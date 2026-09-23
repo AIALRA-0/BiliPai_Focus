@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.bangumi
 
 import com.android.purebilibili.data.model.response.BangumiDetail
+import com.android.purebilibili.data.model.response.BangumiRights
 import com.android.purebilibili.data.model.response.BangumiSection
 
 /**
@@ -33,6 +34,9 @@ fun resolveBangumiRestrictionLabels(detail: BangumiDetail): List<String> {
     val rights = detail.rights
     if (rights?.isPreview == 1) labels += "试看"
     if (rights?.areaLimit == 1) labels += "地区受限"
+    if (rights?.allowDownload == 0) labels += "不可下载"
+    if (rights?.allowReview == 0) labels += "暂不可点评"
+    if (rights?.allowDanmaku == 0) labels += "无弹幕"
     detail.payment?.let { payment ->
         when {
             payment.tip.isNotBlank() -> labels += payment.tip
@@ -44,6 +48,14 @@ fun resolveBangumiRestrictionLabels(detail: BangumiDetail): List<String> {
     }
     if (detail.userStatus?.vip == 1) labels += "大会员"
     return labels.filter { it.isNotBlank() }.distinct()
+}
+
+fun canReviewBangumi(mediaId: Long, rights: BangumiRights?): Boolean {
+    return mediaId > 0L && rights?.allowReview != 0
+}
+
+fun canShowBangumiDanmaku(rights: BangumiRights?): Boolean {
+    return rights?.allowDanmaku != 0
 }
 
 fun resolveBangumiSectionTitle(section: BangumiSection, fallbackIndex: Int): String {

@@ -70,6 +70,50 @@ class PlaybackAncillaryTaskPolicyTest {
     }
 
     @Test
+    fun `initial heartbeat should require actual foreground playback and valid video ids`() {
+        assertTrue(
+            shouldSendInitialPlaybackHeartbeat(
+                isActivelyPlaying = true,
+                isInBackground = false,
+                currentBvid = "BV1test",
+                currentCid = 456L
+            )
+        )
+        assertFalse(
+            shouldSendInitialPlaybackHeartbeat(
+                isActivelyPlaying = false,
+                isInBackground = false,
+                currentBvid = "BV1test",
+                currentCid = 456L
+            )
+        )
+        assertFalse(
+            shouldSendInitialPlaybackHeartbeat(
+                isActivelyPlaying = true,
+                isInBackground = true,
+                currentBvid = "BV1test",
+                currentCid = 456L
+            )
+        )
+        assertFalse(
+            shouldSendInitialPlaybackHeartbeat(
+                isActivelyPlaying = true,
+                isInBackground = false,
+                currentBvid = " ",
+                currentCid = 456L
+            )
+        )
+        assertFalse(
+            shouldSendInitialPlaybackHeartbeat(
+                isActivelyPlaying = true,
+                isInBackground = false,
+                currentBvid = "BV1test",
+                currentCid = 0L
+            )
+        )
+    }
+
+    @Test
     fun `heartbeat session start timestamp should stay stable once assigned`() {
         assertEquals(
             1_700_000_000L,

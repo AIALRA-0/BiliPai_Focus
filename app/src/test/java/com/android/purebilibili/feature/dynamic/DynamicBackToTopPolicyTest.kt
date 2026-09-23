@@ -37,4 +37,56 @@ class DynamicBackToTopPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `scrollToTop request only scrolls when not at top and never refreshes`() {
+        val notAtTopPlan = resolveDynamicScrollActionPlan(
+            request = DynamicScrollRequest.SCROLL_TO_TOP,
+            isAtTop = false
+        )
+        assertTrue(notAtTopPlan.shouldScrollToTop)
+        assertFalse(notAtTopPlan.shouldRefresh)
+
+        val atTopPlan = resolveDynamicScrollActionPlan(
+            request = DynamicScrollRequest.SCROLL_TO_TOP,
+            isAtTop = true
+        )
+        assertFalse(atTopPlan.shouldScrollToTop)
+        assertFalse(atTopPlan.shouldRefresh)
+    }
+
+    @Test
+    fun `single click reselect scrolls to top when scrolled and refreshes when at top`() {
+        val notAtTopPlan = resolveDynamicScrollActionPlan(
+            request = DynamicScrollRequest.SCROLL_TO_TOP_OR_REFRESH,
+            isAtTop = false
+        )
+        assertTrue(notAtTopPlan.shouldScrollToTop)
+        assertFalse(notAtTopPlan.shouldRefresh)
+
+        val atTopPlan = resolveDynamicScrollActionPlan(
+            request = DynamicScrollRequest.SCROLL_TO_TOP_OR_REFRESH,
+            isAtTop = true
+        )
+        assertFalse(atTopPlan.shouldScrollToTop)
+        assertTrue(atTopPlan.shouldRefresh)
+    }
+
+    @Test
+    fun `double click request always refreshes and scrolls when not at top`() {
+        val notAtTopPlan = resolveDynamicScrollActionPlan(
+            request = DynamicScrollRequest.SCROLL_TO_TOP_AND_REFRESH,
+            isAtTop = false
+        )
+        assertTrue(notAtTopPlan.shouldScrollToTop)
+        assertTrue(notAtTopPlan.shouldRefresh)
+
+        val atTopPlan = resolveDynamicScrollActionPlan(
+            request = DynamicScrollRequest.SCROLL_TO_TOP_AND_REFRESH,
+            isAtTop = true
+        )
+        assertFalse(atTopPlan.shouldScrollToTop)
+        assertTrue(atTopPlan.shouldRefresh)
+    }
 }
+

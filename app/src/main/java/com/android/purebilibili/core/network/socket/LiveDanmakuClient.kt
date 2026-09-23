@@ -24,6 +24,8 @@ import java.nio.ByteBuffer
 import kotlin.math.min
 import kotlin.math.pow
 
+internal val LIVE_DANMAKU_AUTH_PROTOCOL_VERSION = DanmakuProtocol.PROTO_VER_BROTLI
+
 /**
  * Bilibili 直播弹幕 WebSocket 客户端
  * 
@@ -68,7 +70,7 @@ class LiveDanmakuClient(
 
     // 入站消息队列：串行解码，避免高频 onMessage 创建大量并发协程
     private val incomingFrames = Channel<ByteArray>(
-        capacity = 128,
+        capacity = 24,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     private var decodeJob: Job? = null
@@ -141,7 +143,7 @@ class LiveDanmakuClient(
         val authJson = JSONObject().apply {
             put("uid", uid) // 使用传入的真实 UID (未登录为 0)
             put("roomid", roomId)
-            put("protover", 2) // 降级为 Zlib (2)，避免 Brotli 兼容性问题
+            put("protover", LIVE_DANMAKU_AUTH_PROTOCOL_VERSION)
             put("platform", "web")
             put("type", 2)
             put("key", token)
@@ -182,6 +184,10 @@ class LiveDanmakuClient(
             markUserDisconnect = true,
             cancelReconnectJob = true
         )
+        // Client 实例不会在主动断开后复用；结束常驻解码协程并释放队列中仍持有的帧。
+        decodeJob?.cancel()
+        decodeJob = null
+        incomingFrames.cancel()
     }
 
     private fun closeCurrentConnection(
@@ -351,6 +357,10 @@ class LiveDanmakuClient(
 
     private fun onIncomingMessage(bytes: ByteString) {
         connectionHealth = markLiveDanmakuServerFrameReceived(connectionHealth, clockMs())
+        if (!shouldAcceptLiveDanmakuFrame(bytes.size)) {
+            Log.w(TAG, "⚠️ Oversized incoming frame dropped: ${bytes.size} bytes")
+            return
+        }
         enqueueMessageFrame(bytes.toByteArray())
     }
 }

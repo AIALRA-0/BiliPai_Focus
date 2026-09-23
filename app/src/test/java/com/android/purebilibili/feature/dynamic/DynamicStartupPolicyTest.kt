@@ -22,4 +22,29 @@ class DynamicStartupPolicyTest {
         assertEquals(6, resolveDynamicFollowingsPageLimit(isStartupHydration = true))
         assertEquals(20, resolveDynamicFollowingsPageLimit(isStartupHydration = false))
     }
+
+    @Test
+    fun followingsPagination_stopsOnShortPageOrReportedTotal() {
+        assertTrue(
+            hasLoadedAllDynamicFollowings(
+                pageSize = 12,
+                accumulatedCount = 62,
+                reportedTotal = 0,
+            )
+        )
+        assertTrue(
+            hasLoadedAllDynamicFollowings(
+                pageSize = 50,
+                accumulatedCount = 100,
+                reportedTotal = 100,
+            )
+        )
+        assertFalse(
+            hasLoadedAllDynamicFollowings(
+                pageSize = 50,
+                accumulatedCount = 50,
+                reportedTotal = 120,
+            )
+        )
+    }
 }

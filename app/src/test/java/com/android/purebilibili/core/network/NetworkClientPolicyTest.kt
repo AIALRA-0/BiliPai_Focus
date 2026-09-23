@@ -1,10 +1,11 @@
 package com.android.purebilibili.core.network
 
-import okhttp3.Protocol
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import java.net.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NetworkClientPolicyTest {
@@ -52,5 +53,44 @@ class NetworkClientPolicyTest {
             listOf(Protocol.HTTP_2, Protocol.HTTP_1_1),
             NetworkModule.resolveSharedNetworkProtocols()
         )
+    }
+
+    @Test
+    fun androidHdLoginEndpoints_useAndroidHdAppKeyHeader() {
+        assertEquals(
+            "android_hd",
+            NetworkModule.resolveAndroidHdLoginAppKeyHeader("/x/passport-login/sms/send")
+        )
+        assertEquals(
+            "android_hd",
+            NetworkModule.resolveAndroidHdLoginAppKeyHeader("/x/passport-login/login/sms")
+        )
+        assertEquals(
+            "android_hd",
+            NetworkModule.resolveAndroidHdLoginAppKeyHeader("/x/passport-login/oauth2/login")
+        )
+        assertEquals(
+            "android_hd",
+            NetworkModule.resolveAndroidHdLoginAppKeyHeader("/x/safecenter/common/sms/send")
+        )
+        assertEquals(
+            "android_hd",
+            NetworkModule.resolveAndroidHdLoginAppKeyHeader("/x/safecenter/login/tel/verify")
+        )
+        assertNull(NetworkModule.resolveAndroidHdLoginAppKeyHeader("/x/web-interface/nav"))
+    }
+
+    @Test
+    fun forcedCookieHeaderReplacesJarCookieAfterBridge() {
+        val request = okhttp3.Request.Builder()
+            .url("https://api.bilibili.com/x/web-interface/nav")
+            .header("Cookie", "buvid3=from-jar")
+            .header(FORCE_COOKIE_HEADER, "SESSDATA=imported; bili_jct=csrf")
+            .build()
+
+        val applied = applyForcedCookieHeader(request)
+        assertEquals("SESSDATA=imported; bili_jct=csrf", applied.header("Cookie"))
+        assertNull(applied.header(FORCE_COOKIE_HEADER))
+        assertEquals(request, applyForcedCookieHeader(request.newBuilder().removeHeader(FORCE_COOKIE_HEADER).build()))
     }
 }

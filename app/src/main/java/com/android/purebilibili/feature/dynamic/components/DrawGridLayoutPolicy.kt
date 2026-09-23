@@ -5,8 +5,23 @@ internal enum class DrawGridScaleMode {
     CROP
 }
 
+/** 列表/转发预览与 B 站一致：最多九宫格；详情页传 null 不截断。 */
+internal const val DYNAMIC_FEED_PREVIEW_MAX_IMAGES = 9
+
 private const val PILI_PLUS_DYNAMIC_MAX_IMAGE_RATIO = 22f / 9f
 private const val PILI_PLUS_SINGLE_IMAGE_WIDE_THRESHOLD = 1.5f
+private const val PILI_PLUS_DYNAMIC_LONG_IMAGE_THRESHOLD = 2.2f
+
+// 单图长图判定（对齐 BiliPai image_grid_view 的长图徽标）：
+// 高宽比超过阈值且宽度足够大时显示"长图"徽标。
+internal fun shouldShowDrawGridLongImageBadge(
+    width: Int,
+    height: Int
+): Boolean {
+    if (width <= 0 || height <= 0) return false
+    if (width < 100) return false
+    return height.toFloat() / width.toFloat() > PILI_PLUS_DYNAMIC_LONG_IMAGE_THRESHOLD
+}
 
 internal fun resolveSingleImageAspectRatio(
     width: Int,
@@ -45,6 +60,14 @@ internal fun resolveDrawGridDisplayCount(
     if (totalImages <= 0) return 0
     val maxImages = maxDisplayImages ?: return totalImages
     return totalImages.coerceAtMost(maxImages.coerceAtLeast(1))
+}
+
+internal fun resolveDrawGridColumnCount(displayCount: Int): Int {
+    return when {
+        displayCount <= 1 -> 1
+        displayCount <= 4 -> 2
+        else -> 3
+    }
 }
 
 internal fun shouldDrawGridShowMoreBadge(

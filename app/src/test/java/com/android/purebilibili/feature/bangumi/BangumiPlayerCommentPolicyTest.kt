@@ -15,6 +15,8 @@ class BangumiPlayerCommentPolicyTest {
         assertTrue(source.contains("tabs = listOf(\"简介\""))
         assertTrue(source.contains("HorizontalPager("))
         assertTrue(source.contains("VideoCommentMainList("))
+        assertTrue(source.contains("val useCapsuleTabs = LocalAppUiStyle.current == AppUiStyle.MIUIX"))
+        assertTrue(source.contains("modifier = Modifier.fillMaxWidth(0.4f)"))
     }
 
     @Test

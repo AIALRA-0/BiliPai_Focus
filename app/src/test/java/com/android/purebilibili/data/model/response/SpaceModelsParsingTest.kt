@@ -501,4 +501,35 @@ class SpaceModelsParsingTest {
         assertEquals("1063487284684259332", deleteItem?.params?.dyn_id_str)
         assertEquals(1, deleteItem?.params?.dyn_type)
     }
+
+    @Test
+    fun decodeSpaceDynamicResponse_preservesStandaloneTopicMetadata() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "items": [
+                  {
+                    "id_str": "123456",
+                    "type": "DYNAMIC_TYPE_WORD",
+                    "modules": {
+                      "module_dynamic": {
+                        "topic": {
+                          "id": 1314000,
+                          "name": "新机来了！"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val topic = json.decodeFromString<SpaceDynamicResponse>(payload)
+            .data?.items?.single()?.modules?.module_dynamic?.topic
+
+        assertEquals(1314000L, topic?.id)
+        assertEquals("新机来了！", topic?.name)
+    }
 }

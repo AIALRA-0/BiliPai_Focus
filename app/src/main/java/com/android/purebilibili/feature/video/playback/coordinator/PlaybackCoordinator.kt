@@ -26,7 +26,8 @@ internal class PlaybackCoordinator(
         isExternalPlaylist: Boolean,
         externalPlaylistAutoContinueEnabled: Boolean,
         externalPlaylistSource: ExternalPlaylistSource,
-        playMode: PlayMode
+        playMode: PlayMode,
+        hasNextPageOrSeasonTarget: Boolean = false
     ): PlaybackEndAction {
         val action = resolvePlaybackEndActionForSession(
             behavior = behavior,
@@ -34,7 +35,8 @@ internal class PlaybackCoordinator(
             isExternalPlaylist = isExternalPlaylist,
             externalPlaylistAutoContinueEnabled = externalPlaylistAutoContinueEnabled,
             externalPlaylistSource = externalPlaylistSource,
-            playMode = playMode
+            playMode = playMode,
+            hasNextPageOrSeasonTarget = hasNextPageOrSeasonTarget
         )
         sessionStore.recordCompletionAction(action)
         return action

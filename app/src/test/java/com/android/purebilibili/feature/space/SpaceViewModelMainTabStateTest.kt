@@ -15,7 +15,7 @@ class SpaceViewModelMainTabStateTest {
     fun `selectMainTab updates selectedMainTab state`() {
         val savedStateHandle = SavedStateHandle()
         val viewModel = SpaceViewModel(savedStateHandle)
-        assertEquals(2, viewModel.selectedMainTab.value)
+        assertEquals(0, viewModel.selectedMainTab.value)
 
         viewModel.selectMainTab(3)
         assertEquals(3, viewModel.selectedMainTab.value)

@@ -2,20 +2,18 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.FullscreenMode
+import com.android.purebilibili.core.store.player.DEFAULT_AUDIO_QUALITY_FOLLOW_LAST
 import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
 import com.android.purebilibili.core.store.PortraitPlayerCollapseMode
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
+import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
+import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.feature.screenshot.AppScreenshotCaptureMode
 import com.android.purebilibili.feature.screenshot.AppScreenshotGestureMode
 
-internal data class PlaybackSegmentOption<T>(
-    val value: T,
-    val label: String
-)
-
 internal fun <T> resolveSelectionIndex(
-    options: List<PlaybackSegmentOption<T>>,
+    options: List<AppSegmentOption<T>>,
     selectedValue: T
 ): Int {
     if (options.isEmpty()) return 0
@@ -24,7 +22,7 @@ internal fun <T> resolveSelectionIndex(
 }
 
 internal fun <T> resolveSelectionLabel(
-    options: List<PlaybackSegmentOption<T>>,
+    options: List<AppSegmentOption<T>>,
     selectedValue: T,
     fallbackLabel: String
 ): String {
@@ -55,15 +53,35 @@ internal fun resolveSegmentedSwipeTargetIndex(
     }
 }
 
-internal fun resolveDefaultPlaybackQualityOptions(): List<PlaybackSegmentOption<Int>> {
+internal fun resolveDefaultPlaybackQualityOptions(): List<AppSegmentOption<Int>> {
     return listOf(
-        PlaybackSegmentOption(125, "4K HDR"),
-        PlaybackSegmentOption(116, "1080P60"),
-        PlaybackSegmentOption(80, "1080P"),
-        PlaybackSegmentOption(64, "720P"),
-        PlaybackSegmentOption(32, "480P"),
-        PlaybackSegmentOption(16, "360P")
+        AppSegmentOption(126, "杜比视界"),
+        AppSegmentOption(125, "4K HDR"),
+        AppSegmentOption(116, "1080P60"),
+        AppSegmentOption(80, "1080P"),
+        AppSegmentOption(64, "720P"),
+        AppSegmentOption(32, "480P"),
+        AppSegmentOption(16, "360P")
     )
+}
+
+internal fun resolveDefaultAudioQualityOptions(): List<AppSegmentOption<Int>> {
+    return listOf(
+        AppSegmentOption(DEFAULT_AUDIO_QUALITY_FOLLOW_LAST, "跟随上次"),
+        AppSegmentOption(30251, "Hi-Res 无损"),
+        AppSegmentOption(30250, "杜比全景声"),
+        AppSegmentOption(-1, "AAC")
+    )
+}
+
+internal fun normalizeDefaultAudioQualityOption(value: Int): Int {
+    return when (value) {
+        DEFAULT_AUDIO_QUALITY_FOLLOW_LAST,
+        -1,
+        30250,
+        30251 -> value
+        else -> -1
+    }
 }
 
 internal fun resolveDefaultQualitySubtitle(
@@ -81,74 +99,80 @@ internal fun resolveDefaultQualitySubtitle(
 
 internal fun resolveFeedApiSegmentOptions(
     entries: List<SettingsManager.FeedApiType> = SettingsManager.FeedApiType.entries
-): List<PlaybackSegmentOption<SettingsManager.FeedApiType>> {
+): List<AppSegmentOption<SettingsManager.FeedApiType>> {
     return entries.map { type ->
-        PlaybackSegmentOption(
+        AppSegmentOption(
             value = type,
             label = type.label
         )
     }
 }
 
-internal fun resolveFullscreenModeSegmentOptions(): List<PlaybackSegmentOption<FullscreenMode>> {
+internal fun resolveFullscreenModeSegmentOptions(): List<AppSegmentOption<FullscreenMode>> {
     return listOf(
-        PlaybackSegmentOption(FullscreenMode.AUTO, "自动"),
-        PlaybackSegmentOption(FullscreenMode.NONE, "不改"),
-        PlaybackSegmentOption(FullscreenMode.VERTICAL, "竖屏"),
-        PlaybackSegmentOption(FullscreenMode.HORIZONTAL, "横屏")
+        AppSegmentOption(FullscreenMode.AUTO, "自动"),
+        AppSegmentOption(FullscreenMode.NONE, "不改"),
+        AppSegmentOption(FullscreenMode.VERTICAL, "竖屏"),
+        AppSegmentOption(FullscreenMode.HORIZONTAL, "横屏")
     )
 }
 
-internal fun resolveFullscreenAspectRatioSegmentOptions(): List<PlaybackSegmentOption<FullscreenAspectRatio>> {
+internal fun resolveFullscreenAspectRatioSegmentOptions(): List<AppSegmentOption<FullscreenAspectRatio>> {
     return listOf(
-        PlaybackSegmentOption(FullscreenAspectRatio.FIT, "适应"),
-        PlaybackSegmentOption(FullscreenAspectRatio.FILL, "填充"),
-        PlaybackSegmentOption(FullscreenAspectRatio.RATIO_16_9, "16:9"),
-        PlaybackSegmentOption(FullscreenAspectRatio.RATIO_4_3, "4:3"),
-        PlaybackSegmentOption(FullscreenAspectRatio.STRETCH, "拉伸")
+        AppSegmentOption(FullscreenAspectRatio.FIT, "适应"),
+        AppSegmentOption(FullscreenAspectRatio.FILL, "填充"),
+        AppSegmentOption(FullscreenAspectRatio.RATIO_16_9, "16:9"),
+        AppSegmentOption(FullscreenAspectRatio.RATIO_4_3, "4:3"),
+        AppSegmentOption(FullscreenAspectRatio.STRETCH, "拉伸")
     )
 }
 
-internal fun resolvePortraitPlayerCollapseModeSegmentOptions(): List<PlaybackSegmentOption<PortraitPlayerCollapseMode>> {
+internal fun resolvePortraitPlayerCollapseModeSegmentOptions(): List<AppSegmentOption<PortraitPlayerCollapseMode>> {
     return listOf(
-        PlaybackSegmentOption(PortraitPlayerCollapseMode.OFF, "关闭"),
-        PlaybackSegmentOption(PortraitPlayerCollapseMode.INTRO_ONLY, "竖屏"),
-        PlaybackSegmentOption(PortraitPlayerCollapseMode.COMMENT_ONLY, "横屏"),
-        PlaybackSegmentOption(PortraitPlayerCollapseMode.BOTH, "全部"),
-        PlaybackSegmentOption(PortraitPlayerCollapseMode.PAUSED_ONLY, "暂停时")
+        AppSegmentOption(PortraitPlayerCollapseMode.OFF, "关闭"),
+        AppSegmentOption(PortraitPlayerCollapseMode.INTRO_ONLY, "竖屏"),
+        AppSegmentOption(PortraitPlayerCollapseMode.COMMENT_ONLY, "横屏"),
+        AppSegmentOption(PortraitPlayerCollapseMode.BOTH, "全部"),
+        AppSegmentOption(PortraitPlayerCollapseMode.PAUSED_ONLY, "暂停时")
     )
 }
 
-internal fun resolveHomeFeedCardWidthPresetSegmentOptions(): List<PlaybackSegmentOption<HomeFeedCardWidthPreset>> {
+internal fun resolveHomeFeedCardWidthPresetSegmentOptions(): List<AppSegmentOption<HomeFeedCardWidthPreset>> {
     return listOf(
-        PlaybackSegmentOption(HomeFeedCardWidthPreset.AUTO, "自动"),
-        PlaybackSegmentOption(HomeFeedCardWidthPreset.COMPACT, "紧凑"),
-        PlaybackSegmentOption(HomeFeedCardWidthPreset.BALANCED, "均衡"),
-        PlaybackSegmentOption(HomeFeedCardWidthPreset.WIDE, "宽"),
-        PlaybackSegmentOption(HomeFeedCardWidthPreset.ULTRA_WIDE, "超宽")
+        AppSegmentOption(HomeFeedCardWidthPreset.AUTO, "自动"),
+        AppSegmentOption(HomeFeedCardWidthPreset.COMPACT, "紧凑"),
+        AppSegmentOption(HomeFeedCardWidthPreset.BALANCED, "均衡"),
+        AppSegmentOption(HomeFeedCardWidthPreset.WIDE, "宽"),
+        AppSegmentOption(HomeFeedCardWidthPreset.ULTRA_WIDE, "超宽")
     )
 }
 
-internal fun resolveTabletCommentPanelWidthSegmentOptions(): List<PlaybackSegmentOption<TabletCommentPanelWidthPreset>> {
+internal fun resolveTabletCommentPanelWidthSegmentOptions(): List<AppSegmentOption<TabletCommentPanelWidthPreset>> {
     return listOf(
-        PlaybackSegmentOption(TabletCommentPanelWidthPreset.COMPACT, "窄"),
-        PlaybackSegmentOption(TabletCommentPanelWidthPreset.STANDARD, "标准"),
-        PlaybackSegmentOption(TabletCommentPanelWidthPreset.WIDE, "宽"),
-        PlaybackSegmentOption(TabletCommentPanelWidthPreset.ULTRA_WIDE, "超宽")
+        AppSegmentOption(TabletCommentPanelWidthPreset.COMPACT, "窄"),
+        AppSegmentOption(TabletCommentPanelWidthPreset.STANDARD, "标准"),
+        AppSegmentOption(TabletCommentPanelWidthPreset.WIDE, "宽"),
+        AppSegmentOption(TabletCommentPanelWidthPreset.ULTRA_WIDE, "超宽")
     )
 }
 
-internal fun resolveAppScreenshotGestureModeSegmentOptions(): List<PlaybackSegmentOption<AppScreenshotGestureMode>> {
+internal fun resolveTabletSecondaryDefaultTabOptions(): List<AppSegmentOption<TabletSecondaryDefaultTab>> =
+    listOf(
+        AppSegmentOption(TabletSecondaryDefaultTab.RELATED, "推荐"),
+        AppSegmentOption(TabletSecondaryDefaultTab.COMMENTS, "评论"),
+    )
+
+internal fun resolveAppScreenshotGestureModeSegmentOptions(): List<AppSegmentOption<AppScreenshotGestureMode>> {
     return listOf(
-        PlaybackSegmentOption(AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS, "右上角"),
-        PlaybackSegmentOption(AppScreenshotGestureMode.THREE_FINGER_SWIPE_DOWN, "三指下滑"),
-        PlaybackSegmentOption(AppScreenshotGestureMode.DISABLED, "关闭")
+        AppSegmentOption(AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS, "右上角"),
+        AppSegmentOption(AppScreenshotGestureMode.THREE_FINGER_SWIPE_DOWN, "三指下滑"),
+        AppSegmentOption(AppScreenshotGestureMode.DISABLED, "关闭")
     )
 }
 
-internal fun resolveAppScreenshotCaptureModeSegmentOptions(): List<PlaybackSegmentOption<AppScreenshotCaptureMode>> {
+internal fun resolveAppScreenshotCaptureModeSegmentOptions(): List<AppSegmentOption<AppScreenshotCaptureMode>> {
     return listOf(
-        PlaybackSegmentOption(AppScreenshotCaptureMode.FULL_WINDOW, "全屏"),
-        PlaybackSegmentOption(AppScreenshotCaptureMode.SELECT_REGION, "手选")
+        AppSegmentOption(AppScreenshotCaptureMode.FULL_WINDOW, "全屏"),
+        AppSegmentOption(AppScreenshotCaptureMode.SELECT_REGION, "手选")
     )
 }

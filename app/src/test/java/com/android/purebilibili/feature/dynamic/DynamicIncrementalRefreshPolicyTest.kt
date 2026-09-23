@@ -73,9 +73,32 @@ class DynamicIncrementalRefreshPolicyTest {
     }
 
     @Test
+    fun resolveDynamicRefreshDividerGridIndex_accountsForLeadingChromeInset() {
+        assertEquals(4, resolveDynamicRefreshDividerGridIndex(dividerDataIndex = 3))
+        assertEquals(3, resolveDynamicRefreshDividerGridIndex(dividerDataIndex = 3, leadingGridItemCount = 0))
+        assertEquals(-1, resolveDynamicRefreshDividerGridIndex(dividerDataIndex = -1))
+    }
+
+    @Test
     fun shouldStartDynamicRefresh_requiresIdleRefreshAndUnlockedState() {
         assertEquals(true, shouldStartDynamicRefresh(isRefreshing = false, isLoadingLocked = false))
         assertEquals(false, shouldStartDynamicRefresh(isRefreshing = true, isLoadingLocked = false))
         assertEquals(false, shouldStartDynamicRefresh(isRefreshing = false, isLoadingLocked = true))
+    }
+
+    @Test
+    fun refreshTarget_usesSelectedUserOnlyOnUserTab() {
+        assertEquals(
+            1001L,
+            resolveDynamicRefreshUserId(selectedTab = 4, selectedUserId = 1001L)
+        )
+        assertEquals(
+            null,
+            resolveDynamicRefreshUserId(selectedTab = 0, selectedUserId = 1001L)
+        )
+        assertEquals(
+            null,
+            resolveDynamicRefreshUserId(selectedTab = 4, selectedUserId = null)
+        )
     }
 }

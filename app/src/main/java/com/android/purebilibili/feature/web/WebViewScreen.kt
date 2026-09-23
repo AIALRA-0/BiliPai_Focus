@@ -1,4 +1,5 @@
 package com.android.purebilibili.feature.web
+import com.android.purebilibili.core.ui.components.AppIcon
 
 import android.view.ViewGroup
 import android.webkit.WebResourceRequest
@@ -12,9 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import kotlinx.coroutines.launch
@@ -41,18 +43,18 @@ fun WebViewScreen(
     onSpaceClick: ((mid: Long) -> Unit)? = null,
     onLiveClick: ((roomId: Long) -> Unit)? = null,
     onDynamicClick: ((dynamicId: String) -> Unit)? = null,
-    onBangumiClick: ((seasonId: Long, epId: Long) -> Unit)? = null,
+    onBangumiClick: ((seasonId: Long, epId: Long, mediaId: Long) -> Unit)? = null,
     onMusicClick: ((musicId: String) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
 
-    AdaptiveScaffold(
+    AppScaffold(
         topBar = {
-            AdaptiveTopAppBar(
+            AppTopBar(
                 title = title ?: "浏览器",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "Back")
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -139,12 +141,12 @@ fun WebViewScreen(
                                             }
 
                                             is BilibiliNavigationTarget.BangumiSeason -> {
-                                                onBangumiClick?.invoke(target.seasonId, 0)
+                                                onBangumiClick?.invoke(target.seasonId, 0, target.mediaId)
                                                 onBangumiClick != null
                                             }
 
                                             is BilibiliNavigationTarget.BangumiEpisode -> {
-                                                onBangumiClick?.invoke(0, target.epId)
+                                                onBangumiClick?.invoke(0, target.epId, 0)
                                                 onBangumiClick != null
                                             }
 

@@ -8,25 +8,31 @@ import kotlin.test.assertTrue
 class LiveCategorySegmentedControlStructureTest {
 
     @Test
-    fun `live home category row delegates to bottom bar segmented control`() {
+    fun `live home category row follows theme tabs and liquid reuse`() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/live/LiveListScreen.kt"
         )
 
-        assertTrue(source.contains("BottomBarLiquidSegmentedControl("))
-        assertTrue(source.contains("resolveLiveHomeCategorySegmentedControlSpec()"))
-        assertTrue(source.contains(".horizontalScroll(scrollState, enabled = false)"))
-        assertTrue(source.contains("resolveLiveHomeCategoryFollowScrollTarget("))
-        assertTrue(source.contains("scrollState.scrollTo(targetScroll)"))
-        assertTrue(source.contains("onIndicatorPositionChanged = { indicatorPosition = it }"))
+        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(source.contains("private fun LiveSortTagChipRow("))
+        assertTrue(source.contains("onSortTagSelected(value.takeIf { it.isNotBlank() })"))
+        val homeCategoryRow = source.substringAfter("private fun LiveAreaHomeChipRow(")
+            .substringBefore("private fun LiveSortTagChipRow(")
+        assertTrue(homeCategoryRow.contains("scrollable = true"))
+        assertTrue(homeCategoryRow.contains("minTabWidth = categoryMinWidth"))
+        val sortTagRow = source.substringAfter("private fun LiveSortTagChipRow(")
+            .substringBefore("private fun LiveHomeLoadMoreFooter(")
+        assertTrue(sortTagRow.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(sortTagRow.contains("scrollable = true"))
+        assertTrue(homeCategoryRow.contains("uiStyle == AppUiStyle.MATERIAL3"))
+        assertTrue(sortTagRow.contains("uiStyle == AppUiStyle.MATERIAL3"))
         assertFalse(source.contains("dragSelectionEnabled = false"))
         assertFalse(source.contains("liquidGlassEffectsEnabled = false"))
         assertFalse(source.contains("SimpleLiquidIndicator"))
-        assertFalse(source.contains("shouldUseLiveHomeCategoryLiquidIndicator("))
     }
 
     @Test
-    fun `all tags parent row uses shared segmented control dimensions`() {
+    fun `all tags parent row uses native preset chip row`() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/live/LiveAreaScreen.kt"
         )
@@ -35,14 +41,22 @@ class LiveCategorySegmentedControlStructureTest {
         assertTrue(source.contains("HorizontalPager("))
         assertTrue(source.contains("pagerState.animateScrollToPage"))
         assertTrue(source.contains("selectedTab = pagerState.currentPage"))
-        assertTrue(source.contains("BottomBarLiquidSegmentedControl("))
-        assertTrue(source.contains("resolveLiveAreaParentSegmentedControlSpec()"))
-        assertTrue(source.contains(".horizontalScroll(scrollState, enabled = false)"))
-        assertTrue(source.contains("resolveLiveHomeCategoryFollowScrollTarget("))
-        assertTrue(source.contains("scrollState.scrollTo(targetScroll)"))
-        assertTrue(source.contains("onIndicatorPositionChanged = { indicatorPosition = it }"))
+        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(source.contains("effectiveHorizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3) 0.dp else horizontalPadding"))
+        assertTrue(source.contains("minTabWidth = AppChromeSizeTokens.MinimumTouchTarget"))
+        assertFalse(source.contains("LiveHomeSelectableChip("))
         assertFalse(source.contains("dragSelectionEnabled = false"))
         assertFalse(source.contains("liquidGlassEffectsEnabled = false"))
+    }
+
+    @Test
+    fun `live search result tabs use the global theme adaptive row`() {
+        val source = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/live/LiveSearchScreen.kt"
+        )
+
+        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
+        assertFalse(source.contains("LiveHomeSelectableChip("))
     }
 
     @Test
@@ -54,11 +68,12 @@ class LiveCategorySegmentedControlStructureTest {
         assertTrue(source.contains("rememberPagerState"))
         assertTrue(source.contains("HorizontalPager("))
         assertTrue(source.contains("pagerState.animateScrollToPage"))
-        assertTrue(source.contains("selectedIndex = pagerState.currentPage"))
+        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(source.contains("selectedValue = pagerState.currentPage"))
     }
 
     @Test
-    fun `live room interaction panel is collapsed by default and gated before rendering`() {
+    fun `full interaction panel remains opt in alongside the portrait chat preview`() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/live/LivePlayerScreen.kt"
         )
@@ -66,7 +81,8 @@ class LiveCategorySegmentedControlStructureTest {
         assertTrue(source.contains("defaultLiveInteractionPanelVisible()"))
         assertTrue(source.contains("isInteractionPanelVisible"))
         assertTrue(source.contains("shouldReserveLivePortraitInteractionPanel("))
-        assertTrue(source.contains("if (isInteractionPanelVisible)"))
+        assertTrue(source.contains("if (portraitPresentation.showChatPreview)"))
+        assertTrue(source.contains("portraitPresentation.showChrome && showPortraitInteractionSheet"))
         assertFalse(source.contains("var isChatVisible by remember { mutableStateOf(true) }"))
     }
 
@@ -84,6 +100,13 @@ class LiveCategorySegmentedControlStructureTest {
         assertTrue(screenSource.contains("viewModel.resumeLiveHeartbeatIfNeeded()"))
         assertTrue(sheetSource.contains("permission: LiveDanmakuPermission"))
         assertTrue(sheetSource.contains("permission.canSend"))
+        assertTrue(sheetSource.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(sheetSource.contains("onOpenEmote: (() -> Unit)? = null"))
+        assertTrue(sheetSource.contains("Icons.Outlined.EmojiEmotions"))
+        assertTrue(sheetSource.contains(".widthIn(max = 640.dp)"))
+        assertTrue(screenSource.contains("onOpenEmote = {"))
+        assertTrue(screenSource.contains("resolveLiveSplitChatPanelWidthDp("))
+        assertFalse(sheetSource.contains("AppFilterChip("))
     }
 
     @Test
@@ -121,6 +144,19 @@ class LiveCategorySegmentedControlStructureTest {
         assertTrue(source.contains("Modifier.size("))
         assertTrue(source.contains("width = viewportLayout.width.toDp()"))
         assertTrue(source.contains("height = viewportLayout.height.toDp()"))
+    }
+
+    @Test
+    fun `live room overflow uses the miuix window action menu`() {
+        val source = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/live/LivePlayerScreen.kt"
+        )
+
+        assertTrue(source.contains("AppWindowActionMenu("))
+        assertTrue(source.contains("label = \"高能榜\""))
+        assertTrue(source.contains("contentDescription = \"更多直播间操作\""))
+        assertFalse(source.contains("AppDropdownMenu("))
+        assertFalse(source.contains("LiveRoomOverflowMenu("))
     }
 
     private fun loadSource(path: String): String {

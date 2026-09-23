@@ -1,5 +1,11 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.rememberAppDynamicIcon
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,10 +18,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,38 +30,37 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.android.purebilibili.data.model.response.OpusLinkCard
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.Link
 
 @Composable
 internal fun DynamicOpusLinkCard(
     card: OpusLinkCard,
     modifier: Modifier = Modifier,
+    enabled: Boolean = card.jumpUrl.isNotBlank(),
     onClick: () -> Unit = {}
 ) {
-    Surface(
+    AppSurface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = card.jumpUrl.isNotBlank(), onClick = onClick),
+            .clip(AppShapes.container(ContainerLevel.Card))
+            .clickable(enabled = enabled, onClick = onClick),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 0.dp,
-        shape = RoundedCornerShape(12.dp)
+        tonalElevation = AppSpacingTokens.None,
+        shape = AppShapes.container(ContainerLevel.Card)
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(AppSpacingTokens.Small + AppSpacingTokens.Micro),
             verticalAlignment = Alignment.CenterVertically
         ) {
             LinkCardCover(card = card)
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)
             ) {
                 if (card.label.isNotBlank()) {
-                    Text(
+                    AppText(
                         text = card.label,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
@@ -63,7 +68,7 @@ internal fun DynamicOpusLinkCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(
+                AppText(
                     text = card.title.ifBlank { resolveOpusLinkCardFallbackTitle(card.type) },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
@@ -72,7 +77,7 @@ internal fun DynamicOpusLinkCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (card.description.isNotBlank()) {
-                    Text(
+                    AppText(
                         text = card.description,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -82,8 +87,8 @@ internal fun DynamicOpusLinkCard(
                 }
             }
             if (card.badgeText.isNotBlank()) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
+                Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+                AppText(
                     text = card.badgeText,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
@@ -96,28 +101,28 @@ internal fun DynamicOpusLinkCard(
 
 @Composable
 private fun LinkCardCover(card: OpusLinkCard) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = AppShapes.container(ContainerLevel.Card)
     if (card.cover.isNotBlank()) {
         AsyncImage(
             model = card.cover,
             contentDescription = card.title,
             modifier = Modifier
-                .size(width = 86.dp, height = 58.dp)
+                .size(width = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro, height = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small + AppSpacingTokens.Micro)
                 .clip(shape),
             contentScale = ContentScale.Crop
         )
     } else {
         Box(
             modifier = Modifier
-                .size(width = 58.dp, height = 58.dp)
+                .size(width = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small + AppSpacingTokens.Micro, height = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small + AppSpacingTokens.Micro)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = CupertinoIcons.Default.Link,
+            AppIcon(
+                imageVector = rememberAppDynamicIcon(),
                 contentDescription = null,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(AppSpacingTokens.ExtraLarge),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -133,6 +138,9 @@ private fun resolveOpusLinkCardFallbackTitle(type: String): String {
         "LINK_CARD_TYPE_MUSIC" -> "音乐"
         "LINK_CARD_TYPE_GOODS" -> "商品"
         "LINK_CARD_TYPE_VOTE" -> "投票"
+        "LINK_CARD_TYPE_RESERVE" -> "预约"
+        "LINK_CARD_TYPE_MATCH" -> "赛事"
+        "LINK_CARD_TYPE_UPOWER_LOTTERY" -> "充电专属抽奖"
         "LINK_CARD_TYPE_ITEM_NULL" -> "内容已失效"
         else -> "链接"
     }

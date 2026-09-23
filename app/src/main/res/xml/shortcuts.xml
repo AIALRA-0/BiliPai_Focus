@@ -12,22 +12,20 @@
             android:targetPackage="com.android.purebilibili"
             android:targetClass="com.android.purebilibili.MainActivity"
             android:data="bilipai://search" />
-        <categories android:name="android.shortcut.conversation" />
     </shortcut>
 
-    <!-- 动态 -->
+    <!-- 稍后再看：Launcher 通常只展示四个快捷方式，优先保留高频个人功能。 -->
     <shortcut
-        android:shortcutId="shortcut_dynamic"
+        android:shortcutId="shortcut_watch_later"
         android:enabled="true"
-        android:icon="@drawable/ic_shortcut_dynamic"
-        android:shortcutShortLabel="@string/shortcut_dynamic_short"
-        android:shortcutLongLabel="@string/shortcut_dynamic_long">
+        android:icon="@drawable/ic_shortcut_watch_later"
+        android:shortcutShortLabel="@string/shortcut_watch_later_short"
+        android:shortcutLongLabel="@string/shortcut_watch_later_long">
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.android.purebilibili"
             android:targetClass="com.android.purebilibili.MainActivity"
-            android:data="bilipai://dynamic" />
-        <categories android:name="android.shortcut.conversation" />
+            android:data="bilipai://watch_later" />
     </shortcut>
 
     <!-- 收藏 -->
@@ -42,7 +40,6 @@
             android:targetPackage="com.android.purebilibili"
             android:targetClass="com.android.purebilibili.MainActivity"
             android:data="bilipai://favorite" />
-        <categories android:name="android.shortcut.conversation" />
     </shortcut>
 
     <!-- 历史 -->
@@ -57,6 +54,5 @@
             android:targetPackage="com.android.purebilibili"
             android:targetClass="com.android.purebilibili.MainActivity"
             android:data="bilipai://history" />
-        <categories android:name="android.shortcut.conversation" />
     </shortcut>
 </shortcuts>

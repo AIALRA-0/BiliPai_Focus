@@ -85,7 +85,7 @@ class VideoDetailPlayerCollapsePolicyTest {
     }
 
     @Test
-    fun `resolveIsPlaybackPausedForCollapse follows explicit pause intent only`() {
+    fun `resolveIsPlaybackPausedForCollapse accepts explicit pause and ended playback`() {
         assertTrue(
             resolveIsPlaybackPausedForCollapse(
                 playWhenReady = false,
@@ -98,11 +98,30 @@ class VideoDetailPlayerCollapsePolicyTest {
                 playbackState = Player.STATE_BUFFERING
             )
         )
-        assertFalse(
+        assertTrue(
+            resolveIsPlaybackPausedForCollapse(
+                playWhenReady = true,
+                playbackState = Player.STATE_ENDED
+            )
+        )
+        assertTrue(
             resolveIsPlaybackPausedForCollapse(
                 playWhenReady = false,
                 playbackState = Player.STATE_ENDED
             )
         )
+    }
+
+    @Test
+    fun `collapsed player media darkens instead of receiving a light surface wash`() {
+        assertEquals(0f, resolveCollapsedPlayerMediaScrimAlpha(0f), 0.0001f)
+        assertEquals(0.21f, resolveCollapsedPlayerMediaScrimAlpha(0.5f), 0.0001f)
+        assertEquals(0.42f, resolveCollapsedPlayerMediaScrimAlpha(1f), 0.0001f)
+    }
+
+    @Test
+    fun `collapsed toolbar waits until late in collapse before covering media`() {
+        assertEquals(0f, resolveCollapsedPlayerToolbarAlpha(0.55f), 0.0001f)
+        assertEquals(1f, resolveCollapsedPlayerToolbarAlpha(1f), 0.0001f)
     }
 }

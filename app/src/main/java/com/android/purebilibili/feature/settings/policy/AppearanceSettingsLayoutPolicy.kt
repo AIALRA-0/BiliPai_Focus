@@ -17,7 +17,3 @@ internal fun resolveAppearanceBottomPadding(
     }
     return navigationBarsBottom + extraPadding
 }
-
-internal fun shouldBringDisplayModeIntoView(isExpanded: Boolean): Boolean {
-    return isExpanded
-}

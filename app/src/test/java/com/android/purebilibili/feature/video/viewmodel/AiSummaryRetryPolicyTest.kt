@@ -10,10 +10,12 @@ class AiSummaryRetryPolicyTest {
 
     @Test
     fun queuedSummaryUsesProgressiveRetryBackoff() {
-        assertEquals(2_500L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 0))
-        assertEquals(5_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 1))
-        assertEquals(10_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 2))
-        assertEquals(20_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 3))
+        assertEquals(3_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 0))
+        assertEquals(8_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 1))
+        assertEquals(15_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 2))
+        assertEquals(30_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 3))
+        assertEquals(60_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 4))
+        assertEquals(120_000L, resolveAiSummaryRetryDelayMs(queuedRetryCount = 5))
     }
 
     @Test
@@ -33,7 +35,7 @@ class AiSummaryRetryPolicyTest {
         assertFalse(
             shouldContinueAiSummaryAutoRetry(
                 status = AiSummaryFetchStatus.QUEUED,
-                queuedRetryCount = 4
+                queuedRetryCount = 6
             )
         )
         assertFalse(
@@ -47,7 +49,7 @@ class AiSummaryRetryPolicyTest {
     @Test
     fun queuedSummaryRetryDelayShouldBackOffFurtherInBackground() {
         assertEquals(
-            2_500L,
+            3_000L,
             resolveAiSummaryRetryDelayMs(
                 queuedRetryCount = 0,
                 isInBackground = false
@@ -61,7 +63,7 @@ class AiSummaryRetryPolicyTest {
             )
         )
         assertEquals(
-            20_000L,
+            30_000L,
             resolveAiSummaryRetryDelayMs(
                 queuedRetryCount = 3,
                 isInBackground = true

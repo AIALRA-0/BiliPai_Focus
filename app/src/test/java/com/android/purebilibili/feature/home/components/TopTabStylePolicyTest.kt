@@ -3,7 +3,11 @@ package com.android.purebilibili.feature.home.components
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.theme.resolveUiStyle
+import com.android.purebilibili.core.ui.AppTopTabPresentation
+import com.android.purebilibili.core.ui.resolveAppTopChromePolicy
 import java.io.File
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -14,6 +18,60 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TopTabStylePolicyTest {
+
+    @Test
+    fun `md3 top tabs use official floating toolbar only when liquid glass is off`() {
+        assertTrue(
+            shouldUseOfficialMd3HomeTopToolbar(
+                uiStyle = AppUiStyle.MATERIAL3,
+                liquidGlassEnabled = false,
+            )
+        )
+        assertFalse(
+            shouldUseOfficialMd3HomeTopToolbar(
+                uiStyle = AppUiStyle.MATERIAL3,
+                liquidGlassEnabled = true,
+            )
+        )
+        assertFalse(
+            shouldUseOfficialMd3HomeTopToolbar(
+                uiStyle = AppUiStyle.MIUIX,
+                liquidGlassEnabled = false,
+            )
+        )
+        assertTrue(
+            shouldUseOfficialMiuixHomeTopTabs(
+                uiStyle = AppUiStyle.MIUIX,
+                liquidGlassEnabled = false,
+            )
+        )
+        assertFalse(
+            shouldUseOfficialMiuixHomeTopTabs(
+                uiStyle = AppUiStyle.MIUIX,
+                liquidGlassEnabled = true,
+            )
+        )
+        assertFalse(
+            shouldUseOfficialMiuixHomeTopTabs(
+                uiStyle = AppUiStyle.MATERIAL3,
+                liquidGlassEnabled = false,
+            )
+        )
+
+        val topDock = sourceText(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/" +
+                "HomeTopTabFloatingDock.kt"
+        )
+        assertTrue(topDock.contains("HorizontalFloatingToolbar("))
+        assertTrue(topDock.contains("FilledTonalButton("))
+        assertTrue(topDock.contains("FilledTonalIconButton("))
+        val topBar = sourceText("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
+        assertTrue(topBar.contains("shouldUseOfficialMiuixHomeTopTabs("))
+        assertFalse(topBar.contains("AppNativeTabRow("))
+        assertTrue(topBar.contains("showIcon = showIcon"))
+        assertTrue(topBar.contains("showText = showText"))
+        assertTrue(topBar.contains(".align(Alignment.Center)"))
+    }
 
     @Test
     fun `floating plus liquid uses liquid glass`() {
@@ -134,108 +192,64 @@ class TopTabStylePolicyTest {
     }
 
     @Test
-    fun `home top tab renderer routes by preset and native variant`() {
+    fun `home top tab presentation routes by preset and native variant`() {
+        // iOS 输入经迁移表并入 MIUIX，两值风格现在共用新的移动指示器呈现。
         assertEquals(
-            HomeTopTabRenderer.IOS,
-            resolveHomeTopTabRenderer(
-                uiPreset = UiPreset.IOS,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
-                labelMode = 2
-            )
+            AppTopTabPresentation.MATERIAL_UNDERLINE,
+            topStyle(UiPreset.IOS, AndroidNativeVariant.MATERIAL3).presentation
         )
         assertEquals(
-            HomeTopTabRenderer.MD3,
-            resolveHomeTopTabRenderer(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
-                labelMode = 2
-            )
+            AppTopTabPresentation.MATERIAL_UNDERLINE,
+            topStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3).presentation
         )
         assertEquals(
-            HomeTopTabRenderer.MIUIX,
-            resolveHomeTopTabRenderer(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
-                labelMode = 2
-            )
+            AppTopTabPresentation.MATERIAL_UNDERLINE,
+            topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX).presentation
         )
         assertEquals(
-            HomeTopTabRenderer.MD3,
-            resolveHomeTopTabRenderer(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
-                labelMode = 0
-            )
+            AppTopTabPresentation.MATERIAL_UNDERLINE,
+            topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX, labelMode = 0).presentation
         )
     }
 
     @Test
-    fun `home top preset style separates ios material3 and miuix text tabs`() {
-        val ios = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.IOS,
-            androidNativeVariant = AndroidNativeVariant.MATERIAL3,
-            labelMode = 2
-        )
-        val material3 = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.MD3,
-            androidNativeVariant = AndroidNativeVariant.MATERIAL3,
-            labelMode = 2
-        )
-        val miuix = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.MD3,
-            androidNativeVariant = AndroidNativeVariant.MIUIX,
-            labelMode = 2
-        )
+    fun `home top preset style keeps migrated ios aligned with miuix text tabs`() {
+        val ios = topStyle(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+        val material3 = topStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3)
+        val miuix = topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX)
 
-        assertNotEquals(ios.preset, material3.preset)
-        assertNotEquals(material3.preset, miuix.preset)
-        assertEquals(HomeTopPreset.IOS, ios.preset)
-        assertEquals(HomeTopPreset.MATERIAL3, material3.preset)
-        assertEquals(HomeTopPreset.MIUIX, miuix.preset)
-        assertEquals(HomeTopTabRenderer.IOS, ios.renderer)
-        assertEquals(HomeTopTabRenderer.MD3, material3.renderer)
-        assertEquals(HomeTopTabRenderer.MIUIX, miuix.renderer)
-        assertEquals(TopTabIndicatorStyle.CAPSULE, ios.indicatorStyle)
+        assertEquals(ios.searchBarHeight, material3.searchBarHeight)
+        assertEquals(material3.searchBarHeight, miuix.searchBarHeight)
+        assertNotEquals(material3.unifiedPanelCornerRadius, miuix.unifiedPanelCornerRadius)
+        // 2B 迁移：iOS 输入并入 MIUIX，与 miuix 呈现一致。
+        assertEquals(AppTopTabPresentation.MATERIAL_UNDERLINE, ios.presentation)
+        assertEquals(AppTopTabPresentation.MATERIAL_UNDERLINE, material3.presentation)
+        assertEquals(AppTopTabPresentation.MATERIAL_UNDERLINE, miuix.presentation)
+        assertEquals(TopTabIndicatorStyle.MATERIAL, ios.indicatorStyle)
         assertEquals(TopTabIndicatorStyle.MATERIAL, material3.indicatorStyle)
-        assertEquals(TopTabIndicatorStyle.CAPSULE, miuix.indicatorStyle)
+        assertEquals(TopTabIndicatorStyle.MATERIAL, miuix.indicatorStyle)
     }
 
     @Test
-    fun `miuix icon modes keep miuix dimensions while falling back to shared md3 renderer`() {
-        val iconAndText = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.MD3,
-            androidNativeVariant = AndroidNativeVariant.MIUIX,
-            labelMode = 0
-        )
+    fun `miuix icon modes use the shared compact top tab geometry`() {
+        val iconAndText = topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX, labelMode = 0)
 
-        assertEquals(HomeTopPreset.MIUIX, iconAndText.preset)
-        assertEquals(HomeTopTabRenderer.MD3, iconAndText.renderer)
+        assertEquals(AppTopTabPresentation.MATERIAL_UNDERLINE, iconAndText.presentation)
         assertEquals(56.dp, iconAndText.tabRowHeightDocked)
-        assertEquals(60.dp, iconAndText.tabRowHeightFloating)
+        assertEquals(56.dp, iconAndText.tabRowHeightFloating)
         assertEquals(30.dp, iconAndText.md3VisualSpec.selectedCapsuleHeight)
         assertEquals(44.dp, iconAndText.actionButtonSizeDocked)
     }
 
     @Test
     fun `miuix top panel reserves extra content gap below category tabs`() {
-        val ios = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.IOS,
-            androidNativeVariant = AndroidNativeVariant.MATERIAL3,
-            labelMode = 2
-        )
-        val material3 = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.MD3,
-            androidNativeVariant = AndroidNativeVariant.MATERIAL3,
-            labelMode = 2
-        )
-        val miuix = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.MD3,
-            androidNativeVariant = AndroidNativeVariant.MIUIX,
-            labelMode = 2
-        )
+        val ios = topStyle(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+        val material3 = topStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3)
+        val miuix = topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX)
 
-        assertEquals(5.dp, ios.reservedContentBottomGap)
-        assertEquals(5.dp, material3.reservedContentBottomGap)
+        // 2B 迁移：iOS 输入并入 MIUIX 预留 12dp 内容底部间隙。
+        assertEquals(12.dp, ios.reservedContentBottomGap)
+        assertEquals(0.dp, material3.reservedContentBottomGap)
         assertEquals(12.dp, miuix.reservedContentBottomGap)
         assertEquals(
             12.dp,
@@ -244,47 +258,51 @@ class TopTabStylePolicyTest {
                 androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
+        // Feed air under dock is owned by tabsToContent (list padding), not panel bottom gap.
+        assertEquals(6.dp, ios.tabsToContentSpacing)
+        assertEquals(6.dp, material3.tabsToContentSpacing)
+        assertEquals(6.dp, miuix.tabsToContentSpacing)
     }
 
     @Test
-    fun `miuix top settings button follows action button metrics while other presets keep existing size`() {
+    fun `home top settings button converges to unified edge control height`() {
         assertEquals(
-            40.dp,
+            36.dp, // 两主题统一：与头像、搜索胶囊同高
             resolveHomeTopSettingsButtonSize(
                 uiPreset = UiPreset.IOS,
                 androidNativeVariant = AndroidNativeVariant.MATERIAL3
             )
         )
         assertEquals(
-            40.dp,
+            36.dp,
             resolveHomeTopSettingsButtonSize(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MATERIAL3
             )
         )
         assertEquals(
-            44.dp,
+            36.dp,
             resolveHomeTopSettingsButtonSize(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
         assertEquals(
-            20.dp,
+            18.dp,
             resolveHomeTopSettingsIconSize(
                 uiPreset = UiPreset.IOS,
                 androidNativeVariant = AndroidNativeVariant.MATERIAL3
             )
         )
         assertEquals(
-            20.dp,
+            18.dp,
             resolveHomeTopSettingsIconSize(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MATERIAL3
             )
         )
         assertEquals(
-            22.dp,
+            18.dp,
             resolveHomeTopSettingsIconSize(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
@@ -292,20 +310,6 @@ class TopTabStylePolicyTest {
         )
     }
 
-    @Test
-    fun `miuix category action trailing padding aligns with unified top settings center`() {
-        val miuix = resolveHomeTopPresetStyle(
-            uiPreset = UiPreset.MD3,
-            androidNativeVariant = AndroidNativeVariant.MIUIX,
-            labelMode = 2
-        )
-
-        assertEquals(4.dp, resolveMiuixTopTabRowHorizontalPadding())
-        assertEquals(
-            5.dp,
-            resolveMiuixTopTabActionTrailingPadding(miuix.unifiedPanelInnerPadding)
-        )
-    }
 
     @Test
     fun `clicking selected top tab scrolls to top while other tabs select`() {
@@ -320,27 +324,30 @@ class TopTabStylePolicyTest {
     }
 
     @Test
-    fun `ios top tab tuning uses compact indicator footprint`() {
-        val tuning = resolveTopTabVisualTuning(UiPreset.IOS)
+    fun `ios top tab tuning uses the compact shared top tab footprint`() {
+        val tuning = resolveTopTabVisualTuning(AppTopTabPresentation.MOVING_CAPSULE)
 
-        assertEquals(40f, tuning.nonFloatingIndicatorHeightDp, 0.001f)
-        assertEquals(20f, tuning.nonFloatingIndicatorCornerDp, 0.001f)
+        assertEquals(30f, tuning.nonFloatingIndicatorHeightDp, 0.001f)
+        assertEquals(9f, tuning.nonFloatingIndicatorCornerDp, 0.001f)
         assertEquals(1.18f, tuning.nonFloatingIndicatorWidthRatio, 0.001f)
-        assertEquals(78f, tuning.nonFloatingIndicatorMinWidthDp, 0.001f)
+        assertEquals(84f, tuning.nonFloatingIndicatorMinWidthDp, 0.001f)
         assertEquals(0f, tuning.nonFloatingIndicatorHorizontalInsetDp, 0.001f)
-        assertEquals(40f, tuning.floatingIndicatorHeightDp, 0.001f)
-        assertEquals(13f, tuning.tabTextSizeSp, 0.001f)
-        assertEquals(17f, tuning.tabTextLineHeightSp, 0.001f)
-        assertEquals(36f, tuning.tabContentMinHeightDp, 0.001f)
+        assertEquals(30f, tuning.floatingIndicatorHeightDp, 0.001f)
+        assertEquals(15f, tuning.tabTextSizeSp, 0.001f)
+        assertEquals(20f, tuning.tabTextLineHeightSp, 0.001f)
+        assertEquals(30f, tuning.tabContentMinHeightDp, 0.001f)
+        assertEquals(18f, tuning.tabIconWithTextSizeDp, 0.001f)
+        assertEquals(18f, tuning.tabIconOnlySizeDp, 0.001f)
     }
 
     @Test
-    fun `md3 capsule top tab tuning also uses compact shape`() {
-        val tuning = resolveTopTabVisualTuning(UiPreset.MD3)
+    fun `md3 top tab tuning uses the compact shared top tab shape`() {
+        val tuning = resolveTopTabVisualTuning(AppTopTabPresentation.MATERIAL_UNDERLINE)
 
-        assertEquals(40f, tuning.nonFloatingIndicatorHeightDp, 0.001f)
-        assertEquals(20f, tuning.nonFloatingIndicatorCornerDp, 0.001f)
-        assertEquals(40f, tuning.floatingIndicatorHeightDp, 0.001f)
+        assertEquals(30f, tuning.nonFloatingIndicatorHeightDp, 0.001f)
+        assertEquals(9f, tuning.nonFloatingIndicatorCornerDp, 0.001f)
+        assertEquals(30f, tuning.floatingIndicatorHeightDp, 0.001f)
+        assertEquals(15f, tuning.tabTextSizeSp, 0.001f)
     }
 
     @Test
@@ -351,7 +358,7 @@ class TopTabStylePolicyTest {
                 selectionFraction = 1f,
                 showIcon = true,
                 showText = true,
-                uiPreset = UiPreset.IOS
+                presentation = AppTopTabPresentation.MOVING_CAPSULE
             ),
             0.001f
         )
@@ -361,7 +368,7 @@ class TopTabStylePolicyTest {
                 selectionFraction = 1f,
                 showIcon = true,
                 showText = false,
-                uiPreset = UiPreset.IOS
+                presentation = AppTopTabPresentation.MOVING_CAPSULE
             ),
             0.001f
         )
@@ -374,8 +381,188 @@ class TopTabStylePolicyTest {
             .substringAfter("private fun LightweightTopTabItem(")
             .substringBefore("Box(")
 
-        assertTrue(itemBlock.contains("HomeTopTabRenderer.IOS -> resolveSharedBottomBarCapsuleShape()"))
-        assertFalse(itemBlock.contains("HomeTopTabRenderer.IOS -> AppShapes.container(ContainerLevel.Pill)"))
+        assertTrue(itemBlock.contains("presentation == AppTopTabPresentation.MOVING_CAPSULE -> resolveSharedBottomBarCapsuleShape()"))
+        assertFalse(itemBlock.contains("presentation == AppTopTabPresentation.MOVING_CAPSULE -> AppShapes.container(ContainerLevel.Pill)"))
+    }
+
+    @Test
+    fun `top tab chrome centers wrapped dock`() {
+        val source = sourceText(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeTopTabChrome.kt"
+        )
+
+        assertTrue(source.contains("val dockAlignment = Alignment.Center"))
+        assertTrue(source.contains(".align(dockAlignment)"))
+        assertFalse(source.contains("val dockAlignment = Alignment.CenterStart"))
+    }
+
+    @Test
+    fun `top tab indicator keeps liquid rendering while owning direct horizontal drag`() {
+        val source = sourceText("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
+        val iosIndicatorBlock = source
+            .substringAfter("if (shouldUseMovingIosCapsule) {")
+            .substringBefore("if (shouldUseMd3DockBackedCapsule)")
+        val chromeSource = sourceText(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeTopTabChrome.kt"
+        )
+        val bottomBarIndicatorBlock = sourceText(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt"
+        ).substringAfter("internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(")
+            .substringBefore("@Composable\nprivate fun BiliPaiBottomBarSearchSlot(")
+
+        assertFalse(source.contains("topTabIndicatorDrag("))
+        assertFalse(source.contains("awaitHorizontalTouchSlopOrCancellation"))
+        assertTrue(source.contains("Modifier.draggable("))
+        assertTrue(source.contains(".then(indicatorDragModifier)"))
+        assertTrue(iosIndicatorBlock.contains("BiliPaiFloatingDockIndicator("))
+        assertEquals(1, iosIndicatorBlock.split("BiliPaiFloatingDockIndicator(").size - 1)
+        assertTrue(iosIndicatorBlock.contains("combinedBackdrop = indicatorCombinedBackdrop"))
+        assertTrue(iosIndicatorBlock.contains("pressProgress = topTabLensProgress"))
+        assertTrue(iosIndicatorBlock.contains("scaleX = indicatorScaleX"))
+        assertTrue(iosIndicatorBlock.contains("scaleY = indicatorScaleY"))
+        assertFalse(iosIndicatorBlock.contains(".fillMaxHeight()"))
+        assertTrue(source.contains(".zIndex(3f)"))
+        assertTrue(source.contains(".then(indicatorGestureModifier)"))
+        assertFalse(source.contains("shouldForceDragLiquidGlassIndicator"))
+        assertFalse(chromeSource.contains("Modifier.clip(tabShape)"))
+        assertTrue(bottomBarIndicatorBlock.contains("indicatorIdleSurfaceColor"))
+        assertTrue(bottomBarIndicatorBlock.contains("shellShape"))
+        assertTrue(bottomBarIndicatorBlock.contains("miuixDrawBackdrop("))
+        assertFalse(bottomBarIndicatorBlock.contains("BiliPaiBottomBarIndicatorLayer"))
+        assertFalse(source.contains("shouldUseTonalDockCapsule"))
+        assertFalse(source.contains("secondaryContainer.copy(alpha = 0.70f * selectionFraction)"))
+    }
+
+    @Test
+    fun `liquid top tab glyphs switch below indicator while glass is moving`() {
+        val source = sourceText("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
+        val visibleTabsBlock = source
+            .substringAfter("LazyRow(\n                    state = listState,")
+            .substringBefore("// Keep the indicator between its capture layer")
+        val indicatorLayerBlock = source
+            .substringAfter("// Keep the indicator between its capture layer")
+            .substringBefore("} // shared panel-offset group")
+
+        assertTrue(source.contains("val topTabVisibleContentZIndex = if (useTopTabGlassColorPath) 0f else 2f"))
+        assertTrue(visibleTabsBlock.contains(".zIndex(topTabVisibleContentZIndex)"))
+        assertTrue(visibleTabsBlock.contains("resolveTopTabVisibleContentAlpha("))
+        assertTrue(indicatorLayerBlock.contains(".zIndex(1f)"))
+    }
+
+    @Test
+    fun `liquid top tab visible glyph fades as export coverage increases`() {
+        assertEquals(1f, resolveTopTabVisibleContentAlpha(false, 1f), 0.001f)
+        assertEquals(1f, resolveTopTabVisibleContentAlpha(true, 0f), 0.001f)
+        assertEquals(0.5f, resolveTopTabVisibleContentAlpha(true, 0.5f), 0.001f)
+        assertEquals(0f, resolveTopTabVisibleContentAlpha(true, 1f), 0.001f)
+    }
+
+    @Test
+    fun `capsule top tabs reuse the bottom-bar floating dock shell`() {
+        assertTrue(
+            shouldHomeTopTabUseFloatingBottomBarDock(
+                skinPlainStyle = false,
+                hasSkinStickerIcons = false,
+                presentation = AppTopTabPresentation.MOVING_CAPSULE,
+                liquidGlassEnabled = true,
+                selectionIndicatorStyle = HomeSelectionIndicatorStyle.CAPSULE,
+            )
+        )
+        assertFalse(
+            shouldHomeTopTabUseFloatingBottomBarDock(
+                skinPlainStyle = false,
+                hasSkinStickerIcons = false,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
+                liquidGlassEnabled = false,
+                selectionIndicatorStyle = HomeSelectionIndicatorStyle.MD3_UNDERLINE,
+            )
+        )
+        assertFalse(
+            shouldHomeTopTabUseFloatingBottomBarDock(
+                skinPlainStyle = false,
+                hasSkinStickerIcons = false,
+                presentation = AppTopTabPresentation.MOVING_CAPSULE,
+                liquidGlassEnabled = false,
+                selectionIndicatorStyle = HomeSelectionIndicatorStyle.CAPSULE,
+            )
+        )
+        assertFalse(
+            shouldHomeTopTabUseFloatingBottomBarDock(
+                skinPlainStyle = true,
+                hasSkinStickerIcons = false,
+                presentation = AppTopTabPresentation.MOVING_CAPSULE,
+                liquidGlassEnabled = true,
+                selectionIndicatorStyle = HomeSelectionIndicatorStyle.CAPSULE,
+            )
+        )
+        assertFalse(
+            shouldHomeTopTabChromeDrawOuterShell(
+                drawOuterChrome = true,
+                innerOwnsFloatingDock = true,
+            )
+        )
+        assertEquals(56.dp, FloatingBottomBarDefaultShellHeight)
+        assertEquals(52.dp, FloatingBottomBarIndicatorHeight)
+        assertEquals(
+            resolveBiliPaiFloatingBottomBarWidth(
+                containerWidth = 360.dp,
+                itemCount = 4,
+                minEdgePadding = 20.dp,
+                labelMode = 0,
+                cornerRadius = FloatingBottomBarDefaultShellHeight / 2,
+            ),
+            resolveHomeTopTabFloatingDockWidth(
+                containerWidth = 360.dp,
+                itemCount = 4,
+                labelMode = 0,
+            ),
+        )
+        val topBar = sourceText("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
+        val chrome = sourceText(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeTopTabChrome.kt"
+        )
+        val dock = sourceText(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/BottomBarFloatingSegmentedControl.kt"
+        )
+        assertTrue(topBar.contains("HomeTopTabFloatingDock("))
+        assertTrue(topBar.contains("resolveHomeTopTabFloatingDockWidth("))
+        assertTrue(topBar.contains("itemWidth = null"))
+        assertTrue(topBar.contains("resolveFloatingDockLabelFontSize("))
+        assertTrue(topBar.contains("showIcon = showIcon"))
+        assertTrue(topBar.contains("showText = showText"))
+        assertTrue(chrome.contains("resolveHomeTopTabFloatingDockWidth("))
+        assertTrue(dock.contains("itemIndex = index"))
+        val header = sourceText(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt"
+        )
+        assertTrue(header.contains("includeTabInBlur = true"))
+        assertTrue(
+            header.contains(
+                "tabHorizontalPadding = if (topTabInnerOwnsFloatingDockShell)"
+            )
+        )
+    }
+
+    @Test
+    fun `liquid top tab keeps selected icon and text on the export layer even at rest`() {
+        assertTrue(resolveTopTabUsesGlassExportForSelectedGlyphs(liquidGlassEnabled = true))
+        assertFalse(resolveTopTabUsesGlassExportForSelectedGlyphs(liquidGlassEnabled = false))
+        val source = sourceText("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
+        assertTrue(source.contains("resolveTopTabUsesGlassExportForSelectedGlyphs("))
+        assertFalse(
+            source.contains(
+                "resolveSharedLiquidIndicatorUseGlassColorPath(\n            liquidGlassEnabled = shouldUseLiquidGlassIndicator,"
+            )
+        )
+    }
+
+    @Test
+    fun `top tab viewport follows selection without indicator drag state`() {
+        val source = sourceText("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
+
+        assertFalse(source.contains("LaunchedEffect(topTabDragActive"))
+        assertFalse(source.contains("topTabDragTargetIndex"))
+        assertTrue(source.contains("KeepLazyTabSelectionVisible(listState, selectedIndex)"))
     }
 
     @Test
@@ -401,12 +588,49 @@ class TopTabStylePolicyTest {
     @Test
     fun `ios top tab icon modes use readable glyph sizes`() {
         assertEquals(18f, resolveTopTabIconSizeDp(labelMode = 0), 0.001f)
-        assertEquals(22f, resolveTopTabIconSizeDp(labelMode = 1), 0.001f)
-        assertEquals(2f, resolveTopTabIconTextSpacingDp(labelMode = 0), 0.001f)
-        assertEquals(52.dp, resolveIosTopTabRowHeight(isFloatingStyle = false))
-        assertEquals(52.dp, resolveIosTopTabRowHeight(isFloatingStyle = true))
+        assertEquals(18f, resolveTopTabIconSizeDp(labelMode = 1), 0.001f)
+        assertEquals(6f, resolveTopTabIconTextSpacingDp(labelMode = 0), 0.001f)
+        // Must match compact chrome track (HomeTopPresetStyle 36/40) or labels clip to "...".
+        assertEquals(36.dp, resolveIosTopTabRowHeight(isFloatingStyle = false))
+        assertEquals(40.dp, resolveIosTopTabRowHeight(isFloatingStyle = true))
         assertEquals(44.dp, resolveIosTopTabActionButtonSize(isFloatingStyle = false))
         assertEquals(22.dp, resolveIosTopTabActionIconSize(isFloatingStyle = false))
+    }
+
+    @Test
+    fun `all three top tab presentations use bottom dock shell height`() {
+        listOf(
+            topStyle(UiPreset.IOS, AndroidNativeVariant.MATERIAL3),
+            topStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3),
+            topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX)
+        ).forEach { style ->
+            assertEquals(resolveBiliPaiBottomBarDockHeight(searchExpanded = false), style.tabRowHeightDocked)
+            assertEquals(resolveBiliPaiBottomBarDockHeight(searchExpanded = false), style.tabRowHeightFloating)
+        }
+
+        assertEquals(36.dp, resolveIosTopTabRowHeight(isFloatingStyle = false))
+        assertEquals(40.dp, resolveIosTopTabRowHeight(isFloatingStyle = true))
+        assertEquals(
+            36.dp,
+            resolveMd3TopTabVisualSpec(
+                isFloatingStyle = false,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE
+            ).rowHeight
+        )
+        assertEquals(
+            40.dp,
+            resolveMd3TopTabVisualSpec(
+                isFloatingStyle = true,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE
+            ).rowHeight
+        )
+        assertEquals(
+            36.dp,
+            resolveMd3TopTabVisualSpec(
+                isFloatingStyle = false,
+                presentation = AppTopTabPresentation.TONAL_CAPSULE
+            ).rowHeight
+        )
     }
 
     @Test
@@ -414,23 +638,23 @@ class TopTabStylePolicyTest {
         val textSize = resolveTopTabLabelTextSizeSp(labelMode = 0)
         val lineHeight = resolveTopTabLabelLineHeightSp(labelMode = 0)
 
-        assertEquals(14f, textSize, 0.001f)
-        assertEquals(18f, lineHeight, 0.001f)
+        assertEquals(15f, textSize, 0.001f)
+        assertEquals(20f, lineHeight, 0.001f)
         assertTrue(lineHeight >= textSize)
     }
 
     @Test
-    fun `md3 top tabs should use compact text first underline sizing`() {
+    fun `md3 top tabs use compact rounded rectangle sizing`() {
         val spec = resolveMd3TopTabVisualSpec(isFloatingStyle = false)
 
-        assertEquals(48.dp, spec.rowHeight)
-        assertEquals(2.dp, spec.selectedCapsuleHeight)
-        assertEquals(1.dp, spec.selectedCapsuleCornerRadius)
-        assertEquals(20.dp, spec.iconSize)
+        assertEquals(36.dp, spec.rowHeight)
+        assertEquals(30.dp, spec.selectedCapsuleHeight)
+        assertEquals(9.dp, spec.selectedCapsuleCornerRadius)
+        assertEquals(18.dp, spec.iconSize)
         assertEquals(15.sp, spec.labelTextSize)
         assertEquals(20.sp, spec.labelLineHeight)
         assertEquals(0.dp, spec.iconLabelSpacing)
-        assertEquals(12.dp, spec.itemHorizontalPadding)
+        assertEquals(10.dp, spec.itemHorizontalPadding)
         assertEquals(0.dp, spec.selectedCapsuleShadowElevation)
         assertEquals(0.dp, spec.selectedCapsuleTonalElevation)
     }
@@ -442,11 +666,11 @@ class TopTabStylePolicyTest {
             labelMode = 0
         )
 
-        assertEquals(60.dp, spec.rowHeight)
-        assertEquals(8.dp, spec.itemHorizontalPadding)
-        assertEquals(3.dp, spec.iconLabelSpacing)
-        assertEquals(20.dp, spec.iconSize)
-        assertEquals(14.sp, spec.labelTextSize)
+        assertEquals(56.dp, spec.rowHeight)
+        assertEquals(10.dp, spec.itemHorizontalPadding)
+        assertEquals(6.dp, spec.iconLabelSpacing)
+        assertEquals(18.dp, spec.iconSize)
+        assertEquals(15.sp, spec.labelTextSize)
         assertTrue(spec.labelLineHeight >= spec.labelTextSize)
     }
 
@@ -454,127 +678,59 @@ class TopTabStylePolicyTest {
     fun `android native miuix top tabs should promote capsule selection styling`() {
         val spec = resolveMd3TopTabVisualSpec(
             isFloatingStyle = false,
-            androidNativeVariant = AndroidNativeVariant.MIUIX
+            presentation = AppTopTabPresentation.TONAL_CAPSULE
         )
 
-        assertEquals(48.dp, spec.rowHeight)
+        assertEquals(36.dp, spec.rowHeight)
         assertEquals(30.dp, spec.selectedCapsuleHeight)
-        assertEquals(15.dp, spec.selectedCapsuleCornerRadius)
-        assertEquals(12.dp, spec.itemHorizontalPadding)
-        assertEquals(2.dp, spec.iconLabelSpacing)
+        assertEquals(9.dp, spec.selectedCapsuleCornerRadius)
+        assertEquals(10.dp, spec.itemHorizontalPadding)
+        assertEquals(0.dp, spec.iconLabelSpacing)
         assertEquals(15.sp, spec.labelTextSize)
     }
 
-    @Test
-    fun `android native miuix top tab content is inset from row bottom`() {
-        val rowHeight = 48.dp
-
-        assertEquals(2.dp, resolveMiuixTopTabRowVerticalInset())
-        assertEquals(44.dp, resolveMiuixTopTabContentHeight(rowHeight))
-    }
 
     @Test
-    fun `android native miuix text tabs should use native miuix row while icon modes stay shared`() {
+    fun `top tabs only draw outer dock for liquid glass`() {
         assertTrue(
-            shouldUseNativeMiuixTopTabRow(
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
-                labelMode = 2
-            )
-        )
-        assertEquals(
-            false,
-            shouldUseNativeMiuixTopTabRow(
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
-                labelMode = 0
-            )
-        )
-        assertFalse(
-            shouldUseNativeMiuixTopTabRow(
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
-                labelMode = 1
-            )
-        )
-    }
-
-    @Test
-    fun `android native miuix top tab chrome should avoid large primary color fills`() {
-        val source = sourceText("src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
-        val miuixTabRowSource = source.substringAfter("private fun MiuixCategoryTabRow(")
-
-        assertTrue(
-            "MiuiX 分类条必须通过颜色策略收敛普通态背景",
-            miuixTabRowSource.contains("resolveMiuixTopTabRowColors(")
-        )
-        assertTrue(
-            "MiuiX 分区按钮必须通过颜色策略收敛普通态背景",
-            miuixTabRowSource.contains("resolveMiuixTopTabActionColors(")
-        )
-        assertFalse(
-            "MiuiX 分类条普通容器不应使用 primary 大面积铺色",
-            miuixTabRowSource.contains("backgroundColor = MiuixTheme.colorScheme.primary.copy")
-        )
-        assertFalse(
-            "MiuiX 分区按钮普通态不应使用 primary 大面积铺色",
-            miuixTabRowSource.contains("color = MiuixTheme.colorScheme.primary.copy")
-        )
-    }
-
-    @Test
-    fun `android native miuix top tabs keep native contour indicator driver`() {
-        val source = sourceText("src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
-        val miuixSelectionSource = source
-            .substringAfter("private fun MiuixCategoryTabRow(")
-            .substringBefore("val topTabSpec =")
-
-        assertTrue(
-            "MiuiX 分类条必须继续使用原生轮廓 TabRow",
-            source.substringAfter("private fun MiuixCategoryTabRow(")
-                .contains("MiuixTabRowWithContour(")
-        )
-        assertFalse(
-            "MiuiX 原生轮廓指示器不应复用 MD3 的 pager 指示器位置驱动",
-            miuixSelectionSource.contains("resolveTopTabIndicatorRenderPosition(")
-        )
-        assertTrue(
-            "MiuiX 可见槽位应由已选中分类驱动，避免滑动中退化成 MD3 指示器语义",
-            miuixSelectionSource.contains("selectedIndex = selectedIndex")
-        )
-    }
-
-    @Test
-    fun `android native miuix top tabs skip outer chrome surface`() {
-        assertFalse(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                presentation = AppTopTabPresentation.TONAL_CAPSULE,
                 materialMode = TopTabMaterialMode.LIQUID_GLASS
             )
         )
         assertFalse(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                presentation = AppTopTabPresentation.TONAL_CAPSULE,
                 materialMode = TopTabMaterialMode.BLUR
             )
         )
         assertFalse(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                presentation = AppTopTabPresentation.TONAL_CAPSULE,
                 materialMode = TopTabMaterialMode.PLAIN
             )
         )
         assertTrue(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 materialMode = TopTabMaterialMode.LIQUID_GLASS
+            )
+        )
+        assertFalse(
+            shouldDrawHomeTopTabOuterChromeSurface(
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
+                materialMode = TopTabMaterialMode.PLAIN
+            )
+        )
+        assertFalse(
+            shouldDrawHomeTopTabOuterChromeSurface(
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
+                materialMode = TopTabMaterialMode.BLUR
             )
         )
         assertTrue(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.IOS,
-                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                presentation = AppTopTabPresentation.MOVING_CAPSULE,
                 materialMode = TopTabMaterialMode.LIQUID_GLASS
             )
         )
@@ -599,7 +755,7 @@ class TopTabStylePolicyTest {
     }
 
     @Test
-    fun `android native miuix top tabs should use miuix secondary container emphasis`() {
+    fun `android native miuix top tabs should use miuix neutral surface content color`() {
         val colorScheme = lightColorScheme(
             primary = Color(0xFF2D6A4F),
             surfaceContainerHigh = Color(0xFFF4ECE1),
@@ -610,82 +766,48 @@ class TopTabStylePolicyTest {
         )
 
         assertEquals(
-            colorScheme.secondaryContainer,
+            colorScheme.onSurface,
             resolveMd3TopTabSelectedContainerColor(
                 colorScheme = colorScheme,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
+                uiStyle = AppUiStyle.MIUIX
             )
         )
         assertEquals(
-            colorScheme.onSecondaryContainer,
+            colorScheme.onSurface,
             resolveMd3TopTabSelectedIconColor(
                 colorScheme = colorScheme,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
+                uiStyle = AppUiStyle.MIUIX
             )
         )
         assertEquals(
-            colorScheme.onSecondaryContainer,
+            colorScheme.onSurface,
             resolveMd3TopTabSelectedLabelColor(
                 colorScheme = colorScheme,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
+                uiStyle = AppUiStyle.MIUIX
+            )
+        )
+        assertEquals(
+            colorScheme.onSurface,
+            resolveIosTopTabSelectedContentColor(
+                colorScheme = colorScheme,
+                uiStyle = AppUiStyle.MIUIX
             )
         )
     }
 
-    @Test
-    fun `android native miuix top tab row colors should stay neutral outside selection`() {
-        val colorScheme = lightColorScheme(
-            primary = Color(0xFF1E88E5),
-            surfaceContainer = Color(0xFFF4F5F8),
-            secondaryContainer = Color(0xFFE3EAF8),
-            onSecondaryContainer = Color(0xFF1B2230),
-            onSurfaceVariant = Color(0xFF5F6368)
-        )
-
-        val colors = resolveMiuixTopTabRowColors(
-            surfaceContainer = colorScheme.surfaceContainer,
-            onSurfaceVariant = colorScheme.onSurfaceVariant,
-            secondaryContainer = colorScheme.secondaryContainer,
-            onSecondaryContainer = colorScheme.onSecondaryContainer
-        )
-
-        assertEquals(colorScheme.surfaceContainer.copy(alpha = 0.72f), colors.backgroundColor)
-        assertEquals(colorScheme.secondaryContainer.copy(alpha = 0.58f), colors.selectedBackgroundColor)
-        assertEquals(colorScheme.onSurfaceVariant, colors.contentColor)
-        assertEquals(colorScheme.onSecondaryContainer, colors.selectedContentColor)
-        assertFalse(colors.backgroundColor == colorScheme.primary.copy(alpha = 0.10f))
-    }
-
-    @Test
-    fun `android native miuix top tab action colors should stay neutral`() {
-        val colorScheme = lightColorScheme(
-            primary = Color(0xFF1E88E5),
-            surfaceContainer = Color(0xFFF4F5F8),
-            outlineVariant = Color(0xFFC9CDD6),
-            onSurfaceVariant = Color(0xFF5F6368)
-        )
-
-        val colors = resolveMiuixTopTabActionColors(
-            surfaceContainer = colorScheme.surfaceContainer,
-            outlineVariant = colorScheme.outlineVariant,
-            contentColor = colorScheme.onSurfaceVariant
-        )
-
-        assertEquals(colorScheme.surfaceContainer.copy(alpha = 0.74f), colors.containerColor)
-        assertEquals(colorScheme.outlineVariant.copy(alpha = 0.42f), colors.borderColor)
-        assertEquals(colorScheme.onSurfaceVariant, colors.contentColor)
-        assertFalse(colors.containerColor == colorScheme.primary.copy(alpha = 0.10f))
-    }
 
     @Test
     fun `md3 preset uses material tab indicator style`() {
         assertEquals(
             TopTabIndicatorStyle.MATERIAL,
-            resolveTopTabIndicatorStyle(UiPreset.MD3)
+            resolveTopTabIndicatorStyle(AppTopTabPresentation.MATERIAL_UNDERLINE)
         )
         assertEquals(
             TopTabIndicatorStyle.CAPSULE,
-            resolveTopTabIndicatorStyle(UiPreset.IOS)
+            resolveTopTabIndicatorStyle(AppTopTabPresentation.MOVING_CAPSULE)
         )
     }
 
@@ -693,60 +815,35 @@ class TopTabStylePolicyTest {
     fun `md3 top tabs always use material indicator after removing top liquid glass`() {
         assertTrue(
             shouldUseMd3TopTabMaterialIndicator(
-                uiPreset = UiPreset.MD3,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 liquidGlassEnabled = true
             )
         )
         assertTrue(
             shouldUseMd3TopTabMaterialIndicator(
-                uiPreset = UiPreset.MD3,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 liquidGlassEnabled = false
             )
         )
     }
 
     @Test
-    fun `md3 and miuix use screenshot underline when liquid glass is off`() {
-        assertTrue(
-            shouldUsePlainMd3TopTabUnderline(
-                uiPreset = UiPreset.MD3,
-                liquidGlassEnabled = false
-            )
-        )
-        assertFalse(
-            shouldUsePlainMd3TopTabUnderline(
-                uiPreset = UiPreset.MD3,
-                liquidGlassEnabled = true
-            )
-        )
-        assertFalse(
-            shouldUsePlainMd3TopTabUnderline(
-                uiPreset = UiPreset.IOS,
-                liquidGlassEnabled = false
-            )
-        )
-    }
-
-    @Test
-    fun `md3 top tabs remove outer dock when liquid glass is off`() {
+    fun `md3 top tabs only keep outer dock in liquid glass mode`() {
         assertFalse(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 materialMode = TopTabMaterialMode.BLUR
             )
         )
         assertFalse(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 materialMode = TopTabMaterialMode.PLAIN
             )
         )
         assertTrue(
             shouldDrawHomeTopTabOuterChromeSurface(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
+                presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 materialMode = TopTabMaterialMode.LIQUID_GLASS
             )
         )
@@ -833,11 +930,7 @@ class TopTabStylePolicyTest {
         )
 
         presets.forEach { (uiPreset, androidNativeVariant) ->
-            resolveHomeTopPresetStyle(
-                uiPreset = uiPreset,
-                androidNativeVariant = androidNativeVariant,
-                labelMode = 0
-            )
+            topStyle(uiPreset, androidNativeVariant, labelMode = 0)
             val contentColor = resolveHomeSkinTopTabContentColor(
                 topAtmosphereTint = lightFallbackTint,
                 hasTopAtmosphereImage = true,
@@ -853,25 +946,11 @@ class TopTabStylePolicyTest {
     }
 
     @Test
-    fun `skin decoration keeps host top tab readability strategy`() {
-        assertFalse(shouldUseHomeSkinPlainTopTabs(null))
-        assertFalse(
-            shouldUseHomeSkinPlainTopTabs(
-                HomeUiSkinDecoration(
-                    skinId = "test",
-                    topAtmosphereTint = Color(0xFFE4F6FF),
-                    searchCapsuleTint = Color.White
-                )
-            )
-        )
-    }
-
-    @Test
     fun `skin top tabs render sticker image before host vector icon fallback`() {
         val source = sourceText("src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
         val rowCallSource = source
             .substringAfter("LightweightHomeTopTabs(")
-            .substringBefore("private fun MiuixCategoryTabRow(")
+            .substringBefore("private fun rememberTopTabPagerDragHeld(")
         val itemSource = source
             .substringAfter("private fun LightweightTopTabItem(")
             .substringBefore("@OptIn(ExperimentalMaterial3Api::class)")
@@ -884,13 +963,17 @@ class TopTabStylePolicyTest {
         assertTrue(itemSource.contains("resolveTopTabSkinStickerIconSize(showText = showText)"))
         assertTrue(rowCallSource.contains("resolveTopTabSkinPartitionIconSize()"))
         assertTrue(rowCallSource.contains("resolveTopTabSkinStickerRowHeight("))
-        assertTrue(rowCallSource.contains("if (effectiveRenderer == HomeTopTabRenderer.MD3 && !hasSkinStickerIcons)"))
+        // 纯色 wash 胶囊仅限 skin 主题兜底；常规主题始终由移动胶囊负责。
+        assertTrue(rowCallSource.contains("if (effectivePresentation == AppTopTabPresentation.MATERIAL_UNDERLINE && !hasSkinStickerIcons && skinPlainStyle)"))
         assertTrue(itemSource.contains("resolveTopTabSkinStickerItemVerticalPadding(showText = showText)"))
         assertTrue(itemSource.contains("resolveTopTabSkinStickerIndicatorWidth()"))
         assertTrue(itemSource.contains("alpha(selectionFraction)"))
-        assertTrue(itemSource.indexOf("AsyncImage(") < itemSource.indexOf("imageVector = icon"))
+        assertTrue(itemSource.indexOf("AsyncImage(") < itemSource.indexOf("TopTabBlendedIcon("))
         assertTrue(itemSource.contains("else {"))
-        assertTrue(itemSource.contains("resolveTopTabCategoryIcon(categoryKey, uiPreset)"))
+        assertTrue(itemSource.contains("resolveTopTabCategoryIcon("))
+        assertFalse(itemSource.contains("resolveMiuixPreferredTopTabCategoryIcon("))
+        // Host still passes the shared icon family into LightweightHomeTopTabs.
+        assertTrue(rowCallSource.contains("iconFamily = topTabIconFamily") || source.contains("iconFamily = topTabIconFamily"))
     }
 
     @Test
@@ -898,10 +981,9 @@ class TopTabStylePolicyTest {
         val source = sourceText("src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
         val categoryTabRowSource = source
             .substringAfter("fun CategoryTabRow(")
-            .substringBefore("@Composable\nprivate fun MiuixCategoryTabRow(")
+            .substringBefore("@Composable\nprivate fun rememberTopTabPagerDragHeld(")
 
         assertTrue(categoryTabRowSource.contains("val hasSkinStickerIcons = topTabSkinIconPaths.isNotEmpty() || !partitionSkinIconPath.isNullOrBlank()"))
-        assertTrue(categoryTabRowSource.contains("if (showPartitionAction && !hasSkinStickerIcons && !skinPlainStyle && presetStyle.renderer == HomeTopTabRenderer.MIUIX)"))
         assertTrue(categoryTabRowSource.contains("topTabSkinIconPaths = topTabSkinIconPaths"))
         assertTrue(categoryTabRowSource.contains("partitionSkinIconPath = partitionSkinIconPath"))
     }
@@ -912,31 +994,41 @@ class TopTabStylePolicyTest {
             18.dp,
             resolveMd3TopTabActionButtonCorner(
                 isFloatingStyle = true,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.TONAL_CAPSULE
             )
         )
         assertEquals(
             14.dp,
             resolveMd3TopTabActionButtonCorner(
                 isFloatingStyle = false,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.TONAL_CAPSULE
             )
         )
         assertEquals(
             50.dp,
             resolveMd3TopTabActionButtonSize(
                 isFloatingStyle = true,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.TONAL_CAPSULE
             )
         )
         assertEquals(
             44.dp,
             resolveMd3TopTabActionButtonSize(
                 isFloatingStyle = false,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.TONAL_CAPSULE
             )
         )
     }
+
+    private fun topStyle(
+        uiPreset: UiPreset,
+        androidNativeVariant: AndroidNativeVariant,
+        labelMode: Int = 2,
+    ): HomeTopPresetStyle = resolveHomeTopPresetStyle(
+        // 兼容桥接：旧 pair 输入经迁移表落到两值风格。
+        chromePolicy = resolveAppTopChromePolicy(resolveUiStyle(uiPreset, androidNativeVariant)),
+        labelMode = labelMode,
+    )
 
     private fun sourceText(path: String): String {
         val normalizedPath = path.removePrefix("app/")

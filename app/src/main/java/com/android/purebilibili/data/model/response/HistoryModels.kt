@@ -61,17 +61,24 @@ data class HistoryData(
             business == HistoryBusiness.ARTICLE -> history?.oid ?: 0L
             else -> history?.oid ?: 0L
         }
+        val resolvedCover = listOf(cover, pic, covers.firstOrNull().orEmpty())
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
         return VideoItem(
             id = if (business == HistoryBusiness.ARTICLE) resolvedArticleId else (history?.oid ?: 0L),
             bvid = history?.bvid ?: "",
             cid = history?.cid ?: 0,
             title = title,
-            pic = listOf(cover, pic, covers.firstOrNull().orEmpty()).firstOrNull { it.isNotBlank() }.orEmpty(),
+            pic = resolvedCover,
             owner = Owner(mid = author_mid, name = author_name, face = author_face),
             stat = stat ?: Stat(),
             duration = duration,
             progress = progress,
-            view_at = view_at
+            view_at = view_at,
+            isVertical = resolveKnownVerticalVideo(
+                isVerticalVideo = false,
+                coverUrl = resolvedCover
+            )
         )
     }
     
@@ -85,7 +92,7 @@ data class HistoryData(
             videoItem = toVideoItem(),
             business = business,
             epid = history?.epid ?: 0,
-            seasonId = if (business == HistoryBusiness.PGC) (history?.oid ?: 0) else 0,
+            seasonId = if (business == HistoryBusiness.PGC || business == HistoryBusiness.CHEESE) (history?.oid ?: 0) else 0,
             roomId = if (business == HistoryBusiness.LIVE) (history?.oid ?: 0) else 0,
             cid = history?.cid ?: 0,
             page = history?.page ?: 1,
@@ -96,10 +103,10 @@ data class HistoryData(
 
 @Serializable
 data class HistoryPage(
-    val oid: Long = 0,
     val bvid: String = "",
-    val epid: Long = 0,        // 番剧剧集 ID
-    val cid: Long = 0,         // 分 P cid
+    val cid: Long = 0,
+    val epid: Long = 0,
+    val oid: Long = 0,
     val business: String = "", // 内容类型: archive/pgc/live
     val page: Int = 1          // 分 P 号
 )
@@ -112,6 +119,7 @@ enum class HistoryBusiness(val value: String) {
     PGC("pgc"),           // 番剧/影视
     LIVE("live"),         // 直播
     ARTICLE("article"),   // 文章
+    CHEESE("cheese"),     // 课堂
     UNKNOWN("");          // 未知
     
     companion object {
@@ -122,6 +130,8 @@ enum class HistoryBusiness(val value: String) {
                 normalizedValue.equals(PGC.value, ignoreCase = true) -> PGC
                 normalizedValue.equals(LIVE.value, ignoreCase = true) -> LIVE
                 normalizedValue.contains(ARTICLE.value, ignoreCase = true) -> ARTICLE
+                normalizedValue.equals(CHEESE.value, ignoreCase = true) ||
+                    normalizedValue.equals("pugv", ignoreCase = true) -> CHEESE
                 else -> UNKNOWN
             }
         }

@@ -9,8 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +18,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.feature.video.ui.components.*
 
 /**
@@ -87,7 +87,8 @@ fun BottomRightControls(
             SpeedSelectionMenu(
                 currentSpeed = currentSpeed,
                 onSpeedSelected = onSpeedChange,
-                onDismiss = { showSpeedMenu = false }
+                onDismiss = { showSpeedMenu = false },
+                placement = SpeedSelectionMenuPlacement.CENTER
             )
         }
         
@@ -119,13 +120,13 @@ private fun QualityButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    AppSurface(
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(layoutPolicy.chipCornerRadiusDp.dp),
         color = Color.Black.copy(alpha = 0.5f)
     ) {
-        Text(
+        AppText(
             text = qualityText,
             color = Color.White,
             fontSize = layoutPolicy.chipFontSp.sp,

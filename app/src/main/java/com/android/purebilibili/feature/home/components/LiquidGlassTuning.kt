@@ -1,39 +1,54 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.store.LiquidGlassAdvancedSettings
 import com.android.purebilibili.core.store.LiquidGlassMode
+import com.android.purebilibili.core.store.LiquidGlassReadabilityMode
 import com.android.purebilibili.core.store.LiquidGlassStyle
 import com.android.purebilibili.core.store.normalizeLiquidGlassProgress
 import com.android.purebilibili.core.store.normalizeLiquidGlassStrength
-import com.android.purebilibili.core.store.resolveDefaultLiquidGlassStrength
 import com.android.purebilibili.core.store.resolveLiquidGlassStrengthFromProgress
 import com.android.purebilibili.core.store.resolveLegacyLiquidGlassProgress
 import com.android.purebilibili.core.store.resolveLegacyLiquidGlassMode
 
 data class LiquidGlassTuning(
+    val readabilityMode: LiquidGlassReadabilityMode,
     val mode: LiquidGlassMode,
     val progress: Float,
     val strength: Float,
     val backdropBlurRadius: Float,
+    val progressiveBlurRadius: Float,
+    val progressiveBlurStartFraction: Float = BILIPAI_PROGRESSIVE_TOP_BLUR_START_FRACTION,
+    val progressiveBlurEndFraction: Float,
+    val progressiveBlurCurve: Float,
     val surfaceAlpha: Float,
     val whiteOverlayAlpha: Float,
-    val refractIntensity: Float,
+    val saturation: Float,
     val refractionAmount: Float,
     val refractionHeight: Float,
     val indicatorTintAlpha: Float,
     val indicatorLensBoost: Float,
     val indicatorEdgeWarpBoost: Float,
     val indicatorChromaticBoost: Float,
-    val chromaticAberrationEnabled: Boolean,
-    val chromaticAberrationAmount: Float,
-    val scrollCoupledRefraction: Boolean,
+    val contentReadabilityBoost: Float,
+    val contentReadabilityScrimAlpha: Float,
+    val contentDistortionScale: Float,
+    val shellChromaticAberrationAmount: Float,
+    val indicatorChromaticAberrationAmount: Float,
     val scrollCoupledRefractionAmount: Float,
-    val useNeutralIndicatorTint: Boolean,
-    val neutralIndicatorTintAmount: Float,
-    val depthEffectEnabled: Boolean,
-    val depthEffectAmount: Float
 )
 
-internal fun resolveLiquidGlassTuning(progress: Float): LiquidGlassTuning {
+private const val UPSTREAM_BALANCED_CHROMATIC_CONTROL = 0.56f
+private const val UPSTREAM_INDICATOR_CHROMATIC_ABERRATION = 0.5f
+private const val BALANCED_CONTENT_DISTORTION = 0.45f
+private const val MAX_CONTENT_DISTORTION_SCALE = 1.8f
+internal const val LIQUID_GLASS_BALANCED_BACKDROP_BLUR_RADIUS_DP = 4f
+internal const val LIQUID_GLASS_FROSTED_BACKDROP_BLUR_RADIUS_DP = 10f
+
+internal fun resolveLiquidGlassTuning(
+    progress: Float,
+    advancedSettings: LiquidGlassAdvancedSettings = LiquidGlassAdvancedSettings(),
+    readabilityMode: LiquidGlassReadabilityMode = LiquidGlassReadabilityMode.STABLE,
+): LiquidGlassTuning {
     val normalizedProgress = normalizeLiquidGlassProgress(progress)
     val mode = when {
         normalizedProgress < 0.34f -> LiquidGlassMode.CLEAR
@@ -41,33 +56,94 @@ internal fun resolveLiquidGlassTuning(progress: Float): LiquidGlassTuning {
         else -> LiquidGlassMode.FROSTED
     }
     val frostWeight = normalizedProgress
-    val chromaticAmount = (1f - normalizedProgress).coerceIn(0f, 1f) * 0.18f
-    val scrollCouplingAmount = (1f - normalizedProgress * 1.15f).coerceIn(0f, 1f)
-    val neutralTintAmount = (1f - normalizedProgress * 2.2f).coerceIn(0f, 1f)
-    val depthEffectAmount = (1f - normalizedProgress * 1.2f).coerceIn(0f, 1f)
+    val configuredReadability = advancedSettings.contentReadability.coerceIn(0f, 1f)
+    // A smooth fourth-power response keeps the balanced preset subtle while making the whole
+    // 0..1 control range effective. The old threshold mapping made every value below 0.62 a
+    // visual no-op even though the settings UI exposed that range.
+    val readabilityProtection = configuredReadability * configuredReadability *
+        configuredReadability * configuredReadability
+    // Readability protection must remain active across the full slider. It is strongest for
+    // transparent glass, but a user-selected 100% must not become a no-op around 50%.
+    val readabilityWeight = midpointLerp(1f, 0.6f, 0.25f, normalizedProgress)
+    val contentReadabilityBoost = readabilityWeight * readabilityProtection
+    val contentReadabilityScrimAlpha = contentReadabilityBoost *
+        (0.12f + readabilityProtection * 0.22f)
+    val chromaticControl = advancedSettings.chromaticAberration.coerceIn(0f, 1f)
+    // Miuix keeps the 24dp shell achromatic and applies 0.5 dispersion to the moving
+    // 10dp/14dp indicator. The balanced anchor reproduces that split exactly.
+    val shellChromaticAmount = if (chromaticControl > UPSTREAM_BALANCED_CHROMATIC_CONTROL) {
+        (chromaticControl - UPSTREAM_BALANCED_CHROMATIC_CONTROL) /
+            (1f - UPSTREAM_BALANCED_CHROMATIC_CONTROL) *
+            UPSTREAM_INDICATOR_CHROMATIC_ABERRATION
+    } else {
+        0f
+    }
+    val indicatorChromaticAmount = (
+        chromaticControl / UPSTREAM_BALANCED_CHROMATIC_CONTROL
+    ).coerceIn(0f, 1f) * UPSTREAM_INDICATOR_CHROMATIC_ABERRATION
+    val configuredDistortion = advancedSettings.contentDistortion.coerceIn(0f, 1f)
+    // Preserve the upstream-balanced anchor (0.45 -> 1x), then continue toward 1.8x instead of
+    // saturating at 0.81 and leaving the final fifth of the slider ineffective.
+    val contentDistortionScale = if (configuredDistortion <= BALANCED_CONTENT_DISTORTION) {
+        configuredDistortion / BALANCED_CONTENT_DISTORTION
+    } else {
+        1f + (configuredDistortion - BALANCED_CONTENT_DISTORTION) /
+            (1f - BALANCED_CONTENT_DISTORTION) *
+            (MAX_CONTENT_DISTORTION_SCALE - 1f)
+    }
+    val scrollCouplingAmount = midpointLerp(1f, 0f, 0f, normalizedProgress)
     return LiquidGlassTuning(
+        readabilityMode = readabilityMode,
         mode = mode,
         progress = normalizedProgress,
         strength = resolveLiquidGlassStrengthFromProgress(normalizedProgress),
-        backdropBlurRadius = lerp(3f, 30f, normalizedProgress),
-        surfaceAlpha = lerp(0.12f, 0.42f, normalizedProgress),
-        whiteOverlayAlpha = lerp(0.012f, 0.11f, normalizedProgress),
-        refractIntensity = lerp(0.5f, 0.14f, normalizedProgress),
-        refractionAmount = lerp(26f, 8f, normalizedProgress),
-        refractionHeight = lerp(22f, 8f, normalizedProgress),
-        indicatorTintAlpha = lerp(0.20f, 0.34f, normalizedProgress),
-        indicatorLensBoost = lerp(1.72f, 1.04f, frostWeight),
-        indicatorEdgeWarpBoost = lerp(1.78f, 1.08f, frostWeight),
-        indicatorChromaticBoost = lerp(1.36f, 0.82f, frostWeight),
-        chromaticAberrationEnabled = chromaticAmount > 0.01f,
-        chromaticAberrationAmount = chromaticAmount,
-        scrollCoupledRefraction = scrollCouplingAmount > 0.01f,
+        // The clear endpoint intentionally preserves the dynamic dock's formerly accidental
+        // crystal-glass recipe: no backdrop blur, but enough tint, saturation and refraction
+        // to keep the capsule legible over moving content. The midpoint remains the original
+        // BiliPai material. Frosted stays stronger, but is capped so typical densities stay
+        // in a single Miuix 4× blur pass instead of the 8×/16× cross-fade band (σ≈20 / σ≈44)
+        // that renders two full cascades per capsule and hitches the live slider.
+        backdropBlurRadius = midpointLerp(
+            0f,
+            LIQUID_GLASS_BALANCED_BACKDROP_BLUR_RADIUS_DP,
+            LIQUID_GLASS_FROSTED_BACKDROP_BLUR_RADIUS_DP,
+            normalizedProgress,
+        ),
+        progressiveBlurRadius = advancedSettings.progressiveBlurRadius.coerceIn(0f, 1f) * 40f,
+        progressiveBlurStartFraction = BILIPAI_PROGRESSIVE_TOP_BLUR_START_FRACTION,
+        progressiveBlurEndFraction = 0.25f +
+            advancedSettings.progressiveBlurExtent.coerceIn(0f, 1f) * 0.75f,
+        progressiveBlurCurve = 0.35f +
+            advancedSettings.progressiveBlurCurve.coerceIn(0f, 1f) * 1.65f,
+        surfaceAlpha = midpointLerp(0.40f, 0.40f, 0.54f, normalizedProgress),
+        whiteOverlayAlpha = midpointLerp(0.04f, 0.04f, 0.14f, normalizedProgress),
+        saturation = midpointLerp(1.5f, 1.5f, 1.24f, normalizedProgress),
+        refractionAmount = midpointLerp(24f, 24f, 8f, normalizedProgress),
+        refractionHeight = midpointLerp(24f, 24f, 8f, normalizedProgress),
+        indicatorTintAlpha = midpointLerp(0.20f, 0.28f, 0.38f, normalizedProgress),
+        // 照搬 HyperIsland LiquidGlassNavigationBar 的指示器 lens：
+        // refractionHeight = 10dp、refractionAmount = 14dp（按壳高比例换算），
+        // chromaticAberration = 0.5f。参考不再额外放大折射 —— 原先的 1.35/1.40 系数
+        // 会把 CLEAR 端的折射推到 11.8dp/17.15dp，比参考长一截（上下色散被摊薄）。
+        indicatorLensBoost = 1f,
+        indicatorEdgeWarpBoost = 1f,
+        indicatorChromaticBoost = midpointLerp(1.20f, 1f, 0.70f, frostWeight),
+        contentReadabilityBoost = contentReadabilityBoost,
+        contentReadabilityScrimAlpha = contentReadabilityScrimAlpha,
+        contentDistortionScale = contentDistortionScale,
+        shellChromaticAberrationAmount = shellChromaticAmount,
+        indicatorChromaticAberrationAmount = indicatorChromaticAmount,
         scrollCoupledRefractionAmount = scrollCouplingAmount,
-        useNeutralIndicatorTint = neutralTintAmount > 0.5f,
-        neutralIndicatorTintAmount = neutralTintAmount,
-        depthEffectEnabled = depthEffectAmount > 0.08f,
-        depthEffectAmount = depthEffectAmount
     )
+}
+
+internal fun resolveLiquidGlassIndicatorChromaticAberration(
+    tuning: LiquidGlassTuning,
+): Float = if (tuning.indicatorChromaticAberrationAmount > 0.01f) {
+    (tuning.indicatorChromaticAberrationAmount * tuning.indicatorChromaticBoost)
+        .coerceIn(0f, UPSTREAM_INDICATOR_CHROMATIC_ABERRATION)
+} else {
+    0f
 }
 
 internal fun resolveLiquidGlassTuning(
@@ -89,30 +165,17 @@ internal fun resolveLiquidGlassTuning(style: LiquidGlassStyle): LiquidGlassTunin
     }
 }
 
-private fun sukisuLiquidGlassTuning(): LiquidGlassTuning {
-    return LiquidGlassTuning(
-        mode = LiquidGlassMode.BALANCED,
-        progress = 0.5f,
-        strength = resolveDefaultLiquidGlassStrength(LiquidGlassMode.BALANCED),
-        backdropBlurRadius = 8f,
-        surfaceAlpha = 0.40f,
-        whiteOverlayAlpha = 0.04f,
-        refractIntensity = 0.28f,
-        refractionAmount = 24f,
-        refractionHeight = 24f,
-        indicatorTintAlpha = 0.28f,
-        indicatorLensBoost = 1.18f,
-        indicatorEdgeWarpBoost = 1.16f,
-        indicatorChromaticBoost = 0.90f,
-        chromaticAberrationEnabled = false,
-        chromaticAberrationAmount = 0f,
-        scrollCoupledRefraction = false,
-        scrollCoupledRefractionAmount = 0f,
-        useNeutralIndicatorTint = false,
-        neutralIndicatorTintAmount = 0f,
-        depthEffectEnabled = true,
-        depthEffectAmount = 1f
-    )
+private fun sukisuLiquidGlassTuning(): LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
+
+private fun midpointLerp(
+    start: Float,
+    midpoint: Float,
+    stop: Float,
+    fraction: Float
+): Float = if (fraction <= 0.5f) {
+    lerp(start, midpoint, fraction * 2f)
+} else {
+    lerp(midpoint, stop, (fraction - 0.5f) * 2f)
 }
 
 private fun lerp(start: Float, stop: Float, fraction: Float): Float {

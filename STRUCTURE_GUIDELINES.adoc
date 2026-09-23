@@ -1,6 +1,8 @@
 # BiliPai 结构维护准则
 
-适用范围：`app/src/main/java/com/android/purebilibili/`
+最后核对：2026-07-31
+
+适用范围：`app/src/main/java/com/android/purebilibili/` 与 `design-system/src/main/java/com/android/purebilibili/`
 
 ## 1. 分层边界
 
@@ -9,7 +11,9 @@
 - `data/`：数据获取与存储实现（repository/model）。
 - `domain/`：稳定业务规则（usecase）。
 - `feature/`：按业务场景组织的 UI 与交互实现。
-- `navigation/`：全局路由和页面注册。
+- `navigation/`：路由键、路由能力与全局导航协作等基础层。
+- `navigation3/`：基于官方 Navigation 3 的入口注册、场景编排与应用级 back stack；新增页面优先接入此层，不再创建第三套路由体系。
+- `design-system/`：跨页面共享的主题、组件、图标、动效和纯视觉策略，不承载业务状态或网络逻辑。
 
 ## 2. 目录归属规则
 
@@ -49,5 +53,4 @@
 
 1. 优先收敛“公共能力误放 feature”问题。
 2. 再处理“单目录文件过多”的子目录拆分。
-3. 最后推进 Gradle 多模块拆分（避免一次性大重构）。
-
+3. 已下沉到 `design-system`、`settings-core`、`network-core` 或 `plugin-sdk` 的公共能力继续保持单向依赖；新增拆分应渐进进行，避免一次性大重构。

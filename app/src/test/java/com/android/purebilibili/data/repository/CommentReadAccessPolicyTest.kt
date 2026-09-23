@@ -30,6 +30,7 @@ class CommentReadAccessPolicyTest {
         assertTrue(shouldFallbackCommentRead(-101))
         assertTrue(shouldFallbackCommentRead(-111))
         assertTrue(shouldFallbackCommentRead(-352))
+        assertTrue(shouldFallbackCommentRead(-403))
         assertTrue(shouldFallbackCommentRead(-412))
         assertFalse(shouldFallbackCommentRead(12002))
     }
@@ -57,6 +58,38 @@ class CommentReadAccessPolicyTest {
                 )
             )
         )
+    }
+
+    @Test
+    fun `hot first page falls back when successful endpoint omits comments and count`() {
+        assertTrue(
+            shouldFallbackHotCommentReadOnEmptySuccess(
+                page = 1,
+                mode = 3,
+                responseCode = 0,
+                data = ReplyData(
+                    cursor = ReplyCursor(allCount = 0, isEnd = true, next = 0),
+                    replies = emptyList(),
+                    hots = emptyList(),
+                ),
+            )
+        )
+        assertTrue(
+            shouldFallbackHotCommentReadOnEmptySuccess(
+                page = 1,
+                mode = 3,
+                responseCode = 0,
+                data = null,
+            )
+        )
+    }
+
+    @Test
+    fun `hot empty fallback is limited to first page and hot sort`() {
+        val emptyData = ReplyData(replies = emptyList(), hots = emptyList())
+        assertFalse(shouldFallbackHotCommentReadOnEmptySuccess(2, 3, 0, emptyData))
+        assertFalse(shouldFallbackHotCommentReadOnEmptySuccess(1, 2, 0, emptyData))
+        assertFalse(shouldFallbackHotCommentReadOnEmptySuccess(1, 3, -1, emptyData))
     }
 
     @Test

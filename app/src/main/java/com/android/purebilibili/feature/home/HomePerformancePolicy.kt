@@ -1,12 +1,11 @@
 package com.android.purebilibili.feature.home
 
-import com.android.purebilibili.core.store.resolveEffectiveLiquidGlassEnabled
-import com.android.purebilibili.core.theme.UiPreset
 
 internal data class HomePerformanceConfig(
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
     val topBarLiquidGlassEnabled: Boolean,
+    val homeSearchLiquidGlassEnabled: Boolean,
     val bottomBarLiquidGlassEnabled: Boolean,
     val cardAnimationEnabled: Boolean,
     val cardTransitionEnabled: Boolean,
@@ -14,7 +13,9 @@ internal data class HomePerformanceConfig(
     val preloadAheadCount: Int
 ) {
     val isAnyLiquidGlassEnabled: Boolean
-        get() = bottomBarLiquidGlassEnabled
+        get() = topBarLiquidGlassEnabled ||
+            homeSearchLiquidGlassEnabled ||
+            bottomBarLiquidGlassEnabled
 }
 
 internal fun resolveHomePreloadAheadCount(
@@ -47,13 +48,15 @@ internal fun resolveHomeCoverPreloadRange(
     return preloadStart until preloadEndExclusive
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun resolveHomePerformanceConfig(
-    uiPreset: UiPreset = UiPreset.IOS,
+    supportsIndependentLiquidGlass: Boolean = true,
     headerBlurEnabled: Boolean,
     bottomBarBlurEnabled: Boolean,
     topBarLiquidGlassEnabled: Boolean,
+    homeSearchLiquidGlassEnabled: Boolean = false,
     bottomBarLiquidGlassEnabled: Boolean,
-    androidNativeLiquidGlassEnabled: Boolean = false,
+    androidNativeLiquidGlassEnabled: Boolean = true,
     cardAnimationEnabled: Boolean,
     cardTransitionEnabled: Boolean,
     isDataSaverActive: Boolean,
@@ -63,11 +66,11 @@ internal fun resolveHomePerformanceConfig(
     // Feature retired: keep parameter for compatibility, but never apply runtime smoothness downgrade.
     val shouldPrioritizeSmoothness = false
     val effectiveDataSaver = isDataSaverActive
-    val effectiveBottomBarLiquidGlass = resolveEffectiveLiquidGlassEnabled(
-        requestedEnabled = bottomBarLiquidGlassEnabled,
-        uiPreset = uiPreset,
-        androidNativeLiquidGlassEnabled = androidNativeLiquidGlassEnabled
-    ) && !shouldPrioritizeSmoothness
+    // The legacy per-surface values remain readable for settings migration/import compatibility,
+    // but the Android liquid-glass switch is now the only runtime enablement source.
+    val effectiveTopBarLiquidGlass = androidNativeLiquidGlassEnabled
+    val effectiveHomeSearchLiquidGlass = androidNativeLiquidGlassEnabled
+    val effectiveBottomBarLiquidGlass = androidNativeLiquidGlassEnabled
     val effectivePreloadAheadCount = when {
         shouldPrioritizeSmoothness -> normalPreloadAheadCount.coerceAtLeast(0).coerceAtMost(2)
         else -> resolveHomePreloadAheadCount(
@@ -79,7 +82,8 @@ internal fun resolveHomePerformanceConfig(
     return HomePerformanceConfig(
         headerBlurEnabled = headerBlurEnabled,
         bottomBarBlurEnabled = bottomBarBlurEnabled,
-        topBarLiquidGlassEnabled = topBarLiquidGlassEnabled,
+        topBarLiquidGlassEnabled = effectiveTopBarLiquidGlass,
+        homeSearchLiquidGlassEnabled = effectiveHomeSearchLiquidGlass,
         bottomBarLiquidGlassEnabled = effectiveBottomBarLiquidGlass,
         cardAnimationEnabled = cardAnimationEnabled,
         cardTransitionEnabled = cardTransitionEnabled,

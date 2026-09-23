@@ -1,35 +1,35 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.material.icons.outlined.SmartToy
-import androidx.compose.material.icons.outlined.SportsEsports
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.android.purebilibili.core.theme.UiPreset
-import io.github.alexzhirkevich.cupertino.icons.outlined.Cpu
-import io.github.alexzhirkevich.cupertino.icons.outlined.PlayCircle
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.CollectionsBookmark
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.People
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.Whatshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class TopTabCategoryIconPolicyTest {
 
     @Test
-    fun topTabCategoryIconPolicy_usesSemanticIosIcons() {
-        assertSameVectorAsset(CupertinoIcons.Outlined.PlayCircle, resolveTopTabCategoryIcon("游戏", UiPreset.IOS))
-        assertSameVectorAsset(CupertinoIcons.Outlined.Cpu, resolveTopTabCategoryIcon("科技", UiPreset.IOS))
+    fun `top category tabs use Material Rounded icons for every supported category`() {
+        assertEquals(Icons.Rounded.Home, resolveTopTabMaterialIcon("RECOMMEND"))
+        assertEquals(Icons.Rounded.People, resolveTopTabMaterialIcon("FOLLOW"))
+        assertEquals(Icons.Rounded.Whatshot, resolveTopTabMaterialIcon("POPULAR"))
+        assertEquals(Icons.Rounded.CollectionsBookmark, resolveTopTabMaterialIcon("ANIME"))
+        assertEquals(Icons.Rounded.LiveTv, resolveTopTabMaterialIcon("LIVE"))
+        assertEquals(Icons.Rounded.SportsEsports, resolveTopTabMaterialIcon("GAME"))
+        assertEquals(Icons.Rounded.School, resolveTopTabMaterialIcon("KNOWLEDGE"))
+        assertEquals(Icons.Rounded.Memory, resolveTopTabMaterialIcon("TECH"))
     }
 
     @Test
-    fun topTabCategoryIconPolicy_usesSemanticMd3Icons() {
-        assertSameVectorAsset(Icons.Outlined.SportsEsports, resolveTopTabCategoryIcon("游戏", UiPreset.MD3))
-        assertSameVectorAsset(Icons.Outlined.SmartToy, resolveTopTabCategoryIcon("科技", UiPreset.MD3))
-    }
-
-    private fun assertSameVectorAsset(expected: ImageVector, actual: ImageVector) {
-        assertEquals(expected.name, actual.name)
-        assertEquals(expected.defaultWidth, actual.defaultWidth)
-        assertEquals(expected.defaultHeight, actual.defaultHeight)
-        assertEquals(expected.viewportWidth, actual.viewportWidth)
-        assertEquals(expected.viewportHeight, actual.viewportHeight)
+    fun `partition and unknown categories use the shared grid fallback`() {
+        assertEquals(Icons.Rounded.GridView, resolveTopTabMaterialIcon("PARTITION"))
+        assertEquals(Icons.Rounded.GridView, resolveTopTabMaterialIcon("未知栏目"))
     }
 }

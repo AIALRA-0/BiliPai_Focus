@@ -7,6 +7,10 @@ private const val HISTORY_PROGRESS_BAR_HEIGHT_DP = 2f
 private const val HISTORY_PROGRESS_BAR_CLEARANCE_DP = 2f
 private const val COMPACT_STATS_BASE_BOTTOM_PADDING_DP = 6f
 private const val FLOATING_DURATION_BASE_BOTTOM_PADDING_DP = 10f
+// 时长统计 pill：闹钟图标 + 文本，文本宽度按字符数估算（labelSmall 半角/全角混合）。
+private const val DURATION_STAT_BASE_MIN_WIDTH_DP = 30f
+private const val DURATION_STAT_MIN_WIDTH_DP = 44f
+private const val DURATION_STAT_MAX_WIDTH_DP = 68f
 
 internal data class VideoCardCompactCoverStatsLayout(
     val primaryMinWidthDp: Float,
@@ -36,12 +40,22 @@ internal fun resolveVideoCardSecondaryStatBadgeMinWidthDp(
     return (40f + normalizedLength * 6f).coerceIn(58f, 76f)
 }
 
+/** 时长作为统计行 pill（闹钟图标 + 文本）时的最小宽度估算。 */
+internal fun resolveVideoCardDurationStatMinWidthDp(
+    durationText: String
+): Float {
+    val normalizedLength = durationText.trim().length.coerceAtLeast(4)
+    return (DURATION_STAT_BASE_MIN_WIDTH_DP + normalizedLength * 6f)
+        .coerceIn(DURATION_STAT_MIN_WIDTH_DP, DURATION_STAT_MAX_WIDTH_DP)
+}
+
 internal fun resolveVideoCardCompactCoverStatsLayout(
     availableWidthDp: Float,
     primaryStatText: String,
     secondaryStatText: String?,
     hasOnlineCount: Boolean,
-    durationBadgeMinWidthDp: Float = 0f
+    durationBadgeMinWidthDp: Float = 0f,
+    durationStatMinWidthDp: Float = 0f
 ): VideoCardCompactCoverStatsLayout {
     val primaryMinWidth = resolveVideoCardPrimaryStatBadgeMinWidthDp(primaryStatText)
     val showSecondary = !secondaryStatText.isNullOrBlank()
@@ -55,8 +69,16 @@ internal fun resolveVideoCardCompactCoverStatsLayout(
     } else {
         0f
     }
+    // 时长作为统计 pill 时的宽度预算：只在 OUTSIDE_COVER（时长进统计行）时参与。
+    val hasDurationStat = durationStatMinWidthDp > 0f
+    val durationStatRequired = if (hasDurationStat) {
+        durationStatMinWidthDp + COMPACT_STAT_BADGE_SPACING_DP
+    } else {
+        0f
+    }
     val statsAvailableWidth = (availableWidthDp - durationReserveWidth).coerceAtLeast(0f)
-    val requiredForPrimaryAndSecondary = primaryMinWidth +
+    val requiredForPrimaryAndDuration = primaryMinWidth + durationStatRequired
+    val requiredForPrimaryAndSecondary = requiredForPrimaryAndDuration +
         if (showSecondary) COMPACT_STAT_BADGE_SPACING_DP + secondaryMinWidth else 0f
     val requiredWithOnline = requiredForPrimaryAndSecondary +
         if (hasOnlineCount) COMPACT_STAT_BADGE_SPACING_DP + COMPACT_ONLINE_BADGE_MIN_WIDTH_DP else 0f
@@ -64,8 +86,9 @@ internal fun resolveVideoCardCompactCoverStatsLayout(
     return VideoCardCompactCoverStatsLayout(
         primaryMinWidthDp = primaryMinWidth,
         secondaryMinWidthDp = secondaryMinWidth,
-        showSecondaryStat = showSecondary,
-        // 在线人数是补充信息；空间不足时先让位给播放量和弹幕/评论数。
+        // 时长进统计行后空间更紧张：播放量 + 时长保底，弹幕次之，在线人数最先让位。
+        showSecondaryStat = showSecondary &&
+            (!hasDurationStat || statsAvailableWidth >= requiredForPrimaryAndSecondary),
         showOnlineCount = hasOnlineCount && statsAvailableWidth >= requiredWithOnline,
         statsEndPaddingDp = durationReserveWidth
     )
@@ -74,11 +97,7 @@ internal fun resolveVideoCardCompactCoverStatsLayout(
 internal fun resolveVideoCardCoverOverlayBottomLayout(
     showHistoryProgressBar: Boolean
 ): VideoCardCoverOverlayBottomLayout {
-    val progressReserve = if (showHistoryProgressBar) {
-        HISTORY_PROGRESS_BAR_HEIGHT_DP + HISTORY_PROGRESS_BAR_CLEARANCE_DP
-    } else {
-        0f
-    }
+    val progressReserve = HISTORY_PROGRESS_BAR_HEIGHT_DP + HISTORY_PROGRESS_BAR_CLEARANCE_DP
     return VideoCardCoverOverlayBottomLayout(
         historyProgressBarHeightDp = HISTORY_PROGRESS_BAR_HEIGHT_DP,
         compactStatsBottomPaddingDp = COMPACT_STATS_BASE_BOTTOM_PADDING_DP + progressReserve,

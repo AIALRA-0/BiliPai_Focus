@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.plugin.RecommendationStrategy
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.VideoItem
@@ -480,5 +481,121 @@ class TodayWatchPolicyTest {
 
         assertTrue(plan.videoQueue.any { it.bvid == "keep" })
         assertFalse(plan.videoQueue.any { it.bvid == "consumed" })
+    }
+
+    @Test
+    fun `completed history item is excluded while partial item remains eligible`() {
+        val history = listOf(
+            VideoItem(bvid = "done", owner = Owner(mid = 1), duration = 100, progress = 90),
+            VideoItem(bvid = "partial", owner = Owner(mid = 2), duration = 100, progress = 30)
+        )
+        val candidates = listOf(
+            VideoItem(bvid = "done", owner = Owner(mid = 1), title = "已看完", duration = 100),
+            VideoItem(bvid = "partial", owner = Owner(mid = 2), title = "继续了解", duration = 100)
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = history,
+            candidateVideos = candidates,
+            mode = TodayWatchMode.LEARN,
+            eyeCareNightActive = false
+        )
+
+        assertFalse(plan.videoQueue.any { it.bvid == "done" })
+        assertTrue(plan.videoQueue.any { it.bvid == "partial" })
+    }
+
+    @Test
+    fun `affinity and explore strategies make different stable tradeoffs`() {
+        val now = 1_800_000_000L
+        val history = listOf(
+            VideoItem(
+                bvid = "history",
+                owner = Owner(mid = 1, name = "熟悉UP"),
+                tname = "科技",
+                duration = 1_200,
+                progress = 1_100,
+                view_at = now - 1_000
+            )
+        )
+        val candidates = listOf(
+            VideoItem(
+                bvid = "familiar",
+                owner = Owner(mid = 1, name = "熟悉UP"),
+                title = "Android 技术分析",
+                tname = "科技",
+                duration = 1_200,
+                pubdate = now - 60L * 86_400,
+                stat = Stat(view = 10_000, like = 500)
+            ),
+            VideoItem(
+                bvid = "novel",
+                owner = Owner(mid = 2, name = "新UP"),
+                title = "城市旅行记录",
+                tname = "旅行",
+                duration = 1_200,
+                pubdate = now - 3_600,
+                stat = Stat(view = 10_000, like = 500)
+            )
+        )
+
+        val affinity = buildTodayWatchPlan(
+            historyVideos = history,
+            candidateVideos = candidates,
+            mode = TodayWatchMode.LEARN,
+            eyeCareNightActive = false,
+            nowEpochSec = now,
+            queueLimit = 1,
+            strategy = RecommendationStrategy.AFFINITY
+        )
+        val explore = buildTodayWatchPlan(
+            historyVideos = history,
+            candidateVideos = candidates,
+            mode = TodayWatchMode.LEARN,
+            eyeCareNightActive = false,
+            nowEpochSec = now,
+            queueLimit = 1,
+            strategy = RecommendationStrategy.EXPLORE
+        )
+
+        assertEquals("familiar", affinity.videoQueue.firstOrNull()?.bvid)
+        assertEquals("novel", explore.videoQueue.firstOrNull()?.bvid)
+    }
+
+    @Test
+    fun `v2 exposes normalized real scores and caps creator repeats in preview`() {
+        val candidates = (1..6).map { index ->
+            VideoItem(
+                bvid = "same_$index",
+                owner = Owner(mid = 1, name = "同一UP"),
+                title = "科技视频$index",
+                tname = "科技",
+                duration = 600,
+                stat = Stat(view = 100_000 - index, like = 1_000)
+            )
+        } + (1..4).map { index ->
+            VideoItem(
+                bvid = "other_$index",
+                owner = Owner(mid = (index + 1).toLong(), name = "其它UP$index"),
+                title = "旅行记录$index",
+                tname = "旅行",
+                duration = 600,
+                stat = Stat(view = 10_000 - index, like = 100)
+            )
+        }
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            queueLimit = 10,
+            strategy = RecommendationStrategy.BALANCED
+        )
+
+        assertTrue(plan.videoQueue.take(6).count { it.owner.mid == 1L } <= 2)
+        assertEquals(plan.videoQueue.map { it.bvid }.toSet(), plan.scoreByBvid.keys)
+        assertTrue(plan.scoreByBvid.values.all { it in 0.0..1.0 })
+        assertTrue(plan.confidenceByBvid.values.all { it in 0f..1f })
     }
 }

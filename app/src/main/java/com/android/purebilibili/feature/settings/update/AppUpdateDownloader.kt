@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
@@ -66,7 +67,9 @@ internal suspend fun downloadAppUpdateApk(
             )
             onStateChange(completedState)
             outputFile
-        } catch (t: Throwable) {
+        } catch (t: CancellationException) {
+            throw t
+        } catch (t: Exception) {
             onStateChange(
                 failAppUpdateDownload(
                     current = state,
@@ -78,8 +81,4 @@ internal suspend fun downloadAppUpdateApk(
             connection.disconnect()
         }
     }
-}
-
-private fun sanitizeAppUpdateFileName(name: String): String {
-    return name.replace(Regex("[^A-Za-z0-9._-]"), "_")
 }

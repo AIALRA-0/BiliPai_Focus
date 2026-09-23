@@ -1,6 +1,10 @@
 // File: feature/video/ui/section/VideoInfoSection.kt
 package com.android.purebilibili.feature.video.ui.section
 
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -17,16 +21,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -39,29 +43,41 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.VideoStaff
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.VideoTag
+import com.android.purebilibili.core.ui.common.TextSelectionPolicy
+import com.android.purebilibili.core.ui.common.detectTapWithSelectionFriendly
 import com.android.purebilibili.core.ui.common.copyOnLongPress
-import com.android.purebilibili.core.ui.VideoCardSkeleton
+import com.android.purebilibili.feature.video.ui.components.VideoCardSkeleton
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.draw.rotate
 import com.android.purebilibili.core.ui.common.copyOnClick
 import com.android.purebilibili.core.ui.OfficialVerifyBadge
+import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
+import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.core.ui.components.UserUpBadge
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.resolveOfficialVerifyBadgeFromRole
+import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
 import com.android.purebilibili.core.ui.transition.resolveVideoMetadataSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
-import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
+import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
+import com.android.purebilibili.core.ui.transition.videoMetadataSharedElementBoundsTransformSpec
 import com.android.purebilibili.data.model.response.BgmDetailData
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.AiSummaryData
@@ -75,16 +91,24 @@ import com.android.purebilibili.feature.video.ui.FollowTextTone
 import com.android.purebilibili.feature.video.ui.resolveVideoFollowVisualPolicy
 import com.android.purebilibili.data.repository.ViewGrpcRepository
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
+import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
+import com.android.purebilibili.core.store.HomeFeedCardStyle
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.video.ui.components.ShimmerContainer
 import com.android.purebilibili.feature.video.ui.components.SkeletonBox
+import com.android.purebilibili.feature.video.ui.VideoDetailShapes
 import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 internal const val VIDEO_DESCRIPTION_URL_TAG = "VIDEO_DESCRIPTION_URL"
 private val VIDEO_DESCRIPTION_URL_PATTERN =
     """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
 private val VIDEO_DESCRIPTION_INLINE_BVID_PATTERN =
     Regex("""(?<![A-Za-z0-9])BV[a-zA-Z0-9]{10}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
+private val VIDEO_DESCRIPTION_TOPIC_PATTERN =
+    Regex("""#([^#\n\r\t]+)#""")
 
 internal fun buildVideoDescriptionAnnotatedString(
     desc: String,
@@ -117,6 +141,23 @@ internal fun buildVideoDescriptionAnnotatedString(
                 displayText = match.value,
                 priority = 1
             )
+        }
+    }
+    VIDEO_DESCRIPTION_TOPIC_PATTERN.findAll(desc).forEach { match ->
+        val overlapsUrl = matches.any { existing ->
+            match.range.first <= existing.range.last && match.range.last >= existing.range.first
+        }
+        if (!overlapsUrl) {
+            val topic = match.groupValues[1].trim()
+            if (topic.isNotEmpty()) {
+                val encoded = java.net.URLEncoder.encode(topic, java.nio.charset.StandardCharsets.UTF_8.name())
+                matches += LinkMatch(
+                    range = match.range,
+                    annotation = "bilibili://search?keyword=$encoded",
+                    displayText = match.value,
+                    priority = 2
+                )
+            }
         }
     }
     matches.sortWith(compareBy<LinkMatch> { it.range.first }.thenBy { it.priority })
@@ -155,7 +196,7 @@ internal fun buildVideoDescriptionAnnotatedString(
 internal fun resolveVideoInfoInitialExpandedState(
     hasDescription: Boolean,
     hasTags: Boolean,
-    defaultExpanded: Boolean = true
+    defaultExpanded: Boolean = false
 ): Boolean = defaultExpanded && (hasDescription || hasTags)
 
 private const val BGM_DISCOVERY_LOAD_DELAY_MS = 420L
@@ -199,24 +240,24 @@ fun VideoTitleSection(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            Text(
-                text = info.title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 16.sp,
-                    lineHeight = 22.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
-                maxLines = if (expanded) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
+            SelectionContainer(
                 modifier = Modifier
                     .weight(1f)
                     .then(if (animateLayout) Modifier.animateContentSize() else Modifier)
-                    .copyOnLongPress(info.title, "视频标题")
-            )
+            ) {
+                AppText(
+                    text = info.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.copyOnLongPress(info.title, "视频标题")
+                )
+            }
             Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
+            AppIcon(
+                imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(18.dp)
@@ -226,9 +267,9 @@ fun VideoTitleSection(
         Spacer(Modifier.height(2.dp))
         
         // Stats row (views, danmaku)
-        Text(
+        AppText(
             text = "${FormatUtils.formatStat(info.stat.view.toLong())}  \u2022  ${FormatUtils.formatStat(info.stat.danmaku.toLong())}\u5f39\u5e55",
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             maxLines = 1
         )
@@ -236,22 +277,24 @@ fun VideoTitleSection(
         if (publishTimeRowText.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
             if (emphasizePublishTime) {
-                Surface(
+                AppSurface(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = com.android.purebilibili.core.ui.AppShapes.container(
+                        com.android.purebilibili.core.ui.ContainerLevel.Field
+                    )
                 ) {
-                    Text(
+                    AppText(
                         text = publishTimeRowText,
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     )
                 }
             } else {
-                Text(
+                AppText(
                     text = publishTimeRowText,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                     maxLines = 1
                 )
@@ -276,16 +319,19 @@ fun VideoTitleWithDesc(
     showOnlineCount: Boolean = true,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     isQuickReturnLimitedForSharedElements: Boolean = false,
+    sourceRouteForSharedElement: String? = null,
     animateLayout: Boolean = true,
     onDescriptionUrlClick: ((String) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
+    onTagClick: (String) -> Unit = {},
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+    val isMaterial3 = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
+    val horizontalPadding = if (isMaterial3) 16.dp else 12.dp
     val defaultExpanded by com.android.purebilibili.core.store.SettingsManager
         .getVideoInfoDefaultExpanded(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
+        .collectAsStateWithLifecycle(initialValue = false)
     var expanded by remember(info.bvid, info.desc, videoTags.size, defaultExpanded) {
         mutableStateOf(
             resolveVideoInfoInitialExpandedState(
@@ -326,13 +372,23 @@ fun VideoTitleWithDesc(
         hasSharedTransitionScope = sharedTransitionScope != null,
         hasAnimatedVisibilityScope = animatedVisibilityScope != null
     )
+    val useCardContainerSharedBounds = shouldUseVideoCardShellSharedBounds(
+        sourceRoute = sourceRouteForSharedElement,
+        transitionEnabled = coverSharedEnabled
+    )
     val metadataSharedEnabled = shouldEnableVideoMetadataSharedTransition(
         coverSharedEnabled = coverSharedEnabled,
-        isQuickReturnLimited = isQuickReturnLimitedForSharedElements
+        isQuickReturnLimited = isQuickReturnLimitedForSharedElements,
+        useCardContainerSharedBounds = useCardContainerSharedBounds
     )
-    val metadataSharedTransitionMotionSpec = remember(metadataSharedEnabled) {
+    val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
+    val metadataSharedTransitionMotionSpec = remember(
+        metadataSharedEnabled,
+        sharedTransitionSpeedSettings
+    ) {
         resolveVideoMetadataSharedTransitionMotionSpec(
-            transitionEnabled = metadataSharedEnabled
+            transitionEnabled = metadataSharedEnabled,
+            speedSettings = sharedTransitionSpeedSettings
         )
     }
     
@@ -340,13 +396,15 @@ fun VideoTitleWithDesc(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-            .clickable { expanded = !expanded }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = horizontalPadding, vertical = if (isMaterial3) 8.dp else 6.dp)
     ) {
         // Title row (expandable)
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(role = Role.Button) { expanded = !expanded },
+            verticalAlignment = Alignment.CenterVertically
         ) {
             //  共享元素过渡 - 标题
             var titleModifier = if (animateLayout) Modifier.animateContentSize() else Modifier
@@ -355,35 +413,43 @@ fun VideoTitleWithDesc(
             if (metadataSharedEnabled) {
                 with(requireNotNull(sharedTransitionScope)) {
                      titleModifier = titleModifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoTitleSharedElementKey(info.bvid)),
+                        sharedContentState = rememberSharedContentState(
+                            key = com.android.purebilibili.core.ui.transition.videoTitleSharedElementKey(
+                                info.bvid,
+                                sourceRoute = sourceRouteForSharedElement
+                            )
+                        ),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                        boundsTransform = { _, _ ->
-                            videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
+                        boundsTransform = { initialBounds, targetBounds ->
+                            videoMetadataSharedElementBoundsTransformSpec(
+                                motion = metadataSharedTransitionMotionSpec,
+                                initialBounds = initialBounds,
+                                targetBounds = targetBounds
+                            )
                         }
                     )
                 }
             }
 
-            Text(
-                text = info.title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 16.sp,
-                    lineHeight = 21.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
-                maxLines = if (expanded) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = titleModifier.weight(1f)
-            )
+            SelectionContainer(modifier = Modifier.weight(1f)) {
+                AppText(
+                    text = info.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = titleModifier
+                )
+            }
 
             val rotateAngle by animateFloatAsState(
                 targetValue = if (expanded) 180f else 0f, // 展开时旋转180度
                 animationSpec = tween(durationMillis = 300), // 设置动画时长和曲线
                 label = "IconRotation"
             )
-            Icon(
-                imageVector = CupertinoIcons.Default.ChevronDown,
+            AppIcon(
+                imageVector = Icons.Outlined.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier
@@ -393,11 +459,13 @@ fun VideoTitleWithDesc(
             )
         }
         
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(if (isMaterial3) 6.dp else 4.dp))
         
         // Stats row
-        Row(
-            verticalAlignment = Alignment.CenterVertically
+        androidx.compose.foundation.layout.FlowRow(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isMaterial3) 10.dp else 8.dp),
+            itemVerticalAlignment = Alignment.CenterVertically
         ) {
             // Stats Row split for shared element transitions
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -406,24 +474,33 @@ fun VideoTitleWithDesc(
                 if (metadataSharedEnabled) {
                     with(requireNotNull(sharedTransitionScope)) {
                         viewsModifier = viewsModifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey(info.bvid)),
+                            sharedContentState = rememberSharedContentState(
+                                key = com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey(
+                                    info.bvid,
+                                    sourceRoute = sourceRouteForSharedElement
+                                )
+                            ),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                            boundsTransform = { _, _ ->
-                                videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
+                            boundsTransform = { initialBounds, targetBounds ->
+                                videoMetadataSharedElementBoundsTransformSpec(
+                                    motion = metadataSharedTransitionMotionSpec,
+                                    initialBounds = initialBounds,
+                                    targetBounds = targetBounds
+                                )
                             }
                         )
                     }
                 }
-                Text(
+                AppText(
                     text = "${FormatUtils.formatStat(info.stat.view.toLong())}播放",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = viewsModifier
                 )
 
-                Text(
+                AppText(
                     text = "  •  ",
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
 
@@ -432,43 +509,87 @@ fun VideoTitleWithDesc(
                 if (metadataSharedEnabled) {
                     with(requireNotNull(sharedTransitionScope)) {
                         danmakuModifier = danmakuModifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoDanmakuSharedElementKey(info.bvid)),
+                            sharedContentState = rememberSharedContentState(
+                                key = com.android.purebilibili.core.ui.transition.videoDanmakuSharedElementKey(
+                                    info.bvid,
+                                    sourceRoute = sourceRouteForSharedElement
+                                )
+                            ),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                            boundsTransform = { _, _ ->
-                                videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
+                            boundsTransform = { initialBounds, targetBounds ->
+                                videoMetadataSharedElementBoundsTransformSpec(
+                                    motion = metadataSharedTransitionMotionSpec,
+                                    initialBounds = initialBounds,
+                                    targetBounds = targetBounds
+                                )
                             }
                         )
                     }
                 }
-                Text(
+                AppText(
                     text = "${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = danmakuModifier
                 )
 
             }
             if (onlineCountText.isNotBlank()) {
-                Text(
-                    text = "  •  ",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
-                Text(
+                AppText(
                     text = onlineCountText,
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            // [新增] 显示 BVID 并支持点击复制
-            Spacer(Modifier.width(8.dp))
-            Text(
+            if (publishTimeRowText.isNotBlank()) {
+                if (emphasizePublishTime) {
+                    AppSurface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
+                        shape = com.android.purebilibili.core.ui.AppShapes.container(
+                            com.android.purebilibili.core.ui.ContainerLevel.Field
+                        )
+                    ) {
+                        AppText(
+                            text = publishTimeRowText,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                } else {
+                    AppText(
+                        text = publishTimeRowText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = expanded,
+            enter = if (animateLayout) {
+                androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn()
+            } else {
+                androidx.compose.animation.EnterTransition.None
+            },
+            exit = if (animateLayout) {
+                androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+            } else {
+                androidx.compose.animation.ExitTransition.None
+            }
+        ) {
+            AppText(
                 text = info.bvid,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                modifier = Modifier.copyOnClick(info.bvid, "BV号")
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.66f),
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .copyOnClick(info.bvid, "BV号")
             )
         }
 
@@ -487,31 +608,6 @@ fun VideoTitleWithDesc(
             }
         }
 
-        if (publishTimeRowText.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            if (emphasizePublishTime) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text(
-                        text = publishTimeRowText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            } else {
-                Text(
-                    text = publishTimeRowText,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    maxLines = 1
-                )
-            }
-        }
-
         // [新增] BGM Info Row
         if (bgmList.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
@@ -521,7 +617,7 @@ fun VideoTitleWithDesc(
                 onRelatedVideoClick = onRelatedVideoClick
             )
         }
-        
+
         //  Description - 默认隐藏，展开后显示
         androidx.compose.animation.AnimatedVisibility(
             visible = expanded && info.desc.isNotBlank(),
@@ -548,8 +644,8 @@ fun VideoTitleWithDesc(
                 var descriptionTextLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
                 val descriptionModifier = if (onDescriptionUrlClick != null) {
                     Modifier.pointerInput(descriptionText, info.desc, onDescriptionUrlClick) {
-                        detectTapGestures { offset ->
-                            val layoutResult = descriptionTextLayout ?: return@detectTapGestures
+                        detectTapWithSelectionFriendly { offset ->
+                            val layoutResult = descriptionTextLayout ?: return@detectTapWithSelectionFriendly
                             val position = layoutResult.getOffsetForPosition(offset)
                             val searchStart = maxOf(0, position - 1)
                             val searchEnd = minOf(descriptionText.length, position + 1)
@@ -567,12 +663,9 @@ fun VideoTitleWithDesc(
                 }
                 // [新增] 使用 SelectionContainer 支持滑动复制
                 SelectionContainer {
-                    Text(
+                    AppText(
                         text = descriptionText,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp
-                        ),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         onTextLayout = { descriptionTextLayout = it },
                         modifier = (if (animateLayout) Modifier.animateContentSize() else Modifier)
@@ -600,22 +693,14 @@ fun VideoTitleWithDesc(
                 Spacer(Modifier.height(8.dp))
                 androidx.compose.foundation.layout.FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     videoTags.take(10).forEach { tag ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text(
-                                text = tag.tag_name,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    .copyOnLongPress(tag.tag_name, "标签")
-                            )
-                        }
+                        com.android.purebilibili.core.ui.components.AppTagChip(
+                            label = tag.tag_name,
+                            onClick = { onTagClick(tag.tag_name) },
+                            modifier = Modifier.copyOnLongPress(tag.tag_name, "标签"),
+                        )
                     }
                 }
             }
@@ -628,30 +713,10 @@ private fun VideoDetailBadgeChip(
     text: String,
     emphasized: Boolean
 ) {
-    val containerColor = if (emphasized) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
-    }
-    val contentColor = if (emphasized) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Surface(
-        color = containerColor,
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Text(
-            text = text,
-            fontSize = 11.sp,
-            lineHeight = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = contentColor,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
+    com.android.purebilibili.core.ui.components.AppStatusBadge(
+        label = text,
+        emphasized = emphasized,
+    )
 }
 
 /**
@@ -669,8 +734,16 @@ fun UpInfoSection(
     videoCount: Int? = null,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     isQuickReturnLimitedForSharedElements: Boolean = false,
-    modifier: Modifier = Modifier
+    sourceRouteForSharedElement: String? = null,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 12.dp,
+    modifier: Modifier = Modifier,
+    trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
+    val playerControlVisibility by com.android.purebilibili.core.store.SettingsManager
+        .getPlayerControlVisibilitySettings(LocalContext.current)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
+        )
     //  尝试获取共享元素作用域
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
@@ -679,13 +752,23 @@ fun UpInfoSection(
         hasSharedTransitionScope = sharedTransitionScope != null,
         hasAnimatedVisibilityScope = animatedVisibilityScope != null
     )
+    val useCardContainerSharedBounds = shouldUseVideoCardShellSharedBounds(
+        sourceRoute = sourceRouteForSharedElement,
+        transitionEnabled = coverSharedEnabled
+    )
     val metadataSharedEnabled = shouldEnableVideoMetadataSharedTransition(
         coverSharedEnabled = coverSharedEnabled,
-        isQuickReturnLimited = isQuickReturnLimitedForSharedElements
+        isQuickReturnLimited = isQuickReturnLimitedForSharedElements,
+        useCardContainerSharedBounds = useCardContainerSharedBounds
     )
-    val metadataSharedTransitionMotionSpec = remember(metadataSharedEnabled) {
+    val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
+    val metadataSharedTransitionMotionSpec = remember(
+        metadataSharedEnabled,
+        sharedTransitionSpeedSettings
+    ) {
         resolveVideoMetadataSharedTransitionMotionSpec(
-            transitionEnabled = metadataSharedEnabled
+            transitionEnabled = metadataSharedEnabled,
+            speedSettings = sharedTransitionSpeedSettings
         )
     }
     val upStatsText = resolveUpStatsText(
@@ -693,52 +776,59 @@ fun UpInfoSection(
         videoCount = videoCount
     )
     val showInlineOwnerIdentity = shouldShowInlineOwnerIdentity(showOwnerAvatar = showOwnerAvatar)
-    Column(
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onUpClick(info.owner.mid) }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (showOwnerAvatar) {
-                var avatarModifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
 
+    BoxWithConstraints(modifier = modifier) {
+        val isCompact = maxWidth.isSpecified && shouldUseCompactUpInfoLayout(maxWidth.value.toInt())
+
+        val avatarContent: @Composable () -> Unit = {
+            if (showOwnerAvatar) {
+                val avatarSize = if (isCompact) 36.dp else 40.dp
+                var sharedFaceModifier: Modifier = Modifier
                 if (metadataSharedEnabled) {
                     with(requireNotNull(sharedTransitionScope)) {
-                        avatarModifier = avatarModifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoAvatarSharedElementKey(info.bvid)),
+                        sharedFaceModifier = Modifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(
+                                key = com.android.purebilibili.core.ui.transition.videoAvatarSharedElementKey(
+                                    info.bvid,
+                                    sourceRoute = sourceRouteForSharedElement
+                                )
+                            ),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                            boundsTransform = { _, _ ->
-                                videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
+                            boundsTransform = { initialBounds, targetBounds ->
+                                videoMetadataSharedElementBoundsTransformSpec(
+                                    motion = metadataSharedTransitionMotionSpec,
+                                    initialBounds = initialBounds,
+                                    targetBounds = targetBounds
+                                )
                             },
                             clipInOverlayDuringTransition = OverlayClip(CircleShape)
                         )
                     }
                 }
+                val ownerStaff = info.staff.firstOrNull { it.mid == info.owner.mid }
 
                 if (info.owner.face.isNotBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(FormatUtils.fixImageUrl(info.owner.face))
-                            .crossfade(true)
-                            .build(),
+                    OwnerDecoratedAvatar(
+                        faceUrl = info.owner.face,
+                        ownerMid = info.owner.mid,
+                        modifier = Modifier.size(avatarSize),
+                        badgeSize = if (isCompact) 12.dp else 14.dp,
+                        fallbackOfficialType = ownerStaff?.official?.type,
+                        fallbackVipStatus = ownerStaff?.vip?.status,
+                        faceModifier = sharedFaceModifier,
                         contentDescription = "UP主头像",
-                        modifier = avatarModifier,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
                     )
                 } else {
                     Box(
-                        modifier = avatarModifier,
+                        modifier = Modifier
+                            .size(avatarSize)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .then(sharedFaceModifier),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = CupertinoIcons.Default.PersonCropCircle,
+                        AppIcon(
+                            imageVector = Icons.Outlined.AccountCircle,
                             contentDescription = "UP主标识",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -748,54 +838,62 @@ fun UpInfoSection(
             } else {
                 UserUpBadge()
             }
+        }
 
-            Spacer(Modifier.width(10.dp))
+        val upNameContent: @Composable (Modifier) -> Unit = { rowModifier ->
+            Row(
+                modifier = rowModifier,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                var upNameModifier: Modifier = Modifier
 
-            // UP owner name row
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    //  共享元素过渡 - UP主名称
-                    //  [调整] 确保 sharedBounds 在交互修饰符之前应用
-                    var upNameModifier: Modifier = Modifier
-
-                    if (metadataSharedEnabled) {
-                        with(requireNotNull(sharedTransitionScope)) {
-                            upNameModifier = upNameModifier.sharedBounds(
-                                sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoUpNameSharedElementKey(info.bvid)),
-                                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                                boundsTransform = { _, _ ->
-                                    videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
-                                }
-                            )
-                        }
+                if (metadataSharedEnabled) {
+                    with(requireNotNull(sharedTransitionScope)) {
+                        upNameModifier = upNameModifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(
+                                key = com.android.purebilibili.core.ui.transition.videoUpNameSharedElementKey(
+                                    info.bvid,
+                                    sourceRoute = sourceRouteForSharedElement
+                                )
+                            ),
+                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
+                            boundsTransform = { initialBounds, targetBounds ->
+                                videoMetadataSharedElementBoundsTransformSpec(
+                                    motion = metadataSharedTransitionMotionSpec,
+                                    initialBounds = initialBounds,
+                                    targetBounds = targetBounds
+                                )
+                            }
+                        )
                     }
+                }
 
-                    //  添加交互修饰符 (放在 sharedBounds 之后，使其包含在 sharedBounds 内部)
-                    upNameModifier = upNameModifier.copyOnLongPress(info.owner.name, "UP主名称")
+                upNameModifier = upNameModifier.copyOnLongPress(info.owner.name, "UP主名称")
 
-                    if (showInlineOwnerIdentity) {
-                        if (info.owner.face.isNotBlank()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(FormatUtils.fixImageUrl(info.owner.face))
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "UP主头像",
-                                modifier = Modifier
-                                    .padding(horizontal = 2.dp)
-                                    .size(18.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                            )
-                        } else {
-                            UserUpBadge(modifier = Modifier.padding(horizontal = 2.dp))
-                        }
-                        Spacer(Modifier.width(4.dp))
+                if (showInlineOwnerIdentity) {
+                    if (info.owner.face.isNotBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(FormatUtils.fixImageUrl(info.owner.face))
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "UP主头像",
+                            modifier = Modifier
+                                .padding(horizontal = 2.dp)
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        UserUpBadge(modifier = Modifier.padding(horizontal = 2.dp))
                     }
-                    Text(
+                    Spacer(Modifier.width(4.dp))
+                }
+                SelectionContainer {
+                    AppText(
                         text = info.owner.name,
-                        fontSize = 15.sp,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -803,61 +901,56 @@ fun UpInfoSection(
                         modifier = upNameModifier
                     )
                 }
-                if (!upStatsText.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = upStatsText,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
+        }
 
-            var followActionModifier = Modifier.height(36.dp)
+        val followButtonContent: @Composable () -> Unit = {
+            var followActionModifier = Modifier.heightIn(min = if (isCompact) 28.dp else 32.dp)
             if (metadataSharedEnabled) {
                 with(requireNotNull(sharedTransitionScope)) {
                     followActionModifier = followActionModifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoUpActionSharedElementKey(info.bvid)),
+                        sharedContentState = rememberSharedContentState(
+                            key = com.android.purebilibili.core.ui.transition.videoUpActionSharedElementKey(
+                                info.bvid,
+                                sourceRoute = sourceRouteForSharedElement
+                            )
+                        ),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                        boundsTransform = { _, _ ->
-                            videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
+                        boundsTransform = { initialBounds, targetBounds ->
+                            videoMetadataSharedElementBoundsTransformSpec(
+                                motion = metadataSharedTransitionMotionSpec,
+                                initialBounds = initialBounds,
+                                targetBounds = targetBounds
+                            )
                         },
-                        clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(16.dp))
+                        clipInOverlayDuringTransition = OverlayClip(VideoDetailShapes.action())
                     )
                 }
             }
 
-            // Follow button
-            val followVisualPolicy = remember(isFollowing) {
-                resolveVideoFollowVisualPolicy(isFollowing = isFollowing)
+            val followDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            val followVisualPolicy = remember(isFollowing, followDarkTheme) {
+                resolveVideoFollowVisualPolicy(
+                    isFollowing = isFollowing,
+                    darkTheme = followDarkTheme,
+                )
             }
-            Surface(
+            AppSurface(
                 onClick = onFollowClick,
                 color = when (followVisualPolicy.detailButtonTone) {
                     FollowButtonTone.PRIMARY -> MaterialTheme.colorScheme.primary
                     FollowButtonTone.PRIMARY_CONTAINER -> MaterialTheme.colorScheme.primaryContainer
                 },
-                shape = RoundedCornerShape(18.dp),
+                shape = VideoDetailShapes.action(),
                 modifier = followActionModifier
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = if (isCompact) 8.dp else 12.dp)
                 ) {
-                    if (!isFollowing) {
-                        Icon(
-                            CupertinoIcons.Default.Plus,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(2.dp))
-                    }
-                    Text(
+                    AppText(
                         text = if (isFollowing) "\u5df2\u5173\u6ce8" else "\u5173\u6ce8",
-                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.labelMedium,
                         color = when (followVisualPolicy.detailTextTone) {
                             FollowTextTone.ON_PRIMARY -> MaterialTheme.colorScheme.onPrimary
                             FollowTextTone.ON_PRIMARY_CONTAINER -> MaterialTheme.colorScheme.onPrimaryContainer
@@ -867,11 +960,93 @@ fun UpInfoSection(
                 }
             }
         }
-        if (shouldShowCreatorTeamSection(info)) {
-            CreatorTeamSection(
-                staff = info.staff,
-                onMemberClick = onUpClick
-            )
+
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (isCompact) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onUpClick(info.owner.mid) }
+                        .padding(horizontal = horizontalPadding, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    avatarContent()
+
+                    Spacer(Modifier.width(10.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        upNameContent(Modifier.fillMaxWidth())
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (playerControlVisibility.showFollowButton) {
+                                followButtonContent()
+                            }
+                            if (!upStatsText.isNullOrBlank()) {
+                                AppText(
+                                    text = upStatsText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (trailingContent != null) {
+                                trailingContent()
+                            }
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onUpClick(info.owner.mid) }
+                        .padding(horizontal = horizontalPadding, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    avatarContent()
+
+                    Spacer(Modifier.width(10.dp))
+
+                    // UP owner name row
+                    Column(modifier = Modifier.weight(1f)) {
+                        upNameContent(Modifier)
+                        if (!upStatsText.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            AppText(
+                                text = upStatsText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (playerControlVisibility.showFollowButton) {
+                        followButtonContent()
+                    }
+                    if (trailingContent != null) {
+                        if (playerControlVisibility.showFollowButton) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        trailingContent()
+                    }
+                }
+            }
+            if (shouldShowCreatorTeamSection(info)) {
+                CreatorTeamSection(
+                    staff = info.staff,
+                    onMemberClick = onUpClick
+                )
+            }
         }
     }
 }
@@ -891,16 +1066,16 @@ private fun CreatorTeamSection(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
+            AppText(
                 text = "创作团队",
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.weight(1f))
-            Text(
+            AppText(
                 text = "共 ${staff.size} 位",
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
             )
         }
@@ -937,24 +1112,34 @@ private fun CreatorTeamMemberChip(
     }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(AppShapes.container(ContainerLevel.Chip))
             .clickable(enabled = member.mid > 0L, onClick = onClick)
             .padding(end = 4.dp)
             .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(member.face))
-                .crossfade(true)
-                .build(),
-            contentDescription = "${member.name} 头像",
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-        )
+        Box(modifier = Modifier.size(36.dp)) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(FormatUtils.fixImageUrl(member.face))
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "${member.name} 头像",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            UserAvatarCornerMarkBadge(
+                mark = resolveUserAvatarCornerMark(
+                    officialType = member.official.type,
+                    vipStatus = member.vip.status,
+                ),
+                modifier = Modifier.align(Alignment.BottomEnd),
+                badgeSize = 14.dp,
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
         Column(
             modifier = Modifier.widthIn(min = 64.dp, max = 112.dp)
@@ -963,9 +1148,9 @@ private fun CreatorTeamMemberChip(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
+                AppText(
                     text = member.name,
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -980,9 +1165,9 @@ private fun CreatorTeamMemberChip(
                 }
             }
             if (member.title.isNotBlank()) {
-                Text(
+                AppText(
                     text = member.title,
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1001,7 +1186,7 @@ fun DescriptionSection(desc: String) {
 
     if (desc.isBlank()) return
 
-    Surface(
+    AppSurface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.background
     ) {
@@ -1011,16 +1196,15 @@ fun DescriptionSection(desc: String) {
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .animateContentSize()
         ) {
-            Text(
-                text = desc,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
-                maxLines = if (expanded) Int.MAX_VALUE else 3,
-                overflow = TextOverflow.Ellipsis
-            )
+            SelectionContainer {
+                AppText(
+                    text = desc,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
+                    maxLines = if (expanded) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
             if (desc.length > 100 || desc.lines().size > 3) {
                 Row(
@@ -1031,15 +1215,15 @@ fun DescriptionSection(desc: String) {
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
+                    AppText(
                         text = if (expanded) "\u6536\u8d77" else "\u5c55\u5f00\u66f4\u591a",
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.width(2.dp))
-                    Icon(
-                        imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
+                    AppIcon(
+                        imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
@@ -1115,9 +1299,9 @@ fun BgmInfoRow(
         label = "BgmExpandIndicator"
     )
 
-    Surface(
+    AppSurface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-        shape = RoundedCornerShape(8.dp),
+        shape = AppShapes.container(ContainerLevel.Chip),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -1126,15 +1310,15 @@ fun BgmInfoRow(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = CupertinoIcons.Default.MusicNote,
+            AppIcon(
+                imageVector = Icons.Outlined.MusicNote,
                 contentDescription = "BGM",
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     text = title,
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Medium
@@ -1145,7 +1329,7 @@ fun BgmInfoRow(
                 )
                 subtitle?.takeIf { it.isNotBlank() }?.let {
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(
+                    AppText(
                         text = it,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
@@ -1155,8 +1339,8 @@ fun BgmInfoRow(
                 }
             }
             if (showIndicator) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.ChevronDown,
+                AppIcon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f),
                     modifier = Modifier
@@ -1262,7 +1446,7 @@ private fun BgmSelectionSheet(
         selectedData.recommendedVideos.chunked(2)
     }
 
-    com.android.purebilibili.core.ui.IOSModalBottomSheet(
+    com.android.purebilibili.core.ui.AppModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         dragHandle = null
@@ -1281,7 +1465,7 @@ private fun BgmSelectionSheet(
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
+                    AppText(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
@@ -1290,9 +1474,9 @@ private fun BgmSelectionSheet(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = CupertinoIcons.Default.Xmark,
+                    AppIconButton(onClick = onDismiss) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.Close,
                             contentDescription = "关闭",
                             modifier = Modifier.size(20.dp)
                         )
@@ -1352,7 +1536,7 @@ private fun BgmSelectionSheet(
                 }
             } else if (selectedData.errorMessage?.isNotBlank() == true) {
                 item(key = "bgm-recommend-error") {
-                    Text(
+                    AppText(
                         text = selectedData.errorMessage.takeIf { it.isNotBlank() } ?: "音乐推荐加载失败",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
@@ -1361,7 +1545,7 @@ private fun BgmSelectionSheet(
                 }
             } else {
                 item(key = "bgm-recommend-empty") {
-                    Text(
+                    AppText(
                         text = "暂无相关视频",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
@@ -1378,7 +1562,7 @@ private fun BgmSelectionSheet(
 
             if (selectedMusicId.isBlank() || aid <= 0L || cid <= 0L) {
                 item {
-                    Text(
+                    AppText(
                         text = "暂时无法加载更多音乐信息",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
@@ -1423,7 +1607,7 @@ private fun BgmDiscoveryRelatedHeader() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        Text(
+        AppText(
             text = "使用该音乐的视频",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
@@ -1439,11 +1623,18 @@ private fun BgmRecommendVideoCardRow(
     rowIndex: Int,
     onVideoClick: (BgmRecommendVideo) -> Unit
 ) {
+    val context = LocalContext.current
+    val homeFeedCardStyle by SettingsManager
+        .getHomeFeedCardStyle(context)
+        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
+    val cardLayout = remember(homeFeedCardStyle) {
+        resolveHomeFeedCardLayout(homeFeedCardStyle)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = cardLayout.outerPaddingDp.dp),
+        horizontalArrangement = Arrangement.spacedBy(cardLayout.itemSpacingDp.dp)
     ) {
         rowVideos.forEachIndexed { columnIndex, video ->
             ElegantVideoCard(
@@ -1453,6 +1644,8 @@ private fun BgmRecommendVideoCardRow(
                 showPublishTime = true,
                 isDataSaverActive = true,
                 preferLowQualityCover = true,
+                coverAspectRatio = cardLayout.coverAspectRatio,
+                compactMetadata = cardLayout.compactMetadata,
                 modifier = Modifier.weight(1f),
                 onClick = { _, _ ->
                     onVideoClick(video)
@@ -1469,19 +1662,28 @@ private fun BgmRecommendVideoCardRow(
 private fun BgmRecommendVideoSkeletonRow(
     indexBase: Int
 ) {
+    val context = LocalContext.current
+    val homeFeedCardStyle by SettingsManager
+        .getHomeFeedCardStyle(context)
+        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
+    val cardLayout = remember(homeFeedCardStyle) {
+        resolveHomeFeedCardLayout(homeFeedCardStyle)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = cardLayout.outerPaddingDp.dp),
+        horizontalArrangement = Arrangement.spacedBy(cardLayout.itemSpacingDp.dp)
     ) {
         VideoCardSkeleton(
             modifier = Modifier.weight(1f),
-            index = indexBase
+            index = indexBase,
+            coverAspectRatio = cardLayout.coverAspectRatio
         )
         VideoCardSkeleton(
             modifier = Modifier.weight(1f),
-            index = indexBase + 1
+            index = indexBase + 1,
+            coverAspectRatio = cardLayout.coverAspectRatio
         )
     }
 }
@@ -1532,7 +1734,7 @@ private fun BgmSelectionStrip(
                 Box(
                     modifier = Modifier
                         .size(76.dp)
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(AppShapes.container(ContainerLevel.Floating))
                         .background(
                             if (selected) {
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
@@ -1547,7 +1749,7 @@ private fun BgmSelectionStrip(
                             } else {
                                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)
                             },
-                            shape = RoundedCornerShape(20.dp)
+                            shape = AppShapes.container(ContainerLevel.Floating)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1563,8 +1765,8 @@ private fun BgmSelectionStrip(
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        Icon(
-                            imageVector = CupertinoIcons.Default.MusicNote,
+                        AppIcon(
+                            imageVector = Icons.Outlined.MusicNote,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.78f),
                             modifier = Modifier.size(24.dp)
@@ -1572,7 +1774,7 @@ private fun BgmSelectionStrip(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
+                AppText(
                     text = bgm.musicTitle.ifBlank { "未知音乐" },
                     style = MaterialTheme.typography.labelSmall,
                     color = if (selected) {
@@ -1606,11 +1808,11 @@ private fun BgmDetailCard(
             ?: "点击查看这首音乐的完整详情"
     }
 
-    Surface(
+    AppSurface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(24.dp),
+        shape = AppShapes.container(ContainerLevel.Floating),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
     ) {
         if (isLoading) {
@@ -1634,7 +1836,7 @@ private fun BgmDetailCard(
                         .fillMaxHeight(),
                     verticalArrangement = Arrangement.Top
                 ) {
-                    Text(
+                    AppText(
                         text = detail?.musicTitle.orEmpty().ifBlank { bgm.musicTitle.ifBlank { "未知音乐" } },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
@@ -1644,14 +1846,14 @@ private fun BgmDetailCard(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = CupertinoIcons.Outlined.Star,
+                        AppIcon(
+                            imageVector = Icons.Outlined.Star,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(
+                        AppText(
                             text = scoreText,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -1659,7 +1861,7 @@ private fun BgmDetailCard(
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
+                    AppText(
                         text = displayStatLine,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1667,7 +1869,7 @@ private fun BgmDetailCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
+                    AppText(
                         text = commentText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1675,7 +1877,7 @@ private fun BgmDetailCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    AppText(
                         text = description,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
@@ -1683,7 +1885,7 @@ private fun BgmDetailCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.weight(1f, fill = true))
-                    Text(
+                    AppText(
                         text = "打开音乐详情",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
@@ -1770,7 +1972,7 @@ private fun BgmDetailCover(
     Box(
         modifier = Modifier
             .size(width = 112.dp, height = 112.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(AppShapes.container(ContainerLevel.Floating))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
         contentAlignment = Alignment.Center
     ) {
@@ -1786,8 +1988,8 @@ private fun BgmDetailCover(
                 contentScale = ContentScale.Crop
             )
         } else {
-            Icon(
-                imageVector = CupertinoIcons.Default.MusicNote,
+            AppIcon(
+                imageVector = Icons.Outlined.MusicNote,
                 contentDescription = title,
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                 modifier = Modifier.size(34.dp)

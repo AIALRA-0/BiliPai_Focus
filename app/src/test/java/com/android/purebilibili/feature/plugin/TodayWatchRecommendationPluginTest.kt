@@ -10,6 +10,8 @@ import com.android.purebilibili.core.plugin.RecommendationSceneSignals
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.VideoItem
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -24,6 +26,7 @@ class TodayWatchRecommendationPluginTest {
         assertTrue(plugin.capabilityManifest.capabilities.contains(PluginCapability.RECOMMENDATION_CANDIDATES))
         assertTrue(plugin.capabilityManifest.capabilities.contains(PluginCapability.LOCAL_HISTORY_READ))
         assertTrue(plugin.capabilityManifest.capabilities.contains(PluginCapability.LOCAL_FEEDBACK_READ))
+        assertEquals("1.1.0", plugin.version)
     }
 
     @Test
@@ -69,7 +72,24 @@ class TodayWatchRecommendationPluginTest {
 
         assertEquals("today_watch", result.sourcePluginId)
         assertEquals("candidate_a", result.items.first().video.bvid)
+        assertTrue(result.items.first().score in 0.0..1.0)
+        assertTrue(result.items.first().confidence in 0f..1f)
         assertTrue(result.items.first().explanation.isNotBlank())
-        assertTrue(result.groups.any { it.id == "preferred_creators" && it.items.isNotEmpty() })
+        assertTrue(
+            result.groups.any { group ->
+                group.id == "preferred_creators" && group.items.any { it.watchCount != null }
+            }
+        )
+    }
+
+    @Test
+    fun todayWatchPluginConfig_oldPayloadDefaultsToBalancedLocalMode() {
+        val config = Json { ignoreUnknownKeys = true }.decodeFromString<TodayWatchPluginConfig>(
+            """{"currentMode":"LEARN","queueBuildLimit":30}"""
+        )
+
+        assertEquals(com.android.purebilibili.core.plugin.RecommendationStrategy.BALANCED, config.recommendationStrategy)
+        assertEquals(TodayWatchCandidatePoolMode.LOCAL, config.candidatePoolMode)
+        assertEquals(30, config.queueBuildLimit)
     }
 }

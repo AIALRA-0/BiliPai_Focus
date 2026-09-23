@@ -6,6 +6,10 @@ internal data class DynamicTabSpec(
     val logicalIndex: Int
 )
 
+internal data class DynamicPagerInvalidPageKey(
+    val page: Int
+)
+
 internal val allDynamicTabSpecs: List<DynamicTabSpec> = listOf(
     DynamicTabSpec(id = "all", title = "全部", logicalIndex = 0),
     DynamicTabSpec(id = "video", title = "投稿", logicalIndex = 1),
@@ -76,4 +80,44 @@ internal fun isDynamicUserTabVisible(
     visibleTabs: List<DynamicTabSpec>
 ): Boolean {
     return visibleTabs.any { it.logicalIndex == 4 }
+}
+
+internal fun resolveDynamicSettledLogicalTab(
+    settledPage: Int,
+    visibleTabs: List<DynamicTabSpec>
+): Int? {
+    return visibleTabs.getOrNull(settledPage)?.logicalIndex
+}
+
+internal fun resolveDynamicPagerTabKey(
+    visibleTabs: List<DynamicTabSpec>,
+    page: Int
+): Any {
+    return visibleTabs.getOrNull(page)?.logicalIndex ?: DynamicPagerInvalidPageKey(page)
+}
+
+internal fun resolveDynamicPagerIndicatorPosition(
+    currentPage: Int,
+    currentPageOffsetFraction: Float,
+    pageCount: Int
+): Float {
+    if (pageCount <= 0) return 0f
+    return (currentPage + currentPageOffsetFraction)
+        .coerceIn(0f, (pageCount - 1).toFloat())
+}
+
+internal enum class DynamicTabReselectAction {
+    SWITCH_TAB,
+    SCROLL_TO_TOP
+}
+
+internal fun resolveDynamicTabReselectAction(
+    currentVisibleIndex: Int,
+    tappedVisibleIndex: Int
+): DynamicTabReselectAction {
+    return if (currentVisibleIndex == tappedVisibleIndex) {
+        DynamicTabReselectAction.SCROLL_TO_TOP
+    } else {
+        DynamicTabReselectAction.SWITCH_TAB
+    }
 }

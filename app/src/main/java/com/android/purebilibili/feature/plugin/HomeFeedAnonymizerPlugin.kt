@@ -16,11 +16,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PersonOff
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -29,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,10 +37,16 @@ import com.android.purebilibili.core.network.policy.HomeFeedAnonymizerStatsSnaps
 import com.android.purebilibili.core.plugin.Plugin
 import com.android.purebilibili.core.plugin.PluginCapability
 import com.android.purebilibili.core.plugin.PluginCapabilityManifest
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.Logger
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 internal const val HOME_FEED_ANONYMIZER_PLUGIN_ID = "home_feed_anonymizer"
 private const val TAG = "HomeFeedAnonymizerPlugin"
@@ -54,8 +59,9 @@ class HomeFeedAnonymizerPlugin : Plugin {
     override val id: String = HOME_FEED_ANONYMIZER_PLUGIN_ID
     override val name: String = "初见推荐"
     override val description: String = "仅在 Web 首页推荐接口隐藏登录 Cookie，让推荐流更接近未登录公共热门"
-    override val version: String = "1.0.1"
+    override val version: String = "1.0.2"
     override val author: String = "BiliPai项目组"
+    override val icon: ImageVector = Icons.Outlined.PersonOff
     override val capabilityManifest: PluginCapabilityManifest = PluginCapabilityManifest(
         pluginId = id,
         displayName = name,
@@ -205,16 +211,16 @@ private fun HomeFeedAnonymizerSettingsContent(enabled: Boolean) {
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { refreshKey += 1 }) {
-                    Text("刷新统计")
+                AppTextButton(onClick = { refreshKey += 1 }) {
+                    AppText("刷新统计")
                 }
-                TextButton(
+                AppTextButton(
                     onClick = {
                         HomeFeedAnonymizerRuntime.resetStats()
                         refreshKey += 1
                     }
                 ) {
-                    Text("重置统计")
+                    AppText("重置统计")
                 }
             }
         }
@@ -226,7 +232,7 @@ private fun HomeFeedAnonymizerSettingsContent(enabled: Boolean) {
                     onShowDetail = { detailRow = row }
                 )
             }
-            Text(
+            AppText(
                 text = "BiliPai 仅实现 Android 端内置插件形态，保留原项目与 Plus 改版来源说明。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -250,15 +256,15 @@ private fun HomeFeedAnonymizerSection(
     content: @Composable () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
+        AppText(
             text = title,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Medium
         )
-        Surface(
+        AppSurface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
+            shape = AppShapes.container(ContainerLevel.Chip),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f)
         ) {
             Column(
@@ -291,12 +297,12 @@ private fun HomeFeedAnonymizerInfoRowView(
             )
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-                shape = RoundedCornerShape(6.dp)
+                shape = AppShapes.container(ContainerLevel.Chip)
             )
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Text(
+        AppText(
             text = row.label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -305,7 +311,7 @@ private fun HomeFeedAnonymizerInfoRowView(
             modifier = Modifier.width(86.dp)
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Text(
+        AppText(
             text = row.summary,
             style = MaterialTheme.typography.bodySmall,
             color = if (row.url == null) {
@@ -326,19 +332,19 @@ private fun HomeFeedAnonymizerDetailDialog(
     onDismiss: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(row.label) },
+        title = { AppText(row.label) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
+                AppText(
                     text = "长按并拖拽选择需要复制的内容",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 SelectionContainer {
-                    Text(
+                    AppText(
                         text = row.fullContent,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
@@ -351,7 +357,7 @@ private fun HomeFeedAnonymizerDetailDialog(
         },
         confirmButton = {
             if (row.url != null) {
-                TextButton(
+                AppTextButton(
                     onClick = {
                         try {
                             uriHandler.openUri(row.url)
@@ -360,13 +366,13 @@ private fun HomeFeedAnonymizerDetailDialog(
                         }
                     }
                 ) {
-                    Text("打开链接")
+                    AppText("打开链接")
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("关闭")
+            AppTextButton(onClick = onDismiss) {
+                AppText("关闭")
             }
         }
     )

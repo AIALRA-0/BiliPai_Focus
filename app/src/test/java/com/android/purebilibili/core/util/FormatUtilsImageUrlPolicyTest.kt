@@ -6,11 +6,11 @@ import kotlin.test.assertEquals
 class FormatUtilsImageUrlPolicyTest {
 
     @Test
-    fun resolveVideoCoverUrl_usesSizedImageForHighQualityMode() {
+    fun resolveVideoCoverUrl_usesOriginalImageForHighQualityMode() {
         assertEquals(
-            "https://i0.hdslb.com/bfs/archive/demo.jpg@480w_300h.webp",
+            "https://i0.hdslb.com/bfs/archive/demo.jpg",
             FormatUtils.resolveVideoCoverUrl(
-                "//i0.hdslb.com/bfs/archive/demo.jpg",
+                "//i0.hdslb.com/bfs/archive/demo.jpg@480w_300h.webp",
                 useLowQuality = false
             )
         )

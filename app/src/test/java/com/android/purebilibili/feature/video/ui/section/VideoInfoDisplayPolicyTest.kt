@@ -17,9 +17,26 @@ class VideoInfoDisplayPolicyTest {
 
     @Test
     fun videoInfoInitialExpanded_whenDescriptionOrTagsExist() {
-        assertTrue(resolveVideoInfoInitialExpandedState(hasDescription = true, hasTags = false))
-        assertTrue(resolveVideoInfoInitialExpandedState(hasDescription = false, hasTags = true))
+        assertTrue(
+            resolveVideoInfoInitialExpandedState(
+                hasDescription = true,
+                hasTags = false,
+                defaultExpanded = true
+            )
+        )
+        assertTrue(
+            resolveVideoInfoInitialExpandedState(
+                hasDescription = false,
+                hasTags = true,
+                defaultExpanded = true
+            )
+        )
         assertFalse(resolveVideoInfoInitialExpandedState(hasDescription = false, hasTags = false))
+    }
+
+    @Test
+    fun videoInfoInitialExpanded_defaultsToCollapsedWhenPreferenceIsUnset() {
+        assertFalse(resolveVideoInfoInitialExpandedState(hasDescription = true, hasTags = true))
     }
 
     @Test
@@ -220,6 +237,17 @@ class VideoInfoDisplayPolicyTest {
     }
 
     @Test
+    fun compactPublishTimeRow_neverAppendsPreciseTimeForCards() {
+        assertEquals(
+            "发布于 3天前",
+            resolveCompactPublishTimeRowText(
+                pubdate = 1_709_006_400L,
+                nowMs = 1_709_265_600_000L
+            )
+        )
+    }
+
+    @Test
     fun videoDetailOnlineCountTextRequiresSettingAndLoadedValue() {
         assertEquals(
             "123人正在看",
@@ -270,5 +298,16 @@ class VideoInfoDisplayPolicyTest {
                 timeZone = TimeZone.getTimeZone("UTC")
             )
         )
+    }
+
+    @Test
+    fun shouldUseCompactUpInfoLayout_whenWidthBelowThreshold() {
+        assertTrue(shouldUseCompactUpInfoLayout(180))
+        assertTrue(shouldUseCompactUpInfoLayout(240))
+        assertTrue(shouldUseCompactUpInfoLayout(319))
+        assertFalse(shouldUseCompactUpInfoLayout(320))
+        assertFalse(shouldUseCompactUpInfoLayout(412))
+        assertFalse(shouldUseCompactUpInfoLayout(0))
+        assertFalse(shouldUseCompactUpInfoLayout(-1))
     }
 }

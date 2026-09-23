@@ -24,4 +24,35 @@ class AppUpdateDialogVisualPolicyTest {
         assertEquals(Color.Unspecified, colors.currentVersionColor)
         assertEquals(Color.Unspecified, colors.releaseNotesColor)
     }
+
+    @Test
+    fun `scrollable content height follows the current window and stays bounded`() {
+        assertEquals(
+            384,
+            resolveAppUpdateScrollableContentMaxHeight(
+                screenHeightDp = 800,
+                heightFraction = 0.48f,
+                minHeightDp = 170,
+                maxHeightDp = 390,
+            ),
+        )
+        assertEquals(
+            170,
+            resolveAppUpdateScrollableContentMaxHeight(
+                screenHeightDp = 300,
+                heightFraction = 0.48f,
+                minHeightDp = 170,
+                maxHeightDp = 390,
+            ),
+        )
+        assertEquals(
+            390,
+            resolveAppUpdateScrollableContentMaxHeight(
+                screenHeightDp = 1200,
+                heightFraction = 0.48f,
+                minHeightDp = 170,
+                maxHeightDp = 390,
+            ),
+        )
+    }
 }

@@ -25,3 +25,14 @@ internal fun resolveAppUpdateDialogTextColors(isDarkTheme: Boolean): AppUpdateDi
         releaseNotesColor = highContrastText
     )
 }
+
+internal fun resolveAppUpdateScrollableContentMaxHeight(
+    screenHeightDp: Int,
+    heightFraction: Float,
+    minHeightDp: Int,
+    maxHeightDp: Int,
+): Int {
+    return (screenHeightDp * heightFraction)
+        .toInt()
+        .coerceIn(minHeightDp, maxHeightDp)
+}

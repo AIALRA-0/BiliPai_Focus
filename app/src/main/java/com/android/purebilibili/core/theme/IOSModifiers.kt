@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.HapticType
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  * iOS Style Modifier Extensions
@@ -43,13 +45,14 @@ import com.android.purebilibili.core.util.HapticType
  * - Haptic feedback on press (optional)
  */
 fun Modifier.iosCard(
-    shape: Shape = RoundedCornerShape(12.dp), // Standard iOS corner radius
+    shape: Shape? = null, // null → theme Card radius inside composed
     backgroundColor: Color? = null,
     elevation: Dp = 2.dp, // Subtle elevation
     pressEffect: Boolean = true,
     hapticFeedback: Boolean = true,
     onClick: (() -> Unit)? = null
 ): Modifier = composed {
+    val resolvedShape = shape ?: AppShapes.container(ContainerLevel.Card)
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed && pressEffect) 0.96f else 1f,
@@ -70,10 +73,10 @@ fun Modifier.iosCard(
             // iOS shadows are often more diffuse and less "elevated" looking than Material
             // We can simulate this with standard shadow for now, or custom drawn shadow later
             shadowElevation = if (isPressed) elevation.toPx() / 2 else elevation.toPx()
-            this.shape = shape
+            this.shape = resolvedShape
             clip = true
         }
-        .background(currentBackgroundColor, shape)
+        .background(currentBackgroundColor, resolvedShape)
         .let { modifier ->
             if (onClick != null) {
                 modifier.pointerInput(Unit) {

@@ -20,9 +20,18 @@ object SponsorCategory {
     const val PREVIEW = "preview"           // 预告/回顾片段
     const val FILLER = "filler"             // 无关片段/跑题
     const val POI_HIGHLIGHT = "poi_highlight" // 精彩片段标记
+    const val EXCLUSIVE_ACCESS = "exclusive_access"
+    const val PADDING = "padding"
+    const val MUSIC_OFFTOPIC = "music_offtopic"
     
     val ALL_SKIP_CATEGORIES = listOf(
         SPONSOR, SELFPROMO, INTRO, OUTRO, INTERACTION, PREVIEW, FILLER
+    )
+
+    /** Categories accepted by the BilibiliSponsorBlock API, including marker-only types. */
+    val ALL_CATEGORIES = listOf(
+        SPONSOR, SELFPROMO, EXCLUSIVE_ACCESS, INTERACTION, POI_HIGHLIGHT,
+        INTRO, OUTRO, PREVIEW, PADDING, FILLER, MUSIC_OFFTOPIC
     )
     
     fun getCategoryName(category: String): String = when (category) {
@@ -34,6 +43,9 @@ object SponsorCategory {
         PREVIEW -> "预告/回顾"
         FILLER -> "无关片段"
         POI_HIGHLIGHT -> "精彩片段"
+        EXCLUSIVE_ACCESS -> "独家访问/抢先体验"
+        PADDING -> "填充内容"
+        MUSIC_OFFTOPIC -> "音乐：非音乐部分"
         else -> category
     }
 }
@@ -75,7 +87,7 @@ data class SponsorSegment(
     val segment: List<Float>,         // [起始时间, 结束时间] 秒
     val UUID: String,                 // 片段唯一标识
     val category: String,             // 片段类别
-    val actionType: String,           // 动作类型
+    val actionType: String = SponsorActionType.SKIP, // 动作类型
     val locked: Int = 0,              // 是否锁定
     val votes: Int = 0,               // 投票数
     val videoDuration: Float = 0f     // 提交时的视频时长
@@ -100,11 +112,15 @@ data class SponsorSegment(
     
     /** 是否为跳过类型 */
     val isSkipType: Boolean get() = actionType == SponsorActionType.SKIP
+    val isMuteType: Boolean get() = actionType == SponsorActionType.MUTE
+    val isMarkerOnlyType: Boolean get() = actionType == SponsorActionType.FULL || actionType == SponsorActionType.POI
 }
 
 data class SponsorProgressMarker(
     val segmentId: String,
     val category: String,
     val startTimeMs: Long,
-    val endTimeMs: Long
+    val endTimeMs: Long,
+    /** User configured #RRGGBB color. Null falls back to the category default. */
+    val colorHex: String? = null,
 )

@@ -7,14 +7,14 @@ import kotlin.test.assertNull
 class HomeScrollOffsetPolicyTest {
 
     @Test
-    fun liquidGlassDisabled_skipsGlobalOffsetUpdate() {
+    fun liquidGlassDisabled_stillDrivesDockMotion() {
         val next = resolveNextHomeGlobalScrollOffset(
             currentOffset = 120f,
             scrollDeltaY = -15f,
             liquidGlassEnabled = false
         )
 
-        assertNull(next)
+        assertEquals(135f, next)
     }
 
     @Test

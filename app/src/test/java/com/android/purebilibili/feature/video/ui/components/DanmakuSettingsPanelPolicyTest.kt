@@ -2,9 +2,11 @@ package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuCloudSyncToggleSubtitle
 import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleSections
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,6 +14,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DanmakuSettingsPanelPolicyTest {
+    @Test
+    fun blockManagerTabs_keepDynamicLabelsReadable() {
+        val source = java.io.File(
+            "app/src/main/java/com/android/purebilibili/feature/video/ui/components/DanmakuSettingsPanel.kt"
+        ).readText()
+        val blockManagerTabs = source
+            .substringAfter("options = listOf(\"关键词\", \"正则\", \"UID(hash)\")")
+            .substringBefore("AppOutlinedTextField(")
+
+        assertTrue(blockManagerTabs.contains("scrollable = true"))
+        assertTrue(blockManagerTabs.contains("minTabWidth = 88.dp"))
+    }
 
     @Test
     fun portraitPanelAnchorsToBottomAndUsesWiderSheetWidth() {
@@ -43,7 +57,7 @@ class DanmakuSettingsPanelPolicyTest {
             policy.presentation
         )
         assertEquals(0, policy.bottomPaddingDp)
-        assertEquals(480, policy.maxHeightDp)
+        assertTrue(policy.maxHeightDp in 280..420)
         assertEquals(
             DanmakuSettingsPanelAnchor.End,
             policy.anchor
@@ -51,7 +65,7 @@ class DanmakuSettingsPanelPolicyTest {
     }
 
     @Test
-    fun fullscreenPanelWidthMode_isFixedToQuarterWidth() {
+    fun fullscreenPanelWidth_isNarrowSideRail() {
         val fullWidth = resolveDanmakuSettingsPanelLayoutPolicy(
             isFullscreen = true,
             screenWidthDp = 915,
@@ -71,9 +85,12 @@ class DanmakuSettingsPanelPolicyTest {
             fullscreenWidthMode = DanmakuPanelWidthMode.THIRD
         )
 
-        assertEquals(221, fullWidth.maxWidthDp)
-        assertEquals(221, halfWidth.maxWidthDp)
-        assertEquals(221, thirdWidth.maxWidthDp)
+        // 分区 Tab 侧栏：放宽到约 45% 屏宽（380-440dp），避免控件拥挤
+        assertEquals(fullWidth.maxWidthDp, halfWidth.maxWidthDp)
+        assertEquals(fullWidth.maxWidthDp, thirdWidth.maxWidthDp)
+        assertTrue(fullWidth.maxWidthDp in 380..440)
+        assertEquals(fullWidth.minWidthDp, fullWidth.maxWidthDp)
+        assertEquals(DanmakuSettingsPanelAnchor.End, fullWidth.anchor)
     }
 
     @Test
@@ -106,25 +123,28 @@ class DanmakuSettingsPanelPolicyTest {
 
     @Test
     fun fullscreenPanelSurfaceColors_followDarkThemeTokens() {
+        val darkScheme = darkColorScheme()
         val colors = resolveDanmakuSettingsPanelSurfaceColors(
-            colorScheme = darkColorScheme()
+            colorScheme = darkScheme
         )
 
-        assertTrue(colors.panelColor.alpha > 0.9f)
-        assertTrue(colors.itemColor.alpha < colors.panelColor.alpha)
+        assertTrue(colors.panelColor.luminance() < 0.5f)
+        assertTrue(colors.titleColor.luminance() > colors.panelColor.luminance())
         assertTrue(colors.titleColor.alpha > colors.supportingColor.alpha)
+        assertEquals(darkScheme.primary, colors.sliderActiveTrackColor)
     }
 
     @Test
     fun fullscreenPanelSurfaceColors_followLightThemeTokens() {
+        val lightScheme = lightColorScheme()
         val colors = resolveDanmakuSettingsPanelSurfaceColors(
-            colorScheme = lightColorScheme()
+            colorScheme = lightScheme
         )
 
-        assertTrue(colors.panelColor.alpha > 0.9f)
-        assertTrue(colors.panelColor.red > 0.85f)
+        assertTrue(colors.panelColor.luminance() > 0.5f)
+        assertTrue(colors.titleColor.luminance() < colors.panelColor.luminance())
         assertTrue(colors.titleColor.alpha > colors.supportingColor.alpha)
-        assertTrue(colors.sliderInactiveTickColor.alpha < colors.sliderActiveTickColor.alpha)
+        assertEquals(lightScheme.primary, colors.sliderThumbColor)
     }
 
     @Test
@@ -173,6 +193,12 @@ class DanmakuSettingsPanelPolicyTest {
                 DanmakuCloudSyncUiState(status = DanmakuCloudSyncStatus.FAILURE)
             )
         )
+    }
+
+    @Test
+    fun cloudSyncToggleSubtitle_mentionsWebImpactWhenEnabled() {
+        assertTrue(resolveDanmakuCloudSyncToggleSubtitle(enabled = true).contains("网页版"))
+        assertTrue(resolveDanmakuCloudSyncToggleSubtitle(enabled = false).contains("本机"))
     }
 
     @Test

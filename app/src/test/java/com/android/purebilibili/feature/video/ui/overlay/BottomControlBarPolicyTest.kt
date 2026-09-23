@@ -120,10 +120,44 @@ class BottomControlBarPolicyTest {
                 widthDp = 393
             )
         )
+        assertFalse(
+            shouldShowDanmakuInputInControlBar(
+                isFullscreen = true,
+                widthDp = 479
+            )
+        )
+        assertFalse(
+            shouldShowDanmakuInputInControlBar(
+                isFullscreen = true,
+                widthDp = 616
+            )
+        )
         assertTrue(
             shouldShowDanmakuInputInControlBar(
                 isFullscreen = true,
                 widthDp = 720
+            )
+        )
+    }
+
+    @Test
+    fun danmakuToggle_shownOnTabletInlinePlayerEvenWhenNotFullscreen() {
+        assertTrue(
+            shouldShowDanmakuToggleInControlBar(
+                isFullscreen = true,
+                widthDp = 393
+            )
+        )
+        assertTrue(
+            shouldShowDanmakuToggleInControlBar(
+                isFullscreen = false,
+                widthDp = 800
+            )
+        )
+        assertFalse(
+            shouldShowDanmakuToggleInControlBar(
+                isFullscreen = false,
+                widthDp = 411
             )
         )
     }
@@ -194,7 +228,7 @@ class BottomControlBarPolicyTest {
                 showEpisodeInMoreActions = true,
                 showNextEpisodeButton = false,
                 showPlaybackOrderLabel = false,
-                showAspectRatioButton = false,
+                showAudioQualityButton = false,
                 showPortraitSwitchButton = false
             )
         )
@@ -203,7 +237,7 @@ class BottomControlBarPolicyTest {
                 isFullscreen = true,
                 showNextEpisodeButton = false,
                 showPlaybackOrderLabel = false,
-                showAspectRatioButton = false,
+                showAudioQualityButton = false,
                 showPortraitSwitchButton = true
             )
         )
@@ -212,7 +246,7 @@ class BottomControlBarPolicyTest {
                 isFullscreen = true,
                 showNextEpisodeButton = false,
                 showPlaybackOrderLabel = false,
-                showAspectRatioButton = false,
+                showAudioQualityButton = false,
                 showPortraitSwitchButton = false
             )
         )
@@ -221,7 +255,7 @@ class BottomControlBarPolicyTest {
                 isFullscreen = false,
                 showNextEpisodeButton = true,
                 showPlaybackOrderLabel = true,
-                showAspectRatioButton = true,
+                showAudioQualityButton = true,
                 showPortraitSwitchButton = true
             )
         )
@@ -247,9 +281,9 @@ class BottomControlBarPolicyTest {
 
     @Test
     fun floatingPanelMinWidthScalesWithLandscapeWidth() {
-        assertEquals(176, resolveFloatingControlPanelMinWidthDp(widthDp = 560))
-        assertEquals(196, resolveFloatingControlPanelMinWidthDp(widthDp = 720))
-        assertEquals(216, resolveFloatingControlPanelMinWidthDp(widthDp = 1024))
+        assertEquals(168, resolveFloatingControlPanelMinWidthDp(widthDp = 560))
+        assertEquals(176, resolveFloatingControlPanelMinWidthDp(widthDp = 720))
+        assertEquals(184, resolveFloatingControlPanelMinWidthDp(widthDp = 1024))
     }
 
     @Test

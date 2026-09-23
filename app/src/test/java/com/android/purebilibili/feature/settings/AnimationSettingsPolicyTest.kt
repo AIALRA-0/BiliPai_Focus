@@ -31,7 +31,7 @@ class AnimationSettingsPolicyTest {
     }
 
     @Test
-    fun bottomBarLiquidGlassPresetControl_livesInAnimationSettings() {
+    fun bottomBarLiquidGlassUsesUnifiedMaterialWithoutPresetPicker() {
         val animationSource = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/settings/screen/AnimationSettingsScreen.kt"
         )
@@ -42,23 +42,15 @@ class AnimationSettingsPolicyTest {
             "app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt"
         )
 
-        assertFalse(animationSource.contains("底栏液态玻璃预设"))
-        assertFalse(animationSource.contains("BottomBarLiquidGlassPreset.entries"))
-        // 底栏液态玻璃预设现在提供 BiliPai 调校 + iOS 26 两种；列表显式枚举，避免误改
-        // 时混入未审视的预设。
-        assertTrue(animationSource.contains("BottomBarLiquidGlassPreset.BILIPAI_TUNED,"))
-        assertTrue(animationSource.contains("BottomBarLiquidGlassPreset.IOS26_REFINED"))
-        assertFalse(settingsManagerSource.contains("更轻的模糊、更低的遮罩和更清晰的背景折射"))
-        val forbiddenExternalName = listOf("Na", "gram", "X").joinToString("")
-        assertFalse(animationSource.contains(forbiddenExternalName))
-        assertFalse(animationSource.contains(forbiddenExternalName.lowercase()))
-        assertFalse(settingsManagerSource.contains(forbiddenExternalName))
-        assertFalse(settingsManagerSource.contains(forbiddenExternalName.lowercase()))
+        assertFalse(animationSource.contains("当前底栏材质"))
+        assertFalse(animationSource.contains("BottomBarLiquidGlassPreset"))
+        assertFalse(animationSource.contains("getBottomBarLiquidGlassPreset"))
+        assertFalse(settingsManagerSource.contains("getBottomBarLiquidGlassPreset"))
+        assertFalse(settingsManagerSource.contains("setBottomBarLiquidGlassPreset"))
         assertFalse(animationSource.contains("底栏跟随高光"))
         assertFalse(animationSource.contains("getBottomBarInteractiveHighlightEnabled"))
         assertFalse(animationSource.contains("setBottomBarInteractiveHighlightEnabled"))
-        assertFalse(bottomBarSource.contains("底栏液态玻璃预设"))
-        assertFalse(bottomBarSource.contains("BottomBarLiquidGlassPreset.entries"))
+        assertFalse(bottomBarSource.contains("BottomBarLiquidGlassPreset"))
         assertFalse(bottomBarSource.contains("底栏跟随高光"))
     }
 
@@ -73,7 +65,6 @@ class AnimationSettingsPolicyTest {
 
         assertFalse(animationSource.contains("预测性返回动画"))
         assertFalse(animationSource.contains("Predictive" + "BackAnimationDialog"))
-        assertFalse(animationSource.contains("SettingsIconRole.PREDICTIVE" + "_BACK"))
         assertFalse(policySource.contains("Predictive" + "BackToggleUiState"))
         assertFalse(policySource.contains("resolvePredictive" + "BackToggleUiState"))
     }

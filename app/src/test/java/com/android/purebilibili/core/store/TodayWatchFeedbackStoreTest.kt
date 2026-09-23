@@ -63,4 +63,22 @@ class TodayWatchFeedbackStoreTest {
         assertEquals(listOf("BV2", "BV1"), repeated.recentDislikedVideos.map { it.bvid })
         assertEquals("新标题", repeated.recentDislikedVideos.last().title)
     }
+
+    @Test
+    fun dislikedVideoFeedback_canAvoidAddingCreatorSignal() {
+        val snapshot = TodayWatchFeedbackSnapshot().withDislikedVideoFeedback(
+            video = TodayWatchDislikedVideoSnapshot(
+                bvid = "BV1",
+                title = "普通内容",
+                creatorName = "UP-X",
+                creatorMid = 42L,
+                dislikedAtMillis = 100L
+            ),
+            keywords = emptySet(),
+            includeCreatorSignal = false
+        )
+
+        assertEquals(setOf("BV1"), snapshot.dislikedBvids)
+        assertTrue(snapshot.dislikedCreatorMids.isEmpty())
+    }
 }

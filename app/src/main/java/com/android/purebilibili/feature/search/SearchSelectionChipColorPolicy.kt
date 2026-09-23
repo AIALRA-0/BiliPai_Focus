@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.search
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
-import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
+import com.android.purebilibili.core.theme.resolveFilledSelectionAccentColors
 
 internal data class SearchSelectionChipColors(
     val backgroundColor: Color,
@@ -21,7 +21,7 @@ internal fun resolveSearchSelectionChipColors(
         )
     }
 
-    val selectedColors = resolveAdaptivePrimaryAccentColors(colorScheme)
+    val selectedColors = resolveFilledSelectionAccentColors(colorScheme)
 
     return SearchSelectionChipColors(
         backgroundColor = selectedColors.backgroundColor,

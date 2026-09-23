@@ -10,11 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -25,11 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.theme.UiPreset
-import io.github.alexzhirkevich.cupertino.CupertinoSlider
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 internal const val DEFAULT_PLAYBACK_SPEED_MIN = 0.5f
 internal const val DEFAULT_PLAYBACK_SPEED_MAX = 2.0f
@@ -72,7 +67,6 @@ fun DefaultPlaybackSpeedPreferenceControl(
     subtitle: String? = null,
     showCurrentValue: Boolean = true
 ) {
-    val uiPreset = LocalUiPreset.current
     var sliderValue by remember(currentSpeed) {
         mutableFloatStateOf(normalizeDefaultPlaybackPreferenceSpeed(currentSpeed))
     }
@@ -90,14 +84,14 @@ fun DefaultPlaybackSpeedPreferenceControl(
                 if (title != null || subtitle != null) {
                     Column(modifier = Modifier.weight(1f)) {
                         if (title != null) {
-                            Text(
+                            AppText(
                                 text = title,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         if (subtitle != null) {
-                            Text(
+                            AppText(
                                 text = subtitle,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -109,14 +103,14 @@ fun DefaultPlaybackSpeedPreferenceControl(
                 }
 
                 if (showCurrentValue) {
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
+                    AppSurface(
+                        shape = AppShapes.container(ContainerLevel.Pill),
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
-                        Text(
+                        AppText(
                             text = formatDefaultPlaybackSpeed(sliderValue),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
@@ -129,37 +123,24 @@ fun DefaultPlaybackSpeedPreferenceControl(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
+            AppText(
                 text = formatDefaultPlaybackSpeed(DEFAULT_PLAYBACK_SPEED_MIN),
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (uiPreset == UiPreset.MD3) {
-                Slider(
-                    value = sliderValue,
-                    onValueChange = { sliderValue = normalizeDefaultPlaybackPreferenceSpeed(it) },
-                    onValueChangeFinished = { onSpeedChange(sliderValue) },
-                    valueRange = DEFAULT_PLAYBACK_SPEED_MIN..DEFAULT_PLAYBACK_SPEED_MAX,
-                    steps = DEFAULT_PLAYBACK_SPEED_STEPS,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                )
-            } else {
-                CupertinoSlider(
-                    value = sliderValue,
-                    onValueChange = { sliderValue = normalizeDefaultPlaybackPreferenceSpeed(it) },
-                    onValueChangeFinished = { onSpeedChange(sliderValue) },
-                    valueRange = DEFAULT_PLAYBACK_SPEED_MIN..DEFAULT_PLAYBACK_SPEED_MAX,
-                    steps = DEFAULT_PLAYBACK_SPEED_STEPS,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                )
-            }
-            Text(
+            AppSlider(
+                value = sliderValue,
+                onValueChange = { sliderValue = normalizeDefaultPlaybackPreferenceSpeed(it) },
+                onValueChangeFinished = { onSpeedChange(sliderValue) },
+                valueRange = DEFAULT_PLAYBACK_SPEED_MIN..DEFAULT_PLAYBACK_SPEED_MAX,
+                steps = DEFAULT_PLAYBACK_SPEED_STEPS,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+            )
+            AppText(
                 text = formatDefaultPlaybackSpeed(DEFAULT_PLAYBACK_SPEED_MAX),
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -170,13 +151,13 @@ fun DefaultPlaybackSpeedPreferenceControl(
         ) {
             DEFAULT_PLAYBACK_SPEED_PRESETS.forEach { preset ->
                 val isSelected = selectedPreset == preset
-                Surface(
+                AppSurface(
                     onClick = {
                         val normalizedPreset = normalizeDefaultPlaybackPreferenceSpeed(preset)
                         sliderValue = normalizedPreset
                         onSpeedChange(normalizedPreset)
                     },
-                    shape = RoundedCornerShape(16.dp),
+                    shape = AppShapes.container(ContainerLevel.Card),
                     color = if (isSelected) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -188,9 +169,9 @@ fun DefaultPlaybackSpeedPreferenceControl(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.padding(horizontal = 12.dp)
                     ) {
-                        Text(
+                        AppText(
                             text = formatDefaultPlaybackSpeed(preset),
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             color = if (isSelected) {
                                 MaterialTheme.colorScheme.onPrimary
                             } else {

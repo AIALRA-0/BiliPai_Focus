@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.video.danmaku
 
-import com.bytedance.danmaku.render.engine.render.draw.text.TextData
+import com.android.purebilibili.danmaku.engine.DanmakuItem
 
 /**
  * 带有权重的文本弹幕数据
@@ -12,15 +12,7 @@ import com.bytedance.danmaku.render.engine.render.draw.text.TextData
  * - duplicateCount: 服务端合并计数
  * - isSelf: 当前账号发送的弹幕
  */
-class WeightedTextData : TextData() {
-    var danmakuId: Long = 0L
-    var userHash: String = ""
-    var weight: Int = 0
-    var pool: Int = 0
-    var likeCount: Long = 0L
-    var isVipGradualColor: Boolean = false
-    var duplicateCount: Int = 0
-    var isSelf: Boolean = false
+class WeightedTextData : DanmakuItem() {
     
     // 调试用
     override fun toString(): String {

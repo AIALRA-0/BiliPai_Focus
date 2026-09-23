@@ -29,6 +29,7 @@ class CastPluginApiTest {
     fun `default playback state is inactive`() {
         val api = stubPlugin()
         assertFalse(api.playbackState.value.isActive)
+        assertEquals(CastDiscoveryRequirement.NONE, api.discoveryRequirement)
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.android.purebilibili.navigation3
 
+import com.android.purebilibili.feature.settings.resolveSettingsNavPopTransition
 import com.android.purebilibili.navigation.AppSystemBackAction
+import com.android.purebilibili.navigation.shouldInterceptSystemBackForAppAction
 
 internal enum class BiliPaiNavMotionMode {
     CARD_DISABLED,
@@ -9,6 +11,7 @@ internal enum class BiliPaiNavMotionMode {
 
 internal enum class BiliPaiNavRouteTransition {
     NO_OP_SHARED_ELEMENT,
+    REDUCED_MOTION_FADE,
     CARD_DISABLED_VIDEO_FORWARD_FROM_LEFT,
     CARD_DISABLED_VIDEO_FORWARD_FROM_RIGHT,
     CARD_DISABLED_VIDEO_RETURN_TO_LEFT,
@@ -16,6 +19,10 @@ internal enum class BiliPaiNavRouteTransition {
     SPACE_FORWARD,
     LIGHT_SIBLING_FORWARD,
     LIGHT_SIBLING_POP,
+    BOTTOM_BAR_SIBLING_FORWARD,
+    BOTTOM_BAR_SIBLING_POP,
+    SETTINGS_IOS_PUSH_FORWARD,
+    SETTINGS_IOS_PUSH_POP,
     CLASSIC_CARD,
     FALLBACK
 }
@@ -80,14 +87,16 @@ internal fun resolveBiliPaiBackGestureDecision(
     systemBackAction: AppSystemBackAction,
     currentKey: BiliPaiNavKey?,
     previousKey: BiliPaiNavKey?,
-    sourceMetadata: BiliPaiNavSourceMetadata
+    sourceMetadata: BiliPaiNavSourceMetadata,
+    activeMainHostRoute: String? = null,
 ): BiliPaiBackGestureDecision {
     val motionMode = resolveBiliPaiNavMotionMode(cardTransitionEnabled = cardTransitionEnabled)
     val routeTransition = resolveBiliPaiNavDisplayPopRouteTransition(
         cardTransitionEnabled = cardTransitionEnabled,
         sourceMetadata = sourceMetadata,
         fromKey = currentKey,
-        toKey = previousKey
+        toKey = previousKey,
+        activeMainHostRoute = activeMainHostRoute,
     )
     val isAppAction = systemBackAction == AppSystemBackAction.RETURN_TO_HOME_TAB
     return BiliPaiBackGestureDecision(
@@ -96,8 +105,45 @@ internal fun resolveBiliPaiBackGestureDecision(
         } else {
             routeTransition
         },
-        interceptSystemBack = isAppAction || motionMode == BiliPaiNavMotionMode.CLASSIC_CARD
+        interceptSystemBack = shouldInterceptSystemBackForAppAction(systemBackAction)
     )
+}
+
+internal fun shouldBindVideoDetailBackPreviewPlayer(
+    currentKey: BiliPaiNavKey?,
+    previewKey: BiliPaiNavKey?,
+): Boolean {
+    if (previewKey !is BiliPaiNavKey.VideoDetail) return false
+    if (currentKey !is BiliPaiNavKey.VideoDetail) return true
+    // Keep the exact related parent surface attached but its playback session suspended while the
+    // child is on top. This preserves the parent's last decoded frame for return without double
+    // playback; activating the session remains a separate committed-return decision below.
+    return isRelatedVideoDetailReturn(currentKey, previewKey)
+}
+
+internal fun shouldActivateVideoDetailPlaybackSession(
+    currentKey: BiliPaiNavKey?,
+    detailKey: BiliPaiNavKey.VideoDetail,
+    isImmediateBackPreview: Boolean,
+    activateBackPreviewPlayback: Boolean = false,
+): Boolean {
+    return currentKey == detailKey ||
+        (
+            currentKey is BiliPaiNavKey.AudioMode &&
+                currentKey.sourceBvid == detailKey.bvid
+        ) ||
+        (
+            isImmediateBackPreview &&
+                currentKey is BiliPaiNavKey.VideoDetail &&
+                activateBackPreviewPlayback
+        )
+}
+
+internal fun shouldRecoverVideoPlayerAfterBackCancellation(
+    currentKey: BiliPaiNavKey?,
+    targetKey: BiliPaiNavKey?
+): Boolean {
+    return currentKey is BiliPaiNavKey.VideoDetail && targetKey is BiliPaiNavKey.VideoDetail
 }
 
 /**
@@ -116,21 +162,40 @@ internal fun resolveBiliPaiNavDisplayPopRouteTransition(
     cardTransitionEnabled: Boolean = true,
     sourceMetadata: BiliPaiNavSourceMetadata,
     fromKey: BiliPaiNavKey?,
-    toKey: BiliPaiNavKey?
+    toKey: BiliPaiNavKey?,
+    activeMainHostRoute: String? = null,
 ): BiliPaiNavRouteTransition {
+    resolveSettingsNavPopTransition(
+        fromKey = fromKey,
+        toKey = toKey,
+        activeMainHostRoute = activeMainHostRoute,
+    )?.let { return it }
     val fromVideoKey = fromKey as? BiliPaiNavKey.VideoDetail
     val toIsCardReturnTarget = toKey != null && isCardReturnTargetNavKey(toKey)
     if (cardTransitionEnabled) {
-        val normalizedSourceRoute = sourceMetadata.sourceRoute?.substringBefore("?")
-        val normalizedVideoRoute = fromVideoKey?.sourceRoute?.substringBefore("?")
-        val sourceMatchesCurrentVideo = fromVideoKey != null &&
-            normalizedSourceRoute != null &&
-            normalizedVideoRoute == normalizedSourceRoute &&
-            sourceMetadata.sourceKey == "$normalizedSourceRoute:${fromVideoKey.bvid}"
-        val sharedReadyVideoToSourceCard = sourceMetadata.sharedTransitionReady &&
-            sourceMatchesCurrentVideo &&
-            toIsCardReturnTarget
-        if (sharedReadyVideoToSourceCard) {
+        if (isRelatedVideoDetailReturn(fromVideoKey, toKey)) {
+            return BiliPaiNavRouteTransition.NO_OP_SHARED_ELEMENT
+        }
+        val sharedReadyFavoriteCollectionReturn =
+            fromKey is BiliPaiNavKey.SeasonSeriesDetail &&
+                fromKey.sharedElementTransition &&
+                (toKey == BiliPaiNavKey.MainHost || toKey == BiliPaiNavKey.Favorite)
+        if (sharedReadyFavoriteCollectionReturn) {
+            // 与首页一致：预测返回走 sharedBounds 整卡 morph（NO_OP 路由层 + SharedElement handler）。
+            return BiliPaiNavRouteTransition.NO_OP_SHARED_ELEMENT
+        }
+
+        // Story 直达返回：没有 sharedBounds 对端，必须走普通过渡，否则黑底悬浮卡。
+        if (fromKey is BiliPaiNavKey.Story) {
+            return BiliPaiNavRouteTransition.FALLBACK
+        }
+
+        val morphSourceRoute = resolveCardMorphDestinationSourceRoute(fromKey)
+        val normalizedMorphRoute = morphSourceRoute?.substringBefore("?")
+        // VideoDetail.sourceRoute 在 push 时写入 key，完整观看后仍可靠。
+        // 不再依赖 CardPosition / sharedTransitionEntryReady：任一过期都会把 pop 打成
+        // CLASSIC_CARD fade，表现为「卡片已在原位、没有落位动画」。
+        if (toIsCardReturnTarget && !normalizedMorphRoute.isNullOrBlank()) {
             return BiliPaiNavRouteTransition.NO_OP_SHARED_ELEMENT
         }
         return BiliPaiNavRouteTransition.CLASSIC_CARD
@@ -143,22 +208,42 @@ internal fun resolveBiliPaiNavDisplayPopRouteTransition(
     return BiliPaiNavRouteTransition.FALLBACK
 }
 
+internal fun isRelatedVideoDetailEntry(
+    key: BiliPaiNavKey,
+    sourceMetadata: BiliPaiNavSourceMetadata
+): Boolean {
+    val videoKey = key as? BiliPaiNavKey.VideoDetail ?: return false
+    val sourceRoute = sourceMetadata.sourceRoute?.substringBefore("?") ?: return false
+    return sourceRoute.startsWith("video/") &&
+        videoKey.sourceRoute?.substringBefore("?") == sourceRoute &&
+        sourceMetadata.sourceKey == "$sourceRoute:${videoKey.bvid}"
+}
+
+internal fun isRelatedVideoDetailReturn(
+    fromKey: BiliPaiNavKey.VideoDetail?,
+    toKey: BiliPaiNavKey?
+): Boolean {
+    val targetKey = toKey as? BiliPaiNavKey.VideoDetail ?: return false
+    return fromKey?.sourceRoute?.substringBefore("?") == "video/${targetKey.bvid}"
+}
+
 internal fun shouldInterceptSystemBackForNavigation3(
     mode: BiliPaiNavMotionMode,
     appBackActionRequiresInterception: Boolean
 ): Boolean {
-    if (appBackActionRequiresInterception) return true
-    return mode == BiliPaiNavMotionMode.CLASSIC_CARD
+    return appBackActionRequiresInterception
 }
 
-private fun resolveCardDisabledReturnTransition(
+internal fun resolveCardDisabledReturnTransition(
     sourceDirection: BiliPaiNavCardSourceDirection
 ): BiliPaiNavRouteTransition {
     return when (sourceDirection) {
         BiliPaiNavCardSourceDirection.SOURCE_LEFT ->
             BiliPaiNavRouteTransition.CARD_DISABLED_VIDEO_RETURN_TO_LEFT
-        BiliPaiNavCardSourceDirection.SOURCE_RIGHT,
-        BiliPaiNavCardSourceDirection.NONE ->
+        BiliPaiNavCardSourceDirection.SOURCE_RIGHT ->
             BiliPaiNavRouteTransition.CARD_DISABLED_VIDEO_RETURN_TO_RIGHT
+        // Unknown origin: soft sibling pop instead of always forcing right-half exit.
+        BiliPaiNavCardSourceDirection.NONE ->
+            BiliPaiNavRouteTransition.LIGHT_SIBLING_POP
     }
 }

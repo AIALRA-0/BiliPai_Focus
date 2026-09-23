@@ -37,27 +37,187 @@ class DanmakuPlaybackSyncPolicyTest {
     }
 
     @Test
-    fun `force resync should trigger periodically for both normal and non-normal speed`() {
-        assertFalse(shouldForceDanmakuDataResync(1.0f, 3))
-        assertFalse(shouldForceDanmakuDataResync(1.0f, 5))
-        assertTrue(shouldForceDanmakuDataResync(1.0f, 6))
-        assertFalse(shouldForceDanmakuDataResync(1.3f, 1))
-        assertFalse(shouldForceDanmakuDataResync(1.3f, 2))
-        assertTrue(shouldForceDanmakuDataResync(1.3f, 3))
-        assertTrue(shouldForceDanmakuDataResync(0.8f, 6))
+    fun `drift correction should trigger periodically for both normal and non-normal speed`() {
+        assertFalse(shouldScheduleDanmakuDriftCorrection(1.0f, 3))
+        assertFalse(shouldScheduleDanmakuDriftCorrection(1.0f, 5))
+        assertTrue(shouldScheduleDanmakuDriftCorrection(1.0f, 6))
+        assertFalse(shouldScheduleDanmakuDriftCorrection(1.3f, 1))
+        assertFalse(shouldScheduleDanmakuDriftCorrection(1.3f, 2))
+        assertTrue(shouldScheduleDanmakuDriftCorrection(1.3f, 3))
+        assertTrue(shouldScheduleDanmakuDriftCorrection(0.8f, 6))
     }
 
     @Test
-    fun `explicit resync should pause before setData and start`() {
+    fun `drift correction should be less frequent at high playback speed`() {
+        assertFalse(shouldScheduleDanmakuDriftCorrection(2.0f, 3))
+        assertFalse(shouldScheduleDanmakuDriftCorrection(2.0f, 6))
+        assertTrue(shouldScheduleDanmakuDriftCorrection(2.0f, 9))
+    }
+
+    @Test
+    fun `periodic guard action should always preserve visible danmaku`() {
+        assertEquals(
+            DanmakuSyncAction.SoftResync,
+            resolveDanmakuGuardAction(
+                videoSpeed = 2.0f,
+                tickCount = 9,
+                danmakuEnabled = true,
+                isPlaying = true,
+                hasData = true
+            )
+        )
+        assertEquals(
+            DanmakuSyncAction.SoftResync,
+            resolveDanmakuGuardAction(
+                videoSpeed = 1.3f,
+                tickCount = 3,
+                danmakuEnabled = true,
+                isPlaying = true,
+                hasData = true
+            )
+        )
+    }
+
+    @Test
+    fun `attach reapply is required when controller changed or pending after related navigation`() {
+        // 新 view 接管：即使此前有 controller，也必须重放已就绪缓存
+        assertTrue(
+            shouldReapplyDanmakuTimelineOnAttach(
+                hasCachedList = true,
+                pendingTimelineResync = false,
+                previousControllerSameAsCurrent = false,
+                timelineAlreadySyncedToCurrent = false,
+            )
+        )
+        // load 完成时 controller=null，等 attach 再补
+        assertTrue(
+            shouldReapplyDanmakuTimelineOnAttach(
+                hasCachedList = true,
+                pendingTimelineResync = true,
+                previousControllerSameAsCurrent = true,
+                timelineAlreadySyncedToCurrent = false,
+            )
+        )
+        // 同 controller 且已同步：不必重复
+        assertFalse(
+            shouldReapplyDanmakuTimelineOnAttach(
+                hasCachedList = true,
+                pendingTimelineResync = false,
+                previousControllerSameAsCurrent = true,
+                timelineAlreadySyncedToCurrent = true,
+            )
+        )
+        // 无缓存：不重放
+        assertFalse(
+            shouldReapplyDanmakuTimelineOnAttach(
+                hasCachedList = false,
+                pendingTimelineResync = true,
+                previousControllerSameAsCurrent = false,
+                timelineAlreadySyncedToCurrent = false,
+            )
+        )
+    }
+
+    @Test
+    fun `danmaku should start on data ready when player is playing or will play`() {
+        // 正在播放：必须启动
+        assertTrue(
+            shouldStartDanmakuOnDataReady(
+                isPlaying = true,
+                playWhenReady = true
+            )
+        )
+        // ExoPlayer 不变量下 isPlaying=true 时 playWhenReady 必为 true；显式覆盖以防策略误判
+        assertTrue(
+            shouldStartDanmakuOnDataReady(
+                isPlaying = true,
+                playWhenReady = false
+            )
+        )
+        // 缓冲中但即将播放（相关推荐/切集后数据先就绪、播放器后开始）：必须启动，
+        // 否则 onIsPlayingChanged(true) 事件已在数据加载完成前被 None 分支吃掉时引擎停在 paused。
+        assertTrue(
+            shouldStartDanmakuOnDataReady(
+                isPlaying = false,
+                playWhenReady = true
+            )
+        )
+        // 用户主动暂停：不启动
+        assertFalse(
+            shouldStartDanmakuOnDataReady(
+                isPlaying = false,
+                playWhenReady = false
+            )
+        )
+    }
+
+    @Test
+    fun `episode data ready uses current player position instead of stale request position`() {
+        assertEquals(
+            4_800L,
+            resolveDanmakuDataReadyPositionMs(
+                currentPlayerPositionMs = 4_800L,
+                requestedPositionMs = 0L,
+            )
+        )
+        assertEquals(
+            1_200L,
+            resolveDanmakuDataReadyPositionMs(
+                currentPlayerPositionMs = null,
+                requestedPositionMs = 1_200L,
+            )
+        )
+    }
+
+    @Test
+    fun `player attach resyncs cached data only for an enabled bound session`() {
+        assertTrue(
+            shouldResyncDanmakuAfterPlayerAttach(
+                danmakuEnabled = true,
+                hasData = true,
+                hasController = true
+            )
+        )
+        assertFalse(
+            shouldResyncDanmakuAfterPlayerAttach(
+                danmakuEnabled = false,
+                hasData = true,
+                hasController = true
+            )
+        )
+        assertFalse(
+            shouldResyncDanmakuAfterPlayerAttach(
+                danmakuEnabled = true,
+                hasData = false,
+                hasController = true
+            )
+        )
+    }
+
+    @Test
+    fun `explicit resync should pause and clear before setData and start`() {
         val calls = mutableListOf<String>()
 
         executeExplicitDanmakuResync(
             pause = { calls += "pause" },
+            clear = { calls += "clear" },
             setData = { calls += "setData" },
             start = { calls += "start" }
         )
 
-        assertEquals(listOf("pause", "setData", "start"), calls)
+        assertEquals(listOf("pause", "clear", "setData", "start"), calls)
+    }
+
+    @Test
+    fun `playback speed update changes timing without refreshing timeline data`() {
+        val calls = mutableListOf<String>()
+
+        executeDanmakuPlaybackSpeedUpdate(
+            applyTiming = { calls += "applyTiming" },
+            invalidate = { calls += "invalidate" }
+        )
+
+        assertEquals(listOf("applyTiming", "invalidate"), calls)
     }
 
     @Test
@@ -70,6 +230,22 @@ class DanmakuPlaybackSyncPolicyTest {
         )
 
         assertEquals(listOf("pause", "clear"), calls)
+    }
+
+    @Test
+    fun `explicit seek suppression should be invalidated after timeline pauses`() {
+        assertFalse(
+            resolveExplicitSeekStartedPlaybackAfterSyncAction(
+                explicitSeekStartedPlayback = true,
+                action = DanmakuSyncAction.PauseOnly
+            ) ?: true
+        )
+        assertTrue(
+            resolveExplicitSeekStartedPlaybackAfterSyncAction(
+                explicitSeekStartedPlayback = true,
+                action = DanmakuSyncAction.HardResync
+            ) ?: false
+        )
     }
 
     @Test

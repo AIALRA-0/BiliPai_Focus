@@ -62,6 +62,41 @@ internal fun resolvePortraitCommentExpandedPlayerScale(
     ).scale
 }
 
+/**
+ * 半屏展开后播放器目标缩放。
+ *
+ * - 默认：评论区固定 [PORTRAIT_COMMENT_EXPANDED_PLAYER_SCALE]
+ * - [fitToAvailableBand]=true（UP 预览）：按「顶区剩余高度 / 视频视口高度」贴合，
+ *   避免半屏过高时仍用 0.58 缩放导致上浮过大、画面比例失调。
+ */
+internal fun resolvePortraitOverlayExpandedPlayerScale(
+    containerHeightPx: Int,
+    containerWidthPx: Int,
+    currentVideoAspect: Float,
+    viewportVerticalOffsetPx: Float,
+    fillContainer: Boolean,
+    visibleHeightFraction: Float,
+    fitToAvailableBand: Boolean,
+    fallbackScale: Float = PORTRAIT_COMMENT_EXPANDED_PLAYER_SCALE,
+): Float {
+    if (!fitToAvailableBand || containerHeightPx <= 0) {
+        return fallbackScale.coerceIn(0.32f, 1f)
+    }
+    val videoHeightPx = resolvePortraitCommentVideoHeightBeforeTransformPx(
+        containerWidthPx = containerWidthPx,
+        containerHeightPx = containerHeightPx,
+        currentVideoAspect = currentVideoAspect,
+        fillContainer = fillContainer,
+    )
+    val availableHeightPx =
+        (visibleHeightFraction.coerceIn(0f, 1f) * containerHeightPx.toFloat())
+            .coerceAtLeast(1f)
+    if (videoHeightPx <= 1f) return fallbackScale.coerceIn(0.32f, 1f)
+    // 略留顶边空隙，避免顶到状态栏图标；上限 1，下限防过小。
+    val fit = (availableHeightPx * 0.92f) / videoHeightPx
+    return fit.coerceIn(0.32f, 1f)
+}
+
 internal fun resolvePortraitCommentPlayerTransform(
     commentVisibilityProgress: Float,
     containerHeightPx: Int = 1,
@@ -69,7 +104,9 @@ internal fun resolvePortraitCommentPlayerTransform(
     currentVideoAspect: Float = 0f,
     viewportVerticalOffsetPx: Float = 0f,
     fillContainer: Boolean = false,
-    commentSheetHeightFraction: Float = MAIN_COMMENT_SHEET_HEIGHT_FRACTION
+    commentSheetHeightFraction: Float = MAIN_COMMENT_SHEET_HEIGHT_FRACTION,
+    /** UP 预览：缩放贴合顶区可用高度，而不是固定 0.58。 */
+    fitToAvailableBand: Boolean = false,
 ): PortraitCommentPlayerTransform {
     val progress = if (containerHeightPx > 0) {
         commentVisibilityProgress.coerceIn(0f, 1f)
@@ -78,7 +115,17 @@ internal fun resolvePortraitCommentPlayerTransform(
     }
     val sheetFraction = commentSheetHeightFraction.coerceIn(0f, 1f)
     val visibleHeightFraction = (1f - sheetFraction * progress).coerceIn(0f, 1f)
-    val scale = 1f - ((1f - PORTRAIT_COMMENT_EXPANDED_PLAYER_SCALE) * progress)
+    val expandedScale = resolvePortraitOverlayExpandedPlayerScale(
+        containerHeightPx = containerHeightPx,
+        containerWidthPx = containerWidthPx,
+        currentVideoAspect = currentVideoAspect,
+        viewportVerticalOffsetPx = viewportVerticalOffsetPx,
+        fillContainer = fillContainer,
+        // 展开态按最终顶区比例算 fit（progress 插值用）
+        visibleHeightFraction = (1f - sheetFraction).coerceIn(0f, 1f),
+        fitToAvailableBand = fitToAvailableBand,
+    )
+    val scale = 1f - ((1f - expandedScale) * progress)
     val translationYPx = if (containerHeightPx > 0) {
         val visibleBottomPx = visibleHeightFraction * containerHeightPx.toFloat()
         val videoBottomPx = resolvePortraitCommentVideoBottomBeforeTransformPx(
@@ -88,6 +135,7 @@ internal fun resolvePortraitCommentPlayerTransform(
             viewportVerticalOffsetPx = viewportVerticalOffsetPx,
             fillContainer = fillContainer
         )
+        // 目标：缩放后视频底边贴半屏顶；progress 插值回落时不额外乱跳。
         val targetTranslationPx = visibleBottomPx - videoBottomPx * scale
         val collapsedTranslationPx = containerHeightPx.toFloat() - videoBottomPx
         targetTranslationPx - collapsedTranslationPx * (1f - progress)
@@ -103,6 +151,23 @@ internal fun resolvePortraitCommentPlayerTransform(
         overlayAlpha = (1f - progress).coerceIn(0f, 1f),
         playerGesturesEnabled = progress <= 0.001f
     )
+}
+
+private fun resolvePortraitCommentVideoHeightBeforeTransformPx(
+    containerWidthPx: Int,
+    containerHeightPx: Int,
+    currentVideoAspect: Float,
+    fillContainer: Boolean,
+): Float {
+    if (containerWidthPx <= 0 || containerHeightPx <= 0 || currentVideoAspect <= 0f) {
+        return containerHeightPx.toFloat().coerceAtLeast(1f)
+    }
+    return resolvePortraitVideoViewportSize(
+        containerWidth = containerWidthPx,
+        containerHeight = containerHeightPx,
+        currentVideoAspect = currentVideoAspect,
+        fillContainer = fillContainer,
+    ).height.toFloat().coerceAtLeast(1f)
 }
 
 private fun resolvePortraitCommentVideoBottomBeforeTransformPx(
@@ -146,9 +211,12 @@ internal fun resolveVideoSubReplySheetMaxHeightFraction(
     screenHeightPx: Int = 0,
     topReservedPx: Int = 0
 ): Float {
-    if (screenHeightPx <= 0) return FULLSCREEN_VIDEO_SUB_REPLY_SHEET_HEIGHT_FRACTION
-
     val reservedTopPx = topReservedPx.coerceAtLeast(0)
+    if (shouldUseEmbeddedVideoSubReplyPresentation() && reservedTopPx == 0) {
+        return MAIN_COMMENT_SHEET_HEIGHT_FRACTION
+    }
+
+    if (screenHeightPx <= 0) return FULLSCREEN_VIDEO_SUB_REPLY_SHEET_HEIGHT_FRACTION
     if (reservedTopPx == 0) return FULLSCREEN_VIDEO_SUB_REPLY_SHEET_HEIGHT_FRACTION
 
     val availableHeightPx = (screenHeightPx - reservedTopPx).coerceAtLeast(0)

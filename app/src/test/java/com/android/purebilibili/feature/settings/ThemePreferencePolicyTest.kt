@@ -111,4 +111,13 @@ class ThemePreferencePolicyTest {
         assertEquals("#007AFF", normalizeMd3CustomColorHex("#12345"))
         assertEquals("#007AFF", normalizeMd3CustomColorHex("#FF007AFF"))
     }
+
+    @Test
+    fun md3CustomColorHex_validation_acceptsOnlyCompleteRgbValues() {
+        assertTrue(isValidMd3CustomColorHex("#BBCAAE"))
+        assertTrue(isValidMd3CustomColorHex("bbcaae"))
+        assertFalse(isValidMd3CustomColorHex("#BBCAA"))
+        assertFalse(isValidMd3CustomColorHex("#BBCAAZ"))
+        assertFalse(isValidMd3CustomColorHex("#FFBBCAAE"))
+    }
 }

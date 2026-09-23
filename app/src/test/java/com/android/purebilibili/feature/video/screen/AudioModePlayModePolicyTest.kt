@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.screen
 
-import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.video.player.PlayMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,29 +13,30 @@ class AudioModePlayModePolicyTest {
         assertEquals("顺序播放", resolveAudioPlayModeLabel(PlayMode.SEQUENTIAL))
         assertEquals("随机播放", resolveAudioPlayModeLabel(PlayMode.SHUFFLE))
         assertEquals("单曲循环", resolveAudioPlayModeLabel(PlayMode.REPEAT_ONE))
+        assertEquals("列表循环", resolveAudioPlayModeLabel(PlayMode.REPEAT_ALL))
     }
 
     @Test
-    fun shouldUseAudioModeLiquidPlayModeControl_keepsLegacyButtonsForAndroidNativeWithoutGlass() {
+    fun shouldUseAudioModeLiquidPlayModeControl_keepsStandardButtonsWithoutLiquidCapability() {
         assertFalse(
             shouldUseAudioModeLiquidPlayModeControl(
-                uiPreset = UiPreset.MD3,
+                supportsIndependentLiquidGlass = false,
                 androidNativeLiquidGlassEnabled = false
             )
         )
     }
 
     @Test
-    fun shouldUseAudioModeLiquidPlayModeControl_usesLiquidControlWhenIosOrAndroidNativeGlassEnabled() {
+    fun shouldUseAudioModeLiquidPlayModeControl_usesEitherAvailableLiquidCapability() {
         assertTrue(
             shouldUseAudioModeLiquidPlayModeControl(
-                uiPreset = UiPreset.IOS,
+                supportsIndependentLiquidGlass = true,
                 androidNativeLiquidGlassEnabled = false
             )
         )
         assertTrue(
             shouldUseAudioModeLiquidPlayModeControl(
-                uiPreset = UiPreset.MD3,
+                supportsIndependentLiquidGlass = false,
                 androidNativeLiquidGlassEnabled = true
             )
         )

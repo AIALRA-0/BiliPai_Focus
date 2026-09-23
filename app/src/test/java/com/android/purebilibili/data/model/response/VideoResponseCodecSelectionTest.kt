@@ -28,6 +28,27 @@ class VideoResponseCodecSelectionTest {
     }
 
     @Test
+    fun `AV1 decoder fallback does not select failed HEVC again when AV1 is unavailable`() {
+        val dash = Dash(
+            video = listOf(
+                DashVideo(id = 80, baseUrl = "https://example.com/hevc.m4s", codecs = "hev1"),
+                DashVideo(id = 80, baseUrl = "https://example.com/avc.m4s", codecs = "avc1")
+            )
+        )
+
+        val selected = dash.getBestVideo(
+            targetQn = 80,
+            preferCodec = "av01",
+            secondPreferCodec = "avc1",
+            isHevcSupported = true,
+            isAv1Supported = true
+        )
+
+        assertNotNull(selected)
+        assertEquals("avc1", selected.codecs)
+    }
+
+    @Test
     fun `getBestVideo prefers lower bitrate when quality and codec are equivalent`() {
         val dash = Dash(
             video = listOf(

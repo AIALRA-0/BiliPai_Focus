@@ -1,9 +1,14 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.refresh.WatchLaterRefreshBus
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.FollowingUser
+import com.android.purebilibili.data.model.response.RecommendationFeedbackMetadata
+import com.android.purebilibili.data.model.response.RecommendationFeedbackReason
+import com.android.purebilibili.data.model.response.RecommendationFeedbackType
+import com.android.purebilibili.data.model.response.WatchLaterItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,12 +19,60 @@ private const val FAVORITE_SEASON_PATH = "x/v3/fav/season/fav"
 private const val UNFAVORITE_SEASON_PATH = "x/v3/fav/season/unfav"
 private const val COLLECTION_SUBSCRIPTION_PLATFORM = "web"
 
+internal fun isWatchLaterAid(items: List<WatchLaterItem>, aid: Long): Boolean {
+    return aid > 0L && items.any { it.aid == aid }
+}
+
 internal data class CollectionSubscriptionRequest(
     val path: String,
     val seasonId: Long,
     val platform: String,
     val csrf: String
 )
+
+internal data class RecommendationFeedbackRequest(
+    val goto: String,
+    val resourceId: String,
+    val reasonId: Long?,
+    val feedbackId: Long?
+)
+
+internal fun buildRecommendationFeedbackRequest(
+    metadata: RecommendationFeedbackMetadata,
+    reason: RecommendationFeedbackReason
+): RecommendationFeedbackRequest? {
+    val reasonId = reason.id?.takeIf { it > 0L } ?: return null
+    if (!metadata.supportsServerSync || metadata.goto.isBlank() || metadata.param.isBlank()) {
+        return null
+    }
+    return RecommendationFeedbackRequest(
+        goto = metadata.goto,
+        resourceId = metadata.param,
+        reasonId = reasonId.takeIf { reason.type == RecommendationFeedbackType.DISLIKE },
+        feedbackId = reasonId.takeIf { reason.type == RecommendationFeedbackType.FEEDBACK }
+    )
+}
+
+internal fun buildRecommendationFeedbackParams(
+    request: RecommendationFeedbackRequest,
+    accessToken: String,
+    timestamp: Long
+): Map<String, String> {
+    require((request.reasonId != null) xor (request.feedbackId != null)) {
+        "reason_id 与 feedback_id 必须且只能提供一个"
+    }
+    return buildMap {
+        put("goto", request.goto)
+        put("id", request.resourceId)
+        request.reasonId?.let { put("reason_id", it.toString()) }
+        request.feedbackId?.let { put("feedback_id", it.toString()) }
+        put("build", "1")
+        put("mobi_app", "android")
+        put("access_key", accessToken)
+        put("appkey", AppSignUtils.TV_APP_KEY)
+        put("ts", timestamp.toString())
+    }
+}
 
 internal fun buildCollectionSubscriptionRequest(
     seasonId: Long,
@@ -58,6 +111,28 @@ object ActionRepository {
     private const val FOLLOW_GROUP_QUERY_RETRY_BASE_DELAY_MS = 600L
     private const val FOLLOW_GROUP_TAG_MEMBERS_PAGE_SIZE = 100
     private const val FOLLOW_GROUP_TAG_MEMBERS_MAX_PAGES = 120
+
+    suspend fun submitRecommendationFeedback(
+        metadata: RecommendationFeedbackMetadata,
+        reason: RecommendationFeedbackReason
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val accessToken = TokenManager.accessTokenCache
+            ?.takeIf { it.isNotBlank() }
+            ?: return@withContext Result.failure(Exception("缺少移动端登录凭证"))
+        val request = buildRecommendationFeedbackRequest(metadata, reason)
+            ?: return@withContext Result.failure(Exception("当前推荐不支持服务器同步"))
+        runCatching {
+            val params = buildRecommendationFeedbackParams(
+                request = request,
+                accessToken = accessToken,
+                timestamp = AppSignUtils.getTimestamp()
+            )
+            val response = api.submitMobileFeedDislike(AppSignUtils.signForTvLogin(params))
+            if (response.code != 0) {
+                throw Exception(response.message.ifBlank { "反馈失败: ${response.code}" })
+            }
+        }
+    }
 
     private fun normalizeRelationTagIds(raw: Set<Long>): Set<Long> {
         return raw.asSequence().filter { it != 0L }.toSet()
@@ -213,7 +288,7 @@ object ActionRepository {
     /**
      * 订阅/取消订阅 UGC 合集。
      *
-     * 对齐 PiliPlus:
+     * 对齐 BiliPai:
      * - 订阅: /x/v3/fav/season/fav
      * - 取消订阅: /x/v3/fav/season/unfav
      * - 表单字段: platform=web, season_id, csrf
@@ -342,6 +417,25 @@ object ActionRepository {
         }
     }
     
+    /**
+     * 获取与 UP 主的详细关注关系数据
+     */
+    suspend fun getRelationDetail(mid: Long): com.android.purebilibili.data.model.response.RelationData? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.getRelation(mid)
+                if (response.code == 0) {
+                    response.data
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ActionRepository", "getRelationDetail failed", e)
+                null
+            }
+        }
+    }
+
     /**
      *  检查是否已关注 UP 主
      */
@@ -803,5 +897,13 @@ object ActionRepository {
                 Result.failure(e)
             }
         }
+    }
+
+    suspend fun checkWatchLaterStatus(aid: Long): Boolean = withContext(Dispatchers.IO) {
+        if (aid <= 0L || TokenManager.sessDataCache.isNullOrEmpty()) return@withContext false
+        runCatching {
+            val response = api.getWatchLaterList()
+            response.code == 0 && isWatchLaterAid(response.data?.list.orEmpty(), aid)
+        }.getOrDefault(false)
     }
 }

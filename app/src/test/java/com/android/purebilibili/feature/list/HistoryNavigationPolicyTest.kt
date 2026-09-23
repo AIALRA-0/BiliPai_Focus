@@ -6,7 +6,7 @@ import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 class HistoryNavigationPolicyTest {
 
@@ -57,6 +57,23 @@ class HistoryNavigationPolicyTest {
     }
 
     @Test
+    fun `history navigation kind resolves cheese entries explicitly`() {
+        val kind = resolveHistoryNavigationKind(
+            HistoryItem(
+                videoItem = VideoItem(
+                    id = 667788L,
+                    title = "精品课程"
+                ),
+                business = HistoryBusiness.CHEESE,
+                seasonId = 1234L,
+                epid = 5678L
+            )
+        )
+
+        assertEquals(HistoryNavigationKind.CHEESE, kind)
+    }
+
+    @Test
     fun `pgc history card hides up badge and uses content type when owner is missing`() {
         val item = HistoryItem(
             videoItem = VideoItem(
@@ -68,7 +85,19 @@ class HistoryNavigationPolicyTest {
 
         val presentation = requireNotNull(resolveHistoryCardPresentation(item))
 
-        assertFalse(presentation.showUpBadge)
+        assertEquals(false, presentation.showUpBadge)
         assertEquals("番剧", presentation.videoItem.owner.name)
+    }
+
+    @Test
+    fun `archive history card follows global up badge visibility`() {
+        val item = HistoryItem(
+            videoItem = VideoItem(title = "普通视频"),
+            business = HistoryBusiness.ARCHIVE
+        )
+
+        val presentation = requireNotNull(resolveHistoryCardPresentation(item))
+
+        assertNull(presentation.showUpBadge)
     }
 }

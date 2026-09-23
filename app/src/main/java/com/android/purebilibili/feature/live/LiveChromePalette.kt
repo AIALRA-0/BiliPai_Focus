@@ -8,6 +8,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
+/** Fixed media and live-status colors that must not follow ordinary page surfaces. */
+internal object LiveStatusPalette {
+    val MediaContent = Color.White
+    val MediaScrim = Color.Black
+    val MedalFallback = Color(0xFFFF6699)
+    val AdminName = Color(0xFFFF7B92)
+    val Reply = Color(0xFF8FD5FF)
+    val GuardGold = Color(0xFFE6A23C)
+    val SuperChatFallback = Color(0xFFDD5B6A)
+    val LevelHigh = Color(0xFFFF3333)
+    val LevelMedium = Color(0xFFFFAA33)
+    val LevelLow = Color(0xFF66CCFF)
+    val OverlayNeutral = Color(0xFFE0E0E0)
+    val InputContent = Color(0xFFEEEEEE)
+}
+
 @Immutable
 internal data class LiveChromePalette(
     val isDark: Boolean,
@@ -86,7 +102,7 @@ internal fun resolveLiveChromePalette(
         bubble = if (isDark) surfaceContainerHigh.copy(alpha = 0.82f) else surface.copy(alpha = 0.96f),
         bubbleStrong = if (isDark) surfaceContainerHighest.copy(alpha = 0.88f) else surfaceVariant,
         border = outlineVariant.copy(alpha = if (isDark) 0.42f else 0.55f),
-        scrim = Color.Black.copy(alpha = if (isDark) 0.78f else 0.52f),
+        scrim = LiveStatusPalette.MediaScrim.copy(alpha = if (isDark) 0.78f else 0.52f),
         primaryText = onBackground,
         secondaryText = onSurfaceVariant,
         tertiaryText = outline,

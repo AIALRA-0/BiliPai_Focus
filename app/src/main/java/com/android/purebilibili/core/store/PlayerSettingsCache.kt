@@ -18,6 +18,7 @@ object PlayerSettingsCache {
     private const val KEY_HW_DECODE = "hw_decode_enabled"
     private const val KEY_SEEK_FAST = "seek_fast_enabled"
     private const val KEY_PLAYER_DIAGNOSTIC_LOGGING = "player_diagnostic_logging_enabled"
+    private const val KEY_DASH_SEGMENT_REQUESTS_ENABLED = "dash_segment_requests_enabled"
     private const val LEGACY_HW_DECODE_PREFS_NAME = "hw_decode_cache"
     
     // 内存缓存
@@ -29,6 +30,9 @@ object PlayerSettingsCache {
 
     @Volatile
     private var playerDiagnosticLoggingEnabled: Boolean? = null
+
+    @Volatile
+    private var dashSegmentRequestsEnabled: Boolean? = null
     
     /**
      * 初始化缓存（在 Application.onCreate 中调用）
@@ -41,10 +45,15 @@ object PlayerSettingsCache {
             KEY_PLAYER_DIAGNOSTIC_LOGGING,
             DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
         )
+        dashSegmentRequestsEnabled = prefs.getBoolean(
+            KEY_DASH_SEGMENT_REQUESTS_ENABLED,
+            DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED
+        )
         Logger.d(
             TAG,
             "✅ 初始化完成: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +
-                "playerDiagnosticLogging=$playerDiagnosticLoggingEnabled"
+                "playerDiagnosticLogging=$playerDiagnosticLoggingEnabled, " +
+                "dashSegmentRequests=$dashSegmentRequestsEnabled"
         )
     }
     
@@ -129,6 +138,33 @@ object PlayerSettingsCache {
             .apply()
         Logger.d(TAG, "💾 播放器诊断日志设置已更新: $enabled")
     }
+
+    /**
+     * 获取 DASH 分段请求开关。
+     */
+    fun isDashSegmentRequestsEnabled(context: Context): Boolean {
+        return dashSegmentRequestsEnabled ?: run {
+            val value = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(
+                    KEY_DASH_SEGMENT_REQUESTS_ENABLED,
+                    DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED
+                )
+            dashSegmentRequestsEnabled = value
+            value
+        }
+    }
+
+    /**
+     * 设置 DASH 分段请求开关。
+     */
+    fun setDashSegmentRequestsEnabled(context: Context, enabled: Boolean) {
+        dashSegmentRequestsEnabled = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DASH_SEGMENT_REQUESTS_ENABLED, enabled)
+            .apply()
+        Logger.d(TAG, "💾 DASH 分段请求设置已更新: $enabled")
+    }
     
     /**
      * 强制刷新缓存（设置页面修改后调用）
@@ -141,10 +177,15 @@ object PlayerSettingsCache {
             KEY_PLAYER_DIAGNOSTIC_LOGGING,
             DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
         )
+        dashSegmentRequestsEnabled = prefs.getBoolean(
+            KEY_DASH_SEGMENT_REQUESTS_ENABLED,
+            DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED
+        )
         Logger.d(
             TAG,
             "🔄 缓存已刷新: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +
-                "playerDiagnosticLogging=$playerDiagnosticLoggingEnabled"
+                "playerDiagnosticLogging=$playerDiagnosticLoggingEnabled, " +
+                "dashSegmentRequests=$dashSegmentRequestsEnabled"
         )
     }
 

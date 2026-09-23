@@ -1,15 +1,15 @@
-# BiliPai <img src="docs/images/233娘.jpeg" height="80" align="center">
+# BiliPai Focus <img src="docs/images/233娘.jpeg" height="80" align="center">
 
 <p align="center">
   <strong>Native, Pure, Extensible — Redefining your Bilibili experience</strong>
 </p>
 
 <p align="center">
-    <sub>Last updated: 2026-06-06 · Synced to v9.1.1 Focus.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+    <sub>Last updated: 2026-09-23 · Focus sync baseline: 9.1.1-focus.5 (versionCode 385), upstream BiliPai 0.2.3-beta.46</sub>
   </p>
 
   <p align="center">
-  <img src="https://img.shields.io/badge/Version-9.1.1-focus.1-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-9.1.1--focus.5-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
@@ -347,7 +347,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 | Category | Technology | Description |
 |-----|-----|-----|
-| **Language** | Kotlin 1.9+ | 100% Kotlin |
+| **Language** | Kotlin 2.4 | 100% Kotlin |
 | **UI** | Jetpack Compose | Declarative UI, Material 3 |
 | **Architecture** | MVVM + Clean Architecture | Clear separation, maintainable |
 
@@ -436,16 +436,17 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v9.1.1 Focus.1 · 2026-06-06)
+### Focus sync baseline (v9.1.1-focus.5 · versionCode 385)
 
-- Merged upstream `9.0.6`, `9.0.7`, `9.1.0`, and `9.1.1` stability updates, including dynamic comment pagination, Android 15 download service handling, profile color fixes, video return behavior, and bottom bar visual fixes.
+- Based on upstream `0.2.3-beta.46`, including the current architecture, build system, plugin SDK, dynamic plugin downloads, and release metadata support.
+- Keeps the Focus `9.x` version epoch and advances the Focus suffix so older clients comparing version names detect `9.1.1-focus.5` after `9.1.1-focus.4`; Android `versionCode` advances monotonically to `385`.
+- Preserves the Focus application ID, Focus Release update source, and existing release signing identity.
 - Fixed home recommendation manual refresh being stuck at the old pagination tail: pull-to-refresh now requests the fresh feed, bypasses startup preload cache, and resets the recommendation cursor after success.
 - Focus search settings now use positive "show" semantics: `Show hot searches`, `Show search discovery`, and `Show search history`; switching them on shows the full section, switching them off fully hides it.
 - Fixed feed parsing when upstream APIs return numeric boolean values (`0/1`) in home, dynamic, space dynamic, popular, favorite, and navigation responses.
 - Home recommendations now continue fetching after filters leave the first screen sparse, and empty filtered pages no longer kill pagination.
 - Dynamic feeds now continue pagination from the refreshed offset and retry bounded empty cold starts while preserving the Focus follow-group entry.
 - Focus search switches continue to remove the entire hot-search, discovery, and history sections when disabled instead of leaving headers behind.
-- Preserved the Focus README, Focus release links, Focus in-app update source, and Focus settings features.
 
 ---
 
@@ -454,8 +455,39 @@ See full changelog: [CHANGELOG.md](CHANGELOG.md)
 ```bash
 git clone https://github.com/AIALRA-0/BiliPai_Focus.git
 cd BiliPai_Focus
-./gradlew assembleDebug
+./gradlew :app:assembleDev
 ```
+
+### Build requirements
+
+- JDK 21 or newer and Android SDK 37 (Compile SDK).
+- Use the Gradle Wrapper included in this repository.
+- To enable Firebase services, place `google-services.json` in `app/`; without it, the build skips the Firebase Gradle plugins.
+- Release APKs must use the existing Focus signing key configured through the root `keystore.properties`. CI release builds require the repository's Focus signing secrets; packaging fails when signing is unavailable so an unsigned APK cannot be mistaken for an upgrade-ready release.
+
+### Reproducible MIUIX build
+
+The default dependency is downloaded from MIUIX GitHub Packages. The CI credentials used for this sync receive HTTP 401 from that source, so the build workflow checks out the pinned MIUIX source commit `5157b503e86e2bfc2db61db00fff5df41326394a` and aligns its AGP `9.4.0` to the root build's `9.3.2`. To reproduce the same source and plugin inputs locally:
+
+```bash
+git clone https://github.com/compose-miuix-ui/miuix.git .ci/miuix
+git -C .ci/miuix checkout --detach 5157b503e86e2bfc2db61db00fff5df41326394a
+
+python3 - <<'PY'
+from pathlib import Path
+
+catalog = Path(".ci/miuix/gradle/libs.versions.toml")
+text = catalog.read_text(encoding="utf-8")
+old = 'agp = "9.4.0"'
+if text.count(old) != 1:
+    raise SystemExit(f"Expected one {old!r} entry in {catalog}")
+catalog.write_text(text.replace(old, 'agp = "9.3.2"'), encoding="utf-8")
+PY
+
+./gradlew -Pbili.miuix.source="$PWD/.ci/miuix" :app:compileDebugKotlin
+```
+
+This pins the dependency source and plugin version for reproducible build inputs; it does not claim that a build has passed.
 
 ---
 

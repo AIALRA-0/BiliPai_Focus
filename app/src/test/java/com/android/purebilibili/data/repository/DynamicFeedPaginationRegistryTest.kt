@@ -112,6 +112,104 @@ class DynamicFeedPaginationRegistryTest {
     }
 
     @Test
+    fun fullRefresh_usesResponsePaginationInsteadOfOldCursor() {
+        val result = resolveDynamicPaginationStateAfterPage(
+            paginationBeforeRefresh = DynamicPaginationState(),
+            responseOffset = "fresh_offset",
+            responseUpdateBaseline = "fresh_baseline",
+            responseHasMore = true,
+            preserveExistingPagination = false
+        )
+
+        assertEquals("fresh_offset", result.offset)
+        assertEquals("fresh_baseline", result.updateBaseline)
+        assertTrue(result.hasMore)
+    }
+
+    @Test
+    fun incrementalRefresh_preservesOlderTimelinePaginationAndAdvancesBaseline() {
+        val result = resolveDynamicPaginationStateAfterPage(
+            paginationBeforeRefresh = DynamicPaginationState(
+                offset = "older_page_offset",
+                updateBaseline = "old_baseline",
+                hasMore = true
+            ),
+            responseOffset = "incremental_window_offset",
+            responseUpdateBaseline = "new_baseline",
+            responseHasMore = false,
+            preserveExistingPagination = true
+        )
+
+        assertEquals("older_page_offset", result.offset)
+        assertEquals("new_baseline", result.updateBaseline)
+        assertTrue(result.hasMore)
+    }
+
+    @Test
+    fun incrementalRefresh_withBlankOldOffset_usesResponseOffset() {
+        val result = resolveDynamicPaginationStateAfterPage(
+            paginationBeforeRefresh = DynamicPaginationState(
+                offset = "",
+                updateBaseline = "old_baseline",
+                hasMore = true
+            ),
+            responseOffset = "fresh_response_offset",
+            responseUpdateBaseline = "new_baseline",
+            responseHasMore = true,
+            preserveExistingPagination = true
+        )
+
+        assertEquals("fresh_response_offset", result.offset)
+        assertEquals("new_baseline", result.updateBaseline)
+        assertTrue(result.hasMore)
+    }
+
+    @Test
+    fun incrementalRefresh_withZeroUpdateNum_usesResponseOffset() {
+        val result = resolveDynamicPaginationStateAfterPage(
+            paginationBeforeRefresh = DynamicPaginationState(
+                offset = "stale_offset",
+                updateBaseline = "old_baseline",
+                hasMore = true
+            ),
+            responseOffset = "fresh_response_offset",
+            responseUpdateBaseline = "new_baseline",
+            responseHasMore = true,
+            preserveExistingPagination = true,
+            reportedUpdateNum = 0
+        )
+
+        assertEquals("fresh_response_offset", result.offset)
+        assertEquals("new_baseline", result.updateBaseline)
+        assertTrue(result.hasMore)
+    }
+
+    @Test
+    fun incrementalRefresh_requiresEnabledSettingAndEstablishedBaseline() {
+        assertFalse(
+            shouldUseDynamicIncrementalRefresh(
+                refresh = true,
+                incrementalRefreshEnabled = false,
+                updateBaseline = "baseline"
+            )
+        )
+        assertFalse(
+            shouldUseDynamicIncrementalRefresh(
+                refresh = true,
+                incrementalRefreshEnabled = true,
+                updateBaseline = ""
+            )
+        )
+        assertTrue(
+            shouldUseDynamicIncrementalRefresh(
+                refresh = true,
+                incrementalRefreshEnabled = true,
+                updateBaseline = "baseline"
+            )
+        )
+    }
+
+    @Test
     fun update_count_polling_doesNotAdvanceExistingBaselineUntilFeedIsRead() {
         assertEquals(
             "old_baseline",
@@ -122,7 +220,7 @@ class DynamicFeedPaginationRegistryTest {
             )
         )
         assertEquals(
-            "new_baseline",
+            "",
             resolveDynamicUpdateCountBaseline(
                 currentBaseline = "",
                 responseBaseline = "new_baseline",

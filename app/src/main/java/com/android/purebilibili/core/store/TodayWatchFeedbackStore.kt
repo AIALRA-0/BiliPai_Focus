@@ -45,7 +45,8 @@ private const val MAX_RECENT_DISLIKED_VIDEOS = 24
 
 fun TodayWatchFeedbackSnapshot.withDislikedVideoFeedback(
     video: TodayWatchDislikedVideoSnapshot,
-    keywords: Set<String>
+    keywords: Set<String>,
+    includeCreatorSignal: Boolean = true
 ): TodayWatchFeedbackSnapshot {
     val normalizedBvid = video.bvid.trim()
     if (normalizedBvid.isBlank()) return this
@@ -61,7 +62,9 @@ fun TodayWatchFeedbackSnapshot.withDislikedVideoFeedback(
             .filter { it.isNotBlank() }
             .takeLast(MAX_DISLIKED_BVIDS)
             .toSet(),
-        dislikedCreatorMids = (dislikedCreatorMids + normalizedVideo.creatorMid)
+        dislikedCreatorMids = (
+            if (includeCreatorSignal) dislikedCreatorMids + normalizedVideo.creatorMid else dislikedCreatorMids
+        )
             .filter { it > 0L }
             .takeLast(MAX_DISLIKED_CREATORS)
             .toSet(),

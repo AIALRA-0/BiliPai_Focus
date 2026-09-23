@@ -110,7 +110,7 @@ class WebDavBackupService(private val context: Context) {
                 if (!response.isSuccessful) {
                     throw IOException("下载失败: HTTP ${response.code}")
                 }
-                response.body?.bytes() ?: throw IOException("备份文件为空")
+                response.body.bytes()
             }
 
             val restoredCount = restoreFromBackupArchive(zipBytes)
@@ -137,7 +137,7 @@ class WebDavBackupService(private val context: Context) {
             if (response.code !in setOf(200, 207)) {
                 throw IOException("读取目录失败: HTTP ${response.code} (PROPFIND ${request.url.encodedPath})")
             }
-            response.body?.string() ?: ""
+            response.body.string()
         }
 
         return parseWebDavBackupEntries(xml)
@@ -151,20 +151,60 @@ class WebDavBackupService(private val context: Context) {
         var current = baseUrl
         for (segment in segments) {
             current = "$current/$segment"
-            val request = Request.Builder()
-                .url(current)
-                .header("Authorization", authHeader)
-                .method("MKCOL", ByteArray(0).toRequestBody(null))
-                .build()
+            val action = resolveWebDavDirectoryAction(
+                probeStatus = probeDirectoryDepthZero(current, authHeader)
+            )
+            when (action) {
+                WebDavDirectoryAction.EXISTS -> Unit // 已存在,跳过创建
 
-            httpClient.newCall(request).execute().use { response ->
-                if (response.code !in setOf(200, 201, 204, 301, 405)) {
-                    throw IOException("创建远端目录失败: HTTP ${response.code}")
+                WebDavDirectoryAction.CREATE -> {
+                    mkcolDirectory(current, authHeader)
+                }
+
+                WebDavDirectoryAction.CREATE_OR_VERIFY -> {
+                    // 探测异常(部分服务器不支持对目录 Depth:0 PROPFIND):
+                    // 回退幂等 MKCOL,再探测确认。
+                    mkcolDirectory(current, authHeader)
+                    val confirmStatus = probeDirectoryDepthZero(current, authHeader)
+                    if (confirmStatus !in setOf(200, 207)) {
+                        throw IOException(
+                            resolveWebDavDirectoryProbeError(confirmStatus ?: 0, current)
+                        )
+                    }
                 }
             }
         }
 
         return current
+    }
+
+    /** PROPFIND Depth: 0 探测目录是否存在;返回 HTTP 状态码,网络异常返回 null。 */
+    private fun probeDirectoryDepthZero(url: String, authHeader: String): Int? {
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", authHeader)
+                .header("Depth", "0")
+                .method("PROPFIND", buildWebDavPropfindBody().toRequestBody(XML_CONTENT_TYPE.toMediaType()))
+                .build()
+            httpClient.newCall(request).execute().use { it.code }
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    private fun mkcolDirectory(url: String, authHeader: String) {
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", authHeader)
+            .method("MKCOL", ByteArray(0).toRequestBody(null))
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            if (response.code !in setOf(200, 201, 204, 301, 405)) {
+                throw IOException("创建远端目录失败: HTTP ${response.code} ($url)")
+            }
+        }
     }
 
     private fun validateConfig(config: WebDavBackupConfig) {

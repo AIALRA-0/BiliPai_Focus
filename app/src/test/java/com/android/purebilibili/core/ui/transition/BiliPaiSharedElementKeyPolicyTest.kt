@@ -35,6 +35,18 @@ class BiliPaiSharedElementKeyPolicyTest {
     }
 
     @Test
+    fun metadataKeysCanUseSourceRouteToAvoidCrossOriginMatches() {
+        assertNotEquals(
+            videoTitleSharedElementKey("BV1", sourceRoute = "history"),
+            videoTitleSharedElementKey("BV1", sourceRoute = "home")
+        )
+        assertEquals(
+            videoUpNameSharedElementKey("BV1", sourceRoute = "history"),
+            videoUpNameSharedElementKey("BV1", sourceRoute = "history")
+        )
+    }
+
+    @Test
     fun liveAvatarAndArticleKeysAreStructured() {
         assertEquals(BiliPaiSharedElementKey.Live(6L), liveCoverSharedElementKey(6L))
         assertEquals(BiliPaiSharedElementKey.Avatar(42L), avatarSharedElementKey(42L))

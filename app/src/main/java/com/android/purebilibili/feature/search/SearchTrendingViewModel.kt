@@ -7,6 +7,7 @@ import com.android.purebilibili.data.repository.SearchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 data class SearchTrendingUiState(
@@ -22,13 +23,17 @@ class SearchTrendingViewModel(
 ) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(SearchTrendingUiState())
     val uiState = _uiState.asStateFlow()
+    private var refreshJob: Job? = null
 
     init {
         refresh()
     }
 
     fun refresh() {
-        viewModelScope.launch {
+        // A pull refresh and the toolbar action can arrive back-to-back. Cancel the
+        // previous request so an older response cannot overwrite the newest ranking.
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             val showInitialLoading = _uiState.value.items.isEmpty()
             _uiState.update {
                 it.copy(

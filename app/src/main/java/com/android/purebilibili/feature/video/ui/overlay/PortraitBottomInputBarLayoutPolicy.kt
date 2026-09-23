@@ -38,7 +38,7 @@ fun resolvePortraitBottomInputBarLayoutPolicy(
             inputFontSp = 16,
             afterInputSpacingDp = 14,
             actionSpacingDp = 8,
-            actionButtonSizeDp = 46,
+            actionButtonSizeDp = 48,
             actionIconSizeDp = 28
         )
     }
@@ -52,7 +52,7 @@ fun resolvePortraitBottomInputBarLayoutPolicy(
             inputFontSp = 15,
             afterInputSpacingDp = 13,
             actionSpacingDp = 7,
-            actionButtonSizeDp = 43,
+            actionButtonSizeDp = 48,
             actionIconSizeDp = 26
         )
     }
@@ -65,7 +65,7 @@ fun resolvePortraitBottomInputBarLayoutPolicy(
         inputFontSp = 14,
         afterInputSpacingDp = 12,
         actionSpacingDp = 6,
-        actionButtonSizeDp = 40,
+        actionButtonSizeDp = 48,
         actionIconSizeDp = 24
     )
 }

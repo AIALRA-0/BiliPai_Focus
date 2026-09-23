@@ -1,5 +1,9 @@
 // 文件路径: feature/video/ui/components/DanmakuSendDialog.kt
 package com.android.purebilibili.feature.video.ui.components
+import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
+import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -29,17 +33,26 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.Xmark
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppCheckbox
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppFilterChip
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppTextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import kotlinx.coroutines.delay
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 internal data class DanmakuSendDialogLayoutPolicy(
     val fillMaxWidthFraction: Float,
@@ -52,8 +65,6 @@ internal data class DanmakuSendSelectionState(
     val mode: Int,
     val fontSize: Int
 )
-
-internal const val DANMAKU_SEND_VIP_GRADUAL_COLOR = -1
 
 internal fun resolveDanmakuSendDialogLayoutPolicy(): DanmakuSendDialogLayoutPolicy {
     return DanmakuSendDialogLayoutPolicy(
@@ -102,6 +113,9 @@ fun DanmakuSendDialog(
     initialColor: Int = 16777215,
     initialMode: Int = 1,
     initialFontSize: Int = 25,
+    initialText: String = "",
+    initialAttentionCommand: Boolean = false,
+    onDraftChange: (String, Boolean) -> Unit = { _, _ -> },
     onSelectionChange: (color: Int, mode: Int, fontSize: Int) -> Unit = { _, _, _ -> },
     topReservedSpace: Dp = 0.dp,
     modifier: Modifier = Modifier
@@ -115,48 +129,36 @@ fun DanmakuSendDialog(
         imeBottomPx = imeBottomPx
     )
     val maxSheetHeight = remember(configuration.screenHeightDp, topReservedSpace) {
-        (configuration.screenHeightDp.dp - topReservedSpace).coerceAtLeast(1.dp)
+        minOf(
+            configuration.screenHeightDp.dp * 0.5f,
+            (configuration.screenHeightDp.dp - topReservedSpace).coerceAtLeast(1.dp)
+        )
     }
 
-    // 弹幕预设颜色 (十进制 RGB)
-    val colorOptions = listOf(
-        16777215 to "白色",  // 0xFFFFFF
-        16646914 to "红色",  // 0xFE0302
-        16740868 to "橙色",  // 0xFF7204
-        16755202 to "金色",  // 0xFFAA02
-        52224 to "绿色",     // 0x00CD00
-        41430 to "蓝色",     // 0x00A1D6
-        13369971 to "紫色",  // 0xCC0273
-        2236962 to "黑色",   // 0x222222
-        DANMAKU_SEND_VIP_GRADUAL_COLOR to "会员渐变"
-    )
-
-    // 弹幕位置模式
-    val modeOptions = listOf(
-        1 to "滚动",
-        5 to "顶部",
-        4 to "底部"
-    )
-
-    // 弹幕字号
-    val fontSizeOptions = listOf(
-        18 to "小",
-        25 to "中",
-        36 to "大"
-    )
+    val colorOptions = remember { danmakuSendColorOptions().map { it.value to it.label } }
+    val modeOptions = remember { danmakuSendModeOptions().map { it.value to it.label } }
+    val fontSizeOptions = remember { danmakuSendFontSizeOptions().map { it.value to it.label } }
 
     // 状态
-    var text by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf(initialText) }
     var selectedColor by remember { mutableIntStateOf(initialColor) }
     var selectedMode by remember { mutableIntStateOf(initialMode) }
     var selectedFontSize by remember { mutableIntStateOf(initialFontSize) }
-    var attentionCommandChecked by remember { mutableStateOf(false) }
+    var attentionCommandChecked by remember { mutableStateOf(initialAttentionCommand) }
+    var showSettings by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     // 重置状态
-    LaunchedEffect(visible, initialColor, initialMode, initialFontSize) {
+    LaunchedEffect(
+        visible,
+        initialColor,
+        initialMode,
+        initialFontSize,
+        initialText,
+        initialAttentionCommand
+    ) {
         if (visible) {
             val selection = resolveDanmakuSendSelectionState(
                 initialColor = initialColor,
@@ -166,11 +168,12 @@ fun DanmakuSendDialog(
                 modeOptions = modeOptions.map { it.first },
                 fontSizeOptions = fontSizeOptions.map { it.first }
             )
-            text = ""
+            text = initialText
             selectedColor = selection.color
             selectedMode = selection.mode
             selectedFontSize = selection.fontSize
-            attentionCommandChecked = false
+            attentionCommandChecked = initialAttentionCommand
+            showSettings = false
             delay(100)
             focusRequester.requestFocus()
             keyboardController?.show()
@@ -217,15 +220,15 @@ fun DanmakuSendDialog(
                     )
                 }
 
-                Surface(
+                AppSurface(
                     modifier = modifier
                         .fillMaxWidth(layoutPolicy.fillMaxWidthFraction)
                         .heightIn(max = maxSheetHeight)
                         .wrapContentHeight(),
                     shape = if (layoutPolicy.bottomAligned) {
-                        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                        AppShapes.container(ContainerLevel.Sheet)
                     } else {
-                        RoundedCornerShape(20.dp)
+                        AppShapes.container(ContainerLevel.Floating)
                     },
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp
@@ -243,19 +246,18 @@ fun DanmakuSendDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
+                            AppText(
                                 text = "发送弹幕",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
-                            IconButton(
+                            AppIconButton(
                                 onClick = onDismiss,
                                 modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(
-                                    imageVector = CupertinoIcons.Outlined.Xmark,
+                                AppIcon(
+                                    imageVector = Icons.Outlined.Close,
                                     contentDescription = "关闭",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
@@ -268,19 +270,24 @@ fun DanmakuSendDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(AppShapes.container(ContainerLevel.Card))
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                 .padding(horizontal = 16.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             BasicTextField(
                                 value = text,
-                                onValueChange = { if (it.length <= 100) text = it },
+                                onValueChange = {
+                                    if (it.length <= 100) {
+                                        text = it
+                                        onDraftChange(it, attentionCommandChecked)
+                                    }
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .testTag("danmaku_compact_input")
                                     .focusRequester(focusRequester),
-                                textStyle = TextStyle(
-                                    fontSize = 15.sp,
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
                                     color = MaterialTheme.colorScheme.onSurface
                                 ),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -291,10 +298,10 @@ fun DanmakuSendDialog(
                                         contentAlignment = Alignment.CenterStart
                                     ) {
                                         if (text.isEmpty()) {
-                                            Text(
+                                            AppText(
                                                 text = "发个友善的弹幕见证当下",
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontSize = 15.sp
+                                                style = MaterialTheme.typography.bodyLarge
                                             )
                                         }
                                         innerTextField()
@@ -304,9 +311,9 @@ fun DanmakuSendDialog(
                         }
 
                         // 字数统计
-                        Text(
+                        AppText(
                             text = "${text.length}/100",
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = if (text.length > 90) {
                                 MaterialTheme.colorScheme.error
                             } else {
@@ -316,12 +323,19 @@ fun DanmakuSendDialog(
                             textAlign = TextAlign.End
                         )
 
+                        AppTextButton(
+                            onClick = { showSettings = !showSettings },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            AppText(if (showSettings) "收起弹幕设置" else "颜色、位置与大小")
+                        }
+
+                        if (showSettings) {
                         // 颜色选择
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
+                            AppText(
                                 text = "颜色",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
@@ -363,11 +377,10 @@ fun DanmakuSendDialog(
                                             .clickable { selectedColor = colorValue }
                                     ) {
                                         if (colorValue == DANMAKU_SEND_VIP_GRADUAL_COLOR) {
-                                            Text(
+                                            AppText(
                                                 text = "VIP",
                                                 modifier = Modifier.align(Alignment.Center),
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                                 color = Color.White
                                             )
                                         }
@@ -379,27 +392,32 @@ fun DanmakuSendDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(AppShapes.container(ContainerLevel.Card))
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f))
-                                .clickable { attentionCommandChecked = !attentionCommandChecked }
+                                .clickable {
+                                    attentionCommandChecked = !attentionCommandChecked
+                                    onDraftChange(text, attentionCommandChecked)
+                                }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Checkbox(
+                            AppCheckbox(
                                 checked = attentionCommandChecked,
-                                onCheckedChange = { attentionCommandChecked = it }
+                                onCheckedChange = {
+                                    attentionCommandChecked = it
+                                    onDraftChange(text, it)
+                                }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
+                                AppText(
                                     text = "内嵌关注按钮",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                Text(
+                                AppText(
                                     text = "发送一个视频内嵌关注按钮",
-                                    fontSize = 12.sp,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -414,23 +432,22 @@ fun DanmakuSendDialog(
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
+                                AppText(
                                     text = "位置",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     modeOptions.forEach { (modeValue, label) ->
                                         val isSelected = selectedMode == modeValue
-                                        FilterChip(
+                                        AppFilterChip(
                                             selected = isSelected,
                                             onClick = { selectedMode = modeValue },
                                             label = {
-                                                Text(
+                                                AppText(
                                                     text = label,
-                                                    fontSize = 12.sp,
+                                                    style = MaterialTheme.typography.labelMedium,
                                                     maxLines = 1
                                                 )
                                             },
@@ -447,23 +464,22 @@ fun DanmakuSendDialog(
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
+                                AppText(
                                     text = "大小",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     fontSizeOptions.forEach { (sizeValue, label) ->
                                         val isSelected = selectedFontSize == sizeValue
-                                        FilterChip(
+                                        AppFilterChip(
                                             selected = isSelected,
                                             onClick = { selectedFontSize = sizeValue },
                                             label = {
-                                                Text(
+                                                AppText(
                                                     text = label,
-                                                    fontSize = 12.sp,
+                                                    style = MaterialTheme.typography.labelMedium,
                                                     maxLines = 1
                                                 )
                                             },
@@ -476,9 +492,10 @@ fun DanmakuSendDialog(
                                 }
                             }
                         }
+                        }
 
                         // 发送按钮
-                        Button(
+                        AppButton(
                             onClick = {
                                 if (text.isNotBlank() && !isSending) {
                                     onSend(
@@ -494,22 +511,23 @@ fun DanmakuSendDialog(
                                 .fillMaxWidth()
                                 .height(48.dp),
                             enabled = text.isNotBlank() && !isSending,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = AppShapes.container(ContainerLevel.Card),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
+                                containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
+
+                                contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
                             )
                         ) {
                             if (isSending) {
-                                CircularProgressIndicator(
+                                AppCircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             } else {
-                                Text(
+                                AppText(
                                     text = "发送",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
                                 )
                             }
                         }

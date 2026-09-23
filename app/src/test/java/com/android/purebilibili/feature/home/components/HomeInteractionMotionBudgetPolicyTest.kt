@@ -358,6 +358,36 @@ class HomeInteractionMotionBudgetPolicyTest {
     }
 
     @Test
+    fun md3NativeUnderline_stretchesBetweenTabCentersThenSettles() {
+        assertEquals(
+            Md3TopTabUnderlineBounds(36f, 28f),
+            resolveMd3TopTabUnderlineBounds(
+                absolutePagerPosition = 0f,
+                itemWidthPx = 100f,
+                rowScrollOffsetPx = 0f,
+                indicatorWidthPx = 28f,
+            ),
+        )
+        val midpoint = resolveMd3TopTabUnderlineBounds(
+                absolutePagerPosition = 0.5f,
+                itemWidthPx = 100f,
+                rowScrollOffsetPx = 0f,
+                indicatorWidthPx = 28f,
+            )
+        assertEquals(65.289f, midpoint.translationXPx, 0.001f)
+        assertEquals(69.421f, midpoint.widthPx, 0.001f)
+        assertEquals(
+            Md3TopTabUnderlineBounds(136f, 28f),
+            resolveMd3TopTabUnderlineBounds(
+                absolutePagerPosition = 1f,
+                itemWidthPx = 100f,
+                rowScrollOffsetPx = 0f,
+                indicatorWidthPx = 28f,
+            ),
+        )
+    }
+
+    @Test
     fun iosTopTabCapsuleTranslation_prefersMeasuredSelectedItemLeft() {
         assertEquals(
             184f,
@@ -393,5 +423,76 @@ class HomeInteractionMotionBudgetPolicyTest {
         assertFalse(shouldAnimateIosTopTabCapsule(pagerIsDragging = true, pagerIsScrolling = false))
         assertFalse(shouldAnimateIosTopTabCapsule(pagerIsDragging = false, pagerIsScrolling = true))
         assertTrue(shouldAnimateIosTopTabCapsule(pagerIsDragging = false, pagerIsScrolling = false))
+    }
+
+    @Test
+    fun shouldAnimateMd3TopTabUnderline_onlyWhenNotDraggingOrHoldingIndicator() {
+        assertTrue(
+            shouldAnimateMd3TopTabUnderline(
+                pagerIsDragging = false,
+                topTabIndicatorOwnsPosition = false
+            )
+        )
+        assertFalse(
+            shouldAnimateMd3TopTabUnderline(
+                pagerIsDragging = true,
+                topTabIndicatorOwnsPosition = false
+            )
+        )
+        assertFalse(
+            shouldAnimateMd3TopTabUnderline(
+                pagerIsDragging = false,
+                topTabIndicatorOwnsPosition = true
+            )
+        )
+    }
+
+    @Test
+    fun resolveMd3TopTabTargetBounds_centersIndicatorOverTargetSlot() {
+        val bounds = resolveMd3TopTabTargetBounds(
+            targetIndex = 2,
+            itemWidthPx = 100f,
+            indicatorWidthPx = 28f,
+            contentPaddingPx = 10f,
+        )
+        assertEquals(246f, bounds.leftPx, 0.001f)
+        assertEquals(274f, bounds.rightPx, 0.001f)
+    }
+
+    @Test
+    fun resolveMd3TopTabUnderlineTapBounds_computesOffsetAndWidth() {
+        val bounds = resolveMd3TopTabUnderlineTapBounds(
+            animatedLeftPx = 246f,
+            animatedRightPx = 274f,
+            rowScrollOffsetPx = 30f,
+        )
+        assertEquals(216f, bounds.translationXPx, 0.001f)
+        assertEquals(28f, bounds.widthPx, 0.001f)
+    }
+
+    @Test
+    fun resolveMd3TopTabTapContentPosition_recoversContinuousFraction() {
+        val pos = resolveMd3TopTabTapContentPosition(
+            animatedLeftPx = 246f,
+            animatedRightPx = 274f,
+            itemWidthPx = 100f,
+            contentPaddingPx = 10f,
+            fallbackIndex = 2,
+            categoryCount = 5,
+        )
+        assertEquals(2f, pos, 0.001f)
+    }
+
+    @Test
+    fun md3TapIndicatorEasing_leadingEdgeMovesFasterThanTrailingEdge() {
+        for (i in 1..9) {
+            val fraction = i / 10f
+            val dec = Md3TopTabIndicatorDecelerate.transform(fraction)
+            val acc = Md3TopTabIndicatorAccelerate.transform(fraction)
+            assertTrue(
+                dec > acc,
+                "Decelerate ($dec) should be greater than Accelerate ($acc) at fraction $fraction to stretch underline"
+            )
+        }
     }
 }

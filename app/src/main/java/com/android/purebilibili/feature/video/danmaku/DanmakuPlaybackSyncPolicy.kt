@@ -5,8 +5,9 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 private const val NORMAL_SYNC_INTERVAL_MS = 3200L
-private const val NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 6
-private const val NON_NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 3
+private const val NORMAL_SPEED_CORRECTION_INTERVAL_TICKS = 6
+private const val NON_NORMAL_SPEED_CORRECTION_INTERVAL_TICKS = 3
+private const val HIGH_SPEED_CORRECTION_INTERVAL_TICKS = 9
 private const val EXPLICIT_SEEK_RESYNC_TOLERANCE_MS = 500L
 private const val EXPLICIT_SEEK_RESYNC_WINDOW_MS = 1500L
 private const val MIN_ENGINE_PLAYBACK_SPEED = 0.1f
@@ -15,6 +16,7 @@ private const val MAX_ENGINE_PLAYBACK_SPEED = 4.0f
 internal enum class DanmakuSyncAction {
     None,
     PauseOnly,
+    SoftResync,
     HardResync
 }
 
@@ -51,13 +53,14 @@ internal fun resolveDanmakuDriftSyncIntervalMs(videoSpeed: Float): Long {
     }
 }
 
-internal fun shouldForceDanmakuDataResync(videoSpeed: Float, tickCount: Int): Boolean {
+internal fun shouldScheduleDanmakuDriftCorrection(videoSpeed: Float, tickCount: Int): Boolean {
     if (tickCount <= 0) return false
-    val isNearNormalSpeed = abs(normalizeDanmakuPlaybackSpeed(videoSpeed) - 1.0f) <= 0.02f
-    val interval = if (isNearNormalSpeed) {
-        NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS
-    } else {
-        NON_NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS
+    val normalizedSpeed = normalizeDanmakuPlaybackSpeed(videoSpeed)
+    val isNearNormalSpeed = abs(normalizedSpeed - 1.0f) <= 0.02f
+    val interval = when {
+        isNearNormalSpeed -> NORMAL_SPEED_CORRECTION_INTERVAL_TICKS
+        normalizedSpeed >= 1.75f -> HIGH_SPEED_CORRECTION_INTERVAL_TICKS
+        else -> NON_NORMAL_SPEED_CORRECTION_INTERVAL_TICKS
     }
     return tickCount % interval == 0
 }
@@ -68,7 +71,65 @@ internal fun resolveDanmakuActionForIsPlayingChange(
     hasData: Boolean
 ): DanmakuSyncAction {
     if (!isPlayerPlaying) return DanmakuSyncAction.PauseOnly
-    return if (danmakuEnabled && hasData) DanmakuSyncAction.HardResync else DanmakuSyncAction.None
+    // A normal pause/resume does not invalidate the loaded timeline. Re-anchoring the
+    // engine clock is sufficient and preserves the currently visible render layers.
+    // Explicit seeks, buffering recovery and player/view replacement keep their hard
+    // resync paths because those events can invalidate the active window.
+    return if (danmakuEnabled && hasData) DanmakuSyncAction.SoftResync else DanmakuSyncAction.None
+}
+
+/**
+ * 弹幕数据就绪时的启动意图。
+ *
+ * 相关推荐/同页切集（含进入过渡动画）后，播放器往往先于弹幕网络请求开始播放：
+ * `onIsPlayingChanged(true)` 可能在弹幕数据加载完成前到达，被 [resolveDanmakuActionForIsPlayingChange]
+ * 的 None 分支（hasData=false）吃掉；若随后数据就绪时仅按 `isPlaying` 瞬时快照判断，
+ * 引擎会停在 paused 且没有新的 isPlaying 事件恢复它（表现为弹幕开关显示「开」却无弹幕，
+ * 需手动重开开关才显示）。因此数据就绪时应按「播放意图」（正在播放或即将播放）启动引擎，
+ * 由后续 drift sync / buffering HardResync 校正缓冲造成的少量时间线偏差。
+ */
+internal fun shouldStartDanmakuOnDataReady(
+    isPlaying: Boolean,
+    playWhenReady: Boolean
+): Boolean = isPlaying || playWhenReady
+
+/**
+ * Network loading is asynchronous, so the position captured when an episode request starts can
+ * already be stale when its first segment commits. Always prefer the currently attached player.
+ */
+internal fun resolveDanmakuDataReadyPositionMs(
+    currentPlayerPositionMs: Long?,
+    requestedPositionMs: Long,
+): Long = (currentPlayerPositionMs ?: requestedPositionMs).coerceAtLeast(0L)
+
+/**
+ * 新 DanmakuView attach 时是否要把已缓存弹幕时间线补到当前 controller。
+ *
+ * 相关推荐 push 新页时，load 常在旧 controller 完成；新 view 若跳过重放，
+ * 开关显示「开」却无弹幕，只能手动重开开关才恢复。
+ */
+internal fun shouldReapplyDanmakuTimelineOnAttach(
+    hasCachedList: Boolean,
+    pendingTimelineResync: Boolean,
+    previousControllerSameAsCurrent: Boolean,
+    timelineAlreadySyncedToCurrent: Boolean,
+): Boolean {
+    if (!hasCachedList) return false
+    if (pendingTimelineResync) return true
+    if (previousControllerSameAsCurrent && timelineAlreadySyncedToCurrent) return false
+    return true
+}
+
+internal fun resolveExplicitSeekStartedPlaybackAfterSyncAction(
+    explicitSeekStartedPlayback: Boolean?,
+    action: DanmakuSyncAction
+): Boolean? {
+    if (explicitSeekStartedPlayback == null) return null
+    return if (action == DanmakuSyncAction.PauseOnly) {
+        false
+    } else {
+        explicitSeekStartedPlayback
+    }
 }
 
 internal fun resolveDanmakuActionForPlaybackState(
@@ -102,16 +163,6 @@ internal fun resolveDanmakuActionForPositionDiscontinuity(
     return if (isSeekDiscontinuity) DanmakuSyncAction.HardResync else DanmakuSyncAction.None
 }
 
-internal fun resolveDanmakuActionForPlaybackSpeedChange(
-    previousSpeed: Float,
-    newSpeed: Float,
-    isPlayerPlaying: Boolean,
-    hasData: Boolean
-): DanmakuSyncAction {
-    if (!isPlayerPlaying || !hasData) return DanmakuSyncAction.None
-    return if (abs(previousSpeed - newSpeed) > 0.01f) DanmakuSyncAction.HardResync else DanmakuSyncAction.None
-}
-
 internal fun resolveDanmakuActionForForegroundRecovery(
     playWhenReady: Boolean,
     isPlayerPlaying: Boolean,
@@ -130,6 +181,19 @@ internal fun resolveDanmakuActionForForegroundRecovery(
     }
 }
 
+/**
+ * Loading can finish before the ExoPlayer is attached to the danmaku session.
+ * Rebind the cached timeline when the player arrives so an enabled session does
+ * not require toggling the switch to become visible.
+ */
+internal fun shouldResyncDanmakuAfterPlayerAttach(
+    danmakuEnabled: Boolean,
+    hasData: Boolean,
+    hasController: Boolean
+): Boolean {
+    return danmakuEnabled && hasData && hasController
+}
+
 internal fun resolveDanmakuGuardAction(
     videoSpeed: Float,
     tickCount: Int,
@@ -138,23 +202,35 @@ internal fun resolveDanmakuGuardAction(
     hasData: Boolean
 ): DanmakuSyncAction {
     if (!danmakuEnabled || !isPlaying || !hasData) return DanmakuSyncAction.None
-    return if (shouldForceDanmakuDataResync(videoSpeed, tickCount)) {
-        DanmakuSyncAction.HardResync
-    } else {
-        DanmakuSyncAction.None
-    }
+    if (!shouldScheduleDanmakuDriftCorrection(videoSpeed, tickCount)) return DanmakuSyncAction.None
+    // Periodic health checks must never clear the active render layers. Explicit seeks,
+    // buffering recovery and view replacement still use HardResync at their event boundaries.
+    return DanmakuSyncAction.SoftResync
 }
 
 internal inline fun executeExplicitDanmakuResync(
     pause: () -> Unit,
+    clear: () -> Unit,
     setData: () -> Unit,
     start: () -> Unit
 ) {
-    // DanmakuRenderEngine start() is ignored while already playing.
-    // Force a deterministic restart order for explicit timeline jumps.
+    // 引擎 setData/start 均不清屏：先 clear 掉渲染队列里残留的旧弹幕，
+    // 否则 seek 后旧时间线弹幕与新时间线叠加（重复且不跟随进度）。
     pause()
+    clear()
     setData()
     start()
+}
+
+internal inline fun executeDanmakuPlaybackSpeedUpdate(
+    applyTiming: () -> Unit,
+    invalidate: () -> Unit
+) {
+    // 倍速变化不改变媒体时间位置，只更新引擎 playSpeed、滚动时长和静态弹幕
+    // 停留时长。不要复用显式 seek 的 clear/setData/start，否则长按进入和退出
+    // 倍速都会清屏，看起来像弹幕被刷新。
+    applyTiming()
+    invalidate()
 }
 
 internal inline fun executeDanmakuSeekScrubStart(

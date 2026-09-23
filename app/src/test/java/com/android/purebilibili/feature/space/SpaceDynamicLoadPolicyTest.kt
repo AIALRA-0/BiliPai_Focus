@@ -83,6 +83,284 @@ class SpaceDynamicLoadPolicyTest {
     }
 
     @Test
+    fun shouldPrefetchMoreSpaceDynamicsForSearch_onlyWhenNoLocalMatches() {
+        assertEquals(
+            true,
+            shouldPrefetchMoreSpaceDynamicsForSearch(
+                query = "星轨",
+                matchCount = 0,
+                hasMore = true,
+                pagesFetchedForSearch = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreSpaceDynamicsForSearch(
+                query = "星轨",
+                matchCount = 1,
+                hasMore = true,
+                pagesFetchedForSearch = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreSpaceDynamicsForSearch(
+                query = "星轨",
+                matchCount = 0,
+                hasMore = false,
+                pagesFetchedForSearch = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreSpaceDynamicsForSearch(
+                query = "星轨",
+                matchCount = 0,
+                hasMore = true,
+                pagesFetchedForSearch = SPACE_DYNAMIC_SEARCH_PREFETCH_PAGE_LIMIT
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreSpaceDynamicsForSearch(
+                query = "   ",
+                matchCount = 0,
+                hasMore = true,
+                pagesFetchedForSearch = 0
+            )
+        )
+    }
+
+    @Test
+    fun mergeSpaceDynamicPages_appendsUniqueById() {
+        val existing = listOf(
+            SpaceDynamicItem(id_str = "1"),
+            SpaceDynamicItem(id_str = "2")
+        )
+        val incoming = listOf(
+            SpaceDynamicItem(id_str = "2"),
+            SpaceDynamicItem(id_str = "3")
+        )
+        assertEquals(
+            listOf("1", "2", "3"),
+            mergeSpaceDynamicPages(existing, incoming).map { it.id_str }
+        )
+    }
+
+    @Test
+    fun filterSpaceDynamicItemsByQuery_matchesContinuousPhraseAcrossRichTextNodes() {
+        // UI joins rich nodes without separators; search must match the continuous phrase.
+        val items = listOf(
+            SpaceDynamicItem(
+                id_str = "phrase",
+                modules = SpaceDynamicModules(
+                    module_dynamic = SpaceDynamicContent(
+                        desc = SpaceDynamicDesc(
+                            text = "",
+                            rich_text_nodes = listOf(
+                                com.android.purebilibili.data.model.response.SpaceDynamicRichText(
+                                    type = "RICH_TEXT_NODE_TYPE_TEXT",
+                                    text = "今天天气"
+                                ),
+                                com.android.purebilibili.data.model.response.SpaceDynamicRichText(
+                                    type = "RICH_TEXT_NODE_TYPE_TEXT",
+                                    text = "真不错啊"
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("phrase"),
+            filterSpaceDynamicItemsByQuery(items, "天气真不错").map { it.id_str }
+        )
+        assertEquals(
+            listOf("phrase"),
+            filterSpaceDynamicItemsByQuery(items, "今天天气真不错啊").map { it.id_str }
+        )
+    }
+
+    @Test
+    fun filterSpaceDynamicItemsByQuery_matchesOpusSummaryRichNodesWithoutPlainText() {
+        val items = listOf(
+            SpaceDynamicItem(
+                id_str = "opus-only",
+                modules = SpaceDynamicModules(
+                    module_dynamic = SpaceDynamicContent(
+                        major = SpaceDynamicMajor(
+                            type = "MAJOR_TYPE_OPUS",
+                            opus = SpaceDynamicOpus(
+                                title = "",
+                                summary = SpaceDynamicOpusSummary(
+                                    text = "",
+                                    rich_text_nodes = listOf(
+                                        com.android.purebilibili.data.model.response.SpaceDynamicRichText(
+                                            type = "RICH_TEXT_NODE_TYPE_TEXT",
+                                            text = "深夜加班写代码"
+                                        ),
+                                        com.android.purebilibili.data.model.response.SpaceDynamicRichText(
+                                            type = "RICH_TEXT_NODE_TYPE_TEXT",
+                                            text = "只为修一个搜索bug"
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("opus-only"),
+            filterSpaceDynamicItemsByQuery(items, "加班写代码只为修").map { it.id_str }
+        )
+        assertEquals(
+            listOf("opus-only"),
+            filterSpaceDynamicItemsByQuery(items, "搜索bug").map { it.id_str }
+        )
+    }
+
+    @Test
+    fun filterSpaceDynamicItemsByQuery_matchesRichTextNodesAndRepostOrig() {
+        val items = listOf(
+            SpaceDynamicItem(
+                id_str = "rich",
+                modules = SpaceDynamicModules(
+                    module_dynamic = SpaceDynamicContent(
+                        desc = SpaceDynamicDesc(
+                            text = "",
+                            rich_text_nodes = listOf(
+                                com.android.purebilibili.data.model.response.SpaceDynamicRichText(
+                                    type = "RICH_TEXT_NODE_TYPE_TEXT",
+                                    text = "只有富文本节点有关键词夜航船"
+                                )
+                            )
+                        )
+                    )
+                )
+            ),
+            SpaceDynamicItem(
+                id_str = "repost",
+                modules = SpaceDynamicModules(
+                    module_dynamic = SpaceDynamicContent(
+                        desc = SpaceDynamicDesc(text = "转发了一条动态")
+                    )
+                ),
+                orig = SpaceDynamicItem(
+                    id_str = "orig",
+                    modules = SpaceDynamicModules(
+                        module_dynamic = SpaceDynamicContent(
+                            major = SpaceDynamicMajor(
+                                archive = SpaceDynamicArchive(
+                                    bvid = "BV9",
+                                    title = "被转发的原视频：星轨摄影"
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("rich"),
+            filterSpaceDynamicItemsByQuery(items, "夜航船").map { it.id_str }
+        )
+        assertEquals(
+            listOf("repost"),
+            filterSpaceDynamicItemsByQuery(items, "星轨").map { it.id_str }
+        )
+        assertEquals(
+            listOf("repost"),
+            filterSpaceDynamicItemsByQuery(items, "BV9").map { it.id_str }
+        )
+    }
+
+    @Test
+    fun toDynamicRichTextNode_prefersOrigTextAndKeepsJumpUrlForAt() {
+        // Access via mapping a forward body that only has orig_text + jump_url on AT nodes.
+        val item = SpaceDynamicItem(
+            id_str = "at-map",
+            modules = SpaceDynamicModules(
+                module_dynamic = SpaceDynamicContent(
+                    desc = SpaceDynamicDesc(
+                        rich_text_nodes = listOf(
+                            com.android.purebilibili.data.model.response.SpaceDynamicRichText(
+                                type = "RICH_TEXT_NODE_TYPE_AT",
+                                text = "",
+                                orig_text = "@奇妙的摸鱼禁止",
+                                jump_url = "//space.bilibili.com/99",
+                                rid = "99"
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        val node = resolveSpaceDynamicCardItem(item)
+            .modules.module_dynamic?.desc?.rich_text_nodes?.single()
+        assertEquals("@奇妙的摸鱼禁止", node?.text)
+        assertEquals("99", node?.rid)
+        assertEquals("//space.bilibili.com/99", node?.jump_url)
+    }
+
+    @Test
+    fun resolveSpaceDynamicCardItem_mapsForwardOrigForNestedDisplay() {
+        val item = SpaceDynamicItem(
+            id_str = "forward",
+            type = "DYNAMIC_TYPE_FORWARD",
+            modules = SpaceDynamicModules(
+                module_dynamic = SpaceDynamicContent(
+                    desc = SpaceDynamicDesc(text = "我的4P也到了 查看图片")
+                )
+            ),
+            orig = SpaceDynamicItem(
+                id_str = "orig",
+                type = "DYNAMIC_TYPE_DRAW",
+                modules = SpaceDynamicModules(
+                    module_author = com.android.purebilibili.data.model.response.SpaceDynamicAuthor(
+                        mid = 1L,
+                        name = "奇妙的摸鱼禁止",
+                        face = "https://face"
+                    ),
+                    module_dynamic = SpaceDynamicContent(
+                        desc = SpaceDynamicDesc(text = "大疆Pocket收纳包"),
+                        major = SpaceDynamicMajor(
+                            type = "MAJOR_TYPE_DRAW",
+                            draw = SpaceDynamicDraw(
+                                items = listOf(
+                                    SpaceDynamicDrawItem(
+                                        src = "https://i0.hdslb.com/bfs/new_dyn/bag.jpg",
+                                        width = 800,
+                                        height = 800
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val mapped = resolveSpaceDynamicCardItem(item)
+        assertEquals("DYNAMIC_TYPE_FORWARD", mapped.type)
+        assertEquals("我的4P也到了 查看图片", mapped.modules.module_dynamic?.desc?.text)
+        val orig = mapped.orig
+        assertEquals("orig", orig?.id_str)
+        assertEquals("DYNAMIC_TYPE_DRAW", orig?.type)
+        assertEquals("奇妙的摸鱼禁止", orig?.modules?.module_author?.name)
+        assertEquals("大疆Pocket收纳包", orig?.modules?.module_dynamic?.desc?.text)
+        assertEquals(
+            listOf("https://i0.hdslb.com/bfs/new_dyn/bag.jpg"),
+            orig?.modules?.module_dynamic?.major?.draw?.items?.map { it.src }
+        )
+    }
+
+    @Test
     fun resolveSpaceDynamicCardItem_preservesDeleteMenuParams() {
         val item = SpaceDynamicItem(
             id_str = "1063487284684259332",

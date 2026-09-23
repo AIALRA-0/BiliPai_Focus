@@ -1,12 +1,15 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.android.purebilibili.core.util
 
 import android.content.Context
-import coil.annotation.ExperimentalCoilApi
-import coil.imageLoader
+import coil3.annotation.ExperimentalCoilApi
+import coil3.imageLoader
 import com.android.purebilibili.core.cache.PlayUrlCache
 import com.android.purebilibili.core.cooldown.PlaybackCooldownManager
 import com.android.purebilibili.core.player.PlaybackMediaCache
 import com.android.purebilibili.core.store.FollowingCacheStore
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.data.repository.DanmakuRepository
 import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +17,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.first
 import java.io.File
 
 enum class CacheClearTarget {
@@ -23,6 +27,19 @@ enum class CacheClearTarget {
     SUBTITLE_DANMAKU,
     TEMP_FILES_AND_LOGS,
     APP_METADATA
+}
+
+internal fun shouldAutomaticallyClearCache(
+    interval: SettingsManager.AutoCacheClearInterval,
+    lastClearAtMillis: Long,
+    nowMillis: Long,
+    reclaimableDiskBytes: Long,
+    thresholdBytes: Long
+): Boolean {
+    val intervalDue = interval != SettingsManager.AutoCacheClearInterval.NEVER &&
+        (lastClearAtMillis <= 0L || nowMillis - lastClearAtMillis >= interval.days * 24L * 60L * 60L * 1000L)
+    val thresholdReached = thresholdBytes > 0L && reclaimableDiskBytes >= thresholdBytes
+    return intervalDue || thresholdReached
 }
 
 /**
@@ -38,6 +55,38 @@ enum class CacheClearTarget {
 object CacheUtils {
 
     private const val TAG = "CacheUtils"
+    private const val DAY_MILLIS = 24L * 60L * 60L * 1000L
+
+    suspend fun clearCacheAutomaticallyIfDue(
+        context: Context,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Boolean {
+        val interval = SettingsManager.getAutoCacheClearInterval(context).first()
+        val thresholdGb = SettingsManager.getAutoCacheClearThresholdGb(context).first()
+        val lastClearAt = SettingsManager.getLastAutoCacheClearAt(context)
+        val intervalDue = interval != SettingsManager.AutoCacheClearInterval.NEVER &&
+            (lastClearAt <= 0L || nowMillis - lastClearAt >= interval.days * DAY_MILLIS)
+        val thresholdBytes = thresholdGb.toLong() * 1024L * 1024L * 1024L
+        val reclaimableDiskBytes = getCacheBreakdown(context).reclaimableDiskSize
+        val thresholdReached = reclaimableDiskBytes >= thresholdBytes
+        if (!shouldAutomaticallyClearCache(
+                interval = interval,
+                lastClearAtMillis = lastClearAt,
+                nowMillis = nowMillis,
+                reclaimableDiskBytes = reclaimableDiskBytes,
+                thresholdBytes = thresholdBytes
+            )
+        ) return false
+        Logger.i(
+            TAG,
+            "Auto cache clear triggered: intervalDue=$intervalDue, " +
+                "thresholdReached=$thresholdReached, diskBytes=$reclaimableDiskBytes, " +
+                "thresholdGb=$thresholdGb"
+        )
+        val result = clearCache(context, CacheClearTarget.entries.toSet())
+        if (result.isSuccess) SettingsManager.setLastAutoCacheClearAt(context, nowMillis)
+        return result.isSuccess
+    }
 
     /**
      * 缓存详情数据类
@@ -54,9 +103,11 @@ object CacheUtils {
         val imageCache: Long get() = imageDiskCache + imageMemoryCache
         val memoryCache: Long get() = imageMemoryCache + playUrlMemoryCache + subtitleDanmakuMemoryCache
         val networkCache: Long get() = httpCache + playbackMediaCache
-        val totalSize: Long get() = imageDiskCache + networkCache + otherCache + memoryCache
+        /** 与清理操作一致的、实际可回收磁盘字节数；不混入运行时内存估算。 */
+        val reclaimableDiskSize: Long get() = imageDiskCache + networkCache + otherCache
+        val totalSize: Long get() = reclaimableDiskSize + memoryCache
         
-        fun format(): String = formatSize(totalSize.toDouble())
+        fun format(): String = formatSize(reclaimableDiskSize.toDouble())
         
         fun formatBreakdown(): String = buildString {
             append("图片: ${formatSize(imageCache.toDouble())}")

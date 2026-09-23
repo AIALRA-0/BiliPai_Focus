@@ -9,13 +9,6 @@ import kotlin.test.assertTrue
 class CommandDanmakuOverlayPolicyTest {
 
     @Test
-    fun `attention command labels match action type`() {
-        assertEquals("一键三连", resolveAttentionCommandLabel(1))
-        assertEquals("关注并三连", resolveAttentionCommandLabel(2))
-        assertEquals("关注 UP", resolveAttentionCommandLabel(0))
-    }
-
-    @Test
     fun `follow and triple command does not unfollow existing followers`() {
         val action = resolveAttentionCommandClickAction(attentionType = 2, isFollowing = true)
 
@@ -40,18 +33,25 @@ class CommandDanmakuOverlayPolicyTest {
     }
 
     @Test
-    fun `follow and triple attention card has enough width for portrait details`() {
-        assertTrue(resolveAttentionCommandCardWidthDp(2) > resolveAttentionCommandCardWidthDp(1))
-        assertTrue(resolveAttentionCommandCardWidthDp(2) >= 188)
-    }
-
-    @Test
     fun `command card horizontal offset is clamped inside player bounds`() {
         val containerWidthPx = 1080
         val cardWidthPx = 588
 
         assertEquals(492, resolveCommandDanmakuHorizontalOffsetPx(containerWidthPx, cardWidthPx, 0.82f))
         assertEquals(0, resolveCommandDanmakuHorizontalOffsetPx(containerWidthPx, cardWidthPx, -0.2f))
+    }
+
+    @Test
+    fun `command card width is capped by a narrow player viewport`() {
+        assertEquals(320, resolveCommandDanmakuCardWidthPx(320, 420))
+        assertEquals(0, resolveCommandDanmakuCardWidthPx(320, -1))
+    }
+
+    @Test
+    fun `command card vertical offset is clamped by measured card height`() {
+        assertEquals(192, resolveCommandDanmakuVerticalOffsetPx(320, 128, 0.8f))
+        assertEquals(0, resolveCommandDanmakuVerticalOffsetPx(320, 400, 0.8f))
+        assertEquals(0, resolveCommandDanmakuVerticalOffsetPx(320, 128, -0.2f))
     }
 
     @Test

@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-
 data class VideoSettingsPanelActionPolicy(
     val rowItemSpacingDp: Int,
     val pillHeightDp: Int,
@@ -12,7 +10,6 @@ data class VideoSettingsPanelActionPolicy(
 
 fun resolveVideoSettingsPanelActionPolicy(
     widthDp: Int,
-    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): VideoSettingsPanelActionPolicy {
     val basePolicy = when {
         widthDp >= 840 -> VideoSettingsPanelActionPolicy(

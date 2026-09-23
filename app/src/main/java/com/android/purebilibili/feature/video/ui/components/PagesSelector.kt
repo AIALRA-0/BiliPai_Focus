@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import android.content.res.Configuration
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,18 +23,23 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppFilterChip
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppOutlinedTextField
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,13 +51,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.ui.IOSModalBottomSheet
+import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.data.model.response.Page
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.DropdownItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,9 +68,37 @@ fun PagesSelector(
     currentPageIndex: Int,
     onPageSelect: (Int) -> Unit,
     forceGridMode: Boolean = false,
+    blockParentVerticalScroll: Boolean = false,
     onDismissRequest: (() -> Unit)? = null
 ) {
     if (pages.isEmpty()) return
+
+    if (forceGridMode && onDismissRequest != null) {
+        PlayerMiuixListPopup(
+            title = "分集（${pages.size}）",
+            onDismissRequest = onDismissRequest,
+            placement = PlayerListPopupPlacement.END,
+        ) {
+            pages.forEachIndexed { index, page ->
+                val selected = index == currentPageIndex
+                DropdownImpl(
+                    item = DropdownItem(
+                        text = "P${page.page}",
+                        summary = page.part.takeIf { it.isNotEmpty() },
+                    ),
+                    optionSize = pages.size,
+                    isSelected = selected,
+                    index = index,
+                    enabled = !selected,
+                    onSelectedIndexChange = {
+                        onPageSelect(index)
+                        onDismissRequest()
+                    },
+                )
+            }
+        }
+        return
+    }
 
     val configuration = LocalConfiguration.current
     val isLandscape = remember(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
@@ -119,36 +153,34 @@ fun PagesSelector(
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
+            AppText(
                 text = "选集",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
+            AppText(
                 text = "(${pages.size})",
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
             )
             Spacer(modifier = Modifier.weight(1f))
             if (showExpandAction) {
                 Row(
                     modifier = Modifier
-                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(999.dp))
+                        .clip(AppShapes.container(ContainerLevel.Pill))
                         .clickable { showExpandedSheet = true }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
+                    AppText(
                         text = "展开",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
+                    AppIcon(
                         imageVector = Icons.Outlined.ExpandMore,
                         contentDescription = "展开选集",
                         tint = MaterialTheme.colorScheme.primary,
@@ -157,8 +189,8 @@ fun PagesSelector(
                 }
             }
             if (onDismissRequest != null) {
-                IconButton(onClick = onDismissRequest) {
-                    Icon(
+                AppIconButton(onClick = onDismissRequest) {
+                    AppIcon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "关闭选集面板",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -196,6 +228,7 @@ fun PagesSelector(
                 gridItemMinHeightDp = layoutPolicy.gridItemMinHeightDp,
                 emptyMessage = "没有匹配的分集",
                 onPageSelect = onPageSelect,
+                blockParentVerticalScroll = blockParentVerticalScroll,
                 modifier = Modifier.fillMaxWidth()
             )
         } else {
@@ -229,7 +262,7 @@ fun PagesSelector(
             )
         }
 
-        IOSModalBottomSheet(
+        AppModalBottomSheet(
             onDismissRequest = { showExpandedSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             dragHandle = null,
@@ -246,17 +279,15 @@ fun PagesSelector(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
+                    AppText(
                         text = "分集(${pages.size})",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    IconButton(onClick = { showExpandedSheet = false }) {
-                        Icon(
+                    AppIconButton(onClick = { showExpandedSheet = false }) {
+                        AppIcon(
                             imageVector = Icons.Outlined.Close,
                             contentDescription = "关闭选集",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -297,6 +328,7 @@ fun PagesSelector(
                         onPageSelect(index)
                         showExpandedSheet = false
                     },
+                    blockParentVerticalScroll = true,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -317,24 +349,24 @@ private fun PagesSelectorFilterBar(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        OutlinedTextField(
+        AppOutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
-                Text(text = "搜索 P号 / 标题")
+                AppText(text = "搜索 P号 / 标题")
             },
             leadingIcon = {
-                Icon(
+                AppIcon(
                     imageVector = Icons.Outlined.Search,
                     contentDescription = null
                 )
             },
             trailingIcon = if (query.isNotBlank()) {
                 {
-                    IconButton(onClick = { onQueryChange("") }) {
-                        Icon(
+                    AppIconButton(onClick = { onQueryChange("") }) {
+                        AppIcon(
                             imageVector = Icons.Outlined.Close,
                             contentDescription = "清空搜索"
                         )
@@ -349,17 +381,17 @@ private fun PagesSelectorFilterBar(
             Spacer(modifier = Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
-                    FilterChip(
+                    AppFilterChip(
                         selected = selectedGroupKey == null,
                         onClick = { onGroupSelect(null) },
-                        label = { Text("全部 $totalCount") }
+                        label = { AppText("全部 $totalCount") }
                     )
                 }
                 items(groups, key = { it.key }) { group ->
-                    FilterChip(
+                    AppFilterChip(
                         selected = selectedGroupKey == group.key,
                         onClick = { onGroupSelect(group.key) },
-                        label = { Text("${group.label} ${group.count}") }
+                        label = { AppText("${group.label} ${group.count}") }
                     )
                 }
             }
@@ -379,6 +411,7 @@ private fun PagesGrid(
     gridItemMinHeightDp: Int,
     emptyMessage: String,
     onPageSelect: (Int) -> Unit,
+    blockParentVerticalScroll: Boolean,
     modifier: Modifier = Modifier
 ) {
     if (visiblePageIndices.isEmpty()) {
@@ -388,7 +421,7 @@ private fun PagesGrid(
                 .height(180.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(
+            AppText(
                 text = emptyMessage,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -402,10 +435,17 @@ private fun PagesGrid(
     } else {
         modifier.fillMaxSize()
     }
+    val gridState = rememberLazyGridState()
+    val nestedScrollConnection = rememberModalChildScrollConnection()
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(gridColumns),
-        modifier = gridModifier,
+        state = gridState,
+        modifier = if (blockParentVerticalScroll) {
+            gridModifier.nestedScroll(nestedScrollConnection)
+        } else {
+            gridModifier
+        },
         contentPadding = PaddingValues(
             start = horizontalPaddingDp.dp,
             end = horizontalPaddingDp.dp,
@@ -438,50 +478,29 @@ private fun PageSelectorItem(
     modifier: Modifier,
     onClick: (Int) -> Unit
 ) {
-    val containerColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f)
-    }
-    val indexColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.primary
-    }
-    val titleColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-    val borderColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-    } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-    }
-
-    Surface(
+    AppSingleChoiceRow(
+        selected = isSelected,
         onClick = { onClick(index) },
-        color = containerColor,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, borderColor),
+        shape = AppShapes.container(ContainerLevel.Card),
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+            modifier = Modifier.weight(1f)
         ) {
-            Text(
+            AppText(
                 text = "P${page.page}",
-                fontSize = 11.sp,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = indexColor
+                color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(6.dp))
-            Text(
+            AppText(
                 text = page.part.ifEmpty { "第${page.page}P" },
-                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp),
+                style = MaterialTheme.typography.bodyMedium,
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = titleColor.copy(alpha = 0.96f)
+                color = AppSurfaceTokens.onSurfaceContainerHigh()
             )
         }
     }

@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.search
 
-import com.android.purebilibili.core.theme.UiPreset
-
 internal enum class SearchResultCardSurfaceStyle {
     GLASS,
     PLAIN
@@ -28,30 +26,33 @@ internal fun resolveSearchCardBlurEnabled(
 ): Boolean = headerBlurEnabled || bottomBarBlurEnabled
 
 internal fun resolveSearchVideoCardAppearance(
-    liquidGlassEnabled: Boolean,
+    effectiveLiquidGlassEnabled: Boolean,
     blurEnabled: Boolean,
     showHomeCoverGlassBadges: Boolean,
-    showHomeInfoGlassBadges: Boolean
-): SearchVideoCardAppearance = SearchVideoCardAppearance(
-    glassEnabled = liquidGlassEnabled,
-    blurEnabled = blurEnabled,
-    showCoverGlassBadges = false,
-    showInfoGlassBadges = false
-)
+    showHomeInfoGlassBadges: Boolean,
+): SearchVideoCardAppearance {
+    return SearchVideoCardAppearance(
+        glassEnabled = effectiveLiquidGlassEnabled,
+        blurEnabled = blurEnabled,
+        showCoverGlassBadges = false,
+        showInfoGlassBadges = false
+    )
+}
 
 internal fun resolveSearchResultCardAppearance(
-    liquidGlassEnabled: Boolean,
-    uiPreset: UiPreset = UiPreset.IOS
+    effectiveLiquidGlassEnabled: Boolean,
+    supportsIndependentLiquidGlass: Boolean,
+    tonalElevationDp: Int,
 ): SearchResultCardAppearance {
-    return if (liquidGlassEnabled && uiPreset == UiPreset.MD3) {
+    return if (effectiveLiquidGlassEnabled && !supportsIndependentLiquidGlass) {
         SearchResultCardAppearance(
             surfaceStyle = SearchResultCardSurfaceStyle.GLASS,
             containerAlpha = 0.96f,
             borderAlpha = 0f,
-            tonalElevationDp = 1,
+            tonalElevationDp = tonalElevationDp,
             shadowElevationDp = 0
         )
-    } else if (liquidGlassEnabled) {
+    } else if (effectiveLiquidGlassEnabled) {
         SearchResultCardAppearance(
             surfaceStyle = SearchResultCardSurfaceStyle.GLASS,
             containerAlpha = 0.92f,
@@ -59,12 +60,12 @@ internal fun resolveSearchResultCardAppearance(
             tonalElevationDp = 0,
             shadowElevationDp = 0
         )
-    } else if (uiPreset == UiPreset.MD3) {
+    } else if (!supportsIndependentLiquidGlass) {
         SearchResultCardAppearance(
             surfaceStyle = SearchResultCardSurfaceStyle.PLAIN,
             containerAlpha = 1f,
             borderAlpha = 0f,
-            tonalElevationDp = 1,
+            tonalElevationDp = tonalElevationDp,
             shadowElevationDp = 0
         )
     } else {
@@ -72,7 +73,7 @@ internal fun resolveSearchResultCardAppearance(
             surfaceStyle = SearchResultCardSurfaceStyle.PLAIN,
             containerAlpha = 1f,
             borderAlpha = 0f,
-            tonalElevationDp = 1,
+            tonalElevationDp = tonalElevationDp,
             shadowElevationDp = 1
         )
     }

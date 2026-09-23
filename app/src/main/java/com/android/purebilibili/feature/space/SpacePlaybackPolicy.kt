@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.space
 
+import com.android.purebilibili.data.model.response.HistoryBusiness
+import com.android.purebilibili.data.model.response.HistoryData
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.feature.list.VideoProgressDisplayState
 import com.android.purebilibili.feature.list.resolveVideoDisplayProgressState
@@ -9,6 +11,28 @@ data class SpaceExternalPlaylist(
     val playlistItems: List<PlaylistItem>,
     val startIndex: Int
 )
+
+data class SpaceWatchProgress(
+    val bvid: String,
+    val cid: Long,
+    val title: String,
+    val progressSec: Int,
+    val durationSec: Int,
+    val viewAt: Long
+)
+
+data class SpacePlaybackTarget(
+    val cid: Long,
+    val resumePositionMs: Long
+)
+
+internal sealed interface SpaceLocateTargetPageAction {
+    data class Found(val index: Int) : SpaceLocateTargetPageAction
+    data object Wait : SpaceLocateTargetPageAction
+    data object LoadMore : SpaceLocateTargetPageAction
+    data object LoadFailed : SpaceLocateTargetPageAction
+    data object Missing : SpaceLocateTargetPageAction
+}
 
 enum class SpaceCollectionDetailType(val raw: String) {
     SEASON("season"),
@@ -67,22 +91,105 @@ fun resolveSpacePlayAllStartTarget(videos: List<SpaceVideoItem>): String? {
     return videos.firstOrNull()?.bvid
 }
 
+internal fun shouldPromptToLocatePlayedVideo(
+    targetBvid: String?,
+    hasLoadedSpace: Boolean,
+    promptEnabled: Boolean,
+    promptHandled: Boolean
+): Boolean {
+    return promptEnabled && hasLoadedSpace && targetBvid?.isNotBlank() == true && !promptHandled
+}
+
+internal fun resolveSpaceWatchProgressByBvid(
+    history: List<HistoryData>,
+    upMid: Long
+): Map<String, SpaceWatchProgress> {
+    if (upMid <= 0L) return emptyMap()
+
+    return buildMap {
+        history.forEach { item ->
+            val bvid = item.history?.bvid?.trim().orEmpty()
+            if (
+                item.author_mid != upMid ||
+                bvid.isBlank() ||
+                HistoryBusiness.fromValue(item.history?.business.orEmpty()) != HistoryBusiness.ARCHIVE ||
+                containsKey(bvid)
+            ) {
+                return@forEach
+            }
+            put(
+                bvid,
+                SpaceWatchProgress(
+                    bvid = bvid,
+                    cid = item.history?.cid ?: 0L,
+                    title = item.title.trim(),
+                    progressSec = item.progress,
+                    durationSec = item.duration,
+                    viewAt = item.view_at
+                )
+            )
+        }
+    }
+}
+
+internal fun resolveSpaceLastWatchedVideo(
+    progressByBvid: Map<String, SpaceWatchProgress>
+): SpaceWatchProgress? {
+    return progressByBvid.values.maxByOrNull { it.viewAt }
+}
+
 internal fun resolveSpaceVideoProgressState(
     video: SpaceVideoItem,
-    localPositionMs: Long
+    localPositionMs: Long,
+    syncedProgress: SpaceWatchProgress? = null
 ): VideoProgressDisplayState {
-    val durationSec = parseSpaceVideoLengthToSeconds(video.length).toInt()
+    val durationSec = parseSpaceVideoLengthToSeconds(video.length)
+        .toInt()
+        .takeIf { it > 0 }
+        ?: syncedProgress?.durationSec.orZero()
     return resolveVideoDisplayProgressState(
-        serverProgressSec = 0,
+        serverProgressSec = syncedProgress?.progressSec ?: 0,
         durationSec = durationSec,
-        localPositionMs = localPositionMs,
-        viewAt = if (localPositionMs > 0L) 1L else 0L
+        localPositionMs = if (syncedProgress == null) localPositionMs else 0L,
+        viewAt = syncedProgress?.viewAt ?: if (localPositionMs > 0L) 1L else 0L
     )
 }
 
-internal fun resolveSpaceResumePositionMs(localPositionMs: Long): Long {
-    return localPositionMs.coerceAtLeast(0L)
+internal fun resolveSpacePlaybackTarget(
+    syncedProgress: SpaceWatchProgress?,
+    localPositionMs: Long
+): SpacePlaybackTarget {
+    if (syncedProgress != null) {
+        val resumePositionMs = syncedProgress.progressSec
+            .takeIf { it > 0 }
+            ?.times(1_000L)
+            ?: 0L
+        return SpacePlaybackTarget(
+            cid = syncedProgress.cid.takeIf { resumePositionMs > 0L } ?: 0L,
+            resumePositionMs = resumePositionMs
+        )
+    }
+    return SpacePlaybackTarget(cid = 0L, resumePositionMs = localPositionMs.coerceAtLeast(0L))
 }
+
+internal fun resolveSpaceLocateTargetPageAction(
+    targetBvid: String,
+    videos: List<SpaceVideoItem>,
+    isLoading: Boolean,
+    hasMore: Boolean,
+    lastLoadFailed: Boolean = false,
+): SpaceLocateTargetPageAction {
+    val targetIndex = videos.indexOfFirst { it.bvid == targetBvid }
+    return when {
+        targetIndex >= 0 -> SpaceLocateTargetPageAction.Found(targetIndex)
+        isLoading -> SpaceLocateTargetPageAction.Wait
+        lastLoadFailed -> SpaceLocateTargetPageAction.LoadFailed
+        hasMore -> SpaceLocateTargetPageAction.LoadMore
+        else -> SpaceLocateTargetPageAction.Missing
+    }
+}
+
+private fun Int?.orZero(): Int = this ?: 0
 
 fun resolveSpacePriorityTabLoadState(
     shell: SpaceTabShellState

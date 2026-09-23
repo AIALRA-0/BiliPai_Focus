@@ -59,4 +59,19 @@ class SearchRecommendPolicyTest {
         assertTrue(result.any { it.recommend_reason != "关注的 UP 主" })
         assertTrue(result.map { it.keyword }.contains("原神") || result.map { it.keyword }.contains("黑神话悟空") || result.map { it.keyword }.contains("F1"))
     }
+
+    @Test
+    fun `search discovery without personalized sources yields only non personalized items`() {
+        val result = buildSearchRecommendItems(
+            historySuggestionKeywords = emptyList(),
+            followedUpNames = emptyList(),
+            officialItems = listOf(HotItem(keyword = "原神", show_name = "原神")),
+            trendingItems = listOf(HotItem(keyword = "黑神话悟空", show_name = "黑神话悟空")),
+            fallbackKeywords = listOf("猫咪"),
+            limit = 5
+        )
+
+        assertEquals(listOf("原神", "黑神话悟空", "猫咪"), result.map { it.keyword })
+        assertTrue(result.all { it.recommend_reason.isBlank() })
+    }
 }

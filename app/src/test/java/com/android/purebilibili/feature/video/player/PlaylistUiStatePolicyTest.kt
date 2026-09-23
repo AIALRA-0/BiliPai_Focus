@@ -31,6 +31,36 @@ class PlaylistUiStatePolicyTest {
         assertEquals(0, result.currentIndex)
         assertTrue(result.isExternalPlaylist)
         assertEquals(ExternalPlaylistSource.WATCH_LATER, result.externalPlaylistSource)
+        assertFalse(result.shuffleEnabled)
+    }
+
+    @Test
+    fun restoreTransport_promotesLegacyShuffleMode() {
+        val restored = resolveRestoredPlayTransport(
+            storedPlayMode = PlayMode.SHUFFLE,
+            storedShuffleEnabled = false
+        )
+        assertEquals(PlayMode.REPEAT_ALL, restored.playMode)
+        assertTrue(restored.shuffleEnabled)
+    }
+
+    @Test
+    fun restoreTransport_keepsIndependentShuffleAndRepeatOne() {
+        val restored = resolveRestoredPlayTransport(
+            storedPlayMode = PlayMode.REPEAT_ONE,
+            storedShuffleEnabled = true
+        )
+        assertEquals(PlayMode.REPEAT_ONE, restored.playMode)
+        assertTrue(restored.shuffleEnabled)
+    }
+
+    @Test
+    fun linearAdvance_wrapsOnlyWhenRequested() {
+        assertEquals(1, resolveLinearPlayNextIndex(3, 0, wrap = false))
+        assertEquals(null, resolveLinearPlayNextIndex(3, 2, wrap = false))
+        assertEquals(0, resolveLinearPlayNextIndex(3, 2, wrap = true))
+        assertEquals(null, resolveLinearPlayPreviousIndex(3, 0, wrap = false))
+        assertEquals(2, resolveLinearPlayPreviousIndex(3, 0, wrap = true))
     }
 
     @Test

@@ -1,12 +1,28 @@
 // 文件路径: feature/home/components/BottomBar.kt
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorHeightDp
+import com.android.purebilibili.core.ui.AppIconStyle
+import com.android.purebilibili.core.ui.rememberResolvedAppIconStyle
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppBottomNavigationHost
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.components.AppNavigationBar
+import com.android.purebilibili.core.ui.components.AppNavigationBarItem
+import com.android.purebilibili.core.ui.components.AppPlatformNavigationBadge
+import com.android.purebilibili.core.ui.components.AppPlatformNavigationBar
+import com.android.purebilibili.core.ui.components.AppPlatformNavigationBarDisplayMode
+import com.android.purebilibili.core.ui.components.AppPlatformNavigationBarItem
+import com.android.purebilibili.core.ui.components.AppSurface
+
+import com.android.purebilibili.core.ui.OpticalContrastPalette
+
 import android.os.Build
+import android.os.SystemClock
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -29,27 +45,45 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuOpen
 import androidx.compose.material.icons.filled.CollectionsBookmark
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WatchLater
-import androidx.compose.material3.*
+import com.android.purebilibili.core.ui.components.AppIcon
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.TextButton
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -60,9 +94,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
@@ -93,15 +127,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.alpha
 import com.android.purebilibili.core.ui.blur.shouldAllowDirectHazeLiquidGlassFallback
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
-import com.android.purebilibili.core.ui.blur.shouldAllowRuntimeShaderBackedHazeEffect
+import com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.theme.iOSSystemGray
@@ -111,20 +145,10 @@ import com.android.purebilibili.core.theme.iOSRed
 import com.android.purebilibili.core.theme.BottomBarColors  // 统一底栏颜色配置
 import com.android.purebilibili.core.theme.BottomBarColorPalette  // 调色板
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
-import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
-import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
-import com.android.purebilibili.core.theme.iOSCornerRadius
+
 import kotlinx.coroutines.launch  //  延迟导航
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import com.android.purebilibili.core.ui.animation.DampedDragAnimationState
-import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
-import com.android.purebilibili.core.ui.animation.horizontalDragGesture
 import com.android.purebilibili.feature.home.LocalHomeScrollOffset
+import com.android.purebilibili.feature.home.HomeVisualPalette
 import com.android.purebilibili.core.ui.motion.BottomBarMotionProfile
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.motion.resolveBottomBarMotionSpec
@@ -133,22 +157,6 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import dev.chrisbanes.haze.hazeEffect // [New]
-import dev.chrisbanes.haze.HazeStyle   // [New]
-// [LayerBackdrop] AndroidLiquidGlass library for real background refraction
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
-import com.kyant.backdrop.backdrops.LayerBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.runtimeShaderEffect
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.InnerShadow
-import com.kyant.backdrop.shadow.Shadow
 import com.android.purebilibili.feature.home.components.liquid.InnerShadow as MiuixInnerShadow
 import com.android.purebilibili.feature.home.components.liquid.innerShadow as miuixInnerShadow
 import com.android.purebilibili.feature.home.components.liquid.lens as miuixLens
@@ -159,14 +167,11 @@ import androidx.compose.ui.Modifier.Companion.then
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.store.BottomBarLiquidGlassPreset
 import com.android.purebilibili.core.store.BottomBarSearchAutoExpandMode
+import com.android.purebilibili.core.store.BottomBarSearchLayoutMode
 import com.android.purebilibili.core.store.LiquidGlassStyle // [New] Top-level enum
 import com.android.purebilibili.core.store.LiquidGlassMode
 import androidx.compose.animation.core.EaseOut
-import androidx.compose.animation.core.FastOutSlowInEasing
 import kotlin.math.sign
-import kotlin.math.sqrt
-import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode as MiuixNavigationBarDisplayMode
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop as MiuixLayerBackdrop
 import top.yukonga.miuix.kmp.blur.blur as miuixBlur
@@ -177,88 +182,44 @@ import top.yukonga.miuix.kmp.blur.highlight.LightPosition
 import top.yukonga.miuix.kmp.blur.highlight.LightSource
 import top.yukonga.miuix.kmp.blur.layerBackdrop as miuixLayerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop as rememberMiuixLayerBackdrop
-import top.yukonga.miuix.kmp.blur.sensor.rememberDeviceTilt
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.basic.NavigationBarDefaults as MiuixNavigationBarDefaults
 private val iosIndicatorSpecular: MiuixHighlight = MiuixHighlight(
-    width = 1.dp,
+    width = AppSpacingTokens.Micro / 2,
     alpha = 1f,
     style = BloomStroke(
-        color = Color.White.copy(alpha = 0.12f),
-        innerBlurRadius = 2.0.dp,
+        color = OpticalContrastPalette.Highlight.copy(alpha = 0.12f),
+        innerBlurRadius = AppSpacingTokens.Micro,
         primaryLight = LightSource(
             position = LightPosition(0.5f, -0.3f, -0.05f),
-            color = Color.White,
+            color = OpticalContrastPalette.Highlight,
             intensity = 1f
         ),
         secondaryLight = LightSource(
             position = LightPosition(0.5f, 0.8f, -0.5f),
-            color = Color.White,
+            color = OpticalContrastPalette.Highlight,
             intensity = 0.4f
         ),
         dualPeak = true
     )
 )
 
-private const val MIUIX_LIGHT_REF_X = 0.5f
-private const val MIUIX_LIGHT_REF_Y = 0.7f
-private const val MIUIX_GRAVITY_DIR_THRESHOLD_SQ = 0.01f
-
-@Composable
-private fun rememberGravityRotatedHighlight(
-    base: MiuixHighlight,
-    extraDegrees: Float = 0f
-): MiuixHighlight {
-    val baseStyle = base.style as BloomStroke
-    val tilt by rememberDeviceTilt()
-    val rotatedPrimary = remember(tilt, baseStyle.primaryLight, extraDegrees) {
-        val gx = tilt.gravityX
-        val gy = tilt.gravityY
-        val gMagSq = gx * gx + gy * gy
-        val (lx0, ly0) = if (gMagSq > MIUIX_GRAVITY_DIR_THRESHOLD_SQ) {
-            val invMag = 1f / sqrt(gMagSq)
-            (gx * invMag) to (gy * invMag)
-        } else {
-            0f to -1f
-        }
-        val rad = extraDegrees * PI / 180.0
-        val c = cos(rad).toFloat()
-        val s = sin(rad).toFloat()
-        val lx = c * lx0 - s * ly0
-        val ly = s * lx0 + c * ly0
-        baseStyle.primaryLight.copy(
-            position = LightPosition(
-                x = MIUIX_LIGHT_REF_X + lx,
-                y = MIUIX_LIGHT_REF_Y + ly,
-                z = baseStyle.primaryLight.position.z
-            )
-        )
-    }
-    return remember(base, baseStyle, rotatedPrimary) {
-        base.copy(style = baseStyle.copy(primaryLight = rotatedPrimary))
-    }
-}
-
 /**
- * 底部导航项枚举 -  使用 iOS SF Symbols 风格图标
- * [HIG] 所有图标包含 contentDescription 用于无障碍访问
+ * 底部导航项枚举。图标由当前主题的导航图标策略统一解析。
  */
 enum class BottomNavItem(
     val label: String,
     @StringRes val labelRes: Int,
     @StringRes val contentDescriptionRes: Int,
     val legacyAliases: List<String> = emptyList(),
-    val selectedIcon: @Composable () -> Unit,
-    val unselectedIcon: @Composable () -> Unit,
     val route: String // [新增] 路由地址
 ) {
     HOME(
-        "首页",
+        "推荐",
         R.string.bottom_nav_home,
         R.string.bottom_nav_home,
         emptyList(),
-        { Icon(CupertinoIcons.Filled.House, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.House, contentDescription = null) },
         ScreenRoutes.Home.route
     ),
     DYNAMIC(
@@ -266,8 +227,6 @@ enum class BottomNavItem(
         R.string.bottom_nav_dynamic,
         R.string.bottom_nav_dynamic,
         emptyList(),
-        { Icon(CupertinoIcons.Filled.Bell, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = null) },
         ScreenRoutes.Dynamic.route
     ),
     STORY(
@@ -275,26 +234,27 @@ enum class BottomNavItem(
         R.string.bottom_nav_story,
         R.string.bottom_nav_story,
         emptyList(),
-        { Icon(CupertinoIcons.Filled.PlayCircle, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.PlayCircle, contentDescription = null) },
-        ScreenRoutes.Story.route
+        ScreenRoutes.Story.baseRoute
     ),
     HISTORY(
         "历史",
         R.string.bottom_nav_history,
         R.string.bottom_nav_history_desc,
         listOf("历史记录"),
-        { Icon(CupertinoIcons.Filled.Clock, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.Clock, contentDescription = null) },
         ScreenRoutes.History.route
+    ),
+    LISTEN_VIDEO(
+        "听视频",
+        R.string.bottom_nav_listen_video,
+        R.string.bottom_nav_listen_video_desc,
+        listOf("音乐"),
+        ScreenRoutes.ListenVideo.route
     ),
     PROFILE(
         "我的",
         R.string.bottom_nav_profile,
         R.string.bottom_nav_profile_desc,
         listOf("个人中心"),
-        { Icon(CupertinoIcons.Filled.Person, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.Person, contentDescription = null) },
         ScreenRoutes.Profile.route
     ),
     FAVORITE(
@@ -302,8 +262,6 @@ enum class BottomNavItem(
         R.string.bottom_nav_favorite,
         R.string.bottom_nav_favorite_desc,
         listOf("收藏夹"),
-        { Icon(CupertinoIcons.Filled.Star, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.Star, contentDescription = null) },
         ScreenRoutes.Favorite.route
     ),
     LIVE(
@@ -311,8 +269,6 @@ enum class BottomNavItem(
         R.string.bottom_nav_live,
         R.string.bottom_nav_live,
         emptyList(),
-        { Icon(CupertinoIcons.Filled.Video, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.Video, contentDescription = null) },
         ScreenRoutes.LiveList.route
     ),
     WATCHLATER(
@@ -320,8 +276,6 @@ enum class BottomNavItem(
         R.string.bottom_nav_watch_later,
         R.string.bottom_nav_watch_later_desc,
         listOf("稍后再看"),
-        { Icon(CupertinoIcons.Filled.Clock, contentDescription = null) },
-        { Icon(CupertinoIcons.Outlined.Clock, contentDescription = null) },
         ScreenRoutes.WatchLater.route
     ),
     SETTINGS(
@@ -329,14 +283,22 @@ enum class BottomNavItem(
         R.string.bottom_nav_settings,
         R.string.bottom_nav_settings,
         emptyList(),
-        { Icon(CupertinoIcons.Filled.Gearshape, contentDescription = null) },
-        { Icon(CupertinoIcons.Default.Gearshape, contentDescription = null) },
         ScreenRoutes.Settings.route
+    ),
+    PLUGINS(
+        "插件",
+        R.string.plugins_center_title,
+        R.string.plugins_center_title,
+        listOf("插件中心"),
+        ScreenRoutes.PluginsSettings.createRoute()
     )
 }
 
 @Composable
-internal fun resolveBottomNavItemLabel(item: BottomNavItem): String = stringResource(item.labelRes)
+internal fun resolveBottomNavItemLabel(
+    item: BottomNavItem,
+    customLabels: Map<String, String> = emptyMap(),
+): String = customLabels[item.name]?.takeIf(String::isNotBlank) ?: stringResource(item.labelRes)
 
 @Composable
 internal fun resolveBottomNavItemContentDescription(item: BottomNavItem): String =
@@ -399,6 +361,21 @@ internal fun resolveMaterialDockedBottomBarItemColors(
     )
 }
 
+internal fun resolveDockedBottomBarIndicatorColor(
+    defaultColor: Color,
+    hasUiSkinDecoration: Boolean,
+): Color = if (hasUiSkinDecoration) Color.Transparent else defaultColor
+
+internal fun resolveFloatingBottomBarContainerColor(
+    defaultColor: Color,
+    mode: FloatingBottomBarMode,
+    hasUiSkinDecoration: Boolean,
+): Color = if (mode == FloatingBottomBarMode.None && hasUiSkinDecoration) {
+    Color.Transparent
+} else {
+    defaultColor
+}
+
 internal fun resolveMd3BottomBarFloatingChromeSpec(
     isFloating: Boolean
 ): Md3BottomBarFloatingChromeSpec {
@@ -431,6 +408,11 @@ internal fun resolveMd3BottomBarDisplayMode(labelMode: Int): Md3BottomBarDisplay
     }
 }
 
+internal fun shouldUseOfficialMd3FloatingToolbar(
+    isFloating: Boolean,
+    liquidGlassEnabled: Boolean,
+): Boolean = isFloating && !liquidGlassEnabled
+
 internal data class AndroidNativeBottomBarTuning(
     val cornerRadiusDp: Float,
     val shellShadowElevationDp: Float,
@@ -442,9 +424,9 @@ internal data class AndroidNativeBottomBarTuning(
     val indicatorLensRadiusDp: Float
 )
 
-private enum class SharedFloatingBottomBarIconStyle {
+internal enum class SharedFloatingBottomBarIconStyle {
     MATERIAL,
-    CUPERTINO
+    MIUIX
 }
 
 internal data class AndroidNativeIndicatorSpec(
@@ -453,36 +435,41 @@ internal data class AndroidNativeIndicatorSpec(
 )
 
 internal fun resolveSharedBottomBarCapsuleShape(): androidx.compose.ui.graphics.Shape =
-    AppShapes.resolveContainerShape(
-        level = ContainerLevel.Pill,
-        uiPreset = UiPreset.MD3,
-        androidNativeVariant = AndroidNativeVariant.MATERIAL3
-    )
+    RoundedCornerShape(percent = 50)
 
-internal fun resolveKernelSuFloatingBottomBarWidth(
+internal fun resolveBiliPaiFloatingBottomBarWidth(
     containerWidth: Dp,
     itemCount: Int,
-    minEdgePadding: Dp
+    minEdgePadding: Dp,
+    labelMode: Int = 0,
+    cornerRadius: Dp = AppSpacingTokens.DoubleExtraLarge
 ): Dp {
     val safeItemCount = itemCount.coerceAtLeast(1)
-    val contentPadding = 4.dp
-    val preferredWidth = (76.dp * safeItemCount) + (contentPadding * 2)
-    val minimumWidth = (52.dp * safeItemCount) + (contentPadding * 2)
+    val contentPadding = AppSpacingTokens.ExtraSmall
+    val minimumItemWidth = cornerRadius.coerceAtLeast(AppSpacingTokens.None) * 2
+    val contentPreferredItemWidth = when (normalizeBottomBarLabelMode(labelMode)) {
+        1 -> minimumItemWidth
+        2 -> AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall
+        else -> AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraLarge + AppSpacingTokens.ExtraSmall
+    }
+    val preferredItemWidth = maxOf(contentPreferredItemWidth, minimumItemWidth)
+    val preferredWidth = (preferredItemWidth * safeItemCount) + (contentPadding * 2)
+    val minimumWidth = (minimumItemWidth * safeItemCount) + (contentPadding * 2)
     val widthCap = (containerWidth - (minEdgePadding * 2)).coerceAtLeast(minimumWidth)
     return minOf(preferredWidth, widthCap).coerceAtMost(containerWidth)
 }
 
-internal fun resolveKernelSuBottomBarItemSlotWidth(
+internal fun resolveBiliPaiBottomBarItemSlotWidth(
     dockWidth: Dp,
     horizontalPadding: Dp,
     itemCount: Int
 ): Dp {
     val safeItemCount = itemCount.coerceAtLeast(1)
     return ((dockWidth - (horizontalPadding * 2)) / safeItemCount)
-        .coerceAtLeast(0.dp)
+        .coerceAtLeast(AppSpacingTokens.None)
 }
 
-internal fun resolveKernelSuBottomBarItemCenterX(
+internal fun resolveBiliPaiBottomBarItemCenterX(
     itemIndex: Int,
     itemWidth: Dp,
     horizontalPadding: Dp
@@ -491,76 +478,137 @@ internal fun resolveKernelSuBottomBarItemCenterX(
     return horizontalPadding + (itemWidth * safeIndex) + (itemWidth / 2f)
 }
 
-internal data class KernelSuBottomBarSearchLayout(
+internal data class BiliPaiBottomBarSearchLayout(
     val dockWidth: Dp,
     val searchWidth: Dp,
-    val gap: Dp
+    val gap: Dp,
+    val minimumIndicatorWidth: Dp,
+    val indicatorReferenceWidth: Dp,
 )
 
-internal fun resolveKernelSuBottomBarSearchCircleSize(): Dp = 64.dp
+internal fun resolveBiliPaiBottomBarSearchCircleSize(): Dp =
+    AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small
 
-internal fun resolveKernelSuExpandedHomeIconSize(): Dp = 28.dp
+internal fun resolveBiliPaiExpandedHomeIconSize(): Dp = AppSpacingTokens.ExtraLarge + AppSpacingTokens.ExtraSmall
 
-internal fun resolveKernelSuExpandedHomeIconScale(): Float = 0.92f
+internal fun resolveBiliPaiExpandedHomeIconScale(): Float = 0.92f
 
-internal fun resolveKernelSuBottomBarSearchLayout(
+internal fun resolveBiliPaiBottomBarSearchFieldExpanded(
+    searchExpanded: Boolean,
+    searchLayoutMode: BottomBarSearchLayoutMode
+): Boolean {
+    return searchExpanded && searchLayoutMode == BottomBarSearchLayoutMode.HOME_AND_SEARCH
+}
+
+internal fun resolveBiliPaiBottomBarSearchLayout(
     containerWidth: Dp,
     itemCount: Int,
     minEdgePadding: Dp,
     searchEnabled: Boolean,
-    searchExpanded: Boolean
-): KernelSuBottomBarSearchLayout {
-    val baseDockWidth = resolveKernelSuFloatingBottomBarWidth(
+    searchExpanded: Boolean,
+    labelMode: Int = 0,
+    cornerRadius: Dp = AppSpacingTokens.DoubleExtraLarge,
+    searchLayoutMode: BottomBarSearchLayoutMode = BottomBarSearchLayoutMode.FULL_DOCK
+): BiliPaiBottomBarSearchLayout {
+    val baseDockWidth = resolveBiliPaiFloatingBottomBarWidth(
         containerWidth = containerWidth,
         itemCount = itemCount,
-        minEdgePadding = minEdgePadding
+        minEdgePadding = minEdgePadding,
+        labelMode = labelMode,
+        cornerRadius = cornerRadius
     )
     if (!searchEnabled) {
-        return KernelSuBottomBarSearchLayout(
+        return BiliPaiBottomBarSearchLayout(
             dockWidth = baseDockWidth,
-            searchWidth = 0.dp,
-            gap = 0.dp
+            searchWidth = AppSpacingTokens.None,
+            gap = AppSpacingTokens.None,
+            minimumIndicatorWidth = AppSpacingTokens.None,
+            indicatorReferenceWidth = resolveBiliPaiBottomBarItemSlotWidth(
+                dockWidth = baseDockWidth,
+                horizontalPadding = AppSpacingTokens.ExtraSmall,
+                itemCount = itemCount,
+            ),
         )
     }
 
-    val gap = 10.dp
-    val availableWidth = (containerWidth - (minEdgePadding * 2)).coerceAtLeast(0.dp)
-    val searchCircleSize = resolveKernelSuBottomBarSearchCircleSize()
-    val compactHomeDockSize = searchCircleSize
-    val minimumDockWidth = searchCircleSize
+    val gap = AppSpacingTokens.Small
+    val paddedAvailable = (containerWidth - (minEdgePadding * 2)).coerceAtLeast(AppSpacingTokens.None)
+    val fullAvailable = containerWidth.coerceAtLeast(AppSpacingTokens.None)
+    val searchCircleSize = resolveBiliPaiBottomBarSearchCircleSize()
     val collapsedSearchWidth = searchCircleSize
+    val compactHomeDockSize = searchCircleSize
     val expandedSearchWidth = minOf(
-        280.dp,
-        (availableWidth - compactHomeDockSize - gap).coerceAtLeast(176.dp)
+        AppSpacingTokens.TripleExtraLarge * 6 - AppSpacingTokens.Small,
+        (paddedAvailable - compactHomeDockSize - gap).coerceAtLeast(
+            AppSpacingTokens.TripleExtraLarge * 3 + AppSpacingTokens.DoubleExtraLarge
+        )
     )
-    val targetSearchWidth = if (searchExpanded) expandedSearchWidth else collapsedSearchWidth
-    val targetDockWidth = if (searchExpanded) {
-        compactHomeDockSize
+    val useCompactLayout = searchLayoutMode == BottomBarSearchLayoutMode.HOME_AND_SEARCH
+    val targetSearchWidth = if (useCompactLayout && searchExpanded) {
+        expandedSearchWidth
     } else {
-        minOf(baseDockWidth, (availableWidth - targetSearchWidth - gap).coerceAtLeast(minimumDockWidth))
+        collapsedSearchWidth
     }
-    return KernelSuBottomBarSearchLayout(
+    val targetDockWidth = if (useCompactLayout && searchExpanded) {
+        minOf(
+            compactHomeDockSize,
+            (paddedAvailable - targetSearchWidth - gap).coerceAtLeast(AppSpacingTokens.None)
+        )
+    } else {
+        // Spend outer padding before shrinking navigation slots so icon+label
+        // geometry stays close to the search-off dock.
+        minOf(
+            baseDockWidth,
+            (fullAvailable - targetSearchWidth - gap).coerceAtLeast(AppSpacingTokens.None)
+        )
+    }
+    return BiliPaiBottomBarSearchLayout(
         dockWidth = targetDockWidth,
         searchWidth = targetSearchWidth,
-        gap = gap
+        gap = gap,
+        // The indicator must match the navigation slot. Keeping the pre-search
+        // width makes it overlap neighbouring destinations and shifts it at the dock edges.
+        minimumIndicatorWidth = AppSpacingTokens.None,
+        // Preserve the uncompressed selected-background proportions when the
+        // adjacent search control takes width away from the navigation dock.
+        indicatorReferenceWidth = resolveBiliPaiBottomBarItemSlotWidth(
+            dockWidth = baseDockWidth,
+            horizontalPadding = AppSpacingTokens.ExtraSmall,
+            itemCount = itemCount,
+        ),
     )
 }
 
-internal fun resolveKernelSuBottomBarDockHeight(
+internal fun resolveBiliPaiBottomBarDockHeight(
     searchExpanded: Boolean,
     hasUiSkinDecoration: Boolean = false
 ): Dp {
     return if (searchExpanded) {
-        resolveKernelSuBottomBarSearchCircleSize()
+        resolveBiliPaiBottomBarSearchCircleSize()
     } else if (hasUiSkinDecoration) {
         resolveBottomBarSkinDockHeight()
     } else {
-        64.dp
+        // 照搬 HyperIsland 的壳高 64dp：指示器静止 56dp、按下 78dp、
+        // 指示器 lens 绝对 10dp/14dp 都由此推导，静止时上下各留 4dp。
+        com.android.purebilibili.core.ui.BottomBarReferenceShellHeightDp.dp
     }
 }
 
-internal fun resolveKernelSuBottomBarSearchHeight(searchExpanded: Boolean): Dp {
-    return 64.dp
+internal fun resolveBiliPaiBottomBarIndicatorHeight(dockHeight: Dp): Dp {
+    // 照搬 HyperIsland 的静止几何：64dp 壳配 56dp 指示器，也就是指示器 = 壳高 × 56/64，
+    // 静止时上下各留出 4dp（以 64dp 壳计）比例的垂直边距。
+    // 原先的 minOf(dockHeight, 56dp) 会让 56dp 壳的指示器与壳同高，静止 inset 变成 0。
+    // 按下 bloom 的绝对高度不受影响：resolveMatchedLiquidIndicatorPressedScale 以新基准换算。
+    val scaledHeight = resolveMatchedLiquidIndicatorHeightDp(dockHeight.value)
+    return minOf(dockHeight, scaledHeight.coerceAtLeast(1f).dp)
+}
+
+internal fun resolveBiliPaiBottomBarSearchHeight(searchExpanded: Boolean): Dp {
+    return if (searchExpanded) {
+        AppChromeSizeTokens.MinimumTouchTarget
+    } else {
+        resolveBiliPaiBottomBarSearchCircleSize()
+    }
 }
 
 internal fun resolveBottomBarRefractionCaptureWidth(
@@ -576,9 +624,11 @@ internal fun resolveBottomBarRefractionCaptureWidth(
     }
 }
 
-private data class KernelSuBottomBarSearchLayoutState(
+private data class BiliPaiBottomBarSearchLayoutState(
     val dockWidth: Dp,
     val dockHeight: Dp,
+    val minimumIndicatorWidth: Dp,
+    val indicatorReferenceWidth: Dp,
     val searchWidth: Dp,
     val searchHeight: Dp,
     val searchGap: Dp,
@@ -587,101 +637,87 @@ private data class KernelSuBottomBarSearchLayoutState(
 )
 
 @Composable
-private fun rememberKernelSuBottomBarSearchLayoutState(
+private fun rememberBiliPaiBottomBarSearchLayoutState(
     containerWidth: Dp,
     itemCount: Int,
     minEdgePadding: Dp,
     searchEnabled: Boolean,
     searchExpanded: Boolean,
+    labelMode: Int,
+    searchLayoutMode: BottomBarSearchLayoutMode,
     hasUiSkinDecoration: Boolean
-): KernelSuBottomBarSearchLayoutState {
-    val targetSearchLayout = resolveKernelSuBottomBarSearchLayout(
+): BiliPaiBottomBarSearchLayoutState {
+    val targetDockHeight = resolveBiliPaiBottomBarDockHeight(
+        searchExpanded = searchExpanded,
+        hasUiSkinDecoration = hasUiSkinDecoration
+    )
+    val targetSearchLayout = resolveBiliPaiBottomBarSearchLayout(
         containerWidth = containerWidth,
         itemCount = itemCount,
         minEdgePadding = minEdgePadding,
         searchEnabled = searchEnabled,
-        searchExpanded = searchExpanded
+        searchExpanded = searchExpanded,
+        labelMode = labelMode,
+        cornerRadius = targetDockHeight / 2,
+        searchLayoutMode = searchLayoutMode
     )
     if (!searchEnabled) {
         val dockWidth by animateDpAsState(
             targetValue = targetSearchLayout.dockWidth,
-            animationSpec = tween(
-                durationMillis = 260,
-                easing = AppMotionEasing.Continuity
-            ),
+            animationSpec = bottomBarDockWidthMotionSpec(),
             label = "bottomBarDockWidth"
         )
         val dockHeight by animateDpAsState(
-            targetValue = resolveKernelSuBottomBarDockHeight(
-                searchExpanded = false,
-                hasUiSkinDecoration = hasUiSkinDecoration
-            ),
-            animationSpec = tween(
-                durationMillis = 220,
-                easing = AppMotionEasing.Continuity
-            ),
+            targetValue = targetDockHeight,
+            animationSpec = bottomBarChromeHeightMotionSpec(),
             label = "bottomBarDockHeight"
         )
-        return KernelSuBottomBarSearchLayoutState(
+        return BiliPaiBottomBarSearchLayoutState(
             dockWidth = dockWidth,
             dockHeight = dockHeight,
-            searchWidth = 0.dp,
-            searchHeight = 0.dp,
-            searchGap = 0.dp,
-            launchAdjustedSearchGap = 0.dp,
+            minimumIndicatorWidth = targetSearchLayout.minimumIndicatorWidth,
+            indicatorReferenceWidth = targetSearchLayout.indicatorReferenceWidth,
+            searchWidth = AppSpacingTokens.None,
+            searchHeight = AppSpacingTokens.None,
+            searchGap = AppSpacingTokens.None,
+            launchAdjustedSearchGap = AppSpacingTokens.None,
             shellHeight = dockHeight
         )
     }
 
     val dockWidth by animateDpAsState(
         targetValue = targetSearchLayout.dockWidth,
-        animationSpec = tween(
-            durationMillis = 260,
-            easing = AppMotionEasing.Continuity
-        ),
+        animationSpec = bottomBarDockWidthMotionSpec(),
         label = "bottomBarDockWidth"
     )
     val searchWidth by animateDpAsState(
         targetValue = targetSearchLayout.searchWidth,
-        animationSpec = tween(
-            durationMillis = 260,
-            easing = AppMotionEasing.Continuity
-        ),
+        animationSpec = bottomBarDockWidthMotionSpec(),
         label = "bottomBarSearchWidth"
     )
     val searchGap by animateDpAsState(
         targetValue = targetSearchLayout.gap,
-        animationSpec = tween(
-            durationMillis = 240,
-            easing = AppMotionEasing.Continuity
-        ),
+        animationSpec = bottomBarSearchGapMotionSpec(),
         label = "bottomBarSearchGap"
     )
     val dockHeight by animateDpAsState(
-        targetValue = resolveKernelSuBottomBarDockHeight(
-            searchExpanded = searchExpanded,
-            hasUiSkinDecoration = hasUiSkinDecoration
-        ),
-        animationSpec = tween(
-            durationMillis = 220,
-            easing = AppMotionEasing.Continuity
-        ),
+        targetValue = targetDockHeight,
+        animationSpec = bottomBarChromeHeightMotionSpec(),
         label = "bottomBarDockHeight"
     )
     val searchHeight by animateDpAsState(
-        targetValue = resolveKernelSuBottomBarSearchHeight(
+        targetValue = resolveBiliPaiBottomBarSearchHeight(
             searchExpanded = searchExpanded
         ),
-        animationSpec = tween(
-            durationMillis = 220,
-            easing = AppMotionEasing.Continuity
-        ),
+        animationSpec = bottomBarChromeHeightMotionSpec(),
         label = "bottomBarSearchHeight"
     )
     val shellHeight = if (dockHeight > searchHeight) dockHeight else searchHeight
-    return KernelSuBottomBarSearchLayoutState(
+    return BiliPaiBottomBarSearchLayoutState(
         dockWidth = dockWidth,
         dockHeight = dockHeight,
+        minimumIndicatorWidth = targetSearchLayout.minimumIndicatorWidth,
+        indicatorReferenceWidth = targetSearchLayout.indicatorReferenceWidth,
         searchWidth = searchWidth,
         searchHeight = searchHeight,
         searchGap = searchGap,
@@ -729,6 +765,18 @@ internal fun resolveBottomBarSearchEnabledForItem(
     return bottomBarSearchEnabled && currentItem == BottomNavItem.HOME
 }
 
+internal fun shouldReserveBottomBarSearchLayout(
+    bottomBarSearchEnabled: Boolean
+): Boolean = bottomBarSearchEnabled
+
+internal fun resolveBottomBarVisibleItemsForSearchMode(
+    visibleItems: List<BottomNavItem>,
+    bottomBarSearchEnabled: Boolean,
+    searchLayoutMode: BottomBarSearchLayoutMode = BottomBarSearchLayoutMode.FULL_DOCK
+): List<BottomNavItem> {
+    return visibleItems
+}
+
 internal enum class BottomBarSearchExpansionOverride {
     FOLLOW_AUTO,
     EXPANDED,
@@ -755,7 +803,21 @@ internal fun resolveBottomBarSearchExpansionOverrideOnNavItemClick(
     bottomBarSearchEnabled: Boolean,
     effectiveSearchExpanded: Boolean
 ): BottomBarSearchExpansionOverride? {
-    if (!bottomBarSearchEnabled || currentItem != BottomNavItem.HOME || clickedItem != BottomNavItem.HOME) {
+    // 首页标签只负责重选刷新；搜索展开/收起交给独立搜索槽位，避免两个意图共用一次点击。
+    return null
+}
+
+internal fun resolveBottomBarSearchExpansionOverrideOnSearchClick(
+    currentItem: BottomNavItem,
+    bottomBarSearchEnabled: Boolean,
+    effectiveSearchExpanded: Boolean,
+    searchLayoutMode: BottomBarSearchLayoutMode = BottomBarSearchLayoutMode.FULL_DOCK
+): BottomBarSearchExpansionOverride? {
+    if (
+        !bottomBarSearchEnabled ||
+        currentItem != BottomNavItem.HOME ||
+        searchLayoutMode != BottomBarSearchLayoutMode.HOME_AND_SEARCH
+    ) {
         return null
     }
     return if (effectiveSearchExpanded) {
@@ -832,15 +894,6 @@ internal fun shouldUseBottomBarCombinedIndicatorBackdrop(
     }
 }
 
-internal fun shouldRenderBottomBarForegroundAboveIndicator(
-    preset: BottomBarLiquidGlassPreset
-): Boolean {
-    return when (preset) {
-        BottomBarLiquidGlassPreset.BILIPAI_TUNED,
-        BottomBarLiquidGlassPreset.IOS26_REFINED -> false
-    }
-}
-
 internal fun shouldUseBottomBarIndicatorLens(
     preset: BottomBarLiquidGlassPreset
 ): Boolean {
@@ -860,7 +913,6 @@ internal fun shouldComposeBottomBarDockContent(
 internal fun resolveAndroidNativeBottomBarTuning(
     blurEnabled: Boolean,
     darkTheme: Boolean,
-    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): AndroidNativeBottomBarTuning {
     return AndroidNativeBottomBarTuning(
         cornerRadiusDp = 32f,
@@ -878,13 +930,15 @@ internal fun resolveAndroidNativeBottomBarContainerColor(
     surfaceColor: Color,
     tuning: AndroidNativeBottomBarTuning,
     glassEnabled: Boolean,
-    liquidGlassPreset: BottomBarLiquidGlassPreset = BottomBarLiquidGlassPreset.BILIPAI_TUNED
+    liquidGlassPreset: BottomBarLiquidGlassPreset = BottomBarLiquidGlassPreset.BILIPAI_TUNED,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
 ): Color {
     return resolveBottomBarGlassMaterialContainerColor(
         surfaceColor = surfaceColor,
         preset = liquidGlassPreset,
         glassEnabled = glassEnabled,
-        fallbackAlpha = tuning.shellSurfaceAlpha
+        fallbackAlpha = tuning.shellSurfaceAlpha,
+        liquidGlassTuning = liquidGlassTuning
     )
 }
 
@@ -894,14 +948,17 @@ internal fun resolveAndroidNativeFloatingBottomBarContainerColor(
     glassEnabled: Boolean,
     blurEnabled: Boolean,
     blurIntensity: com.android.purebilibili.core.ui.blur.BlurIntensity,
-    liquidGlassPreset: BottomBarLiquidGlassPreset = BottomBarLiquidGlassPreset.BILIPAI_TUNED
+    liquidGlassPreset: BottomBarLiquidGlassPreset = BottomBarLiquidGlassPreset.BILIPAI_TUNED,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
+    globalWallpaperVisible: Boolean = false
 ): Color {
-    return if (glassEnabled) {
+    val resolvedColor = if (glassEnabled) {
         resolveAndroidNativeBottomBarContainerColor(
             surfaceColor = surfaceColor,
             tuning = tuning,
             glassEnabled = true,
-            liquidGlassPreset = liquidGlassPreset
+            liquidGlassPreset = liquidGlassPreset,
+            liquidGlassTuning = liquidGlassTuning
         )
     } else {
         resolveBottomBarSurfaceColor(
@@ -910,12 +967,49 @@ internal fun resolveAndroidNativeFloatingBottomBarContainerColor(
             blurIntensity = blurIntensity
         )
     }
+    if (!globalWallpaperVisible || resolvedColor.alpha == 0f) return resolvedColor
+    val protectiveColor = resolveGlobalWallpaperProtectiveColor(
+        baseColor = surfaceColor,
+        lightAlpha = 0.68f,
+        darkAlpha = 0.74f
+    )
+    return resolvedColor.copy(alpha = maxOf(resolvedColor.alpha, protectiveColor.alpha))
 }
 
 internal fun resolveAndroidNativeBottomBarGlassEnabled(
     liquidGlassEnabled: Boolean,
+    blurEnabled: Boolean,
+    sdkInt: Int = Build.VERSION.SDK_INT
+): Boolean = liquidGlassEnabled && shouldAllowHomeChromeLiquidGlass(sdkInt)
+
+internal fun resolveBottomBarIndicatorEffectsEnabled(
+    liquidGlassEnabled: Boolean,
     blurEnabled: Boolean
+): Boolean = liquidGlassEnabled || blurEnabled
+
+internal fun shouldUseBottomBarCaptureLens(
+    liquidGlassEnabled: Boolean
 ): Boolean = liquidGlassEnabled
+
+internal fun resolveBiliPaiBottomBarShellColor(
+    containerColor: Color,
+    liquidGlassEnabled: Boolean,
+    darkTheme: Boolean,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
+): Color {
+    return if (liquidGlassEnabled) {
+        resolveBiliPaiBottomBarContainerColor(
+            darkTheme = darkTheme,
+            liquidGlassTuning = liquidGlassTuning
+        )
+    } else {
+        containerColor
+    }
+}
+
+internal fun shouldBlurBiliPaiBottomBarShell(
+    blurEnabled: Boolean
+): Boolean = blurEnabled
 
 internal fun shouldUseAndroidNativeFloatingHazeBlur(
     blurEnabled: Boolean,
@@ -925,178 +1019,27 @@ internal fun shouldUseAndroidNativeFloatingHazeBlur(
 ): Boolean = blurEnabled &&
     !glassEnabled &&
     hasHazeState &&
-    shouldAllowRuntimeShaderBackedHazeEffect(sdkInt)
+    shouldAllowRenderEffectBackedHazeEffect(sdkInt)
 
-internal fun Modifier.kernelSuFloatingDockSurface(
-    shape: androidx.compose.ui.graphics.Shape,
-    backdrop: Backdrop?,
-    containerColor: Color,
-    blurEnabled: Boolean,
+internal fun shouldRenderBottomBarLiquidGlassEffects(
     glassEnabled: Boolean,
-    drawShellLens: Boolean = true,
-    blurRadius: Dp,
-    hazeState: HazeState?,
-    motionTier: MotionTier,
-    isTransitionRunning: Boolean,
     forceLowBlurBudget: Boolean,
-    liquidGlassPreset: BottomBarLiquidGlassPreset = BottomBarLiquidGlassPreset.BILIPAI_TUNED,
-    isScrolling: Boolean = false,
-    materialScrollProgress: Float = if (isScrolling) 1f else 0f,
-    materialMotionProgress: Float = 0f,
-    materialPressProgress: Float = 0f
-): Modifier = composed {
-    val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.chromeBackground())
-    val materialSpec: BottomBarGlassMaterialSpec = resolveBottomBarGlassMaterialSpec(
-        preset = liquidGlassPreset,
-        isDarkTheme = isDarkTheme,
-        isScrolling = isScrolling,
-        scrollProgress = materialScrollProgress,
-        glassEnabled = glassEnabled,
-        motionProgress = materialMotionProgress,
-        pressProgress = materialPressProgress
-    )
-    val useHazeBlur = shouldUseAndroidNativeFloatingHazeBlur(
-        blurEnabled = blurEnabled,
-        glassEnabled = glassEnabled,
-        hasHazeState = hazeState != null
-    )
-    this
-        .then(
-            if (useHazeBlur && hazeState != null) {
-                Modifier.unifiedBlur(
-                    hazeState = hazeState,
-                    shape = shape,
-                    surfaceType = BlurSurfaceType.BOTTOM_BAR,
-                    motionTier = motionTier,
-                    isScrolling = false,
-                    isTransitionRunning = isTransitionRunning,
-                    forceLowBudget = forceLowBlurBudget
-                )
-            } else {
-                Modifier
-            }
-        )
-        .run {
-            if (backdrop != null && !useHazeBlur) {
-                val innerRimGlowProvider: (() -> InnerShadow)? = remember(
-                    materialSpec.innerRimGlow,
-                    isDarkTheme,
-                    glassEnabled
-                ) {
-                    val innerRimGlow = materialSpec.innerRimGlow
-                    if (glassEnabled && innerRimGlow != null) {
-                        val cached = InnerShadow(
-                            radius = innerRimGlow.radiusDp.dp,
-                            alpha = innerRimGlow.alpha,
-                            color = if (isDarkTheme) Color.White else Color.Black
-                        )
-                        val provider: () -> InnerShadow = { cached }
-                        provider
-                    } else {
-                        null
-                    }
-                }
-                drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { shape },
-                    effects = {
-                        if (glassEnabled || (blurEnabled && !useHazeBlur)) {
-                            if (materialSpec.vibrancy) {
-                                vibrancy()
-                            }
-                            blur((materialSpec.blurRadiusDp?.dp ?: blurRadius).toPx())
-                            if (
-                                glassEnabled &&
-                                drawShellLens &&
-                                materialSpec.shellRefractionHeightDp > 0f &&
-                                materialSpec.shellRefractionAmountDp > 0f
-                            ) {
-                                lens(
-                                    refractionHeight = materialSpec.shellRefractionHeightDp.dp.toPx(),
-                                    refractionAmount = materialSpec.shellRefractionAmountDp.dp.toPx()
-                                )
-                            }
-                            val shellShader = materialSpec.shellShader
-                            if (glassEnabled && drawShellLens && shellShader != null) {
-                                val cornerPx = (size.height.coerceAtMost(size.width)) / 2f
-                                val u = resolveLiquidGlassShaderUniforms(
-                                    widthPx = size.width,
-                                    heightPx = size.height,
-                                    paddingPx = padding,
-                                    cornerRadiusPx = cornerPx,
-                                    thicknessPx = shellShader.thicknessDp.dp.toPx(),
-                                    refractIndex = shellShader.refractIndex,
-                                    refractIntensity = shellShader.refractIntensity,
-                                    intensityScale = 1f
-                                )
-                                runtimeShaderEffect(
-                                    key = LIQUID_GLASS_SHADER_KEY,
-                                    shaderString = LIQUID_GLASS_SHADER,
-                                    uniformShaderName = "img"
-                                ) {
-                                    setFloatUniform("resolution", u.resolutionX, u.resolutionY)
-                                    setFloatUniform("center", u.centerX, u.centerY)
-                                    setFloatUniform("size", u.halfWidth, u.halfHeight)
-                                    setFloatUniform(
-                                        "radius",
-                                        u.cornerRadiusPx, u.cornerRadiusPx,
-                                        u.cornerRadiusPx, u.cornerRadiusPx
-                                    )
-                                    setFloatUniform("thickness", u.thicknessPx)
-                                    setFloatUniform("refract_index", u.refractIndex)
-                                    setFloatUniform("refract_intensity", u.refractIntensity)
-                                    setFloatUniform(
-                                        "foreground_color_premultiplied",
-                                        0f, 0f, 0f, 0f
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    highlight = {
-                        Highlight(
-                            width = 1.dp,
-                            alpha = if (glassEnabled) 0.75f else 0f
-                        )
-                    },
-                    shadow = {
-                        Shadow.Default.copy(
-                            color = Color.Black.copy(
-                                alpha = if (isDarkTheme) 0.2f else 0.1f
-                            )
-                        )
-                    },
-                    innerShadow = innerRimGlowProvider,
-                    layerBlock = if (glassEnabled) {
-                        {
-                            val width = size.width.coerceAtLeast(1f)
-                            val s = lerp(1f, 1f + 16.dp.toPx() / width, materialPressProgress)
-                            scaleX = s
-                            scaleY = s
-                        }
-                    } else null,
-                    onDrawSurface = {
-                        drawRect(containerColor)
-                        if (materialSpec.foregroundTint.alpha > 0f) {
-                            drawRect(materialSpec.foregroundTint)
-                        }
-                    }
-                )
-            } else {
-                background(containerColor, shape)
-            }
-        }
-        .clip(shape)
-}
+): Boolean = glassEnabled && !forceLowBlurBudget
 
-@Composable
-internal fun Modifier.kernelSuMiuixFloatingDockSurface(
+internal fun shouldUsePlainMiuixFloatingBar(
+    glassEnabled: Boolean,
+    blurEnabled: Boolean,
+): Boolean = !glassEnabled && !blurEnabled
+
+internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     shape: androidx.compose.ui.graphics.Shape,
     backdrop: MiuixBackdrop?,
     containerColor: Color,
     blurEnabled: Boolean,
     glassEnabled: Boolean,
     drawShellLens: Boolean = true,
+    /** Scales shell lens refraction for short docks; 1f = full strength. */
+    shellLensIntensity: Float = 1f,
     blurRadius: Dp,
     hazeState: HazeState?,
     motionTier: MotionTier,
@@ -1106,19 +1049,44 @@ internal fun Modifier.kernelSuMiuixFloatingDockSurface(
     isScrolling: Boolean = false,
     materialScrollProgress: Float = 0f,
     materialMotionProgress: Float = 0f,
-    materialPressProgress: Float = 0f
+    materialPressProgress: Float = 0f,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
 ): Modifier = composed {
-    val isDarkTheme = resolveBottomBarDarkTheme(MiuixTheme.colorScheme.background)
-    val useHazeBlur = shouldUseAndroidNativeFloatingHazeBlur(
+    // The global liquid-glass switch owns primary navigation chrome. Runtime jank
+    // downgrades may trim secondary effects, but must not silently turn this surface solid.
+    val effectiveForceLowBlurBudget = forceLowBlurBudget
+    val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
+    val renderGlassEffects = shouldRenderBottomBarLiquidGlassEffects(
         glassEnabled = glassEnabled,
+        forceLowBlurBudget = effectiveForceLowBlurBudget,
+    )
+    val useHazeBlur = shouldUseAndroidNativeFloatingHazeBlur(
+        glassEnabled = renderGlassEffects,
         blurEnabled = blurEnabled,
         hasHazeState = hazeState != null
     )
-    val baseHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = -45f)
+    val materialSpec = resolveBottomBarGlassMaterialSpec(
+        preset = liquidGlassPreset,
+        isDarkTheme = isDarkTheme,
+        isScrolling = isScrolling,
+        scrollProgress = materialScrollProgress,
+        glassEnabled = renderGlassEffects,
+        motionProgress = materialMotionProgress,
+        pressProgress = materialPressProgress,
+        liquidGlassTuning = liquidGlassTuning
+    )
+    val baseHighlight = if (renderGlassEffects) {
+        rememberBiliPaiGravityHighlight(iosIndicatorSpecular, extraDegrees = -45f)
+    } else {
+        null
+    }
+    val effectiveShellLensIntensity = shellLensIntensity.coerceIn(0f, 1f)
+    val hasBackdrop = backdrop != null && (renderGlassEffects || blurEnabled)
+    val hasHazeBlur = !hasBackdrop && useHazeBlur && hazeState != null
 
     this
         .then(
-            if (useHazeBlur && hazeState != null) {
+            if (hasHazeBlur) {
                 Modifier.unifiedBlur(
                     hazeState = hazeState,
                     shape = shape,
@@ -1126,58 +1094,149 @@ internal fun Modifier.kernelSuMiuixFloatingDockSurface(
                     motionTier = motionTier,
                     isScrolling = false,
                     isTransitionRunning = isTransitionRunning,
-                    forceLowBudget = forceLowBlurBudget
+                    forceLowBudget = effectiveForceLowBlurBudget
                 )
             } else {
                 Modifier
             }
         )
         .run {
-            if (backdrop != null && !useHazeBlur) {
+            if (hasBackdrop) {
                 this
                     .dropShadow(
                         shape = shape,
                         shadow = ComposeShadow(
-                            radius = 10.dp,
-                            color = Color.Black,
-                            alpha = if (isDarkTheme) 0.2f else 0.1f
+                            radius = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                            color = OpticalContrastPalette.Shadow,
+                            alpha = (if (isDarkTheme) 0.2f else 0.1f) *
+                                materialSpec.shadowAlphaScale
                         )
                     )
                     .miuixDrawBackdrop(
                         backdrop = backdrop,
                         shape = { shape },
                         effects = {
-                            if (glassEnabled) {
-                                miuixVibrancy()
-                                miuixBlur(4.dp.toPx(), 4.dp.toPx())
-                                if (drawShellLens) {
+                            if (renderGlassEffects) {
+                                val resolvedShellRefractionAmountDp = if (drawShellLens) {
+                                    materialSpec.shellRefractionAmountDp *
+                                        effectiveShellLensIntensity
+                                } else {
+                                    0f
+                                }
+                                padding = maxOf(
+                                    padding,
+                                    resolveFloatingDockEffectPaddingDp(
+                                        refractionAmountDp = resolvedShellRefractionAmountDp,
+                                        pressBloomDp = AppSpacingTokens.Large.value,
+                                    ).dp.toPx(),
+                                )
+                                if (materialSpec.vibrancy) {
+                                    miuixVibrancy(liquidGlassTuning.saturation)
+                                }
+                                val resolvedBlurRadius =
+                                    materialSpec.blurRadiusDp?.dp ?: AppSpacingTokens.ExtraSmall
+                                miuixBlur(resolvedBlurRadius.toPx(), resolvedBlurRadius.toPx())
+                                if (
+                                    drawShellLens &&
+                                    effectiveShellLensIntensity > 0f &&
+                                    materialSpec.shellRefractionHeightDp > 0f &&
+                                    materialSpec.shellRefractionAmountDp > 0f
+                                ) {
                                     miuixLens(
-                                        refractionHeight = 24.dp.toPx(),
-                                        refractionAmount = 24.dp.toPx()
+                                        refractionHeight = (
+                                            materialSpec.shellRefractionHeightDp *
+                                                effectiveShellLensIntensity
+                                            ).dp.toPx(),
+                                        refractionAmount = (
+                                            materialSpec.shellRefractionAmountDp *
+                                                effectiveShellLensIntensity
+                                            ).dp.toPx(),
+                                        chromaticAberration = materialSpec.shellChromaticAberration
                                     )
                                 }
-                            } else if (blurEnabled && !useHazeBlur) {
-                                val radiusPx = blurRadius.toPx()
+                            } else if (blurEnabled) {
+                                val resolvedBlurRadius = maxOf(blurRadius, 25.dp)
+                                val radiusPx = resolvedBlurRadius.toPx()
                                 miuixBlur(radiusPx, radiusPx)
                             }
                         },
                         highlight = {
-                            baseHighlight.copy(alpha = if (glassEnabled) 0.75f else 0f)
+                            baseHighlight?.value?.copy(
+                                alpha = if (renderGlassEffects) {
+                                    0.75f * materialSpec.highlightWidthScale *
+                                        effectiveShellLensIntensity
+                                } else {
+                                    0f
+                                }
+                            )
                         },
-                        layerBlock = if (glassEnabled) {
+                        layerBlock = if (renderGlassEffects) {
                             {
                                 val width = size.width.coerceAtLeast(1f)
-                                val s = lerp(1f, 1f + 16.dp.toPx() / width, materialPressProgress)
+                                val s = lerp(1f, 1f + AppSpacingTokens.Large.toPx() / width, materialPressProgress)
                                 scaleX = s
                                 scaleY = s
                             }
                         } else null,
                         onDrawSurface = {
-                            drawRect(containerColor)
+                            if (renderGlassEffects) {
+                                drawRect(containerColor)
+                                if (liquidGlassTuning.contentReadabilityScrimAlpha > 0f) {
+                                    drawRect(
+                                        (if (isDarkTheme) Color.Black else Color.White).copy(
+                                            alpha = liquidGlassTuning.contentReadabilityScrimAlpha
+                                        )
+                                    )
+                                }
+                                if (materialSpec.foregroundTint.alpha > 0f) {
+                                    drawRect(materialSpec.foregroundTint)
+                                }
+                            } else {
+                                drawRect(containerColor.copy(alpha = 0.65f))
+                            }
                         }
                     )
+                    .run {
+                        val innerRimGlow = materialSpec.innerRimGlow
+                        if (renderGlassEffects && innerRimGlow != null) {
+                            miuixInnerShadow(shape = shape) {
+                                MiuixInnerShadow(
+                                    radius = innerRimGlow.radiusDp.dp,
+                                    color = if (isDarkTheme) {
+                                        OpticalContrastPalette.Highlight
+                                    } else {
+                                        OpticalContrastPalette.Shadow
+                                    },
+                                    alpha = innerRimGlow.alpha
+                                )
+                            }
+                        } else {
+                            this
+                        }
+                    }
+            } else if (hasHazeBlur) {
+                this
+                    .dropShadow(
+                        shape = shape,
+                        shadow = ComposeShadow(
+                            radius = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                            color = OpticalContrastPalette.Shadow,
+                            alpha = (if (isDarkTheme) 0.2f else 0.1f) *
+                                materialSpec.shadowAlphaScale
+                        )
+                    )
+                    .background(containerColor.copy(alpha = 0.65f), shape)
             } else {
-                background(containerColor, shape)
+                this
+                    .dropShadow(
+                        shape = shape,
+                        shadow = ComposeShadow(
+                            radius = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                            color = OpticalContrastPalette.Shadow,
+                            alpha = if (isDarkTheme) 0.2f else 0.12f
+                        )
+                    )
+                    .background(containerColor.copy(alpha = 1f), shape)
             }
         }
         .clip(shape)
@@ -1198,7 +1257,7 @@ internal fun resolveAndroidNativeIndicatorColor(
 ): Color {
     val softened = androidx.compose.ui.graphics.lerp(
         start = themeColor,
-        stop = Color.White,
+        stop = OpticalContrastPalette.Highlight,
         fraction = if (darkTheme) 0.58f else 0.82f
     )
     return softened.copy(alpha = if (darkTheme) 0.42f else 0.82f)
@@ -1213,41 +1272,6 @@ internal fun resolveAndroidNativeExportTintColor(
     return themeColor
 }
 
-internal fun resolveBottomBarGlassVisibleContentColor(
-    unselectedColor: Color,
-    selectedColor: Color,
-    themeWeight: Float,
-    glassEnabled: Boolean,
-    indicatorProgress: Float,
-    indicatorBackdropEnabled: Boolean = true
-): Color {
-    if (glassEnabled && indicatorBackdropEnabled && indicatorProgress > 0.001f) {
-        return unselectedColor
-    }
-    return lerpColor(
-        start = unselectedColor,
-        stop = selectedColor,
-        fraction = themeWeight.coerceIn(0f, 1f)
-    )
-}
-
-internal fun resolveBottomBarGlassExportContentColor(
-    unselectedColor: Color,
-    selectedColor: Color,
-    themeWeight: Float,
-    glassEnabled: Boolean
-): Color {
-    val clampedWeight = themeWeight.coerceIn(0f, 1f)
-    if (glassEnabled) {
-        return unselectedColor
-    }
-    return lerpColor(
-        start = unselectedColor,
-        stop = selectedColor,
-        fraction = clampedWeight
-    )
-}
-
 internal data class BottomBarSkinContentColors(
     val selectedColor: Color,
     val unselectedColor: Color,
@@ -1260,19 +1284,49 @@ internal fun resolveBottomBarSkinContentColors(
     unselectedColor: Color,
     skinTrimTint: Color?
 ): BottomBarSkinContentColors {
-    val readableBackgroundIsLight = skinTrimTint?.luminance()?.let { it >= 0.45f } == true
-    val labelScrimColor = when {
-        skinTrimTint == null -> Color.Transparent
-        readableBackgroundIsLight -> Color.White
-        else -> Color.Black
+    if (skinTrimTint == null) {
+        return BottomBarSkinContentColors(
+            selectedColor = selectedColor,
+            unselectedColor = unselectedColor,
+        )
     }
-    val labelScrimAlpha = 0f
-    return BottomBarSkinContentColors(
-        selectedColor = selectedColor,
-        unselectedColor = unselectedColor,
-        labelScrimColor = labelScrimColor,
-        labelScrimAlpha = labelScrimAlpha
+    val readableSelectedColor = resolveReadableBottomBarSkinForeground(
+        preferredColor = selectedColor,
+        backgroundColor = skinTrimTint,
     )
+    val readableUnselectedColor = resolveReadableBottomBarSkinForeground(
+        preferredColor = unselectedColor,
+        backgroundColor = skinTrimTint,
+    )
+    val labelScrimColor = if (readableUnselectedColor.luminance() >= 0.5f) {
+        OpticalContrastPalette.Shadow
+    } else {
+        OpticalContrastPalette.Highlight
+    }
+    return BottomBarSkinContentColors(
+        selectedColor = readableSelectedColor,
+        unselectedColor = readableUnselectedColor,
+        labelScrimColor = labelScrimColor,
+        labelScrimAlpha = 0f,
+    )
+}
+
+internal fun resolveReadableBottomBarSkinForeground(
+    preferredColor: Color,
+    backgroundColor: Color,
+): Color {
+    val opaquePreferred = preferredColor.copy(alpha = 1f)
+    if (bottomBarColorContrastRatio(opaquePreferred, backgroundColor) >= 3f) {
+        return preferredColor
+    }
+    return listOf(OpticalContrastPalette.Shadow, OpticalContrastPalette.Highlight)
+        .maxBy { candidate -> bottomBarColorContrastRatio(candidate, backgroundColor) }
+}
+
+private fun bottomBarColorContrastRatio(foreground: Color, background: Color): Float {
+    val lighter = maxOf(foreground.luminance(), background.luminance())
+    val darker = minOf(foreground.luminance(), background.luminance())
+    return (lighter + 0.05f) / (darker + 0.05f)
 }
 
 @Composable
@@ -1284,26 +1338,29 @@ private fun Modifier.bottomBarSkinLabelScrim(
     return this
         .clip(AppShapes.container(ContainerLevel.Chip))
         .background(color.copy(alpha = alpha.coerceIn(0f, 1f)))
-        .padding(horizontal = 4.dp, vertical = 1.dp)
+        .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Micro / 2)
 }
 
 internal fun resolveAndroidNativeIdleIndicatorSurfaceColor(
     darkTheme: Boolean
 ): Color {
     return if (darkTheme) {
-        Color.White.copy(alpha = 0.1f)
+        OpticalContrastPalette.Highlight.copy(alpha = 0.1f)
     } else {
-        Color.Black.copy(alpha = 0.1f)
+        OpticalContrastPalette.Shadow.copy(alpha = 0.1f)
     }
 }
 
-internal fun resolveKernelSuBottomBarContainerColor(darkTheme: Boolean): Color {
+internal fun resolveBiliPaiBottomBarContainerColor(
+    darkTheme: Boolean,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
+): Color {
     val surfaceContainer = if (darkTheme) {
-        Color(red = 0x24, green = 0x24, blue = 0x24)
+        HomeVisualPalette.BiliPaiDarkSurface
     } else {
-        Color.White
+        OpticalContrastPalette.Highlight
     }
-    return surfaceContainer.copy(alpha = 0.4f)
+    return surfaceContainer.copy(alpha = liquidGlassTuning.surfaceAlpha)
 }
 
 internal fun resolveBottomBarDarkTheme(backgroundColor: Color): Boolean {
@@ -1328,13 +1385,19 @@ internal fun resolveAndroidNativePanelOffsetFraction(
     return (velocity / 2200f).coerceIn(-0.18f, 0.18f)
 }
 
-private fun Md3BottomBarDisplayMode.toMiuixNavigationDisplayMode(): MiuixNavigationBarDisplayMode {
+internal fun Md3BottomBarDisplayMode.toAppPlatformNavigationDisplayMode(): AppPlatformNavigationBarDisplayMode {
     return when (this) {
-        Md3BottomBarDisplayMode.IconAndText -> MiuixNavigationBarDisplayMode.IconAndText
-        Md3BottomBarDisplayMode.IconOnly -> MiuixNavigationBarDisplayMode.IconOnly
-        Md3BottomBarDisplayMode.TextOnly -> MiuixNavigationBarDisplayMode.TextOnly
+        Md3BottomBarDisplayMode.IconAndText -> AppPlatformNavigationBarDisplayMode.ICON_AND_TEXT
+        Md3BottomBarDisplayMode.IconOnly -> AppPlatformNavigationBarDisplayMode.ICON_ONLY
+        Md3BottomBarDisplayMode.TextOnly -> AppPlatformNavigationBarDisplayMode.ICON_WITH_SELECTED_LABEL
     }
 }
+
+/** Official [MiuixNavigationBarItem] cannot host skin bitmaps or label scrims. */
+internal fun shouldUseMiuixOfficialNavigationBarItem(
+    skinIconPath: String?,
+    labelScrimAlpha: Float
+): Boolean = skinIconPath == null && labelScrimAlpha <= 0f
 
 internal fun resolveMiuixDockedBottomBarItemColor(
     selected: Boolean,
@@ -1409,12 +1472,28 @@ internal data class BottomBarIndicatorVisualPolicy(
 )
 
 internal const val BOTTOM_BAR_REFRACTION_IDLE_HOLD_MS = 96L
-private const val BOTTOM_BAR_INDICATOR_DRAG_SCALE_TARGET = 88f / 56f
-private const val KSU_INDICATOR_VELOCITY_NORMALIZATION_DIVISOR = 10f
-private const val KSU_INDICATOR_VELOCITY_SCALE_X_MULTIPLIER = 0.75f
-private const val KSU_INDICATOR_VELOCITY_SCALE_Y_MULTIPLIER = 0.25f
-private const val KSU_INDICATOR_VELOCITY_CLAMP = 0.2f
+internal const val BOTTOM_BAR_INDICATOR_DRAG_SCALE_TARGET =
+    com.android.purebilibili.core.ui.BottomBarReferencePressedScale
 
+internal fun resolveBottomBarCaptureSafeInsetDp(
+    indicatorWidthDp: Float,
+    refractionHeightDp: Float,
+    refractionAmountDp: Float,
+    panelOffsetDp: Float,
+    dragScaleTarget: Float = BOTTOM_BAR_INDICATOR_DRAG_SCALE_TARGET
+): Float {
+    val scaleOverflowDp = (
+        indicatorWidthDp.coerceAtLeast(0f) *
+            (dragScaleTarget.coerceAtLeast(1f) - 1f) /
+            2f
+        )
+    return scaleOverflowDp +
+        maxOf(refractionHeightDp, refractionAmountDp).coerceAtLeast(0f) +
+        kotlin.math.abs(panelOffsetDp)
+}
+private const val BILIPAI_INDICATOR_VELOCITY_NORMALIZATION_DIVISOR = 10f
+private const val BILIPAI_INDICATOR_VELOCITY_SCALE_X_MULTIPLIER = 0.75f
+private const val BILIPAI_INDICATOR_VELOCITY_CLAMP = 0.2f
 internal fun resolveBottomBarIndicatorVisualPolicyWithHold(
     basePolicy: BottomBarIndicatorVisualPolicy,
     keepRefractionLayerAlive: Boolean
@@ -1544,59 +1623,6 @@ internal fun resolveBottomBarIndicatorGlowAlpha(
     return maxOf(pressProgress, motionProgress).coerceIn(0f, 1f)
 }
 
-internal fun resolveBottomBarShellHighlightAlpha(
-    glassEnabled: Boolean,
-    pressProgress: Float,
-    motionProgress: Float = 0f,
-    isDragging: Boolean = false
-): Float {
-    if (!glassEnabled) return 0f
-    // 拖拽中保留一道地板:慢拖时 motion/press 都低,但高光应持续锚定在指示器上,
-    // 让它「跟手」而非中途变暗掉队。高 motion 时不被地板压低。
-    val dragFloor = if (isDragging) 0.6f else 0f
-    return maxOf(pressProgress, motionProgress, dragFloor).coerceIn(0f, 1f)
-}
-
-internal fun resolveBottomBarInteractiveHighlightCenterX(
-    indicatorTranslationXPx: Float,
-    itemWidthPx: Float,
-    panelOffsetPx: Float
-): Float {
-    return indicatorTranslationXPx + itemWidthPx * 0.5f + panelOffsetPx
-}
-
-private fun Modifier.bottomBarInteractiveHighlight(
-    enabled: Boolean,
-    alpha: Float,
-    centerXPx: Float
-): Modifier = composed {
-    // 不直接引用平台着色器类：低版本系统在 Compose materialize modifier 时也可能解析类并崩溃。
-    drawWithContent {
-        val clampedAlpha = alpha.coerceIn(0f, 1f)
-        drawContent()
-        if (!enabled || clampedAlpha <= 0f) return@drawWithContent
-        val center = Offset(
-            x = centerXPx.coerceIn(0f, size.width),
-            y = size.height * 0.5f
-        )
-        drawRect(
-            color = Color.White.copy(alpha = 0.06f * clampedAlpha),
-            blendMode = BlendMode.Plus
-        )
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color.White.copy(alpha = 0.17f * clampedAlpha),
-                    Color.Transparent
-                ),
-                center = center,
-                radius = size.minDimension * 1.2f
-            ),
-            blendMode = BlendMode.Plus
-        )
-    }
-}
-
 internal fun resolveBottomBarBackdropPresetCaptureLens(
     progress: Float
 ): BottomBarBackdropPresetLensSpec {
@@ -1647,10 +1673,6 @@ internal fun resolveBottomBarEffectiveBackdropPresetProgress(
     }
 }
 
-internal fun resolveBottomBarIndicatorEffectProgress(progress: Float): Float {
-    return progress.coerceIn(0f, 1f)
-}
-
 @Suppress("UNUSED_PARAMETER")
 internal fun resolveBottomBarIndicatorLayerTransform(
     motionProgress: Float,
@@ -1658,33 +1680,44 @@ internal fun resolveBottomBarIndicatorLayerTransform(
     isDragging: Boolean = true,
     dragScaleProgress: Float = if (isDragging) 1f else 0f,
     dragScaleTransform: BottomBarIndicatorLayerTransform? = null,
+    dragScaleTarget: Float = BOTTOM_BAR_INDICATOR_DRAG_SCALE_TARGET,
     motionSpec: com.android.purebilibili.core.ui.motion.BottomBarMotionSpec = resolveBottomBarMotionSpec()
 ): BottomBarIndicatorLayerTransform {
     val clampedProgress = motionProgress.coerceIn(0f, 1f)
     val clampedDragScaleProgress = dragScaleProgress.coerceIn(0f, 1f)
     val baseScale = lerp(
         start = 1f,
-        stop = BOTTOM_BAR_INDICATOR_DRAG_SCALE_TARGET,
+        stop = dragScaleTarget.coerceAtLeast(1f),
         fraction = clampedDragScaleProgress
     )
     val baseScaleX = dragScaleTransform?.scaleX ?: baseScale
     val baseScaleY = dragScaleTransform?.scaleY ?: baseScale
-    // 对齐 KernelSU FloatingBottomBar 的胶囊速度形变和基础按压放大倍数。
+    // 对齐 BiliPai FloatingBottomBar 的胶囊速度形变和基础按压放大倍数。
     val velocity = if (isDragging || clampedDragScaleProgress > 0f) {
-        velocityItemsPerSecond / KSU_INDICATOR_VELOCITY_NORMALIZATION_DIVISOR
+        velocityItemsPerSecond / BILIPAI_INDICATOR_VELOCITY_NORMALIZATION_DIVISOR
     } else {
         0f
     }
-    val velocityScaleX = (velocity * KSU_INDICATOR_VELOCITY_SCALE_X_MULTIPLIER)
-        .coerceIn(-KSU_INDICATOR_VELOCITY_CLAMP, KSU_INDICATOR_VELOCITY_CLAMP)
-    val velocityScaleY = (velocity * KSU_INDICATOR_VELOCITY_SCALE_Y_MULTIPLIER)
-        .coerceIn(-KSU_INDICATOR_VELOCITY_CLAMP, KSU_INDICATOR_VELOCITY_CLAMP)
+    // HyperIsland: the leading/trailing direction affects both longitudinal stretch and
+    // cross-axis compression, producing the asymmetric liquid handoff while dragging.
+    val velocityScaleX = (velocity * BILIPAI_INDICATOR_VELOCITY_SCALE_X_MULTIPLIER)
+        .coerceIn(-BILIPAI_INDICATOR_VELOCITY_CLAMP, BILIPAI_INDICATOR_VELOCITY_CLAMP)
+    val velocityScaleY = (velocity * 0.25f)
+        .coerceIn(-BILIPAI_INDICATOR_VELOCITY_CLAMP, BILIPAI_INDICATOR_VELOCITY_CLAMP)
     return BottomBarIndicatorLayerTransform(
         scaleX = baseScaleX / (1f - velocityScaleX),
         scaleY = baseScaleY * (1f - velocityScaleY)
     )
 }
 
+/**
+ * 指示器按下放大的进度。
+ *
+ * 照搬 HyperIsland LiquidGlassNavigationBar 的
+ * `scaleXAnimation.animateTo(78f / 56f, spring(0.6f, 250f, 0.001f))`：
+ * 进入与退出共用同一条 spring(0.6f, 250f)，不再使用 BiliPai 早先的
+ * tween(90ms 进入 / 220ms 退出)。
+ */
 @Composable
 internal fun rememberBottomBarIndicatorDragScaleProgress(
     isDragging: Boolean
@@ -1693,13 +1726,37 @@ internal fun rememberBottomBarIndicatorDragScaleProgress(
     LaunchedEffect(isDragging) {
         progress.animateTo(
             targetValue = if (isDragging) 1f else 0f,
-            animationSpec = tween(
-                durationMillis = if (isDragging) 90 else 220,
-                easing = if (isDragging) EaseOut else FastOutSlowInEasing
+            animationSpec = spring(
+                dampingRatio = 0.6f,
+                stiffness = 250f,
+                visibilityThreshold = 0.001f
             )
         )
     }
     return progress.value
+}
+
+/**
+ * 指示器按下/拖拽放大的 X/Y 形变。
+ *
+ * 照搬 HyperIsland LiquidGlassNavigationBar 的两条独立 Animatable：
+ * `scaleXAnimation.animateTo(78f / 56f, spring(0.6f, 250f, 0.001f))` 与
+ * `scaleYAnimation.animateTo(78f / 56f, spring(0.7f, 250f, 0.001f))` ——
+ * BiliPai 不再把两条弹簧压成单条 progress。
+ */
+@Composable
+internal fun rememberBottomBarIndicatorLayerScaleTransform(
+    active: Boolean,
+    target: Float = BOTTOM_BAR_INDICATOR_DRAG_SCALE_TARGET
+): BottomBarIndicatorLayerTransform {
+    val scaleX = remember { Animatable(1f) }
+    val scaleY = remember { Animatable(1f) }
+    LaunchedEffect(active, target) {
+        val resolvedTarget = if (active) target.coerceAtLeast(1f) else 1f
+        launch { scaleX.animateTo(resolvedTarget, spring(0.6f, 250f, 0.001f)) }
+        launch { scaleY.animateTo(resolvedTarget, spring(0.7f, 250f, 0.001f)) }
+    }
+    return BottomBarIndicatorLayerTransform(scaleX = scaleX.value, scaleY = scaleY.value)
 }
 
 internal fun resolveBottomBarVisualIndicatorPosition(
@@ -1769,10 +1826,7 @@ internal fun rememberBottomBarClickPulseTransform(
         progress.snapTo(0f)
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = 240,
-                easing = LinearEasing
-            )
+            animationSpec = bottomBarClickPulseMotionSpec()
         )
     }
     return resolveBottomBarClickPulseTransform(progress.value)
@@ -1788,17 +1842,14 @@ private fun rememberBottomBarTapSwitchPressProgress(
         progress.snapTo(1f)
         progress.animateTo(
             targetValue = 0f,
-            animationSpec = tween(
-                durationMillis = 240,
-                easing = FastOutSlowInEasing
-            )
+            animationSpec = bottomBarTapReleaseMotionSpec()
         )
     }
     return progress.value
 }
 
 @Composable
-private fun rememberBottomBarSettleReboundTransform(
+internal fun rememberBottomBarSettleReboundTransform(
     pulseKey: Int
 ): BottomBarClickPulseTransform {
     val progress = remember { Animatable(1f) }
@@ -1807,10 +1858,7 @@ private fun rememberBottomBarSettleReboundTransform(
         progress.snapTo(0f)
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = 260,
-                easing = LinearEasing
-            )
+            animationSpec = bottomBarSettleReboundMotionSpec()
         )
     }
     return resolveBottomBarSettleReboundTransform(progress.value)
@@ -1985,7 +2033,7 @@ internal fun resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme: Boolean): 
     return if (isDarkTheme) {
         iOSSystemGray6
     } else {
-        Color.White
+        OpticalContrastPalette.Highlight
     }
 }
 
@@ -2091,32 +2139,32 @@ internal fun resolveBottomBarLayoutPolicy(
 ): BottomBarLayoutPolicy {
     if (!isFloating) {
         return BottomBarLayoutPolicy(
-            horizontalPadding = 0.dp,
-            rowPadding = 20.dp,
+            horizontalPadding = AppSpacingTokens.None,
+            rowPadding = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
             maxBarWidth = containerWidth
         )
     }
 
     val safeItemCount = itemCount.coerceAtLeast(1)
     val rowPadding = when {
-        isTablet && safeItemCount >= 6 -> 16.dp
-        isTablet -> 18.dp
-        safeItemCount >= 5 -> 12.dp
-        else -> 16.dp
+        isTablet && safeItemCount >= 6 -> AppSpacingTokens.Large
+        isTablet -> AppSpacingTokens.Large + AppSpacingTokens.Micro
+        safeItemCount >= 5 -> AppSpacingTokens.Medium
+        else -> AppSpacingTokens.Large
     }
     val normalizedLabelMode = when (labelMode) {
         0, 1, 2 -> labelMode
         else -> 0
     }
     val minItemWidth = when (normalizedLabelMode) {
-        0 -> if (isTablet) 62.dp else 52.dp
-        2 -> if (isTablet) 60.dp else 52.dp
-        else -> if (isTablet) 58.dp else 50.dp
+        0 -> if (isTablet) AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Medium + AppSpacingTokens.Micro else AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraSmall
+        2 -> if (isTablet) AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Medium else AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraSmall
+        else -> if (isTablet) AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small + AppSpacingTokens.Micro else AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Micro
     }
     val preferredItemWidth = when (normalizedLabelMode) {
-        0 -> if (isTablet) 84.dp else 80.dp
-        2 -> if (isTablet) 80.dp else 74.dp
-        else -> if (isTablet) 76.dp else 72.dp
+        0 -> if (isTablet) AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.ExtraSmall else AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge
+        2 -> if (isTablet) AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge else AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraLarge + AppSpacingTokens.Micro
+        else -> if (isTablet) AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraLarge + AppSpacingTokens.ExtraSmall else AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraLarge
     }
     val minBarWidth = (rowPadding * 2) + (minItemWidth * safeItemCount)
     val preferredBarWidth = (rowPadding * 2) + (preferredItemWidth * safeItemCount)
@@ -2129,9 +2177,9 @@ internal fun resolveBottomBarLayoutPolicy(
     }
     val widthRatio = if (isTablet) 0.86f else phoneRatio
     val visualCap = containerWidth * widthRatio
-    val hardCap = if (isTablet) 640.dp else 432.dp
-    val minEdgePadding = if (isTablet) 16.dp else 10.dp
-    val containerCap = (containerWidth - (minEdgePadding * 2)).coerceAtLeast(0.dp)
+    val hardCap = if (isTablet) AppSpacingTokens.TripleExtraLarge * 13 + AppSpacingTokens.Large else AppSpacingTokens.TripleExtraLarge * 9
+    val minEdgePadding = if (isTablet) AppSpacingTokens.Large else AppSpacingTokens.Small + AppSpacingTokens.Micro
+    val containerCap = (containerWidth - (minEdgePadding * 2)).coerceAtLeast(AppSpacingTokens.None)
     val maxAllowed = minOf(hardCap, visualCap, containerCap)
 
     val resolvedBarWidth = maxOf(
@@ -2139,7 +2187,7 @@ internal fun resolveBottomBarLayoutPolicy(
         minOf(preferredBarWidth, maxAllowed)
     ).coerceAtMost(containerWidth)
 
-    val horizontalPadding = ((containerWidth - resolvedBarWidth) / 2).coerceAtLeast(0.dp)
+    val horizontalPadding = ((containerWidth - resolvedBarWidth) / 2).coerceAtLeast(AppSpacingTokens.None)
     return BottomBarLayoutPolicy(
         horizontalPadding = horizontalPadding,
         rowPadding = rowPadding,
@@ -2156,12 +2204,12 @@ internal fun resolveBottomBarLayoutPolicy(
  * - 自动适配深色/浅色模式
  * -  点击触觉反馈
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun FrostedBottomBar(
     currentItem: BottomNavItem = BottomNavItem.HOME,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
+    nowPlayingContent: LinkedDockNowPlayingSlot? = null,
     hazeState: HazeState? = null,
     isFloating: Boolean = true,
     labelMode: Int = 1,
@@ -2172,161 +2220,143 @@ fun FrostedBottomBar(
     onSearchKeywordSubmit: (String) -> Unit = {},
     searchLaunchKey: Int = 0,
     onSearchLaunchTransitionFinished: (Int) -> Unit = {},
-    visibleItems: List<BottomNavItem> = listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY, BottomNavItem.PROFILE),
+    visibleItems: List<BottomNavItem> = listOf(
+        BottomNavItem.HOME,
+        BottomNavItem.DYNAMIC,
+        BottomNavItem.HISTORY,
+        BottomNavItem.LISTEN_VIDEO,
+        BottomNavItem.PROFILE
+    ),
     itemColorIndices: Map<String, Int> = emptyMap(),
+    itemLabels: Map<String, String> = emptyMap(),
     dynamicUnreadCount: Int = 0,
     onToggleSidebar: (() -> Unit)? = null,
-    // [NEW] Scroll offset for liquid glass refraction effect
-    scrollOffset: Float = 0f,
-    // [NEW] LayerBackdrop for real background refraction (captures content behind the bar)
-    backdrop: LayerBackdrop? = null,
     miuixBackdrop: MiuixLayerBackdrop? = null,
     motionTier: MotionTier = MotionTier.Normal,
     isTransitionRunning: Boolean = false,
     forceLowBlurBudget: Boolean = false,
     isFeedScrollInProgress: Boolean = false,
-    uiSkinDecoration: BottomBarUiSkinDecoration? = null
+    collapseLinkedDock: Boolean = false,
+    indicatorPositionProvider: (() -> Float)? = null,
+    isPagerScrollInProgressProvider: () -> Boolean = { false },
+    uiSkinDecoration: BottomBarUiSkinDecoration? = null,
+    linkedDockPhase: LinkedDockPhase? = null,
+    onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
+    isTopLevelDestination: Boolean = true,
 ) {
-    if (LocalUiPreset.current == UiPreset.MD3) {
-        val androidNativeVariant = LocalAndroidNativeVariant.current
-        if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-            MiuixBottomBar(
+    val foldPosture = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.posture
+    val forceBottomNavigation = foldPosture == com.android.purebilibili.core.util.AppFoldPosture.Tabletop
+    // Fold posture decides whether navigation stays at the bottom; window size still owns the
+    // dock geometry so a large foldable does not shrink to phone-sized icons and indicators.
+    val isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet
+    val effectiveToggleSidebar = onToggleSidebar.takeUnless { forceBottomNavigation }
+    var lastHomeClickMs by remember { mutableLongStateOf(0L) }
+    var lastDynamicClickMs by remember { mutableLongStateOf(0L) }
+    val resolvedItemClick: (BottomNavItem) -> Unit = { item ->
+        val nowMs = SystemClock.elapsedRealtime()
+        val isDynamicDoubleTap = resolveDynamicSideBarClickAction(
+            item = item,
+            nowMs = nowMs,
+            lastDynamicClickMs = lastDynamicClickMs
+        )
+        if (isDynamicDoubleTap) {
+            lastDynamicClickMs = 0L
+            onDynamicDoubleTap()
+        } else {
+            when (
+                resolveHomeSideBarClickAction(
+                    item = item,
+                    nowMs = nowMs,
+                    lastHomeClickMs = lastHomeClickMs,
+                )
+            ) {
+                HomeSideBarClickAction.HOME_DOUBLE_TAP -> {
+                    lastHomeClickMs = 0L
+                    onHomeDoubleTap()
+                }
+                HomeSideBarClickAction.NAVIGATE -> onItemClick(item)
+            }
+            if (item == BottomNavItem.HOME) {
+                lastHomeClickMs = nowMs
+            }
+            if (item == BottomNavItem.DYNAMIC) {
+                lastDynamicClickMs = nowMs
+            }
+        }
+    }
+    ProvideBottomBarSkinMotion(uiSkinDecoration) {
+        AppBottomNavigationHost(
+            androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+            materialContent = { policy ->
+                MaterialBottomBar(
                 currentItem = currentItem,
-                onItemClick = onItemClick,
+                nowPlayingContent = nowPlayingContent,
+                onItemClick = resolvedItemClick,
                 modifier = modifier,
                 visibleItems = visibleItems,
-                onToggleSidebar = onToggleSidebar,
+                itemLabels = itemLabels,
+                onToggleSidebar = effectiveToggleSidebar,
                 dynamicUnreadCount = dynamicUnreadCount,
                 isFloating = isFloating,
-                isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet,
+                isTablet = isTablet,
                 labelMode = labelMode,
                 blurEnabled = hazeState != null,
                 hazeState = hazeState,
-                backdrop = backdrop,
+                miuixBackdrop = miuixBackdrop,
+                homeSettings = homeSettings,
+                onSearchClick = onSearchClick,
+                onSearchKeywordSubmit = onSearchKeywordSubmit,
+                motionTier = motionTier,
+                isTransitionRunning = isTransitionRunning,
+                forceLowBlurBudget = forceLowBlurBudget,
+                isFeedScrollInProgress = isFeedScrollInProgress,
+                collapseLinkedDock = collapseLinkedDock,
+                indicatorPositionProvider = indicatorPositionProvider,
+                isPagerScrollInProgressProvider = isPagerScrollInProgressProvider,
+                uiSkinDecoration = uiSkinDecoration,
+                sharedLiquidGlassEnabled = policy.liquidGlassEnabled,
+                linkedDockPhase = linkedDockPhase,
+                onLinkedDockPhaseChange = onLinkedDockPhaseChange,
+                isTopLevelDestination = isTopLevelDestination,
+                )
+            },
+            platformContent = { policy ->
+                MiuixBottomBar(
+                currentItem = currentItem,
+                nowPlayingContent = nowPlayingContent,
+                onItemClick = resolvedItemClick,
+                modifier = modifier,
+                visibleItems = visibleItems,
+                itemLabels = itemLabels,
+                onToggleSidebar = effectiveToggleSidebar,
+                dynamicUnreadCount = dynamicUnreadCount,
+                isFloating = isFloating,
+                isTablet = isTablet,
+                labelMode = labelMode,
+                blurEnabled = hazeState != null,
+                hazeState = hazeState,
                 miuixBackdrop = miuixBackdrop,
                 homeSettings = homeSettings,
                 onSearchClick = onSearchClick,
                 onSearchKeywordSubmit = onSearchKeywordSubmit,
                 searchLaunchKey = searchLaunchKey,
                 onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-                scrollOffset = scrollOffset,
                 motionTier = motionTier,
                 isTransitionRunning = isTransitionRunning,
                 forceLowBlurBudget = forceLowBlurBudget,
                 isFeedScrollInProgress = isFeedScrollInProgress,
-                uiSkinDecoration = uiSkinDecoration
-            )
-        } else {
-            MaterialBottomBar(
-                currentItem = currentItem,
-                onItemClick = onItemClick,
-                modifier = modifier,
-                visibleItems = visibleItems,
-                onToggleSidebar = onToggleSidebar,
-                dynamicUnreadCount = dynamicUnreadCount,
-                isFloating = isFloating,
-                isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet,
-                labelMode = labelMode,
-                blurEnabled = hazeState != null,
-                hazeState = hazeState,
-                backdrop = backdrop,
-                miuixBackdrop = miuixBackdrop,
-                homeSettings = homeSettings,
-                onSearchClick = onSearchClick,
-                onSearchKeywordSubmit = onSearchKeywordSubmit,
-                scrollOffset = scrollOffset,
-                motionTier = motionTier,
-                isTransitionRunning = isTransitionRunning,
-                forceLowBlurBudget = forceLowBlurBudget,
-                isFeedScrollInProgress = isFeedScrollInProgress,
-                uiSkinDecoration = uiSkinDecoration
-            )
-        }
-        return
+                collapseLinkedDock = collapseLinkedDock,
+                indicatorPositionProvider = indicatorPositionProvider,
+                isPagerScrollInProgressProvider = isPagerScrollInProgressProvider,
+                uiSkinDecoration = uiSkinDecoration,
+                sharedLiquidGlassEnabled = policy.liquidGlassEnabled,
+                linkedDockPhase = linkedDockPhase,
+                onLinkedDockPhaseChange = onLinkedDockPhaseChange,
+                isTopLevelDestination = isTopLevelDestination,
+                )
+            },
+        )
     }
-
-    val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.chromeBackground())
-    val haptic = rememberHapticFeedback()
-    val normalizedLabelMode = normalizeBottomBarLabelMode(labelMode)
-    val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
-    val showText = shouldShowBottomBarText(normalizedLabelMode)
-    val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
-    val isTablet = windowSizeClass.isTablet
-    if (isFloating) {
-        val glassEnabled = homeSettings.isBottomBarLiquidGlassEnabled
-        val tuning = resolveAndroidNativeBottomBarTuning(
-            blurEnabled = glassEnabled || hazeState != null,
-            darkTheme = isDarkTheme
-        )
-        val containerColor = resolveAndroidNativeFloatingBottomBarContainerColor(
-            surfaceColor = MaterialTheme.colorScheme.surfaceContainer,
-            tuning = tuning,
-            glassEnabled = glassEnabled,
-            blurEnabled = hazeState != null,
-            blurIntensity = currentUnifiedBlurIntensity(),
-            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset
-        )
-        KernelSuAlignedBottomBar(
-            currentItem = currentItem,
-            onItemClick = onItemClick,
-            modifier = modifier,
-            visibleItems = visibleItems,
-            itemColorIndices = itemColorIndices,
-            dynamicUnreadCount = dynamicUnreadCount,
-            onToggleSidebar = onToggleSidebar,
-            isTablet = isTablet,
-            showIcon = showIcon,
-            showText = showText,
-            blurEnabled = hazeState != null,
-            backdrop = backdrop,
-            miuixBackdrop = miuixBackdrop,
-            containerColor = containerColor,
-            tuning = tuning,
-            glassEnabled = glassEnabled,
-            interactiveHighlightEnabled = homeSettings.bottomBarInteractiveHighlightEnabled,
-            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
-            iconStyle = SharedFloatingBottomBarIconStyle.CUPERTINO,
-            haptic = haptic,
-            hazeState = hazeState,
-            motionTier = motionTier,
-            isTransitionRunning = isTransitionRunning,
-            forceLowBlurBudget = forceLowBlurBudget,
-            bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
-            bottomBarSearchAutoExpandMode = homeSettings.bottomBarSearchAutoExpandMode,
-            onSearchClick = onSearchClick,
-            onSearchKeywordSubmit = onSearchKeywordSubmit,
-            searchLaunchKey = searchLaunchKey,
-            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-            scrollOffset = scrollOffset,
-            isFeedScrollInProgress = isFeedScrollInProgress,
-            uiSkinDecoration = uiSkinDecoration
-        )
-        return
-    }
-
-    MaterialBottomBar(
-        currentItem = currentItem,
-        onItemClick = onItemClick,
-        modifier = modifier,
-        visibleItems = visibleItems,
-        onToggleSidebar = onToggleSidebar,
-        dynamicUnreadCount = dynamicUnreadCount,
-        isFloating = false,
-        isTablet = isTablet,
-        labelMode = labelMode,
-        blurEnabled = hazeState != null,
-        hazeState = hazeState,
-        backdrop = backdrop,
-        miuixBackdrop = miuixBackdrop,
-        homeSettings = homeSettings,
-        onSearchClick = onSearchClick,
-        onSearchKeywordSubmit = onSearchKeywordSubmit,
-        scrollOffset = scrollOffset,
-        motionTier = motionTier,
-        isTransitionRunning = isTransitionRunning,
-        forceLowBlurBudget = forceLowBlurBudget,
-        uiSkinDecoration = uiSkinDecoration
-    )
 }
 
 @Composable
@@ -2334,7 +2364,9 @@ private fun MaterialBottomBar(
     currentItem: BottomNavItem,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
+    nowPlayingContent: LinkedDockNowPlayingSlot? = null,
     visibleItems: List<BottomNavItem>,
+    itemLabels: Map<String, String>,
     onToggleSidebar: (() -> Unit)?,
     dynamicUnreadCount: Int,
     isFloating: Boolean,
@@ -2342,32 +2374,58 @@ private fun MaterialBottomBar(
     labelMode: Int,
     blurEnabled: Boolean,
     hazeState: HazeState?,
-    backdrop: LayerBackdrop?,
     miuixBackdrop: MiuixLayerBackdrop?,
     homeSettings: com.android.purebilibili.core.store.HomeSettings,
     onSearchClick: () -> Unit,
     onSearchKeywordSubmit: (String) -> Unit,
     searchLaunchKey: Int = 0,
     onSearchLaunchTransitionFinished: (Int) -> Unit = {},
-    scrollOffset: Float,
     motionTier: MotionTier,
     isTransitionRunning: Boolean,
     forceLowBlurBudget: Boolean,
     isFeedScrollInProgress: Boolean = false,
-    uiSkinDecoration: BottomBarUiSkinDecoration? = null
+    collapseLinkedDock: Boolean = false,
+    indicatorPositionProvider: (() -> Float)? = null,
+    isPagerScrollInProgressProvider: () -> Boolean = { false },
+    uiSkinDecoration: BottomBarUiSkinDecoration? = null,
+    sharedLiquidGlassEnabled: Boolean,
+    linkedDockPhase: LinkedDockPhase? = null,
+    onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
+    isTopLevelDestination: Boolean = true,
 ) {
     val haptic = rememberHapticFeedback()
     val normalizedLabelMode = normalizeBottomBarLabelMode(labelMode)
     val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
     val showText = shouldShowBottomBarText(normalizedLabelMode)
+    val bottomBarVisibleItems = remember(
+        visibleItems,
+        homeSettings.isBottomBarSearchEnabled,
+        homeSettings.bottomBarSearchLayoutMode
+    ) {
+        resolveBottomBarVisibleItemsForSearchMode(
+            visibleItems = visibleItems,
+            bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
+            searchLayoutMode = homeSettings.bottomBarSearchLayoutMode
+        )
+    }
     val glassEnabled = resolveAndroidNativeBottomBarGlassEnabled(
-        liquidGlassEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
+        liquidGlassEnabled = sharedLiquidGlassEnabled,
         blurEnabled = blurEnabled
     )
+    val liquidGlassTuning = remember(
+        homeSettings.liquidGlassProgress,
+        homeSettings.liquidGlassAdvancedSettings,
+        homeSettings.liquidGlassReadabilityMode,
+    ) {
+        resolveLiquidGlassTuning(
+            homeSettings.liquidGlassProgress,
+            homeSettings.liquidGlassAdvancedSettings,
+            homeSettings.liquidGlassReadabilityMode,
+        )
+    }
     val androidNativeTuning = resolveAndroidNativeBottomBarTuning(
         blurEnabled = glassEnabled || blurEnabled,
         darkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.chromeBackground()),
-        androidNativeVariant = LocalAndroidNativeVariant.current
     )
     val blurIntensity = currentUnifiedBlurIntensity()
     val baseSurfaceColor = if (isFloating) {
@@ -2375,6 +2433,7 @@ private fun MaterialBottomBar(
     } else {
         AppSurfaceTokens.cardContainer()
     }
+    val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     val containerColor = if (isFloating) {
         resolveAndroidNativeFloatingBottomBarContainerColor(
             surfaceColor = baseSurfaceColor,
@@ -2382,7 +2441,9 @@ private fun MaterialBottomBar(
             glassEnabled = glassEnabled,
             blurEnabled = blurEnabled,
             blurIntensity = blurIntensity,
-            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset
+            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
+            liquidGlassTuning = liquidGlassTuning,
+            globalWallpaperVisible = globalWallpaperVisible
         )
     } else {
         resolveBottomBarSurfaceColor(
@@ -2397,45 +2458,148 @@ private fun MaterialBottomBar(
         secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
     )
     val skinDockedItemColors = resolveBottomBarSkinContentColors(
-        selectedColor = dockedItemColors.selectedIconColor,
-        unselectedColor = dockedItemColors.unselectedIconColor,
+        selectedColor = uiSkinDecoration?.bottomSelectedTint
+            ?.takeUnless { it == Color.Unspecified }
+            ?: dockedItemColors.selectedIconColor,
+        unselectedColor = uiSkinDecoration?.bottomUnselectedTint
+            ?.takeUnless { it == Color.Unspecified }
+            ?: dockedItemColors.unselectedIconColor,
         skinTrimTint = uiSkinDecoration?.bottomTrimTint
     )
+    val dockedIndicatorColor = resolveDockedBottomBarIndicatorColor(
+        defaultColor = dockedItemColors.indicatorColor,
+        hasUiSkinDecoration = uiSkinDecoration != null,
+    )
 
-    if (isFloating) {
-        KernelSuAlignedBottomBar(
+    if (
+        shouldUseOfficialMd3FloatingToolbar(
+            isFloating = isFloating,
+            liquidGlassEnabled = glassEnabled,
+        )
+    ) {
+        val searchEnabled = shouldReserveBottomBarSearchLayout(
+            bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
+        )
+        if (searchEnabled || nowPlayingContent != null) {
+            LinkedBottomDock(
+                currentItem = currentItem,
+                firstItem = bottomBarVisibleItems.firstOrNull() ?: BottomNavItem.HOME,
+                firstLabel = resolveBottomNavItemLabel(
+                    bottomBarVisibleItems.firstOrNull() ?: BottomNavItem.HOME,
+                    itemLabels
+                ),
+                searchEnabled = searchEnabled,
+                isFeedScrollInProgress = isFeedScrollInProgress,
+                collapseRequested = collapseLinkedDock,
+                onSearchClick = onSearchClick,
+                onSearchKeywordSubmit = onSearchKeywordSubmit,
+                containerColor = containerColor,
+                backdrop = miuixBackdrop,
+                blurEnabled = blurEnabled,
+                hazeState = hazeState,
+                glassEnabled = false,
+                liquidGlassTuning = liquidGlassTuning,
+                iconStyle = SharedFloatingBottomBarIconStyle.MATERIAL,
+                navigationItemCount = bottomBarVisibleItems.size + if (isTablet && onToggleSidebar != null) 1 else 0,
+                navigationLabelMode = normalizedLabelMode,
+                navigationMinEdgePadding = androidNativeTuning.outerHorizontalPaddingDp.dp,
+                nowPlayingContent = nowPlayingContent,
+                dockPhase = linkedDockPhase,
+                onDockPhaseChange = onLinkedDockPhaseChange,
+                isTopLevelDestination = isTopLevelDestination,
+                modifier = modifier,
+                navigationContent = {
+                    OfficialMd3FloatingToolbarContent(
+                        currentItem = currentItem,
+                        onItemClick = onItemClick,
+                        visibleItems = bottomBarVisibleItems,
+                        itemLabels = itemLabels,
+                        onToggleSidebar = onToggleSidebar,
+                        dynamicUnreadCount = dynamicUnreadCount,
+                        isTablet = isTablet,
+                        showIcon = showIcon,
+                        showText = showText,
+                        haptic = haptic,
+                        modifier = Modifier.fillMaxSize(),
+                        blurEnabled = blurEnabled,
+                        hazeState = hazeState,
+                        backdrop = miuixBackdrop,
+                        containerColor = containerColor,
+                        motionTier = motionTier,
+                        isTransitionRunning = isTransitionRunning,
+                        forceLowBlurBudget = forceLowBlurBudget,
+                    )
+                }
+            )
+            return
+        }
+
+        OfficialMd3FloatingBottomBar(
             currentItem = currentItem,
             onItemClick = onItemClick,
             modifier = modifier,
-            visibleItems = visibleItems,
+            visibleItems = bottomBarVisibleItems,
+            itemLabels = itemLabels,
             onToggleSidebar = onToggleSidebar,
             dynamicUnreadCount = dynamicUnreadCount,
             isTablet = isTablet,
             showIcon = showIcon,
             showText = showText,
-            blurEnabled = blurEnabled,
-            backdrop = backdrop,
-            miuixBackdrop = miuixBackdrop,
-            containerColor = containerColor,
-            tuning = androidNativeTuning,
-            glassEnabled = glassEnabled,
-            interactiveHighlightEnabled = homeSettings.bottomBarInteractiveHighlightEnabled,
-            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
             haptic = haptic,
-            bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
-            bottomBarSearchAutoExpandMode = homeSettings.bottomBarSearchAutoExpandMode,
-            onSearchClick = onSearchClick,
-            onSearchKeywordSubmit = onSearchKeywordSubmit,
-            searchLaunchKey = searchLaunchKey,
-            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-            scrollOffset = scrollOffset,
-            isFeedScrollInProgress = isFeedScrollInProgress,
-            uiSkinDecoration = uiSkinDecoration
+            blurEnabled = blurEnabled,
+            hazeState = hazeState,
+            backdrop = miuixBackdrop,
+            containerColor = containerColor,
+            motionTier = motionTier,
+            isTransitionRunning = isTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget,
         )
         return
     }
 
-    Surface(
+    if (isFloating) {
+        BiliPaiFloatingBottomBar(
+            currentItem = currentItem,
+            nowPlayingContent = nowPlayingContent,
+            onItemClick = onItemClick,
+            modifier = modifier,
+            visibleItems = bottomBarVisibleItems,
+            itemLabels = itemLabels,
+            onToggleSidebar = onToggleSidebar,
+            dynamicUnreadCount = dynamicUnreadCount,
+            isTablet = isTablet,
+            showIcon = showIcon,
+            showText = showText,
+            labelMode = normalizedLabelMode,
+            blurEnabled = blurEnabled,
+            miuixBackdrop = miuixBackdrop,
+            containerColor = containerColor,
+            tuning = androidNativeTuning,
+            glassEnabled = glassEnabled,
+            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
+            liquidGlassTuning = liquidGlassTuning,
+            navigationIconCrossScaleEnabled = homeSettings.navigationIconCrossScaleEnabled,
+            haptic = haptic,
+            bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
+            bottomBarSearchAutoExpandMode = homeSettings.bottomBarSearchAutoExpandMode,
+            bottomBarSearchLayoutMode = homeSettings.bottomBarSearchLayoutMode,
+            onSearchClick = onSearchClick,
+            onSearchKeywordSubmit = onSearchKeywordSubmit,
+            searchLaunchKey = searchLaunchKey,
+            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
+            isFeedScrollInProgress = isFeedScrollInProgress,
+            collapseLinkedDock = collapseLinkedDock,
+            indicatorPositionProvider = indicatorPositionProvider,
+            isPagerScrollInProgressProvider = isPagerScrollInProgressProvider,
+            uiSkinDecoration = uiSkinDecoration,
+            linkedDockPhase = linkedDockPhase,
+            onLinkedDockPhaseChange = onLinkedDockPhaseChange,
+            isTopLevelDestination = isTopLevelDestination,
+        )
+        return
+    }
+
+    AppSurface(
         modifier = modifier
             .fillMaxWidth()
             .then(
@@ -2452,23 +2616,23 @@ private fun MaterialBottomBar(
                     Modifier
                 }
             ),
-        tonalElevation = if (blurEnabled) 0.dp else 3.dp,
-        shadowElevation = 0.dp,
+        tonalElevation = if (blurEnabled) AppSpacingTokens.None else AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2,
+        shadowElevation = AppSpacingTokens.None,
         color = containerColor
     ) {
         DockedBottomBarSkinContainer(
             decoration = uiSkinDecoration
         ) {
-            NavigationBar(
+            AppNavigationBar(
                 containerColor = Color.Transparent,
-                tonalElevation = 0.dp,
+                tonalElevation = AppSpacingTokens.None,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             ) {
-                visibleItems.forEach { item ->
-                    val itemLabel = resolveBottomNavItemLabel(item)
+                bottomBarVisibleItems.forEach { item ->
+                    val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
                     val itemContentDescription = resolveBottomNavItemContentDescription(item)
                     val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = currentItem == item)
-                    NavigationBarItem(
+                    AppNavigationBarItem(
                         selected = currentItem == item,
                         onClick = {
                             performMaterialBottomBarTap(
@@ -2485,22 +2649,24 @@ private fun MaterialBottomBar(
                                     if (skinIconPath != null) {
                                         BottomBarSkinIcon(
                                             iconPath = skinIconPath,
-                                            contentDescription = itemContentDescription
+                                            contentDescription = itemContentDescription,
+                                            selected = currentItem == item,
                                         )
                                     } else {
-                                        Icon(
-                                            imageVector = resolveMaterialBottomBarIcon(item = item, selected = currentItem == item),
+                                        MaterialBottomBarAnimatedIcon(
+                                            item = item,
+                                            selected = currentItem == item,
                                             contentDescription = itemContentDescription
                                         )
                                     }
                                 }
                             } else {
-                                Spacer(modifier = Modifier.size(0.dp))
+                                Spacer(modifier = Modifier.size(AppSpacingTokens.None))
                             }
                         },
                         label = if (showText) {
                             {
-                                Text(
+                                AppText(
                                     text = itemLabel,
                                     modifier = Modifier.bottomBarSkinLabelScrim(
                                         color = skinDockedItemColors.labelScrimColor,
@@ -2515,7 +2681,7 @@ private fun MaterialBottomBar(
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = skinDockedItemColors.selectedColor,
                             selectedTextColor = skinDockedItemColors.selectedColor,
-                            indicatorColor = dockedItemColors.indicatorColor,
+                            indicatorColor = dockedIndicatorColor,
                             unselectedIconColor = skinDockedItemColors.unselectedColor,
                             unselectedTextColor = skinDockedItemColors.unselectedColor
                         )
@@ -2524,7 +2690,7 @@ private fun MaterialBottomBar(
 
                 if (isTablet && onToggleSidebar != null) {
                     val sidebarLabel = stringResource(R.string.sidebar_toggle)
-                    NavigationBarItem(
+                    AppNavigationBarItem(
                         selected = false,
                         onClick = {
                             performMaterialBottomBarTap(
@@ -2534,17 +2700,17 @@ private fun MaterialBottomBar(
                         },
                         icon = {
                             if (showIcon) {
-                                Icon(
+                                AppIcon(
                                     imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
                                     contentDescription = sidebarLabel
                                 )
                             } else {
-                                Spacer(modifier = Modifier.size(0.dp))
+                                Spacer(modifier = Modifier.size(AppSpacingTokens.None))
                             }
                         },
                         label = if (showText) {
                             {
-                                Text(
+                                AppText(
                                     text = sidebarLabel,
                                     modifier = Modifier.bottomBarSkinLabelScrim(
                                         color = skinDockedItemColors.labelScrimColor,
@@ -2570,12 +2736,206 @@ private fun MaterialBottomBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OfficialMd3FloatingToolbarContent(
+    currentItem: BottomNavItem,
+    onItemClick: (BottomNavItem) -> Unit,
+    visibleItems: List<BottomNavItem>,
+    itemLabels: Map<String, String>,
+    onToggleSidebar: (() -> Unit)?,
+    dynamicUnreadCount: Int,
+    isTablet: Boolean,
+    showIcon: Boolean,
+    showText: Boolean,
+    haptic: (HapticType) -> Unit,
+    modifier: Modifier = Modifier,
+    blurEnabled: Boolean = false,
+    hazeState: HazeState? = null,
+    backdrop: MiuixLayerBackdrop? = null,
+    containerColor: Color = Color.Unspecified,
+    motionTier: MotionTier = MotionTier.Normal,
+    isTransitionRunning: Boolean = false,
+    forceLowBlurBudget: Boolean = false,
+) {
+    val useBlur = blurEnabled && (hazeState != null || backdrop != null)
+    val toolbarShape = FloatingToolbarDefaults.ContainerShape
+    val toolbarColors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+        toolbarContainerColor = if (useBlur) Color.Transparent else Color.Unspecified,
+    )
+    val toolbarModifier = if (useBlur) {
+        Modifier.biliPaiFloatingDockShell(
+            backdrop = backdrop,
+            containerColor = if (containerColor != Color.Unspecified) containerColor else MaterialTheme.colorScheme.surfaceContainer,
+            pressProgress = 0f,
+            shape = toolbarShape,
+            enabled = false,
+            blurEnabled = true,
+            hazeState = hazeState,
+            motionTier = motionTier,
+            isTransitionRunning = isTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget,
+        )
+    } else {
+        Modifier
+    }
+
+    val toolbarContent: @Composable RowScope.() -> Unit = {
+        visibleItems.forEach { item ->
+            val selected = currentItem == item
+            val label = resolveBottomNavItemLabel(item, itemLabels)
+            val onClick = {
+                performMaterialBottomBarTap(
+                    haptic = haptic,
+                    onClick = { onItemClick(item) },
+                )
+            }
+            val icon: @Composable () -> Unit = {
+                BottomBarReminderBadgeAnchor(
+                    item = item,
+                    unreadCount = dynamicUnreadCount,
+                    floatingCompact = true,
+                ) {
+                    AppIcon(
+                        imageVector = resolveMaterialBottomBarIcon(item, selected),
+                        contentDescription = if (showText) null else label,
+                    )
+                }
+            }
+
+            when {
+                showIcon && showText && selected -> FilledTonalButton(
+                    onClick = onClick,
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                ) {
+                    icon()
+                    Spacer(Modifier.width(8.dp))
+                    AppText(text = label, maxLines = 1)
+                }
+                showIcon && selected -> FilledTonalIconButton(onClick = onClick) { icon() }
+                showIcon -> IconButton(onClick = onClick) { icon() }
+                selected -> FilledTonalButton(onClick = onClick) {
+                    AppText(text = label, maxLines = 1)
+                }
+                else -> TextButton(onClick = onClick) {
+                    AppText(text = label, maxLines = 1)
+                }
+            }
+        }
+
+        if (isTablet && onToggleSidebar != null) {
+            IconButton(
+                onClick = {
+                    performMaterialBottomBarTap(haptic = haptic, onClick = onToggleSidebar)
+                },
+            ) {
+                AppIcon(
+                    imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
+                    contentDescription = stringResource(R.string.sidebar_toggle),
+                )
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        HorizontalFloatingToolbar(
+            expanded = true,
+            modifier = toolbarModifier,
+            colors = toolbarColors,
+            shape = toolbarShape,
+            content = toolbarContent,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OfficialMd3FloatingBottomBar(
+    currentItem: BottomNavItem,
+    onItemClick: (BottomNavItem) -> Unit,
+    modifier: Modifier = Modifier,
+    visibleItems: List<BottomNavItem>,
+    itemLabels: Map<String, String>,
+    onToggleSidebar: (() -> Unit)?,
+    dynamicUnreadCount: Int,
+    isTablet: Boolean,
+    showIcon: Boolean,
+    showText: Boolean,
+    haptic: (HapticType) -> Unit,
+    blurEnabled: Boolean = false,
+    hazeState: HazeState? = null,
+    backdrop: MiuixLayerBackdrop? = null,
+    containerColor: Color = Color.Unspecified,
+    motionTier: MotionTier = MotionTier.Normal,
+    isTransitionRunning: Boolean = false,
+    forceLowBlurBudget: Boolean = false,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = FloatingToolbarDefaults.ScreenOffset,
+                end = FloatingToolbarDefaults.ScreenOffset,
+                bottom = FloatingToolbarDefaults.ScreenOffset +
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            ),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        OfficialMd3FloatingToolbarContent(
+            currentItem = currentItem,
+            onItemClick = onItemClick,
+            visibleItems = visibleItems,
+            itemLabels = itemLabels,
+            onToggleSidebar = onToggleSidebar,
+            dynamicUnreadCount = dynamicUnreadCount,
+            isTablet = isTablet,
+            showIcon = showIcon,
+            showText = showText,
+            haptic = haptic,
+            blurEnabled = blurEnabled,
+            hazeState = hazeState,
+            backdrop = backdrop,
+            containerColor = containerColor,
+            motionTier = motionTier,
+            isTransitionRunning = isTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget,
+        )
+    }
+}
+
+@Composable
+private fun MaterialBottomBarAnimatedIcon(
+    item: BottomNavItem,
+    selected: Boolean,
+    contentDescription: String?,
+) {
+    val transform = rememberNavigationSelectionTransform(
+        selected = selected,
+        label = "${item.name}_md3_bottom_bar",
+    )
+
+    AppIcon(
+        imageVector = resolveMaterialBottomBarIcon(item = item, selected = selected),
+        contentDescription = contentDescription,
+        modifier = Modifier.graphicsLayer {
+            scaleX = transform.scale()
+            scaleY = transform.scale()
+            rotationZ = transform.rotationDegrees()
+        },
+    )
+}
+
 @Composable
 private fun MiuixBottomBar(
     currentItem: BottomNavItem,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
+    nowPlayingContent: LinkedDockNowPlayingSlot? = null,
     visibleItems: List<BottomNavItem>,
+    itemLabels: Map<String, String>,
     onToggleSidebar: (() -> Unit)?,
     dynamicUnreadCount: Int,
     isFloating: Boolean,
@@ -2583,40 +2943,73 @@ private fun MiuixBottomBar(
     labelMode: Int,
     blurEnabled: Boolean,
     hazeState: HazeState?,
-    backdrop: LayerBackdrop?,
     miuixBackdrop: MiuixLayerBackdrop?,
     homeSettings: com.android.purebilibili.core.store.HomeSettings,
     onSearchClick: () -> Unit,
     onSearchKeywordSubmit: (String) -> Unit,
     searchLaunchKey: Int = 0,
     onSearchLaunchTransitionFinished: (Int) -> Unit = {},
-    scrollOffset: Float,
     motionTier: MotionTier,
     isTransitionRunning: Boolean,
     forceLowBlurBudget: Boolean,
     isFeedScrollInProgress: Boolean = false,
-    uiSkinDecoration: BottomBarUiSkinDecoration? = null
+    collapseLinkedDock: Boolean = false,
+    indicatorPositionProvider: (() -> Float)? = null,
+    isPagerScrollInProgressProvider: () -> Boolean = { false },
+    uiSkinDecoration: BottomBarUiSkinDecoration? = null,
+    sharedLiquidGlassEnabled: Boolean,
+    linkedDockPhase: LinkedDockPhase? = null,
+    onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
+    isTopLevelDestination: Boolean = true,
 ) {
     val haptic = rememberHapticFeedback()
     val normalizedLabelMode = normalizeBottomBarLabelMode(labelMode)
     val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
     val showText = shouldShowBottomBarText(normalizedLabelMode)
-    val displayMode = resolveMd3BottomBarDisplayMode(labelMode).toMiuixNavigationDisplayMode()
+    val resolvedIconStyle = rememberResolvedAppIconStyle()
+    val sharedBarIconStyle = if (resolvedIconStyle == AppIconStyle.MD3_STANDARD) {
+        SharedFloatingBottomBarIconStyle.MATERIAL
+    } else {
+        SharedFloatingBottomBarIconStyle.MIUIX
+    }
+    val bottomBarVisibleItems = remember(
+        visibleItems,
+        homeSettings.isBottomBarSearchEnabled,
+        homeSettings.bottomBarSearchLayoutMode
+    ) {
+        resolveBottomBarVisibleItemsForSearchMode(
+            visibleItems = visibleItems,
+            bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
+            searchLayoutMode = homeSettings.bottomBarSearchLayoutMode
+        )
+    }
+    val displayMode = resolveMd3BottomBarDisplayMode(labelMode).toAppPlatformNavigationDisplayMode()
     val glassEnabled = resolveAndroidNativeBottomBarGlassEnabled(
-        liquidGlassEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
+        liquidGlassEnabled = sharedLiquidGlassEnabled,
         blurEnabled = blurEnabled
     )
+    val liquidGlassTuning = remember(
+        homeSettings.liquidGlassProgress,
+        homeSettings.liquidGlassAdvancedSettings,
+        homeSettings.liquidGlassReadabilityMode,
+    ) {
+        resolveLiquidGlassTuning(
+            homeSettings.liquidGlassProgress,
+            homeSettings.liquidGlassAdvancedSettings,
+            homeSettings.liquidGlassReadabilityMode,
+        )
+    }
     val tuning = resolveAndroidNativeBottomBarTuning(
         blurEnabled = glassEnabled || blurEnabled,
-        darkTheme = resolveBottomBarDarkTheme(MiuixTheme.colorScheme.background),
-        androidNativeVariant = AndroidNativeVariant.MIUIX
+        darkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background()),
     )
     val blurIntensity = currentUnifiedBlurIntensity()
     val baseSurfaceColor = if (isFloating) {
-        MiuixTheme.colorScheme.surfaceContainer
+        AppSurfaceTokens.surfaceContainer()
     } else {
-        MiuixTheme.colorScheme.surface
+        AppSurfaceTokens.surface()
     }
+    val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     val containerColor = if (isFloating) {
         resolveAndroidNativeFloatingBottomBarContainerColor(
             surfaceColor = baseSurfaceColor,
@@ -2624,7 +3017,9 @@ private fun MiuixBottomBar(
             glassEnabled = glassEnabled,
             blurEnabled = blurEnabled,
             blurIntensity = blurIntensity,
-            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset
+            liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
+            liquidGlassTuning = liquidGlassTuning,
+            globalWallpaperVisible = globalWallpaperVisible
         )
     } else {
         resolveBottomBarSurfaceColor(
@@ -2634,25 +3029,28 @@ private fun MiuixBottomBar(
         )
     }
     if (isFloating) {
-        KernelSuAlignedBottomBar(
+        BiliPaiFloatingBottomBar(
             currentItem = currentItem,
+            nowPlayingContent = nowPlayingContent,
             onItemClick = onItemClick,
             modifier = modifier,
-            visibleItems = visibleItems,
+            visibleItems = bottomBarVisibleItems,
+            itemLabels = itemLabels,
             onToggleSidebar = onToggleSidebar,
             dynamicUnreadCount = dynamicUnreadCount,
             isTablet = isTablet,
             showIcon = showIcon,
             showText = showText,
+            labelMode = normalizedLabelMode,
             blurEnabled = blurEnabled,
-            backdrop = backdrop,
             miuixBackdrop = miuixBackdrop,
             containerColor = containerColor,
             tuning = tuning,
             glassEnabled = glassEnabled,
-            interactiveHighlightEnabled = homeSettings.bottomBarInteractiveHighlightEnabled,
             liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
-            iconStyle = SharedFloatingBottomBarIconStyle.CUPERTINO,
+            liquidGlassTuning = liquidGlassTuning,
+            iconStyle = sharedBarIconStyle,
+            navigationIconCrossScaleEnabled = homeSettings.navigationIconCrossScaleEnabled,
             haptic = haptic,
             hazeState = hazeState,
             motionTier = motionTier,
@@ -2660,13 +3058,19 @@ private fun MiuixBottomBar(
             forceLowBlurBudget = forceLowBlurBudget,
             bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
             bottomBarSearchAutoExpandMode = homeSettings.bottomBarSearchAutoExpandMode,
+            bottomBarSearchLayoutMode = homeSettings.bottomBarSearchLayoutMode,
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,
             searchLaunchKey = searchLaunchKey,
             onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-            scrollOffset = scrollOffset,
             isFeedScrollInProgress = isFeedScrollInProgress,
-            uiSkinDecoration = uiSkinDecoration
+            collapseLinkedDock = collapseLinkedDock,
+            indicatorPositionProvider = indicatorPositionProvider,
+            isPagerScrollInProgressProvider = isPagerScrollInProgressProvider,
+            uiSkinDecoration = uiSkinDecoration,
+            linkedDockPhase = linkedDockPhase,
+            onLinkedDockPhaseChange = onLinkedDockPhaseChange,
+            isTopLevelDestination = isTopLevelDestination,
         )
         return
     }
@@ -2692,7 +3096,7 @@ private fun MiuixBottomBar(
         decoration = uiSkinDecoration,
         modifier = barModifier.background(containerColor)
     ) {
-        MiuixNavigationBar(
+        AppPlatformNavigationBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
@@ -2703,45 +3107,90 @@ private fun MiuixBottomBar(
                     }
                 ),
             color = Color.Transparent,
-            showDivider = false,
+            showDivider = !sharedLiquidGlassEnabled,
             defaultWindowInsetsPadding = true,
             mode = displayMode
         ) {
             val selectedItemColor = MaterialTheme.colorScheme.primary
             val unselectedItemColor = MaterialTheme.colorScheme.onSurfaceVariant
-            val skinItemColors = resolveBottomBarSkinContentColors(
-                selectedColor = selectedItemColor,
-                unselectedColor = unselectedItemColor,
+            val dockedIndicatorColor = resolveDockedBottomBarIndicatorColor(
+                defaultColor = MaterialTheme.colorScheme.secondaryContainer,
+                hasUiSkinDecoration = uiSkinDecoration != null,
+            )
+        val skinItemColors = resolveBottomBarSkinContentColors(
+                selectedColor = uiSkinDecoration?.bottomSelectedTint
+                    ?.takeUnless { it == Color.Unspecified }
+                    ?: selectedItemColor,
+            unselectedColor = uiSkinDecoration?.bottomUnselectedTint
+                ?.takeUnless { it == Color.Unspecified }
+                ?: unselectedItemColor,
                 skinTrimTint = uiSkinDecoration?.bottomTrimTint
             )
 
-            visibleItems.forEach { item ->
-                val itemLabel = resolveBottomNavItemLabel(item)
-                MiuixDockedBottomBarItem(
-                    selected = currentItem == item,
-                    onClick = {
-                        performMaterialBottomBarTap(
-                            haptic = haptic,
-                            onClick = { onItemClick(item) }
-                        )
-                    },
-                    icon = resolveMaterialBottomBarIcon(item, currentItem == item),
-                    label = itemLabel,
-                    showIcon = showIcon,
-                    showText = showText,
-                    selectedColor = skinItemColors.selectedColor,
-                    unselectedColor = skinItemColors.unselectedColor,
-                    labelScrimColor = skinItemColors.labelScrimColor,
-                    labelScrimAlpha = skinItemColors.labelScrimAlpha,
-                    skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = currentItem == item),
-                    reminderBadgeText = formatBottomBarDynamicReminderBadge(
-                        if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) {
-                            dynamicUnreadCount
-                        } else {
-                            0
+            bottomBarVisibleItems.forEach { item ->
+                val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
+                val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = currentItem == item)
+                val reminderBadgeText = formatBottomBarDynamicReminderBadge(
+                    if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) {
+                        dynamicUnreadCount
+                    } else {
+                        0
+                    }
+                )
+                val onItemTap = {
+                    performMaterialBottomBarTap(
+                        haptic = haptic,
+                        onClick = { onItemClick(item) }
+                    )
+                }
+                if (
+                    shouldUseMiuixOfficialNavigationBarItem(
+                        skinIconPath = skinIconPath,
+                        labelScrimAlpha = skinItemColors.labelScrimAlpha
+                    )
+                ) {
+                    AppPlatformNavigationBarItem(
+                        selected = currentItem == item,
+                        onClick = onItemTap,
+                        icon = resolveSharedBottomBarIcon(
+                            item = item,
+                            selected = currentItem == item,
+                            iconStyle = sharedBarIconStyle
+                        ),
+                        label = itemLabel,
+                        colors = MiuixNavigationBarDefaults.navigationBarItemColors(
+                            unselectedContentColor = skinItemColors.unselectedColor,
+                            selectedContentColor = skinItemColors.selectedColor,
+                        ),
+                        badge = reminderBadgeText?.let { badgeText ->
+                            {
+                                AppPlatformNavigationBadge {
+                                    AppText(text = badgeText)
+                                }
+                            }
                         }
                     )
-                )
+                } else {
+                    MiuixDockedBottomBarItem(
+                        selected = currentItem == item,
+                        onClick = onItemTap,
+                        icon = resolveSharedBottomBarIcon(
+                            item = item,
+                            selected = currentItem == item,
+                            iconStyle = sharedBarIconStyle
+                        ),
+                        label = itemLabel,
+                        showIcon = showIcon,
+                        showText = showText,
+                        selectedColor = skinItemColors.selectedColor,
+                        unselectedColor = skinItemColors.unselectedColor,
+                        labelScrimColor = skinItemColors.labelScrimColor,
+                        labelScrimAlpha = skinItemColors.labelScrimAlpha,
+                        indicatorColor = dockedIndicatorColor,
+                        skinIconPath = skinIconPath,
+                        reminderBadgeText = reminderBadgeText
+                    )
+                }
             }
 
             if (isTablet && onToggleSidebar != null) {
@@ -2754,7 +3203,7 @@ private fun MiuixBottomBar(
                             onClick = onToggleSidebar
                         )
                     },
-                    icon = Icons.AutoMirrored.Outlined.MenuOpen,
+                    icon = resolveSharedBottomBarSidebarIcon(sharedBarIconStyle),
                     label = sidebarLabel,
                     showIcon = showIcon,
                     showText = showText,
@@ -2795,6 +3244,7 @@ private fun RowScope.MiuixDockedBottomBarItem(
     unselectedColor: Color,
     labelScrimColor: Color = Color.Transparent,
     labelScrimAlpha: Float = 0f,
+    indicatorColor: Color = Color.Transparent,
     skinIconPath: String? = null,
     reminderBadgeText: String? = null
 ) {
@@ -2805,6 +3255,13 @@ private fun RowScope.MiuixDockedBottomBarItem(
         selectedColor = selectedColor,
         unselectedColor = unselectedColor
     )
+    // MD3 官方选中态:secondaryContainer 指示器 + onSecondaryContainer 图标
+    val showIndicator = selected && indicatorColor != Color.Transparent && skinIconPath == null
+    val iconTint = if (showIndicator) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        baseContentColor
+    }
     val contentColor by animateColorAsState(
         targetValue = if (isPressed) {
             baseContentColor.copy(alpha = if (selected) 0.62f else 0.54f)
@@ -2839,37 +3296,60 @@ private fun RowScope.MiuixDockedBottomBarItem(
         if (showIcon) {
             BottomBarReminderBadgeAnchor(
                 badgeText = reminderBadgeText,
-                modifier = Modifier.then(if (iconAndText) Modifier.padding(top = 8.dp) else Modifier)
+                modifier = Modifier.then(if (iconAndText) Modifier.padding(top = AppSpacingTokens.Small) else Modifier)
             ) {
                 if (skinIconPath != null) {
                     BottomBarSkinIcon(
                         iconPath = skinIconPath,
                         contentDescription = label,
+                        selected = selected,
                         size = resolveBottomBarMiuixSkinDockIconSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = label,
-                        tint = contentColor,
-                        modifier = Modifier.size(26.dp)
-                    )
+                    val iconGlyph: @Composable () -> Unit = {
+                        AppIcon(
+                            imageVector = icon,
+                            contentDescription = label,
+                            tint = iconTint,
+                            modifier = Modifier.size(AppSpacingTokens.ExtraLarge + AppSpacingTokens.Micro)
+                        )
+                    }
+                    if (showIndicator) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(indicatorColor)
+                                .padding(
+                                    horizontal = AppSpacingTokens.Large,
+                                    vertical = AppSpacingTokens.ExtraSmall
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            iconGlyph()
+                        }
+                    } else {
+                        iconGlyph()
+                    }
                 }
             }
         }
         if (showText) {
-            Text(
+            AppText(
                 text = label,
                 color = contentColor,
                 textAlign = TextAlign.Center,
-                fontSize = if (textOnly) 14.sp else 12.sp,
+                fontSize = if (textOnly) {
+                    MaterialTheme.typography.labelMedium.fontSize
+                } else {
+                    MaterialTheme.typography.labelSmall.fontSize
+                },
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
                 modifier = Modifier.then(
                     if (iconAndText) {
-                        Modifier.padding(bottom = 8.dp)
+                        Modifier.padding(bottom = AppSpacingTokens.Small)
                     } else {
-                        Modifier.padding(vertical = 8.dp)
+                        Modifier.padding(vertical = AppSpacingTokens.Small)
                     }
                 ).bottomBarSkinLabelScrim(
                     color = labelScrimColor,
@@ -2881,26 +3361,29 @@ private fun RowScope.MiuixDockedBottomBarItem(
 }
 
 @Composable
-private fun KernelSuAlignedBottomBar(
+private fun BiliPaiFloatingBottomBar(
     currentItem: BottomNavItem,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
+    nowPlayingContent: LinkedDockNowPlayingSlot? = null,
     visibleItems: List<BottomNavItem>,
+    itemLabels: Map<String, String> = emptyMap(),
     itemColorIndices: Map<String, Int> = emptyMap(),
     dynamicUnreadCount: Int = 0,
     onToggleSidebar: (() -> Unit)?,
     isTablet: Boolean,
     showIcon: Boolean,
     showText: Boolean,
+    labelMode: Int,
     blurEnabled: Boolean,
-    backdrop: Backdrop?,
     miuixBackdrop: MiuixBackdrop?,
     containerColor: Color,
     tuning: AndroidNativeBottomBarTuning,
     glassEnabled: Boolean,
-    interactiveHighlightEnabled: Boolean,
     liquidGlassPreset: BottomBarLiquidGlassPreset,
+    liquidGlassTuning: LiquidGlassTuning,
     iconStyle: SharedFloatingBottomBarIconStyle = SharedFloatingBottomBarIconStyle.MATERIAL,
+    navigationIconCrossScaleEnabled: Boolean = false,
     haptic: (HapticType) -> Unit,
     hazeState: HazeState? = null,
     motionTier: MotionTier = MotionTier.Normal,
@@ -2909,26 +3392,188 @@ private fun KernelSuAlignedBottomBar(
     bottomBarSearchEnabled: Boolean = false,
     bottomBarSearchAutoExpandMode: BottomBarSearchAutoExpandMode =
         BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP,
+    bottomBarSearchLayoutMode: BottomBarSearchLayoutMode =
+        BottomBarSearchLayoutMode.FULL_DOCK,
     onSearchClick: () -> Unit = {},
     onSearchKeywordSubmit: (String) -> Unit = {},
     searchLaunchKey: Int = 0,
     onSearchLaunchTransitionFinished: (Int) -> Unit = {},
-    scrollOffset: Float = 0f,
     isFeedScrollInProgress: Boolean = false,
+    collapseLinkedDock: Boolean = false,
+    indicatorPositionProvider: (() -> Float)? = null,
+    isPagerScrollInProgressProvider: () -> Boolean = { false },
+    uiSkinDecoration: BottomBarUiSkinDecoration? = null,
+    linkedDockPhase: LinkedDockPhase? = null,
+    onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
+    isTopLevelDestination: Boolean = true
+) {
+    if (bottomBarSearchEnabled || nowPlayingContent != null) {
+        LinkedBottomDock(
+            currentItem = currentItem,
+            firstItem = visibleItems.firstOrNull() ?: BottomNavItem.HOME,
+            firstLabel = resolveBottomNavItemLabel(visibleItems.firstOrNull() ?: BottomNavItem.HOME, itemLabels),
+            dockPhase = linkedDockPhase,
+            onDockPhaseChange = onLinkedDockPhaseChange,
+            isTopLevelDestination = isTopLevelDestination,
+            searchEnabled = bottomBarSearchEnabled,
+            isFeedScrollInProgress = isFeedScrollInProgress,
+            collapseRequested = collapseLinkedDock,
+            onSearchClick = onSearchClick,
+            onSearchKeywordSubmit = onSearchKeywordSubmit,
+            containerColor = containerColor,
+            backdrop = miuixBackdrop,
+            blurEnabled = blurEnabled,
+            hazeState = hazeState,
+            glassEnabled = glassEnabled && !forceLowBlurBudget,
+            liquidGlassTuning = liquidGlassTuning,
+            iconStyle = iconStyle,
+            navigationItemCount = visibleItems.size + if (isTablet && onToggleSidebar != null) 1 else 0,
+            navigationLabelMode = labelMode,
+            navigationMinEdgePadding = tuning.outerHorizontalPaddingDp.dp,
+            nowPlayingContent = nowPlayingContent,
+            modifier = modifier,
+            navigationContent = {
+                BiliPaiFloatingBottomBarChrome(
+                    currentItem = currentItem,
+                    onItemClick = onItemClick,
+                    modifier = Modifier,
+                    visibleItems = visibleItems,
+                    itemLabels = itemLabels,
+                    itemColorIndices = itemColorIndices,
+                    dynamicUnreadCount = dynamicUnreadCount,
+                    onToggleSidebar = onToggleSidebar,
+                    isTablet = isTablet,
+                    showIcon = showIcon,
+                    showText = showText,
+                    labelMode = labelMode,
+                    blurEnabled = blurEnabled,
+                    miuixBackdrop = miuixBackdrop,
+                    containerColor = containerColor,
+                    tuning = tuning,
+                    glassEnabled = glassEnabled,
+                    liquidGlassPreset = liquidGlassPreset,
+                    liquidGlassTuning = liquidGlassTuning,
+                    iconStyle = iconStyle,
+                    navigationIconCrossScaleEnabled = navigationIconCrossScaleEnabled,
+                    haptic = haptic,
+                    hazeState = hazeState,
+                    motionTier = motionTier,
+                    isTransitionRunning = isTransitionRunning,
+                    forceLowBlurBudget = forceLowBlurBudget,
+                    bottomBarSearchEnabled = false,
+                    bottomBarSearchAutoExpandMode = bottomBarSearchAutoExpandMode,
+                    bottomBarSearchLayoutMode = bottomBarSearchLayoutMode,
+                    onSearchClick = onSearchClick,
+                    onSearchKeywordSubmit = onSearchKeywordSubmit,
+                    searchLaunchKey = searchLaunchKey,
+                    onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
+                    isFeedScrollInProgress = isFeedScrollInProgress,
+                    indicatorPositionProvider = indicatorPositionProvider,
+                    isPagerScrollInProgressProvider = isPagerScrollInProgressProvider,
+                    uiSkinDecoration = uiSkinDecoration,
+                    embeddedDock = true,
+                )
+            },
+        )
+    } else {
+        BiliPaiFloatingBottomBarChrome(
+            currentItem = currentItem,
+            onItemClick = onItemClick,
+            modifier = modifier,
+            visibleItems = visibleItems,
+            itemLabels = itemLabels,
+            itemColorIndices = itemColorIndices,
+            dynamicUnreadCount = dynamicUnreadCount,
+            onToggleSidebar = onToggleSidebar,
+            isTablet = isTablet,
+            showIcon = showIcon,
+            showText = showText,
+            labelMode = labelMode,
+            blurEnabled = blurEnabled,
+            miuixBackdrop = miuixBackdrop,
+            containerColor = containerColor,
+            tuning = tuning,
+            glassEnabled = glassEnabled,
+            liquidGlassPreset = liquidGlassPreset,
+            liquidGlassTuning = liquidGlassTuning,
+            iconStyle = iconStyle,
+            navigationIconCrossScaleEnabled = navigationIconCrossScaleEnabled,
+            haptic = haptic,
+            hazeState = hazeState,
+            motionTier = motionTier,
+            isTransitionRunning = isTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget,
+            bottomBarSearchEnabled = bottomBarSearchEnabled,
+            bottomBarSearchAutoExpandMode = bottomBarSearchAutoExpandMode,
+            bottomBarSearchLayoutMode = bottomBarSearchLayoutMode,
+            onSearchClick = onSearchClick,
+            onSearchKeywordSubmit = onSearchKeywordSubmit,
+            searchLaunchKey = searchLaunchKey,
+            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
+            isFeedScrollInProgress = isFeedScrollInProgress,
+            indicatorPositionProvider = indicatorPositionProvider,
+            isPagerScrollInProgressProvider = isPagerScrollInProgressProvider,
+            uiSkinDecoration = uiSkinDecoration,
+        )
+    }
+}
+
+@Composable
+private fun BiliPaiFloatingBottomBarChrome(
+    currentItem: BottomNavItem,
+    onItemClick: (BottomNavItem) -> Unit,
+    modifier: Modifier = Modifier,
+    embeddedDock: Boolean = false,
+    visibleItems: List<BottomNavItem>,
+    itemLabels: Map<String, String> = emptyMap(),
+    itemColorIndices: Map<String, Int> = emptyMap(),
+    dynamicUnreadCount: Int = 0,
+    onToggleSidebar: (() -> Unit)?,
+    isTablet: Boolean,
+    showIcon: Boolean,
+    showText: Boolean,
+    labelMode: Int,
+    blurEnabled: Boolean,
+    miuixBackdrop: MiuixBackdrop?,
+    containerColor: Color,
+    tuning: AndroidNativeBottomBarTuning,
+    glassEnabled: Boolean,
+    liquidGlassPreset: BottomBarLiquidGlassPreset,
+    liquidGlassTuning: LiquidGlassTuning,
+    iconStyle: SharedFloatingBottomBarIconStyle = SharedFloatingBottomBarIconStyle.MATERIAL,
+    navigationIconCrossScaleEnabled: Boolean = false,
+    haptic: (HapticType) -> Unit,
+    hazeState: HazeState? = null,
+    motionTier: MotionTier = MotionTier.Normal,
+    isTransitionRunning: Boolean = false,
+    forceLowBlurBudget: Boolean = false,
+    bottomBarSearchEnabled: Boolean = false,
+    bottomBarSearchAutoExpandMode: BottomBarSearchAutoExpandMode =
+        BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP,
+    bottomBarSearchLayoutMode: BottomBarSearchLayoutMode =
+        BottomBarSearchLayoutMode.FULL_DOCK,
+    onSearchClick: () -> Unit = {},
+    onSearchKeywordSubmit: (String) -> Unit = {},
+    searchLaunchKey: Int = 0,
+    onSearchLaunchTransitionFinished: (Int) -> Unit = {},
+    isFeedScrollInProgress: Boolean = false,
+    indicatorPositionProvider: (() -> Float)? = null,
+    isPagerScrollInProgressProvider: () -> Boolean = { false },
     uiSkinDecoration: BottomBarUiSkinDecoration? = null
 ) {
-    val shellShape = resolveSharedBottomBarCapsuleShape()
-    val tabsBackdrop = rememberMiuixLayerBackdrop()
-    val isDarkTheme = resolveBottomBarDarkTheme(MiuixTheme.colorScheme.background)
-    val ksuContainerColor = if (glassEnabled) {
-        resolveKernelSuBottomBarContainerColor(darkTheme = isDarkTheme)
-    } else {
-        containerColor
-    }
-    val density = LocalDensity.current
-    val bottomBarMotionSpec = remember {
-        resolveBottomBarMotionSpec(profile = BottomBarMotionProfile.ANDROID_NATIVE_FLOATING)
-    }
+    // BiliPai 对齐：材质/动效由 FloatingBottomBar 三层结构承担；
+    // 本函数仅编排 BiliPai 特性（search / skin / badge / tablet sidebar）。
+    val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
+    val effectiveGlassEnabled = shouldRenderBottomBarLiquidGlassEffects(
+        glassEnabled = glassEnabled,
+        forceLowBlurBudget = forceLowBlurBudget,
+    )
+    val biliPaiContainerColor = resolveBiliPaiBottomBarShellColor(
+        containerColor = containerColor,
+        liquidGlassEnabled = effectiveGlassEnabled,
+        darkTheme = isDarkTheme,
+        liquidGlassTuning = liquidGlassTuning
+    )
     val allItems = remember(visibleItems, isTablet, onToggleSidebar) {
         buildList {
             addAll(visibleItems)
@@ -2938,110 +3583,43 @@ private fun KernelSuAlignedBottomBar(
     val selectedIndex = visibleItems.indexOf(currentItem).coerceAtLeast(0)
     val isValidSelection = currentItem in visibleItems
     val baseSelectedColor = MaterialTheme.colorScheme.primary
-    val baseUnselectedColor = MaterialTheme.colorScheme.onSurface
+    val baseUnselectedColor = if (iconStyle == SharedFloatingBottomBarIconStyle.MATERIAL) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
     val skinContentColors = resolveBottomBarSkinContentColors(
-        selectedColor = baseSelectedColor,
-        unselectedColor = baseUnselectedColor,
+        selectedColor = uiSkinDecoration?.bottomSelectedTint
+            ?.takeUnless { it == Color.Unspecified }
+            ?: baseSelectedColor,
+        unselectedColor = uiSkinDecoration?.bottomUnselectedTint
+            ?.takeUnless { it == Color.Unspecified }
+            ?: baseUnselectedColor,
         skinTrimTint = uiSkinDecoration?.bottomTrimTint
     )
-    val selectedColor = skinContentColors.selectedColor
-    val unselectedColor = skinContentColors.unselectedColor
-    val exportTintColor = resolveAndroidNativeExportTintColor(
-        themeColor = selectedColor,
-        darkTheme = isDarkTheme
+    val readableContentColor = MaterialTheme.colorScheme.onSurface
+    val selectedColor = lerpColor(
+        skinContentColors.selectedColor,
+        readableContentColor,
+        liquidGlassTuning.contentReadabilityBoost * 0.65f,
     )
+    val unselectedColor = lerpColor(
+        skinContentColors.unselectedColor,
+        readableContentColor,
+        liquidGlassTuning.contentReadabilityBoost,
+    ).copy(alpha = 1f)
     val totalItems = allItems.size.coerceAtLeast(1)
-    val dampedDragState = rememberDampedDragAnimationState(
-        initialIndex = selectedIndex,
-        itemCount = totalItems,
-        motionSpec = bottomBarMotionSpec,
-        notifyIndexChangedOnReleaseStart = false,
-        holdPressUntilReleaseTargetSettles = true,
-        onIndexChanged = { index ->
-            when {
-                index in visibleItems.indices -> onItemClick(visibleItems[index])
-                isTablet && onToggleSidebar != null && index == visibleItems.size -> onToggleSidebar()
-            }
-        }
-    )
-    LaunchedEffect(selectedIndex, isValidSelection, dampedDragState) {
-        if (isValidSelection) {
-            dampedDragState.updateIndex(selectedIndex)
-        }
-    }
-    // [KSU 对齐] 交互高光锚点:点击切换时高光直接在被点项绽放(对齐 KSU 按下即
-    // snap 到触点),不随选中弹簧动画沿途滑动。拖拽时改为跟随实时指示器。
-    var highlightAnchorIndex by remember { mutableIntStateOf(selectedIndex) }
-    LaunchedEffect(selectedIndex) {
-        highlightAnchorIndex = selectedIndex
-    }
-    val pressMotionProgress by remember {
-        derivedStateOf { dampedDragState.pressProgress }
-    }
-    val visualIndicatorPosition by remember(totalItems, dampedDragState) {
-        derivedStateOf {
-            resolveBottomBarVisualIndicatorPosition(
-                rawPosition = dampedDragState.value,
-                itemCount = totalItems
-            )
-        }
-    }
-    val edgeStrain by remember(totalItems, dampedDragState) {
-        derivedStateOf {
-            resolveBottomBarEdgeStrain(
-                rawPosition = dampedDragState.value,
-                itemCount = totalItems
-            )
-        }
-    }
-    val edgeCompressionScaleX by remember {
-        derivedStateOf {
-            resolveBottomBarEdgeCompressionScaleX(edgeStrain)
-        }
-    }
-    val tunedRefractionMotionProfile = resolveBottomBarRefractionMotionProfile(
-        position = visualIndicatorPosition,
-        velocity = dampedDragState.velocityPxPerSecond,
-        isDragging = dampedDragState.isDragging,
-        motionSpec = bottomBarMotionSpec
-    )
-    val refractionMotionProfile = resolveBottomBarEffectiveRefractionMotionProfile(
-        preset = liquidGlassPreset,
-        profile = tunedRefractionMotionProfile
-    )
-    val effectivePressProgress = dampedDragState.pressProgress
-    val motionProgress = maxOf(effectivePressProgress, refractionMotionProfile.progress)
-    val indicatorDragScaleProgress = rememberBottomBarIndicatorDragScaleProgress(
-        isDragging = dampedDragState.isDragging
-    )
-    val indicatorLayerScaleProgress = maxOf(indicatorDragScaleProgress, effectivePressProgress)
-    val materialScrollProgress by animateFloatAsState(
-        targetValue = if (isFeedScrollInProgress) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = resolveBottomBarMaterialScrollAnimationDurationMillis(
-                isScrolling = isFeedScrollInProgress
-            ),
-            easing = AppMotionEasing.Continuity
-        ),
-        label = "bottomBarMaterialScrollProgress"
-    )
-    val bottomBarMaterialSpec = resolveBottomBarGlassMaterialSpec(
-        preset = liquidGlassPreset,
-        isDarkTheme = isDarkTheme,
-        isScrolling = isFeedScrollInProgress,
-        scrollProgress = materialScrollProgress,
-        glassEnabled = glassEnabled,
-        motionProgress = motionProgress,
-        pressProgress = effectivePressProgress
-    )
+
     var searchExpansionOverride by remember {
         mutableStateOf(BottomBarSearchExpansionOverride.FOLLOW_AUTO)
     }
     var searchQuery by remember { mutableStateOf("") }
     val searchLaunchMorphSpec = remember { resolveBottomBarSearchLaunchMorphSpec() }
-    var searchLaunchInProgress by remember { mutableStateOf(false) }
     val searchEnabled = resolveBottomBarSearchEnabledForItem(
         currentItem = currentItem,
+        bottomBarSearchEnabled = bottomBarSearchEnabled
+    )
+    val searchLayoutReserved = shouldReserveBottomBarSearchLayout(
         bottomBarSearchEnabled = bottomBarSearchEnabled
     )
     val homeScrollOffset = LocalHomeScrollOffset.current
@@ -3070,7 +3648,7 @@ private fun KernelSuAlignedBottomBar(
         bottomBarSearchEnabled = searchEnabled,
         shouldAutoExpand = shouldAutoExpandSearch,
         expansionOverride = searchExpansionOverride
-    ) || searchLaunchInProgress
+    )
     LaunchedEffect(
         currentItem,
         searchEnabled,
@@ -3089,14 +3667,83 @@ private fun KernelSuAlignedBottomBar(
     }
     LaunchedEffect(searchLaunchKey) {
         if (searchLaunchKey <= 0 || !searchEnabled) return@LaunchedEffect
-        searchLaunchInProgress = true
-        // 搜索入口交接只推动搜索胶囊展开，避免恢复旧版底栏整体缩放造成的突兀感。
-        searchExpansionOverride = BottomBarSearchExpansionOverride.EXPANDED
         delay(searchLaunchMorphSpec.expandDurationMillis.toLong())
         onSearchLaunchTransitionFinished(searchLaunchKey)
         delay(searchLaunchMorphSpec.postHandoffResetDelayMillis)
-        searchLaunchInProgress = false
     }
+
+    val floatingMode = when {
+        effectiveGlassEnabled && miuixBackdrop != null -> FloatingBottomBarMode.LiquidGlass
+        blurEnabled && miuixBackdrop != null -> FloatingBottomBarMode.Blur
+        else -> FloatingBottomBarMode.None
+    }
+    val usePlainMiuixFloatingBar = shouldUsePlainMiuixFloatingBar(
+        glassEnabled = effectiveGlassEnabled,
+        blurEnabled = blurEnabled,
+    )
+    val floatingContainerColor = if (usePlainMiuixFloatingBar) {
+        biliPaiContainerColor.copy(alpha = 1f)
+    } else {
+        resolveFloatingBottomBarContainerColor(
+            defaultColor = biliPaiContainerColor,
+            mode = floatingMode,
+            hasUiSkinDecoration = uiSkinDecoration != null,
+        )
+    }
+    val floatingColors = FloatingBottomBarColors(
+        containerColor = floatingContainerColor,
+        indicatorColor = selectedColor,
+        contentColor = unselectedColor,
+        activeContentColor = selectedColor
+    )
+
+    fun handleBottomBarItemClick(index: Int, item: BottomNavItem) {
+        val searchOverride = resolveBottomBarSearchExpansionOverrideOnNavItemClick(
+            currentItem = currentItem,
+            clickedItem = item,
+            bottomBarSearchEnabled = searchEnabled,
+            effectiveSearchExpanded = effectiveSearchExpanded
+        )
+        if (searchOverride != null) {
+            haptic(HapticType.LIGHT)
+            searchExpansionOverride = searchOverride
+        } else {
+            performMaterialBottomBarTap(
+                haptic = haptic,
+                onClick = { onItemClick(item) }
+            )
+        }
+    }
+
+    fun handleBottomBarSidebarClick() {
+        if (onToggleSidebar != null) {
+            performMaterialBottomBarTap(
+                haptic = haptic,
+                onClick = onToggleSidebar
+            )
+        }
+    }
+
+    fun handleSelected(index: Int) {
+        when {
+            index in visibleItems.indices -> {
+                val item = visibleItems[index]
+                val searchOverride = resolveBottomBarSearchExpansionOverrideOnNavItemClick(
+                    currentItem = currentItem,
+                    clickedItem = item,
+                    bottomBarSearchEnabled = searchEnabled,
+                    effectiveSearchExpanded = effectiveSearchExpanded
+                )
+                if (searchOverride != null) {
+                    searchExpansionOverride = searchOverride
+                } else {
+                    onItemClick(item)
+                }
+            }
+            isTablet && onToggleSidebar != null && index == visibleItems.size -> onToggleSidebar()
+        }
+    }
+
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
@@ -3104,20 +3751,19 @@ private fun KernelSuAlignedBottomBar(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                .padding(
+                    bottom = if (embeddedDock) 0.dp else AppSpacingTokens.Medium +
+                        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                )
         ) {
-            val dockHorizontalPadding = 4.dp
-            val dockContentPadding = if (uiSkinDecoration != null) {
-                resolveBottomBarSkinDockContentPadding()
-            } else {
-                PaddingValues(dockHorizontalPadding)
-            }
-            val searchLayoutState = rememberKernelSuBottomBarSearchLayoutState(
+            val searchLayoutState = rememberBiliPaiBottomBarSearchLayoutState(
                 containerWidth = maxWidth,
                 itemCount = totalItems,
                 minEdgePadding = tuning.outerHorizontalPaddingDp.dp,
-                searchEnabled = searchEnabled,
+                searchEnabled = searchLayoutReserved,
                 searchExpanded = effectiveSearchExpanded,
+                labelMode = labelMode,
+                searchLayoutMode = bottomBarSearchLayoutMode,
                 hasUiSkinDecoration = uiSkinDecoration != null
             )
             val dockWidth = searchLayoutState.dockWidth
@@ -3126,257 +3772,58 @@ private fun KernelSuAlignedBottomBar(
             val launchAdjustedSearchGap = searchLayoutState.launchAdjustedSearchGap
             val dockHeight = searchLayoutState.dockHeight
             val shellHeight = searchLayoutState.shellHeight
-            val dockContentAlpha by animateFloatAsState(
-                targetValue = if (effectiveSearchExpanded) 0f else 1f,
-                animationSpec = tween(
-                    durationMillis = 180,
-                    easing = AppMotionEasing.Continuity
-                ),
+            val compactSearchLayout =
+                bottomBarSearchLayoutMode == BottomBarSearchLayoutMode.HOME_AND_SEARCH
+            val visualSearchExpanded = resolveBiliPaiBottomBarSearchFieldExpanded(
+                searchExpanded = effectiveSearchExpanded,
+                searchLayoutMode = bottomBarSearchLayoutMode
+            )
+            val animatedDockContentAlpha by animateFloatAsState(
+                targetValue = if (compactSearchLayout && effectiveSearchExpanded) 0f else 1f,
+                animationSpec = bottomBarContentVisibilityMotionSpec(),
                 label = "bottomBarDockContentAlpha"
             )
-            val compactHomeAlpha by animateFloatAsState(
-                targetValue = if (effectiveSearchExpanded) 1f else 0f,
-                animationSpec = tween(
-                    durationMillis = 180,
-                    easing = AppMotionEasing.Continuity
-                ),
+            val animatedCompactHomeAlpha by animateFloatAsState(
+                targetValue = if (compactSearchLayout && effectiveSearchExpanded) 1f else 0f,
+                animationSpec = bottomBarContentVisibilityMotionSpec(),
                 label = "bottomBarCompactHomeAlpha"
             )
+            // 非玻璃路径没有独立的采样/导出层遮蔽交叉淡化；两套推荐内容同时存在时，
+            // 大号首页图标会直接压到原 Dock 的“推荐”文字上。关闭玻璃时改为原子切换。
+            val useImmediatePlainHomeSwap = !effectiveGlassEnabled &&
+                compactSearchLayout && effectiveSearchExpanded
+            val dockContentAlpha = if (useImmediatePlainHomeSwap) 0f else animatedDockContentAlpha
+            val compactHomeAlpha = if (useImmediatePlainHomeSwap) 1f else animatedCompactHomeAlpha
             val shouldComposeDockContent = shouldComposeBottomBarDockContent(
                 dockContentAlpha = dockContentAlpha,
                 effectiveSearchExpanded = effectiveSearchExpanded
             )
-            val compactHomeIconSize = resolveKernelSuExpandedHomeIconSize()
-            val compactHomeIconScale = resolveKernelSuExpandedHomeIconScale()
-            val indicatorWidth = resolveKernelSuBottomBarItemSlotWidth(
-                dockWidth = dockWidth,
-                horizontalPadding = dockHorizontalPadding,
-                itemCount = totalItems
+            val compactHomeIconSize = resolveBiliPaiExpandedHomeIconSize()
+            val compactHomeIconScale = resolveBiliPaiExpandedHomeIconScale()
+            val selectedIndexForBar = if (isValidSelection) selectedIndex else selectedIndex
+            // Keep the selection provider stable. BiliPai derives a plain Int from currentItem,
+            // so passing `{ selectedIndexForBar }` would replace the
+            // lambda/state identity on every tab change while FloatingBottomBar's long-lived
+            // snapshotFlow still observes the previous state. Keep stable providers at this
+            // integration boundary and let their State values follow recomposition instead.
+            val selectedIndexForBarState = rememberUpdatedState(selectedIndexForBar)
+            val handleSelectedState = rememberUpdatedState<(Int) -> Unit>(
+                newValue = { index -> handleSelected(index) }
             )
-            val itemWidthPx = with(density) { indicatorWidth.toPx() }.coerceAtLeast(1f)
-            val dockWidthPx = with(density) { dockWidth.toPx() }.coerceAtLeast(1f)
-            val panelOffsetPx by remember(density, dockWidthPx) {
-                derivedStateOf {
-                    val fraction = (dampedDragState.dragOffset / dockWidthPx).coerceIn(-1f, 1f)
-                    with(density) {
-                        4.dp.toPx() *
-                            fraction.sign *
-                            EaseOut.transform(abs(fraction))
+            val floatingSelectedIndex = remember(selectedIndexForBarState) {
+                { selectedIndexForBarState.value }
+            }
+            val floatingOnSelected = remember(selectedIndexForBarState, handleSelectedState) {
+                { index: Int ->
+                    // External page/tap synchronization only animates the indicator. User drag
+                    // is the path that needs to submit a new selection.
+                    if (index != selectedIndexForBarState.value) {
+                        handleSelectedState.value(index)
                     }
                 }
             }
-            val indicatorTranslationXPx by remember(
-                density,
-                dockHorizontalPadding,
-                indicatorWidth,
-                visualIndicatorPosition
-            ) {
-                derivedStateOf {
-                    with(density) {
-                        (dockHorizontalPadding + indicatorWidth * visualIndicatorPosition).toPx()
-                    }
-                }
-            }
-            // [KSU 对齐] 高光位移:拖拽时跟随实时指示器,否则锚定到被点项,
-            // 使点击切换时高光在目标项直接绽放,而非沿选中弹簧动画滑过。
-            val highlightTranslationXPx by remember(
-                density,
-                dockHorizontalPadding,
-                indicatorWidth,
-                totalItems
-            ) {
-                derivedStateOf {
-                    val position = if (dampedDragState.isDragging) {
-                        visualIndicatorPosition
-                    } else {
-                        highlightAnchorIndex.toFloat()
-                            .coerceIn(0f, (totalItems - 1).coerceAtLeast(0).toFloat())
-                    }
-                    with(density) {
-                        (dockHorizontalPadding + indicatorWidth * position).toPx()
-                    }
-                }
-            }
-            val presetPanelOffsets = remember(liquidGlassPreset, panelOffsetPx) {
-                resolveBottomBarPresetPanelOffsets(
-                    preset = liquidGlassPreset,
-                    rawPanelOffsetPx = panelOffsetPx
-                )
-            }
-            val interactiveHighlightCenterXPx by remember(
-                highlightTranslationXPx,
-                itemWidthPx,
-                presetPanelOffsets.indicatorPanelOffsetPx
-            ) {
-                derivedStateOf {
-                    resolveBottomBarInteractiveHighlightCenterX(
-                        indicatorTranslationXPx = highlightTranslationXPx,
-                        itemWidthPx = itemWidthPx,
-                        panelOffsetPx = presetPanelOffsets.indicatorPanelOffsetPx
-                    )
-                }
-            }
-            val foregroundAboveIndicator = shouldRenderBottomBarForegroundAboveIndicator(liquidGlassPreset)
-            val backdropPresetProgress = resolveBottomBarEffectiveBackdropPresetProgress(
-                preset = liquidGlassPreset,
-                motionProgress = motionProgress,
-                pressProgress = effectivePressProgress
-            )
-            val effectiveCaptureProgress = backdropPresetProgress.captureProgress
-            val effectiveIndicatorProgress = backdropPresetProgress.indicatorProgress
-            val isBottomBarPressActive =
-                effectivePressProgress > BottomBarTransientAlphaThreshold
-            val effectiveIndicatorEffectProgress = maxOf(
-                effectiveIndicatorProgress,
-                effectivePressProgress
-            )
-            val normalizedIndicatorEffectProgress = resolveBottomBarIndicatorEffectProgress(
-                progress = effectiveIndicatorEffectProgress
-            )
-            val shellCaptureRefractionHeightDp = bottomBarMaterialSpec.shellRefractionHeightDp
-            val shellCaptureRefractionAmountDp = bottomBarMaterialSpec.shellRefractionAmountDp
-            val indicatorLensSpec = resolveBottomBarBackdropPresetIndicatorLens(
-                progress = effectivePressProgress
-            )
-            val indicatorIdleSurfaceColor = resolveBottomBarIdleIndicatorSurfaceColor(
-                preset = liquidGlassPreset,
-                darkTheme = isDarkTheme
-            )
-            val shellHighlightAlpha = resolveBottomBarShellHighlightAlpha(
-                glassEnabled = glassEnabled,
-                pressProgress = effectivePressProgress,
-                motionProgress = normalizedIndicatorEffectProgress,
-                isDragging = dampedDragState.isDragging
-            )
-            val isBottomBarInteractionActive = dampedDragState.isDragging ||
-                dampedDragState.isRunning ||
-                dampedDragState.pressProgress > BottomBarTransientAlphaThreshold
-            val shouldRenderRefractionCaptureRaw = shouldRenderBottomBarRefractionCapture(
-                glassEnabled = glassEnabled,
-                hasBackdrop = miuixBackdrop != null,
-                captureProgress = effectiveCaptureProgress,
-                isTransitionRunning = isTransitionRunning,
-                isFeedScrollInProgress = isFeedScrollInProgress,
-                isBottomBarInteractionActive = isBottomBarInteractionActive
-            )
-            val shouldRenderIndicatorBackdropRaw = shouldRenderBottomBarIndicatorBackdrop(
-                glassEnabled = glassEnabled,
-                hasContentBackdrop = miuixBackdrop != null,
-                indicatorProgress = effectiveIndicatorEffectProgress,
-                isTransitionRunning = isTransitionRunning,
-                isBottomBarInteractionActive = isBottomBarInteractionActive,
-                allowIdleGlassEffect = false,
-                allowTransitionIndicatorPulse = isBottomBarPressActive
-            )
-            // [KSU 对齐] 玻璃开启时指示器/捕获层常驻。
-            // KSU 的 tabsBackdrop 与移动指示器始终 composed、始终 drawBackdrop,
-            // 没有 "idle 纯色背景 ↔ 玻璃 drawBackdrop" 的分支切换;BiliPai 原本按
-            // 交互状态增删这些层,切换瞬间 tabsBackdrop 为空,指示器会直接采样到
-            // 原始内容(首页视频画面)。常驻后 tabsBackdrop 始终有录制内容,
-            // 由 progress 连续驱动 effects/surface,彻底消除该瞬态。
-            val glassLayersAlwaysOn = glassEnabled && miuixBackdrop != null
-            val shouldRenderRefractionCapture =
-                glassLayersAlwaysOn || shouldRenderRefractionCaptureRaw
-            val shouldRenderIndicatorBackdrop =
-                glassLayersAlwaysOn || shouldRenderIndicatorBackdropRaw
-            val shouldRenderIndicatorContentCapture =
-                shouldComposeDockContent &&
-                    (shouldRenderRefractionCapture || isBottomBarPressActive)
-            val contentBackdrop = if (
-                shouldRenderIndicatorBackdrop && miuixBackdrop != null
-            ) {
-                rememberMiuixCombinedBackdrop(miuixBackdrop, tabsBackdrop)
-            } else {
-                null
-            }
-            fun itemCoverage(index: Int): Float = resolveBottomBarItemCoverage(
-                itemIndex = index,
-                indicatorPosition = visualIndicatorPosition,
-                currentSelectedIndex = selectedIndex,
-                motionProgress = motionProgress
-            )
-
-            fun selectedContentColor(item: BottomNavItem?): Color {
-                if (item == null) return selectedColor
-                val binding = resolveBottomBarItemColorBinding(
-                    item = item,
-                    itemColorIndices = itemColorIndices
-                )
-                return resolveBottomBarSelectedContentColor(
-                    item = item,
-                    binding = binding,
-                    themeColor = selectedColor
-                )
-            }
-
-            fun visibleItemContentColor(
-                item: BottomNavItem?,
-                coverage: Float
-            ): Color {
-                val itemSelectedColor = selectedContentColor(item)
-                return resolveBottomBarGlassVisibleContentColor(
-                    unselectedColor = unselectedColor,
-                    selectedColor = itemSelectedColor,
-                    themeWeight = coverage,
-                    glassEnabled = glassEnabled,
-                    indicatorProgress = effectiveIndicatorEffectProgress,
-                    indicatorBackdropEnabled = shouldRenderIndicatorBackdrop
-                )
-            }
-
-            fun exportItemContentColor(
-                item: BottomNavItem?,
-                coverage: Float
-            ): Color {
-                if (isBottomBarPressActive && item != null) {
-                    return selectedContentColor(item)
-                }
-                return resolveBottomBarGlassExportContentColor(
-                    unselectedColor = unselectedColor,
-                    selectedColor = selectedContentColor(item),
-                    themeWeight = coverage,
-                    glassEnabled = glassEnabled
-                )
-            }
-
-            fun sampledItemScale(): Float = if (glassEnabled) {
-                resolveBottomBarItemMotionScale(
-                    coverage = 1f,
-                    motionProgress = effectivePressProgress
-                )
-            } else {
-                1f
-            }
-
-            fun handleBottomBarItemClick(index: Int, item: BottomNavItem) {
-                val searchOverride = resolveBottomBarSearchExpansionOverrideOnNavItemClick(
-                    currentItem = currentItem,
-                    clickedItem = item,
-                    bottomBarSearchEnabled = searchEnabled,
-                    effectiveSearchExpanded = effectiveSearchExpanded
-                )
-                if (searchOverride != null) {
-                    haptic(HapticType.LIGHT)
-                    searchExpansionOverride = searchOverride
-                } else {
-                    highlightAnchorIndex = index
-                    dampedDragState.updateIndex(index)
-                    performMaterialBottomBarTap(
-                        haptic = haptic,
-                        onClick = { onItemClick(item) }
-                    )
-                }
-            }
-
-            fun handleBottomBarSidebarClick() {
-                if (onToggleSidebar != null) {
-                    highlightAnchorIndex = visibleItems.size
-                    dampedDragState.updateIndex(visibleItems.size)
-                    performMaterialBottomBarTap(
-                        haptic = haptic,
-                        onClick = onToggleSidebar
-                    )
-                }
+            val floatingOnReselected = remember(selectedIndexForBarState, handleSelectedState) {
+                { handleSelectedState.value(selectedIndexForBarState.value) }
             }
 
             Row(
@@ -3385,258 +3832,161 @@ private fun KernelSuAlignedBottomBar(
                     .align(Alignment.Center),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                KernelSuBottomBarShell(
+                Box(
                     modifier = Modifier
                         .width(dockWidth)
-                        .height(dockHeight),
-                    shellShape = shellShape,
-                    miuixBackdrop = miuixBackdrop,
-                    containerColor = ksuContainerColor,
-                    blurEnabled = blurEnabled,
-                    glassEnabled = glassEnabled,
-                    blurRadius = tuning.shellBlurRadiusDp.dp,
-                    hazeState = hazeState,
-                    motionTier = motionTier,
-                    isTransitionRunning = isTransitionRunning,
-                    forceLowBlurBudget = forceLowBlurBudget,
-                    edgeCompressionScaleX = edgeCompressionScaleX,
-                    shellProgress = backdropPresetProgress.shellProgress,
-                    visiblePanelOffsetPx = presetPanelOffsets.visiblePanelOffsetPx,
-                    interactiveHighlightEnabled = interactiveHighlightEnabled,
-                    shellHighlightAlpha = shellHighlightAlpha,
-                    interactiveHighlightCenterXPx = interactiveHighlightCenterXPx,
-                    uiSkinDecoration = uiSkinDecoration,
-                    liquidGlassPreset = liquidGlassPreset,
-                    isScrolling = isFeedScrollInProgress,
-                    materialScrollProgress = materialScrollProgress,
-                    materialMotionProgress = motionProgress,
-                    materialPressProgress = effectivePressProgress
+                        .height(dockHeight)
+                        // Allow reminder badges to paint slightly outside the dock band.
+                        .graphicsLayer { clip = false }
                 ) {
-
-                if (shouldComposeDockContent) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(dockContentPadding)
-                            .alpha(dockContentAlpha)
-                            .zIndex(if (foregroundAboveIndicator) 1f else 0f)
-                            .graphicsLayer { translationX = presetPanelOffsets.visiblePanelOffsetPx },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        visibleItems.forEachIndexed { index, item ->
-                            val coverage = itemCoverage(index)
-                            val contentColor = visibleItemContentColor(item, coverage)
-                            AndroidNativeBottomBarItem(
-                                item = item,
-                                itemWidth = indicatorWidth,
-                                label = resolveBottomNavItemLabel(item),
-                                dynamicUnreadCount = dynamicUnreadCount,
-                                selected = coverage >= 0.5f,
-                                showIcon = showIcon,
-                                showText = showText,
-                                selectedColor = contentColor,
-                                unselectedColor = unselectedColor,
-                                contentColorOverride = contentColor,
-                                iconStyle = iconStyle,
-                                skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = coverage >= 0.5f),
-                                labelScrimColor = skinContentColors.labelScrimColor,
-                                labelScrimAlpha = skinContentColors.labelScrimAlpha,
-                                onClick = {},
-                                interactive = false,
-                                onPressChanged = dampedDragState::setPressed,
-                                selectedIconAlpha = coverage,
-                                scale = 1f
-                            )
-                        }
-
-                        if (isTablet && onToggleSidebar != null) {
-                            val coverage = itemCoverage(visibleItems.size)
-                            val contentColor = visibleItemContentColor(null, coverage)
-                            AndroidNativeBottomBarItem(
-                                item = null,
-                                itemWidth = indicatorWidth,
-                                label = stringResource(R.string.sidebar_toggle),
-                                dynamicUnreadCount = dynamicUnreadCount,
-                                selected = coverage >= 0.5f,
-                                showIcon = showIcon,
-                                showText = showText,
-                                selectedColor = contentColor,
-                                unselectedColor = unselectedColor,
-                                contentColorOverride = contentColor,
-                                iconStyle = iconStyle,
-                                labelScrimColor = skinContentColors.labelScrimColor,
-                                labelScrimAlpha = skinContentColors.labelScrimAlpha,
-                                onClick = {},
-                                interactive = false,
-                                onPressChanged = dampedDragState::setPressed,
-                                selectedIconAlpha = coverage,
-                                scale = 1f
-                            )
-                        }
-                    }
-                }
-
-                if (shouldRenderIndicatorContentCapture && miuixBackdrop != null) {
-                    Box(
-                        modifier = Modifier
+                    // Skin trim behind the BiliPai glass dock so it never steals hits.
+                    BottomBarSkinDecorativeTrim(
+                        decoration = uiSkinDecoration,
+                        modifier = Modifier.matchParentSize(),
+                        clipShape = resolveSharedBottomBarCapsuleShape()
+                    )
+                    if (shouldComposeDockContent) {
+                        val dockModifier = Modifier
                             .width(dockWidth)
-                            .height(56.dp)
-                            .align(Alignment.CenterStart)
-                            .clearAndSetSemantics {}
-                            .alpha(0f)
-                            .miuixLayerBackdrop(tabsBackdrop)
-                            .graphicsLayer {
-                                translationX = presetPanelOffsets.exportPanelOffsetPx
-                            }
-                            .miuixDrawBackdrop(
-                                backdrop = miuixBackdrop,
-                                shape = { shellShape },
-                                effects = {
-                                    miuixVibrancy()
-                                    miuixBlur(4.dp.toPx(), 4.dp.toPx())
-                                    miuixLens(
-                                        refractionHeight = 24.dp.toPx(),
-                                        refractionAmount = 24.dp.toPx()
-                                    )
-                                },
-                                onDrawSurface = {
-                                    drawRect(ksuContainerColor)
-                                }
-                            )
-                            // 对齐 KSU：隐藏采样层保持中性色内容，再由整层 tint 统一染成主题色。
-                            .graphicsLayer(colorFilter = ColorFilter.tint(exportTintColor))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = dockHorizontalPadding),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                            .height(dockHeight)
+                            .alpha(dockContentAlpha)
+                            .graphicsLayer { clip = false }
+                        val dockContent: @Composable RowScope.() -> Unit = {
                             visibleItems.forEachIndexed { index, item ->
-                                val coverage = itemCoverage(index)
-                                val contentColor = exportItemContentColor(item, coverage)
-                                AndroidNativeBottomBarItem(
-                                    item = item,
-                                    itemWidth = indicatorWidth,
-                                    label = resolveBottomNavItemLabel(item),
-                                    dynamicUnreadCount = 0,
-                                    selected = true,
-                                    showIcon = showIcon,
-                                    showText = showText,
-                                    selectedColor = contentColor,
-                                    unselectedColor = contentColor,
-                                    contentColorOverride = contentColor,
-                                    iconStyle = iconStyle,
-                                    skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = true),
-                                    labelScrimColor = skinContentColors.labelScrimColor,
-                                    labelScrimAlpha = skinContentColors.labelScrimAlpha,
-                                    onClick = {},
-                                    interactive = false,
-                                    selectedIconAlpha = 1f,
-                                    scale = sampledItemScale()
+                                val label = resolveBottomNavItemLabel(item, itemLabels)
+                                val routeSelected = currentItem == item
+                                val selected = index == selectedIndexForBar ||
+                                    LocalFloatingBottomBarActiveContent.current
+                                val skinIconPath = uiSkinDecoration?.iconPathFor(
+                                    item,
+                                    selected = routeSelected
                                 )
+                                val reminderBadgeText = formatBottomBarDynamicReminderBadge(
+                                    if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) {
+                                        dynamicUnreadCount
+                                    } else {
+                                        0
+                                    }
+                                )
+                                FloatingBottomBarItem(
+                                    onClick = { handleBottomBarItemClick(index, item) },
+                                    selected = index == selectedIndexForBar,
+                                    itemIndex = index,
+                                    iconCrossScaleEnabled = navigationIconCrossScaleEnabled,
+                                ) {
+                                    FloatingBottomBarTabVisual(
+                                        item = item,
+                                        label = label,
+                                        selected = selected,
+                                        showIcon = showIcon,
+                                        showText = showText,
+                                        iconStyle = iconStyle,
+                                        skinIconPath = skinIconPath,
+                                        dynamicUnreadCount = dynamicUnreadCount,
+                                        labelScrimColor = skinContentColors.labelScrimColor,
+                                        labelScrimAlpha = skinContentColors.labelScrimAlpha,
+                                        reminderBadgeText = reminderBadgeText
+                                    )
+                                }
                             }
 
                             if (isTablet && onToggleSidebar != null) {
-                                val coverage = itemCoverage(visibleItems.size)
-                                val contentColor = exportItemContentColor(null, coverage)
-                                AndroidNativeBottomBarItem(
-                                    item = null,
-                                    itemWidth = indicatorWidth,
-                                    label = stringResource(R.string.sidebar_toggle),
-                                    dynamicUnreadCount = 0,
-                                    selected = true,
-                                    showIcon = showIcon,
-                                    showText = showText,
-                                    selectedColor = contentColor,
-                                    unselectedColor = contentColor,
-                                    contentColorOverride = contentColor,
-                                    iconStyle = iconStyle,
-                                    labelScrimColor = skinContentColors.labelScrimColor,
-                                    labelScrimAlpha = skinContentColors.labelScrimAlpha,
-                                    onClick = {},
-                                    interactive = false,
-                                    selectedIconAlpha = 1f,
-                                    scale = sampledItemScale()
-                                )
+                                val sidebarLabel = stringResource(R.string.sidebar_toggle)
+                                FloatingBottomBarItem(
+                                    onClick = ::handleBottomBarSidebarClick,
+                                    selected = false,
+                                    itemIndex = visibleItems.size,
+                                    iconCrossScaleEnabled = navigationIconCrossScaleEnabled,
+                                ) {
+                                    FloatingBottomBarTabVisual(
+                                        item = null,
+                                        label = sidebarLabel,
+                                        selected = LocalFloatingBottomBarActiveContent.current,
+                                        showIcon = showIcon,
+                                        showText = showText,
+                                        iconStyle = iconStyle,
+                                        skinIconPath = null,
+                                        dynamicUnreadCount = 0,
+                                        labelScrimColor = skinContentColors.labelScrimColor,
+                                        labelScrimAlpha = skinContentColors.labelScrimAlpha,
+                                        reminderBadgeText = null
+                                    )
+                                }
+                            }
+                        }
+                        if (usePlainMiuixFloatingBar) {
+                            PlainMiuixFloatingBottomBar(
+                                selectedIndex = selectedIndexForBar,
+                                onSelected = floatingOnSelected,
+                                onReselected = floatingOnReselected,
+                                tabsCount = totalItems,
+                                modifier = dockModifier,
+                                colors = floatingColors,
+                                content = dockContent,
+                            )
+                        } else {
+                            FloatingBottomBar(
+                                selectedIndex = floatingSelectedIndex,
+                                onSelected = floatingOnSelected,
+                                onReselected = floatingOnReselected,
+                                backdrop = miuixBackdrop,
+                                tabsCount = totalItems,
+                                modifier = dockModifier,
+                                mode = floatingMode,
+                                colors = floatingColors,
+                                shellHeight = dockHeight,
+                                indicatorHeight = resolveBiliPaiBottomBarIndicatorHeight(dockHeight),
+                                minimumIndicatorWidth = searchLayoutState.minimumIndicatorWidth,
+                                proportionalIndicatorReferenceWidth = if (effectiveGlassEnabled) {
+                                    searchLayoutState.indicatorReferenceWidth
+                                } else {
+                                    null
+                                },
+                                indicatorPositionProvider = indicatorPositionProvider,
+                                isScrollInProgressProvider = isPagerScrollInProgressProvider,
+                                liquidGlassTuning = liquidGlassTuning,
+                            ) {
+                                dockContent()
                             }
                         }
                     }
-                }
 
-                KernelSuMiuixBottomBarIndicatorLayer(
-                    visible = selectedIndex in visibleItems.indices,
-                    dockContentAlpha = dockContentAlpha,
-                    indicatorTranslationXPx = indicatorTranslationXPx,
-                    indicatorPanelOffsetPx = presetPanelOffsets.indicatorPanelOffsetPx,
-                    indicatorWidth = indicatorWidth,
-                    shellShape = shellShape,
-                    liquidGlassPreset = liquidGlassPreset,
-                    contentBackdrop = contentBackdrop,
-                    backdrop = miuixBackdrop,
-                    indicatorLensSpec = indicatorLensSpec,
-                    effectivePressProgress = effectivePressProgress,
-                    indicatorIdleSurfaceColor = indicatorIdleSurfaceColor,
-                    glassEnabled = glassEnabled,
-                    motionProgress = motionProgress,
-                    velocityItemsPerSecond = dampedDragState.deformationVelocityItemsPerSecond,
-                    isDragging = dampedDragState.isDragging,
-                    indicatorLayerScaleProgress = indicatorLayerScaleProgress,
-                    indicatorLayerScaleTransform = null,
-                    bottomBarMotionSpec = bottomBarMotionSpec,
-                    isDarkTheme = isDarkTheme
-                )
-
-                KernelSuBottomBarInputLayer(
-                    visible = !effectiveSearchExpanded,
-                    visibleItems = visibleItems,
-                    isTablet = isTablet,
-                    hasSidebarToggle = onToggleSidebar != null,
-                    dockContentPadding = dockContentPadding,
-                    dockWidth = dockWidth,
-                    dockHeight = dockHeight,
-                    visiblePanelOffsetPx = presetPanelOffsets.visiblePanelOffsetPx,
-                    dampedDragState = dampedDragState,
-                    itemWidthPx = itemWidthPx,
-                    itemWidth = indicatorWidth,
-                    onItemClick = ::handleBottomBarItemClick,
-                    onSidebarClick = ::handleBottomBarSidebarClick
-                )
-
-                if (searchEnabled) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .alpha(compactHomeAlpha)
-                            .then(
-                                if (effectiveSearchExpanded) {
-                                    Modifier.clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        val searchOverride = resolveBottomBarSearchExpansionOverrideOnNavItemClick(
-                                            currentItem = currentItem,
-                                            clickedItem = BottomNavItem.HOME,
-                                            bottomBarSearchEnabled = searchEnabled,
-                                            effectiveSearchExpanded = effectiveSearchExpanded
-                                        )
-                                        if (searchOverride != null) {
-                                            haptic(HapticType.LIGHT)
-                                            searchExpansionOverride = searchOverride
-                                        } else {
-                                            performMaterialBottomBarTap(
-                                                haptic = haptic,
-                                                onClick = { onItemClick(BottomNavItem.HOME) }
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    Modifier
-                                }
-                            ),
-                        contentAlignment = Alignment.Center
+                    if (searchEnabled && compactSearchLayout &&
+                        compactHomeAlpha > BottomBarTransientAlphaThreshold
                     ) {
                         Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .alpha(compactHomeAlpha)
+                                .then(
+                                    if (effectiveSearchExpanded) {
+                                        Modifier.clickable(
+                                            interactionSource = remember {
+                                                MutableInteractionSource()
+                                            },
+                                            indication = null
+                                        ) {
+                                            val searchOverride =
+                                                resolveBottomBarSearchExpansionOverrideOnNavItemClick(
+                                                    currentItem = currentItem,
+                                                    clickedItem = BottomNavItem.HOME,
+                                                    bottomBarSearchEnabled = searchEnabled,
+                                                    effectiveSearchExpanded = effectiveSearchExpanded
+                                                )
+                                            if (searchOverride != null) {
+                                                haptic(HapticType.LIGHT)
+                                                searchExpansionOverride = searchOverride
+                                            } else {
+                                                performMaterialBottomBarTap(
+                                                    haptic = haptic,
+                                                    onClick = { onItemClick(BottomNavItem.HOME) }
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             val homeSkinIconPath = uiSkinDecoration?.iconPathFor(
@@ -3647,6 +3997,7 @@ private fun KernelSuAlignedBottomBar(
                                 BottomBarSkinIcon(
                                     iconPath = homeSkinIconPath,
                                     contentDescription = null,
+                                    selected = currentItem == BottomNavItem.HOME,
                                     size = resolveBottomBarCompactSkinHomeIconSize(),
                                     modifier = Modifier.graphicsLayer {
                                         scaleX = compactHomeIconScale
@@ -3654,10 +4005,24 @@ private fun KernelSuAlignedBottomBar(
                                     }
                                 )
                             } else {
-                                Icon(
-                                    imageVector = CupertinoIcons.Filled.House,
+                                AppIcon(
+                                    imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                                        resolveHomeNavigationBarIcon(
+                                            item = BottomNavItem.HOME,
+                                            selected = currentItem == BottomNavItem.HOME
+                                        )
+                                    } else {
+                                        resolveMaterialBottomBarIcon(
+                                            item = BottomNavItem.HOME,
+                                            selected = currentItem == BottomNavItem.HOME
+                                        )
+                                    },
                                     contentDescription = null,
-                                    tint = if (currentItem == BottomNavItem.HOME) selectedColor else unselectedColor,
+                                    tint = if (currentItem == BottomNavItem.HOME) {
+                                        selectedColor
+                                    } else {
+                                        unselectedColor
+                                    },
                                     modifier = Modifier
                                         .size(compactHomeIconSize)
                                         .graphicsLayer {
@@ -3669,16 +4034,28 @@ private fun KernelSuAlignedBottomBar(
                         }
                     }
                 }
-            }
 
-                KernelSuBottomBarSearchSlot(
-                    visible = searchEnabled,
+                BiliPaiBottomBarSearchSlot(
+                    visible = searchLayoutReserved,
                     launchAdjustedSearchGap = launchAdjustedSearchGap,
                     searchWidth = searchWidth,
                     searchHeight = searchHeight,
-                    expanded = effectiveSearchExpanded,
+                    expanded = visualSearchExpanded,
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
+                    onCompactClick = {
+                        val searchOverride = resolveBottomBarSearchExpansionOverrideOnSearchClick(
+                            currentItem = currentItem,
+                            bottomBarSearchEnabled = searchEnabled,
+                            effectiveSearchExpanded = effectiveSearchExpanded,
+                            searchLayoutMode = bottomBarSearchLayoutMode
+                        )
+                        if (searchOverride != null) {
+                            searchExpansionOverride = searchOverride
+                        } else {
+                            onSearchClick()
+                        }
+                    },
                     onSubmit = {
                         val keyword = searchQuery.trim()
                         if (keyword.isEmpty()) {
@@ -3687,11 +4064,15 @@ private fun KernelSuAlignedBottomBar(
                             onSearchKeywordSubmit(keyword)
                         }
                     },
-                    shape = shellShape,
+                    shape = resolveSharedBottomBarCapsuleShape(),
                     miuixBackdrop = miuixBackdrop,
-                    containerColor = ksuContainerColor,
+                    containerColor = if (usePlainMiuixFloatingBar) {
+                        floatingContainerColor
+                    } else {
+                        biliPaiContainerColor
+                    },
                     blurEnabled = blurEnabled,
-                    glassEnabled = glassEnabled,
+                    glassEnabled = effectiveGlassEnabled,
                     blurRadius = tuning.shellBlurRadiusDp.dp,
                     hazeState = hazeState,
                     motionTier = motionTier,
@@ -3702,92 +4083,123 @@ private fun KernelSuAlignedBottomBar(
                     haptic = haptic,
                     liquidGlassPreset = liquidGlassPreset,
                     isScrolling = isFeedScrollInProgress,
-                    materialScrollProgress = materialScrollProgress,
+                    materialScrollProgress = 0f,
                     materialMotionProgress = 0f,
-                    materialPressProgress = 0f
+                    materialPressProgress = 0f,
+                    liquidGlassTuning = liquidGlassTuning,
+                    iconStyle = iconStyle
                 )
+            }
         }
     }
 }
-}
 
+/**
+ * FloatingBottomBar 槽内的 Tab 视觉内容：图标 + 文案 + 角标。
+ * 内容色优先读 [LocalFloatingBottomBarContentColor]（BiliPai 契约）。
+ */
 @Composable
-private fun KernelSuBottomBarShell(
-    modifier: Modifier,
-    shellShape: androidx.compose.ui.graphics.Shape,
-    miuixBackdrop: MiuixBackdrop?,
-    containerColor: Color,
-    blurEnabled: Boolean,
-    glassEnabled: Boolean,
-    blurRadius: Dp,
-    hazeState: HazeState?,
-    motionTier: MotionTier,
-    isTransitionRunning: Boolean,
-    forceLowBlurBudget: Boolean,
-    edgeCompressionScaleX: Float,
-    shellProgress: Float,
-    visiblePanelOffsetPx: Float,
-    interactiveHighlightEnabled: Boolean,
-    shellHighlightAlpha: Float,
-    interactiveHighlightCenterXPx: Float,
-    uiSkinDecoration: BottomBarUiSkinDecoration?,
-    liquidGlassPreset: BottomBarLiquidGlassPreset,
-    isScrolling: Boolean,
-    materialScrollProgress: Float,
-    materialMotionProgress: Float,
-    materialPressProgress: Float,
-    content: @Composable BoxScope.() -> Unit
+private fun ColumnScope.FloatingBottomBarTabVisual(
+    item: BottomNavItem?,
+    label: String,
+    selected: Boolean,
+    showIcon: Boolean,
+    showText: Boolean,
+    iconStyle: SharedFloatingBottomBarIconStyle,
+    skinIconPath: String?,
+    dynamicUnreadCount: Int,
+    labelScrimColor: Color,
+    labelScrimAlpha: Float,
+    reminderBadgeText: String?
 ) {
-    Box(modifier = modifier) {
+    val localColor = LocalFloatingBottomBarContentColor.current
+    val selectedContentColor = LocalFloatingBottomBarSelectedContentColor.current
+    val contentColor = when {
+        selected && selectedContentColor != Color.Unspecified -> selectedContentColor
+        localColor != Color.Unspecified -> localColor
+        selected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val selectedAlpha = if (selected) 1f else 0f
+    val selectionScale = LocalFloatingBottomBarItemSelectionScale.current
+    val density = LocalDensity.current
+
+    if (showIcon) {
         Box(
-            modifier = Modifier
-                .matchParentSize()
-                .graphicsLayer {
-                    translationX = visiblePanelOffsetPx
-                    val bumpScale = if (glassEnabled && size.width > 0f) {
-                        lerp(1f, 1f + 16.dp.toPx() / size.width, shellProgress)
-                    } else {
-                        1f
-                    }
-                    scaleX = edgeCompressionScaleX * bumpScale
-                    scaleY = bumpScale
+            modifier = Modifier.graphicsLayer {
+                val scale = selectionScale()
+                scaleX = scale
+                scaleY = scale
+                translationY = with(density) {
+                    -resolveNavigationIconSelectionLiftDp(scale).dp.toPx()
                 }
-                .kernelSuMiuixFloatingDockSurface(
-                    shape = shellShape,
-                    backdrop = miuixBackdrop,
-                    containerColor = containerColor,
-                    blurEnabled = blurEnabled,
-                    glassEnabled = glassEnabled,
-                    blurRadius = blurRadius,
-                    hazeState = hazeState,
-                    motionTier = motionTier,
-                    isTransitionRunning = isTransitionRunning,
-                    forceLowBlurBudget = forceLowBlurBudget,
-                    liquidGlassPreset = liquidGlassPreset,
-                    isScrolling = isScrolling,
-                    materialScrollProgress = materialScrollProgress,
-                    materialMotionProgress = materialMotionProgress,
-                    materialPressProgress = materialPressProgress
+                clip = false
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (skinIconPath != null) {
+                BottomBarReminderBadgeAnchor(
+                    badgeText = reminderBadgeText,
+                    floatingCompact = true
+                ) {
+                    BottomBarSkinIcon(
+                        iconPath = skinIconPath,
+                        contentDescription = label,
+                        selected = selected,
+                    )
+                }
+            } else if (item == null) {
+                AppIcon(
+                    imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                        resolveMiuixPreferredHomeNavigationIcon(tabId = "PARTITION")
+                    } else {
+                        Icons.AutoMirrored.Outlined.MenuOpen
+                    },
+                    contentDescription = label,
+                    tint = contentColor
                 )
-                .bottomBarInteractiveHighlight(
-                    enabled = glassEnabled && interactiveHighlightEnabled,
-                    alpha = shellHighlightAlpha,
-                    centerXPx = interactiveHighlightCenterXPx
+            } else if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                BottomBarBlendedMiuixIcon(
+                    item = item,
+                    unreadCount = dynamicUnreadCount,
+                    selectedAlpha = selectedAlpha,
+                    contentDescription = label,
+                    contentColor = contentColor,
+                    floatingCompactBadge = true
                 )
+            } else {
+                BottomBarBlendedMaterialIcon(
+                    item = item,
+                    unreadCount = dynamicUnreadCount,
+                    selectedAlpha = selectedAlpha,
+                    contentDescription = label,
+                    contentColor = contentColor,
+                    floatingCompactBadge = true
+                )
+            }
+        }
+    }
+    if (showText) {
+        AppText(
+            text = label,
+            color = contentColor,
+            fontSize = resolveFloatingDockLabelFontSize(
+                showIcon = showIcon,
+                showText = showText,
+            ),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.bottomBarSkinLabelScrim(
+                color = labelScrimColor,
+                alpha = if (skinIconPath != null) labelScrimAlpha else 0f
+            )
         )
-
-        BottomBarSkinDecorativeTrim(
-            decoration = uiSkinDecoration,
-            modifier = Modifier.matchParentSize(),
-            clipShape = shellShape
-        )
-
-        content()
     }
 }
 
 @Composable
-private fun BoxScope.KernelSuMiuixBottomBarIndicatorLayer(
+internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
     visible: Boolean,
     dockContentAlpha: Float,
     indicatorTranslationXPx: Float,
@@ -3795,33 +4207,39 @@ private fun BoxScope.KernelSuMiuixBottomBarIndicatorLayer(
     indicatorPanelOffsetPx: Float,
     indicatorPanelOffsetYPx: Float = 0f,
     indicatorWidth: Dp,
-    indicatorHeight: Dp = 56.dp,
+    indicatorHeight: Dp = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small,
     shellShape: androidx.compose.ui.graphics.Shape,
     liquidGlassPreset: BottomBarLiquidGlassPreset,
     contentBackdrop: MiuixBackdrop?,
     backdrop: MiuixBackdrop?,
     indicatorLensSpec: BottomBarBackdropPresetLensSpec,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
     effectivePressProgress: Float,
     indicatorIdleSurfaceColor: Color,
     glassEnabled: Boolean,
+    indicatorEffectsEnabled: Boolean = glassEnabled,
     motionProgress: Float,
     velocityItemsPerSecond: Float,
     isDragging: Boolean,
     indicatorLayerScaleProgress: Float,
     indicatorLayerScaleTransform: BottomBarIndicatorLayerTransform? = null,
+    dragScaleTarget: Float = BOTTOM_BAR_INDICATOR_DRAG_SCALE_TARGET,
     bottomBarMotionSpec: com.android.purebilibili.core.ui.motion.BottomBarMotionSpec,
     isDarkTheme: Boolean,
     swapMotionAxes: Boolean = false,
-    indicatorAlignment: Alignment = Alignment.CenterStart
+    indicatorAlignment: Alignment = Alignment.CenterStart,
+    interactionModifier: Modifier = Modifier
 ) {
     if (!visible) return
-    val rawIndicatorLayerTransform = if (glassEnabled) {
+    val effectiveIndicatorEffectsEnabled = indicatorEffectsEnabled
+    val rawIndicatorLayerTransform = if (effectiveIndicatorEffectsEnabled) {
         resolveBottomBarIndicatorLayerTransform(
             motionProgress = motionProgress,
             velocityItemsPerSecond = velocityItemsPerSecond,
             isDragging = isDragging,
             dragScaleProgress = indicatorLayerScaleProgress,
             dragScaleTransform = indicatorLayerScaleTransform,
+            dragScaleTarget = dragScaleTarget,
             motionSpec = bottomBarMotionSpec
         )
     } else {
@@ -3835,24 +4253,38 @@ private fun BoxScope.KernelSuMiuixBottomBarIndicatorLayer(
     } else {
         rawIndicatorLayerTransform
     }
-    val pillHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = 90f)
+    val pillHighlight = if (glassEnabled) {
+        rememberBiliPaiGravityHighlight(
+            iosIndicatorSpecular,
+            extraDegrees = if (swapMotionAxes) 0f else 90f,
+        )
+    } else {
+        null
+    }
+    val indicatorBackdrop = if (!glassEnabled) {
+        null
+    } else if (shouldUseBottomBarCombinedIndicatorBackdrop(liquidGlassPreset)) {
+        contentBackdrop
+    } else {
+        backdrop
+    }
     Box(
         modifier = Modifier
             .alpha(dockContentAlpha)
             .graphicsLayer {
                 translationX = indicatorTranslationXPx + indicatorPanelOffsetPx
                 translationY = indicatorTranslationYPx + indicatorPanelOffsetYPx
+                if (indicatorBackdrop == null && effectiveIndicatorEffectsEnabled) {
+                    scaleX = indicatorLayerTransform.scaleX
+                    scaleY = indicatorLayerTransform.scaleY
+                }
             }
             .width(indicatorWidth)
             .height(indicatorHeight)
             .align(indicatorAlignment)
             .zIndex(2f)
+            .then(interactionModifier)
             .run {
-                val indicatorBackdrop = if (shouldUseBottomBarCombinedIndicatorBackdrop(liquidGlassPreset)) {
-                    contentBackdrop
-                } else {
-                    backdrop
-                }
                 if (indicatorBackdrop != null) {
                     miuixDrawBackdrop(
                         backdrop = indicatorBackdrop,
@@ -3863,12 +4295,15 @@ private fun BoxScope.KernelSuMiuixBottomBarIndicatorLayer(
                                     refractionHeight = indicatorLensSpec.refractionHeightDp.dp.toPx(),
                                     refractionAmount = indicatorLensSpec.refractionAmountDp.dp.toPx(),
                                     depthEffect = true,
-                                    chromaticAberration = 0.5f
+                                    chromaticAberration =
+                                        resolveLiquidGlassIndicatorChromaticAberration(
+                                            liquidGlassTuning
+                                        )
                                 )
                             }
                         },
                         highlight = {
-                            pillHighlight.copy(alpha = effectivePressProgress)
+                            pillHighlight?.value?.copy(alpha = effectivePressProgress)
                         },
                         onDrawSurface = {
                             val surfaceFade = (1f - effectivePressProgress).coerceIn(0f, 1f)
@@ -3880,214 +4315,32 @@ private fun BoxScope.KernelSuMiuixBottomBarIndicatorLayer(
                             }
                             if (effectivePressProgress > 0f) {
                                 drawRect(
-                                    Color.Black.copy(alpha = 0.03f * effectivePressProgress)
+                                    OpticalContrastPalette.Shadow.copy(alpha = 0.03f * effectivePressProgress)
                                 )
                             }
                         },
                         layerBlock = {
-                            if (glassEnabled) {
+                            if (effectiveIndicatorEffectsEnabled) {
                                 scaleX = indicatorLayerTransform.scaleX
                                 scaleY = indicatorLayerTransform.scaleY
                             }
                         }
                     ).miuixInnerShadow(shape = shellShape) {
                         MiuixInnerShadow(
-                            radius = 8.dp * effectivePressProgress,
-                            color = Color.Black.copy(alpha = 0.15f),
+                            radius = AppSpacingTokens.Small * effectivePressProgress,
+                            color = OpticalContrastPalette.Shadow.copy(alpha = 0.15f),
                             alpha = effectivePressProgress
                         )
                     }
                 } else {
-                    background(
-                        resolveAndroidNativeIdleIndicatorSurfaceColor(
-                            darkTheme = isDarkTheme
-                        ),
-                        shellShape
-                    )
+                    this
                 }
             }
     )
 }
 
 @Composable
-internal fun BoxScope.KernelSuBottomBarIndicatorLayer(
-    visible: Boolean,
-    dockContentAlpha: Float,
-    indicatorTranslationXPx: Float,
-    indicatorTranslationYPx: Float = 0f,
-    indicatorPanelOffsetPx: Float,
-    indicatorPanelOffsetYPx: Float = 0f,
-    indicatorSettleReboundTransform: BottomBarClickPulseTransform,
-    indicatorWidth: Dp,
-    indicatorHeight: Dp = 56.dp,
-    shellShape: androidx.compose.ui.graphics.Shape,
-    liquidGlassPreset: BottomBarLiquidGlassPreset,
-    contentBackdrop: Backdrop?,
-    backdrop: Backdrop?,
-    indicatorLensSpec: BottomBarBackdropPresetLensSpec,
-    effectivePressProgress: Float,
-    indicatorIdleSurfaceColor: Color,
-    glassEnabled: Boolean,
-    motionProgress: Float,
-    velocityItemsPerSecond: Float,
-    isDragging: Boolean,
-    indicatorLayerScaleProgress: Float,
-    indicatorLayerScaleTransform: BottomBarIndicatorLayerTransform? = null,
-    bottomBarMotionSpec: com.android.purebilibili.core.ui.motion.BottomBarMotionSpec,
-    isDarkTheme: Boolean,
-    swapMotionAxes: Boolean = false,
-    indicatorAlignment: Alignment = Alignment.CenterStart
-) {
-    if (!visible) return
-    val rawIndicatorLayerTransform = if (glassEnabled) {
-        resolveBottomBarIndicatorLayerTransform(
-            motionProgress = motionProgress,
-            velocityItemsPerSecond = velocityItemsPerSecond,
-            isDragging = isDragging,
-            dragScaleProgress = indicatorLayerScaleProgress,
-            dragScaleTransform = indicatorLayerScaleTransform,
-            motionSpec = bottomBarMotionSpec
-        )
-    } else {
-        BottomBarIndicatorLayerTransform(scaleX = 1f, scaleY = 1f)
-    }
-    val indicatorLayerTransform = if (swapMotionAxes) {
-        BottomBarIndicatorLayerTransform(
-            scaleX = rawIndicatorLayerTransform.scaleY,
-            scaleY = rawIndicatorLayerTransform.scaleX
-        )
-    } else {
-        rawIndicatorLayerTransform
-    }
-    Box(
-        modifier = Modifier
-            .alpha(dockContentAlpha)
-            .graphicsLayer {
-                translationX = indicatorTranslationXPx + indicatorPanelOffsetPx
-                translationY = indicatorTranslationYPx + indicatorPanelOffsetYPx
-                scaleX = indicatorSettleReboundTransform.scaleX
-                scaleY = indicatorSettleReboundTransform.scaleY
-            }
-            .width(indicatorWidth)
-            .height(indicatorHeight)
-            .align(indicatorAlignment)
-            .run {
-                val indicatorBackdrop = if (shouldUseBottomBarCombinedIndicatorBackdrop(liquidGlassPreset)) {
-                    contentBackdrop
-                } else {
-                    backdrop
-                }
-                if (indicatorBackdrop != null) {
-                    drawBackdrop(
-                        backdrop = indicatorBackdrop,
-                        shape = { shellShape },
-                        effects = {
-                            if (shouldUseBottomBarIndicatorLens(liquidGlassPreset)) {
-                                lens(
-                                    refractionHeight = indicatorLensSpec.refractionHeightDp.dp.toPx(),
-                                    refractionAmount = indicatorLensSpec.refractionAmountDp.dp.toPx(),
-                                    depthEffect = true,
-                                    chromaticAberration = true
-                                )
-                            }
-                        },
-                        highlight = {
-                            Highlight(
-                                width = 1.dp,
-                                alpha = effectivePressProgress
-                            )
-                        },
-                        onDrawSurface = {
-                            val surfaceFade = (1f - effectivePressProgress).coerceIn(0f, 1f)
-                            if (surfaceFade > 0f) {
-                                drawRect(
-                                    color = indicatorIdleSurfaceColor,
-                                    alpha = surfaceFade
-                                )
-                            }
-                            if (effectivePressProgress > 0f) {
-                                drawRect(
-                                    Color.Black.copy(alpha = 0.03f * effectivePressProgress)
-                                )
-                            }
-                        },
-                        innerShadow = {
-                            InnerShadow(
-                                radius = 8.dp * effectivePressProgress,
-                                color = Color.Black.copy(alpha = 0.15f),
-                                alpha = effectivePressProgress
-                            )
-                        },
-                        layerBlock = {
-                            if (glassEnabled) {
-                                scaleX = indicatorLayerTransform.scaleX
-                                scaleY = indicatorLayerTransform.scaleY
-                            }
-                        }
-                    )
-                } else {
-                    background(
-                        resolveAndroidNativeIdleIndicatorSurfaceColor(
-                            darkTheme = isDarkTheme
-                        ),
-                        shellShape
-                    )
-                }
-            }
-    )
-}
-
-@Composable
-private fun BoxScope.KernelSuBottomBarInputLayer(
-    visible: Boolean,
-    visibleItems: List<BottomNavItem>,
-    isTablet: Boolean,
-    hasSidebarToggle: Boolean,
-    dockContentPadding: PaddingValues,
-    dockWidth: Dp,
-    dockHeight: Dp,
-    visiblePanelOffsetPx: Float,
-    dampedDragState: DampedDragAnimationState,
-    itemWidthPx: Float,
-    itemWidth: Dp,
-    onItemClick: (Int, BottomNavItem) -> Unit,
-    onSidebarClick: () -> Unit
-) {
-    if (!visible) return
-    Row(
-        modifier = Modifier
-            .width(dockWidth)
-            .height(dockHeight)
-            .align(Alignment.Center)
-            .padding(dockContentPadding)
-            .alpha(0f)
-            .graphicsLayer { translationX = visiblePanelOffsetPx }
-            .horizontalDragGesture(
-                dragState = dampedDragState,
-                itemWidthPx = itemWidthPx
-            ),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        visibleItems.forEachIndexed { index, item ->
-            BottomBarInputTarget(
-                itemWidth = itemWidth,
-                onClick = { onItemClick(index, item) },
-                onPressChanged = dampedDragState::setPressed
-            )
-        }
-
-        if (isTablet && hasSidebarToggle) {
-            BottomBarInputTarget(
-                itemWidth = itemWidth,
-                onClick = onSidebarClick,
-                onPressChanged = dampedDragState::setPressed
-            )
-        }
-    }
-}
-
-@Composable
-private fun KernelSuBottomBarSearchSlot(
+private fun BiliPaiBottomBarSearchSlot(
     visible: Boolean,
     launchAdjustedSearchGap: Dp,
     searchWidth: Dp,
@@ -4095,6 +4348,7 @@ private fun KernelSuBottomBarSearchSlot(
     expanded: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
+    onCompactClick: () -> Unit,
     onSubmit: () -> Unit,
     shape: androidx.compose.ui.graphics.Shape,
     miuixBackdrop: MiuixBackdrop?,
@@ -4113,7 +4367,9 @@ private fun KernelSuBottomBarSearchSlot(
     isScrolling: Boolean,
     materialScrollProgress: Float,
     materialMotionProgress: Float,
-    materialPressProgress: Float
+    materialPressProgress: Float,
+    liquidGlassTuning: LiquidGlassTuning,
+    iconStyle: SharedFloatingBottomBarIconStyle
 ) {
     if (!visible) return
     Spacer(modifier = Modifier.width(launchAdjustedSearchGap))
@@ -4122,12 +4378,13 @@ private fun KernelSuBottomBarSearchSlot(
             .width(searchWidth)
             .height(searchHeight)
     ) {
-        KernelSuBottomBarSearchCapsule(
+        BiliPaiBottomBarSearchCapsule(
             width = searchWidth,
             height = searchHeight,
             expanded = expanded,
             query = query,
             onQueryChange = onQueryChange,
+            onCompactClick = onCompactClick,
             onSubmit = onSubmit,
             shape = shape,
             miuixBackdrop = miuixBackdrop,
@@ -4146,18 +4403,21 @@ private fun KernelSuBottomBarSearchSlot(
             isScrolling = isScrolling,
             materialScrollProgress = materialScrollProgress,
             materialMotionProgress = materialMotionProgress,
-            materialPressProgress = materialPressProgress
+            materialPressProgress = materialPressProgress,
+            liquidGlassTuning = liquidGlassTuning,
+            iconStyle = iconStyle
         )
     }
 }
 
 @Composable
-private fun KernelSuBottomBarSearchCapsule(
+private fun BiliPaiBottomBarSearchCapsule(
     width: Dp,
     height: Dp,
     expanded: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
+    onCompactClick: () -> Unit,
     onSubmit: () -> Unit,
     shape: androidx.compose.ui.graphics.Shape,
     miuixBackdrop: MiuixBackdrop?,
@@ -4176,42 +4436,21 @@ private fun KernelSuBottomBarSearchCapsule(
     isScrolling: Boolean,
     materialScrollProgress: Float,
     materialMotionProgress: Float,
-    materialPressProgress: Float
+    materialPressProgress: Float,
+    liquidGlassTuning: LiquidGlassTuning,
+    iconStyle: SharedFloatingBottomBarIconStyle
 ) {
-    var searchLongPressHeld by remember { mutableStateOf(false) }
+    val currentOnCompactClick by rememberUpdatedState(onCompactClick)
     val currentOnSubmit by rememberUpdatedState(onSubmit)
     val currentHaptic by rememberUpdatedState(haptic)
-    val launchSearchFromExpandedBlankQuery = expanded && query.isBlank()
-    val longPressHorizontalScale by animateFloatAsState(
-        targetValue = if (searchLongPressHeld) 0.94f else 1f,
-        animationSpec = spring(
-            dampingRatio = 0.62f,
-            stiffness = 560f
-        ),
-        label = "bottomBarSearchLongPressHorizontalScale"
-    )
-    LaunchedEffect(searchLongPressHeld) {
-        if (!searchLongPressHeld) return@LaunchedEffect
-        currentHaptic(HapticType.MEDIUM)
-        while (searchLongPressHeld) {
-            delay(90L)
-            currentHaptic(HapticType.SELECTION)
-        }
-    }
-    val fieldAlpha by animateFloatAsState(
+    val fieldAlpha = animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = 180,
-            easing = AppMotionEasing.Continuity
-        ),
+        animationSpec = bottomBarContentVisibilityMotionSpec(),
         label = "bottomBarSearchFieldAlpha"
     )
-    val iconScale by animateFloatAsState(
+    val iconScale = animateFloatAsState(
         targetValue = if (expanded) 0.92f else 1f,
-        animationSpec = tween(
-            durationMillis = 180,
-            easing = AppMotionEasing.Continuity
-        ),
+        animationSpec = bottomBarContentVisibilityMotionSpec(),
         label = "bottomBarSearchIconScale"
     )
 
@@ -4219,10 +4458,7 @@ private fun KernelSuBottomBarSearchCapsule(
         modifier = Modifier
             .width(width)
             .height(height)
-            .graphicsLayer {
-                scaleX = longPressHorizontalScale
-            }
-            .kernelSuMiuixFloatingDockSurface(
+            .biliPaiMiuixFloatingDockSurface(
                 shape = shape,
                 backdrop = miuixBackdrop,
                 containerColor = containerColor,
@@ -4237,37 +4473,27 @@ private fun KernelSuBottomBarSearchCapsule(
                 isScrolling = isScrolling,
                 materialScrollProgress = materialScrollProgress,
                 materialMotionProgress = materialMotionProgress,
-                materialPressProgress = materialPressProgress
+                materialPressProgress = materialPressProgress,
+                liquidGlassTuning = liquidGlassTuning
             )
             .then(
                 if (!expanded) {
-                    Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                try {
-                                    awaitRelease()
-                                } finally {
-                                    if (searchLongPressHeld) {
-                                        searchLongPressHeld = false
-                                    }
-                                }
-                            },
-                            onTap = {
-                                currentHaptic(HapticType.LIGHT)
-                                currentOnSubmit()
-                            },
-                            onLongPress = {
-                                searchLongPressHeld = true
-                            }
-                        )
-                    }
+                    Modifier.clickable(
+                        role = Role.Button,
+                        onClick = {
+                            currentHaptic(HapticType.LIGHT)
+                            currentOnCompactClick()
+                        },
+                    )
                 } else {
-                    Modifier
+                    Modifier.semantics {
+                        contentDescription = "搜索输入框"
+                    }
                 }
             ),
         contentAlignment = Alignment.Center
     ) {
-        KernelSuBottomBarSearchVisualContent(
+        BiliPaiBottomBarSearchVisualContent(
             expanded = expanded,
             query = query,
             onQueryChange = onQueryChange,
@@ -4276,52 +4502,41 @@ private fun KernelSuBottomBarSearchCapsule(
             },
             contentColor = contentColor,
             accentColor = accentColor,
-            iconScale = iconScale,
-            fieldAlpha = fieldAlpha,
-            interactive = true
+            iconScale = { iconScale.value },
+            fieldAlpha = { fieldAlpha.value },
+            interactive = true,
+            iconStyle = iconStyle
         )
-        if (launchSearchFromExpandedBlankQuery) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(shape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        currentHaptic(HapticType.LIGHT)
-                        currentOnSubmit()
-                    }
-            )
-        }
     }
 }
 
 @Composable
-private fun KernelSuBottomBarSearchVisualContent(
+internal fun BiliPaiBottomBarSearchVisualContent(
     expanded: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
     contentColor: Color,
     accentColor: Color,
-    iconScale: Float,
-    fieldAlpha: Float,
-    interactive: Boolean
+    iconScale: () -> Float,
+    fieldAlpha: () -> Float,
+    interactive: Boolean,
+    iconStyle: SharedFloatingBottomBarIconStyle
 ) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(expanded, interactive) {
+        if (expanded && interactive) focusRequester.requestFocus()
+    }
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = if (expanded) 16.dp else 0.dp),
+            .padding(horizontal = if (expanded) AppSpacingTokens.Large else AppSpacingTokens.None),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (expanded) Arrangement.Start else Arrangement.Center
     ) {
-        Icon(
-            imageVector = CupertinoIcons.Default.MagnifyingGlass,
-            contentDescription = "搜索",
-            tint = if (expanded) accentColor else contentColor,
+        Box(
             modifier = Modifier
-                .size(24.dp)
+                .size(AppChromeSizeTokens.MinimumTouchTarget)
                 .then(
                     if (expanded && interactive) {
                         Modifier.clickable(
@@ -4332,14 +4547,28 @@ private fun KernelSuBottomBarSearchVisualContent(
                     } else {
                         Modifier
                     }
-                )
-                .graphicsLayer {
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
-        )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            AppIcon(
+                imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                    MiuixIcons.Search
+                } else {
+                    Icons.Outlined.Search
+                },
+                contentDescription = "搜索",
+                tint = contentColor,
+                modifier = Modifier
+                    .size(AppSpacingTokens.ExtraLarge)
+                    .graphicsLayer {
+                        val scale = iconScale()
+                        scaleX = scale
+                        scaleY = scale
+                    }
+            )
+        }
         if (expanded) {
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
             if (interactive) {
                 BasicTextField(
                     value = query,
@@ -4350,12 +4579,13 @@ private fun KernelSuBottomBarSearchVisualContent(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
                     modifier = Modifier
+                        .focusRequester(focusRequester)
                         .weight(1f)
-                        .alpha(fieldAlpha),
+                        .graphicsLayer { alpha = fieldAlpha() },
                     decorationBox = { innerTextField ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (query.isBlank()) {
-                                Text(
+                                AppText(
                                     text = "搜索",
                                     color = contentColor.copy(alpha = 0.45f),
                                     maxLines = 1,
@@ -4370,10 +4600,10 @@ private fun KernelSuBottomBarSearchVisualContent(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .alpha(fieldAlpha),
+                        .graphicsLayer { alpha = fieldAlpha() },
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    Text(
+                    AppText(
                         text = query.ifBlank { "搜索" },
                         color = if (query.isBlank()) {
                             contentColor.copy(alpha = 0.45f)
@@ -4461,7 +4691,7 @@ private fun RowScope.AndroidNativeBottomBarItem(
     val iconLabelGap = if (shouldUseSkinItemLayout) {
         resolveBottomBarSkinIconLabelGap()
     } else {
-        0.dp
+        AppSpacingTokens.None
     }
 
     LaunchedEffect(isPressed, interactive) {
@@ -4503,11 +4733,12 @@ private fun RowScope.AndroidNativeBottomBarItem(
                 BottomBarSkinIcon(
                     iconPath = skinIconPathForLayout,
                     contentDescription = label,
+                    selected = selected,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = resolveBottomBarSkinDockIconTopPadding())
                 )
-                Text(
+                AppText(
                     text = label,
                     color = contentColor,
                     fontSize = resolveBottomBarSkinDockLabelFontSize(),
@@ -4522,8 +4753,8 @@ private fun RowScope.AndroidNativeBottomBarItem(
                             alpha = labelScrimAlpha
                         )
                         .padding(
-                            start = 2.dp,
-                            end = 2.dp,
+                            start = AppSpacingTokens.Micro,
+                            end = AppSpacingTokens.Micro,
                             bottom = resolveBottomBarSkinDockLabelBottomPadding()
                         )
                 )
@@ -4544,26 +4775,28 @@ private fun RowScope.AndroidNativeBottomBarItem(
                             skinIconPath != null -> {
                                 BottomBarSkinIcon(
                                     iconPath = skinIconPath,
-                                    contentDescription = label
+                                    contentDescription = label,
+                                    selected = selected,
                                 )
                             }
-                            item == null && iconStyle == SharedFloatingBottomBarIconStyle.CUPERTINO -> {
-                                Icon(
-                                    imageVector = CupertinoIcons.Outlined.SidebarLeft,
+                            item == null && iconStyle == SharedFloatingBottomBarIconStyle.MIUIX -> {
+                                AppIcon(
+                                    imageVector = resolveMiuixPreferredHomeNavigationIcon(tabId = "PARTITION"),
                                     contentDescription = label
                                 )
                             }
                             item == null -> {
-                                Icon(
+                                AppIcon(
                                     imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
                                     contentDescription = label
                                 )
                             }
-                            iconStyle == SharedFloatingBottomBarIconStyle.CUPERTINO -> {
-                                BottomBarBlendedCupertinoIcon(
+                            iconStyle == SharedFloatingBottomBarIconStyle.MIUIX -> {
+                                BottomBarBlendedMiuixIcon(
                                     item = item,
                                     unreadCount = dynamicUnreadCount,
                                     selectedAlpha = selectedIconAlpha,
+                                    contentDescription = label,
                                     contentColor = contentColor
                                 )
                             }
@@ -4580,22 +4813,22 @@ private fun RowScope.AndroidNativeBottomBarItem(
                     }
                 }
             }
-            if (showIcon && showText && iconLabelGap > 0.dp) {
+            if (showIcon && showText && iconLabelGap > AppSpacingTokens.None) {
                 Spacer(modifier = Modifier.height(iconLabelGap))
             }
             if (showText) {
-                Text(
+                AppText(
                     text = label,
                     color = contentColor,
                     fontSize = if (shouldUseSkinItemLayout) {
                         resolveBottomBarSkinDockLabelFontSize()
                     } else {
-                        11.sp
+                        MaterialTheme.typography.labelSmall.fontSize
                     },
                     lineHeight = if (shouldUseSkinItemLayout) {
                         resolveBottomBarSkinDockLabelLineHeight()
                     } else {
-                        14.sp
+                        MaterialTheme.typography.labelMedium.lineHeight
                     },
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -4610,7 +4843,7 @@ private fun RowScope.AndroidNativeBottomBarItem(
     }
 }
 
-private fun resolveMaterialBottomBarIcon(
+internal fun resolveMaterialBottomBarIcon(
     item: BottomNavItem,
     selected: Boolean
 ): ImageVector = when (item) {
@@ -4618,37 +4851,74 @@ private fun resolveMaterialBottomBarIcon(
     BottomNavItem.DYNAMIC -> if (selected) Icons.Filled.Notifications else Icons.Outlined.NotificationsNone
     BottomNavItem.STORY -> if (selected) Icons.Filled.PlayCircle else Icons.Outlined.PlayCircleOutline
     BottomNavItem.HISTORY -> if (selected) Icons.Filled.History else Icons.Outlined.History
+    BottomNavItem.LISTEN_VIDEO -> if (selected) Icons.Filled.LibraryMusic else Icons.Outlined.LibraryMusic
     BottomNavItem.PROFILE -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
     BottomNavItem.FAVORITE -> if (selected) Icons.Filled.CollectionsBookmark else Icons.Outlined.CollectionsBookmark
     BottomNavItem.LIVE -> if (selected) Icons.Filled.LiveTv else Icons.Outlined.LiveTv
     BottomNavItem.WATCHLATER -> if (selected) Icons.Filled.WatchLater else Icons.Outlined.WatchLater
     BottomNavItem.SETTINGS -> if (selected) Icons.Filled.Settings else Icons.Outlined.Settings
+    BottomNavItem.PLUGINS -> if (selected) Icons.Filled.Extension else Icons.Outlined.Extension
 }
 
 @Composable
-private fun BottomBarBlendedCupertinoIcon(
+internal fun resolveHomeNavigationBarIcon(
+    item: BottomNavItem,
+    selected: Boolean
+): ImageVector = resolveMiuixBottomNavigationIcon(item, selected)
+
+@Composable
+private fun resolveSharedBottomBarIcon(
+    item: BottomNavItem,
+    selected: Boolean,
+    iconStyle: SharedFloatingBottomBarIconStyle
+): ImageVector = when (iconStyle) {
+    SharedFloatingBottomBarIconStyle.MATERIAL -> resolveMaterialBottomBarIcon(item, selected)
+    SharedFloatingBottomBarIconStyle.MIUIX -> resolveHomeNavigationBarIcon(item, selected)
+}
+
+@Composable
+private fun resolveSharedBottomBarSidebarIcon(
+    iconStyle: SharedFloatingBottomBarIconStyle
+): ImageVector = when (iconStyle) {
+    SharedFloatingBottomBarIconStyle.MATERIAL -> Icons.AutoMirrored.Outlined.MenuOpen
+    SharedFloatingBottomBarIconStyle.MIUIX ->
+        resolveMiuixPreferredHomeNavigationIcon(tabId = "PARTITION")
+}
+
+@Composable
+private fun BottomBarBlendedMiuixIcon(
     item: BottomNavItem,
     unreadCount: Int = 0,
     selectedAlpha: Float,
-    contentColor: Color
+    contentDescription: String?,
+    contentColor: Color,
+    floatingCompactBadge: Boolean = false
 ) {
     val clampedSelectedAlpha = selectedAlpha.coerceIn(0f, 1f)
     CompositionLocalProvider(LocalContentColor provides contentColor) {
         BottomBarReminderBadgeAnchor(
             item = item,
-            unreadCount = unreadCount
+            unreadCount = unreadCount,
+            floatingCompact = floatingCompactBadge
         ) {
-            Box(
-                modifier = Modifier.alpha(1f - clampedSelectedAlpha),
-                contentAlignment = Alignment.Center
-            ) {
-                item.unselectedIcon()
-            }
-            Box(
-                modifier = Modifier.alpha(clampedSelectedAlpha),
-                contentAlignment = Alignment.Center
-            ) {
-                item.selectedIcon()
+            val idleIcon = resolveHomeNavigationBarIcon(item, selected = false)
+            val activeIcon = resolveHomeNavigationBarIcon(item, selected = true)
+            if (idleIcon == activeIcon) {
+                AppIcon(
+                    imageVector = idleIcon,
+                    contentDescription = contentDescription
+                )
+            } else {
+                AppIcon(
+                    imageVector = idleIcon,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.alpha(1f - clampedSelectedAlpha)
+                )
+                AppIcon(
+                    imageVector = activeIcon,
+                    contentDescription = null,
+                    modifier = Modifier.alpha(clampedSelectedAlpha)
+                )
             }
         }
     }
@@ -4660,20 +4930,22 @@ private fun BottomBarBlendedMaterialIcon(
     unreadCount: Int = 0,
     selectedAlpha: Float,
     contentDescription: String?,
-    contentColor: Color
+    contentColor: Color,
+    floatingCompactBadge: Boolean = false
 ) {
     val clampedSelectedAlpha = selectedAlpha.coerceIn(0f, 1f)
     CompositionLocalProvider(LocalContentColor provides contentColor) {
         BottomBarReminderBadgeAnchor(
             item = item,
-            unreadCount = unreadCount
+            unreadCount = unreadCount,
+            floatingCompact = floatingCompactBadge
         ) {
-            Icon(
+            AppIcon(
                 imageVector = resolveMaterialBottomBarIcon(item, selected = false),
                 contentDescription = contentDescription,
                 modifier = Modifier.alpha(1f - clampedSelectedAlpha)
             )
-            Icon(
+            AppIcon(
                 imageVector = resolveMaterialBottomBarIcon(item, selected = true),
                 contentDescription = null,
                 modifier = Modifier.alpha(clampedSelectedAlpha)
@@ -4687,6 +4959,7 @@ private fun BottomBarReminderBadgeAnchor(
     item: BottomNavItem?,
     unreadCount: Int = 0,
     modifier: Modifier = Modifier,
+    floatingCompact: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     BottomBarReminderBadgeAnchor(
@@ -4698,6 +4971,7 @@ private fun BottomBarReminderBadgeAnchor(
             }
         ),
         modifier = modifier,
+        floatingCompact = floatingCompact,
         content = content
     )
 }
@@ -4706,8 +4980,23 @@ private fun BottomBarReminderBadgeAnchor(
 private fun BottomBarReminderBadgeAnchor(
     badgeText: String?,
     modifier: Modifier = Modifier,
+    /**
+     * Floating BiliPai dock is short (64dp shell). Use a tighter badge offset so the
+     * pill does not clip the top of the reminder badge.
+     */
+    floatingCompact: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val badgeOffsetX = if (floatingCompact) {
+        AppSpacingTokens.Small
+    } else {
+        AppSpacingTokens.Medium
+    }
+    val badgeOffsetY = if (floatingCompact) {
+        -AppSpacingTokens.Micro
+    } else {
+        -AppSpacingTokens.Small
+    }
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
@@ -4717,22 +5006,28 @@ private fun BottomBarReminderBadgeAnchor(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 12.dp, y = (-8).dp)
-                    .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                    .offset(x = badgeOffsetX, y = badgeOffsetY)
+                    .defaultMinSize(
+                        minWidth = AppSpacingTokens.Large + AppSpacingTokens.Micro,
+                        minHeight = AppSpacingTokens.Large + AppSpacingTokens.Micro
+                    )
                     .background(iOSRed, CircleShape)
                     .border(
-                        width = 1.dp,
+                        width = AppSpacingTokens.Micro / 2,
                         color = AppSurfaceTokens.cardContainer(),
                         shape = CircleShape
                     )
-                    .padding(horizontal = 5.dp, vertical = 1.dp),
+                    .padding(
+                        horizontal = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro / 2,
+                        vertical = AppSpacingTokens.Micro / 2
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
+                AppText(
                     text = badgeText,
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    lineHeight = 12.sp,
+                    color = OpticalContrastPalette.Highlight,
+                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                    lineHeight = MaterialTheme.typography.labelSmall.lineHeight,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
                 )
@@ -4881,13 +5176,13 @@ internal fun resolveBottomBarReadableContentColor(
     contentLuminance: Float
 ): Color {
     if (isLightMode) {
-        return Color.Black
+        return OpticalContrastPalette.Shadow
     }
     val shouldUseDarkForeground = liquidGlassProgress >= 0.62f && contentLuminance > 0.6f
     return if (shouldUseDarkForeground) {
-        Color.Black.copy(alpha = 0.82f)
+        OpticalContrastPalette.Shadow.copy(alpha = 0.82f)
     } else {
-        Color.White.copy(
+        OpticalContrastPalette.Highlight.copy(
             alpha = if (liquidGlassProgress < 0.35f) 0.97f else 0.95f
         )
     }

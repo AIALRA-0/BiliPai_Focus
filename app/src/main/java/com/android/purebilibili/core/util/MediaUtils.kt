@@ -1,10 +1,13 @@
 package com.android.purebilibili.core.util
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.media.MediaCodecList
 import android.os.Build
 import android.view.Display
+import androidx.media3.common.MimeTypes
+import androidx.media3.decoder.ffmpeg.FfmpegLibrary
 import java.util.concurrent.ConcurrentHashMap
 
 object MediaUtils {
@@ -23,6 +26,32 @@ object MediaUtils {
     fun isAv1Supported(): Boolean {
         // AV1 support is limited on older devices
         return hasDecoder("video/av01")
+    }
+
+    /** 检查平台或应用内置 FFmpeg 是否能够解码 E-AC-3/JOC 音轨。 */
+    fun isDolbyAtmosAudioSupported(): Boolean {
+        return isPlatformDolbyAudioDecoderSupported() || isDolbySoftwareAudioDecoderSupported()
+    }
+
+    /** 平台解码器可用时保留 Dolby JOC/Atmos 渲染链路。 */
+    fun isPlatformDolbyAudioDecoderSupported(): Boolean {
+        return hasDecoder(MimeTypes.AUDIO_E_AC3) || hasDecoder(MimeTypes.AUDIO_E_AC3_JOC)
+    }
+
+    /** 检查应用内置的窄版 FFmpeg 是否包含 E-AC-3 解码器。 */
+    // FfmpegLibrary 属 media3 unstable API：应用在稳定能力查询封装后消费，opt-in 标记会级联污染全部调用方。
+    @SuppressLint("UnsafeOptInUsageError")
+    fun isDolbySoftwareAudioDecoderSupported(): Boolean {
+        return runCatching {
+            FfmpegLibrary.supportsFormat(MimeTypes.AUDIO_E_AC3)
+        }.onFailure { error ->
+            Logger.e("MediaUtils", "Failed to load bundled E-AC-3 decoder", error)
+        }.getOrDefault(false)
+    }
+
+    /** 只有平台不支持而 FFmpeg 可用时，实际播放才属于兼容软解。 */
+    fun isDolbySoftwareAudioDecoderRequired(): Boolean {
+        return !isPlatformDolbyAudioDecoderSupported() && isDolbySoftwareAudioDecoderSupported()
     }
 
     /**

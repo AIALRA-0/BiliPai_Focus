@@ -10,8 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +20,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  *  画面比例选择面板（官方 B 站样式）
@@ -64,7 +66,7 @@ fun AspectRatioPanel(
                 .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onDismiss() }
         ) {
             // 左侧面板
-            Surface(
+            AppSurface(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 16.dp)
@@ -97,7 +99,7 @@ fun AspectRatioPanel(
                         )
                     }
                     .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { /* 阻止点击穿透 */ },
-                shape = RoundedCornerShape(12.dp),
+                shape = AppShapes.container(ContainerLevel.Card),
                 color = Color.Black.copy(alpha = 0.85f)
             ) {
                 Column(
@@ -105,10 +107,10 @@ fun AspectRatioPanel(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // 标题
-                    Text(
+                    AppText(
                         text = "画面比例",
                         color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 11.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     
@@ -116,22 +118,23 @@ fun AspectRatioPanel(
                     ratioOptions.forEach { option ->
                         val isSelected = currentRatio == option.ratio
                         
-                        Surface(
+                        AppSurface(
                             onClick = { 
                                 onRatioChange(option.ratio)
                                 onDismiss()
                             },
                             color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent,
-                            shape = RoundedCornerShape(6.dp),
+                            shape = AppShapes.container(ContainerLevel.Chip),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text(
+                            AppText(
                                 text = option.label,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                ),
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                             )
                         }

@@ -154,23 +154,15 @@ class StartupSplashPolicyTest {
     }
 
     @Test
-    fun systemSplashPreloadHold_followsSplashIconVisibilitySwitch() {
+    fun systemSplashPreloadHold_runsForEveryColdStartEvenWithoutOptionalIcon() {
         assertTrue(
             shouldKeepSystemSplashForPreload(
-                runColdStartSplash = true,
-                splashIconVisible = true
+                runColdStartSplash = true
             )
         )
         assertFalse(
             shouldKeepSystemSplashForPreload(
-                runColdStartSplash = true,
-                splashIconVisible = false
-            )
-        )
-        assertFalse(
-            shouldKeepSystemSplashForPreload(
-                runColdStartSplash = false,
-                splashIconVisible = true
+                runColdStartSplash = false
             )
         )
     }

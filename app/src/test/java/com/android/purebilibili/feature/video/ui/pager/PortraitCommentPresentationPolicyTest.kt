@@ -86,6 +86,62 @@ class PortraitCommentPresentationPolicyTest {
     }
 
     @Test
+    fun `up preview fit scale uses available top band instead of fixed 0_58`() {
+        // 竖屏满屏视频 + 半屏 0.64 → 顶区 0.36，fit≈0.36*0.92
+        val fit = resolvePortraitOverlayExpandedPlayerScale(
+            containerHeightPx = 2000,
+            containerWidthPx = 1080,
+            currentVideoAspect = 0.56f,
+            viewportVerticalOffsetPx = 0f,
+            fillContainer = true,
+            visibleHeightFraction = 0.36f,
+            fitToAvailableBand = true,
+        )
+        assertTrue(fit in 0.32f..0.40f)
+        assertTrue(fit < 0.58f)
+
+        // 评论路径：不 fit，仍用固定 0.58
+        assertEquals(
+            0.58f,
+            resolvePortraitOverlayExpandedPlayerScale(
+                containerHeightPx = 2000,
+                containerWidthPx = 1080,
+                currentVideoAspect = 0.56f,
+                viewportVerticalOffsetPx = 0f,
+                fillContainer = true,
+                visibleHeightFraction = 0.36f,
+                fitToAvailableBand = false,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun `up preview transform scale is smaller than comment fixed scale for tall sheet`() {
+        val up = resolvePortraitCommentPlayerTransform(
+            commentVisibilityProgress = 1f,
+            containerHeightPx = 2000,
+            containerWidthPx = 1080,
+            currentVideoAspect = 0.56f,
+            fillContainer = true,
+            commentSheetHeightFraction = 0.64f,
+            fitToAvailableBand = true,
+        )
+        val comment = resolvePortraitCommentPlayerTransform(
+            commentVisibilityProgress = 1f,
+            containerHeightPx = 2000,
+            containerWidthPx = 1080,
+            currentVideoAspect = 0.56f,
+            fillContainer = true,
+            commentSheetHeightFraction = 0.60f,
+            fitToAvailableBand = false,
+        )
+        assertTrue(up.scale < comment.scale)
+        // 顶区可用高度约 0.36*H，缩放后视频不应明显高于该带（允许 8% 顶边留白）
+        assertTrue(up.scale * 2000f <= 0.36f * 2000f + 1f)
+    }
+
+    @Test
     fun `portrait comment transform aligns player bottom to sheet top`() {
         val collapsed = resolvePortraitCommentPlayerTransform(
             commentVisibilityProgress = 0f,
@@ -227,9 +283,9 @@ class PortraitCommentPresentationPolicyTest {
     }
 
     @Test
-    fun `detached thread detail should stay fullscreen when no top reserve exists`() {
+    fun `embedded thread detail should keep main comment drawer height when no top reserve exists`() {
         assertEquals(
-            1f,
+            0.60f,
             resolveVideoSubReplySheetMaxHeightFraction(
                 screenHeightPx = 1000,
                 topReservedPx = 0

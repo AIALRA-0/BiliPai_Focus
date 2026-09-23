@@ -119,6 +119,36 @@ class SponsorBlockPluginPolicyTest {
     }
 
     @Test
+    fun sponsorBlockConfig_migratesLegacyManualModeToPerCategoryManualBehaviors() {
+        val config = SponsorBlockConfig(autoSkip = false).normalized()
+
+        assertTrue(config.categoryBehaviorRaw.isNotEmpty())
+        assertEquals(
+            SponsorBlockSegmentBehavior.MANUAL,
+            config.behaviorFor(SponsorCategory.SPONSOR)
+        )
+    }
+
+    @Test
+    fun sponsorBlockConfig_disablesLegacyDisabledCategoriesAndOmitsThemFromRequests() {
+        val config = SponsorBlockConfig(skipIntro = false).normalized()
+
+        assertEquals(
+            SponsorBlockSegmentBehavior.DISABLED,
+            config.behaviorFor(SponsorCategory.INTRO)
+        )
+        assertTrue(SponsorCategory.INTRO !in config.requestedCategories)
+    }
+
+    @Test
+    fun normalizeSponsorBlockServerUrl_acceptsHttpAndHttpsApiUrlsOnly() {
+        assertEquals("https://example.com/api", normalizeSponsorBlockServerUrl("https://example.com/api/"))
+        assertEquals("http://localhost:8080/api", normalizeSponsorBlockServerUrl("http://localhost:8080/api"))
+        assertNull(normalizeSponsorBlockServerUrl("ftp://example.com/api"))
+        assertNull(normalizeSponsorBlockServerUrl("not-a-url"))
+    }
+
+    @Test
     fun sponsorBlockAboutItem_usesCompactValueAndProjectSubtitle() {
         val model = resolveSponsorBlockAboutItemModel()
 

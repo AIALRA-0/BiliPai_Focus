@@ -54,7 +54,8 @@ object HistoryRepository {
         ps: Int = 30,
         max: Long = 0,
         viewAt: Long = 0,
-        business: String? = null
+        business: String? = null,
+        type: String? = null
     ): Result<HistoryResult> {
         return withContext(Dispatchers.IO) {
             try {
@@ -63,15 +64,17 @@ object HistoryRepository {
                     viewAt = viewAt,
                     business = business
                 )
+                val typeQuery = type?.trim()?.takeIf { it.isNotEmpty() && !it.equals("all", ignoreCase = true) }
                 com.android.purebilibili.core.util.Logger.d(
                     "HistoryRepo",
-                    "🔴 Fetching history: ps=$ps, max=${cursorQuery.max}, viewAt=${cursorQuery.viewAt}, business=${cursorQuery.business}"
+                    "🔴 Fetching history: ps=$ps, max=${cursorQuery.max}, viewAt=${cursorQuery.viewAt}, business=${cursorQuery.business}, type=$typeQuery"
                 )
                 val response = api.getHistoryList(
                     ps = ps,
                     max = cursorQuery.max,
                     viewAt = cursorQuery.viewAt,
-                    business = cursorQuery.business
+                    business = cursorQuery.business,
+                    type = typeQuery
                 )
                 com.android.purebilibili.core.util.Logger.d("HistoryRepo", "🔴 Response code=${response.code}, items=${response.data?.list?.size ?: 0}")
                 
@@ -86,12 +89,35 @@ object HistoryRepository {
                 } else {
                     Result.failure(Exception(response.message))
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("HistoryRepo", " Error: ${e.message}")
                 Result.failure(e)
             }
         }
     }
+
+    suspend fun searchHistory(page: Int, keyword: String): Result<HistoryResult> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = api.searchHistory(page = page, keyword = keyword.trim())
+                if (response.code == 0) {
+                    Result.success(
+                        HistoryResult(
+                            list = response.data?.list.orEmpty(),
+                            cursor = response.data?.cursor,
+                        )
+                    )
+                } else {
+                    Result.failure(Exception(response.message.ifBlank { "搜索历史失败" }))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 
     suspend fun deleteHistoryItem(
         kid: String,
@@ -135,6 +161,34 @@ object HistoryRepository {
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "查询历史记录状态失败: ${response.code}" }))
                 }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun reportArticleView(articleId: Long): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val context = com.android.purebilibili.core.network.NetworkModule.appContext
+                if (
+                    context != null &&
+                    com.android.purebilibili.core.store.SettingsManager.isPrivacyModeEnabledSync(context)
+                ) {
+                    return@withContext Result.success(Unit)
+                }
+                val fields = com.android.purebilibili.feature.article.buildArticleHistoryReportFields(
+                    articleId = articleId,
+                    csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
+                ) ?: return@withContext Result.success(Unit)
+                val response = api.reportHistory(fields)
+                if (response.code == 0) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "上报专栏历史失败: ${response.code}" }))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Result.failure(e)
             }

@@ -23,7 +23,7 @@ class MainActivityLinkNavigationPolicyTest {
             BilibiliNavigationTarget.Live(456789L)
         )
 
-        assertEquals("live/456789?title=&uname=", navigation?.pendingNavigationRoute)
+        assertEquals("live/456789?title=&uname=&site=bilibili", navigation?.pendingNavigationRoute)
     }
 
     @Test

@@ -1,5 +1,56 @@
 package com.android.purebilibili.feature.search
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
+import com.android.purebilibili.core.util.WindowWidthSizeClass
+import com.android.purebilibili.feature.home.resolveHomeFeedGridColumns
+
+fun resolveSearchMaxContentWidth(): Dp = 1280.dp
+
+fun resolveSearchSingleColumnResultMaxWidth(): Dp = 840.dp
+
+fun resolveSearchContentWidth(
+    isExpandedScreen: Boolean,
+    widthDp: Dp
+): Dp = if (isExpandedScreen) {
+    minOf(widthDp, resolveSearchMaxContentWidth())
+} else {
+    widthDp
+}
+
+internal fun resolveSearchVideoGridColumns(
+    singleColumn: Boolean,
+    contentWidthDp: Int,
+    fixedColumnCount: Int = 0,
+    cardWidthPreset: HomeFeedCardWidthPreset = HomeFeedCardWidthPreset.AUTO,
+    widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Medium
+): Int {
+    if (singleColumn) {
+        return 1
+    }
+    return resolveHomeFeedGridColumns(
+        contentWidthDp = contentWidthDp,
+        displayMode = 0,
+        fixedColumnCount = fixedColumnCount,
+        cardWidthPreset = cardWidthPreset,
+        widthSizeClass = widthSizeClass
+    )
+}
+
+internal fun resolveSearchGridCardWidthDp(
+    availableWidthDp: Float,
+    minItemWidthDp: Float,
+    horizontalPaddingDp: Float,
+    spacingDp: Float,
+    fixedColumnCount: Int? = null,
+): Float {
+    val contentWidth = (availableWidthDp - 2 * horizontalPaddingDp).coerceAtLeast(0f)
+    val columns = fixedColumnCount?.coerceAtLeast(1) ?: ((contentWidth + spacingDp) / (minItemWidthDp + spacingDp))
+        .toInt().coerceAtLeast(1)
+    return ((contentWidth - spacingDp * (columns - 1)) / columns).coerceAtLeast(0f)
+}
+
 data class SearchLayoutPolicy(
     val resultGridMinItemWidthDp: Int,
     val resultGridSpacingDp: Int,

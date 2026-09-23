@@ -22,7 +22,8 @@ fun buildLocalDashManifest(
         )
         append('\n')
         if (videoTracks.isNotEmpty()) {
-            append("""    <AdaptationSet contentType="video" mimeType="${videoTracks.first().mimeType.escapeXml()}">""")
+            val mimeType = videoTracks.first().mimeType.ifBlank { "video/mp4" }
+            append("""    <AdaptationSet contentType="video" mimeType="${mimeType.escapeXml()}">""")
             append('\n')
             videoTracks.forEach { track ->
                 appendRepresentation(track)
@@ -30,7 +31,8 @@ fun buildLocalDashManifest(
             append("    </AdaptationSet>\n")
         }
         if (audioTracks.isNotEmpty()) {
-            append("""    <AdaptationSet contentType="audio" mimeType="${audioTracks.first().mimeType.escapeXml()}">""")
+            val mimeType = audioTracks.first().mimeType.ifBlank { "audio/mp4" }
+            append("""    <AdaptationSet contentType="audio" mimeType="${mimeType.escapeXml()}">""")
             append('\n')
             audioTracks.forEach { track ->
                 appendRepresentation(track)
@@ -47,7 +49,7 @@ private fun StringBuilder.appendRepresentation(track: DashVideo) {
         """      <Representation id="${track.id}" bandwidth="${track.bandwidth}" codecs="${track.codecs.escapeXml()}" width="${track.width}" height="${track.height}" frameRate="${track.frameRate.escapeXml()}">"""
     )
     append('\n')
-    append("        <BaseURL>${track.baseUrl.escapeXml()}</BaseURL>\n")
+    append("        <BaseURL>${track.getValidUrl().escapeXml()}</BaseURL>\n")
     appendSegmentBase(track.segmentBase)
     append("      </Representation>\n")
 }
@@ -57,7 +59,7 @@ private fun StringBuilder.appendRepresentation(track: DashAudio) {
         """      <Representation id="${track.id}" bandwidth="${track.bandwidth}" codecs="${track.codecs.escapeXml()}">"""
     )
     append('\n')
-    append("        <BaseURL>${track.baseUrl.escapeXml()}</BaseURL>\n")
+    append("        <BaseURL>${track.getValidUrl().escapeXml()}</BaseURL>\n")
     appendSegmentBase(track.segmentBase)
     append("      </Representation>\n")
 }

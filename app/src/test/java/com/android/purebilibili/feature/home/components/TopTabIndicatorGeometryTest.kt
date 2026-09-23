@@ -1,9 +1,43 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TopTabIndicatorGeometryTest {
+
+    @Test
+    fun `liquid capsule width interpolates between adjacent labels`() {
+        assertEquals(
+            54f,
+            resolveTopTabInterpolatedIndicatorWidthDp(
+                position = 0.5f,
+                itemWidthDp = 100f,
+                horizontalGapDp = 2f,
+                contentWidthsDp = listOf(30f, 70f),
+            ),
+            0.01f,
+        )
+    }
+
+    @Test
+    fun `icon only top tab uses a compact side indicator`() {
+        assertEquals(24.dp, resolveIconOnlyTopTabIndicatorWidth())
+    }
+
+    @Test
+    fun `top tab panel offset cannot travel outward past dock edges`() {
+        assertEquals(0f, resolveTopTabEdgeAwarePanelOffsetPx(4f, 4, 6f), 0.01f)
+        assertEquals(0f, resolveTopTabEdgeAwarePanelOffsetPx(0f, 4, -6f), 0.01f)
+        assertEquals(-6f, resolveTopTabEdgeAwarePanelOffsetPx(4f, 4, -6f), 0.01f)
+        assertEquals(6f, resolveTopTabEdgeAwarePanelOffsetPx(0f, 4, 6f), 0.01f)
+    }
+
+    @Test
+    fun `top tab outward panel offset fades during final quarter slot`() {
+        assertEquals(3f, resolveTopTabEdgeAwarePanelOffsetPx(3.875f, 4, 6f), 0.01f)
+        assertEquals(6f, resolveTopTabEdgeAwarePanelOffsetPx(2f, 4, 6f), 0.01f)
+    }
 
     @Test
     fun `indicator width follows ratio when within bounds`() {
@@ -123,6 +157,18 @@ class TopTabIndicatorGeometryTest {
     }
 
     @Test
+    fun `top tab row horizontal padding is zero for text-only docked style`() {
+        assertEquals(
+            0f,
+            resolveTopTabRowHorizontalPaddingDp(
+                isFloatingStyle = false,
+                labelMode = 2
+            ),
+            0.01f
+        )
+    }
+
+    @Test
     fun `top tab row horizontal padding is zero in edge to edge mode`() {
         assertEquals(
             0f,
@@ -140,28 +186,45 @@ class TopTabIndicatorGeometryTest {
     }
 
     @Test
-    fun `top tab dock indicator uses flatter geometry with outer chrome`() {
+    fun `top dock shell lens matches floating bottom bar full strength`() {
+        assertEquals(1f, TOP_DOCK_SHELL_LENS_INTENSITY, 0.01f)
+    }
+
+    @Test
+    fun `top tab dock indicator leaves compact vertical breathing space with outer chrome`() {
         assertEquals(
-            3f,
+            2f,
             resolveTopTabDockIndicatorHorizontalGapDp(hasOuterChromeSurface = true),
             0.01f
         )
         assertEquals(
-            10f,
+            3f,
             resolveTopTabDockIndicatorVerticalGapDp(hasOuterChromeSurface = true),
             0.01f
         )
     }
 
     @Test
-    fun `top tab dock indicator preserves legacy gap without outer dock`() {
+    fun `reused liquid glass top indicator keeps a narrow edge gap`() {
         assertEquals(
-            3f,
+            1f,
+            resolveTopTabDockIndicatorHorizontalGapDp(
+                hasOuterChromeSurface = true,
+                isLiquidGlassReuseEnabled = true
+            ),
+            0.01f
+        )
+    }
+
+    @Test
+    fun `top tab dock indicator uses the same compact gap without outer dock`() {
+        assertEquals(
+            2f,
             resolveTopTabDockIndicatorHorizontalGapDp(hasOuterChromeSurface = false),
             0.01f
         )
         assertEquals(
-            4f,
+            3f,
             resolveTopTabDockIndicatorVerticalGapDp(hasOuterChromeSurface = false),
             0.01f
         )
@@ -180,13 +243,27 @@ class TopTabIndicatorGeometryTest {
             horizontalGapDp = horizontalGap
         )
         val height = resolveTopTabDockIndicatorHeightDp(
-            rowHeightDp = 56f,
+            rowHeightDp = 36f,
             verticalGapDp = verticalGap,
-            minHeightDp = 2f
+            minHeightDp = 30f
         )
 
-        assertEquals(90f, width, 0.01f)
-        assertEquals(36f, height, 0.01f)
+        assertEquals(92f, width, 0.01f)
+        assertEquals(30f, height, 0.01f)
+    }
+
+    @Test
+    fun `top tab dock indicator keeps compact rounded rectangle height with min floor`() {
+        assertEquals(
+            30f,
+            resolveTopTabDockIndicatorHeightDp(
+                rowHeightDp = 36f,
+                verticalGapDp = 3f,
+                minHeightDp = 30f,
+                indicatorWidthDp = 54f
+            ),
+            0.01f
+        )
     }
 
     @Test
@@ -196,7 +273,7 @@ class TopTabIndicatorGeometryTest {
         )
 
         assertEquals(
-            35f,
+            34f,
             resolveTopTabDockIndicatorOffsetPx(
                 slotTranslationPx = 32f,
                 horizontalGapPx = horizontalGap
@@ -229,6 +306,25 @@ class TopTabIndicatorGeometryTest {
                 skinPlainStyle = true,
                 hasOuterChromeSurface = false
             ),
+            0.01f
+        )
+    }
+
+    @Test
+    fun `md3 top tab underline centers directly below label content`() {
+        assertEquals(
+            14f,
+            resolveMd3TopTabUnderlineCenterOffsetDp(showIcon = false, showText = true),
+            0.01f
+        )
+        assertEquals(
+            26f,
+            resolveMd3TopTabUnderlineCenterOffsetDp(showIcon = true, showText = true),
+            0.01f
+        )
+        assertEquals(
+            13f,
+            resolveMd3TopTabUnderlineCenterOffsetDp(showIcon = true, showText = false),
             0.01f
         )
     }

@@ -7,39 +7,38 @@ class HomeReturnAnimationPolicyTest {
 
     @Test
     fun quickReturn_withTransition_usesSharedElementSoftLandingSuppressionOnPhone() {
+        // 360 standard + 40 buffer + 48 settle
         assertEquals(
-            420L,
+            448L,
             resolveReturnAnimationSuppressionDurationMs(
                 isTabletLayout = false,
                 cardAnimationEnabled = true,
                 cardTransitionEnabled = true,
-                isQuickReturnFromDetail = true
             )
         )
     }
 
     @Test
     fun quickReturn_withTransition_usesSharedElementSoftLandingSuppressionOnTablet() {
+        // 360 + 40 + 48 + 40 tablet extra
         assertEquals(
-            540L,
+            488L,
             resolveReturnAnimationSuppressionDurationMs(
                 isTabletLayout = true,
                 cardAnimationEnabled = true,
                 cardTransitionEnabled = true,
-                isQuickReturnFromDetail = true
             )
         )
     }
 
     @Test
-    fun normalReturn_usesOriginalDurations() {
+    fun normalReturn_usesUnifiedSharedTransitionDuration() {
         assertEquals(
-            400L,
+            448L,
             resolveReturnAnimationSuppressionDurationMs(
                 isTabletLayout = false,
                 cardAnimationEnabled = true,
                 cardTransitionEnabled = true,
-                isQuickReturnFromDetail = false
             )
         )
         assertEquals(
@@ -48,7 +47,20 @@ class HomeReturnAnimationPolicyTest {
                 isTabletLayout = false,
                 cardAnimationEnabled = false,
                 cardTransitionEnabled = false,
-                isQuickReturnFromDetail = false
+            )
+        )
+    }
+
+    @Test
+    fun sharedReturnSuppressionUsesTheConfiguredTransitionDuration() {
+        // 520 + 40 buffer + 48 settle buffer（返回已改固定时长 tween，无需 spring 过冲余量）
+        assertEquals(
+            608L,
+            resolveReturnAnimationSuppressionDurationMs(
+                isTabletLayout = false,
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = true,
+                sharedTransitionDurationMillis = 520,
             )
         )
     }
@@ -61,7 +73,6 @@ class HomeReturnAnimationPolicyTest {
                 isTabletLayout = false,
                 cardAnimationEnabled = true,
                 cardTransitionEnabled = false,
-                isQuickReturnFromDetail = false
             )
         )
         assertEquals(
@@ -70,7 +81,6 @@ class HomeReturnAnimationPolicyTest {
                 isTabletLayout = true,
                 cardAnimationEnabled = true,
                 cardTransitionEnabled = false,
-                isQuickReturnFromDetail = false
             )
         )
     }
@@ -99,4 +109,5 @@ class HomeReturnAnimationPolicyTest {
             )
         )
     }
+
 }

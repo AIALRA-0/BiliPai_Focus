@@ -1,5 +1,12 @@
 package com.android.purebilibili.feature.profile
 
+import coil3.request.crossfade
+import coil3.request.allowHardware
+
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppText
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,7 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
@@ -25,11 +32,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.android.purebilibili.core.ui.wallpaper.ProfileWallpaperTransform
 import com.android.purebilibili.core.ui.wallpaper.applyGestureToProfileWallpaperTransform
 import com.android.purebilibili.core.ui.wallpaper.sanitizeProfileWallpaperTransform
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.TabletAndroid
-import androidx.compose.material.icons.outlined.PhoneAndroid
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardShape
+import com.android.purebilibili.core.ui.components.AppSlider
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.util.Logger
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,14 +53,24 @@ fun WallpaperAdjustmentSheet(
     onSave: (mobileBias: Float, tabletBias: Float) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: Mobile, 1: Tablet
-    var mobileBias by remember { mutableStateOf(initialMobileBias) }
-    var tabletBias by remember { mutableStateOf(initialTabletBias) }
+    val context = LocalContext.current
+    var previewLoaded by remember(imageUri) { mutableStateOf(false) }
+    var previewFailed by remember(imageUri) { mutableStateOf(false) }
+    val previewRequest = remember(context, imageUri) {
+        ImageRequest.Builder(context)
+            .data(imageUri)
+            .allowHardware(false)
+            .crossfade(true)
+            .build()
+    }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Mobile, 1: Tablet
+    var mobileBias by remember { mutableFloatStateOf(initialMobileBias) }
+    var tabletBias by remember { mutableFloatStateOf(initialTabletBias) }
     
     val currentBias = if (selectedTab == 0) mobileBias else tabletBias
     
     // Bottom Sheet
-    ModalBottomSheet(
+    AppModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -65,7 +88,7 @@ fun WallpaperAdjustmentSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
-                Text(
+                AppText(
                     text = "取消",
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -73,48 +96,31 @@ fun WallpaperAdjustmentSheet(
                     color = MaterialTheme.colorScheme.primary
                 )
                 
-                Text(
+                AppText(
                     text = "调整壁纸位置",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.Center)
                 )
                 
-                Text(
-                    text = "保存",
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .clickable { onSave(mobileBias, tabletBias) },
-                    color = MaterialTheme.colorScheme.primary
-                )
+                AppTextButton(
+                    onClick = { onSave(mobileBias, tabletBias) },
+                    enabled = previewLoaded && !previewFailed,
+                    modifier = Modifier.align(Alignment.CenterEnd).sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                ) {
+                    AppText(text = "保存", fontWeight = FontWeight.Bold)
+                }
             }
             
-            // Tab Switcher (Mobile vs Tablet)
-            Row(
+            // Device target switcher follows the active native theme; liquid glass reuses the
+            // shared moving indicator when the global glass option is enabled.
+            WallpaperDeviceTabRow(
+                selectedTab = selectedTab,
+                onSelectedTabChange = { selectedTab = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                TabItem(
-                    title = "手机端",
-                    icon = Icons.Outlined.PhoneAndroid,
-                    isSelected = selectedTab == 0,
-                    modifier = Modifier.weight(1f),
-                    onClick = { selectedTab = 0 }
-                )
-                TabItem(
-                    title = "平板端",
-                    icon = Icons.Outlined.TabletAndroid,
-                    isSelected = selectedTab == 1,
-                    modifier = Modifier.weight(1f),
-                    onClick = { selectedTab = 1 }
-                )
-            }
+                    .padding(horizontal = 32.dp, vertical = 8.dp),
+            )
             
             Spacer(modifier = Modifier.height(16.dp))
             
@@ -130,19 +136,31 @@ fun WallpaperAdjustmentSheet(
                 val aspectRatio = if (selectedTab == 0) 9f / 18f else 16f / 10f
                 val width = if (selectedTab == 0) 140.dp else 280.dp
                 val height = width / aspectRatio
+                val previewCornerRadius = if (selectedTab == 0) 16.dp else 12.dp
                 
                 // Card simulating the device screen
-                Card(
-                    shape = RoundedCornerShape(if (selectedTab == 0) 16.dp else 12.dp),
-                    elevation = CardDefaults.cardElevation(8.dp),
-                    modifier = Modifier.size(width = width, height = height)
+                AppCard(
+                    shape = AppCardShape.Uniform(previewCornerRadius),
+                    modifier = Modifier
+                        .size(width = width, height = height)
+                        .shadow(8.dp, RoundedCornerShape(previewCornerRadius)),
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(imageUri)
-                                .crossfade(true)
-                                .build(),
+                            model = previewRequest,
+                            onLoading = {
+                                previewLoaded = false
+                                previewFailed = false
+                            },
+                            onSuccess = {
+                                previewLoaded = true
+                                previewFailed = false
+                            },
+                            onError = {
+                                previewLoaded = false
+                                previewFailed = true
+                                Logger.w("WallpaperAdjustment", "Wallpaper preview failed", it.result.throwable)
+                            },
                             contentDescription = null,
                             alignment = androidx.compose.ui.BiasAlignment(0f, currentBias),
                             contentScale = ContentScale.Crop,
@@ -163,15 +181,36 @@ fun WallpaperAdjustmentSheet(
                         )
                         
                         // Text Overlay hint
-                        Text(
-                            text = "预览效果",
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 10.sp,
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                                .padding(4.dp)
-                        )
+                        if (previewLoaded) {
+                            AppText(
+                                text = "预览效果",
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .background(Color.Black.copy(alpha = 0.3f), AppShapes.container(ContainerLevel.Tag))
+                                    .padding(4.dp)
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                if (!previewFailed) {
+                                    AppCircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    Spacer(Modifier.height(12.dp))
+                                }
+                                AppText(
+                                    text = if (previewFailed) "图片加载失败，请返回重新选择" else "正在加载图片…",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -186,12 +225,12 @@ fun WallpaperAdjustmentSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("顶部对齐", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                    Text("居中", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                    Text("底部对齐", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                    AppText("顶部对齐", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                    AppText("居中", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                    AppText("底部对齐", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                 }
                 
-                Slider(
+                AppSlider(
                     value = currentBias,
                     onValueChange = { newValue ->
                         if (selectedTab == 0) mobileBias = newValue else tabletBias = newValue
@@ -201,7 +240,7 @@ fun WallpaperAdjustmentSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                Text(
+                AppText(
                     text = "上下拖动滑块调整图片显示区域",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
@@ -221,7 +260,7 @@ fun ProfileWallpaperAdjustmentSheet(
     onSave: (mobileTransform: ProfileWallpaperTransform, tabletTransform: ProfileWallpaperTransform) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     var mobileTransform by remember {
         mutableStateOf(sanitizeProfileWallpaperTransform(initialMobileTransform))
     }
@@ -239,7 +278,7 @@ fun ProfileWallpaperAdjustmentSheet(
         }
     }
 
-    ModalBottomSheet(
+    AppModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -256,7 +295,7 @@ fun ProfileWallpaperAdjustmentSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
-                Text(
+                AppText(
                     text = "取消",
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -264,14 +303,14 @@ fun ProfileWallpaperAdjustmentSheet(
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                Text(
+                AppText(
                     text = "调整壁纸位置",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.Center)
                 )
 
-                Text(
+                AppText(
                     text = "保存",
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
@@ -281,30 +320,13 @@ fun ProfileWallpaperAdjustmentSheet(
                 )
             }
 
-            Row(
+            WallpaperDeviceTabRow(
+                selectedTab = selectedTab,
+                onSelectedTabChange = { selectedTab = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                TabItem(
-                    title = "手机端",
-                    icon = Icons.Outlined.PhoneAndroid,
-                    isSelected = selectedTab == 0,
-                    modifier = Modifier.weight(1f),
-                    onClick = { selectedTab = 0 }
-                )
-                TabItem(
-                    title = "平板端",
-                    icon = Icons.Outlined.TabletAndroid,
-                    isSelected = selectedTab == 1,
-                    modifier = Modifier.weight(1f),
-                    onClick = { selectedTab = 1 }
-                )
-            }
+                    .padding(horizontal = 32.dp, vertical = 8.dp),
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -318,11 +340,13 @@ fun ProfileWallpaperAdjustmentSheet(
                 val aspectRatio = if (selectedTab == 0) 9f / 18f else 16f / 10f
                 val width = if (selectedTab == 0) 150.dp else 292.dp
                 val height = width / aspectRatio
+                val previewCornerRadius = if (selectedTab == 0) 16.dp else 12.dp
 
-                Card(
-                    shape = RoundedCornerShape(if (selectedTab == 0) 16.dp else 12.dp),
-                    elevation = CardDefaults.cardElevation(8.dp),
-                    modifier = Modifier.size(width = width, height = height)
+                AppCard(
+                    shape = AppCardShape.Uniform(previewCornerRadius),
+                    modifier = Modifier
+                        .size(width = width, height = height)
+                        .shadow(8.dp, RoundedCornerShape(previewCornerRadius)),
                 ) {
                     var previewSize by remember(selectedTab) { mutableStateOf(IntSize.Zero) }
                     Box(
@@ -344,17 +368,16 @@ fun ProfileWallpaperAdjustmentSheet(
                                 }
                             }
                     ) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
+                        com.android.purebilibili.core.ui.wallpaper.WallpaperMedia(
+                            uri = imageUri,
+                            imageModel = ImageRequest.Builder(LocalContext.current)
                                 .data(imageUri)
                                 .crossfade(true)
                                 .build(),
-                            contentDescription = null,
                             alignment = androidx.compose.ui.BiasAlignment(
                                 currentTransform.offsetX,
                                 currentTransform.offsetY
                             ),
-                            contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .graphicsLayer(
@@ -393,13 +416,13 @@ fun ProfileWallpaperAdjustmentSheet(
                                 )
                         )
 
-                        Text(
+                        AppText(
                             text = "双指缩放  单指拖动",
                             color = Color.White.copy(alpha = 0.86f),
-                            fontSize = 10.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier
                                 .align(Alignment.Center)
-                                .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                .background(Color.Black.copy(alpha = 0.3f), AppShapes.container(ContainerLevel.Tag))
                                 .padding(horizontal = 6.dp, vertical = 4.dp)
                         )
                     }
@@ -416,26 +439,26 @@ fun ProfileWallpaperAdjustmentSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
+                    AppText(
                         text = if (selectedTab == 0) "手机端参数" else "平板端参数",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
+                    AppText(
                         text = "缩放 ${"%.2f".format(currentTransform.scale)}x  横向 ${"%.2f".format(currentTransform.offsetX)}  纵向 ${"%.2f".format(currentTransform.offsetY)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )
                 }
 
-                TextButton(
+                AppTextButton(
                     onClick = { updateCurrentTransform(ProfileWallpaperTransform()) }
                 ) {
-                    Text("重置位置")
+                    AppText("重置位置")
                 }
             }
 
-            Text(
+            AppText(
                 text = "不同设备分别保存；首次设置会以居中参数作为默认值。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
@@ -448,35 +471,28 @@ fun ProfileWallpaperAdjustmentSheet(
 }
 
 @Composable
-private fun TabItem(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSelected: Boolean,
+private fun WallpaperDeviceTabRow(
+    selectedTab: Int,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onSelectedTabChange: (Int) -> Unit,
 ) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isSelected) MaterialTheme.colorScheme.background else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+    val options = remember {
+        listOf(
+            AppSegmentOption(0, "手机端"),
+            AppSegmentOption(1, "平板端"),
+        )
     }
+    AppThemeAdaptiveTabRow(
+        options = options,
+        selectedValue = selectedTab,
+        onSelectionChange = onSelectedTabChange,
+        modifier = modifier.wrapContentWidth(Alignment.CenterHorizontally),
+        compactMiuixWhenTwoOptions = true,
+        height = 48.dp,
+        indicatorHeight = com.android.purebilibili.core.ui
+            .roundMatchedLiquidIndicatorHeightDp(48f).dp,
+        labelFontSize = 14.sp,
+        dragSelectionEnabled = true,
+        tapPressRefractionEnabled = true,
+    )
 }

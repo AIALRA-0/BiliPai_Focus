@@ -58,12 +58,11 @@ class CommentRichContentParsingTest {
                           "id": 1
                         }
                       },
-                      "urls": {
+                      "jump_url": {
                         "https://b23.tv/demo": {
-                          "title": "视频标题",
-                          "url": "https://www.bilibili.com/video/BV1testtest",
-                          "app_url_schema": "bilibili://video/BV1testtest",
-                          "prefix_icon": "https://example.com/icon.png"
+                          "title": "UP主空间",
+                          "appUrlSchema": "bilibili://space/495695169",
+                          "prefixIcon": "https://example.com/icon.png"
                         }
                       }
                     }
@@ -99,8 +98,8 @@ class CommentRichContentParsingTest {
 
         val url = content.urls["https://b23.tv/demo"]
         assertNotNull(url)
-        assertEquals("视频标题", url.title)
-        assertEquals("bilibili://video/BV1testtest", url.appUrlSchema)
+        assertEquals("UP主空间", url.title)
+        assertEquals("bilibili://space/495695169", url.appUrlSchema)
         assertEquals("https://example.com/icon.png", url.prefixIcon)
     }
 }

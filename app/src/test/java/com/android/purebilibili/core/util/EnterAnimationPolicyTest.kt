@@ -32,4 +32,34 @@ class EnterAnimationPolicyTest {
         assertEquals(30, normal.staggerStepMs)
         assertEquals(200, normal.maxStaggerMs)
     }
+
+    @Test
+    fun coordinateWithSharedTransition_usesAlphaOnlyGeometry() {
+        val coordinated = resolveEnterMotionPolicy(
+            motionTier = MotionTier.Enhanced,
+            coordinateWithSharedTransition = true
+        )
+
+        assertEquals(1f, coordinated.initialScale)
+        assertEquals(0f, coordinated.translationFactor)
+        assertTrue(coordinated.maxStaggerMs <= 72)
+        assertTrue(coordinated.stiffness >= 560f)
+    }
+
+    @Test
+    fun coordinateWithSharedTransition_isLighterThanStandaloneEnter() {
+        val standalone = resolveEnterMotionPolicy(
+            motionTier = MotionTier.Normal,
+            coordinateWithSharedTransition = false
+        )
+        val coordinated = resolveEnterMotionPolicy(
+            motionTier = MotionTier.Normal,
+            coordinateWithSharedTransition = true
+        )
+
+        assertTrue(coordinated.maxStaggerMs <= standalone.maxStaggerMs)
+        assertTrue(coordinated.staggerStepMs <= standalone.staggerStepMs)
+        assertTrue(coordinated.initialScale >= standalone.initialScale)
+        assertTrue(coordinated.translationFactor <= standalone.translationFactor)
+    }
 }

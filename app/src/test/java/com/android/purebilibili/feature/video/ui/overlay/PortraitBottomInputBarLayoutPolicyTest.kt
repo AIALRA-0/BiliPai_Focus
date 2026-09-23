@@ -15,7 +15,7 @@ class PortraitBottomInputBarLayoutPolicyTest {
         assertEquals(8, policy.verticalPaddingDp)
         assertEquals(36, policy.inputHeightDp)
         assertEquals(14, policy.inputFontSp)
-        assertEquals(40, policy.actionButtonSizeDp)
+        assertEquals(48, policy.actionButtonSizeDp)
         assertEquals(24, policy.actionIconSizeDp)
     }
 
@@ -29,7 +29,7 @@ class PortraitBottomInputBarLayoutPolicyTest {
         assertEquals(9, policy.verticalPaddingDp)
         assertEquals(40, policy.inputHeightDp)
         assertEquals(15, policy.inputFontSp)
-        assertEquals(43, policy.actionButtonSizeDp)
+        assertEquals(48, policy.actionButtonSizeDp)
         assertEquals(26, policy.actionIconSizeDp)
     }
 
@@ -43,7 +43,7 @@ class PortraitBottomInputBarLayoutPolicyTest {
         assertEquals(10, policy.verticalPaddingDp)
         assertEquals(44, policy.inputHeightDp)
         assertEquals(16, policy.inputFontSp)
-        assertEquals(46, policy.actionButtonSizeDp)
+        assertEquals(48, policy.actionButtonSizeDp)
         assertEquals(28, policy.actionIconSizeDp)
     }
 

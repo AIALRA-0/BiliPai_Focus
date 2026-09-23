@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Static fallback for Android 8-11. Android 12+ overrides these with Monet roles. -->
+    <color name="splash_bilipai_monet_background">#FF003355</color>
+    <color name="splash_bilipai_monet_foreground">#FFA8C7FA</color>
+</resources>

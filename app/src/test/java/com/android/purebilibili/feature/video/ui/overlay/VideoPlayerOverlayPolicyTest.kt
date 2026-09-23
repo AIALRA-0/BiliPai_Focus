@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.store.player.PlayerSettingsStore
+
 import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
@@ -15,6 +17,44 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
 class VideoPlayerOverlayPolicyTest {
+
+    @Test
+    fun portraitMoreMenuUsesMiuixPopupOnlyInNonGlassMode() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt")
+            .readText()
+        val topBar = source
+            .substringAfter("private fun PortraitTopBar(")
+            .substringBefore("private fun PlaybackInsightPanel(")
+
+        assertTrue(topBar.contains("val useMiuixNonGlassChrome = isMiuixNonGlassEnabled()"))
+        assertTrue(topBar.contains("if (useMiuixNonGlassChrome)"))
+        assertTrue(topBar.contains("AppDropdownMenu("))
+        assertTrue(topBar.contains("AppDropdownMenuItem("))
+        assertTrue(topBar.contains("text = { AppText(\"播放设置\") }"))
+        assertTrue(topBar.contains("DropdownMenu("))
+        assertTrue(topBar.contains("DropdownMenuItem("))
+        assertTrue(topBar.contains("text = { Text(\"播放设置\") }"))
+    }
+
+    @Test
+    fun `long press speed keeps shared progress snapshot at high frequency`() {
+        assertEquals(
+            100L,
+            resolveInlineVideoOverlayProgressPollingIntervalMs(
+                controlsVisible = false,
+                isPlaying = true,
+                highFrequencyProgressActive = true
+            )
+        )
+        assertEquals(
+            1000L,
+            resolveInlineVideoOverlayProgressPollingIntervalMs(
+                controlsVisible = false,
+                isPlaying = true,
+                highFrequencyProgressActive = false
+            )
+        )
+    }
 
     @Test
     fun sponsorProgressBarMarkers_areClampedIntoTrackBounds() {
@@ -94,12 +134,25 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
-    fun episodeEntryShownWhenRelatedVideosExist() {
-        assertTrue(
+    fun episodeEntryHiddenWhenOnlyRelatedVideosExist() {
+        assertFalse(
             shouldShowEpisodeEntryFromVideoData(
                 relatedVideosCount = 1,
                 hasSeasonEpisodes = false,
-                pagesCount = 1
+                pagesCount = 1,
+                hasFavoritePlaylist = false
+            )
+        )
+    }
+
+    @Test
+    fun episodeEntryShownWhenFavoritePlaylistExists() {
+        assertTrue(
+            shouldShowEpisodeEntryFromVideoData(
+                relatedVideosCount = 0,
+                hasSeasonEpisodes = false,
+                pagesCount = 1,
+                hasFavoritePlaylist = true
             )
         )
     }
@@ -203,6 +256,18 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun drawerDismissesBeforeSwitchingVideo() {
+        val drawerClickBlock = loadVideoPlayerOverlaySource()
+            .substringAfter("onVideoClick = { vid, options ->")
+            .substringBefore("},\n            hazeState")
+
+        assertTrue(
+            drawerClickBlock.indexOf("onDismissEndDrawer()") <
+                drawerClickBlock.indexOf("onDrawerVideoClick(vid, options)")
+        )
+    }
+
+    @Test
     fun centerPlayButtonHiddenWhenScrubbingOrBuffering() {
         assertFalse(
             shouldShowCenterPlayButton(
@@ -252,6 +317,14 @@ class VideoPlayerOverlayPolicyTest {
                 isSeekTransitionPending = true
             )
         )
+    }
+
+    @Test
+    fun centerPlayButton_routesSingleAndDoubleTapToSameResumeAction() {
+        val source = loadVideoPlayerOverlaySource()
+
+        assertTrue(source.contains("onClick = resumeFromCenterButton"))
+        assertTrue(source.contains("onDoubleClick = resumeFromCenterButton"))
     }
 
     @Test
@@ -407,6 +480,32 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun fullscreenLockButton_hidesAfterLockAndCanBeRevealedAgain() {
+        val sectionSource = loadVideoPlayerSectionSource()
+        val overlaySource = loadVideoPlayerOverlaySource()
+        val lockButtonBlock = overlaySource
+            .substringAfter("// --- 3.5")
+            .substringBefore("if (isFullscreen && showFullscreenScreenshotButton)")
+
+        assertTrue(sectionSource.contains("LaunchedEffect(isScreenLocked, showControls)"))
+        assertTrue(sectionSource.contains("delay(2_000L)"))
+        assertTrue(lockButtonBlock.contains("visible = isVisible"))
+        assertFalse(lockButtonBlock.contains("visible = isVisible || isScreenLocked"))
+    }
+
+    @Test
+    fun fullscreenLock_freezesAndRestoresActivityOrientation() {
+        val sectionSource = loadVideoPlayerSectionSource()
+        val lockEffect = sectionSource
+            .substringAfter("DisposableEffect(isFullscreen, isScreenLocked)")
+            .substringBefore("// 「播放页沉浸状态栏」")
+
+        assertTrue(lockEffect.contains("ActivityInfo.SCREEN_ORIENTATION_LOCKED"))
+        assertTrue(lockEffect.contains("previousRequestedOrientation"))
+        assertTrue(lockEffect.contains("applyPlayerRequestedOrientation(previousRequestedOrientation)"))
+    }
+
+    @Test
     fun playbackDebugRows_includeAllReadableStatsAndSkipEmptyValues() {
         val rows = resolvePlaybackDebugRows(
             PlaybackDebugInfo(
@@ -424,6 +523,12 @@ class VideoPlayerOverlayPolicyTest {
                 firstFrame = "rendered",
                 droppedFrames = "12",
                 bandwidthEstimate = "8.6 Mbps",
+                playerViewport = "2400 x 1080",
+                cdnHost = "upos.example.com",
+                cdnIndex = "2/3",
+                networkType = "WiFi",
+                forwardBuffer = "0 ms",
+                lastLoadError = "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED: timeout",
                 lastVideoEvent = "first frame rendered",
                 lastAudioEvent = "audio sink recovered"
             )
@@ -444,10 +549,89 @@ class VideoPlayerOverlayPolicyTest {
                 DebugStatRow("First frame", "rendered"),
                 DebugStatRow("Dropped frames", "12"),
                 DebugStatRow("Bandwidth", "8.6 Mbps"),
+                DebugStatRow("Player viewport", "2400 x 1080"),
+                DebugStatRow("CDN host", "upos.example.com"),
+                DebugStatRow("CDN index", "2/3"),
+                DebugStatRow("Network type", "WiFi"),
+                DebugStatRow("Forward buffer", "0 ms"),
+                DebugStatRow("Last load error", "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED: timeout"),
                 DebugStatRow("Last video event", "first frame rendered"),
                 DebugStatRow("Last audio event", "audio sink recovered")
             ),
             rows
+        )
+    }
+
+    @Test
+    fun playbackInsight_usesOnlyAvailableMeasuredValuesAndGroupsDetails() {
+        val insight = resolvePlaybackInsightPresentation(
+            PlaybackDebugInfo(
+                resolution = "3840 x 2160",
+                videoCodec = "HEVC",
+                frameRate = "59.94 fps",
+                videoDecoder = "c2.qti.hevc.decoder",
+                playbackState = "READY",
+                droppedFrames = "0"
+            )
+        )
+
+        assertEquals("3840 x 2160 · HEVC · 59.94 fps", insight.summary)
+        assertEquals(PlaybackInsightLevel.LIVE, insight.level)
+        assertEquals("实时数据", insight.statusText)
+        assertEquals(
+            listOf("视频编码", "帧率", "视频解码器", "掉帧"),
+            insight.sections.getValue(PlaybackInsightSection.VIDEO).map { it.label }
+        )
+        assertFalse(insight.summary.contains("HDR"))
+    }
+
+    @Test
+    fun playbackInsight_reportsObservedDroppedFramesWithoutInventingNetworkDiagnosis() {
+        val insight = resolvePlaybackInsightPresentation(
+            PlaybackDebugInfo(
+                videoBitrate = "8.4 Mbps",
+                bandwidthEstimate = "2.1 Mbps",
+                droppedFrames = "7"
+            )
+        )
+
+        assertEquals(PlaybackInsightLevel.ATTENTION, insight.level)
+        assertEquals("已记录 7 个掉帧", insight.statusText)
+        assertFalse(insight.statusText.contains("带宽"))
+        assertFalse(insight.statusText.contains("网络"))
+    }
+
+    @Test
+    fun playbackInsight_marksMissingDataAsUnavailable() {
+        val insight = resolvePlaybackInsightPresentation(PlaybackDebugInfo())
+
+        assertEquals(PlaybackInsightLevel.UNAVAILABLE, insight.level)
+        assertEquals("等待播放器数据", insight.summary)
+        assertTrue(insight.sections.isEmpty())
+    }
+
+    @Test
+    fun playbackInsightHud_respectsModeControlsAttentionAndLock() {
+        val smartMode = PlayerSettingsStore.PlayerInsightMode.SMART
+        val alwaysMode = PlayerSettingsStore.PlayerInsightMode.ALWAYS
+
+        assertFalse(shouldShowPlaybackInsightHud(smartMode, true, false, false, PlaybackInsightLevel.LIVE))
+        assertTrue(shouldShowPlaybackInsightHud(smartMode, true, true, false, PlaybackInsightLevel.LIVE))
+        assertTrue(shouldShowPlaybackInsightHud(smartMode, true, false, false, PlaybackInsightLevel.ATTENTION))
+        assertTrue(shouldShowPlaybackInsightHud(alwaysMode, true, false, false, PlaybackInsightLevel.LIVE))
+        assertFalse(shouldShowPlaybackInsightHud(alwaysMode, true, true, true, PlaybackInsightLevel.ATTENTION))
+        assertFalse(shouldShowPlaybackInsightHud(alwaysMode, false, true, false, PlaybackInsightLevel.LIVE))
+    }
+
+    @Test
+    fun playbackInsightPanel_isCompactInLandscapeAndBoundedInPortrait() {
+        assertEquals(
+            PlaybackInsightPanelLayoutPolicy(widthDp = 374, maxHeightDp = 360, edgePaddingDp = 16),
+            resolvePlaybackInsightPanelLayoutPolicy(screenWidthDp = 891, screenHeightDp = 411)
+        )
+        assertEquals(
+            PlaybackInsightPanelLayoutPolicy(widthDp = 361, maxHeightDp = 520, edgePaddingDp = 16),
+            resolvePlaybackInsightPanelLayoutPolicy(screenWidthDp = 393, screenHeightDp = 852)
         )
     }
 
@@ -485,6 +669,12 @@ class VideoPlayerOverlayPolicyTest {
                 firstFrame = "rendered",
                 droppedFrames = "12",
                 bandwidthEstimate = "8.6 Mbps",
+                playerViewport = "2400 x 1080",
+                cdnHost = "upos.example.com",
+                cdnIndex = "2/3",
+                networkType = "WiFi",
+                forwardBuffer = "0 ms",
+                lastLoadError = "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED: timeout",
                 lastVideoEvent = "first frame rendered",
                 lastAudioEvent = "audio sink recovered"
             ),
@@ -503,6 +693,12 @@ class VideoPlayerOverlayPolicyTest {
         assertTrue(report.contains("Buffered: 03:08"))
         assertTrue(report.contains("Playback state: READY"))
         assertTrue(report.contains("Bandwidth: 8.6 Mbps"))
+        assertTrue(report.contains("Player viewport: 2400 x 1080"))
+        assertTrue(report.contains("CDN host: upos.example.com"))
+        assertTrue(report.contains("CDN index: 2/3"))
+        assertTrue(report.contains("Network type: WiFi"))
+        assertTrue(report.contains("Forward buffer: 0 ms"))
+        assertTrue(report.contains("Last load error: ERROR_CODE_IO_NETWORK_CONNECTION_FAILED: timeout"))
         assertTrue(report.contains("Recent events:"))
         assertTrue(report.contains("- pause requested at 01:40"))
         assertTrue(report.contains("- resume requested at 02:05"))
@@ -521,6 +717,19 @@ class VideoPlayerOverlayPolicyTest {
         assertNotNull(signal)
         assertEquals(PlaybackIssueType.STUTTER, signal.type)
         assertTrue(signal.title.contains("卡顿"))
+    }
+
+    @Test
+    fun playbackIssuePrompt_isNonBlockingAndKeepsViewAndExportActions() {
+        val source = loadVideoPlayerOverlaySource()
+        val issuePrompt = source
+            .substringAfter("if (playerDiagnosticLoggingEnabled) playbackIssueSignal?.let")
+            .substringBefore("// --- 5.")
+
+        assertFalse(issuePrompt.contains("AppAlertDialog"))
+        assertTrue(issuePrompt.contains("AppSurface"))
+        assertTrue(issuePrompt.contains("AppText(\"查看\")"))
+        assertTrue(issuePrompt.contains("AppText(\"导出\")"))
     }
 
     @Test
@@ -821,6 +1030,18 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun inlineControlsAutoHide_staysOffWhileFloatingPanelVisible() {
+        assertFalse(
+            shouldAutoHideInlineControlsAfterDelay(
+                controlsVisible = true,
+                isPlaying = true,
+                isSeekScrubbing = false,
+                floatingPanelVisible = true
+            )
+        )
+    }
+
+    @Test
     fun hiddenInlineControls_cancelActiveSeekScrub() {
         assertTrue(
             shouldCancelSeekScrubWhenControlsHidden(
@@ -834,5 +1055,42 @@ class VideoPlayerOverlayPolicyTest {
                 isSeekScrubbing = true
             )
         )
+    }
+
+    @Test
+    fun inlineProgressPolling_restartsWhenPlaybackMediaChanges() {
+        val source = loadVideoPlayerOverlaySource()
+        val progressStateBlock = source.substringAfter("val progressState by produceState(")
+            .substringBefore(") {")
+
+        assertTrue(progressStateBlock.contains("bvid"))
+        assertTrue(progressStateBlock.contains("cid"))
+        assertTrue(progressStateBlock.contains("videoDuration"))
+    }
+
+    @Test
+    fun playbackInsightDetails_useInlineRealtimeGlassInsteadOfFullscreenSheet() {
+        val source = loadVideoPlayerOverlaySource()
+        val insightPanelBlock = source.substringAfter("private fun PlaybackInsightPanel(")
+            .substringBefore("// --- 11. 侧边栏抽屉")
+
+        assertTrue(insightPanelBlock.contains("Modifier.unifiedBlur("))
+        assertTrue(insightPanelBlock.contains("BlurSurfaceType.DRAWER_OR_SHEET"))
+        assertTrue(insightPanelBlock.contains("Icons.Outlined.Close"))
+        assertFalse(source.contains("ModalBottomSheet("))
+    }
+
+    private fun loadVideoPlayerOverlaySource(): String {
+        return listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt")
+        ).first(File::exists).readText()
+    }
+
+    private fun loadVideoPlayerSectionSource(): String {
+        return listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt")
+        ).first(File::exists).readText()
     }
 }

@@ -12,6 +12,56 @@ import kotlin.test.assertTrue
 class BottomBarColorBindingPolicyTest {
 
     @Test
+    fun `docked skin suppresses material selected indicator`() {
+        val defaultColor = Color(0xFF765432)
+
+        assertEquals(
+            Color.Transparent,
+            resolveDockedBottomBarIndicatorColor(
+                defaultColor = defaultColor,
+                hasUiSkinDecoration = true,
+            ),
+        )
+        assertEquals(
+            defaultColor,
+            resolveDockedBottomBarIndicatorColor(
+                defaultColor = defaultColor,
+                hasUiSkinDecoration = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `plain floating bar reveals skin background while material modes keep their surface`() {
+        val defaultColor = Color(0xFF765432)
+
+        assertEquals(
+            Color.Transparent,
+            resolveFloatingBottomBarContainerColor(
+                defaultColor = defaultColor,
+                mode = FloatingBottomBarMode.None,
+                hasUiSkinDecoration = true,
+            ),
+        )
+        assertEquals(
+            defaultColor,
+            resolveFloatingBottomBarContainerColor(
+                defaultColor = defaultColor,
+                mode = FloatingBottomBarMode.Blur,
+                hasUiSkinDecoration = true,
+            ),
+        )
+        assertEquals(
+            defaultColor,
+            resolveFloatingBottomBarContainerColor(
+                defaultColor = defaultColor,
+                mode = FloatingBottomBarMode.None,
+                hasUiSkinDecoration = false,
+            ),
+        )
+    }
+
+    @Test
     fun `resolves custom color by enum name`() {
         val binding = resolveBottomBarItemColorBinding(
             item = BottomNavItem.DYNAMIC,
@@ -84,7 +134,7 @@ class BottomBarColorBindingPolicyTest {
 
         assertTrue(
             selectedSymbols.all { symbol ->
-                source.contains("{ Icon(CupertinoIcons.Filled.$symbol, contentDescription = null) }")
+                source.contains("{ AppIcon(CupertinoIcons.Filled.$symbol, contentDescription = null) }")
             },
             "Bottom bar selected icons should use filled symbols so the whole selected icon is tinted by the theme color."
         )

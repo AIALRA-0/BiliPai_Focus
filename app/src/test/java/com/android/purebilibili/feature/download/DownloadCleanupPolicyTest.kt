@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.download
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -8,6 +9,7 @@ class DownloadCleanupPolicyTest {
 
     @Test
     fun cleanupTargets_includeOutputCoverAndTempArtifacts() {
+        val directory = File("/tmp/downloads")
         val task = DownloadTask(
             bvid = "BV1cleanup",
             cid = 7L,
@@ -28,14 +30,14 @@ class DownloadCleanupPolicyTest {
         val targets = resolveDownloadCleanupTargets(
             taskId = task.id,
             task = task,
-            taskDirectoryPath = "/tmp/downloads"
+            taskDirectoryPath = directory.path
         )
 
-        assertEquals("/tmp/downloads", targets.taskDirectoryPath)
-        assertTrue("/tmp/downloads/${task.id}_video.m4s" in targets.filePaths)
-        assertTrue("/tmp/downloads/${task.id}_audio.m4s" in targets.filePaths)
-        assertTrue("/tmp/downloads/${task.id}.mp4" in targets.filePaths)
-        assertTrue("/tmp/downloads/${task.id}_cover.jpg" in targets.filePaths)
+        assertEquals(directory.absolutePath, targets.taskDirectoryPath)
+        assertTrue(File(directory, "${task.id}_video.m4s").absolutePath in targets.filePaths)
+        assertTrue(File(directory, "${task.id}_audio.m4s").absolutePath in targets.filePaths)
+        assertTrue(File(directory, "${task.id}.mp4").absolutePath in targets.filePaths)
+        assertTrue(File(directory, "${task.id}_cover.jpg").absolutePath in targets.filePaths)
         assertTrue("/tmp/downloads/BV1cleanup_7_80.mp4" in targets.filePaths)
         assertTrue("/tmp/downloads/BV1cleanup_7_80_cover.jpg" in targets.filePaths)
     }

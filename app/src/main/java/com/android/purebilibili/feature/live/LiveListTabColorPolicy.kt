@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.live
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.theme.resolveFilledSelectionAccentColors
 
 internal data class LiveListTabColors(
     val selectedContainerColor: Color,
@@ -9,16 +11,18 @@ internal data class LiveListTabColors(
     val unselectedContentColor: Color
 )
 
+/**
+ * Live list tab colors from the active theme [ColorScheme] only —
+ * no hard-coded surface / accent hex values.
+ */
 internal fun resolveLiveListTabColors(
-    primary: Color,
-    onPrimary: Color,
-    surfaceVariant: Color,
-    onSurfaceVariant: Color
+    colorScheme: ColorScheme,
 ): LiveListTabColors {
+    val selected = resolveFilledSelectionAccentColors(colorScheme)
     return LiveListTabColors(
-        selectedContainerColor = primary,
-        selectedContentColor = onPrimary,
-        unselectedContainerColor = surfaceVariant,
-        unselectedContentColor = onSurfaceVariant
+        selectedContainerColor = selected.backgroundColor,
+        selectedContentColor = selected.contentColor,
+        unselectedContainerColor = colorScheme.surfaceVariant,
+        unselectedContentColor = colorScheme.onSurfaceVariant,
     )
 }

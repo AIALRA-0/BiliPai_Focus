@@ -29,6 +29,10 @@ object BilibiliUrlParser {
     // AV 号正则表达式
     private val AV_REGEX = Regex("av(\\d+)", RegexOption.IGNORE_CASE)
 
+    // 文本内 URL 抽取（评论/简介等热路径复用，避免每次 Matcher 编译）
+    private val URL_EXTRACTION_PATTERN =
+        Regex("https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+")
+
     // /video/170001 这类纯数字 aid 路径（兼容 bilibili://video/170001 与 https://.../video/170001）
     private val VIDEO_AID_PATH_REGEX = Regex("/video/(\\d+)(?:[/?#]|$)", RegexOption.IGNORE_CASE)
 
@@ -409,7 +413,6 @@ object BilibiliUrlParser {
      * 从任意文本中提取所有可能的 URL
      */
     fun extractUrls(text: String): List<String> {
-        val urlRegex = Regex("https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+")
-        return urlRegex.findAll(text).map { it.value }.toList()
+        return URL_EXTRACTION_PATTERN.findAll(text).map { it.value }.toList()
     }
 }

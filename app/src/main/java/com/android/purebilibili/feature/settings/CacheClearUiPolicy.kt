@@ -95,6 +95,124 @@ internal fun resolveSelectedCacheSizeSummary(
         breakdown = breakdown,
         selectedTargets = selectedTargets
     )
-    val formattedSize = CacheUtils.CacheBreakdown(otherCache = selectedBytes).format()
-    return "已选缓存：$formattedSize"
+    return "已选缓存：${formatCacheClearBytes(selectedBytes)}"
+}
+
+internal data class CacheClearDonutSegment(
+    val target: CacheClearTarget,
+    val title: String,
+    val bytes: Long,
+    val startAngle: Float,
+    val sweepAngle: Float,
+    val selected: Boolean,
+    val colorIndex: Int,
+    val percentLabel: String
+)
+
+internal fun formatCacheClearBytes(bytes: Long): String {
+    return CacheUtils.CacheBreakdown(otherCache = bytes.coerceAtLeast(0L)).format()
+}
+
+internal fun formatCacheClearPercent(bytes: Long, totalBytes: Long): String {
+    if (totalBytes <= 0L || bytes <= 0L) return "<1.0%"
+    val percent = bytes.toDouble() / totalBytes.toDouble() * 100.0
+    return if (percent < 1.0) "<1.0%" else "${percent.toInt()}%"
+}
+
+internal fun resolveCacheClearButtonLabel(
+    breakdown: CacheUtils.CacheBreakdown?,
+    selectedTargets: Set<CacheClearTarget>
+): String {
+    if (selectedTargets.isEmpty()) return "清理缓存"
+    if (breakdown == null) return "清理缓存"
+    val selectedBytes = resolveSelectedCacheBytes(breakdown, selectedTargets)
+    return "清理缓存 ${formatCacheClearBytes(selectedBytes)}"
+}
+
+internal fun resolveCacheClearDonutCenterSize(
+    breakdown: CacheUtils.CacheBreakdown?,
+    selectedTargets: Set<CacheClearTarget>
+): String {
+    if (breakdown == null) return "计算中"
+    return formatCacheClearBytes(resolveSelectedCacheBytes(breakdown, selectedTargets))
+}
+
+internal fun resolveCacheClearDonutSegments(
+    breakdown: CacheUtils.CacheBreakdown?,
+    selectedTargets: Set<CacheClearTarget>,
+    options: List<CacheClearOptionUiModel> = resolveCacheClearOptions()
+): List<CacheClearDonutSegment> {
+    val resolvedBreakdown = breakdown ?: CacheUtils.CacheBreakdown()
+    val buckets = options.mapIndexed { index, option ->
+        Triple(
+            option,
+            resolveSelectedCacheBytes(resolvedBreakdown, setOf(option.target)),
+            index
+        )
+    }
+    val selectedTotalBytes = buckets
+        .filter { it.first.target in selectedTargets }
+        .sumOf { it.second }
+        .coerceAtLeast(0L)
+    val selectedCount = buckets.count { it.first.target in selectedTargets }
+
+    var currentStart = -90f
+    return buckets.map { (option, bytes, colorIndex) ->
+        val selected = option.target in selectedTargets
+        val sweep = when {
+            !selected || selectedCount == 0 -> 0f
+            selectedTotalBytes > 0L -> (bytes.toFloat() / selectedTotalBytes.toFloat()) * 360f
+            else -> 360f / selectedCount
+        }
+        val segment = CacheClearDonutSegment(
+            target = option.target,
+            title = option.title,
+            bytes = bytes,
+            startAngle = currentStart,
+            sweepAngle = sweep,
+            selected = selected,
+            colorIndex = colorIndex,
+            percentLabel = if (selected) {
+                formatCacheClearPercent(bytes, selectedTotalBytes)
+            } else {
+                "0%"
+            }
+        )
+        currentStart += sweep
+        segment
+    }
+}
+
+internal fun canvasAngleDegrees(dx: Float, dy: Float): Float {
+    var angle = Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
+    if (angle < 0f) angle += 360f
+    return angle
+}
+
+internal fun isAngleInDonutSweep(angle: Float, startAngle: Float, sweepAngle: Float): Boolean {
+    if (sweepAngle <= 0f) return false
+    if (sweepAngle >= 360f) return true
+    val start = ((startAngle % 360f) + 360f) % 360f
+    val end = (start + sweepAngle) % 360f
+    val normalized = ((angle % 360f) + 360f) % 360f
+    return if (start <= end) {
+        normalized >= start && normalized < end
+    } else {
+        normalized >= start || normalized < end
+    }
+}
+
+internal fun resolveCacheClearDonutHitTarget(
+    segments: List<CacheClearDonutSegment>,
+    dx: Float,
+    dy: Float,
+    innerRadius: Float,
+    outerRadius: Float
+): CacheClearTarget? {
+    val distance = kotlin.math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+    if (distance < innerRadius || distance > outerRadius) return null
+    val angle = canvasAngleDegrees(dx, dy)
+    return segments.firstOrNull { segment ->
+        isAngleInDonutSweep(angle, segment.startAngle, segment.sweepAngle)
+    }?.target
 }

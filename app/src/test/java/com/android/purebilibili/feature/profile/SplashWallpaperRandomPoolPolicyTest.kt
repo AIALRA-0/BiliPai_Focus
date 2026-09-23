@@ -48,6 +48,7 @@ class SplashWallpaperRandomPoolPolicyTest {
     @Test
     fun `user selected splash wallpaper uri detects content document`() {
         assertTrue(isUserSelectedSplashWallpaperUri("content://com.android.providers.media.documents/document/image%3A42"))
+        assertTrue(isUserSelectedSplashWallpaperUri("file:///data/user/0/app/cache/wallpaper_imports/image.img"))
         assertFalse(isUserSelectedSplashWallpaperUri("https://i0.hdslb.com/bfs/splash.jpg"))
     }
 }

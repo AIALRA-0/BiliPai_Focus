@@ -5,9 +5,11 @@ import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheKeyFactory
+import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import com.android.purebilibili.core.util.Logger
@@ -79,6 +81,53 @@ internal object PlaybackMediaCache {
             .setCacheKeyFactory(playbackCacheKeyFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
             .setEventListener(cacheEventListener)
+    }
+
+    /**
+     * Gives mirrors of one authorized DASH track the same cache spans without changing the URL
+     * used for the actual request. Unknown URLs retain the normal cache-key behavior.
+     */
+    fun buildCdnOptimizedDataSourceFactory(
+        context: Context,
+        upstreamFactory: DataSource.Factory,
+        cacheKeysByUrl: Map<String, String>
+    ): DataSource.Factory {
+        val cachedFactory = buildCachedDataSourceFactory(context, upstreamFactory)
+        if (cacheKeysByUrl.isEmpty()) return cachedFactory
+        return ResolvingDataSource.Factory(cachedFactory) { dataSpec ->
+            val cacheKey = cacheKeysByUrl[dataSpec.uri.toString()]
+            if (cacheKey.isNullOrBlank()) dataSpec else dataSpec.buildUpon().setKey(cacheKey).build()
+        }
+    }
+
+    /** Must be called from an IO dispatcher. CacheWriter only commits complete bytes it reads. */
+    fun prefetchRange(
+        context: Context,
+        upstreamFactory: DataSource.Factory,
+        url: Uri,
+        cacheKey: String,
+        position: Long,
+        length: Long
+    ) {
+        if (length <= 0L) return
+        val cache = getOrCreateCache(context) ?: return
+        val cacheDataSource = CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(upstreamFactory)
+            .setCacheKeyFactory(playbackCacheKeyFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+            .createDataSourceForDownloading()
+        CacheWriter(
+            cacheDataSource,
+            DataSpec.Builder()
+                .setUri(url)
+                .setKey(cacheKey)
+                .setPosition(position)
+                .setLength(length)
+                .build(),
+            null,
+            null
+        ).cache()
     }
 
     fun estimateBytes(context: Context): Long {

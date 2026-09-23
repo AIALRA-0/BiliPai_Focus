@@ -1,8 +1,8 @@
 package com.android.purebilibili.feature.settings
 
 import java.io.File
-import com.android.purebilibili.core.store.resolveEffectiveLiquidGlassEnabled
-import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -83,52 +83,23 @@ class VisualEffectTogglePolicyTest {
     }
 
     @Test
-    fun `android native preset preserves liquid glass when enabled`() {
-        assertFalse(
-            resolveEffectiveLiquidGlassEnabled(
-                requestedEnabled = true,
-                uiPreset = UiPreset.MD3,
-                androidNativeLiquidGlassEnabled = false
-            )
+    fun `android native preset preserves the bottom bar liquid glass choice`() {
+        val enabled = resolveEffectiveHomeSettings(
+            HomeSettings(isBottomBarLiquidGlassEnabled = true),
         )
-        assertTrue(
-            resolveEffectiveLiquidGlassEnabled(
-                requestedEnabled = true,
-                uiPreset = UiPreset.MD3,
+        val disabled = resolveEffectiveHomeSettings(
+            HomeSettings(
+                isBottomBarLiquidGlassEnabled = false,
                 androidNativeLiquidGlassEnabled = true
-            )
+            ),
         )
-        assertFalse(
-            resolveEffectiveLiquidGlassEnabled(
-                requestedEnabled = false,
-                uiPreset = UiPreset.MD3,
-                androidNativeLiquidGlassEnabled = true
-            )
-        )
+
+        assertTrue(enabled.isBottomBarLiquidGlassEnabled)
+        assertFalse(disabled.isBottomBarLiquidGlassEnabled)
     }
 
     @Test
-    fun `ios preset also preserves the stored liquid glass preference`() {
-        assertEquals(
-            true,
-            resolveEffectiveLiquidGlassEnabled(
-                requestedEnabled = true,
-                uiPreset = UiPreset.IOS,
-                androidNativeLiquidGlassEnabled = false
-            )
-        )
-        assertEquals(
-            false,
-            resolveEffectiveLiquidGlassEnabled(
-                requestedEnabled = false,
-                uiPreset = UiPreset.IOS,
-                androidNativeLiquidGlassEnabled = true
-            )
-        )
-    }
-
-    @Test
-    fun `animation settings exposes independent top dock liquid glass entry`() {
+    fun `animation settings no longer exposes per-surface liquid glass entries`() {
         val sourceFile = listOf(
             File("app/src/main/java/com/android/purebilibili/feature/settings/screen/AnimationSettingsScreen.kt"),
             File("src/main/java/com/android/purebilibili/feature/settings/screen/AnimationSettingsScreen.kt")
@@ -136,11 +107,31 @@ class VisualEffectTogglePolicyTest {
         requireNotNull(sourceFile)
         val source = sourceFile.readText()
 
-        assertTrue(source.contains("顶部 Dock 液态玻璃"))
-        assertTrue(source.contains("toggleTopBarLiquidGlass"))
-        assertTrue(source.contains("首页搜索框液态玻璃"))
-        assertTrue(source.contains("toggleHomeSearchLiquidGlass"))
+        assertFalse(source.contains("title = \"顶部标签栏液态玻璃\""))
+        assertFalse(source.contains("toggleTopBarLiquidGlass"))
+        assertFalse(source.contains("title = \"首页搜索框液态玻璃\""))
+        assertFalse(source.contains("toggleHomeSearchLiquidGlass"))
         assertTrue(source.contains("顶部栏磨砂"))
-        assertTrue(source.contains("底栏液态玻璃"))
+        assertFalse(source.contains("title = \"底部导航栏液态玻璃\""))
+    }
+
+    @Test
+    fun `bottom bar visual effects are persisted together with matching defaults`() {
+        val sourceFile = listOf(
+            File("app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt"),
+            File("src/main/java/com/android/purebilibili/core/store/SettingsManager.kt")
+        ).firstOrNull { it.exists() }
+        requireNotNull(sourceFile)
+        val source = sourceFile.readText()
+
+        assertTrue(source.contains("fun setBottomBarVisualEffects("))
+        assertTrue(source.contains("preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] = blurEnabled"))
+        assertTrue(source.contains("preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] = liquidGlassEnabled"))
+        assertTrue(
+            source.contains(
+                "preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: " +
+                    "(preferences[KEY_LIQUID_GLASS_ENABLED] ?: false)"
+            )
+        )
     }
 }

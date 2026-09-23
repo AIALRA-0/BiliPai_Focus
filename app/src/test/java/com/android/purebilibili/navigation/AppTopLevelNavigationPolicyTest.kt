@@ -12,6 +12,25 @@ import kotlin.test.assertTrue
 class AppTopLevelNavigationPolicyTest {
 
     @Test
+    fun videoDetailNeverReservesSidebarSpace() {
+        // Ordinary playback also needs the full width, even when launched from a sidebar tab.
+        assertFalse(shouldMountSidebarForNavigation(true, true))
+        assertFalse(shouldMountSidebarForNavigation(false, true))
+    }
+
+    @Test
+    fun returningFromVideoRestoresSidebarOnAnEligibleDestination() {
+        assertTrue(shouldMountSidebarForNavigation(true, false))
+        assertFalse(shouldMountSidebarForNavigation(true, true))
+        assertTrue(shouldMountSidebarForNavigation(true, false))
+    }
+
+    @Test
+    fun destinationsWithoutSidebarRemainWithoutSidebar() {
+        assertFalse(shouldMountSidebarForNavigation(false, false))
+    }
+
+    @Test
     fun returnsSkip_whenCurrentRouteAlreadyMatchesTarget() {
         val action = resolveTopLevelNavigationAction(
             currentRoute = ScreenRoutes.Profile.route,
@@ -55,12 +74,35 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun liveAndWatchLaterBottomBarTaps_alsoUseReselectScrollToTop() {
+        assertEquals(
+            BottomBarSelectionAction.RESELECT,
+            resolveBottomBarSelectionAction(
+                currentItem = BottomNavItem.LIVE,
+                tappedItem = BottomNavItem.LIVE
+            )
+        )
+        assertTrue(shouldScrollToTopOnBottomBarReselect(BottomNavItem.LIVE))
+        assertTrue(shouldScrollToTopOnBottomBarReselect(BottomNavItem.WATCHLATER))
+        assertTrue(shouldScrollToTopOnBottomBarReselect(BottomNavItem.HOME))
+        assertFalse(shouldScrollToTopOnBottomBarReselect(BottomNavItem.STORY))
+        assertFalse(shouldScrollToTopOnBottomBarReselect(BottomNavItem.SETTINGS))
+    }
+
+    @Test
     fun matchingHistoryBottomBarTap_alsoUsesReselectAction() {
         assertEquals(
             BottomBarSelectionAction.RESELECT,
             resolveBottomBarSelectionAction(
                 currentItem = BottomNavItem.HISTORY,
                 tappedItem = BottomNavItem.HISTORY
+            )
+        )
+        assertEquals(
+            BottomBarSelectionAction.RESELECT,
+            resolveBottomBarSelectionAction(
+                currentItem = BottomNavItem.PROFILE,
+                tappedItem = BottomNavItem.PROFILE
             )
         )
     }
@@ -123,20 +165,20 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun classicBackHandler_isComposedAfterNavDisplaySoItCanOwnAppBackAction() {
+    fun mainHostTabBackHandler_isComposedAfterNavDisplaySoItCanOwnTabBackAction() {
         val sourceFile = listOf(
             File("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"),
             File("src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
         ).first { it.exists() }
         val source = sourceFile.readText()
         val navDisplayIndex = source.indexOf("BiliPaiNavDisplayHost(")
-        val classicBackHandlerIndex = source.indexOf("BackHandler(enabled = shouldInterceptSystemBack)")
+        val tabBackHandlerIndex = source.indexOf("MainHostTabBackHandler(")
 
         assertTrue(navDisplayIndex >= 0)
-        assertTrue(classicBackHandlerIndex >= 0)
+        assertTrue(tabBackHandlerIndex >= 0)
         assertTrue(
-            classicBackHandlerIndex > navDisplayIndex,
-            "经典 BackHandler 必须在 NavDisplay 之后组合，才能由应用壳接管返回动作。"
+            tabBackHandlerIndex > navDisplayIndex,
+            "MainHostTabBackHandler 必须在 NavDisplay 之后组合，才能接管 Tab 二级返回。"
         )
     }
 
@@ -181,6 +223,27 @@ class AppTopLevelNavigationPolicyTest {
             resolveBottomPagerPageForRoute(
                 route = ScreenRoutes.History.route,
                 visibleItems = visibleItems
+            )
+        )
+    }
+
+    @Test
+    fun bottomPagerSwitch_doesNotRebuildNavigation3MainHost() {
+        assertFalse(
+            shouldResetNavigation3BackStackForBottomPager(
+                currentStack = listOf(BiliPaiNavKey.MainHost)
+            )
+        )
+    }
+
+    @Test
+    fun bottomPagerSwitch_restoresNavigation3MainHostFromSecondaryDestination() {
+        assertTrue(
+            shouldResetNavigation3BackStackForBottomPager(
+                currentStack = listOf(
+                    BiliPaiNavKey.MainHost,
+                    BiliPaiNavKey.Settings
+                )
             )
         )
     }
@@ -281,6 +344,26 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun videoSourceRoute_preservesHomeCategorySourceWhenNavigationTopIsMainHost() {
+        val sourceRoute = "home?category=FOLLOW"
+
+        assertEquals(
+            sourceRoute,
+            resolveVideoCardSourceRouteForNavigation(
+                currentRoute = "main_host",
+                videoBvid = "BV1xx411c7mD",
+                lastClickedVideoSourceKey = "$sourceRoute:BV1xx411c7mD",
+                visibleBottomBarRoutes = setOf(
+                    ScreenRoutes.Home.route,
+                    ScreenRoutes.Dynamic.route,
+                    ScreenRoutes.History.route,
+                    ScreenRoutes.Profile.route
+                )
+            )
+        )
+    }
+
+    @Test
     fun videoSourceRoute_rejectsMismatchedClickedVideoKey() {
         assertNull(
             resolveVideoCardSourceRouteForNavigation(
@@ -293,6 +376,40 @@ class AppTopLevelNavigationPolicyTest {
                     ScreenRoutes.History.route,
                     ScreenRoutes.Profile.route
                 )
+            )
+        )
+    }
+
+    @Test
+    fun videoSourceRoute_acceptsNonBottomBarHostsLikeSearchAndSpace() {
+        assertEquals(
+            ScreenRoutes.Search.route,
+            resolveVideoCardSourceRouteForNavigation(
+                currentRoute = "main_host",
+                videoBvid = "BV1search",
+                lastClickedVideoSourceKey = "${ScreenRoutes.Search.route}:BV1search",
+                visibleBottomBarRoutes = setOf(
+                    ScreenRoutes.Home.route,
+                    ScreenRoutes.Dynamic.route
+                )
+            )
+        )
+        assertEquals(
+            "space/42",
+            resolveVideoCardSourceRouteForNavigation(
+                currentRoute = "main_host",
+                videoBvid = "BV1space",
+                lastClickedVideoSourceKey = "space/42:BV1space",
+                visibleBottomBarRoutes = setOf(ScreenRoutes.Home.route)
+            )
+        )
+        assertEquals(
+            "video/BV_PARENT",
+            resolveVideoCardSourceRouteForNavigation(
+                currentRoute = "main_host",
+                videoBvid = "BV_RELATED",
+                lastClickedVideoSourceKey = "video/BV_PARENT:BV_RELATED",
+                visibleBottomBarRoutes = setOf(ScreenRoutes.Home.route)
             )
         )
     }
@@ -409,8 +526,8 @@ class AppTopLevelNavigationPolicyTest {
         )
         assertFalse(
             shouldShowBottomBarForNavigation(
-                activeRoute = ScreenRoutes.Story.route,
-                visibleBottomBarRoutes = defaultRoutes + ScreenRoutes.Story.route,
+                activeRoute = ScreenRoutes.Story.createRoute(bvid = "BV1test", cid = 1L),
+                visibleBottomBarRoutes = defaultRoutes + ScreenRoutes.Story.baseRoute,
                 useSideNavigation = false,
                 shouldHideBottomBarOnTablet = false,
                 shouldDeferReveal = false
@@ -446,79 +563,72 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun bottomPagerNavigationDuration_scalesWithNavigationDistance() {
+    fun bottomPagerNavigationDuration_scalesWithPageDistance() {
+        assertEquals(300, resolveBottomPagerNavigationDurationMillis(pageDistance = 1))
+        assertEquals(300, resolveBottomPagerNavigationDurationMillis(pageDistance = 2))
+        assertEquals(500, resolveBottomPagerNavigationDurationMillis(pageDistance = 4))
+    }
+
+    @Test
+    fun bottomPagerPreload_followsVisibleBottomBarCountAfterReady() {
+        assertEquals(0, resolveBottomPagerBeyondViewportPageCount(pageCount = 4, contentReady = false))
+        assertEquals(0, resolveBottomPagerBeyondViewportPageCount(pageCount = 1, contentReady = true))
+        assertEquals(3, resolveBottomPagerBeyondViewportPageCount(pageCount = 4, contentReady = true))
+        assertEquals(4, resolveBottomPagerBeyondViewportPageCount(pageCount = 5, contentReady = true))
+        assertEquals(4, resolveBottomPagerBeyondViewportPageCount(pageCount = 9, contentReady = true))
+    }
+
+    @Test
+    fun bottomPagerVisibleItems_dropInvalidIdsAndClampToFive() {
         assertEquals(
-            300,
-            resolveBottomPagerNavigationDurationMillis(
-                currentPage = 0,
-                targetPage = 1
-            )
-        )
-        assertEquals(
-            300,
-            resolveBottomPagerNavigationDurationMillis(
-                currentPage = 0,
-                targetPage = 2
-            )
-        )
-        assertEquals(
-            400,
-            resolveBottomPagerNavigationDurationMillis(
-                currentPage = 0,
-                targetPage = 3
-            )
-        )
-        assertEquals(
-            500,
-            resolveBottomPagerNavigationDurationMillis(
-                currentPage = 0,
-                targetPage = 4
+            listOf(
+                BottomNavItem.HOME,
+                BottomNavItem.DYNAMIC,
+                BottomNavItem.HISTORY,
+                BottomNavItem.PROFILE,
+                BottomNavItem.FAVORITE
+            ),
+            resolveVisibleBottomBarItems(
+                orderedVisibleTabIds = listOf(
+                    "HOME",
+                    "DYNAMIC",
+                    "INVALID",
+                    "HISTORY",
+                    "PROFILE",
+                    "FAVORITE",
+                    "LIVE"
+                )
             )
         )
     }
 
     @Test
-    fun bottomPagerPreload_staysOffUntilNavigation() {
-        assertEquals(
-            0,
-            resolveBottomPagerBeyondViewportPageCount(
-                contentReady = false,
-                isNavigating = false,
-                currentPage = 0,
-                selectedPage = 0
-            )
+    fun bottomPagerNavigation_keepsSaveableKeysUniqueForFarJump() {
+        val visibleItems = listOf(
+            BottomNavItem.HOME,
+            BottomNavItem.DYNAMIC,
+            BottomNavItem.HISTORY,
+            BottomNavItem.PROFILE,
+            BottomNavItem.SETTINGS
         )
-        assertEquals(
-            0,
-            resolveBottomPagerBeyondViewportPageCount(
-                contentReady = true,
-                isNavigating = false,
-                currentPage = 0,
-                selectedPage = 0
-            )
-        )
-    }
 
-    @Test
-    fun bottomPagerPreload_expandsOnlyToNavigationDistance() {
-        assertEquals(
-            3,
-            resolveBottomPagerBeyondViewportPageCount(
-                contentReady = true,
-                isNavigating = true,
-                currentPage = 0,
-                selectedPage = 3
-            )
-        )
-        assertEquals(
-            1,
-            resolveBottomPagerBeyondViewportPageCount(
-                contentReady = true,
-                isNavigating = true,
-                currentPage = 2,
-                selectedPage = 3
-            )
-        )
+        val saveableKeys = visibleItems.indices
+            .filter { page ->
+                shouldComposeBottomPagerPage(
+                    item = visibleItems[page],
+                    page = page,
+                    currentPage = 3,
+                    selectedPage = 4,
+                    isNavigating = true,
+                    navigationStartPage = 0,
+                    contentReady = true
+                )
+            }
+            .map { page ->
+                resolveBottomPagerSaveableStateKey(visibleItems[page])
+            }
+
+        assertEquals(saveableKeys.distinct(), saveableKeys)
     }
 
     @Test
@@ -527,81 +637,83 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun bottomPagerDuringNavigation_composesOnlyStartAndTargetBeforeReady() {
+    fun bottomPagerDuringNavigation_composesAllPagesWhenContentReady() {
+        // BiliPai: contentReady → every tab stays mounted through animateScrollBy.
         assertTrue(
             shouldComposeBottomPagerPage(
                 item = BottomNavItem.HOME,
                 page = 0,
                 currentPage = 1,
-                selectedPage = 3,
+                selectedPage = 0,
                 isNavigating = true,
-                navigationStartPage = 0,
-                contentReady = false
-            )
-        )
-        assertTrue(
-            shouldComposeBottomPagerPage(
-                item = BottomNavItem.PROFILE,
-                page = 3,
-                currentPage = 1,
-                selectedPage = 3,
-                isNavigating = true,
-                navigationStartPage = 0,
-                contentReady = false
-            )
-        )
-        assertFalse(
-            shouldComposeBottomPagerPage(
-                item = BottomNavItem.DYNAMIC,
-                page = 1,
-                currentPage = 1,
-                selectedPage = 3,
-                isNavigating = true,
-                navigationStartPage = 0,
-                contentReady = false
-            )
-        )
-        assertFalse(
-            shouldComposeBottomPagerPage(
-                item = BottomNavItem.HISTORY,
-                page = 2,
-                currentPage = 1,
-                selectedPage = 3,
-                isNavigating = true,
-                navigationStartPage = 0,
-                contentReady = false
-            )
-        )
-    }
-
-    @Test
-    fun bottomPagerDuringNavigation_composesOnlyCurrentStartAndTargetAfterReady() {
-        assertTrue(
-            shouldComposeBottomPagerPage(
-                item = BottomNavItem.DYNAMIC,
-                page = 1,
-                currentPage = 1,
-                selectedPage = 3,
-                isNavigating = true,
-                navigationStartPage = 0,
+                navigationStartPage = 4,
                 contentReady = true
             )
         )
-        assertFalse(
+        assertTrue(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.LIVE,
+                page = 4,
+                currentPage = 3,
+                selectedPage = 0,
+                isNavigating = true,
+                navigationStartPage = 4,
+                contentReady = true
+            )
+        )
+        assertTrue(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.DYNAMIC,
+                page = 1,
+                currentPage = 1,
+                selectedPage = 0,
+                isNavigating = true,
+                navigationStartPage = 4,
+                contentReady = true
+            )
+        )
+        // Intermediate pages stay real (not empty Box) so far tab → home scrolls solidly.
+        assertTrue(
             shouldComposeBottomPagerPage(
                 item = BottomNavItem.HISTORY,
                 page = 2,
-                currentPage = 1,
-                selectedPage = 3,
+                currentPage = 3,
+                selectedPage = 0,
                 isNavigating = true,
-                navigationStartPage = 0,
+                navigationStartPage = 4,
                 contentReady = true
             )
         )
     }
 
     @Test
-    fun bottomPagerAfterNavigation_composesSettledPage() {
+    fun bottomPagerAfterReady_keepsSettledPagesComposedWhenNotNavigating() {
+        assertTrue(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.DYNAMIC,
+                page = 1,
+                currentPage = 1,
+                selectedPage = 3,
+                isNavigating = false,
+                navigationStartPage = 1,
+                contentReady = true
+            )
+        )
+        assertTrue(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.HISTORY,
+                page = 2,
+                currentPage = 1,
+                selectedPage = 3,
+                isNavigating = false,
+                navigationStartPage = 1,
+                contentReady = true
+            )
+        )
+    }
+
+    @Test
+    fun bottomPagerAfterReady_keepsNonStoryPagesComposedWhenSettled() {
         assertTrue(
             shouldComposeBottomPagerPage(
                 item = BottomNavItem.PROFILE,
@@ -613,7 +725,7 @@ class AppTopLevelNavigationPolicyTest {
                 contentReady = true
             )
         )
-        assertFalse(
+        assertTrue(
             shouldComposeBottomPagerPage(
                 item = BottomNavItem.HOME,
                 page = 0,
@@ -621,6 +733,32 @@ class AppTopLevelNavigationPolicyTest {
                 selectedPage = 3,
                 isNavigating = false,
                 navigationStartPage = 3,
+                contentReady = true
+            )
+        )
+    }
+
+    @Test
+    fun bottomPagerAfterReady_doesNotPrecomposeInactiveStoryPlayer() {
+        assertFalse(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.STORY,
+                page = 2,
+                currentPage = 0,
+                selectedPage = 0,
+                isNavigating = false,
+                navigationStartPage = 0,
+                contentReady = true
+            )
+        )
+        assertTrue(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.STORY,
+                page = 2,
+                currentPage = 0,
+                selectedPage = 2,
+                isNavigating = true,
+                navigationStartPage = 0,
                 contentReady = true
             )
         )
@@ -640,8 +778,9 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun storyBottomPagerPage_skipsOffscreenPreloadEvenAfterContentReady() {
-        assertFalse(
+    fun storyBottomPagerPage_staysComposedAfterContentReadyLikeBiliPai() {
+        // BiliPai mounts every page after contentReady; active work still uses settledPage.
+        assertTrue(
             shouldComposeBottomPagerPage(
                 item = BottomNavItem.STORY,
                 page = 3,
@@ -660,6 +799,54 @@ class AppTopLevelNavigationPolicyTest {
                 selectedPage = 1,
                 isNavigating = false,
                 navigationStartPage = 3,
+                contentReady = false
+            )
+        )
+        assertFalse(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.STORY,
+                page = 3,
+                currentPage = 0,
+                selectedPage = 1,
+                isNavigating = false,
+                navigationStartPage = 0,
+                contentReady = false
+            )
+        )
+    }
+
+    @Test
+    fun settingsBottomPagerPage_staysComposedAfterContentReadyLikeBiliPai() {
+        assertTrue(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.SETTINGS,
+                page = 4,
+                currentPage = 0,
+                selectedPage = 0,
+                isNavigating = false,
+                navigationStartPage = 0,
+                contentReady = true
+            )
+        )
+        assertTrue(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.SETTINGS,
+                page = 4,
+                currentPage = 4,
+                selectedPage = 0,
+                isNavigating = false,
+                navigationStartPage = 4,
+                contentReady = false
+            )
+        )
+        assertFalse(
+            shouldComposeBottomPagerPage(
+                item = BottomNavItem.SETTINGS,
+                page = 4,
+                currentPage = 0,
+                selectedPage = 0,
+                isNavigating = false,
+                navigationStartPage = 0,
                 contentReady = false
             )
         )

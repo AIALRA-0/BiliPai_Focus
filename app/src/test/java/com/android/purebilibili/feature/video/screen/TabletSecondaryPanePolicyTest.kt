@@ -50,4 +50,32 @@ class TabletSecondaryPanePolicyTest {
             nextTabletSecondaryPaneMode(TabletSecondaryPaneMode.COLLAPSED)
         )
     }
+
+    @Test
+    fun collapsedSidebar_hidesOnlyTheTwoPaneSecondaryContent() {
+        assertEquals(
+            true,
+            shouldHideTabletSecondaryPane(
+                paneMode = TabletSecondaryPaneMode.COLLAPSED,
+                useThreePaneLayout = false,
+                useTabletopLayout = false,
+            )
+        )
+        assertEquals(
+            false,
+            shouldHideTabletSecondaryPane(
+                paneMode = TabletSecondaryPaneMode.COLLAPSED,
+                useThreePaneLayout = true,
+                useTabletopLayout = false,
+            )
+        )
+        assertEquals(
+            false,
+            shouldHideTabletSecondaryPane(
+                paneMode = TabletSecondaryPaneMode.EXPANDED,
+                useThreePaneLayout = false,
+                useTabletopLayout = false,
+            )
+        )
+    }
 }

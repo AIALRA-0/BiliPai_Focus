@@ -3,16 +3,16 @@ package com.android.purebilibili.feature.video.player
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Notification
-import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.Logger
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
 
 internal fun shouldStartForegroundWithFallback(primaryNotification: Any?): Boolean {
     return primaryNotification == null
@@ -37,10 +37,10 @@ internal fun resolvePlaybackServiceFallbackIconRes(iconKey: String): Int {
 }
 
 /**
- * 这是一个 Foreground Service，用于将 MiniPlayerManager 构建的通知提升为前台通知。
- * 这样可以确保在后台播放时，系统媒体控制中心（下拉通知栏）能够正常显示。
+ * Android 17 后台音频入口。MediaSessionService 负责向系统暴露现有
+ * MediaSession，前台通知仍复用 MiniPlayerManager 已稳定的样式和控制逻辑。
  */
-class PlaybackService : Service() {
+class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val TAG = "PlaybackService"
@@ -52,8 +52,25 @@ class PlaybackService : Service() {
         @Volatile private var latestHandledStartId = 0
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+        MiniPlayerManager.getInstance(applicationContext).mediaSession
+
+    override fun onUpdateNotification(
+        session: MediaSession,
+        startInForegroundRequired: Boolean
+    ) {
+        val manager = MiniPlayerManager.getInstance(applicationContext)
+        val notification = manager.currentNotification
+        if (startInForegroundRequired) {
+            startAsForeground(notification ?: buildFallbackNotification())
+            isForegroundStarted = true
+        } else if (notification != null) {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        } else {
+            isForegroundStarted = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,7 +111,7 @@ class PlaybackService : Service() {
             }
         }
 
-        return START_NOT_STICKY
+        return super.onStartCommand(intent, flags, startId)
     }
 
     override fun onDestroy() {

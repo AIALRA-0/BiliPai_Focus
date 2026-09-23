@@ -1,179 +1,170 @@
 package com.android.purebilibili.feature.settings
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.FocusSettings
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.ui.components.IOSDivider
-import com.android.purebilibili.core.ui.components.IOSGroup
-import com.android.purebilibili.core.ui.components.IOSSectionTitle
-import com.android.purebilibili.core.ui.components.IOSSwitchItem
-import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.AppPreferenceDivider
+import com.android.purebilibili.core.ui.components.AppPreferenceGroup
+import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
+import com.android.purebilibili.core.ui.components.AppSwitchPreference
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FocusSettingsScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val settings by SettingsManager.getFocusSettings(context).collectAsState(initial = FocusSettings())
+    val settings by SettingsManager
+        .getFocusSettings(context)
+        .collectAsStateWithLifecycle(initialValue = FocusSettings())
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Focus",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    androidx.compose.material3.IconButton(onClick = onBack) {
-                        androidx.compose.material3.Icon(
-                            imageVector = rememberAppBackIcon(),
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .navigationBarsPadding(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    SettingsPageScaffold(
+        title = "Focus",
+        onBack = onBack,
+        backContentDescription = androidx.compose.ui.res.stringResource(R.string.common_back),
+        bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        lazyListContent = {
             item {
                 Text(
                     text = "Focus 会默认收紧首页、搜索、历史与详情入口\n关注分组管理入口在动态页顶部",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 22.sp
+                    lineHeight = 22.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 )
             }
 
             item {
-                IOSSectionTitle("首页")
-                IOSGroup {
-                    IOSSwitchItem(
+                FocusSettingsSection(title = "首页") {
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Home,
                         title = "显示推荐",
                         subtitle = "只控制首页顶部入口，不删除推荐流实现",
                         checked = settings.showHomeRecommendTab,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusHomeRecommendTabVisible(context, enabled) }
-                        }
+                        },
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSSwitchItem(
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Home,
                         title = "显示关注",
                         subtitle = "控制首页顶部关注标签显隐",
                         checked = settings.showHomeFollowTab,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusHomeFollowTabVisible(context, enabled) }
-                        }
+                        },
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSSwitchItem(
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Home,
                         title = "显示热门",
                         subtitle = "控制首页顶部热门标签显隐",
                         checked = settings.showHomePopularTab,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusHomePopularTabVisible(context, enabled) }
-                        }
+                        },
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSSwitchItem(
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Home,
                         title = "显示直播",
                         subtitle = "控制首页顶部直播标签显隐",
                         checked = settings.showHomeLiveTab,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusHomeLiveTabVisible(context, enabled) }
-                        }
+                        },
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSSwitchItem(
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
+                        icon = Icons.Outlined.Home,
+                        title = "显示番剧",
+                        subtitle = "控制首页顶部番剧标签显隐",
+                        checked = settings.showHomeAnimeTab,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setFocusHomeAnimeTabVisible(context, enabled) }
+                        },
+                    )
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Home,
                         title = "显示游戏",
                         subtitle = "控制首页顶部游戏标签显隐",
                         checked = settings.showHomeGameTab,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusHomeGameTabVisible(context, enabled) }
-                        }
+                        },
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSSwitchItem(
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
+                        icon = Icons.Outlined.Home,
+                        title = "显示知识",
+                        subtitle = "控制首页顶部知识标签显隐",
+                        checked = settings.showHomeKnowledgeTab,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setFocusHomeKnowledgeTabVisible(context, enabled) }
+                        },
+                    )
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
+                        icon = Icons.Outlined.Home,
+                        title = "显示科技",
+                        subtitle = "控制首页顶部科技标签显隐",
+                        checked = settings.showHomeTechTab,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setFocusHomeTechTabVisible(context, enabled) }
+                        },
+                    )
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Tune,
                         title = "显示分区按钮",
                         subtitle = "控制首页顶部右侧分区入口",
                         checked = settings.showHomePartitionButton,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusHomePartitionButtonVisible(context, enabled) }
-                        }
+                        },
                     )
                 }
             }
 
             item {
-                IOSSectionTitle("关注")
-                IOSGroup {
-                    IOSSwitchItem(
+                FocusSettingsSection(title = "关注") {
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Tune,
                         title = "启用关注过滤",
                         subtitle = "关闭后保留分组和归属，但动态与首页关注不再按分组隐藏内容",
                         checked = settings.enableFollowGroupFiltering,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusFollowGroupFilteringEnabled(context, enabled) }
-                        }
+                        },
                     )
                 }
             }
 
             item {
-                IOSSectionTitle("视频")
-                IOSGroup {
-                    IOSSwitchItem(
+                FocusSettingsSection(title = "视频") {
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Tune,
                         title = "显示相关推荐",
                         subtitle = "控制视频详情页中的相关推荐与更多推荐区块",
@@ -182,60 +173,76 @@ fun FocusSettingsScreen(
                             scope.launch {
                                 SettingsManager.setFocusVideoRelatedVideosSectionVisible(context, enabled)
                             }
-                        }
+                        },
                     )
                 }
             }
 
             item {
-                IOSSectionTitle("搜索")
-                IOSGroup {
-                    IOSSwitchItem(
+                FocusSettingsSection(title = "搜索") {
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Search,
                         title = "显示大家都在搜",
                         subtitle = "在搜索首页显示热搜关键词区块",
                         checked = settings.showSearchHotSection,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setSearchHotSectionEnabled(context, enabled) }
-                        }
+                        },
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSSwitchItem(
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Search,
                         title = "显示搜索发现",
                         subtitle = "在搜索首页显示搜索发现区块",
                         checked = settings.showSearchDiscoverSection,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setSearchDiscoverSectionEnabled(context, enabled) }
-                        }
+                        },
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSSwitchItem(
+                    AppPreferenceDivider()
+                    AppSwitchPreference(
                         icon = Icons.Outlined.Search,
                         title = "显示搜索历史",
                         subtitle = "在搜索首页显示搜索历史列表",
                         checked = settings.showSearchHistorySection,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setSearchHistorySectionEnabled(context, enabled) }
-                        }
+                        },
                     )
                 }
             }
 
             item {
-                IOSSectionTitle("历史记录")
-                IOSGroup {
-                    IOSSwitchItem(
+                FocusSettingsSection(title = "历史记录") {
+                    AppSwitchPreference(
                         icon = Icons.Outlined.DeleteOutline,
                         title = "显示一键清空",
                         subtitle = "在观看历史页顶部显示清空全部入口",
                         checked = settings.showHistoryClearAllAction,
                         onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHistoryClearAllActionEnabled(context, enabled) }
-                        }
+                            scope.launch {
+                                SettingsManager.setFocusHistoryClearAllActionEnabled(context, enabled)
+                            }
+                        },
                     )
                 }
             }
-        }
+        },
+    )
+}
+
+@Composable
+private fun FocusSettingsSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        AppPreferenceSectionTitle(title)
+        AppPreferenceGroup(content = content)
     }
 }

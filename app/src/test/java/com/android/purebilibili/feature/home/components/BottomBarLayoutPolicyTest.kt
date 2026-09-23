@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.BottomBarSearchAutoExpandMode
+import com.android.purebilibili.core.store.BottomBarSearchLayoutMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -45,30 +46,79 @@ class BottomBarLayoutPolicyTest {
     }
 
     @Test
-    fun `kernelsu floating width uses intrinsic item width when space allows`() {
-        val width = resolveKernelSuFloatingBottomBarWidth(
+    fun `bilipai floating width uses intrinsic item width when space allows`() {
+        val width = resolveBiliPaiFloatingBottomBarWidth(
             containerWidth = 393.dp,
             itemCount = 4,
-            minEdgePadding = 20.dp
+            minEdgePadding = 20.dp,
+            labelMode = 0
         )
 
         assertEquals(312.dp, width)
     }
 
     @Test
-    fun `kernelsu floating width keeps safe edge padding on crowded phones`() {
-        val width = resolveKernelSuFloatingBottomBarWidth(
+    fun `bilipai floating width keeps safe edge padding on crowded phones`() {
+        val width = resolveBiliPaiFloatingBottomBarWidth(
             containerWidth = 393.dp,
             itemCount = 5,
-            minEdgePadding = 20.dp
+            minEdgePadding = 20.dp,
+            labelMode = 0
         )
 
         assertEquals(353.dp, width)
     }
 
     @Test
-    fun `kernelsu item slot width matches indicator geometry on crowded phones`() {
-        val slotWidth = resolveKernelSuBottomBarItemSlotWidth(
+    fun `bilipai floating width follows icon label presentation mode`() {
+        val iconOnlyWidth = resolveBiliPaiFloatingBottomBarWidth(
+            containerWidth = 393.dp,
+            itemCount = 5,
+            minEdgePadding = 20.dp,
+            labelMode = 1
+        )
+        val iconAndTextWidth = resolveBiliPaiFloatingBottomBarWidth(
+            containerWidth = 393.dp,
+            itemCount = 5,
+            minEdgePadding = 20.dp,
+            labelMode = 0
+        )
+        val textOnlyWidth = resolveBiliPaiFloatingBottomBarWidth(
+            containerWidth = 393.dp,
+            itemCount = 5,
+            minEdgePadding = 20.dp,
+            labelMode = 2
+        )
+
+        assertEquals(328.dp, iconOnlyWidth)
+        assertEquals(353.dp, iconAndTextWidth)
+        assertEquals(348.dp, textOnlyWidth)
+    }
+
+    @Test
+    fun `bilipai icon only width follows capsule corner radius`() {
+        val compactCorners = resolveBiliPaiFloatingBottomBarWidth(
+            containerWidth = 393.dp,
+            itemCount = 4,
+            minEdgePadding = 20.dp,
+            labelMode = 1,
+            cornerRadius = 28.dp
+        )
+        val rounderCorners = resolveBiliPaiFloatingBottomBarWidth(
+            containerWidth = 393.dp,
+            itemCount = 4,
+            minEdgePadding = 20.dp,
+            labelMode = 1,
+            cornerRadius = 36.dp
+        )
+
+        assertEquals(232.dp, compactCorners)
+        assertEquals(296.dp, rounderCorners)
+    }
+
+    @Test
+    fun `bilipai item slot width matches indicator geometry on crowded phones`() {
+        val slotWidth = resolveBiliPaiBottomBarItemSlotWidth(
             dockWidth = 353.dp,
             horizontalPadding = 4.dp,
             itemCount = 5
@@ -77,7 +127,7 @@ class BottomBarLayoutPolicyTest {
         assertEquals(69.dp, slotWidth)
         assertEquals(
             314.5.dp,
-            resolveKernelSuBottomBarItemCenterX(
+            resolveBiliPaiBottomBarItemCenterX(
                 itemIndex = 4,
                 itemWidth = slotWidth,
                 horizontalPadding = 4.dp
@@ -86,8 +136,8 @@ class BottomBarLayoutPolicyTest {
     }
 
     @Test
-    fun `kernelsu search entry shares safe floating width while collapsed`() {
-        val layout = resolveKernelSuBottomBarSearchLayout(
+    fun `bilipai search entry shares safe floating width while collapsed`() {
+        val layout = resolveBiliPaiBottomBarSearchLayout(
             containerWidth = 393.dp,
             itemCount = 4,
             minEdgePadding = 20.dp,
@@ -95,47 +145,174 @@ class BottomBarLayoutPolicyTest {
             searchExpanded = false
         )
 
-        assertEquals(279.dp, layout.dockWidth)
-        assertEquals(64.dp, layout.searchWidth)
-        assertEquals(10.dp, layout.gap)
+        assertEquals(312.dp, layout.dockWidth)
+        assertEquals(56.dp, layout.searchWidth)
+        assertEquals(8.dp, layout.gap)
+        assertEquals(0.dp, layout.minimumIndicatorWidth)
+        assertEquals(76.dp, layout.indicatorReferenceWidth)
     }
 
     @Test
-    fun `kernelsu search entry collapses dock to home capsule when expanded`() {
-        val layout = resolveKernelSuBottomBarSearchLayout(
+    fun `five item dock keeps indicator aligned to its compressed slot beside search`() {
+        val layout = resolveBiliPaiBottomBarSearchLayout(
+            containerWidth = 393.dp,
+            itemCount = 5,
+            minEdgePadding = 20.dp,
+            searchEnabled = true,
+            searchExpanded = false,
+        )
+
+        assertEquals(329.dp, layout.dockWidth)
+        assertEquals(0.dp, layout.minimumIndicatorWidth)
+        assertEquals(69.dp, layout.indicatorReferenceWidth)
+        assertTrue(
+            resolveBiliPaiBottomBarItemSlotWidth(
+                dockWidth = layout.dockWidth,
+                horizontalPadding = 4.dp,
+                itemCount = 5,
+            ) >= 48.dp
+        )
+    }
+
+    @Test
+    fun `five item dock preserves minimum touch width on narrow phone with search`() {
+        val layout = resolveBiliPaiBottomBarSearchLayout(
+            containerWidth = 360.dp,
+            itemCount = 5,
+            minEdgePadding = 20.dp,
+            searchEnabled = true,
+            searchExpanded = false,
+        )
+
+        assertTrue(
+            resolveBiliPaiBottomBarItemSlotWidth(
+                dockWidth = layout.dockWidth,
+                horizontalPadding = 4.dp,
+                itemCount = 5,
+            ) >= 48.dp
+        )
+    }
+
+    @Test
+    fun `search layout stays within available width when minimum targets cannot all fit`() {
+        val layout = resolveBiliPaiBottomBarSearchLayout(
+            containerWidth = 320.dp,
+            itemCount = 5,
+            minEdgePadding = 20.dp,
+            searchEnabled = true,
+            searchExpanded = false,
+        )
+
+        assertTrue(layout.dockWidth + layout.gap + layout.searchWidth <= 320.dp)
+    }
+
+    @Test
+    fun `bilipai search entry keeps dock wider than home capsule when expanded`() {
+        val layout = resolveBiliPaiBottomBarSearchLayout(
             containerWidth = 393.dp,
             itemCount = 4,
             minEdgePadding = 20.dp,
             searchEnabled = true,
-            searchExpanded = true
+            searchExpanded = true,
+            searchLayoutMode = BottomBarSearchLayoutMode.FULL_DOCK
         )
 
-        assertEquals(resolveKernelSuBottomBarSearchCircleSize(), layout.dockWidth)
-        assertEquals(279.dp, layout.searchWidth)
-        assertEquals(10.dp, layout.gap)
+        assertEquals(312.dp, layout.dockWidth)
+        assertEquals(56.dp, layout.searchWidth)
+        assertEquals(8.dp, layout.gap)
     }
 
     @Test
-    fun `kernelsu expanded home dock copies search circle size`() {
-        assertEquals(64.dp, resolveKernelSuBottomBarSearchCircleSize())
-        assertEquals(64.dp, resolveKernelSuBottomBarDockHeight(searchExpanded = false))
-        assertEquals(resolveKernelSuBottomBarSearchCircleSize(), resolveKernelSuBottomBarDockHeight(searchExpanded = true))
-        assertEquals(64.dp, resolveKernelSuBottomBarSearchHeight(searchExpanded = false))
-        assertEquals(64.dp, resolveKernelSuBottomBarSearchHeight(searchExpanded = true))
+    fun `search entry spends edge padding before compressing navigation slots`() {
+        val withoutSearch = resolveBiliPaiFloatingBottomBarWidth(
+            containerWidth = 393.dp,
+            itemCount = 4,
+            minEdgePadding = 20.dp,
+            labelMode = 0,
+        )
+        val withSearch = resolveBiliPaiBottomBarSearchLayout(
+            containerWidth = 393.dp,
+            itemCount = 4,
+            minEdgePadding = 20.dp,
+            searchEnabled = true,
+            searchExpanded = false,
+        )
+
+        assertEquals(withoutSearch, withSearch.dockWidth)
+        assertEquals(312.dp, withSearch.dockWidth)
     }
 
     @Test
-    fun `kernelsu expanded home icon matches compact search icon size`() {
-        assertEquals(28.dp, resolveKernelSuExpandedHomeIconSize())
-        assertEquals(0.92f, resolveKernelSuExpandedHomeIconScale(), 0.001f)
+    fun `compact search layout keeps home dock with expanded search field`() {
+        val layout = resolveBiliPaiBottomBarSearchLayout(
+            containerWidth = 393.dp,
+            itemCount = 4,
+            minEdgePadding = 20.dp,
+            searchEnabled = true,
+            searchExpanded = true,
+            searchLayoutMode = BottomBarSearchLayoutMode.HOME_AND_SEARCH
+        )
+
+        assertEquals(resolveBiliPaiBottomBarSearchCircleSize(), layout.dockWidth)
+        assertEquals(280.dp, layout.searchWidth)
+        assertEquals(8.dp, layout.gap)
+    }
+
+    @Test
+    fun `full dock search layout keeps compact search visual when auto expanded`() {
+        assertEquals(
+            false,
+            resolveBiliPaiBottomBarSearchFieldExpanded(
+                searchExpanded = true,
+                searchLayoutMode = BottomBarSearchLayoutMode.FULL_DOCK
+            )
+        )
+    }
+
+    @Test
+    fun `compact search layout renders expanded search field`() {
+        assertEquals(
+            true,
+            resolveBiliPaiBottomBarSearchFieldExpanded(
+                searchExpanded = true,
+                searchLayoutMode = BottomBarSearchLayoutMode.HOME_AND_SEARCH
+            )
+        )
+    }
+
+    @Test
+    fun `bilipai expanded home dock copies search circle size`() {
+        assertEquals(56.dp, resolveBiliPaiBottomBarSearchCircleSize())
+        // 照搬 HyperIsland 的壳高 64dp（搜索展开态仍是 56dp 圆形）。
+        assertEquals(64.dp, resolveBiliPaiBottomBarDockHeight(searchExpanded = false))
+        assertEquals(
+            64.dp,
+            resolveBiliPaiBottomBarDockHeight(
+                searchExpanded = false,
+                hasUiSkinDecoration = true,
+            )
+        )
+        assertEquals(resolveBiliPaiBottomBarSearchCircleSize(), resolveBiliPaiBottomBarDockHeight(searchExpanded = true))
+        // 照搬 HyperIsland 的 64/56 静止几何：指示器 = 壳高 × 56/64。
+        // 64dp 壳 → 56dp 指示器（上下各 4dp）；56dp 短壳按同一比例得 49dp。
+        assertEquals(49.dp, resolveBiliPaiBottomBarIndicatorHeight(56.dp))
+        assertEquals(56.dp, resolveBiliPaiBottomBarIndicatorHeight(64.dp))
+        assertEquals(56.dp, resolveBiliPaiBottomBarSearchHeight(searchExpanded = false))
+        assertEquals(48.dp, resolveBiliPaiBottomBarSearchHeight(searchExpanded = true))
+    }
+
+    @Test
+    fun `bilipai expanded home icon matches compact search icon size`() {
+        assertEquals(28.dp, resolveBiliPaiExpandedHomeIconSize())
+        assertEquals(0.92f, resolveBiliPaiExpandedHomeIconScale(), 0.001f)
     }
 
     @Test
     fun `bottom bar refraction capture follows full visible bar while search is enabled`() {
         val captureWidth = resolveBottomBarRefractionCaptureWidth(
-            dockWidth = 279.dp,
-            launchAdjustedSearchGap = 10.dp,
-            searchWidth = 64.dp,
+            dockWidth = 289.dp,
+            launchAdjustedSearchGap = 8.dp,
+            searchWidth = 56.dp,
             searchEnabled = true
         )
 
@@ -248,7 +425,7 @@ class BottomBarLayoutPolicyTest {
     }
 
     @Test
-    fun `bottom search entry only renders on searchable home item`() {
+    fun `bottom search auto expand stays gated to the home item`() {
         assertEquals(
             true,
             resolveBottomBarSearchEnabledForItem(
@@ -268,6 +445,80 @@ class BottomBarLayoutPolicyTest {
             resolveBottomBarSearchEnabledForItem(
                 currentItem = BottomNavItem.HOME,
                 bottomBarSearchEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun `search layout stays reserved after leaving home so dock geometry does not jump`() {
+        assertEquals(true, shouldReserveBottomBarSearchLayout(bottomBarSearchEnabled = true))
+        assertEquals(false, shouldReserveBottomBarSearchLayout(bottomBarSearchEnabled = false))
+        assertEquals(
+            resolveBiliPaiBottomBarSearchLayout(
+                containerWidth = 393.dp,
+                itemCount = 4,
+                minEdgePadding = 20.dp,
+                searchEnabled = true,
+                searchExpanded = false,
+            ).dockWidth,
+            resolveBiliPaiBottomBarSearchLayout(
+                containerWidth = 393.dp,
+                itemCount = 4,
+                minEdgePadding = 20.dp,
+                searchEnabled = shouldReserveBottomBarSearchLayout(true),
+                searchExpanded = false,
+            ).dockWidth,
+        )
+    }
+
+    @Test
+    fun `bottom search mode preserves configured dock tabs`() {
+        assertEquals(
+            listOf(
+                BottomNavItem.HOME,
+                BottomNavItem.DYNAMIC,
+                BottomNavItem.HISTORY,
+                BottomNavItem.PROFILE
+            ),
+            resolveBottomBarVisibleItemsForSearchMode(
+                visibleItems = listOf(
+                    BottomNavItem.HOME,
+                    BottomNavItem.DYNAMIC,
+                    BottomNavItem.HISTORY,
+                    BottomNavItem.PROFILE
+                ),
+                bottomBarSearchEnabled = true
+            )
+        )
+        assertEquals(
+            listOf(BottomNavItem.DYNAMIC, BottomNavItem.HISTORY),
+            resolveBottomBarVisibleItemsForSearchMode(
+                visibleItems = listOf(BottomNavItem.DYNAMIC, BottomNavItem.HISTORY),
+                bottomBarSearchEnabled = true
+            )
+        )
+        assertEquals(
+            listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC),
+            resolveBottomBarVisibleItemsForSearchMode(
+                visibleItems = listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC),
+                bottomBarSearchEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun `compact bottom search mode preserves tabs for unfolding`() {
+        assertEquals(
+            listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY, BottomNavItem.PROFILE),
+            resolveBottomBarVisibleItemsForSearchMode(
+                visibleItems = listOf(
+                    BottomNavItem.HOME,
+                    BottomNavItem.DYNAMIC,
+                    BottomNavItem.HISTORY,
+                    BottomNavItem.PROFILE
+                ),
+                bottomBarSearchEnabled = true,
+                searchLayoutMode = BottomBarSearchLayoutMode.HOME_AND_SEARCH
             )
         )
     }
@@ -482,9 +733,9 @@ class BottomBarLayoutPolicyTest {
     }
 
     @Test
-    fun `home icon click toggles search and dock only while already on home`() {
+    fun `home icon click does not toggle bottom search`() {
         assertEquals(
-            BottomBarSearchExpansionOverride.EXPANDED,
+            null,
             resolveBottomBarSearchExpansionOverrideOnNavItemClick(
                 currentItem = BottomNavItem.HOME,
                 clickedItem = BottomNavItem.HOME,
@@ -493,7 +744,7 @@ class BottomBarLayoutPolicyTest {
             )
         )
         assertEquals(
-            BottomBarSearchExpansionOverride.COLLAPSED,
+            null,
             resolveBottomBarSearchExpansionOverrideOnNavItemClick(
                 currentItem = BottomNavItem.HOME,
                 clickedItem = BottomNavItem.HOME,
@@ -501,22 +752,54 @@ class BottomBarLayoutPolicyTest {
                 effectiveSearchExpanded = true
             )
         )
+    }
+
+    @Test
+    fun `search tab click opens search entry instead of toggling dock into compact mode`() {
         assertEquals(
             null,
-            resolveBottomBarSearchExpansionOverrideOnNavItemClick(
+            resolveBottomBarSearchExpansionOverrideOnSearchClick(
                 currentItem = BottomNavItem.HOME,
-                clickedItem = BottomNavItem.DYNAMIC,
                 bottomBarSearchEnabled = true,
                 effectiveSearchExpanded = false
             )
         )
         assertEquals(
             null,
-            resolveBottomBarSearchExpansionOverrideOnNavItemClick(
+            resolveBottomBarSearchExpansionOverrideOnSearchClick(
+                currentItem = BottomNavItem.HOME,
+                bottomBarSearchEnabled = true,
+                effectiveSearchExpanded = true
+            )
+        )
+        assertEquals(
+            null,
+            resolveBottomBarSearchExpansionOverrideOnSearchClick(
                 currentItem = BottomNavItem.HISTORY,
-                clickedItem = BottomNavItem.HOME,
                 bottomBarSearchEnabled = true,
                 effectiveSearchExpanded = false
+            )
+        )
+    }
+
+    @Test
+    fun `compact search layout toggles expanded search from search tab click`() {
+        assertEquals(
+            BottomBarSearchExpansionOverride.EXPANDED,
+            resolveBottomBarSearchExpansionOverrideOnSearchClick(
+                currentItem = BottomNavItem.HOME,
+                bottomBarSearchEnabled = true,
+                effectiveSearchExpanded = false,
+                searchLayoutMode = BottomBarSearchLayoutMode.HOME_AND_SEARCH
+            )
+        )
+        assertEquals(
+            BottomBarSearchExpansionOverride.COLLAPSED,
+            resolveBottomBarSearchExpansionOverrideOnSearchClick(
+                currentItem = BottomNavItem.HOME,
+                bottomBarSearchEnabled = true,
+                effectiveSearchExpanded = true,
+                searchLayoutMode = BottomBarSearchLayoutMode.HOME_AND_SEARCH
             )
         )
     }
@@ -539,5 +822,30 @@ class BottomBarLayoutPolicyTest {
     fun `floating default bar trims height while keeping touch comfort`() {
         assertEquals(58f, resolveBottomBarFloatingHeightDp(labelMode = 1, isTablet = false))
         assertEquals(12f, resolveBottomBarBottomPaddingDp(isFloating = true, isTablet = false))
+    }
+
+    @Test
+    fun `plain md3 floating bar uses official floating toolbar`() {
+        assertEquals(
+            true,
+            shouldUseOfficialMd3FloatingToolbar(
+                isFloating = true,
+                liquidGlassEnabled = false,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldUseOfficialMd3FloatingToolbar(
+                isFloating = true,
+                liquidGlassEnabled = true,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldUseOfficialMd3FloatingToolbar(
+                isFloating = false,
+                liquidGlassEnabled = false,
+            ),
+        )
     }
 }

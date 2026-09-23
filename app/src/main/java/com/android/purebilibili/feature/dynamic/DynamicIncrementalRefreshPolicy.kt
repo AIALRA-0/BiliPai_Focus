@@ -16,6 +16,33 @@ internal fun dynamicFeedItemKey(item: DynamicItem): String {
     return "${item.type}-$authorMid-$pubTs"
 }
 
+internal fun dynamicTimelineItemsOverlap(
+    existing: List<DynamicItem>,
+    incoming: List<DynamicItem>
+): Boolean {
+    if (existing.isEmpty() || incoming.isEmpty()) return false
+    val existingKeys = HashSet<String>(existing.size)
+    for (item in existing) {
+        existingKeys.add(dynamicFeedItemKey(item))
+    }
+    return incoming.any { existingKeys.contains(dynamicFeedItemKey(it)) }
+}
+
+internal fun canPerformIncrementalTimelineRefresh(
+    isRefresh: Boolean,
+    incrementalRefreshEnabled: Boolean,
+    isCachePlaceholder: Boolean = false,
+    existingItems: List<DynamicItem>,
+    incomingItems: List<DynamicItem>
+): Boolean {
+    if (!isRefresh || !incrementalRefreshEnabled) return false
+    // 冷启动离线缓存占位符绝不参与增量拼接，必须完整刷新，对齐 PiliPlus
+    if (isCachePlaceholder) return false
+    if (existingItems.isEmpty() || incomingItems.isEmpty()) return false
+    // 必须存在重叠节点证明时间线连续，否则回退全量替换，避免出现时间断层/吞动态
+    return dynamicTimelineItemsOverlap(existing = existingItems, incoming = incomingItems)
+}
+
 internal fun resolveIncrementalRefreshBoundary(
     existingKeys: List<String>,
     mergedKeys: List<String>
@@ -44,6 +71,16 @@ internal fun resolveOldContentDividerIndex(
     return if (dividerIndex > 0) dividerIndex else -1
 }
 
+/** FeedVerticalStaggeredGrid adds a full-line chrome inset before data items. */
+internal fun resolveDynamicRefreshDividerGridIndex(
+    dividerDataIndex: Int,
+    leadingGridItemCount: Int = 1,
+): Int = if (dividerDataIndex < 0) {
+    -1
+} else {
+    dividerDataIndex + leadingGridItemCount.coerceAtLeast(0)
+}
+
 internal fun shouldReloadFollowings(
     nowMs: Long,
     lastLoadMs: Long,
@@ -58,4 +95,16 @@ internal fun shouldStartDynamicRefresh(
     isLoadingLocked: Boolean
 ): Boolean {
     return !isRefreshing && !isLoadingLocked
+}
+
+internal fun resolveDynamicRefreshUserId(
+    selectedTab: Int,
+    selectedUserId: Long?
+): Long? {
+    return selectedUserId.takeIf {
+        shouldUseSelectedUserDynamicFeed(
+            selectedTab = selectedTab,
+            selectedUserId = selectedUserId
+        )
+    }
 }

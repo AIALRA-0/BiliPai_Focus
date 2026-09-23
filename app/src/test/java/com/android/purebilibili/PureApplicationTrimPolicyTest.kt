@@ -17,6 +17,11 @@ class PureApplicationTrimPolicyTest {
                 ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
             )
         )
+        assertFalse(
+            PureApplicationRuntimeConfig.shouldClearImageMemoryCacheOnTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+            )
+        )
     }
 
     @Test
@@ -85,5 +90,61 @@ class PureApplicationTrimPolicyTest {
     @Test
     fun `image memory cache percent uses lower background friendly budget`() {
         assertEquals(0.10, PureApplicationRuntimeConfig.resolveImageMemoryCachePercent(), 0.0001)
+    }
+
+    @Test
+    fun `background memory pressure should notify player heavy optimization`() {
+        assertTrue(
+            PureApplicationRuntimeConfig.shouldNotifyPlayerHeavyOptimizationOnTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW
+            )
+        )
+        assertTrue(
+            PureApplicationRuntimeConfig.shouldNotifyPlayerHeavyOptimizationOnTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+            )
+        )
+        assertFalse(
+            PureApplicationRuntimeConfig.shouldNotifyPlayerHeavyOptimizationOnTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+            )
+        )
+        assertFalse(
+            PureApplicationRuntimeConfig.shouldNotifyPlayerHeavyOptimizationOnTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE
+            )
+        )
+    }
+
+    @Test
+    fun `trim plan matches legacy image and player notify decisions`() {
+        val uiHidden = PureApplicationRuntimeConfig.resolveBackgroundMemoryTrimPlan(
+            ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+        )
+        assertEquals(
+            PureApplicationRuntimeConfig.resolveImageMemoryCacheTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+            ),
+            uiHidden.imageCacheTrimLevel
+        )
+        assertEquals(
+            PureApplicationRuntimeConfig.shouldClearImageMemoryCacheOnTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+            ),
+            uiHidden.clearImageMemoryCache
+        )
+        assertEquals(
+            PureApplicationRuntimeConfig.shouldNotifyPlayerHeavyOptimizationOnTrimLevel(
+                ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+            ),
+            uiHidden.notifyPlayerHeavyOptimization
+        )
+
+        val complete = PureApplicationRuntimeConfig.resolveBackgroundMemoryTrimPlan(
+            ComponentCallbacks2.TRIM_MEMORY_COMPLETE
+        )
+        assertTrue(complete.requestIdlePlaybackRelease)
+        assertTrue(complete.notifyPlayerHeavyOptimization)
+        assertTrue(complete.clearImageMemoryCache)
     }
 }

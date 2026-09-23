@@ -58,6 +58,13 @@ class TopicModelsParsingTest {
                 "topic_card_list": {
                   "has_more": true,
                   "offset": "offset-token",
+                  "topic_sort_by_conf": {
+                    "show_sort_by": 0,
+                    "all_sort_by": [
+                      {"sort_by": 0, "sort_name": "热门"},
+                      {"sort_by": 1, "sort_name": "最新"}
+                    ]
+                  },
                   "items": [
                     {
                       "topic_type": "DYNAMIC",
@@ -80,5 +87,6 @@ class TopicModelsParsingTest {
         assertTrue(cardList?.hasMore == true)
         assertEquals("offset-token", cardList?.offset)
         assertEquals("1078676238928707587", cardList?.items?.firstOrNull()?.dynamicCardItem?.id_str)
+        assertEquals(listOf("热门", "最新"), cardList?.topicSortByConf?.allSortBy?.map { it.sortName })
     }
 }

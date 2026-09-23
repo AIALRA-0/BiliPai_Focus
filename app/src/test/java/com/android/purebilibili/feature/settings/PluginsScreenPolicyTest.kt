@@ -56,13 +56,15 @@ class PluginsScreenPolicyTest {
             setOf(
                 PluginCapability.RECOMMENDATION_CANDIDATES,
                 PluginCapability.NETWORK,
-                PluginCapability.PLUGIN_STORAGE
+                PluginCapability.PLUGIN_STORAGE,
+                PluginCapability.EXTERNAL_MEDIA_PLAYBACK
             )
         )
 
-        assertEquals(listOf("推荐候选", "网络访问", "插件存储"), models.map { it.label })
+        assertEquals(listOf("推荐候选", "网络访问", "插件存储", "外部媒体播放"), models.map { it.label })
         assertTrue(models.first { it.capability == PluginCapability.NETWORK }.requiresExplicitApproval)
         assertTrue(models.first { it.capability == PluginCapability.PLUGIN_STORAGE }.requiresExplicitApproval)
+        assertTrue(models.first { it.capability == PluginCapability.EXTERNAL_MEDIA_PLAYBACK }.requiresExplicitApproval)
     }
 
     @Test
@@ -277,18 +279,51 @@ class PluginsScreenPolicyTest {
             assetFiles = mapOf(
                 "assets/tail_bg.png" to "/tmp/tail_bg.png",
                 "assets/head_bg.jpg" to "/tmp/head_bg.jpg",
+                "assets/head_myself_mp4_bg.mp4" to "/tmp/head_myself_mp4_bg.mp4",
+                "assets/tail_icon_pub_btn_bg.png" to "/tmp/tail_icon_pub_btn_bg.png",
                 "assets/unknown.png" to "/tmp/unknown.png"
             )
         )
 
         assertEquals(
-            listOf("底栏饰面", "顶部氛围", "资源图片"),
+            listOf("底栏饰面", "顶部氛围", "个人页动态背景", "发布图标", "资源图片"),
             models.map { it.label }
         )
         assertEquals(
-            listOf("/tmp/tail_bg.png", "/tmp/head_bg.jpg", "/tmp/unknown.png"),
+            listOf(
+                "/tmp/tail_bg.png",
+                "/tmp/head_bg.jpg",
+                "/tmp/head_myself_mp4_bg.mp4",
+                "/tmp/tail_icon_pub_btn_bg.png",
+                "/tmp/unknown.png",
+            ),
             models.map { it.localPath }
         )
+        assertEquals(listOf(false, false, true, false, false), models.map { it.isVideo })
+    }
+
+    @Test
+    fun uiSkinEntryCards_shareOneFullWidthGroupedSurface() {
+        val source = java.io.File(
+            "src/main/java/com/android/purebilibili/feature/settings/screen/PluginsScreen.kt"
+        ).let { file ->
+            if (file.exists()) file else java.io.File(
+                "app/src/main/java/com/android/purebilibili/feature/settings/screen/PluginsScreen.kt"
+            )
+        }.readText()
+        val skinSection = source
+            .substringAfter("text = \"界面皮肤\"")
+            .substringBefore("if (uiSkinImportError != null)")
+
+        assertTrue(skinSection.contains(".fillMaxWidth()"))
+        assertTrue(skinSection.contains(".clip(AppShapes.container(ContainerLevel.Card))"))
+        assertTrue(skinSection.contains("text = \"在线装扮目录\""))
+        assertTrue(skinSection.contains("text = \"导入界面皮肤包\""))
+        assertFalse(
+            skinSection.contains(".padding(horizontal = 16.dp)\n                        .clip(AppShapes.container(ContainerLevel.Card))")
+        )
+        assertTrue(skinSection.contains("clickable { onOpenSkinCatalog() }"))
+        assertTrue(skinSection.contains("uiSkinPackagePicker.launch(\"*/*\")"))
     }
 
     @Test

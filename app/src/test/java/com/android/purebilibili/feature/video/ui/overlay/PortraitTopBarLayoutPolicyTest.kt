@@ -2,8 +2,16 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PortraitTopBarLayoutPolicyTest {
+
+    @Test
+    fun portraitTopBar_padsOnlyWhenStatusBarVisible() {
+        assertTrue(shouldApplyStatusBarPaddingToPortraitTopBar(statusBarVisible = true))
+        assertFalse(shouldApplyStatusBarPaddingToPortraitTopBar(statusBarVisible = false))
+    }
 
     @Test
     fun compactPhone_usesDenseControlSizing() {

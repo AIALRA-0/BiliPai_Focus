@@ -49,4 +49,12 @@ class AppUpdateDownloadStatePolicyTest {
         assertEquals(AppUpdateDownloadStatus.FAILED, state.status)
         assertEquals("network", state.errorMessage)
     }
+
+    @Test
+    fun queuedDownload_isAnExplicitRecoverableState() {
+        val state = AppUpdateDownloadState(status = AppUpdateDownloadStatus.QUEUED)
+
+        assertEquals(AppUpdateDownloadStatus.QUEUED, state.status)
+        assertEquals(0f, state.progress)
+    }
 }

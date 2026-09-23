@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import java.text.SimpleDateFormat
@@ -23,6 +24,12 @@ data class PlaybackDebugInfo(
     val firstFrame: String = "",
     val droppedFrames: String = "",
     val bandwidthEstimate: String = "",
+    val playerViewport: String = "",
+    val cdnHost: String = "",
+    val cdnIndex: String = "",
+    val networkType: String = "",
+    val forwardBuffer: String = "",
+    val lastLoadError: String = "",
     val lastVideoEvent: String = "",
     val lastAudioEvent: String = ""
 )
@@ -30,6 +37,33 @@ data class PlaybackDebugInfo(
 data class DebugStatRow(
     val label: String,
     val value: String
+)
+
+internal enum class PlaybackInsightLevel {
+    LIVE,
+    ATTENTION,
+    UNAVAILABLE
+}
+
+internal enum class PlaybackInsightSection(val title: String) {
+    OVERVIEW("概览"),
+    VIDEO("视频"),
+    AUDIO("音频"),
+    RUNTIME("播放"),
+    EVENTS("事件")
+}
+
+internal data class PlaybackInsightPresentation(
+    val summary: String,
+    val level: PlaybackInsightLevel,
+    val statusText: String,
+    val sections: Map<PlaybackInsightSection, List<DebugStatRow>>
+)
+
+internal data class PlaybackInsightPanelLayoutPolicy(
+    val widthDp: Int,
+    val maxHeightDp: Int,
+    val edgePaddingDp: Int
 )
 
 internal enum class CenterLoadingReason {
@@ -96,10 +130,123 @@ internal fun resolvePlaybackDebugRows(
         DebugStatRow("First frame", info.firstFrame),
         DebugStatRow("Dropped frames", info.droppedFrames),
         DebugStatRow("Bandwidth", info.bandwidthEstimate),
+        DebugStatRow("Player viewport", info.playerViewport),
+        DebugStatRow("CDN host", info.cdnHost),
+        DebugStatRow("CDN index", info.cdnIndex),
+        DebugStatRow("Network type", info.networkType),
+        DebugStatRow("Forward buffer", info.forwardBuffer),
+        DebugStatRow("Last load error", info.lastLoadError),
         DebugStatRow("Last video event", info.lastVideoEvent),
         DebugStatRow("Last audio event", info.lastAudioEvent)
     )
     return candidates.filter { it.value.isNotBlank() }
+}
+
+internal fun resolvePlaybackInsightPresentation(
+    info: PlaybackDebugInfo
+): PlaybackInsightPresentation {
+    val summaryParts = listOf(info.resolution, info.videoCodec, info.frameRate)
+        .filter { it.isNotBlank() }
+        .take(3)
+    val droppedFrames = info.droppedFrames.toIntOrNull()?.coerceAtLeast(0) ?: 0
+    val usesSoftwareVideoDecoder = info.videoDecoder.lowercase(Locale.ROOT).let { decoder ->
+        decoder.contains("software") ||
+            decoder.contains("omx.google") ||
+            decoder.contains("c2.android")
+    }
+    val rows = resolvePlaybackDebugRows(info)
+    val (level, statusText) = when {
+        rows.isEmpty() -> PlaybackInsightLevel.UNAVAILABLE to "等待播放器数据"
+        droppedFrames > 0 -> PlaybackInsightLevel.ATTENTION to "已记录 $droppedFrames 个掉帧"
+        usesSoftwareVideoDecoder -> PlaybackInsightLevel.ATTENTION to "当前使用软件视频解码"
+        else -> PlaybackInsightLevel.LIVE to "实时数据"
+    }
+    val sections = linkedMapOf(
+        PlaybackInsightSection.OVERVIEW to listOf(
+            DebugStatRow("分辨率", info.resolution),
+            DebugStatRow("视频码率", info.videoBitrate),
+            DebugStatRow("音频码率", info.audioBitrate),
+            DebugStatRow("带宽估算", info.bandwidthEstimate),
+            DebugStatRow("播放器视口", info.playerViewport),
+            DebugStatRow("CDN", listOf(info.cdnHost, info.cdnIndex).filter { it.isNotBlank() }.joinToString(" · ")),
+            DebugStatRow("网络", info.networkType),
+            DebugStatRow("前向缓冲", info.forwardBuffer)
+        ),
+        PlaybackInsightSection.VIDEO to listOf(
+            DebugStatRow("视频编码", info.videoCodec),
+            DebugStatRow("帧率", info.frameRate),
+            DebugStatRow("视频解码器", info.videoDecoder),
+            DebugStatRow("掉帧", info.droppedFrames)
+        ),
+        PlaybackInsightSection.AUDIO to listOf(
+            DebugStatRow("音频编码", info.audioCodec),
+            DebugStatRow("音频解码器", info.audioDecoder)
+        ),
+        PlaybackInsightSection.RUNTIME to listOf(
+            DebugStatRow("播放状态", info.playbackState),
+            DebugStatRow("准备播放", info.playWhenReady),
+            DebugStatRow("正在播放", info.isPlaying),
+            DebugStatRow("首帧", info.firstFrame)
+        ),
+        PlaybackInsightSection.EVENTS to listOf(
+            DebugStatRow("最近加载错误", info.lastLoadError),
+            DebugStatRow("最近视频事件", info.lastVideoEvent),
+            DebugStatRow("最近音频事件", info.lastAudioEvent)
+        )
+    ).mapValues { (_, sectionRows) -> sectionRows.filter { it.value.isNotBlank() } }
+        .filterValues { it.isNotEmpty() }
+
+    return PlaybackInsightPresentation(
+        summary = summaryParts.joinToString(" · ").ifBlank {
+            info.playbackState.ifBlank { "等待播放器数据" }
+        },
+        level = level,
+        statusText = statusText,
+        sections = sections
+    )
+}
+
+internal fun shouldShowPlaybackInsightHud(
+    mode: PlayerSettingsStore.PlayerInsightMode,
+    hasMeasuredData: Boolean,
+    controlsVisible: Boolean,
+    screenLocked: Boolean,
+    level: PlaybackInsightLevel
+): Boolean {
+    if (mode == PlayerSettingsStore.PlayerInsightMode.OFF ||
+        !hasMeasuredData ||
+        screenLocked
+    ) {
+        return false
+    }
+    return controlsVisible ||
+        mode == PlayerSettingsStore.PlayerInsightMode.ALWAYS ||
+        level == PlaybackInsightLevel.ATTENTION
+}
+
+internal fun resolvePlaybackInsightPanelLayoutPolicy(
+    screenWidthDp: Int,
+    screenHeightDp: Int
+): PlaybackInsightPanelLayoutPolicy {
+    val edgePaddingDp = 16
+    val availableWidthDp = (screenWidthDp - edgePaddingDp * 2).coerceAtLeast(0)
+    val availableHeightDp = (screenHeightDp - edgePaddingDp * 2).coerceAtLeast(0)
+    val isLandscape = screenWidthDp > screenHeightDp
+    val targetWidthDp = if (isLandscape) {
+        (screenWidthDp * 0.42f).toInt().coerceIn(320, 440)
+    } else {
+        availableWidthDp.coerceAtMost(440)
+    }
+    val targetMaxHeightDp = if (isLandscape) {
+        availableHeightDp.coerceAtMost(360)
+    } else {
+        (screenHeightDp * 0.68f).toInt().coerceAtMost(520)
+    }
+    return PlaybackInsightPanelLayoutPolicy(
+        widthDp = targetWidthDp.coerceAtMost(availableWidthDp),
+        maxHeightDp = targetMaxHeightDp.coerceAtMost(availableHeightDp),
+        edgePaddingDp = edgePaddingDp
+    )
 }
 
 internal fun appendPlaybackDiagnosticEvent(
@@ -295,13 +442,16 @@ internal fun resolveSponsorProgressBarMarkers(
                 category = marker.category,
                 startFraction = startFraction,
                 endFraction = endFraction,
-                color = resolveSponsorProgressMarkerColor(marker.category)
+                color = resolveSponsorProgressMarkerColor(marker.category, marker.colorHex)
             )
         }
     }
 }
 
-private fun resolveSponsorProgressMarkerColor(category: String): Color {
+private fun resolveSponsorProgressMarkerColor(category: String, colorHex: String?): Color {
+    colorHex?.let { hex ->
+        runCatching { return Color(android.graphics.Color.parseColor(hex)) }
+    }
     return if (category == SponsorCategory.SPONSOR) {
         Color(0xFFFF8A65)
     } else {

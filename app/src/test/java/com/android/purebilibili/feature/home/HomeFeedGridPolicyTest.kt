@@ -1,11 +1,17 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class HomeFeedGridPolicyTest {
+
+    @Test
+    fun expandedFeedWidth_usesNamedLayoutLimit() {
+        assertEquals(1280.dp, resolveHomeFeedMaxContentWidth())
+    }
 
     @Test
     fun autoPresetKeepsExistingAutomaticColumns() {

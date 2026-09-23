@@ -10,16 +10,19 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import androidx.compose.material3.*
+//  Material Icons
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
 
 /**
  *  权限请求 Composable - 带说明对话框
@@ -33,7 +36,7 @@ import com.android.purebilibili.core.theme.BiliPink
  *     onPermissionResult = { granted -> if (granted) saveImage() }
  * )
  * 
- * Button(onClick = { storagePermission.request() }) { ... }
+ * AppButton(onClick = { storagePermission.request() }) { ... }
  * ```
  */
 @Composable
@@ -41,7 +44,7 @@ fun rememberPermissionState(
     permission: String,
     rationaleTitle: String,
     rationaleMessage: String,
-    rationaleIcon: androidx.compose.ui.graphics.vector.ImageVector = CupertinoIcons.Default.Checkmark,
+    rationaleIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Outlined.Check,
     onPermissionResult: (Boolean) -> Unit = {}
 ): PermissionState {
     val context = LocalContext.current
@@ -65,25 +68,30 @@ fun rememberPermissionState(
     
     // 权限说明对话框
     if (showRationale) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showRationale = false },
-            icon = { Icon(rationaleIcon, contentDescription = null, tint = BiliPink) },
-            title = { Text(rationaleTitle) },
-            text = { Text(rationaleMessage) },
+            icon = {
+                AppIcon(
+                    rationaleIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            },
+            title = { AppText(rationaleTitle) },
+            text = { AppText(rationaleMessage) },
             confirmButton = {
-                Button(
+                AppButton(
                     onClick = {
                         showRationale = false
                         permissionLauncher.launch(permission)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BiliPink)
+                    }
                 ) {
-                    Text("授权")
+                    AppText("授权")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRationale = false }) {
-                    Text("取消")
+                AppTextButton(onClick = { showRationale = false }) {
+                    AppText("取消")
                 }
             }
         )
@@ -91,25 +99,30 @@ fun rememberPermissionState(
     
     // 已永久拒绝，引导去设置
     if (showSettingsDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showSettingsDialog = false },
-            icon = { Icon(CupertinoIcons.Default.Checkmark, contentDescription = null, tint = BiliPink) },
-            title = { Text("权限已关闭") },
-            text = { Text("您已拒绝该权限。如需使用此功能，请在系统设置中手动开启权限。") },
+            icon = {
+                AppIcon(
+                    Icons.Outlined.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            },
+            title = { AppText("权限已关闭") },
+            text = { AppText("您已拒绝该权限。如需使用此功能，请在系统设置中手动开启权限。") },
             confirmButton = {
-                Button(
+                AppButton(
                     onClick = {
                         showSettingsDialog = false
                         openAppSettings(context)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BiliPink)
+                    }
                 ) {
-                    Text("去设置")
+                    AppText("去设置")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showSettingsDialog = false }) {
-                    Text("取消")
+                AppTextButton(onClick = { showSettingsDialog = false }) {
+                    AppText("取消")
                 }
             }
         )

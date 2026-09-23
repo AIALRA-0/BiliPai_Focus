@@ -25,6 +25,44 @@ class BiliPaiHomeFeedFrameTimingBenchmark {
     @Test
     fun homeFeedScroll_compilationFull() = scrollFeed(CompilationMode.Full())
 
+    @Test
+    fun homeFeedSlowScroll_compilationPartial() = benchmarkRule.measureRepeated(
+        packageName = TARGET_PACKAGE_NAME,
+        metrics = listOf(FrameTimingMetric()),
+        compilationMode = CompilationMode.Partial(),
+        iterations = FRAME_TIMING_BENCHMARK_ITERATIONS,
+        startupMode = WARM,
+        setupBlock = {
+            pressHome()
+            startActivityAndWait()
+            device.waitForIdle()
+        }
+    ) {
+        repeat(3) {
+            swipeVertical(down = true, steps = 120)
+            swipeVertical(down = false, steps = 120)
+        }
+    }
+
+    @Test
+    fun homeCategoryHorizontalDrag_compilationPartial() = benchmarkRule.measureRepeated(
+        packageName = TARGET_PACKAGE_NAME,
+        metrics = listOf(FrameTimingMetric()),
+        compilationMode = CompilationMode.Partial(),
+        iterations = FRAME_TIMING_BENCHMARK_ITERATIONS,
+        startupMode = WARM,
+        setupBlock = {
+            pressHome()
+            startActivityAndWait()
+            device.waitForIdle()
+        }
+    ) {
+        repeat(3) {
+            swipeHorizontal(left = true)
+            swipeHorizontal(left = false)
+        }
+    }
+
     private fun scrollFeed(compilationMode: CompilationMode) = benchmarkRule.measureRepeated(
         packageName = TARGET_PACKAGE_NAME,
         metrics = listOf(FrameTimingMetric()),
@@ -44,11 +82,19 @@ class BiliPaiHomeFeedFrameTimingBenchmark {
         }
     }
 
-    private fun MacrobenchmarkScope.swipeVertical(down: Boolean) {
+    private fun MacrobenchmarkScope.swipeVertical(down: Boolean, steps: Int = 24) {
         val x = device.displayWidth / 2
         val yFrom = if (down) (device.displayHeight * 3) / 4 else device.displayHeight / 3
         val yTo = if (down) device.displayHeight / 3 else (device.displayHeight * 3) / 4
-        device.swipe(x, yFrom, x, yTo, 24)
+        device.swipe(x, yFrom, x, yTo, steps)
+        device.waitForIdle()
+    }
+
+    private fun MacrobenchmarkScope.swipeHorizontal(left: Boolean, steps: Int = 90) {
+        val y = device.displayHeight / 3
+        val xFrom = if (left) (device.displayWidth * 4) / 5 else device.displayWidth / 5
+        val xTo = if (left) device.displayWidth / 5 else (device.displayWidth * 4) / 5
+        device.swipe(xFrom, y, xTo, y, steps)
         device.waitForIdle()
     }
 }

@@ -6,10 +6,6 @@ internal data class VisibleSsdpDevice(
     val subtitle: String
 )
 
-internal fun shouldIncludeClingDevice(
-    hasAvTransport: Boolean
-): Boolean = hasAvTransport
-
 internal inline fun <T, K, V> Iterable<T>.associateNotNullBy(
     keySelector: (T) -> K,
     valueSelector: (T) -> V?
@@ -23,12 +19,9 @@ internal inline fun <T, K, V> Iterable<T>.associateNotNullBy(
 }
 
 internal fun resolveVisibleSsdpDevices(
-    clingDevices: List<CastDeviceInfo>,
     ssdpDevices: List<SsdpDiscovery.SsdpDevice>,
     profiles: Map<String, SsdpCastClient.SsdpDeviceProfile>
 ): List<VisibleSsdpDevice> {
-    if (clingDevices.isNotEmpty()) return emptyList()
-
     return ssdpDevices
         .distinctBy { it.location }
         .mapNotNull { device ->

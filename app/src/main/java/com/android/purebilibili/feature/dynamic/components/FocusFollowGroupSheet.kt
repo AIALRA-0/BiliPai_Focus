@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,7 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.android.purebilibili.core.store.DEFAULT_FOCUS_FOLLOW_GROUP_ID
 import com.android.purebilibili.core.store.FocusFollowGroup
 import com.android.purebilibili.core.store.FocusFollowGroupConfig
@@ -64,12 +65,22 @@ import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
 import com.android.purebilibili.core.store.canCreateFocusFollowGroup
 import com.android.purebilibili.core.store.normalizeFocusFollowGroupName
 import com.android.purebilibili.core.store.resolveFocusFollowGroupForUser
-import com.android.purebilibili.core.ui.IOSModalBottomSheet
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.feature.dynamic.FocusFollowAssignmentSection
 import com.android.purebilibili.feature.dynamic.buildFocusFollowAssignmentSections
 import com.android.purebilibili.feature.dynamic.filterFocusFollowAssignmentSections
 
+// Component-specific radii preserve the existing Focus group sheet across theme migrations.
+private object FocusFollowGroupShapeSpec {
+    val Small = 14.dp
+    val Medium = 16.dp
+    val Section = 18.dp
+    val Card = 20.dp
+    val Input = 26.dp
+    val Pill = 999.dp
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FocusFollowGroupSheet(
@@ -87,7 +98,7 @@ fun FocusFollowGroupSheet(
 ) {
     val inputHeight = 60.dp
     val actionButtonHeight = 52.dp
-    val inputShape = RoundedCornerShape(26.dp)
+    val inputShape = RoundedCornerShape(FocusFollowGroupShapeSpec.Input)
     val actionButtonContentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp)
     var newGroupName by rememberSaveable { mutableStateOf("") }
     var followSearchQuery by rememberSaveable { mutableStateOf("") }
@@ -112,7 +123,7 @@ fun FocusFollowGroupSheet(
         )
     }
 
-    IOSModalBottomSheet(onDismissRequest = onDismissRequest) {
+    AppModalBottomSheet(onDismissRequest = onDismissRequest) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
@@ -136,7 +147,7 @@ fun FocusFollowGroupSheet(
 
             item {
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Card),
                     tonalElevation = 1.dp,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
@@ -198,7 +209,7 @@ fun FocusFollowGroupSheet(
                                     .clickable { sortModeMenuExpanded = true },
                                 shape = inputShape,
                                 tonalElevation = 0.dp,
-                                color = MaterialTheme.colorScheme.surface
+                                color = com.android.purebilibili.core.ui.AppSurfaceTokens.surface()
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -339,7 +350,7 @@ fun FocusFollowGroupSheet(
             if (followSearchQuery.isNotBlank() && filteredAssignmentSections.isEmpty()) {
                 item("group_search_empty") {
                     Surface(
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Section),
                         tonalElevation = 1.dp,
                         color = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
@@ -415,7 +426,7 @@ fun FocusFollowGroupSheet(
                     value = renameDraft,
                     onValueChange = { renameDraft = it },
                     singleLine = true,
-                    shape = RoundedCornerShape(26.dp),
+                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Input),
                     label = { Text("分组名称") }
                 )
             }
@@ -484,7 +495,7 @@ private fun FocusFollowGroupManagementCard(
     resolveCurrentGroup: (Long) -> FocusFollowGroup
 ) {
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Card),
         tonalElevation = 1.dp,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
@@ -497,6 +508,7 @@ private fun FocusFollowGroupManagementCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)
                     .clickable(onClick = onToggleExpanded),
                 verticalAlignment = Alignment.Top
             ) {
@@ -516,7 +528,7 @@ private fun FocusFollowGroupManagementCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Surface(
-                            shape = RoundedCornerShape(999.dp),
+                            shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Pill),
                             color = if (section.group.visible) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
@@ -559,7 +571,7 @@ private fun FocusFollowGroupManagementCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Small),
                     color = MaterialTheme.colorScheme.surfaceContainer
                 ) {
                     Row(
@@ -606,7 +618,7 @@ private fun FocusFollowGroupManagementCard(
                 )
                 if (section.members.isEmpty()) {
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Medium),
                         color = MaterialTheme.colorScheme.surfaceContainer
                     ) {
                         Text(
@@ -647,7 +659,7 @@ private fun FocusFollowUserAssignmentRow(
     var expanded by remember(user.mid) { mutableStateOf(false) }
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Card),
         tonalElevation = 1.dp,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {

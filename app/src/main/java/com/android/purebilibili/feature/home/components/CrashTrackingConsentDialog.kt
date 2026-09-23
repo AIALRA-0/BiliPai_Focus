@@ -1,126 +1,125 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppListItem
+import com.android.purebilibili.core.ui.components.AppSwitch
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.CrashReporter
-import com.android.purebilibili.core.theme.BiliPink
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.ContainerLevel
 import kotlinx.coroutines.launch
 
 /**
- *  首次启动隐私提示弹窗
- * 告知用户关于崩溃追踪的用途，并让用户选择是否开启
+ * First-launch crash-tracking consent.
+ * Uses native [AppAlertDialog] / switch / list item — no custom pink chrome.
  */
 @Composable
 fun CrashTrackingConsentDialog(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var isEnabled by remember { mutableStateOf(true) }  // 默认开启
-    
-    Dialog(onDismissRequest = { /* 不允许点击外部关闭 */ }) {
-        Surface(
-            shape = AppShapes.container(ContainerLevel.Dialog),
-            color = AppSurfaceTokens.cardContainer(),
-            tonalElevation = 6.dp,
-            shadowElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 标题
-                Text(
-                    text = "🛡️ 帮助我们改进应用",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // 说明文字
-                Text(
-                    text = "为了快速发现和修复应用问题，BiliPai 会收集崩溃报告和错误日志。\n\n" +
-                           "默认仅启用崩溃追踪；使用情况统计默认关闭。播放器诊断日志保持可用，方便排查黑屏、卡顿等播放问题。\n\n" +
-                           "这些数据仅用于改善应用稳定性，你也可以随时在「设置」中调整相关开关。",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Start,
-                    lineHeight = 22.sp
-                )
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                // 开关选项
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "启用崩溃追踪",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Switch(
-                        checked = isEnabled,
-                        onCheckedChange = { isEnabled = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = AppSurfaceTokens.cardContainer(),
-                            checkedTrackColor = BiliPink
-                        )
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // 确认按钮
-                Button(
-                    onClick = {
-                        scope.launch {
-                            // 保存用户选择
-                            SettingsManager.setCrashTrackingEnabled(context, isEnabled)
-                            SettingsManager.setCrashTrackingConsentShown(context, true)
-                            
-                            // 应用设置到 Crashlytics
-                            CrashReporter.setEnabled(isEnabled)
-                            
-                            //  [修复] 确保设置保存后再关闭弹窗
-                            onDismiss()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = AppShapes.container(ContainerLevel.Card),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BiliPink
-                    )
-                ) {
-                    Text(
-                        text = "确定",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+    var isEnabled by remember { mutableStateOf(true) }
+    var isSaving by remember { mutableStateOf(false) }
+
+    fun saveAndDismiss() {
+        if (isSaving) return
+        isSaving = true
+        scope.launch {
+            try {
+                SettingsManager.setCrashTrackingEnabled(context, isEnabled)
+                SettingsManager.setCrashTrackingConsentShown(context, true)
+                CrashReporter.setEnabled(isEnabled)
+                onDismiss()
+            } finally {
+                isSaving = false
             }
         }
     }
+
+    AppAlertDialog(
+        onDismissRequest = { /* require explicit confirm */ },
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = false,
+        ),
+        icon = {
+            AppIcon(
+                imageVector = Icons.Outlined.BugReport,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp),
+            )
+        },
+        title = {
+            AppText(
+                text = "帮助改进应用",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AppText(
+                    text = "为快速发现并修复问题，应用可收集崩溃报告与错误日志。\n\n" +
+                        "默认仅启用崩溃追踪；使用情况统计默认关闭。播放器诊断日志仍可手动开启，便于排查黑屏、卡顿等播放问题。\n\n" +
+                        "数据仅用于改善稳定性，之后可随时在「设置」中调整。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                AppListItem(
+                    headlineContent = {
+                        AppText(
+                            text = "启用崩溃追踪",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    },
+                    supportingContent = {
+                        AppText(
+                            text = if (isEnabled) "开启后将在崩溃时上传诊断信息" else "关闭后不上传崩溃报告",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    trailingContent = {
+                        AppSwitch(
+                            checked = isEnabled,
+                            onCheckedChange = { isEnabled = it },
+                            enabled = !isSaving,
+                        )
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            AppTextButton(
+                onClick = { saveAndDismiss() },
+                enabled = !isSaving,
+            ) {
+                AppText("确定")
+            }
+        },
+    )
 }

@@ -5,37 +5,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Restore
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppSwitch
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,17 +37,21 @@ import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPink
-import com.android.purebilibili.core.ui.IOSAlertDialog
-import com.android.purebilibili.core.ui.IOSDialogAction
-import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
-import com.android.purebilibili.core.ui.iOSLargeTitleBar
-import com.android.purebilibili.core.ui.components.IOSClickableItem
-import com.android.purebilibili.core.ui.components.IOSDivider
-import com.android.purebilibili.core.ui.components.IOSGroup
-import com.android.purebilibili.core.ui.components.IOSSectionTitle
-import com.android.purebilibili.core.ui.components.IOSSwitchItem
-import dev.chrisbanes.haze.HazeState
-import com.android.purebilibili.core.ui.blur.hazeSourceCompat
+import com.android.purebilibili.feature.settings.SettingsPageScrollHost
+import com.android.purebilibili.feature.settings.rememberThemeAwareSettingsIcon
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
+import com.android.purebilibili.feature.settings.ui.settingsScrollContentPadding
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppDialogAction
+import com.android.purebilibili.core.ui.components.AppPreference
+import com.android.purebilibili.core.ui.components.AppPreferenceDivider
+import com.android.purebilibili.core.ui.components.AppPreferenceGroup
+import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
+import com.android.purebilibili.core.ui.components.AppTextField
+import com.android.purebilibili.core.ui.components.AppSwitchPreference
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Reset
+import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 
 private enum class WebDavEditMode {
     SERVER,
@@ -69,6 +59,7 @@ private enum class WebDavEditMode {
     REMOTE_DIR
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebDavBackupScreen(
     onBack: () -> Unit,
@@ -80,15 +71,6 @@ fun WebDavBackupScreen(
     val saveLabel = stringResource(R.string.common_save)
     val cancelLabel = stringResource(R.string.common_cancel)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-    val listState = rememberLazyListState()
-    val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
-    val scrollOffset by remember {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex > 0) 2000f
-            else listState.firstVisibleItemScrollOffset.toFloat()
-        }
-    }
 
     var showEditDialog by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
@@ -110,21 +92,31 @@ fun WebDavBackupScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .globalWallpaperAwareBackground()
+    val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    SettingsPageScaffold(
+        title = screenTitle,
+        onBack = onBack,
+        backContentDescription = backLabel,
+        bottomContentPadding = bottomContentPadding,
+        scrollHost = SettingsPageScrollHost.External,
+        actions = {
+            AppIconButton(onClick = { viewModel.refreshRemoteBackups() }) {
+                AppIcon(
+                    imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_refresh_fill_24),
+                    contentDescription = refreshLabel,
+                )
+            }
+        },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .hazeSourceCompat(state = hazeState),
-            contentPadding = PaddingValues(top = 118.dp, bottom = 24.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = settingsScrollContentPadding(extraBottom = 24.dp),
+            ) {
             item {
-                IOSSectionTitle("连接状态")
-                IOSGroup {
+                AppPreferenceSectionTitle("连接状态")
+                AppPreferenceGroup {
                     val statusText = when {
                         uiState.isBusy -> uiState.statusMessage ?: "正在处理..."
                         // 恢复会覆盖本地持久化文件，进程重启后才能稳定读取新内容。
@@ -132,8 +124,8 @@ fun WebDavBackupScreen(
                         !uiState.statusMessage.isNullOrBlank() -> uiState.statusMessage ?: ""
                         else -> "尚未执行操作"
                     }
-                    IOSClickableItem(
-                        icon = if (uiState.restoreRequiresRestart) Icons.Filled.Warning else Icons.Filled.Info,
+                    AppPreference(
+                        icon = if (uiState.restoreRequiresRestart) com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_warning_fill_24) else com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_info_fill_24),
                         title = if (uiState.restoreRequiresRestart) "需要重启应用" else "执行状态",
                         value = statusText,
                         onClick = if (uiState.statusMessage != null) ({ viewModel.clearStatus() }) else null,
@@ -144,20 +136,20 @@ fun WebDavBackupScreen(
             }
 
             item {
-                IOSSectionTitle("配置")
-                IOSGroup {
+                AppPreferenceSectionTitle("配置")
+                AppPreferenceGroup {
                     // 配置项图标按“能力/服务器/账号/目录”映射，降低识别成本。
-                    IOSSwitchItem(
-                        icon = Icons.Filled.Cloud,
+                    AppSwitchPreference(
+                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_cloud_fill_24),
                         title = "启用 WebDAV 云备份",
                         subtitle = "开启后每天自动备份，同时保留手动备份能力",
                         checked = uiState.config.enabled,
                         onCheckedChange = { viewModel.setEnabled(it) },
                         iconTint = iOSBlue
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSClickableItem(
-                        icon = Icons.Filled.Storage,
+                    AppPreferenceDivider(startIndent = 66.dp)
+                    AppPreference(
+                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_storage_fill_24),
                         title = "服务器",
                         value = uiState.config.baseUrl.ifBlank { "未配置" },
                         onClick = {
@@ -166,9 +158,9 @@ fun WebDavBackupScreen(
                         },
                         iconTint = iOSBlue
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSClickableItem(
-                        icon = Icons.Filled.Person,
+                    AppPreferenceDivider(startIndent = 66.dp)
+                    AppPreference(
+                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_person_fill_24),
                         title = "用户名",
                         value = uiState.config.username.ifBlank { "未配置" },
                         onClick = {
@@ -177,9 +169,9 @@ fun WebDavBackupScreen(
                         },
                         iconTint = iOSBlue
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSClickableItem(
-                        icon = Icons.Filled.Folder,
+                    AppPreferenceDivider(startIndent = 66.dp)
+                    AppPreference(
+                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_drive_folder_upload_fill_24),
                         title = "远端目录",
                         value = uiState.config.remoteDir,
                         onClick = {
@@ -192,34 +184,40 @@ fun WebDavBackupScreen(
             }
 
             item {
-                IOSSectionTitle("操作")
-                IOSGroup {
-                    IOSClickableItem(
-                        icon = Icons.Filled.CheckCircle,
+                AppPreferenceSectionTitle("操作")
+                AppPreferenceGroup {
+                    AppPreference(
+                        icon = rememberThemeAwareSettingsIcon(
+                            materialSymbolResource = R.drawable.ms_cloud_done_24,
+                            miuixIcon = MiuixIcons.UploadCloud,
+                        ),
                         title = "测试连接",
                         subtitle = "验证账号与目录可用性",
                         onClick = { viewModel.testConnection() },
                         iconTint = iOSGreen
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSClickableItem(
-                        icon = Icons.Filled.Backup,
+                    AppPreferenceDivider(startIndent = 66.dp)
+                    AppPreference(
+                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_backup_fill_24),
                         title = "立即备份",
                         subtitle = "上传当前设置与插件配置",
                         onClick = { viewModel.backupNow() },
                         iconTint = iOSBlue
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSClickableItem(
-                        icon = Icons.Filled.Restore,
+                    AppPreferenceDivider(startIndent = 66.dp)
+                    AppPreference(
+                        icon = rememberThemeAwareSettingsIcon(
+                            materialSymbolResource = R.drawable.ms_settings_backup_restore_24,
+                            miuixIcon = MiuixIcons.Reset,
+                        ),
                         title = "恢复最新备份",
                         subtitle = "会覆盖本地设置，建议先手动备份",
                         onClick = { showRestoreConfirm = true },
                         iconTint = iOSPink
                     )
-                    IOSDivider(startIndent = 66.dp)
-                    IOSClickableItem(
-                        icon = Icons.Filled.Refresh,
+                    AppPreferenceDivider(startIndent = 66.dp)
+                    AppPreference(
+                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_refresh_fill_24),
                         title = "刷新远端列表",
                         subtitle = "读取 WebDAV 目录中的备份文件",
                         onClick = { viewModel.refreshRemoteBackups() },
@@ -229,11 +227,11 @@ fun WebDavBackupScreen(
             }
 
             item {
-                IOSSectionTitle("远端备份")
-                IOSGroup {
+                AppPreferenceSectionTitle("远端备份")
+                AppPreferenceGroup {
                     if (uiState.remoteBackups.isEmpty()) {
-                        IOSClickableItem(
-                            icon = Icons.Filled.Folder,
+                        AppPreference(
+                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_inventory2_fill_24),
                             title = "暂无备份",
                             value = "可先点击“立即备份”生成第一份快照",
                             onClick = null,
@@ -242,8 +240,8 @@ fun WebDavBackupScreen(
                         )
                     } else {
                         uiState.remoteBackups.take(10).forEachIndexed { index, entry ->
-                            IOSClickableItem(
-                                icon = Icons.Filled.Folder,
+                            AppPreference(
+                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_folder_copy_fill_24),
                                 title = entry.fileName,
                                 value = "${entry.sizeBytes} B",
                                 onClick = null,
@@ -251,44 +249,21 @@ fun WebDavBackupScreen(
                                 showChevron = false
                             )
                             if (index != uiState.remoteBackups.take(10).lastIndex) {
-                                IOSDivider(startIndent = 66.dp)
+                                AppPreferenceDivider(startIndent = 66.dp)
                             }
                         }
                     }
                 }
             }
-        }
+            }
 
-        iOSLargeTitleBar(
-            title = screenTitle,
-            scrollOffset = scrollOffset,
-            leadingContent = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = backLabel
-                    )
+            if (uiState.isBusy) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AdaptiveLoadingIndicator()
                 }
-            },
-            trailingContent = {
-                IconButton(onClick = { viewModel.refreshRemoteBackups() }) {
-                    Icon(
-                        imageVector = Icons.Filled.Refresh,
-                        contentDescription = refreshLabel
-                    )
-                }
-            },
-            hazeState = hazeState
-        )
-
-        if (uiState.isBusy) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 96.dp),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                CircularProgressIndicator(modifier = Modifier.padding(top = 20.dp))
             }
         }
     }
@@ -299,55 +274,51 @@ fun WebDavBackupScreen(
             WebDavEditMode.ACCOUNT -> "账号信息"
             WebDavEditMode.REMOTE_DIR -> "远端目录"
         }
-        IOSAlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showEditDialog = false },
-            title = { Text(dialogTitle, fontWeight = FontWeight.Bold) },
+            title = { AppText(dialogTitle, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     when (editMode) {
                         WebDavEditMode.SERVER -> {
-                            OutlinedTextField(
+                            AppTextField(
                                 value = draftBaseUrl,
                                 onValueChange = { draftBaseUrl = it },
-                                label = { Text("服务器地址") },
-                                placeholder = { Text("https://dav.example.com/remote.php/dav/files/<user>") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "服务器地址",
+                                placeholder = "https://dav.example.com/remote.php/dav/files/<user>",
+                                singleLine = true
                             )
                         }
 
                         WebDavEditMode.ACCOUNT -> {
-                            OutlinedTextField(
+                            AppTextField(
                                 value = draftUsername,
                                 onValueChange = { draftUsername = it },
-                                label = { Text("用户名") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "用户名",
+                                singleLine = true
                             )
-                            OutlinedTextField(
+                            AppTextField(
                                 value = draftPassword,
                                 onValueChange = { draftPassword = it },
-                                label = { Text("密码") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "密码",
+                                singleLine = true
                             )
                         }
 
                         WebDavEditMode.REMOTE_DIR -> {
-                            OutlinedTextField(
+                            AppTextField(
                                 value = draftRemoteDir,
                                 onValueChange = { draftRemoteDir = it },
-                                label = { Text("远端目录") },
-                                placeholder = { Text("/BiliPai/backups") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "远端目录",
+                                placeholder = "/BiliPai/backups",
+                                singleLine = true
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("启用备份", modifier = Modifier.weight(1f))
-                                Switch(
+                                AppText("启用备份", modifier = Modifier.weight(1f))
+                                AppSwitch(
                                     checked = draftEnabled,
                                     onCheckedChange = { draftEnabled = it }
                                 )
@@ -357,7 +328,7 @@ fun WebDavBackupScreen(
                 }
             },
             confirmButton = {
-                IOSDialogAction(onClick = {
+                AppDialogAction(onClick = {
                     viewModel.saveConfig(
                         WebDavBackupConfig(
                             baseUrl = draftBaseUrl,
@@ -369,35 +340,35 @@ fun WebDavBackupScreen(
                     )
                     showEditDialog = false
                 }) {
-                    Text(saveLabel)
+                    AppText(saveLabel)
                 }
             },
             dismissButton = {
-                IOSDialogAction(onClick = { showEditDialog = false }) {
-                    Text(cancelLabel)
+                AppDialogAction(onClick = { showEditDialog = false }) {
+                    AppText(cancelLabel)
                 }
             }
         )
     }
 
     if (showRestoreConfirm) {
-        IOSAlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showRestoreConfirm = false },
-            title = { Text("确认恢复最新备份") },
+            title = { AppText("确认恢复最新备份") },
             text = {
-                Text("恢复会覆盖当前本地设置与插件配置。建议先执行一次“立即备份”。")
+                AppText("恢复会覆盖当前本地设置与插件配置。建议先执行一次“立即备份”。")
             },
             confirmButton = {
-                IOSDialogAction(onClick = {
+                AppDialogAction(onClick = {
                     showRestoreConfirm = false
                     viewModel.restoreLatest()
                 }) {
-                    Text("继续恢复")
+                    AppText("继续恢复")
                 }
             },
             dismissButton = {
-                IOSDialogAction(onClick = { showRestoreConfirm = false }) {
-                    Text(cancelLabel)
+                AppDialogAction(onClick = { showRestoreConfirm = false }) {
+                    AppText(cancelLabel)
                 }
             }
         )

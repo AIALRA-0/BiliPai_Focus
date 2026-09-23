@@ -35,4 +35,24 @@ class PluginManagerPolicyTest {
 
         assertEquals(false, resolved)
     }
+
+    @Test
+    fun updatePluginEnabledStateReturnsANewSnapshot() {
+        val plugin = object : Plugin {
+            override val id = "test"
+            override val name = "Test"
+            override val description = "Test plugin"
+            override val version = "1.0.0"
+        }
+        val original = listOf(PluginInfo(plugin, enabled = false))
+
+        val updated = updatePluginEnabledState(
+            plugins = original,
+            pluginId = plugin.id,
+            enabled = true
+        )
+
+        assertFalse(original.first().enabled)
+        assertTrue(updated.first().enabled)
+    }
 }

@@ -11,11 +11,15 @@ import com.android.purebilibili.feature.bangumi.resolveBangumiOverlaySwitchableQ
 import com.android.purebilibili.feature.bangumi.resolveBangumiUnsupportedOverlayActionMessage
 import com.android.purebilibili.feature.bangumi.shouldShowBangumiOverlayDislikeAction
 import com.android.purebilibili.core.util.ShareUtils
+import com.android.purebilibili.feature.anime4k.Anime4KBypassReason
+import com.android.purebilibili.feature.anime4k.Anime4KPreset
+import com.android.purebilibili.feature.anime4k.VideoEnhancementAlgorithm
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
 import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlCallbacks
 import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlUiState
 import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlay
+import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
 
 @Composable
 internal fun BangumiPlayerOverlayHost(
@@ -42,6 +46,11 @@ internal fun BangumiPlayerOverlayHost(
     isLoggedIn: Boolean,
     isVip: Boolean,
     onQualityChange: (Int) -> Unit,
+    requestedAudioQuality: Int,
+    selectedAudioQuality: Int,
+    availableAudioQualities: List<AudioQualityOption>,
+    onAudioQualityChange: (Int) -> Unit,
+    onPlaybackSpeedChange: (Float) -> Unit,
     onBack: () -> Unit,
     onToggleFullscreen: () -> Unit,
     danmakuEnabled: Boolean,
@@ -71,6 +80,16 @@ internal fun BangumiPlayerOverlayHost(
     onCoin: () -> Unit,
     onCaptureScreenshot: () -> Unit,
     onReloadVideo: () -> Unit,
+    anime4kEnabled: Boolean,
+    anime4kAvailable: Boolean,
+    anime4kBypassReason: Anime4KBypassReason,
+    videoEnhancementAlgorithm: VideoEnhancementAlgorithm,
+    anime4kPreset: Anime4KPreset,
+    fsrSharpness: Float,
+    onAnime4kToggle: (Boolean) -> Unit,
+    onVideoEnhancementAlgorithmChange: (VideoEnhancementAlgorithm) -> Unit,
+    onAnime4kPresetChange: (Anime4KPreset) -> Unit,
+    onFsrSharpnessChange: (Float) -> Unit,
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -109,6 +128,11 @@ internal fun BangumiPlayerOverlayHost(
         currentAudioUrl = currentAudioUrl,
         debugInfo = debugInfo,
         isVip = isVip,
+        currentAudioQuality = requestedAudioQuality,
+        selectedAudioQuality = selectedAudioQuality,
+        availableAudioQualities = availableAudioQualities,
+        onAudioQualityChange = onAudioQualityChange,
+        onPlaybackSpeedChange = onPlaybackSpeedChange,
         isLiked = isLiked,
         isCoined = coinCount > 0,
         coinCount = coinCount,
@@ -146,6 +170,16 @@ internal fun BangumiPlayerOverlayHost(
         showDislikeAction = shouldShowBangumiOverlayDislikeAction(),
         coverUrl = coverUrl,
         onReloadVideo = onReloadVideo,
+        anime4kEnabled = anime4kEnabled,
+        anime4kAvailable = anime4kAvailable,
+        anime4kBypassReason = anime4kBypassReason,
+        videoEnhancementAlgorithm = videoEnhancementAlgorithm,
+        anime4kPreset = anime4kPreset,
+        fsrSharpness = fsrSharpness,
+        onAnime4kToggle = onAnime4kToggle,
+        onVideoEnhancementAlgorithmChange = onVideoEnhancementAlgorithmChange,
+        onAnime4kPresetChange = onAnime4kPresetChange,
+        onFsrSharpnessChange = onFsrSharpnessChange,
         onQualityChange = onQualityChange,
         onPipClick = {},
         onCaptureScreenshot = onCaptureScreenshot,

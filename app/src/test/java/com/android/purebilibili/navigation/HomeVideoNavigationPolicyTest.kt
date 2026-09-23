@@ -43,12 +43,14 @@ class HomeVideoNavigationPolicyTest {
             bvid = "BV1xyz",
             cid = 100L,
             coverUrl = "cover",
-            source = HomeVideoClickSource.PREVIEW
+            source = HomeVideoClickSource.PREVIEW,
+            sourceRoute = "home?category=FOLLOW"
         )
 
         val intent = resolveHomeVideoNavigationIntent(request)
 
         assertEquals(HomeVideoClickSource.PREVIEW, intent?.source)
+        assertEquals("home?category=FOLLOW", intent?.sourceRoute)
     }
 
     @Test
@@ -98,6 +100,21 @@ class HomeVideoNavigationPolicyTest {
 
         assertTrue(target is HomeNavigationTarget.DynamicDetail)
         assertEquals("987654321", (target as HomeNavigationTarget.DynamicDetail).dynamicId)
+    }
+
+    @Test
+    fun resolveHomeNavigationTarget_keepsVideoRouteForVerticalHomeVideo() {
+        val request = HomeVideoClickRequest(
+            bvid = "BV1portrait",
+            cid = 66L,
+            coverUrl = "https://img.test.com/portrait.jpg",
+            isVerticalVideo = true,
+            source = HomeVideoClickSource.GRID
+        )
+
+        val target = resolveHomeNavigationTarget(request)
+
+        assertTrue(target is HomeNavigationTarget.Video)
     }
 
     @Test

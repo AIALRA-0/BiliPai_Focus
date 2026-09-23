@@ -1,9 +1,10 @@
 package com.android.purebilibili.feature.dynamic.components
 
 import androidx.compose.ui.graphics.Color
-import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import java.io.File
 
 class DynamicTopBarThemePolicyTest {
 
@@ -15,86 +16,42 @@ class DynamicTopBarThemePolicyTest {
     }
 
     @Test
-    fun `global wallpaper makes dynamic top bar header transparent`() {
-        val surfaceColor = Color(0xFFFFFFFF)
+    fun `publish action consumes image and native color skin modes`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt"
+        ).readText()
 
-        assertEquals(
-            Color.Transparent,
-            resolveDynamicTopBarHeaderColor(
-                surfaceColor = surfaceColor,
-                backgroundAlpha = 0.4f,
-                globalWallpaperVisible = true
-            )
-        )
+        assertTrue(source.contains("publishSkinDecoration: DynamicPublishSkinDecoration? = null"))
+        assertTrue(source.contains("publishIconPaths.pathFor(publishPressed)"))
+        assertTrue(source.contains("Brush.verticalGradient("))
+        assertTrue(source.contains("publishSkinDecoration?.iconTint"))
     }
 
     @Test
-    fun `dynamic top bar keeps surface tint without global wallpaper`() {
-        val surfaceColor = Color(0xFFFFFFFF)
+    fun `miuix non glass dynamic tabs can omit the inner track`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt"
+        ).readText()
 
-        assertEquals(
-            surfaceColor.copy(alpha = 0.4f),
-            resolveDynamicTopBarHeaderColor(
-                surfaceColor = surfaceColor,
-                backgroundAlpha = 0.4f,
-                globalWallpaperVisible = false
-            )
-        )
+        assertTrue(source.contains("if (liquidGlassEnabled)"))
+        assertTrue(source.contains(".clip(RectangleShape)"))
+        assertTrue(source.contains(".clip(dockShape)"))
+        assertTrue(source.contains(".background(dockColor)"))
+        assertTrue(source.contains("drawMiuixNonGlassTrack = liquidGlassEnabled"))
+        assertTrue(source.contains("LocalAppUiStyle.current != AppUiStyle.MIUIX"))
     }
 
     @Test
-    fun `global wallpaper disables dynamic header blur source`() {
-        assertEquals(
-            false,
-            shouldUseDynamicTopBarHeaderBlur(
-                hasHazeState = true,
-                globalWallpaperVisible = true
-            )
-        )
+    fun `layout mode menu uses the miuix window action menu`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt"
+        ).readText()
+
+        assertTrue(source.contains("AppWindowActionMenu("))
+        assertTrue(source.contains("selected = displayMode == mode"))
+        assertTrue(source.contains("resolveDynamicDisplayModeLabel(mode)"))
+        assertTrue(!source.contains("AppDropdownMenu("))
+        assertTrue(!source.contains("AppDropdownMenuItem("))
     }
 
-    @Test
-    fun `dynamic header blur remains enabled without global wallpaper`() {
-        assertEquals(
-            true,
-            shouldUseDynamicTopBarHeaderBlur(
-                hasHazeState = true,
-                globalWallpaperVisible = false
-            )
-        )
-    }
-
-    @Test
-    fun `dynamic header blur is disabled when liquid dock is reused`() {
-        assertEquals(
-            false,
-            shouldUseDynamicTopBarHeaderBlur(
-                hasHazeState = true,
-                globalWallpaperVisible = false,
-                reusesLiquidGlassDock = true
-            )
-        )
-    }
-
-    @Test
-    fun `dynamic top bar reuses liquid dock only when segmented control will draw liquid pill`() {
-        assertEquals(
-            true,
-            shouldReuseDynamicTopBarLiquidGlassDock(
-                hasBackdrop = true,
-                storedLiquidGlassEnabled = true,
-                uiPreset = UiPreset.IOS,
-                androidNativeLiquidGlassEnabled = true
-            )
-        )
-        assertEquals(
-            false,
-            shouldReuseDynamicTopBarLiquidGlassDock(
-                hasBackdrop = true,
-                storedLiquidGlassEnabled = true,
-                uiPreset = UiPreset.MD3,
-                androidNativeLiquidGlassEnabled = true
-            )
-        )
-    }
 }

@@ -5,24 +5,38 @@ import com.android.purebilibili.feature.home.HomeTopTabEntry
 
 internal enum class HomePagerSettledAction {
     NONE,
-    SWITCH_CATEGORY
+    SWITCH_CATEGORY,
+    OPEN_LIVE_LIST,
+    OPEN_BANGUMI,
 }
 
-internal fun shouldEnableHomeTopPagerUserScroll(isTopLevelActive: Boolean): Boolean {
+/**
+ * 即使开启隐藏顶部标签，依然允许用户在屏幕中央左右滑动切换页面。
+ */
+internal fun shouldEnableHomeTopPagerUserScroll(
+    isTopLevelActive: Boolean,
+    hideTopTabs: Boolean = false
+): Boolean {
     return isTopLevelActive
 }
 
+/**
+ * 是否在首页 Pager 内渲染该分类内容。
+ * 直播 / 追番也作为独立页留在顶栏分页里，不再切走导航。
+ */
 internal fun shouldDisplayHomeTopCategoryInline(category: HomeCategory?): Boolean {
     return category != null
 }
 
 internal fun shouldSwitchHomeCategoryFromPager(
+    isTopLevelActive: Boolean,
     hasSyncedPagerWithState: Boolean,
     pagerCurrentPage: Int,
     pagerScrolling: Boolean,
     currentCategoryIndex: Int,
     programmaticPageSwitchInProgress: Boolean = false
 ): Boolean {
+    if (!isTopLevelActive) return false
     if (!hasSyncedPagerWithState) return false
     if (pagerScrolling) return false
     if (programmaticPageSwitchInProgress) return false
@@ -30,6 +44,7 @@ internal fun shouldSwitchHomeCategoryFromPager(
 }
 
 internal fun resolveHomePagerSettledAction(
+    isTopLevelActive: Boolean,
     hasSyncedPagerWithState: Boolean,
     pagerCurrentPage: Int,
     pagerScrolling: Boolean,
@@ -38,6 +53,7 @@ internal fun resolveHomePagerSettledAction(
     programmaticPageSwitchInProgress: Boolean = false
 ): HomePagerSettledAction {
     if (!shouldSwitchHomeCategoryFromPager(
+            isTopLevelActive = isTopLevelActive,
             hasSyncedPagerWithState = hasSyncedPagerWithState,
             pagerCurrentPage = pagerCurrentPage,
             pagerScrolling = pagerScrolling,
@@ -48,10 +64,10 @@ internal fun resolveHomePagerSettledAction(
         return HomePagerSettledAction.NONE
     }
 
-    return if (shouldDisplayHomeTopCategoryInline(settledCategory)) {
-        HomePagerSettledAction.SWITCH_CATEGORY
-    } else {
-        HomePagerSettledAction.NONE
+    return when {
+        settledCategory == null -> HomePagerSettledAction.NONE
+        shouldDisplayHomeTopCategoryInline(settledCategory) -> HomePagerSettledAction.SWITCH_CATEGORY
+        else -> HomePagerSettledAction.NONE
     }
 }
 
@@ -95,6 +111,7 @@ internal fun resolveHomeInitialTopTabPage(
     val displayedEntry = topTabEntries[safeDisplayedIndex]
     if (
         displayedEntry == HomeTopTabEntry.Partition ||
+        displayedEntry == HomeTopTabEntry.Subscriptions ||
         displayedEntry == HomeTopTabEntry.Category(currentCategory)
     ) {
         return safeDisplayedIndex
@@ -110,5 +127,23 @@ internal fun shouldTreatInitialHomePagerPageAsSyncedWithState(
     currentCategory: HomeCategory
 ): Boolean {
     return initialEntry == HomeTopTabEntry.Partition ||
+        initialEntry == HomeTopTabEntry.Subscriptions ||
         initialEntry == HomeTopTabEntry.Category(currentCategory)
+}
+
+internal fun resolveHomePagerTargetPage(
+    topTabEntries: List<HomeTopTabEntry>,
+    retainedEntry: HomeTopTabEntry?,
+    currentCategory: HomeCategory,
+    hasSyncedPagerWithState: Boolean
+): Int {
+    if (topTabEntries.isEmpty()) return -1
+    val targetEntry = when {
+        retainedEntry == HomeTopTabEntry.Partition -> HomeTopTabEntry.Partition
+        retainedEntry == HomeTopTabEntry.Subscriptions -> HomeTopTabEntry.Subscriptions
+        else -> HomeTopTabEntry.Category(currentCategory)
+    }
+    val targetIndex = topTabEntries.indexOf(targetEntry)
+    if (targetIndex >= 0) return targetIndex
+    return topTabEntries.indexOf(HomeTopTabEntry.Category(currentCategory))
 }

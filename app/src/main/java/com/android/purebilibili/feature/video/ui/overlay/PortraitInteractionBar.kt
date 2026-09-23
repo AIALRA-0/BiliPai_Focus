@@ -21,12 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.automirrored.rounded.Comment
-import androidx.compose.material3.Icon
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,7 +48,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.theme.BiliPink
+
+import com.android.purebilibili.core.ui.rememberAppCoinIcon
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -69,18 +70,21 @@ internal fun shouldCancelPortraitTriplePressOnRelease(
 /**
  * 竖屏播放器右侧互动栏 (Refined Style)
  *
- * 移除了头像，仅保留操作按钮：点赞、评论、收藏、分享
+ * 操作：点赞（长按三连）、投币、评论、收藏、分享
  */
 @Composable
 fun PortraitInteractionBar(
     isLiked: Boolean,
     likeCount: Int,
+    isCoined: Boolean = false,
+    coinCount: Int = 0,
     isFavorited: Boolean,
     favoriteCount: Int,
     commentCount: Int,
     shareCount: Int,
     onLikeClick: () -> Unit,
     onLikeLongClick: () -> Unit = {},
+    onCoinClick: () -> Unit = {},
     onFavoriteClick: () -> Unit,
     onCommentClick: () -> Unit,
     onShareClick: () -> Unit,
@@ -92,6 +96,7 @@ fun PortraitInteractionBar(
             widthDp = configuration.screenWidthDp
         )
     }
+    val coinIcon = rememberAppCoinIcon()
     val haptic = rememberHapticFeedback()
     var isTriplePressing by remember { mutableStateOf(false) }
     var tripleCompleted by remember { mutableStateOf(false) }
@@ -140,7 +145,7 @@ fun PortraitInteractionBar(
             icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
             countText = if (likeCount > 0) FormatUtils.formatStat(likeCount.toLong()) else "点赞",
             isActive = isLiked,
-            activeColor = BiliPink,
+            activeColor = MaterialTheme.colorScheme.primary,
             layoutPolicy = layoutPolicy,
             progress = tripleProgress,
             onClick = onLikeClick,
@@ -161,6 +166,21 @@ fun PortraitInteractionBar(
                 }
             }
         )
+
+        // 投币
+        InteractionButton(
+            icon = coinIcon,
+            countText = when {
+                isCoined && coinCount > 0 -> FormatUtils.formatStat(coinCount.toLong())
+                isCoined -> "已投"
+                coinCount > 0 -> FormatUtils.formatStat(coinCount.toLong())
+                else -> "投币"
+            },
+            isActive = isCoined,
+            activeColor = MaterialTheme.colorScheme.primary,
+            layoutPolicy = layoutPolicy,
+            onClick = onCoinClick
+        )
         
         // 评论
         InteractionButton(
@@ -176,7 +196,7 @@ fun PortraitInteractionBar(
             icon = if (isFavorited) Icons.Rounded.Star else Icons.Rounded.StarBorder,
             countText = if (favoriteCount > 0) FormatUtils.formatStat(favoriteCount.toLong()) else "收藏",
             isActive = isFavorited,
-            activeColor = BiliPink,
+            activeColor = MaterialTheme.colorScheme.primary,
             layoutPolicy = layoutPolicy,
             onClick = onFavoriteClick
         )
@@ -200,7 +220,7 @@ private fun InteractionButton(
     icon: ImageVector,
     countText: String,
     isActive: Boolean,
-    activeColor: Color = BiliPink,
+    activeColor: Color = MaterialTheme.colorScheme.primary,
     layoutPolicy: PortraitInteractionBarLayoutPolicy,
     progress: Float = 0f,
     onClick: () -> Unit,
@@ -266,7 +286,7 @@ private fun InteractionButton(
                     )
                 }
             }
-            Icon(
+            AppIcon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (isActive) activeColor else Color.White,
@@ -274,7 +294,7 @@ private fun InteractionButton(
             )
         }
         Spacer(modifier = Modifier.height(layoutPolicy.labelTopSpacingDp.dp))
-        Text(
+        AppText(
             text = countText,
             color = Color.White,
             fontSize = layoutPolicy.labelFontSp.sp,

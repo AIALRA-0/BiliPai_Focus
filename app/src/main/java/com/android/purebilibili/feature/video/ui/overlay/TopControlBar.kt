@@ -1,5 +1,7 @@
 // File: feature/video/ui/overlay/TopControlBar.kt
 package com.android.purebilibili.feature.video.ui.overlay
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import android.content.Context
 import android.content.Intent
@@ -28,11 +30,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.currentStateAsState
-//  Cupertino Icons
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import com.android.purebilibili.core.ui.AppIcons
+import com.android.purebilibili.core.ui.components.AppIconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbUp
@@ -42,6 +44,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Cast
+import androidx.compose.material.icons.outlined.Comment
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -51,9 +54,18 @@ internal fun shouldShowDislikeInTopControlBar(widthDp: Int): Boolean = widthDp >
 internal fun shouldShowInteractiveActionsInTopControlBar(
     showFullscreenActionItems: Boolean
 ): Boolean = showFullscreenActionItems
+/**
+ * 顶栏是否加状态栏 padding。
+ *
+ * 以 [statusBarVisible] 为准；全屏时系统栏通常已隐藏，应传 false。
+ * [isFullscreen] 仅作兼容旧调用：未显式传 statusBarVisible 时，全屏仍 pad
+ *（隐藏栏时 inset 为 0，无视觉影响）。
+ */
 internal fun shouldApplyStatusBarPaddingToTopControlBar(
-    isFullscreen: Boolean
-): Boolean = isFullscreen
+    isFullscreen: Boolean = false,
+    statusBarVisible: Boolean = isFullscreen,
+): Boolean = com.android.purebilibili.feature.video.screen
+    .shouldApplyStatusBarPaddingToVideoPlayerChrome(statusBarVisible = statusBarVisible)
 internal fun shouldPollTopControlBarClock(
     showCurrentTime: Boolean,
     hostLifecycleStarted: Boolean
@@ -130,6 +142,8 @@ fun TopControlBar(
     title: String,
     onlineCount: String = "",
     isFullscreen: Boolean,
+    /** 系统状态栏是否仍显示；显示时顶栏必须 statusBarsPadding。 */
+    statusBarVisible: Boolean = isFullscreen,
     showBatteryLevel: Boolean = false,
     showCurrentTime: Boolean = true,
     showInteractiveActions: Boolean = true,
@@ -142,7 +156,9 @@ fun TopControlBar(
     onDislikeClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
     onShareClick: () -> Unit = {},
+    onCommentClick: () -> Unit = {},
     onCastClick: () -> Unit = {}, // Added Cast callback
+    showCastButton: Boolean = true,
     onMoreClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -201,7 +217,12 @@ fun TopControlBar(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (shouldApplyStatusBarPaddingToTopControlBar(isFullscreen = isFullscreen)) {
+                if (
+                    shouldApplyStatusBarPaddingToTopControlBar(
+                        isFullscreen = isFullscreen,
+                        statusBarVisible = statusBarVisible,
+                    )
+                ) {
                     Modifier.statusBarsPadding()
                 } else {
                     Modifier
@@ -222,12 +243,12 @@ fun TopControlBar(
                 modifier = Modifier.weight(1f) // Text takes remaining space
             ) {
                 // Back Button
-                IconButton(
+                AppIconButton(
                     onClick = onBack,
                     modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
                 ) {
-                    Icon(
-                        imageVector = CupertinoIcons.Default.ChevronBackward, 
+                    AppIcon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
                         contentDescription = "Back", 
                         tint = Color.White,
                         modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
@@ -237,7 +258,7 @@ fun TopControlBar(
                 Spacer(modifier = Modifier.width(layoutPolicy.backToTitleSpacingDp.dp))
 
                 // 标题与右侧图标保持同一行
-                Text(
+                AppText(
                     text = title,
                     color = Color.White,
                     fontSize = layoutPolicy.titleFontSp.sp,
@@ -300,22 +321,32 @@ fun TopControlBar(
                     )
                 }
 
-                // Cast (Added back)
+                if (showCastButton) {
+                    ActionIcon(
+                        icon = Icons.Outlined.Cast,
+                        contentDescription = "投屏",
+                        isActive = false,
+                        onClick = onCastClick,
+                        buttonSizeDp = layoutPolicy.buttonSizeDp,
+                        iconSizeDp = layoutPolicy.iconSizeDp
+                    )
+                }
+
                 ActionIcon(
-                    icon = Icons.Outlined.Cast,
-                    contentDescription = "投屏",
+                    icon = Icons.Outlined.Comment,
+                    contentDescription = "评论区",
                     isActive = false,
-                    onClick = onCastClick,
+                    onClick = onCommentClick,
                     buttonSizeDp = layoutPolicy.buttonSizeDp,
                     iconSizeDp = layoutPolicy.iconSizeDp
                 )
                 
                 // More (Three dots)
-                IconButton(
+                AppIconButton(
                     onClick = onMoreClick,
                     modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
                 ) {
-                    Icon(
+                    AppIcon(
                         imageVector = Icons.Outlined.MoreVert,
                         contentDescription = "更多",
                         tint = Color.White,
@@ -345,14 +376,14 @@ fun TopControlBar(
                                 height = (layoutPolicy.timeFontSp + 4).dp
                             )
                         )
-                        Text(
+                        AppText(
                             text = battery.displayText,
                             color = resolveBatteryStatusTint(battery).copy(alpha = 0.95f),
                             fontSize = layoutPolicy.timeFontSp.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         statusInfo.currentTimeText?.let { timeText ->
-                            Text(
+                            AppText(
                                 text = timeText,
                                 color = Color.White.copy(alpha = 0.88f),
                                 fontSize = layoutPolicy.timeFontSp.sp,
@@ -361,7 +392,7 @@ fun TopControlBar(
                         }
                     }
                 } ?: statusInfo.currentTimeText?.let { timeText ->
-                    Text(
+                    AppText(
                         text = timeText,
                         color = Color.White.copy(alpha = 0.88f),
                         fontSize = layoutPolicy.timeFontSp.sp,
@@ -370,7 +401,7 @@ fun TopControlBar(
                 }
 
                 if (onlineCount.isNotEmpty()) {
-                    Text(
+                    AppText(
                         text = onlineCount,
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = layoutPolicy.onlineCountFontSp.sp,
@@ -456,11 +487,11 @@ private fun ActionIcon(
     buttonSizeDp: Int = 32,
     iconSizeDp: Int = 24
 ) {
-    IconButton(
+    AppIconButton(
         onClick = onClick,
         modifier = Modifier.size(buttonSizeDp.dp)
     ) {
-        Icon(
+        AppIcon(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,

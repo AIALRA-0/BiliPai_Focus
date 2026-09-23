@@ -1,11 +1,17 @@
 package com.android.purebilibili.navigation3
 
+import com.android.purebilibili.feature.settings.isSettingsSubtreeRoute
+
 internal fun resolveInitialBiliPaiBackStack(
     firstRoute: String?,
-    onboardingRequired: Boolean
+    onboardingRequired: Boolean,
+    openPortraitFeedOnStartup: Boolean = false
 ): List<BiliPaiNavKey> {
     if (onboardingRequired) {
         return listOf(BiliPaiNavKey.Onboarding)
+    }
+    if (openPortraitFeedOnStartup) {
+        return listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Story())
     }
     return listOf(BiliPaiNavKey.MainHost)
 }
@@ -15,7 +21,71 @@ internal fun pushBiliPaiNavKey(
     key: BiliPaiNavKey
 ): List<BiliPaiNavKey> {
     val base = currentStack.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
-    return if (base.last() == key) base else base + key
+    val existingIndex = base.indexOfLast { existing ->
+        areSameReusableBiliPaiDestination(existing, key)
+    }
+    return if (existingIndex >= 0) {
+        // Miuix NavDisplay requires every contentKey in the back stack to be unique. Reopening a
+        // singleton destination (for example Search from a video that was opened from Search)
+        // returns to its existing instance instead of producing [Search, VideoDetail, Search].
+        base.take(existingIndex + 1)
+    } else {
+        base + key
+    }
+}
+
+/**
+ * Navigation identity for destinations whose route carries transient presentation arguments.
+ *
+ * [BiliPaiNavKey.Space.targetBvid] only asks a newly opened space page to locate/highlight a
+ * video. It must not make the same UP's space a second destination: Space -> Video -> same Space
+ * would otherwise retain two blur sources and an outgoing touch layer during the transition.
+ */
+internal fun areSameReusableBiliPaiDestination(
+    existing: BiliPaiNavKey,
+    target: BiliPaiNavKey,
+): Boolean {
+    return when {
+        existing is BiliPaiNavKey.Space && target is BiliPaiNavKey.Space ->
+            existing.mid == target.mid
+        else -> existing == target
+    }
+}
+
+/**
+ * 平板/侧栏切换 Category：同层 replace，避免 Category 叠 Category，或详情页上再叠一层 Category。
+ *
+ * - 栈顶已是目标 Category → 不变
+ * - 栈顶是 SettingsCategory 或其他设置子树详情 → 裁掉设置子树尾段后 push
+ * - 栈顶是 Settings 根 / Search / 非设置页 → 普通 push
+ */
+internal fun pushOrReplaceSettingsCategoryNavKey(
+    currentStack: List<BiliPaiNavKey>,
+    key: BiliPaiNavKey.SettingsCategory,
+): List<BiliPaiNavKey> {
+    val base = currentStack.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
+    if (base.lastOrNull() == key) return base
+
+    val top = base.lastOrNull()
+    if (top is BiliPaiNavKey.SettingsCategory) {
+        return base.dropLast(1) + key
+    }
+    if (
+        top != null &&
+        top !is BiliPaiNavKey.Settings &&
+        top !is BiliPaiNavKey.SettingsSearch &&
+        isSettingsSubtreeRoute(top.routeBase)
+    ) {
+        var trimmed = base
+        while (trimmed.size > 1) {
+            val last = trimmed.last()
+            if (last is BiliPaiNavKey.Settings || last == BiliPaiNavKey.MainHost) break
+            if (!isSettingsSubtreeRoute(last.routeBase)) break
+            trimmed = trimmed.dropLast(1)
+        }
+        return trimmed + key
+    }
+    return base + key
 }
 
 internal fun popBiliPaiNavKey(

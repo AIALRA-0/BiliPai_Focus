@@ -11,7 +11,9 @@ import com.android.purebilibili.data.model.response.LiveRcmdMajor
 import com.android.purebilibili.data.model.response.OpusContentBlock
 import com.android.purebilibili.data.model.response.OpusLinkCard
 import com.android.purebilibili.data.model.response.OpusMajor
+import com.android.purebilibili.data.model.response.OpusPic
 import com.android.purebilibili.data.model.response.UgcSeasonMajor
+import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.feature.dynamic.model.LiveContentInfo
 import kotlinx.serialization.json.Json
 
@@ -140,15 +142,89 @@ internal fun resolveArticleCoverDrawItems(article: ArticleMajor): List<DrawItem>
     }
 }
 
+internal fun resolveRenderableDrawItems(items: List<DrawItem>): List<DrawItem> =
+    items.mapNotNull { item ->
+        val source = item.src.trim()
+        source.takeIf(String::isNotEmpty)?.let { item.copy(src = it) }
+    }.distinctBy { normalizeDynamicImageIdentity(it.src) }
+
+internal fun resolveRenderableOpusPics(pics: List<OpusPic>): List<OpusPic> =
+    pics.mapNotNull { pic ->
+        val url = pic.url.trim()
+        url.takeIf(String::isNotEmpty)?.let { pic.copy(url = it) }
+    }.distinctBy { normalizeDynamicImageIdentity(it.url) }
+
+internal fun resolveDynamicOpusPreviewPics(
+    opus: OpusMajor,
+    presentationBlocks: List<OpusContentBlock>,
+): List<OpusPic> {
+    val bodyPics = presentationBlocks.mapNotNull { block ->
+        when (block) {
+            is OpusContentBlock.Image -> block.pic
+            is OpusContentBlock.Divider -> block.pic
+            else -> null
+        }
+    }
+    return if (shouldRenderDynamicOpusBlocksAsFullBody(opus, presentationBlocks) && bodyPics.isNotEmpty()) {
+        resolveRenderableOpusPics(bodyPics)
+    } else {
+        resolveRenderableOpusPics(opus.pics)
+    }
+}
+
+internal fun shouldRenderDynamicDrawGrid(
+    hasFullOpusImageContent: Boolean,
+    opusPics: List<OpusPic>,
+): Boolean = !hasFullOpusImageContent && resolveRenderableOpusPics(opusPics).isEmpty()
+
+private fun normalizeDynamicImageIdentity(rawUrl: String): String = when {
+    rawUrl.startsWith("http://", ignoreCase = true) -> "https://${rawUrl.substringAfter("://")}"
+    rawUrl.startsWith("//") -> "https:$rawUrl"
+    else -> rawUrl
+}
+
 internal fun resolveDynamicOpusPresentationBlocks(
     opus: OpusMajor,
     isDetail: Boolean
 ): List<OpusContentBlock> {
-    return if (isDetail) opus.contentBlocks else emptyList()
+    if (!isDetail) return emptyList()
+    val renderedImageIds = mutableSetOf<String>()
+    fun keepImage(pic: OpusPic): OpusPic? {
+        val url = pic.url.trim()
+        if (url.isEmpty()) return null
+        if (!renderedImageIds.add(normalizeDynamicImageIdentity(url))) return null
+        return pic.copy(url = url)
+    }
+    return buildList {
+        opus.contentBlocks.forEach { block ->
+            when (block) {
+                is OpusContentBlock.Image -> keepImage(block.pic)?.let { add(block.copy(pic = it)) }
+                is OpusContentBlock.Divider -> {
+                    val dividerPic = block.pic
+                    if (dividerPic == null) {
+                        add(block)
+                    } else {
+                        add(block.copy(pic = keepImage(dividerPic)))
+                    }
+                }
+                else -> add(block)
+            }
+        }
+    }
+}
+
+internal fun shouldRenderDynamicOpusBlocksAsFullBody(
+    opus: OpusMajor,
+    presentationBlocks: List<OpusContentBlock>,
+): Boolean {
+    return presentationBlocks.isNotEmpty() &&
+        (presentationBlocks.any {
+            it is OpusContentBlock.Image || (it is OpusContentBlock.Divider && it.pic != null)
+        } || opus.pics.isEmpty())
 }
 
 internal fun resolveDynamicOpusPreviewImageLimit(isDetail: Boolean): Int? {
-    return if (isDetail) null else 9
+    return if (isDetail) null else DYNAMIC_FEED_PREVIEW_MAX_IMAGES
 }
 
 internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLinkCardAction {
@@ -177,9 +253,33 @@ internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLi
     }
 }
 
+/**
+ * 解析卡片头部作者点击跳转的目标 UID。
+ * 对于合集/系列/番剧等非独立 UP 主发布的动态，避免将虚拟 ID / 赛季 ID 误当作个人 UID 打开个人空间导致“获取用户信息失败”报错。
+ */
+internal fun resolveDynamicAuthorClickMid(item: DynamicItem): Long? {
+    val target = item.orig ?: item
+    val type = target.type.trim()
+    val major = target.modules.module_dynamic?.major
+
+    // 合集/剧集：检查是否有真实的 UP 主 mid
+    if (type == "DYNAMIC_TYPE_UGC_SEASON" || major?.ugc_season != null) {
+        val seasonMid = major?.ugc_season?.mid?.takeIf { it > 0L }
+        return seasonMid
+    }
+
+    // 番剧/影视：不具备个人空间主页
+    if (type in setOf("DYNAMIC_TYPE_PGC", "DYNAMIC_TYPE_PGC_UNION") || major?.pgc != null) {
+        return null
+    }
+
+    // 普通用户动态
+    return target.modules.module_author?.mid?.takeIf { it > 0L }
+}
+
 internal fun resolveDynamicCardPrimaryAction(item: DynamicItem): DynamicCardPrimaryAction {
     val target = item.orig ?: item
-    val authorMid = target.modules.module_author?.mid ?: 0L
+    val authorMid = resolveDynamicAuthorClickMid(target) ?: 0L
     val major = target.modules.module_dynamic?.major
     major?.pgc?.let(::resolveArchiveBangumiTarget)?.let { return it }
     val bvid = major?.archive?.let(::resolveArchivePlayableBvid)
@@ -188,9 +288,7 @@ internal fun resolveDynamicCardPrimaryAction(item: DynamicItem): DynamicCardPrim
         return DynamicCardPrimaryAction.OpenVideo(bvid)
     }
 
-    major?.article
-        ?.takeIf { it.id > 0L }
-        ?.let { article ->
+    major?.article?.let { article ->
             when (val target = BilibiliNavigationTargetParser.parse(article.jump_url)) {
                 is BilibiliNavigationTarget.Dynamic -> {
                     return DynamicCardPrimaryAction.OpenDynamicDetail(target.dynamicId)
@@ -203,10 +301,12 @@ internal fun resolveDynamicCardPrimaryAction(item: DynamicItem): DynamicCardPrim
                 }
                 else -> Unit
             }
-            return DynamicCardPrimaryAction.OpenArticle(
-                articleId = article.id,
-                title = article.title.ifBlank { article.desc }
-            )
+            if (article.id > 0L) {
+                return DynamicCardPrimaryAction.OpenArticle(
+                    articleId = article.id,
+                    title = article.title.ifBlank { article.desc }
+                )
+            }
         }
 
     major?.live_rcmd?.let { live ->
@@ -214,6 +314,21 @@ internal fun resolveDynamicCardPrimaryAction(item: DynamicItem): DynamicCardPrim
             liveRcmd = live,
             fallbackName = target.modules.module_author?.name.orEmpty()
         )?.let { return it }
+    }
+
+    major?.subscription_new?.live_rcmd?.let { live ->
+        resolveLivePrimaryAction(
+            liveRcmd = live,
+            fallbackName = target.modules.module_author?.name.orEmpty()
+        )?.let { return it }
+    }
+
+    major?.live?.id?.trim()?.toLongOrNull()?.takeIf { it > 0L }?.let { roomId ->
+        return DynamicCardPrimaryAction.OpenLive(
+            roomId = roomId,
+            title = major.live.title.ifBlank { "直播间" },
+            uname = target.modules.module_author?.name.orEmpty()
+        )
     }
 
     val dynamicId = target.id_str.trim().takeIf { it.isNotEmpty() }
@@ -244,9 +359,11 @@ internal fun resolveDynamicCardMediaAction(
             DynamicCardMediaAction.None
         }
     }
+    val opusImages = major.opus?.let { resolveRenderableOpusPics(it.pics) }.orEmpty()
+    val drawImages = major.draw?.let { resolveRenderableDrawItems(it.items) }.orEmpty()
     val images = when {
-        major.draw != null && major.draw.items.isNotEmpty() -> major.draw.items.map { it.src }
-        major.opus != null && major.opus.pics.isNotEmpty() -> major.opus.pics.map { it.url }
+        opusImages.isNotEmpty() -> opusImages.map { it.url }
+        drawImages.isNotEmpty() -> drawImages.map { it.src }
         major.article != null -> resolveArticleCoverUrls(major.article)
         else -> emptyList()
     }
@@ -303,6 +420,9 @@ internal fun dispatchDynamicCardPrimaryClick(
     onUserClick: (Long) -> Unit,
     onLiveClick: (Long, String, String) -> Unit
 ) {
+    if (action is DynamicCardPrimaryAction.OpenDynamicDetail) {
+        DynamicRepository.rememberDynamicDetailSeed(item)
+    }
     if (onPrimaryClickOverride != null) {
         onPrimaryClickOverride(item)
         return
@@ -337,4 +457,16 @@ private fun resolveLivePrimaryAction(
         title = title.ifBlank { "直播间" },
         uname = uname
     )
+}
+
+/**
+ * Resolves headline title for Opus or Article dynamic items.
+ * Guaranteed to be rendered at the very top of dynamic content (above body text and media).
+ */
+internal fun resolveDynamicHeadlineTitle(
+    opus: OpusMajor?,
+    article: ArticleMajor?
+): String? {
+    return opus?.title?.trim()?.takeIf { it.isNotEmpty() }
+        ?: article?.title?.trim()?.takeIf { it.isNotEmpty() }
 }

@@ -408,6 +408,7 @@ fun MaybeDissolvableVideoCard(
     collapseAfterDissolve: Boolean = true,
     publishGlobalDissolveState: Boolean = true,
     keepInvisibleAfterDissolve: Boolean = false,
+    preserveContentLayerWhenIdle: Boolean = false,
     content: @Composable () -> Unit
 ) {
     if (shouldWrapWithDissolveAnimation(isDissolving)) {
@@ -424,7 +425,16 @@ fun MaybeDissolvableVideoCard(
         )
     } else {
         Box(modifier = modifier) {
-            content()
+            if (preserveContentLayerWhenIdle) {
+                // SharedBounds records its source relative to the card's existing graphics layer.
+                // Keep the same idle hierarchy as DissolvableVideoCard for transition-enabled
+                // cards, without restoring its per-frame size/window coordinate tracking.
+                Box(modifier = Modifier.alpha(1f)) {
+                    content()
+                }
+            } else {
+                content()
+            }
         }
     }
 }

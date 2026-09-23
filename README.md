@@ -1,4 +1,4 @@
-# BiliPai <img src="docs/images/233娘.jpeg" height="80" align="center">
+# BiliPai Focus <img src="docs/images/233娘.jpeg" height="80" align="center">
 
 <p align="center">
   <a href="README_EN.md">English</a> | <a href="README.md">简体中文</a>
@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-    <sub>最后更新：2026-06-06 · 文档已同步至 v9.1.1 Focus.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+    <sub>最后更新：2026-09-23 · Focus 同步基线：9.1.1-focus.5（versionCode 385），上游 BiliPai 0.2.3-beta.46</sub>
   </p>
 
   <p align="center">
-    <img src="https://img.shields.io/badge/Version-9.1.1-focus.1-fb7299?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/Version-9.1.1--focus.5-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
@@ -442,7 +442,7 @@ JSON 规则插件是一种**无需编程**的轻量级插件格式，只需编�
 
 | 类别 | 技术 | 说明 |
 |-----|-----|-----|
-| **语言** | Kotlin 1.9+ | 100% Kotlin 开发 |
+| **语言** | Kotlin 2.4 | 100% Kotlin 开发 |
 | **UI 框架** | Jetpack Compose | 声明式 UI，Material 3 设计语言 |
 | **架构模式** | MVVM + Clean Architecture | 分层清晰，易于维护 |
 
@@ -578,16 +578,17 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v9.1.1 Focus.1 · 2026-06-06)
+### Focus 同步基线 (v9.1.1-focus.5 · versionCode 385)
 
-- 合并上游 `9.0.6`、`9.0.7`、`9.1.0`、`9.1.1` 的稳定性更新，包含动态评论分页、下载前台服务、空间配色、视频返回和底栏视觉修复。
+- 基于上游 `0.2.3-beta.46` 同步当前架构、构建系统、插件 SDK、动态插件下载与更新元数据能力。
+- 版本号沿用 Focus `9.x` 版本代际并递增 Focus 序号，旧客户端只比较版本名时也能从 `9.1.1-focus.4` 发现新版本；Android `versionCode` 单调提升至 `385`。
+- 应用包名、Focus Release 更新源和既有发布签名保持不变。
 - 修复首页推荐手动刷新卡在旧分页尾部的问题：下拉刷新重新从 fresh feed 请求，跳过启动预加载缓存，并在成功后重置推荐分页游标。
 - Focus 搜索设置改为正向“显示”语义：`显示大家都在搜`、`显示搜索发现`、`显示搜索历史`，开关打开即显示、关闭即完整隐藏。
 - 修复上游接口返回 `0/1` 布尔值时首页、动态、空间动态、热门、收藏与导航信息解析失败的问题。
 - 首页推荐在过滤后不足首屏数量时会继续补页，空过滤页不再把分页状态判死，冷启动空白会自动有限重试。
 - 动态页刷新后使用新 offset 继续分页，并在冷启动空白时自动有限重试，保留动态页关注分组过滤入口。
 - Focus 搜索开关继续保证关闭后“大家都在搜 / 搜索发现 / 搜索历史”整个区块完全不渲染。
-- 保留 Focus README、Focus Release 地址、Focus 应用内更新源与 Focus 设置特性。
 
 ### 历史版本
 
@@ -604,16 +605,42 @@ cd BiliPai_Focus
 
 # 使用 Android Studio 打开项目
 # 或使用命令行构建
-./gradlew assembleDebug
+./gradlew :app:assembleDev
 ```
 
 ### 构建要求
 
 - JDK 21+
 - Android Studio 2024.1+ 或更高版本
-- Android SDK 36（Compile SDK）
-- Gradle 8.13+
+- Android SDK 37（Compile SDK）
+- 使用仓库自带的 Gradle Wrapper
 - (可选) `google-services.json`: 放置于 `app/` 目录下以启用 Firebase 功能。如无此文件，构建脚本将自动跳过相关插件，不影响编译运行。
+
+正式 Release 必须使用原有 Focus 签名密钥。仓库维护者在本地通过根目录 `keystore.properties` 配置；CI 需要预先配置 Focus 发布签名 secrets。缺少签名配置时，Release 打包会失败，避免产出不能覆盖安装的 APK。
+
+### MIUIX 可复现构建
+
+默认依赖从 MIUIX GitHub Packages 下载；本次同步所用 CI 凭据请求该源会返回 HTTP 401。构建工作流因此固定检出 MIUIX 源码提交 `5157b503e86e2bfc2db61db00fff5df41326394a`，并把该源码的 AGP `9.4.0` 对齐到本仓库根构建使用的 `9.3.2`。本地复现时可使用相同步骤：
+
+```bash
+git clone https://github.com/compose-miuix-ui/miuix.git .ci/miuix
+git -C .ci/miuix checkout --detach 5157b503e86e2bfc2db61db00fff5df41326394a
+
+python3 - <<'PY'
+from pathlib import Path
+
+catalog = Path(".ci/miuix/gradle/libs.versions.toml")
+text = catalog.read_text(encoding="utf-8")
+old = 'agp = "9.4.0"'
+if text.count(old) != 1:
+    raise SystemExit(f"Expected one {old!r} entry in {catalog}")
+catalog.write_text(text.replace(old, 'agp = "9.3.2"'), encoding="utf-8")
+PY
+
+./gradlew -Pbili.miuix.source="$PWD/.ci/miuix" :app:compileDebugKotlin
+```
+
+此步骤固定依赖源码与插件版本，便于复现相同的构建输入；它不代表当前构建已经通过。
 
 ---
 

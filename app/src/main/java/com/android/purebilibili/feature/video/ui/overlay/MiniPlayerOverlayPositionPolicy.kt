@@ -7,6 +7,11 @@ internal data class MiniPlayerOverlayOffset(
     val y: Float
 )
 
+internal data class MiniPlayerResizeBounds(
+    val minWidthDp: Float,
+    val maxWidthDp: Float
+)
+
 internal enum class MiniPlayerContentDragIntent {
     UNDECIDED,
     SEEK,
@@ -32,6 +37,73 @@ internal fun clampMiniPlayerOverlayOffset(
         x = offsetX.coerceIn(minX, maxX),
         y = offsetY.coerceIn(minY, maxY)
     )
+}
+
+internal fun resolveMiniPlayerInitialOverlayOffset(
+    cardLeftPx: Float?,
+    entryFromLeft: Boolean,
+    screenWidthPx: Float,
+    screenHeightPx: Float,
+    miniPlayerWidthPx: Float,
+    miniPlayerHeightPx: Float,
+    outerPaddingPx: Float,
+    topInsetPx: Float,
+    bottomInsetPx: Float
+): MiniPlayerOverlayOffset {
+    return clampMiniPlayerOverlayOffset(
+        offsetX = cardLeftPx
+            ?: if (entryFromLeft) {
+                outerPaddingPx
+            } else {
+                screenWidthPx - miniPlayerWidthPx - outerPaddingPx
+            },
+        offsetY = resolveMiniPlayerDockedBottomOffsetY(
+            screenHeightPx = screenHeightPx,
+            miniPlayerHeightPx = miniPlayerHeightPx,
+            outerPaddingPx = outerPaddingPx,
+            bottomInsetPx = bottomInsetPx
+        ),
+        screenWidthPx = screenWidthPx,
+        screenHeightPx = screenHeightPx,
+        miniPlayerWidthPx = miniPlayerWidthPx,
+        miniPlayerHeightPx = miniPlayerHeightPx,
+        outerPaddingPx = outerPaddingPx,
+        topInsetPx = topInsetPx,
+        bottomInsetPx = bottomInsetPx
+    )
+}
+
+internal fun resolveMiniPlayerOffsetAfterSizeChanged(
+    offsetX: Float,
+    offsetY: Float,
+    screenWidthPx: Float,
+    screenHeightPx: Float,
+    miniPlayerWidthPx: Float,
+    miniPlayerHeightPx: Float,
+    outerPaddingPx: Float,
+    topInsetPx: Float,
+    bottomInsetPx: Float
+): MiniPlayerOverlayOffset {
+    return clampMiniPlayerOverlayOffset(
+        offsetX = offsetX,
+        offsetY = offsetY,
+        screenWidthPx = screenWidthPx,
+        screenHeightPx = screenHeightPx,
+        miniPlayerWidthPx = miniPlayerWidthPx,
+        miniPlayerHeightPx = miniPlayerHeightPx,
+        outerPaddingPx = outerPaddingPx,
+        topInsetPx = topInsetPx,
+        bottomInsetPx = bottomInsetPx
+    )
+}
+
+internal fun resolveMiniPlayerDockedBottomOffsetY(
+    screenHeightPx: Float,
+    miniPlayerHeightPx: Float,
+    outerPaddingPx: Float,
+    bottomInsetPx: Float
+): Float {
+    return screenHeightPx - miniPlayerHeightPx - outerPaddingPx - bottomInsetPx
 }
 
 internal fun resolveMiniPlayerContentDragIntent(
@@ -65,4 +137,38 @@ internal fun resolveMiniPlayerSeekTargetPosition(
 
     val seekDeltaMs = (dragDeltaPx / miniPlayerWidthPx * safeDurationMs).toLong()
     return (safeStartPositionMs + seekDeltaMs).coerceIn(0L, safeDurationMs)
+}
+
+internal fun resolveMiniPlayerResizeBounds(
+    defaultWidthDp: Int,
+    defaultHeightDp: Int,
+    screenWidthDp: Int,
+    screenHeightDp: Int,
+    outerPaddingDp: Int,
+    topInsetDp: Int,
+    bottomInsetDp: Int
+): MiniPlayerResizeBounds {
+    val aspectRatio = defaultWidthDp.toFloat() / defaultHeightDp.coerceAtLeast(1)
+    val availableWidth = (screenWidthDp - outerPaddingDp * 2).coerceAtLeast(defaultWidthDp)
+    val availableHeight =
+        (screenHeightDp - outerPaddingDp * 2 - topInsetDp - bottomInsetDp).coerceAtLeast(defaultHeightDp)
+    val maxWidthByHeight = availableHeight * aspectRatio
+    return MiniPlayerResizeBounds(
+        minWidthDp = (defaultWidthDp * 0.75f).coerceAtLeast(168f),
+        maxWidthDp = minOf(availableWidth.toFloat(), maxWidthByHeight, defaultWidthDp * 1.75f)
+            .coerceAtLeast(defaultWidthDp.toFloat())
+    )
+}
+
+internal fun resolveResizedMiniPlayerWidth(
+    currentWidthPx: Float,
+    dragDeltaX: Float,
+    dragDeltaY: Float,
+    aspectRatio: Float,
+    minWidthPx: Float,
+    maxWidthPx: Float
+): Float {
+    val safeAspectRatio = aspectRatio.coerceAtLeast(0.1f)
+    val projectedWidthDelta = (dragDeltaX + dragDeltaY * safeAspectRatio) / 2f
+    return (currentWidthPx + projectedWidthDelta).coerceIn(minWidthPx, maxWidthPx)
 }

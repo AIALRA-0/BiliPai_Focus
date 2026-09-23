@@ -45,6 +45,8 @@ class QualityManagerDeviceCapabilityTest {
         assertEquals("1080P+", qualityManager.getQualityLabel(112))
         assertEquals("1080P60", qualityManager.getQualityLabel(116))
         assertEquals("4K", qualityManager.getQualityLabel(120))
+        assertEquals("智能修复", qualityManager.getQualityLabel(100))
+        assertEquals("HDR Vivid", qualityManager.getQualityLabel(129))
     }
 
     @Test
@@ -58,6 +60,18 @@ class QualityManagerDeviceCapabilityTest {
         )
 
         assertTrue(result is QualityPermissionResult.RequiresVip)
+    }
+
+    @Test
+    fun `exact playable server track overrides stale local vip state`() {
+        val result = qualityManager.checkQualityPermission(
+            qualityId = 120,
+            isLoggedIn = true,
+            isVip = false,
+            serverPlayableQualities = listOf(120, 80)
+        )
+
+        assertEquals(QualityPermissionResult.Permitted, result)
     }
 
     @Test

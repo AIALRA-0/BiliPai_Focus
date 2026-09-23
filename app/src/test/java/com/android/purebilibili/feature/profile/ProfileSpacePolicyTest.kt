@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.profile
 
+import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.FollowBangumiItem
 import com.android.purebilibili.data.model.response.DynamicMoreModule
@@ -21,6 +22,7 @@ import com.android.purebilibili.data.model.response.SpaceDynamicModules
 import com.android.purebilibili.data.model.response.SpaceDynamicOpus
 import com.android.purebilibili.data.model.response.SpaceDynamicRichText
 import com.android.purebilibili.data.model.response.SpaceVideoItem
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -31,7 +33,7 @@ class ProfileSpacePolicyTest {
     @Test
     fun `profile space tabs match self space order`() {
         assertEquals(
-            listOf("主页", "动态", "投稿", "收藏", "追番"),
+            listOf("主页", "动态", "投稿", "收藏", "番剧"),
             defaultProfileSpaceTabs().map { it.title }
         )
         assertEquals(ProfileSpaceMainTab.HOME, defaultProfileSpaceTabs().first().tab)
@@ -72,6 +74,24 @@ class ProfileSpacePolicyTest {
                 likeVideos = emptyList(),
                 contributionVideos = emptyList()
             )
+        )
+    }
+
+    @Test
+    fun `dashboard owned sections are not repeated below personal dashboard`() {
+        assertEquals(
+            listOf(
+                ProfileSpaceHomeSection.BANGUMI,
+                ProfileSpaceHomeSection.CONTRIBUTIONS,
+            ),
+            resolveProfileSpaceHomeSections(
+                favoriteFolders = listOf(FavFolder(id = 1, title = "默认收藏夹")),
+                bangumiItems = listOf(FollowBangumiItem(seasonId = 2, title = "追番")),
+                coinVideos = emptyList(),
+                likeVideos = emptyList(),
+                contributionVideos = listOf(SpaceVideoItem(aid = 5, bvid = "BV1xx", title = "投稿")),
+                includeDashboardOwnedSections = false,
+            ),
         )
     }
 
@@ -148,6 +168,252 @@ class ProfileSpacePolicyTest {
         )
 
         assertEquals("https://i0.hdslb.com/bfs/archive/folder.jpg", state.favoriteFolders.first().cover)
+    }
+
+    @Test
+    fun `space favorite folders read cover alias from aggregate response`() {
+        val json = Json { ignoreUnknownKeys = true }
+        val aggregate = json.decodeFromString<SpaceAggregateData>(
+            """
+            {
+              "favourite2": {
+                "count": 1,
+                "item": [
+                  {
+                    "media_id": 123,
+                    "title": "默认收藏夹",
+                    "pic": "https://i0.hdslb.com/bfs/archive/folder-alias.jpg",
+                    "media_count": 9
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        )
+
+        val state = resolveProfileSpaceStateFromAggregate(
+            aggregate = aggregate,
+            favoriteFoldersFallback = emptyList(),
+            bangumiItems = emptyList(),
+            dynamicItems = emptyList()
+        )
+
+        assertEquals("https://i0.hdslb.com/bfs/archive/folder-alias.jpg", state.favoriteFolders.first().cover)
+    }
+
+    @Test
+    fun `aggregate merge preserves already loaded bangumi and dynamic content`() {
+        val bangumi = FollowBangumiItem(seasonId = 2, title = "追番")
+        val dynamic = SpaceDynamicItem(id_str = "dynamic-1")
+        val current = ProfileSpaceUiState(
+            bangumiItems = listOf(bangumi),
+            bangumiCount = 1,
+            dynamicItems = listOf(dynamic),
+            isLoading = true
+        )
+
+        val merged = mergeProfileAggregateState(
+            current = current,
+            aggregate = SpaceAggregateData(
+                archive = com.android.purebilibili.data.model.response.SpaceAggregateArchive(
+                    count = 1,
+                    item = listOf(SpaceAggregateArchiveItem(aid = 3, title = "投稿"))
+                )
+            )
+        )
+
+        assertEquals(listOf(bangumi), merged.bangumiItems)
+        assertEquals(listOf(dynamic), merged.dynamicItems)
+        assertEquals(1, merged.contributionVideoCount)
+        assertTrue(merged.isLoading)
+    }
+
+    @Test
+    fun `profile contribution hydration policy still covers missing aggregate items`() {
+        assertTrue(
+            shouldHydrateProfileContributionVideos(
+                contributionVideoCount = 5,
+                seededVideoCount = 0
+            )
+        )
+        assertTrue(
+            shouldHydrateProfileContributionVideos(
+                contributionVideoCount = 40,
+                seededVideoCount = 10
+            )
+        )
+        assertFalse(
+            shouldHydrateProfileContributionVideos(
+                contributionVideoCount = 5,
+                seededVideoCount = 5
+            )
+        )
+        assertFalse(
+            shouldHydrateProfileContributionVideos(
+                contributionVideoCount = 0,
+                seededVideoCount = 0
+            )
+        )
+    }
+
+    @Test
+    fun `profile contribution content distinguishes loading empty and failure`() {
+        assertEquals(
+            ProfileContributionContentState.LOADING,
+            resolveProfileContributionContentState(ProfileContributionLoadState.LOADING, hasVideos = false)
+        )
+        assertEquals(
+            ProfileContributionContentState.EMPTY,
+            resolveProfileContributionContentState(ProfileContributionLoadState.LOADED, hasVideos = false)
+        )
+        assertEquals(
+            ProfileContributionContentState.ERROR,
+            resolveProfileContributionContentState(ProfileContributionLoadState.ERROR, hasVideos = false)
+        )
+        assertEquals(
+            ProfileContributionContentState.CONTENT,
+            resolveProfileContributionContentState(ProfileContributionLoadState.ERROR, hasVideos = true)
+        )
+    }
+
+    @Test
+    fun `hydrated contribution result remains authoritative over late aggregate`() {
+        val hydrated = ProfileSpaceUiState(
+            contributionVideos = listOf(SpaceVideoItem(aid = 9, bvid = "BV9", title = "WBI 投稿")),
+            contributionVideoCount = 1,
+            contributionLoadState = ProfileContributionLoadState.LOADED
+        )
+
+        val merged = mergeProfileAggregateState(
+            current = hydrated,
+            aggregate = SpaceAggregateData(
+                archive = com.android.purebilibili.data.model.response.SpaceAggregateArchive(
+                    count = 0,
+                    item = emptyList()
+                )
+            )
+        )
+
+        assertEquals(hydrated.contributionVideos, merged.contributionVideos)
+        assertEquals(1, merged.contributionVideoCount)
+    }
+
+    @Test
+    fun `successful empty contribution response clears aggregate seed`() {
+        val seeded = ProfileSpaceUiState(
+            contributionVideos = listOf(SpaceVideoItem(aid = 3, bvid = "BV3", title = "聚合投稿")),
+            contributionVideoCount = 1,
+            contributionLoadState = ProfileContributionLoadState.LOADING
+        )
+
+        val merged = mergeProfileContributionVideoState(seeded, videos = emptyList(), totalCount = 0)
+
+        assertTrue(merged.contributionVideos.isEmpty())
+        assertEquals(0, merged.contributionVideoCount)
+        assertEquals(ProfileContributionLoadState.LOADED, merged.contributionLoadState)
+    }
+
+    @Test
+    fun `profile contribution merge prefers hydrated videos`() {
+        val current = ProfileSpaceUiState(
+            contributionVideos = emptyList(),
+            contributionVideoCount = 3
+        )
+        val hydrated = listOf(
+            SpaceVideoItem(aid = 1, bvid = "BV1", title = "自己的投稿")
+        )
+        val merged = mergeProfileContributionVideoState(
+            current = current,
+            videos = hydrated,
+            totalCount = 3
+        )
+        assertEquals(hydrated, merged.contributionVideos)
+        assertEquals(3, merged.contributionVideoCount)
+    }
+
+    @Test
+    fun `favorite merge keeps aggregate cover without requesting folder content`() {
+        val current = ProfileSpaceUiState(
+            favoriteFolders = listOf(
+                FavFolder(
+                    id = 10,
+                    title = "默认收藏夹",
+                    cover = "https://i0.hdslb.com/folder.jpg",
+                    media_count = 3
+                )
+            ),
+            favoriteFolderCount = 1
+        )
+
+        val merged = mergeProfileFavoriteFolderState(
+            current = current,
+            folders = listOf(
+                FavFolder(id = 10, title = "默认收藏夹", cover = "", media_count = 3),
+                FavFolder(id = 11, title = "音乐", cover = "", media_count = 1)
+            )
+        )
+
+        assertEquals(2, merged.favoriteFolders.size)
+        assertEquals("https://i0.hdslb.com/folder.jpg", merged.favoriteFolders.first().cover)
+        assertEquals("", merged.favoriteFolders.last().cover)
+    }
+
+    @Test
+    fun `favorite preview cover targets only visible empty covered folders`() {
+        val folders = listOf(
+            FavFolder(id = 1, title = "已有封面", cover = "https://i0.hdslb.com/cover.jpg", media_count = 3),
+            FavFolder(id = 2, title = "空收藏夹", cover = "", media_count = 0),
+            FavFolder(id = 3, title = "需要封面", cover = "", media_count = 2),
+            FavFolder(id = 4, title = "也需要封面", cover = " ", media_count = 1),
+            FavFolder(id = 5, title = "第 5 个", cover = "", media_count = 1),
+            FavFolder(id = 6, title = "第 6 个", cover = "", media_count = 1),
+            FavFolder(id = 7, title = "第 7 个", cover = "", media_count = 1),
+            FavFolder(id = 8, title = "第 8 个", cover = "", media_count = 1)
+        )
+
+        assertEquals(
+            listOf(3L, 4L, 5L, 6L),
+            resolveProfileFavoritePreviewCoverTargets(folders).map { it.mediaId }
+        )
+    }
+
+    @Test
+    fun `favorite preview covers fill only blank folder covers`() {
+        val folders = listOf(
+            FavFolder(id = 1, title = "已有封面", cover = "https://i0.hdslb.com/existing.jpg", media_count = 3),
+            FavFolder(id = 2, title = "需要封面", cover = "", media_count = 2)
+        )
+
+        val merged = mergeProfileFavoritePreviewCovers(
+            folders = folders,
+            coversByMediaId = mapOf(
+                1L to "https://i0.hdslb.com/new.jpg",
+                2L to "https://i0.hdslb.com/fallback.jpg"
+            )
+        )
+
+        assertEquals("https://i0.hdslb.com/existing.jpg", merged[0].cover)
+        assertEquals("https://i0.hdslb.com/fallback.jpg", merged[1].cover)
+    }
+
+    @Test
+    fun `profile load generation rejects response from previous account`() {
+        assertFalse(
+            shouldApplyProfileLoadResult(
+                requestGeneration = 2L,
+                currentGeneration = 3L,
+                requestedMid = 10L,
+                currentMid = 20L
+            )
+        )
+        assertTrue(
+            shouldApplyProfileLoadResult(
+                requestGeneration = 3L,
+                currentGeneration = 3L,
+                requestedMid = 20L,
+                currentMid = 20L
+            )
+        )
     }
 
     @Test
@@ -296,5 +562,49 @@ class ProfileSpacePolicyTest {
         assertEquals("1063487284684259332", action?.rid)
         assertEquals("确认删除", action?.confirmText)
         assertEquals("再想想", action?.cancelText)
+    }
+
+    @Test
+    fun `tab chrome uses neutral embedded panel styling`() {
+        val spec = resolveProfileSpaceTabChromeSpec()
+        val panelSpec = resolveProfileSpaceContentPanelSpec()
+
+        assertEquals(0f, spec.rowContainerAlpha)
+        assertTrue(spec.controlContainerAlpha in 0.2f..0.3f)
+        assertTrue(spec.selectedTextAlpha >= 0.95f)
+        assertTrue(spec.unselectedTextAlpha >= 0.65f)
+        assertTrue(spec.selectedIndicatorAlpha in 0.12f..0.22f)
+        assertEquals(2, spec.rowHorizontalInsetDp)
+        assertEquals(2, spec.controlHorizontalInsetDp)
+        assertEquals(0, spec.rowVerticalInsetDp)
+        assertTrue(panelSpec.topOverlapDp >= 20)
+    }
+
+    @Test
+    fun `wallpaper chrome palette uses neutral glass over wallpaper luminance`() {
+        val darkPalette = resolveProfileSpaceWallpaperChromePalette(
+            wallpaperColor = Color(0xFF6E1515),
+            fallbackSurfaceColor = Color.White,
+            fallbackContentColor = Color.Black
+        )
+        val lightPalette = resolveProfileSpaceWallpaperChromePalette(
+            wallpaperColor = Color(0xFFEADBC5),
+            fallbackSurfaceColor = Color.White,
+            fallbackContentColor = Color.Black
+        )
+        val plainPalette = resolveProfileSpaceWallpaperChromePalette(
+            wallpaperColor = Color.Transparent,
+            fallbackSurfaceColor = Color.White,
+            fallbackContentColor = Color.Black
+        )
+
+        assertEquals(Color.White, darkPalette.serviceTextColor)
+        assertEquals(Color.Black, lightPalette.serviceTextColor)
+        assertEquals(Color.Transparent, darkPalette.rowContainerColor)
+        assertEquals(Color.Transparent, darkPalette.serviceContainerColor)
+        assertTrue(darkPalette.contentPanelColor.alpha in 0.28f..0.4f)
+        assertTrue(lightPalette.contentPanelColor.alpha in 0.24f..0.36f)
+        assertEquals(Color.White, plainPalette.contentPanelColor)
+        assertEquals(Color.Black, plainPalette.sectionTextColor)
     }
 }

@@ -143,6 +143,14 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
             }
         }
 
+        fun stopAndClear() {
+            synchronized(bootstrapLock) {
+                sharedServer?.stop()
+                sharedServer = null
+                manifestStore.clear()
+            }
+        }
+
         fun dashManifestPath(key: String): String = "/dash/$key.mpd"
 
         fun corsHeaders(): Map<String, String> = mapOf(

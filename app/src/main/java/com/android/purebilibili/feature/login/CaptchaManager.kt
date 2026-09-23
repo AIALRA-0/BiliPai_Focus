@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.login
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
+import android.app.Dialog
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -17,6 +17,14 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.android.purebilibili.core.network.NetworkModule
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import okhttp3.Response
+import org.json.JSONObject
+import java.io.IOException
 import java.security.KeyFactory
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Cipher
@@ -32,7 +40,8 @@ class CaptchaManager(private val activity: Activity) {
     }
     
     private var webView: WebView? = null
-    private var dialog: AlertDialog? = null
+    private var dialog: Dialog? = null
+    private var geetestConfigCall: Call? = null
     
     /**
      * 初始化并启动极验验证
@@ -78,40 +87,21 @@ class CaptchaManager(private val activity: Activity) {
                 
                 webChromeClient = WebChromeClient()
                 
-                // 添加 JavaScript 接口
-                addJavascriptInterface(object {
-                    @JavascriptInterface
-                    fun onCaptchaSuccess(validate: String, seccode: String, newChallenge: String) {
-                        Logger.d(TAG, "Captcha success via JS")
-                        activity.runOnUiThread {
-                            dialog?.dismiss()
-                            //  使用验证后返回的新 challenge
-                            onSuccess(validate, seccode, newChallenge)
-                        }
-                    }
-                    
-                    @JavascriptInterface
-                    fun onCaptchaFailed(error: String) {
-                        com.android.purebilibili.core.util.Logger.e(TAG, "Captcha failed via JS")
-                        activity.runOnUiThread {
-                            dialog?.dismiss()
-                            onFailed(error)
-                        }
-                    }
-                    
-                    @JavascriptInterface
-                    fun onCaptchaCancel() {
-                        Logger.d(TAG, "Captcha cancelled")
-                        activity.runOnUiThread {
-                            dialog?.dismiss()
-                            onCancel()
-                        }
-                    }
-                }, "Android")
+                // Named bridge class keeps @JavascriptInterface method names stable under R8.
+                addJavascriptInterface(
+                    GeetestJsBridge(
+                        activity = activity,
+                        dismiss = { dialog?.dismiss() },
+                        onSuccess = onSuccess,
+                        onFailed = onFailed,
+                        onCancel = onCancel
+                    ),
+                    "Android"
+                )
             }
             
-            // 加载极验验证 HTML
-            val html = generateGeetestHtml(gt, challenge, isDarkMode)
+            // 先显示加载页，再按 PiliPlus 的流程获取当前 gt 对应的动态配置。
+            val html = generateLoadingHtml(isDarkMode)
             webView?.loadDataWithBaseURL(
                 "https://www.bilibili.com",
                 html,
@@ -120,13 +110,12 @@ class CaptchaManager(private val activity: Activity) {
                 null
             )
             
-            // 显示对话框 - 居中卡片样式，避免全屏空白
-            dialog = AlertDialog.Builder(activity)
-                .setView(webView)
-                .setOnCancelListener {
-                    onCancel()
-                }
-                .create()
+            dialog = Dialog(activity).apply {
+                requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+                setContentView(requireNotNull(webView))
+                setCanceledOnTouchOutside(true)
+                setOnCancelListener { onCancel() }
+            }
             
             dialog?.show()
             
@@ -139,12 +128,32 @@ class CaptchaManager(private val activity: Activity) {
                 setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                 setGravity(Gravity.CENTER)
                 setLayout(policy.widthPx, policy.heightPx)
+                decorView.setPadding(0, 0, 0, 0)
                 setDimAmount(policy.dimAmount)
                 setSoftInputMode(
                     WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN or
                         WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 )
             }
+
+            loadGeetestConfig(
+                gt = gt,
+                challenge = challenge,
+                onSuccess = { configJson ->
+                    val target = webView ?: return@loadGeetestConfig
+                    target.loadDataWithBaseURL(
+                        "https://www.bilibili.com",
+                        generateGeetestHtml(configJson, isDarkMode),
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                },
+                onFailed = { error ->
+                    dialog?.dismiss()
+                    onFailed(error)
+                }
+            )
             
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e(TAG, "Failed to start captcha", e)
@@ -155,7 +164,78 @@ class CaptchaManager(private val activity: Activity) {
     /**
      * 生成极验验证 HTML
      */
-    private fun generateGeetestHtml(gt: String, challenge: String, dark: Boolean): String {
+    private fun generateLoadingHtml(dark: Boolean): String {
+        val pageBg = if (dark) "#121620" else "#f5f7fb"
+        val tipColor = if (dark) "#97a1b7" else "#7f889b"
+        return """
+            <!DOCTYPE html>
+            <html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+            <body style="margin:0;background:$pageBg;color:$tipColor;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
+                <div>正在加载安全验证…</div>
+            </body></html>
+        """.trimIndent()
+    }
+
+    private fun loadGeetestConfig(
+        gt: String,
+        challenge: String,
+        onSuccess: (String) -> Unit,
+        onFailed: (String) -> Unit,
+    ) {
+        val url = "https://api.geetest.com/gettype.php".toHttpUrl().newBuilder()
+            .addQueryParameter("gt", gt)
+            .build()
+        geetestConfigCall?.cancel()
+        geetestConfigCall = NetworkModule.okHttpClient.newCall(Request.Builder().url(url).get().build())
+            .also { call ->
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (call.isCanceled()) return
+                        activity.runOnUiThread {
+                            if (webView != null) onFailed("验证配置加载失败: ${e.message}")
+                        }
+                    }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        val result = runCatching {
+                            response.use {
+                                check(it.isSuccessful) { "HTTP ${it.code}" }
+                                parseGeetestConfig(
+                                    raw = it.body.string(),
+                                    gt = gt,
+                                    challenge = challenge,
+                                )
+                            }
+                        }
+                        activity.runOnUiThread {
+                            if (webView == null || call.isCanceled()) return@runOnUiThread
+                            result.onSuccess(onSuccess).onFailure { error ->
+                                onFailed("验证配置解析失败: ${error.message}")
+                            }
+                        }
+                    }
+                })
+            }
+    }
+
+    private fun parseGeetestConfig(raw: String, gt: String, challenge: String): String {
+        val payload = raw.trim().removePrefix("(").removeSuffix(")")
+        val root = JSONObject(payload)
+        check(root.optString("status") == "success") { root.optString("status", "unknown") }
+        val data = root.optJSONObject("data") ?: error("缺少 data")
+        return data.apply {
+            put("gt", gt)
+            put("challenge", challenge)
+            put("offline", false)
+            put("new_captcha", true)
+            put("product", "bind")
+            put("width", "100%")
+            put("https", true)
+            put("protocol", "https://")
+        }.toString()
+    }
+
+    private fun generateGeetestHtml(configJson: String, dark: Boolean): String {
         val pageBg = if (dark) "#121620" else "#f5f7fb"
         val cardBg = if (dark) "#1b2230" else "#ffffff"
         val panelBg = if (dark) "#111722" else "#f4f7fc"
@@ -179,20 +259,23 @@ class CaptchaManager(private val activity: Activity) {
         html, body {
             width: 100%;
             min-height: 100%;
-            height: 100%;
             background: ${pageBg};
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
+        }
+        body {
+            padding: 16px 8px;
+            overflow-y: auto;
         }
         .container {
-            width: min(100%, 392px);
+            width: min(100%, 640px);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 16px 14px 18px;
+            padding: 24px 16px;
             background: ${cardBg};
             border-radius: 20px;
             border: 1px solid ${borderColor};
@@ -206,10 +289,10 @@ class CaptchaManager(private val activity: Activity) {
         }
         #captcha-container {
             width: 100%;
-            max-width: 360px;
+            max-width: 600px;
             background: ${panelBg};
             border-radius: 14px;
-            padding: 12px;
+            padding: 16px;
             border: 1px solid ${borderColor};
         }
         .loading {
@@ -240,7 +323,6 @@ class CaptchaManager(private val activity: Activity) {
             margin-top: 10px;
         }
     </style>
-    <script src="https://static.geetest.com/static/js/gt.0.5.0.js"></script>
 </head>
 <body>
     <div class="container">
@@ -250,44 +332,33 @@ class CaptchaManager(private val activity: Activity) {
         </div>
         <div class="tip">点击图片上的文字完成验证</div>
     </div>
-    
+
+    <script src="https://static.geetest.com/static/js/fullpage.0.0.0.js"></script>
     <script>
-        window.initGeetest({
-            gt: "$gt",
-            challenge: "$challenge",
-            offline: false,
-            new_captcha: true,
-            product: "bind",
-            width: "100%"
-        }, function(captchaObj) {
-            captchaObj.appendTo("#captcha-container");
-            
-            captchaObj.onReady(function() {
+        var geetestConfig = $configJson;
+        var captchaObj = window.Geetest(geetestConfig)
+            .onReady(function() {
                 document.querySelector('.loading').style.display = 'none';
                 captchaObj.verify();
-            });
-            
-            captchaObj.onSuccess(function() {
+            })
+            .onSuccess(function() {
                 var result = captchaObj.getValidate();
                 if (result) {
                     window.Android.onCaptchaSuccess(
                         result.geetest_validate,
                         result.geetest_seccode,
-                        result.geetest_challenge || "$challenge"
+                        result.geetest_challenge || geetestConfig.challenge
                     );
                 } else {
                     window.Android.onCaptchaFailed("验证结果为空");
                 }
-            });
-            
-            captchaObj.onError(function(e) {
+            })
+            .onError(function(e) {
                 window.Android.onCaptchaFailed(e.msg || e.error_code || "验证失败");
-            });
-            
-            captchaObj.onClose(function() {
+            })
+            .onClose(function() {
                 window.Android.onCaptchaCancel();
             });
-        });
     </script>
 </body>
 </html>
@@ -308,10 +379,51 @@ class CaptchaManager(private val activity: Activity) {
      * 销毁资源
      */
     fun destroy() {
+        geetestConfigCall?.cancel()
+        geetestConfigCall = null
         dialog?.dismiss()
         webView?.destroy()
         webView = null
         dialog = null
+    }
+}
+
+/**
+ * Geetest WebView → Android bridge. Must stay a concrete class so release R8
+ * does not rename the methods invoked from JavaScript.
+ */
+internal class GeetestJsBridge(
+    private val activity: Activity,
+    private val dismiss: () -> Unit,
+    private val onSuccess: (validate: String, seccode: String, challenge: String) -> Unit,
+    private val onFailed: (error: String) -> Unit,
+    private val onCancel: () -> Unit
+) {
+    @JavascriptInterface
+    fun onCaptchaSuccess(validate: String, seccode: String, newChallenge: String) {
+        Logger.d("CaptchaManager", "Captcha success via JS")
+        activity.runOnUiThread {
+            dismiss()
+            onSuccess(validate, seccode, newChallenge)
+        }
+    }
+
+    @JavascriptInterface
+    fun onCaptchaFailed(error: String) {
+        Logger.e("CaptchaManager", "Captcha failed via JS")
+        activity.runOnUiThread {
+            dismiss()
+            onFailed(error)
+        }
+    }
+
+    @JavascriptInterface
+    fun onCaptchaCancel() {
+        Logger.d("CaptchaManager", "Captcha cancelled")
+        activity.runOnUiThread {
+            dismiss()
+            onCancel()
+        }
     }
 }
 
@@ -330,6 +442,10 @@ object RsaEncryption {
      * @return Base64 编码的加密密码
      */
     fun encryptPassword(password: String, publicKey: String, salt: String): String? {
+        return encrypt(salt + password, publicKey)
+    }
+
+    fun encrypt(value: String, publicKey: String): String? {
         return try {
             // 处理公钥字符串
             val keyStr = publicKey
@@ -346,7 +462,7 @@ object RsaEncryption {
             // 加密 (salt + password)
             val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
             cipher.init(Cipher.ENCRYPT_MODE, pubKey)
-            val encryptedBytes = cipher.doFinal((salt + password).toByteArray())
+            val encryptedBytes = cipher.doFinal(value.toByteArray())
             
             // Base64 编码
             Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)

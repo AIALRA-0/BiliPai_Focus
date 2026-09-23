@@ -19,16 +19,18 @@ internal data class PlaybackResumeDecision(
 internal fun resolveShouldContinuePlaybackDuringPause(
     isMiniMode: Boolean,
     isPip: Boolean,
+    isInAudioMode: Boolean = false,
     isBackgroundAudio: Boolean,
     wasPlaybackActive: Boolean
 ): Boolean {
-    if (isMiniMode || isPip) return true
+    if (isMiniMode || isPip || isInAudioMode) return true
     return isBackgroundAudio
 }
 
 internal fun resolvePlaybackPauseDecision(
     isMiniMode: Boolean,
     isPip: Boolean,
+    isInAudioMode: Boolean = false,
     isBackgroundAudio: Boolean,
     wasPlaybackActive: Boolean,
     hasRecentUserLeaveHint: Boolean,
@@ -37,6 +39,7 @@ internal fun resolvePlaybackPauseDecision(
     val shouldContinuePlayback = resolveShouldContinuePlaybackDuringPause(
         isMiniMode = isMiniMode,
         isPip = isPip,
+        isInAudioMode = isInAudioMode,
         isBackgroundAudio = isBackgroundAudio,
         wasPlaybackActive = wasPlaybackActive
     )

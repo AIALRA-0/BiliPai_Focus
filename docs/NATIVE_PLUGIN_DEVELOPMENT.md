@@ -35,7 +35,7 @@
 - Android Studio 2024.1 或更高版本
 - Kotlin 1.9+
 - Gradle 8.0+
-- Android SDK 36（Compile SDK）
+- Android SDK 37（Compile SDK）
 
 ### 克隆项目
 
@@ -53,8 +53,16 @@ app/src/main/java/com/android/purebilibili/
 │   ├── PlayerPlugin.kt       # 播放器插件接口
 │   ├── FeedPlugin.kt         # 推荐流插件接口
 │   ├── DanmakuPlugin.kt      # 弹幕插件接口
+│   ├── CastPluginApi.kt      # 投屏插件接口
+│   ├── RecommendationPluginApi.kt # 推荐插件接口
+│   ├── TypedPluginApis.kt    # 类型化 API 分发
+│   ├── PluginCapabilityManifest.kt # 能力声明
 │   ├── PluginManager.kt      # 插件管理器
-│   └── PluginStore.kt        # 配置持久化
+│   ├── PluginStore.kt        # 配置持久化
+│   ├── json/                 # JSON 规则插件引擎
+│   ├── js/                   # JS 插件运行时
+│   ├── kotlinpkg/            # 外部 Kotlin 包解析/授权
+│   └── skin/                 # 皮肤包解析
 └── feature/plugin/            # 内置插件实现
     └── SponsorBlockPlugin.kt # 示例：空降助手
 ```
@@ -118,18 +126,16 @@ class MyPlugin : Plugin {
 在 `PureApplication.kt` 的插件初始化区域中添加：
 
 ```kotlin
-Looper.myQueue().addIdleHandler {
+private fun initPluginStackNow() {
     PluginManager.initialize(this)
-    PluginManager.register(SponsorBlockPlugin())
-    PluginManager.register(MyPlugin())  // 添加这行
-    false
+    PluginManager.register(MyPlugin())
 }
 ```
 
 ### 3. 编译运行
 
 ```bash
-./gradlew assembleDebug
+./gradlew :app:assembleDev
 ```
 
 ---
@@ -160,6 +166,25 @@ interface Plugin {
     val icon: ImageVector?
         get() = null
     
+    /** 是否暂不可用（用于标识功能尚未完成） */
+    val unavailable: Boolean
+        get() = false
+
+    /** 不可用原因描述 */
+    val unavailableReason: String
+        get() = "功能开发中"
+
+    /** 插件能力声明，用于安装前授权和插件中心展示 */
+    val capabilityManifest: PluginCapabilityManifest
+        get() = PluginCapabilityManifest(
+            pluginId = id,
+            displayName = name,
+            version = version,
+            apiVersion = 1,
+            entryClassName = this::class.java.name,
+            capabilities = emptySet()
+        )
+    
     /** 插件启用时调用 */
     suspend fun onEnable() {}
     
@@ -169,6 +194,12 @@ interface Plugin {
     /** 插件配置界面（可选） */
     @Composable
     fun SettingsContent(): Unit = Unit
+
+    /** Modifier-aware 配置入口；无参版本保留给旧/实验插件，根布局需要消费调用方约束时可重载此版本 */
+    @Composable
+    fun SettingsContent(modifier: Modifier) {
+        Box(modifier = modifier) { SettingsContent() }
+    }
 }
 ```
 
@@ -182,6 +213,9 @@ interface Plugin {
 | `version` | String | ✅ | 语义化版本号 |
 | `author` | String | ❌ | 作者名称 |
 | `icon` | ImageVector | ❌ | Material Icons 图标 |
+| `unavailable` | Boolean | ❌ | 是否暂不可用（功能未完成），默认 false |
+| `unavailableReason` | String | ❌ | 不可用原因，默认 "功能开发中" |
+| `capabilityManifest` | PluginCapabilityManifest | ❌ | 插件能力声明，用于安装前授权与插件中心展示 |
 
 ---
 
@@ -206,6 +240,9 @@ interface PlayerPlugin : Plugin {
      * @return 跳过动作
      */
     suspend fun onPositionUpdate(positionMs: Long): SkipAction?
+
+    /** 用户拖动进度条或点击章节时调用 */
+    fun onUserSeek(positionMs: Long) {}
     
     /**
      * 视频播放结束时回调
@@ -223,8 +260,12 @@ sealed class SkipAction {
     
     /** 自动跳转到指定位置 */
     data class SkipTo(
-        val positionMs: Long,  // 跳转目标位置
-        val reason: String     // 跳过原因（用于 Toast 提示）
+        val positionMs: Long,        // 跳转目标位置
+        val reason: String,          // 跳过原因（用于 Toast 提示）
+        val segmentId: String? = null,
+        val startMs: Long? = null,
+        val categoryName: String? = null,
+        val showToast: Boolean = true,
     ) : SkipAction()
     
     /** 显示跳过按钮（手动跳过模式） */
@@ -232,6 +273,14 @@ sealed class SkipAction {
         val skipToMs: Long,    // 点击后跳转位置
         val label: String,     // 按钮文字，如 "跳过广告"
         val segmentId: String  // 片段唯一 ID，防止重复显示
+    ) : SkipAction()
+
+    /** 临时静音（用于 SponsorBlock 的 mute 类型片段） */
+    data class Mute(
+        val untilMs: Long,
+        val reason: String,
+        val segmentId: String? = null,
+        val showToast: Boolean = true,
     ) : SkipAction()
 }
 ```
@@ -285,8 +334,8 @@ data class VideoItem(
     val bvid: String,           // BV 号
     val title: String,          // 标题
     val duration: Int,          // 时长（秒）
-    val owner: Owner?,          // UP 主信息
-    val stat: Stat?,            // 统计数据
+    val owner: Owner,          // UP 主信息
+    val stat: Stat,            // 统计数据
     // ...
 )
 
@@ -513,18 +562,11 @@ override fun SettingsContent() {
 
 ```kotlin
 // 文件: PureApplication.kt
-Looper.myQueue().addIdleHandler {
-    // 初始化插件系统
+private fun initPluginStackNow() {
     PluginManager.initialize(this)
-
-    // 注册内置插件
-    PluginManager.register(SponsorBlockPlugin())
-    PluginManager.register(AdFilterPlugin())
-    PluginManager.register(DanmakuEnhancePlugin())
 
     // 注册你的插件
     PluginManager.register(MyCustomPlugin())
-    false
 }
 ```
 

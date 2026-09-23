@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.home
 
-import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,11 +11,12 @@ class HomePerformancePolicyTest {
     @Test
     fun keepsHomeVisualSettingsWhenDataSaverOff() {
         val config = resolveHomePerformanceConfig(
-            uiPreset = UiPreset.IOS,
+            supportsIndependentLiquidGlass = true,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = false,
             topBarLiquidGlassEnabled = true,
             bottomBarLiquidGlassEnabled = false,
+            androidNativeLiquidGlassEnabled = true,
             cardAnimationEnabled = false,
             cardTransitionEnabled = true,
             isDataSaverActive = false,
@@ -27,8 +27,8 @@ class HomePerformancePolicyTest {
         assertTrue(config.headerBlurEnabled)
         assertFalse(config.bottomBarBlurEnabled)
         assertTrue(config.topBarLiquidGlassEnabled)
-        assertFalse(config.bottomBarLiquidGlassEnabled)
-        assertFalse(config.isAnyLiquidGlassEnabled)
+        assertTrue(config.bottomBarLiquidGlassEnabled)
+        assertTrue(config.isAnyLiquidGlassEnabled)
         assertFalse(config.cardAnimationEnabled)
         assertTrue(config.cardTransitionEnabled)
         assertFalse(config.isDataSaverActive)
@@ -38,11 +38,12 @@ class HomePerformancePolicyTest {
     @Test
     fun dataSaverDisablesPreloadAhead() {
         val config = resolveHomePerformanceConfig(
-            uiPreset = UiPreset.IOS,
+            supportsIndependentLiquidGlass = true,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
             topBarLiquidGlassEnabled = true,
             bottomBarLiquidGlassEnabled = true,
+            androidNativeLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
             isDataSaverActive = true,
@@ -57,11 +58,12 @@ class HomePerformancePolicyTest {
     @Test
     fun smartGuardFlag_noLongerAffectsHomePerformanceConfig() {
         val config = resolveHomePerformanceConfig(
-            uiPreset = UiPreset.IOS,
+            supportsIndependentLiquidGlass = true,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
             topBarLiquidGlassEnabled = true,
             bottomBarLiquidGlassEnabled = true,
+            androidNativeLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
             isDataSaverActive = false,
@@ -77,7 +79,7 @@ class HomePerformancePolicyTest {
     @Test
     fun normalMode_capsPreloadAheadToConservativeBudget() {
         val config = resolveHomePerformanceConfig(
-            uiPreset = UiPreset.IOS,
+            supportsIndependentLiquidGlass = true,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
             topBarLiquidGlassEnabled = true,
@@ -133,12 +135,13 @@ class HomePerformancePolicyTest {
     }
 
     @Test
-    fun md3Preset_requiresAndroidNativeGlobalOptInOnlyForBottomLiquidGlass() {
+    fun md3Preset_requiresAndroidNativeGlobalOptInForSharedLiquidGlass() {
         val config = resolveHomePerformanceConfig(
-            uiPreset = UiPreset.MD3,
+            supportsIndependentLiquidGlass = false,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
             topBarLiquidGlassEnabled = true,
+            homeSearchLiquidGlassEnabled = true,
             bottomBarLiquidGlassEnabled = true,
             androidNativeLiquidGlassEnabled = false,
             cardAnimationEnabled = true,
@@ -148,18 +151,42 @@ class HomePerformancePolicyTest {
             normalPreloadAheadCount = 5
         )
 
-        assertTrue(config.topBarLiquidGlassEnabled)
+        assertFalse(config.topBarLiquidGlassEnabled)
+        assertFalse(config.homeSearchLiquidGlassEnabled)
+        assertFalse(config.bottomBarLiquidGlassEnabled)
+        assertFalse(config.isAnyLiquidGlassEnabled)
+    }
+
+    @Test
+    fun legacyIndependentValuesCannotEnableGlassWithoutGlobalEntry() {
+        val config = resolveHomePerformanceConfig(
+            supportsIndependentLiquidGlass = true,
+            headerBlurEnabled = false,
+            bottomBarBlurEnabled = false,
+            topBarLiquidGlassEnabled = true,
+            homeSearchLiquidGlassEnabled = true,
+            bottomBarLiquidGlassEnabled = true,
+            androidNativeLiquidGlassEnabled = false,
+            cardAnimationEnabled = false,
+            cardTransitionEnabled = false,
+            isDataSaverActive = false,
+            smartVisualGuardEnabled = false,
+        )
+
+        assertFalse(config.topBarLiquidGlassEnabled)
+        assertFalse(config.homeSearchLiquidGlassEnabled)
         assertFalse(config.bottomBarLiquidGlassEnabled)
     }
 
     @Test
-    fun md3Preset_allowsIndependentTopDockAndBottomLiquidGlassWhenAndroidNativeOptInIsEnabled() {
+    fun md3Preset_globalLiquidGlassReuseEnablesHomeDockSearchAndBottomBar() {
         val config = resolveHomePerformanceConfig(
-            uiPreset = UiPreset.MD3,
+            supportsIndependentLiquidGlass = false,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
-            topBarLiquidGlassEnabled = true,
-            bottomBarLiquidGlassEnabled = true,
+            topBarLiquidGlassEnabled = false,
+            homeSearchLiquidGlassEnabled = false,
+            bottomBarLiquidGlassEnabled = false,
             androidNativeLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
@@ -169,6 +196,8 @@ class HomePerformancePolicyTest {
         )
 
         assertTrue(config.topBarLiquidGlassEnabled)
+        assertTrue(config.homeSearchLiquidGlassEnabled)
         assertTrue(config.bottomBarLiquidGlassEnabled)
+        assertTrue(config.isAnyLiquidGlassEnabled)
     }
 }

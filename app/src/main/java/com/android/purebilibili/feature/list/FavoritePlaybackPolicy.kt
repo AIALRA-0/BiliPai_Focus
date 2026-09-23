@@ -8,6 +8,10 @@ data class FavoriteExternalPlaylist(
     val startIndex: Int
 )
 
+internal fun shouldLoadNextFavoritePlaybackPage(hasMore: Boolean, pageItemCount: Int): Boolean {
+    return hasMore && pageItemCount > 0
+}
+
 fun buildExternalPlaylistFromFavorite(
     items: List<VideoItem>,
     clickedBvid: String? = null
@@ -21,6 +25,7 @@ fun buildExternalPlaylistFromFavorite(
             title = video.title,
             cover = video.pic,
             owner = video.owner.name,
+            ownerFace = video.owner.face,
             duration = video.duration.toLong()
         )
     }

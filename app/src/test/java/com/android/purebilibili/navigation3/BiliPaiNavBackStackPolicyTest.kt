@@ -32,10 +32,92 @@ class BiliPaiNavBackStackPolicyTest {
     }
 
     @Test
+    fun initialBackStack_opensPortraitFeedOnStartupWhenEnabled() {
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Story()),
+            resolveInitialBiliPaiBackStack(
+                firstRoute = ScreenRoutes.Home.route,
+                onboardingRequired = false,
+                openPortraitFeedOnStartup = true
+            )
+        )
+    }
+
+    @Test
     fun push_skipsDuplicateTopEntry() {
         val stack = listOf(BiliPaiNavKey.MainHost)
 
         assertEquals(stack, pushBiliPaiNavKey(stack, BiliPaiNavKey.MainHost))
+    }
+
+    @Test
+    fun push_existingSearchPopsToItsUniqueBackStackInstance() {
+        val stack = listOf(
+            BiliPaiNavKey.MainHost,
+            BiliPaiNavKey.Search,
+            BiliPaiNavKey.VideoDetail("BV1", sourceRoute = "search", openId = 1L),
+        )
+
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Search),
+            pushBiliPaiNavKey(stack, BiliPaiNavKey.Search),
+        )
+    }
+
+    @Test
+    fun push_sameUpSpaceIgnoresTransientTargetVideoAndPopsVideoDetail() {
+        val originalSpace = BiliPaiNavKey.Space(mid = 42L)
+        val video = BiliPaiNavKey.VideoDetail(
+            bvid = "BV1",
+            sourceRoute = originalSpace.toLegacyRoute(),
+            openId = 1L,
+        )
+
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, originalSpace),
+            pushBiliPaiNavKey(
+                currentStack = listOf(BiliPaiNavKey.MainHost, originalSpace, video),
+                key = BiliPaiNavKey.Space(mid = 42L, targetBvid = "BV1"),
+            ),
+        )
+    }
+
+    @Test
+    fun push_differentUpSpaceStillAppends() {
+        val originalSpace = BiliPaiNavKey.Space(mid = 42L)
+        val video = BiliPaiNavKey.VideoDetail("BV1", openId = 1L)
+        val otherSpace = BiliPaiNavKey.Space(mid = 84L, targetBvid = "BV1")
+
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, originalSpace, video, otherSpace),
+            pushBiliPaiNavKey(
+                currentStack = listOf(BiliPaiNavKey.MainHost, originalSpace, video),
+                key = otherSpace,
+            ),
+        )
+    }
+
+    @Test
+    fun push_distinctInstanceKeyStillAppends() {
+        val first = BiliPaiNavKey.VideoDetail("BV1", sourceRoute = "search", openId = 1L)
+        val second = first.copy(openId = 2L)
+
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, first, second),
+            pushBiliPaiNavKey(listOf(BiliPaiNavKey.MainHost, first), second),
+        )
+    }
+
+    @Test
+    fun push_liveAreaDetailReentryKeepsDistinctInstances() {
+        // 回归：同一直播分区经同级 chips 互跳后再次进入时，openId 使每次 push 的
+        // contentKey 实例唯一，避免 Miuix 抛出 Duplicate contentKey 崩溃。
+        val first = BiliPaiNavKey.LiveAreaDetail(parentAreaId = 1, areaId = 145, title = "颜值", openId = 100L)
+        val reentry = BiliPaiNavKey.LiveAreaDetail(parentAreaId = 1, areaId = 145, title = "颜值", openId = 101L)
+
+        val stack = pushBiliPaiNavKey(listOf(BiliPaiNavKey.MainHost, first), reentry)
+
+        assertEquals(listOf(BiliPaiNavKey.MainHost, first, reentry), stack)
     }
 
     @Test
@@ -88,6 +170,57 @@ class BiliPaiNavBackStackPolicyTest {
     }
 
     @Test
+    fun pushOrReplaceSettingsCategory_replacesSiblingCategory() {
+        val a = BiliPaiNavKey.SettingsCategory(com.android.purebilibili.feature.settings.SettingsRootCategory.APPEARANCE_INTERACTION)
+        val b = BiliPaiNavKey.SettingsCategory(com.android.purebilibili.feature.settings.SettingsRootCategory.CONTENT_PLAYBACK)
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, b),
+            pushOrReplaceSettingsCategoryNavKey(listOf(BiliPaiNavKey.MainHost, a), b)
+        )
+    }
+
+    @Test
+    fun pushOrReplaceSettingsCategory_replacesDetailChainOnTabletSwitch() {
+        val category = BiliPaiNavKey.SettingsCategory(
+            com.android.purebilibili.feature.settings.SettingsRootCategory.CONTENT_PLAYBACK
+        )
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, category),
+            pushOrReplaceSettingsCategoryNavKey(
+                listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.AppearanceSettings),
+                category,
+            )
+        )
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, category),
+            pushOrReplaceSettingsCategoryNavKey(
+                listOf(
+                    BiliPaiNavKey.MainHost,
+                    BiliPaiNavKey.SettingsCategory(
+                        com.android.purebilibili.feature.settings.SettingsRootCategory.APPEARANCE_INTERACTION
+                    ),
+                    BiliPaiNavKey.AppearanceSettings,
+                ),
+                category,
+            )
+        )
+    }
+
+    @Test
+    fun pushOrReplaceSettingsCategory_pushesOnSettingsRoot() {
+        val category = BiliPaiNavKey.SettingsCategory(
+            com.android.purebilibili.feature.settings.SettingsRootCategory.SYSTEM_ABOUT
+        )
+        assertEquals(
+            listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Settings, category),
+            pushOrReplaceSettingsCategoryNavKey(
+                listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Settings),
+                category,
+            )
+        )
+    }
+
+    @Test
     fun onboardingFinishEntersMainHostInsteadOfDirectHomeRoute() {
         val sourceFile = listOf(
             File("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"),
@@ -98,9 +231,11 @@ class BiliPaiNavBackStackPolicyTest {
             .substringAfter("BiliPaiNavEntryContentRole.ONBOARDING")
             .substringBefore("BiliPaiNavEntryContentRole.SETTINGS")
 
-        assertTrue(onboardingFinishBlock.contains("onApplySettingsProfile"))
-        assertTrue(onboardingFinishBlock.contains("applyOnboardingSettingsGuidePreset("))
-        assertTrue(onboardingFinishBlock.contains("navigation3BackStack = listOf(BiliPaiNavKey.MainHost)"))
+        assertTrue(onboardingFinishBlock.contains("USER_AGREEMENT_ACK_KEY"))
+        assertTrue(onboardingFinishBlock.contains("onDisagree"))
+        assertTrue(onboardingFinishBlock.contains("finishAffinity()"))
+        assertTrue(onboardingFinishBlock.contains("resolveInitialBiliPaiBackStack("))
+        assertFalse(onboardingFinishBlock.contains("applyOnboardingSettingsGuidePreset("))
         assertFalse(onboardingFinishBlock.contains("navigation3BackStack = listOf(BiliPaiNavKey.Home)"))
     }
 }

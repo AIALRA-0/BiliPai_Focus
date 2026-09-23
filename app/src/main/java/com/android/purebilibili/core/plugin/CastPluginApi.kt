@@ -40,8 +40,15 @@ private val defaultPlaybackState: StateFlow<CastPluginPlaybackState> =
 private val defaultIsDiscovering: StateFlow<Boolean> =
     MutableStateFlow(false).asStateFlow()
 
+enum class CastDiscoveryRequirement {
+    NONE,
+    RAW_LOCAL_NETWORK
+}
+
 interface CastPluginApi : Plugin {
     val routes: StateFlow<List<CastPluginRoute>>
+    val discoveryRequirement: CastDiscoveryRequirement
+        get() = CastDiscoveryRequirement.NONE
     val playbackState: StateFlow<CastPluginPlaybackState>
         get() = defaultPlaybackState
     val isDiscovering: StateFlow<Boolean>
@@ -49,6 +56,9 @@ interface CastPluginApi : Plugin {
 
     fun startRouteDiscovery(context: Context)
     fun stopRouteDiscovery()
+    fun onDiscoveryAccessRevoked() {
+        stopRouteDiscovery()
+    }
     fun refreshRouteDiscovery(context: Context) {
         startRouteDiscovery(context)
     }

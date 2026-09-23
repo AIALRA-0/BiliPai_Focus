@@ -1,15 +1,29 @@
 package com.android.purebilibili.feature.download
 
+import com.android.purebilibili.core.ui.components.VideoListLayoutToggle
+import com.android.purebilibili.core.ui.components.resolveVideoListColumns
+import com.android.purebilibili.core.ui.components.rememberVideoListLayoutControl
+import com.android.purebilibili.core.ui.components.videoListItemModifier
+import com.android.purebilibili.core.ui.components.AnimatedVideoListItem
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+//  Material Icons
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,14 +36,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardDefaults
+import com.android.purebilibili.core.ui.components.AppCardShape
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.util.NetworkUtils
 import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  *  离线缓存列表页面
@@ -42,6 +63,12 @@ fun DownloadListScreen(
     onOfflineVideoClick: (String) -> Unit = {}  // 🔧 [新增] taskId - 离线播放
 ) {
     val context = LocalContext.current
+    val listLayout = rememberVideoListLayoutControl(defaultSingleColumn = true)
+    val gridState = rememberLazyGridState()
+    val columns = resolveVideoListColumns(
+        listLayout.singleColumn,
+        androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.toFloat(),
+    )
     val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
     var isNetworkAvailable by remember(context) { mutableStateOf(NetworkUtils.isNetworkAvailable(context)) }
     val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsStateWithLifecycle(initialValue = null)
@@ -59,15 +86,21 @@ fun DownloadListScreen(
             delay(1_500L)
         }
     }
-    
-    AdaptiveScaffold(
+
+    AppScaffold(
         topBar = {
-            AdaptiveTopAppBar(
+            AppTopBar(
                 title = "离线缓存",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
                     }
+                },
+                actions = {
+                    VideoListLayoutToggle(
+                        singleColumn = listLayout.singleColumn,
+                        onClick = listLayout.toggle,
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -84,77 +117,79 @@ fun DownloadListScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "",
-                        fontSize = 48.sp
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
+                    Spacer(modifier = Modifier.height(AppSpacingTokens.Large))
+                    AppText(
                         text = "暂无缓存视频",
+                        style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                    AppText(
                         text = "在视频详情页点击「缓存」按钮下载",
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
             }
         } else {
-            LazyColumn(
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                state = gridState,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                    ,
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 16.dp, bottom = padding.calculateBottomPadding() + 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(taskList, key = { it.id }) { task ->
-                    val playableOffline = remember(task.filePath, task.status) {
-                        isDownloadTaskPlayableOffline(task)
+                    AnimatedVideoListItem(modifier = videoListItemModifier(), enabled = true) {
+                        val playableOffline = remember(task.filePath, task.status) {
+                            isDownloadTaskPlayableOffline(task)
+                        }
+                        DownloadTaskItem(
+                            task = task,
+                            stacked = columns > 1,
+                            onClick = {
+                                when (resolveDownloadTaskClickTarget(task, isNetworkAvailable = isNetworkAvailable)) {
+                                    DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(task.id)
+                                    null -> Unit
+                                }
+                            },
+                            onPauseResume = {
+                                if (task.isDownloading) {
+                                    DownloadManager.pauseDownload(task.id)
+                                } else if (task.canResume) {
+                                    DownloadManager.startDownload(task.id)
+                                }
+                            },
+                            onDelete = {
+                                DownloadManager.removeTask(task.id)
+                            },
+                            offlinePlayable = playableOffline
+                        )
                     }
-                    DownloadTaskItem(
-                        task = task,
-                        onClick = { 
-                            when (resolveDownloadTaskClickTarget(task, isNetworkAvailable = isNetworkAvailable)) {
-                                DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(task.id)
-                                null -> Unit
-                            }
-                        },
-                        onPauseResume = {
-                            if (task.isDownloading) {
-                                DownloadManager.pauseDownload(task.id)
-                            } else if (task.canResume) {
-                                DownloadManager.startDownload(task.id)
-                            }
-                        },
-                        onDelete = {
-                            DownloadManager.removeTask(task.id)
-                        },
-                        offlinePlayable = playableOffline
-                    )
                 }
-                
+
                 // [新增] 显示当前存储路径
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
+                        AppText(
                             text = "存储位置",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                        AppText(
                             text = currentDir,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            fontSize = 10.sp
                         )
                     }
                 }
@@ -170,216 +205,227 @@ private fun DownloadTaskItem(
     onClick: () -> Unit,
     onPauseResume: () -> Unit,
     onDelete: () -> Unit,
+    stacked: Boolean = false,
     offlinePlayable: Boolean
 ) {
-    Card(
+    val cover: @Composable (Modifier) -> Unit = { coverModifier ->
+        // 封面
+        Box(
+            modifier = coverModifier
+                .aspectRatio(16f / 9f)
+                .clip(AppShapes.container(ContainerLevel.Chip))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            // 🖼️ [修复] 优先使用本地封面（无网络时也能显示）
+            val localCoverFile = task.localCoverPath?.let { java.io.File(it) }
+            val coverSource = if (localCoverFile?.exists() == true) {
+                // 使用本地缓存的封面
+                localCoverFile
+            } else {
+                // Fallback 到网络URL
+                val coverUrl = task.cover.let { url ->
+                    if (url.startsWith("http://")) url.replace("http://", "https://")
+                    else url
+                }
+                coil3.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                    .data(coverUrl)
+                    .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com").build())
+                    .crossfade(true)
+                    .build()
+            }
+
+            AsyncImage(
+                model = coverSource,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // 进度/状态覆盖层
+            if (!task.isComplete) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (task.status) {
+                        DownloadStatus.QUEUED -> {
+                            AppText("排队中", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        }
+                        DownloadStatus.DOWNLOADING, DownloadStatus.MERGING -> {
+                            AppCircularProgressIndicator(
+                                progress = { resolveDownloadTaskProgress(task) },
+                                modifier = Modifier.size(32.dp),
+                                color = Color.White,
+                                strokeWidth = 3.dp
+                            )
+                        }
+                        DownloadStatus.PAUSED -> {
+                            AppText("已暂停", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        }
+                        DownloadStatus.FAILED -> {
+                            AppText("失败", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            // 画质标签
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(AppSpacingTokens.ExtraSmall)
+                    .background(
+                        Color.Black.copy(alpha = 0.7f),
+                        AppShapes.container(ContainerLevel.Tag)
+                    )
+                    .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Micro)
+            ) {
+                AppText(
+                    text = task.qualityDesc,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+
+    }
+    val info: @Composable () -> Unit = {
+        // 信息
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            AppText(
+                text = task.title,
+                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+
+            resolveDownloadTaskSecondaryText(task)?.let { secondaryText ->
+                AppText(
+                    text = secondaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+            }
+
+            AppText(
+                text = task.ownerName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+
+            // 状态文字
+            val statusText = when (task.status) {
+                DownloadStatus.QUEUED -> "排队中..."
+                DownloadStatus.PENDING -> "等待中..."
+                DownloadStatus.DOWNLOADING -> "下载中 ${resolveDownloadTaskProgressPercent(task)}%"
+                DownloadStatus.MERGING -> "处理中..."
+                DownloadStatus.COMPLETED -> "已完成"
+                DownloadStatus.PAUSED -> "已暂停"
+                DownloadStatus.FAILED -> task.errorMessage ?: "下载失败"
+            }
+            AppText(
+                text = statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = when (task.status) {
+                    DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
+                    DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.primary
+                }
+            )
+
+            val assetSummary = resolveDownloadAssetSummary(task)
+            val assetTexts = listOfNotNull(
+                assetSummary.videoText,
+                assetSummary.audioText,
+                assetSummary.danmakuText
+            )
+            if (assetTexts.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppText(
+                    text = assetTexts.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (task.isComplete && !offlinePlayable) {
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppText(
+                    text = if (!task.exportedFileUri.isNullOrBlank()) {
+                        "已导出到自定义目录，当前列表不直接离线播放"
+                    } else {
+                        "本地缓存文件不可用"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+    }
+    val actions: @Composable () -> Unit = {
+        // 操作按钮
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // 暂停/继续
+            if (task.isDownloading || task.canResume) {
+                AppIconButton(onClick = onPauseResume) {
+                    AppIcon(
+                        imageVector = if (task.isDownloading) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                        contentDescription = if (task.isDownloading) "暂停" else "继续",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // 删除
+            AppIconButton(onClick = onDelete) {
+                AppIcon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = "删除",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+    AppCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
+        shape = AppCardShape.Semantic(ContainerLevel.Card),
+        colors = AppCardDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 封面
-            Box(
-                modifier = Modifier
-                    .width(120.dp)
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                // 🖼️ [修复] 优先使用本地封面（无网络时也能显示）
-                val localCoverFile = task.localCoverPath?.let { java.io.File(it) }
-                val coverSource = if (localCoverFile?.exists() == true) {
-                    // 使用本地缓存的封面
-                    localCoverFile
-                } else {
-                    // Fallback 到网络URL
-                    val coverUrl = task.cover.let { url ->
-                        if (url.startsWith("http://")) url.replace("http://", "https://")
-                        else url
-                    }
-                    coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                        .data(coverUrl)
-                        .addHeader("Referer", "https://www.bilibili.com")
-                        .crossfade(true)
-                        .build()
-                }
-                
-                AsyncImage(
-                    model = coverSource,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                
-                // 进度/状态覆盖层
-                if (!task.isComplete) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.5f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        when (task.status) {
-                            DownloadStatus.QUEUED -> {
-                                Text("排队中", color = Color.White, fontSize = 12.sp)
-                            }
-                            DownloadStatus.DOWNLOADING, DownloadStatus.MERGING -> {
-                                CircularProgressIndicator(
-                                    progress = { resolveDownloadTaskProgress(task) },
-                                    modifier = Modifier.size(32.dp),
-                                    color = Color.White,
-                                    strokeWidth = 3.dp
-                                )
-                            }
-                            DownloadStatus.PAUSED -> {
-                                Text("已暂停", color = Color.White, fontSize = 12.sp)
-                            }
-                            DownloadStatus.FAILED -> {
-                                Text("失败", color = com.android.purebilibili.core.theme.iOSRed, fontSize = 12.sp)
-                            }
-                            else -> {}
-                        }
-                    }
-                }
-                
-                // 画质标签
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .background(
-                            Color.Black.copy(alpha = 0.7f),
-                            RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = task.qualityDesc,
-                        color = Color.White,
-                        fontSize = 10.sp
-                    )
-                }
+        if (stacked) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                cover(Modifier.fillMaxWidth())
+                info()
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { actions() }
             }
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            // 信息
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = task.title,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-
-                resolveDownloadTaskSecondaryText(task)?.let { secondaryText ->
-                    Text(
-                        text = secondaryText,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-                
-                Text(
-                    text = task.ownerName,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                // 状态文字
-                val statusText = when (task.status) {
-                    DownloadStatus.QUEUED -> "排队中..."
-                    DownloadStatus.PENDING -> "等待中..."
-                    DownloadStatus.DOWNLOADING -> "下载中 ${resolveDownloadTaskProgressPercent(task)}%"
-                    DownloadStatus.MERGING -> "处理中..."
-                    DownloadStatus.COMPLETED -> "已完成"
-                    DownloadStatus.PAUSED -> "已暂停"
-                    DownloadStatus.FAILED -> task.errorMessage ?: "下载失败"
-                }
-                Text(
-                    text = statusText,
-                    fontSize = 11.sp,
-                    color = when (task.status) {
-                        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
-                        DownloadStatus.FAILED -> com.android.purebilibili.core.theme.iOSRed
-                        else -> MaterialTheme.colorScheme.primary
-                    }
-                )
-
-                val assetSummary = resolveDownloadAssetSummary(task)
-                val assetTexts = listOfNotNull(
-                    assetSummary.videoText,
-                    assetSummary.audioText,
-                    assetSummary.danmakuText
-                )
-                if (assetTexts.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = assetTexts.joinToString(" · "),
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (task.isComplete && !offlinePlayable) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (!task.exportedFileUri.isNullOrBlank()) {
-                            "已导出到自定义目录，当前列表不直接离线播放"
-                        } else {
-                            "本地缓存文件不可用"
-                        },
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            // 操作按钮
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 暂停/继续
-                if (task.isDownloading || task.canResume) {
-                    IconButton(onClick = onPauseResume) {
-                        Icon(
-                            imageVector = if (task.isDownloading) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
-                            contentDescription = if (task.isDownloading) "暂停" else "继续",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-                
-                // 删除
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = CupertinoIcons.Default.Trash,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+        } else {
+            Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.Bottom) {
+                cover(Modifier.width(120.dp))
+                Spacer(Modifier.width(12.dp))
+                Box(modifier = Modifier.weight(1f)) { info() }
+                actions()
             }
         }
     }

@@ -2,6 +2,7 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FavoriteModelsMappingTest {
@@ -117,6 +118,22 @@ class FavoriteModelsMappingTest {
 
         assertEquals(39366561L, item.owner.mid)
         assertEquals("阿虎医考", item.owner.name)
+    }
+
+    @Test
+    fun `toVideoItem maps vertical metadata from ugc dimension`() {
+        val item = FavoriteData(
+            id = 371494037,
+            bvid = "BV1vertical",
+            title = "test",
+            cover = "https://example.com/cover.jpg",
+            ugc = FavoriteUgc(
+                first_cid = 216576581,
+                dimension = Dimension(width = 1080, height = 1920)
+            )
+        )
+
+        assertTrue(item.toVideoItem().isVertical)
     }
 
     @Test

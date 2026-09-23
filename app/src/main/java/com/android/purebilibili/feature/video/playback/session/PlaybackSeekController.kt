@@ -121,7 +121,8 @@ internal fun updatePlaybackSeekInteraction(
 }
 
 internal fun finishPlaybackSeekInteraction(
-    state: PlaybackSeekSessionState
+    state: PlaybackSeekSessionState,
+    nowMs: Long = currentMonotonicMs(),
 ): PlaybackSeekSessionCommitResult {
     val committedPositionMs = state.sliderPositionMs.coerceAtLeast(0L)
     return PlaybackSeekSessionCommitResult(
@@ -130,12 +131,24 @@ internal fun finishPlaybackSeekInteraction(
             isSliderMoving = false,
             pendingSeekPositionMs = committedPositionMs,
             pendingSeekOriginPositionMs = state.playbackPositionMs.coerceAtLeast(0L),
-            sliderInteractionUpdatedAtMs = 0L
+            sliderInteractionUpdatedAtMs = nowMs
         ),
         committedPositionMs = committedPositionMs,
         shouldResumePlayback = state.shouldResumePlayback
     )
 }
+
+internal fun expirePendingPlaybackSeek(
+    state: PlaybackSeekSessionState,
+    playbackPositionMs: Long,
+): PlaybackSeekSessionState = state.copy(
+    playbackPositionMs = playbackPositionMs.coerceAtLeast(0L),
+    sliderPositionMs = playbackPositionMs.coerceAtLeast(0L),
+    pendingSeekPositionMs = null,
+    pendingSeekOriginPositionMs = null,
+    shouldResumePlayback = null,
+    sliderInteractionUpdatedAtMs = 0L,
+)
 
 internal fun commitPlaybackSeekInteraction(
     state: PlaybackSeekSessionState,
@@ -157,6 +170,22 @@ internal fun cancelPlaybackSeekInteraction(
     val restoredPositionMs = state.playbackPositionMs.coerceAtLeast(0L)
     return state.copy(
         sliderPositionMs = restoredPositionMs,
+        isSliderMoving = false,
+        pendingSeekPositionMs = null,
+        pendingSeekOriginPositionMs = null,
+        shouldResumePlayback = null,
+        sliderInteractionUpdatedAtMs = 0L
+    )
+}
+
+internal fun resetPlaybackSeekSessionForActivePlayback(
+    state: PlaybackSeekSessionState,
+    playbackPositionMs: Long
+): PlaybackSeekSessionState {
+    val safePositionMs = playbackPositionMs.coerceAtLeast(0L)
+    return state.copy(
+        playbackPositionMs = safePositionMs,
+        sliderPositionMs = safePositionMs,
         isSliderMoving = false,
         pendingSeekPositionMs = null,
         pendingSeekOriginPositionMs = null,
@@ -218,7 +247,8 @@ private fun shouldHoldPendingSeekPosition(
             playerPositionMs < targetPositionMs - toleranceMs
         targetPositionMs < originPositionMs ->
             playerPositionMs > targetPositionMs + toleranceMs
-        else -> true
+        // 采样原点与提交目标相同时无法可靠判断方向，继续锁定会让进度条永久停在目标值。
+        else -> false
     }
 }
 

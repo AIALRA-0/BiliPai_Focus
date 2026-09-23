@@ -46,9 +46,14 @@ class DanmakuRepositoryPolicyTest {
     }
 
     @Test
-    fun resolveDanmakuSegmentCount_prefersDurationWhenAvailable() {
+    fun resolveDanmakuSegmentCount_usesDurationWhenMetadataIsUnavailable() {
         assertEquals(1, resolveDanmakuSegmentCount(durationMs = 1000L, metadataSegmentCount = null))
-        assertEquals(3, resolveDanmakuSegmentCount(durationMs = 720_001L, metadataSegmentCount = 1))
+    }
+
+    @Test
+    fun resolveDanmakuSegmentCount_prefersCidMetadataOverPossiblyStalePlayerDuration() {
+        assertEquals(1, resolveDanmakuSegmentCount(durationMs = 720_001L, metadataSegmentCount = 1))
+        assertEquals(5, resolveDanmakuSegmentCount(durationMs = 1_000L, metadataSegmentCount = 5))
     }
 
     @Test

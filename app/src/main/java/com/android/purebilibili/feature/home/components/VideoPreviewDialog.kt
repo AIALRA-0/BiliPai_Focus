@@ -1,11 +1,19 @@
 package com.android.purebilibili.feature.home.components
 
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+
+import com.android.purebilibili.core.ui.MediaContrastPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,11 +24,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.ui.rememberAppClearIcon
 import com.android.purebilibili.core.ui.rememberAppPhotoIcon
@@ -31,10 +38,11 @@ import com.android.purebilibili.core.ui.rememberAppWatchLaterIcon
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.VideoItem
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.Icon
+import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import androidx.compose.ui.viewinterop.AndroidView
@@ -48,9 +56,6 @@ import androidx.media3.common.Player
 
 import androidx.compose.material.icons.rounded.Fullscreen
 import com.android.purebilibili.core.ui.blur.unifiedBlur
-import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
-import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.zIndex
 
 internal fun shouldEnableSaveCoverAction(coverUrl: String): Boolean = coverUrl.isNotBlank()
@@ -82,9 +87,6 @@ fun VideoPreviewDialog(
     val blockCreatorIcon = rememberAppVisibilityOffIcon()
     val watchLaterIcon = rememberAppWatchLaterIcon()
     
-    // Dissolve Animation State
-    var isDissolving by remember { mutableStateOf(false) }
-    
     // Playback State
     var isPlaying by remember { androidx.compose.runtime.mutableStateOf(false) }
     var videoUrl by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
@@ -106,9 +108,9 @@ fun VideoPreviewDialog(
     }
 
     // Handle Back Press manually since we are not in a Dialog anymore
-    androidx.activity.compose.BackHandler(onBack = {
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) {
         if (isPlaying) isPlaying = false else onDismiss()
-    })
+    }
 
     Box(
         modifier = Modifier
@@ -120,7 +122,7 @@ fun VideoPreviewDialog(
                     Modifier
                 }
             )
-            .background(Color.Black.copy(alpha = 0.6f))
+            .background(MediaContrastPalette.Scrim.copy(alpha = 0.6f))
             .clickable(
                 interactionSource = null, 
                 indication = null, 
@@ -128,36 +130,26 @@ fun VideoPreviewDialog(
             ),
         contentAlignment = Alignment.Center
     ) {
-        DissolvableVideoCard(
-            isDissolving = isDissolving,
-            onDissolveComplete = {
-                onDismiss()
-                onNotInterested?.invoke()
-            },
-            cardId = video.bvid
-            ,
-            preset = DissolveAnimationPreset.TELEGRAM_FAST
+        Column(
+            modifier = Modifier
+                .width(AppSpacingTokens.TripleExtraLarge * 6 + AppSpacingTokens.Medium) // Slightly wider than standard alert
+                // Remove padding between items by putting them in one Surface
+                .clip(AppShapes.container(ContainerLevel.Card)) // Clip the whole card
+                .clickable(enabled = false) {}, // Prevent clicks from passing through to background
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier
-                    .width(300.dp) // Slightly wider than standard alert
-                    // Remove padding between items by putting them in one Surface
-                    .clip(AppShapes.container(ContainerLevel.Card)) // Clip the whole card
-                    .clickable(enabled = false) {}, // Prevent clicks from passing through to background
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
 
-                Surface(
-                    color = AppSurfaceTokens.cardContainer(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column {
+            AppSurface(
+                color = AppSurfaceTokens.cardContainer(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
                         // 1. Media Area (Cover or Player)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1.6f)
-                                .background(Color.Black)
+                                .background(MediaContrastPalette.Scrim)
                                 .clickable { // Toggle Play/Pause
                                     haptic(HapticType.MEDIUM)
                                     isPlaying = !isPlaying
@@ -184,36 +176,36 @@ fun VideoPreviewDialog(
                                 
                                 // Loading Indicator
                                 if (isLoading) {
-                                    androidx.compose.material3.CircularProgressIndicator(
-                                        color = Color.White,
-                                        modifier = Modifier.size(30.dp)
+                                    AdaptiveLoadingIndicator(
+                                        color = MediaContrastPalette.Foreground,
+                                        size = AppSpacingTokens.DoubleExtraLarge - AppSpacingTokens.Micro,
                                     )
                                 }
                             } else {
                                 // Play Icon Overlay (Hint that it's clickable)
-                                Icon(
+                                AppIcon(
                                     imageVector = playIcon,
                                     contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.8f),
+                                    tint = MediaContrastPalette.Foreground.copy(alpha = 0.8f),
                                     modifier = Modifier
-                                        .size(48.dp)
-                                        .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
-                                        .padding(12.dp)
+                                        .size(AppChromeSizeTokens.MinimumTouchTarget)
+                                        .background(MediaContrastPalette.Scrim.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                                        .padding(AppSpacingTokens.Medium)
                                 )
                             }
                         }
                         
                         // 2. Title & Info
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
+                        Column(modifier = Modifier.padding(AppSpacingTokens.Large)) {
+                            AppText(
                                 text = video.title,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
+                            Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                            AppText(
                                 text = "${video.owner.name} · ${FormatUtils.formatStat(video.stat.view.toLong())}播放",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -247,20 +239,6 @@ fun VideoPreviewDialog(
                             }
                         )
 
-                        if (onBlockCreator != null && shouldShowBlockCreatorAction(video.owner.mid)) {
-                            MenuDivider()
-                            PreviewMenuItem(
-                                text = "屏蔽 UP 主",
-                                icon = blockCreatorIcon,
-                                isDestructive = true,
-                                onClick = {
-                                    haptic(HapticType.HEAVY)
-                                    onBlockCreator()
-                                    onDismiss()
-                                }
-                            )
-                        }
-                        
                         if (onSaveCover != null && shouldEnableSaveCoverAction(video.pic)) {
                             MenuDivider()
                             PreviewMenuItem(
@@ -290,6 +268,20 @@ fun VideoPreviewDialog(
                             }
                         )
 
+                        if (onBlockCreator != null && shouldShowBlockCreatorAction(video.owner.mid)) {
+                            MenuDivider()
+                            PreviewMenuItem(
+                                text = "屏蔽 UP 主",
+                                icon = blockCreatorIcon,
+                                isDestructive = true,
+                                onClick = {
+                                    haptic(HapticType.HEAVY)
+                                    onBlockCreator()
+                                    onDismiss()
+                                }
+                            )
+                        }
+
                         if (onNotInterested != null) {
                             MenuDivider()
                             PreviewMenuItem(
@@ -298,11 +290,11 @@ fun VideoPreviewDialog(
                                 isDestructive = true,
                                 onClick = {
                                     haptic(HapticType.HEAVY)
-                                    isDissolving = true // Trigger Thanos snap animation
+                                    onNotInterested()
+                                    onDismiss()
                                 }
                             )
                         }
-                    }
                 }
             }
         }
@@ -310,6 +302,7 @@ fun VideoPreviewDialog(
 }
 
 @Composable
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 fun DisposableVideoPlayer(url: String) {
     val context = LocalContext.current
     
@@ -356,28 +349,28 @@ private fun PreviewMenuItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
+            AppText(
                 text = text,
-                fontSize = 17.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 fontWeight = FontWeight.Normal,
                 color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
             )
-            Icon(
+            AppIcon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
             )
         }
     }
@@ -385,8 +378,8 @@ private fun PreviewMenuItem(
 
 @Composable
 private fun MenuDivider() {
-    androidx.compose.material3.HorizontalDivider(
+    AppHorizontalDivider(
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-        thickness = 0.5.dp
+        thickness = AppSpacingTokens.Micro / 4
     )
 }

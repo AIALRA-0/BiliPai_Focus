@@ -18,6 +18,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardMediaActio
 import com.android.purebilibili.feature.dynamic.components.DynamicCardPrimaryAction
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicCardMediaAction
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicCardPrimaryAction
+import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,6 +27,32 @@ import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
 
 class DynamicInteractionPolicyTest {
+
+    @Test
+    fun `comment page result is rejected after reopening the same target`() {
+        val target = DynamicCommentTarget(oid = 42L, type = 17)
+
+        assertTrue(
+            shouldApplyDynamicCommentPageResult(
+                activeRequestId = 2L,
+                requestId = 2L,
+                activeTarget = target,
+                requestTarget = target,
+                activeSortMode = CommentSortMode.HOT,
+                requestSortMode = CommentSortMode.HOT,
+            )
+        )
+        assertFalse(
+            shouldApplyDynamicCommentPageResult(
+                activeRequestId = 3L,
+                requestId = 2L,
+                activeTarget = target,
+                requestTarget = target,
+                activeSortMode = CommentSortMode.HOT,
+                requestSortMode = CommentSortMode.HOT,
+            )
+        )
+    }
 
     @Test
     fun `video tab includes ugc season dynamics`() {
@@ -39,6 +66,23 @@ class DynamicInteractionPolicyTest {
         val item = DynamicItem(type = "DYNAMIC_TYPE_PGC")
 
         assertFalse(shouldIncludeDynamicItemInVideoTab(item))
+        assertTrue(shouldIncludeDynamicItemInPgcTab(item))
+    }
+
+    @Test
+    fun `pgc tab includes items identified by their major pgc payload`() {
+        val item = DynamicItem(
+            type = "DYNAMIC_TYPE_COMMON_SQUARE",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        type = "MAJOR_TYPE_PGC",
+                        pgc = ArchiveMajor(aid = "123")
+                    )
+                )
+            )
+        )
+
         assertTrue(shouldIncludeDynamicItemInPgcTab(item))
     }
 
@@ -166,7 +210,7 @@ class DynamicInteractionPolicyTest {
     }
 
     @Test
-    fun `resolve dynamic comment target prefers dynamic id for opus detail even when basic points elsewhere`() {
+    fun `resolve dynamic comment target prefers documented basic fields for opus detail`() {
         val item = DynamicItem(
             id_str = "967717348014293017",
             type = "DYNAMIC_TYPE_DRAW",
@@ -186,11 +230,11 @@ class DynamicInteractionPolicyTest {
 
         val target = resolveDynamicCommentTarget(item)
 
-        assertEquals(DynamicCommentTarget(oid = 967717348014293017L, type = 17), target)
+        assertEquals(DynamicCommentTarget(oid = 326122895L, type = 11), target)
     }
 
     @Test
-    fun `resolve dynamic comment targets keeps desktop dynamic target before legacy basic fallback`() {
+    fun `resolve dynamic comment targets keeps documented basic target before desktop fallback`() {
         val item = DynamicItem(
             id_str = "967717348014293017",
             type = "DYNAMIC_TYPE_DRAW",
@@ -210,10 +254,46 @@ class DynamicInteractionPolicyTest {
 
         assertEquals(
             listOf(
-                DynamicCommentTarget(oid = 967717348014293017L, type = 17),
-                DynamicCommentTarget(oid = 326122895L, type = 11)
+                DynamicCommentTarget(oid = 326122895L, type = 11),
+                DynamicCommentTarget(oid = 967717348014293017L, type = 17)
             ),
             targets
+        )
+    }
+
+    @Test
+    fun `resolve forwarded dynamic comment target uses dynamic id target`() {
+        val item = DynamicItem(
+            id_str = "967717348014293017",
+            type = "DYNAMIC_TYPE_FORWARD",
+            basic = DynamicBasic(
+                comment_id_str = "967717348014293018",
+                comment_type = 17
+            )
+        )
+
+        val target = resolveDynamicCommentTarget(item)
+
+        assertEquals(DynamicCommentTarget(oid = 967717348014293017L, type = 17), target)
+    }
+
+    @Test
+    fun `forwarded image dynamic includes both forward dynamic and image comment targets`() {
+        val item = DynamicItem(
+            id_str = "1224850859523833879",
+            type = "DYNAMIC_TYPE_FORWARD",
+            basic = DynamicBasic(
+                comment_id_str = "401730991",
+                comment_type = 11
+            )
+        )
+
+        assertEquals(
+            listOf(
+                DynamicCommentTarget(oid = 1224850859523833879L, type = 17),
+                DynamicCommentTarget(oid = 401730991L, type = 11)
+            ),
+            resolveDynamicCommentTargets(item)
         )
     }
 

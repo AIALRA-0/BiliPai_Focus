@@ -9,8 +9,10 @@ import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import java.util.concurrent.CancellationException
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.max
 
 private val LIVE_STAGE_WHITESPACE_REGEX = Regex("\\s+")
 private val SENSITIVE_CRASH_CUSTOM_KEYS = setOf(
@@ -57,6 +59,54 @@ internal fun shouldUseRemoteCrashlytics(
     firebaseConfigured: Boolean,
     crashTrackingEnabled: Boolean
 ): Boolean = firebaseConfigured && crashTrackingEnabled
+private const val MIN_NON_FATAL_HEADROOM_BYTES = 8L * 1024 * 1024
+private const val MIN_NON_FATAL_HEADROOM_RATIO = 0.03
+
+internal fun shouldRecordNonFatalEvent(
+    maxMemoryBytes: Long,
+    totalMemoryBytes: Long,
+    freeMemoryBytes: Long
+): Boolean {
+    val availableBytes = (maxMemoryBytes - totalMemoryBytes + freeMemoryBytes).coerceAtLeast(0L)
+    val requiredBytes = max(
+        MIN_NON_FATAL_HEADROOM_BYTES,
+        (maxMemoryBytes * MIN_NON_FATAL_HEADROOM_RATIO).toLong()
+    )
+    return availableBytes >= requiredBytes
+}
+
+internal fun shouldReportApiFailure(
+    callCanceled: Boolean,
+    throwable: Throwable
+): Boolean {
+    if (callCanceled) return false
+
+    var cause: Throwable? = throwable
+    while (cause != null) {
+        if (cause is CancellationException) return false
+        if (cause.message?.trim()?.equals("Canceled", ignoreCase = true) == true ||
+            cause.message?.trim()?.equals("Cancelled", ignoreCase = true) == true
+        ) {
+            return false
+        }
+        cause = cause.cause
+    }
+    return true
+}
+
+internal fun normalizeApiErrorEndpoint(endpoint: String): String {
+    val normalized = endpoint.substringBefore("?").trim().take(160)
+    val pathStart = normalized.indexOf('/')
+    val method = if (pathStart > 0) normalized.substring(0, pathStart).trim() else ""
+    val path = if (pathStart >= 0) normalized.substring(pathStart) else normalized
+    val groupedPath = when {
+        path.startsWith("/bfs/") -> path.split('/').take(3).joinToString("/")
+        path.startsWith("/videoshotpvhdboss/") -> "/videoshotpvhdboss"
+        path.startsWith("/v1/resource/upgcxcode/") -> "/v1/resource/upgcxcode"
+        else -> path
+    }
+    return if (method.isBlank()) groupedPath else "$method $groupedPath"
+}
 
 /**
  * 崩溃报告工具类
@@ -164,8 +214,10 @@ object CrashReporter {
                     Logger.persistCrashSnapshot(throwable)
                 }
                 if (isEnabled) {
+                    @Suppress("DEPRECATION")
+                    val fatalThreadId = thread.id
                     setCustomKey("fatal_thread_name", thread.name)
-                    setCustomKey("fatal_thread_id", thread.threadId())
+                    setCustomKey("fatal_thread_id", fatalThreadId)
                     setCustomKey("app_in_foreground", !BackgroundManager.isInBackground)
                     setCustomKey("fatal_in_live_session", liveSessionActive)
                     if (liveSessionActive) {
@@ -252,7 +304,7 @@ object CrashReporter {
      * 用于捕获的异常，不会导致崩溃但需要追踪
      */
     fun logException(e: Throwable, message: String? = null) {
-        if (!canUseRemoteCrashlytics()) return
+        if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
         val key = "exception:${e.javaClass.name}:${message ?: e.message.orEmpty().take(120)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -363,7 +415,7 @@ object CrashReporter {
         errorMessage: String,
         exception: Throwable? = null
     ) {
-        if (!canUseRemoteCrashlytics()) return
+        if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
         val key = "video:$errorType:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -396,8 +448,8 @@ object CrashReporter {
         errorMessage: String,
         bvid: String? = null
     ) {
-        if (!canUseRemoteCrashlytics()) return
-        val safeEndpoint = endpoint.substringBefore("?").take(160)
+        if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
+        val safeEndpoint = normalizeApiErrorEndpoint(endpoint)
         val key = "api:$httpCode:$safeEndpoint:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -416,7 +468,7 @@ object CrashReporter {
      * 上报弹幕加载错误
      */
     fun reportDanmakuError(cid: Long, errorMessage: String, exception: Throwable? = null) {
-        if (!canUseRemoteCrashlytics()) return
+        if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
         val key = "danmaku:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -445,7 +497,7 @@ object CrashReporter {
         errorMessage: String,
         exception: Throwable? = null
     ) {
-        if (!canUseRemoteCrashlytics()) return
+        if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
         val key = "live:$errorType:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -573,6 +625,15 @@ object CrashReporter {
     private fun hasConfiguredFirebaseApp(context: Context): Boolean {
         return runCatching { FirebaseApp.getApps(context).isNotEmpty() }
             .getOrDefault(false)
+    }
+
+    private fun hasNonFatalReportingHeadroom(): Boolean {
+        val runtime = Runtime.getRuntime()
+        return shouldRecordNonFatalEvent(
+            maxMemoryBytes = runtime.maxMemory(),
+            totalMemoryBytes = runtime.totalMemory(),
+            freeMemoryBytes = runtime.freeMemory()
+        )
     }
 
     private fun shouldCacheAndWriteCustomKey(key: String, value: Any): Boolean {

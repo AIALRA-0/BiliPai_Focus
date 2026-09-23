@@ -12,6 +12,7 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
 
 data class AppUpdateAsset(
     val name: String,
@@ -108,7 +109,11 @@ object AppUpdateChecker {
     private const val READ_TIMEOUT_MS = 8000
     private val releaseJson = Json { ignoreUnknownKeys = true }
 
-    suspend fun check(currentVersion: String): Result<AppUpdateCheckResult> = withContext(Dispatchers.IO) {
+    suspend fun check(
+        currentVersion: String,
+        currentVersionCode: Int,
+        includePrerelease: Boolean = false
+    ): Result<AppUpdateCheckResult> = withContext(Dispatchers.IO) {
         runCatching {
             val endpointErrors = mutableListOf<String>()
             val resolved = resolveEndpointCandidates().firstNotNullOfOrNull { endpoints ->
@@ -117,7 +122,7 @@ object AppUpdateChecker {
                         ?.let { body ->
                             selectLatestReleaseCandidate(
                                 rawReleaseJson = body,
-                                currentVersion = currentVersion,
+                                includePrerelease = includePrerelease,
                                 releasesPageUrl = endpoints.releasesPageUrl
                             )
                         }
@@ -129,28 +134,21 @@ object AppUpdateChecker {
                             rawBuildGradle = body,
                             repositoryUrl = endpoints.repositoryUrl
                         )
-                    }?.takeIf { candidate ->
-                        !candidate.isPrerelease || isPrereleaseVersion(currentVersion)
-                    }
-                    val preferred = selectPreferredUpdateCandidate(
+                    }?.takeIf { candidate -> includePrerelease || !candidate.isPrerelease }
+                    val candidate = selectPreferredUpdateCandidate(
                         releaseCandidate = releaseCandidate,
                         repositoryCandidate = repositoryCandidate
                     ) ?: return@runCatching null
-                    endpoints to preferred
+                    endpoints to candidate
                 }.onFailure { error ->
                     endpointErrors += "${endpoints.repositoryUrl}: ${error.message ?: "未知错误"}"
                 }.getOrNull()
             } ?: throw IllegalStateException(
                 buildString {
-                    append("未获取到有效版本信息")
-                    if (endpointErrors.isNotEmpty()) {
-                        append("（")
-                        append(endpointErrors.joinToString("；"))
-                        append('）')
-                    }
+                    append(if (includePrerelease) "未获取到有效测试版版本信息" else "未获取到有效稳定版版本信息")
+                    if (endpointErrors.isNotEmpty()) append("（${endpointErrors.joinToString("；")}）")
                 }
             )
-
             val release = resolved.second
 
             val latestTag = release.tagName
@@ -177,7 +175,12 @@ object AppUpdateChecker {
                     fetchRemoteText(metadataUrl, required = false)
                 }
                 ?.let(::parseVerificationMetadata)
-            val updateAvailable = isRemoteNewer(currentVersion, latestVersion)
+            val updateAvailable = shouldOfferUpdate(
+                currentVersion = currentVersion,
+                currentVersionCode = currentVersionCode,
+                latestVersion = latestVersion,
+                buildMetadata = buildMetadata
+            )
             val message = if (updateAvailable) {
                 "发现新版本 v$latestVersion"
             } else {
@@ -216,7 +219,7 @@ object AppUpdateChecker {
                     endpoint.repositoryUrl.isNotBlank() &&
                     endpoint.releasesPageUrl.isNotBlank()
             }
-            .distinctBy { it.repositoryUrl.trim().lowercase() }
+            .distinctBy { endpoint -> endpoint.repositoryUrl.trim().lowercase() }
     }
 
     private fun buildEndpointSetFromRepositoryPath(path: String): AppUpdateEndpointSet {
@@ -271,56 +274,73 @@ object AppUpdateChecker {
         ) < 0
     }
 
-internal fun parseVersionParts(version: String): List<Int> {
-    if (version.isBlank()) return emptyList()
-    return version
-        .split('.')
-        .mapNotNull { part -> part.toIntOrNull() }
-}
+    internal fun shouldOfferUpdate(
+        currentVersion: String,
+        currentVersionCode: Int,
+        latestVersion: String,
+        buildMetadata: AppReleaseBuildMetadata?
+    ): Boolean {
+        val remoteVersionCode = buildMetadata?.versionCode ?: 0
+        if (currentVersionCode > 0 && remoteVersionCode > 0) {
+            return remoteVersionCode > currentVersionCode
+        }
 
-private data class ParsedVersion(
-    val numericParts: List<Int>,
-    val qualifiers: List<ParsedVersionQualifier>
-)
+        val currentEpoch = parseVersionParts(normalizeVersion(currentVersion)).firstOrNull()
+        val latestEpoch = parseVersionParts(normalizeVersion(latestVersion)).firstOrNull()
+        return currentEpoch != null &&
+            currentEpoch == latestEpoch &&
+            isRemoteNewer(currentVersion, latestVersion)
+    }
 
-private data class ParsedVersionQualifier(
-    val name: String,
-    val rank: Int,
-    val number: Int
-)
+    internal fun parseVersionParts(version: String): List<Int> {
+        if (version.isBlank()) return emptyList()
+        return version
+            .split('.')
+            .mapNotNull { part -> part.toIntOrNull() }
+    }
 
-private fun parseComparableVersion(version: String): ParsedVersion {
-    val normalized = normalizeVersion(version)
-    val numericPrefix = normalized
-        .takeWhile { it.isDigit() || it == '.' }
-        .trimEnd('.')
-    val suffix = normalized.removePrefix(numericPrefix)
-    val qualifiers = Regex(
-        pattern = """(?i)(alpha|beta|rc|focus)[\s._-]*(\d+)?"""
-    ).findAll(suffix)
-        .map { match ->
-            val name = match.groupValues[1].lowercase()
-            ParsedVersionQualifier(
-                name = name,
-                rank = when (name) {
-                    "alpha" -> 0
-                    "beta" -> 1
-                    "rc" -> 2
-                    "focus" -> 4
-                    else -> 3
-                },
-                number = match.groupValues[2].toIntOrNull() ?: 0
+    private data class ParsedVersion(
+        val numericParts: List<Int>,
+        val stabilityRank: Int,
+        val qualifierNumber: Int
+    )
+
+    private fun parseComparableVersion(version: String): ParsedVersion {
+        val normalized = normalizeVersion(version)
+        val match = Regex(
+            pattern = """^(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc|focus)[\s._-]*(\d+)?)?$""",
+            option = RegexOption.IGNORE_CASE
+        ).matchEntire(normalized)
+        if (match != null) {
+            val numeric = parseVersionParts(match.groupValues[1])
+            val qualifier = match.groupValues[2].lowercase()
+            val qualifierNumber = match.groupValues[3].toIntOrNull() ?: 0
+            val stabilityRank = when (qualifier) {
+                "alpha" -> 0
+                "beta" -> 1
+                "rc" -> 2
+                "focus" -> 4
+                else -> 3
+            }
+            return ParsedVersion(
+                numericParts = numeric,
+                stabilityRank = stabilityRank,
+                qualifierNumber = qualifierNumber
             )
         }
-        .toList()
-    return ParsedVersion(
-        numericParts = parseVersionParts(numericPrefix),
-        qualifiers = qualifiers
-    )
-}
 
-private fun compareVersions(localVersion: String, remoteVersion: String): Int {
-    val local = parseComparableVersion(localVersion)
+        val numericPrefix = normalized
+            .takeWhile { it.isDigit() || it == '.' }
+            .trimEnd('.')
+        return ParsedVersion(
+            numericParts = parseVersionParts(numericPrefix),
+            stabilityRank = 3,
+            qualifierNumber = 0
+        )
+    }
+
+    private fun compareVersions(localVersion: String, remoteVersion: String): Int {
+        val local = parseComparableVersion(localVersion)
         val remote = parseComparableVersion(remoteVersion)
         val maxSize = maxOf(local.numericParts.size, remote.numericParts.size)
         for (index in 0 until maxSize) {
@@ -330,26 +350,11 @@ private fun compareVersions(localVersion: String, remoteVersion: String): Int {
                 return localPart.compareTo(remotePart)
             }
         }
-    val maxQualifierCount = maxOf(local.qualifiers.size, remote.qualifiers.size)
-    for (index in 0 until maxQualifierCount) {
-        val localQualifier = local.qualifiers.getOrNull(index)
-        val remoteQualifier = remote.qualifiers.getOrNull(index)
-        if (localQualifier == null && remoteQualifier == null) break
-        if (localQualifier == null) {
-            return if (remoteQualifier?.name == "focus") -1 else 1
+        if (local.stabilityRank != remote.stabilityRank) {
+            return local.stabilityRank.compareTo(remote.stabilityRank)
         }
-        if (remoteQualifier == null) {
-            return if (localQualifier.name == "focus") 1 else -1
-        }
-        if (localQualifier.rank != remoteQualifier.rank) {
-            return localQualifier.rank.compareTo(remoteQualifier.rank)
-        }
-        if (localQualifier.number != remoteQualifier.number) {
-            return localQualifier.number.compareTo(remoteQualifier.number)
-        }
+        return local.qualifierNumber.compareTo(remote.qualifierNumber)
     }
-    return 0
-}
 
     private fun isPrereleaseVersion(version: String): Boolean {
         val normalized = normalizeVersion(version).lowercase()
@@ -358,28 +363,28 @@ private fun compareVersions(localVersion: String, remoteVersion: String): Int {
 
     internal fun selectLatestReleaseCandidate(
         rawReleaseJson: String,
-        currentVersion: String,
+        includePrerelease: Boolean = false,
         releasesPageUrl: String = BuildConfig.FOCUS_RELEASES_URL
     ): AppUpdateReleaseCandidate? {
         val releasesJson = runCatching {
             releaseJson.parseToJsonElement(rawReleaseJson).jsonArray
         }.getOrNull() ?: return null
 
-        val allowPrerelease = isPrereleaseVersion(currentVersion)
-        return releasesJson
+        val candidates = releasesJson
             .mapNotNull { releaseElement ->
-                parseReleaseCandidateElement(
-                    releaseElement = releaseElement,
-                    releasesPageUrl = releasesPageUrl
-                )
+                parseReleaseCandidateElement(releaseElement, releasesPageUrl)
             }
-            .filter { !it.isPrerelease || allowPrerelease }
-            .maxWithOrNull { left, right ->
-                compareVersions(
-                    localVersion = normalizeVersion(left.tagName),
-                    remoteVersion = normalizeVersion(right.tagName)
-                )
+            .filter { (includePrerelease || !it.isPrerelease) && it.assets.any(AppUpdateAsset::isApk) }
+
+        return candidates
+            .mapNotNull { candidate ->
+                candidate.publishedAt
+                    ?.let { publishedAt -> runCatching { Instant.parse(publishedAt) }.getOrNull() }
+                    ?.let { publishedAt -> candidate to publishedAt }
             }
+            .maxByOrNull { (_, publishedAt) -> publishedAt }
+            ?.first
+            ?: candidates.firstOrNull()
     }
 
     internal fun parseRepositoryVersionCandidate(
@@ -395,8 +400,8 @@ private fun compareVersions(localVersion: String, remoteVersion: String): Int {
         if (versionName.isBlank()) return null
         return AppUpdateReleaseCandidate(
             tagName = versionName,
-            releaseUrl = repositoryUrl,
-            releaseNotes = "当前版本来自仓库默认分支，尚未创建 GitHub Release",
+            releaseUrl = "$repositoryUrl/releases",
+            releaseNotes = "仓库默认分支提供了更新版本，尚未发布 GitHub Release。",
             publishedAt = null,
             assets = emptyList(),
             isPrerelease = isPrereleaseVersion(versionName)
@@ -414,11 +419,7 @@ private fun compareVersions(localVersion: String, remoteVersion: String): Int {
                 localVersion = normalizeVersion(releaseCandidate.tagName),
                 remoteVersion = normalizeVersion(repositoryCandidate.tagName)
             ) >= 0
-        ) {
-            releaseCandidate
-        } else {
-            repositoryCandidate
-        }
+        ) releaseCandidate else repositoryCandidate
     }
 
     private fun parseReleaseCandidateElement(

@@ -1,88 +1,56 @@
 package com.android.purebilibili.core.ui
 
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
-import com.android.purebilibili.core.ui.IOSLargeTitleBarRenderer
-import com.android.purebilibili.core.ui.resolveLargeTitleBarRenderer
-import com.android.purebilibili.feature.home.components.IOSRefreshIndicatorRenderer
-import com.android.purebilibili.feature.home.components.resolveRefreshIndicatorRenderer
+import com.android.purebilibili.core.theme.AppUiStyle
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
- * Asserts every shared iOS* primitive exposes a preset-aware renderer decision
- * so feature screens get the right look on iOS / MD3 / Miuix without primitive
+ * Asserts every shared adaptive primitive exposes a preset-aware renderer decision
+ * so feature screens get the right look on MIUIX / MD3 without primitive
  * call sites changing. Compose UI tests would assert actual rendered nodes;
  * here we assert the policy layer that drives the dispatch.
  */
 class PrimitivePresetCoverageTest {
 
     @Test
-    fun unifiedRenderer_matches_uiPresetMatrix() {
+    fun unifiedRenderer_matches_uiStyleMatrix() {
+        // 两值模型：MIUIX → MIUIX_BRIDGED、MATERIAL3 → MATERIAL3。
         assertEquals(
-            PresetPrimitiveRenderer.IOS,
-            resolvePresetPrimitiveRenderer(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+            PresetPrimitiveRenderer.MIUIX_BRIDGED,
+            resolvePresetPrimitiveRenderer(AppUiStyle.MIUIX)
         )
         assertEquals(
             PresetPrimitiveRenderer.MATERIAL3,
-            resolvePresetPrimitiveRenderer(UiPreset.MD3, AndroidNativeVariant.MATERIAL3)
-        )
-        assertEquals(
-            PresetPrimitiveRenderer.MIUIX_BRIDGED,
-            resolvePresetPrimitiveRenderer(UiPreset.MD3, AndroidNativeVariant.MIUIX)
+            resolvePresetPrimitiveRenderer(AppUiStyle.MATERIAL3)
         )
     }
 
     @Test
-    fun largeTitleBarRenderer_collapsesMd3AndMiuixOntoAdaptiveTopAppBar() {
-        assertEquals(
-            IOSLargeTitleBarRenderer.IOS_LARGE_TITLE,
-            resolveLargeTitleBarRenderer(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+    fun legacyLargeTitleBar_isRemovedAfterFeatureMigration() {
+        val legacySource = listOf(
+            File("app/src/main/java/com/android/purebilibili/core/ui/iOSLargeTitleBar.kt"),
+            File("src/main/java/com/android/purebilibili/core/ui/iOSLargeTitleBar.kt"),
         )
-        assertEquals(
-            IOSLargeTitleBarRenderer.ADAPTIVE_TOP_APP_BAR,
-            resolveLargeTitleBarRenderer(UiPreset.MD3, AndroidNativeVariant.MATERIAL3)
-        )
-        assertEquals(
-            IOSLargeTitleBarRenderer.ADAPTIVE_TOP_APP_BAR,
-            resolveLargeTitleBarRenderer(UiPreset.MD3, AndroidNativeVariant.MIUIX)
-        )
+        assertEquals(false, legacySource.any { it.exists() })
     }
 
     @Test
-    fun refreshIndicatorRenderer_swapsToMaterialWhenNotIos() {
-        assertEquals(
-            IOSRefreshIndicatorRenderer.CUPERTINO_IOS,
-            resolveRefreshIndicatorRenderer(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
-        )
-        assertEquals(
-            IOSRefreshIndicatorRenderer.MATERIAL3_CIRCULAR,
-            resolveRefreshIndicatorRenderer(UiPreset.MD3, AndroidNativeVariant.MATERIAL3)
-        )
-        assertEquals(
-            IOSRefreshIndicatorRenderer.MIUIX_BRIDGED,
-            resolveRefreshIndicatorRenderer(UiPreset.MD3, AndroidNativeVariant.MIUIX)
-        )
+    fun dialogActionLayoutPolicy_isConstantAfterIosMigration() {
+        // 2B 迁移：iOS 全宽铺满操作区行为已随单向迁移删除，布局政策收敛为常量。
+        assertEquals(false, resolveDialogActionLayoutPolicy().expandToContainer)
     }
 
     @Test
-    fun dialogActionLayoutPolicy_stillBranches() {
-        // iOSDialogComponents already exposes resolveIosDialogActionLayoutPolicy.
-        // Verify it continues to differentiate iOS vs MD3.
-        val iosLayout = resolveIosDialogActionLayoutPolicy(UiPreset.IOS)
-        val md3Layout = resolveIosDialogActionLayoutPolicy(UiPreset.MD3)
-        assertEquals(true, iosLayout.expandToContainer)
-        assertEquals(false, md3Layout.expandToContainer)
-    }
-
-    @Test
-    fun adaptiveBottomSheetVisual_stillBranches() {
-        // iOSSheetComponents exposes resolveAdaptiveBottomSheetVisualSpec.
-        val ios = resolveAdaptiveBottomSheetVisualSpec(UiPreset.IOS)
-        val md3 = resolveAdaptiveBottomSheetVisualSpec(UiPreset.MD3)
-        assertEquals(14, ios.cornerRadiusDp)
-        assertEquals(28, md3.cornerRadiusDp)
-        assertEquals(false, ios.useMaterialDragHandle)
-        assertEquals(true, md3.useMaterialDragHandle)
+    fun adaptiveBottomSheetVisual_branchesByUiStyle() {
+        // AppSheetComponents 按两值风格分支圆角等级（胶囊级）。
+        val miuix = resolveAdaptiveBottomSheetVisualSpec(AppUiStyle.MIUIX)
+        val material3 = resolveAdaptiveBottomSheetVisualSpec(AppUiStyle.MATERIAL3)
+        // 2B 迁移：两值风格统一使用胶囊圆角与 Material 拖拽把手。
+        assertEquals(22, miuix.cornerRadiusDp)
+        assertEquals(28, material3.cornerRadiusDp)
+        assertTrue(miuix.useMaterialDragHandle)
+        assertTrue(material3.useMaterialDragHandle)
     }
 }

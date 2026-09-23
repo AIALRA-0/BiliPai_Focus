@@ -2,6 +2,10 @@ package com.android.purebilibili.feature.bangumi
 
 import com.android.purebilibili.data.model.response.BangumiDetail
 import com.android.purebilibili.data.model.response.BangumiEpisode
+import com.android.purebilibili.data.model.response.BangumiVideoInfo
+import com.android.purebilibili.data.model.response.Dash
+import com.android.purebilibili.data.model.response.DashVideo
+import com.android.purebilibili.data.model.response.FormatItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -38,6 +42,24 @@ class BangumiPlayerOverlayPolicyTest {
         )
 
         assertEquals(listOf(120, 80, 64), switchableQualityIds)
+    }
+
+    @Test
+    fun resolveBangumiQualityOptions_mergesApiFormatAndDashMetadata() {
+        val options = resolveBangumiQualityOptions(
+            BangumiVideoInfo(
+                acceptQuality = listOf(126, 120),
+                acceptDescription = listOf("杜比视界", "4K"),
+                supportFormats = listOf(
+                    FormatItem(quality = 127, displayDesc = "8K", codecs = listOf("av01")),
+                    FormatItem(quality = 125, newDescription = "HDR 真彩")
+                ),
+                dash = Dash(video = listOf(DashVideo(id = 116, codecs = "av01.0.08M.08")))
+            )
+        )
+
+        assertEquals(listOf(127, 126, 125, 120, 116), options.ids)
+        assertEquals(listOf("8K", "杜比视界", "HDR 真彩", "4K", "1080P 60帧"), options.labels)
     }
 
     @Test

@@ -1,13 +1,13 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-internal inline fun executeLiveDanmakuDataRefresh(
-    pause: () -> Unit,
-    setData: () -> Unit,
-    start: () -> Unit,
-    invalidateView: () -> Unit
+internal inline fun <T> appendLiveDanmakuBatch(
+    batch: List<T>,
+    append: (List<T>) -> Unit
 ) {
-    pause()
-    setData()
-    start()
-    invalidateView()
+    if (batch.isNotEmpty()) append(batch)
 }
+
+internal fun shouldRenderLiveDanmakuAsBitmap(
+    isSuperChat: Boolean,
+    emoticonUrl: String?
+): Boolean = isSuperChat || !emoticonUrl.isNullOrBlank()

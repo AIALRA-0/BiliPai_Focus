@@ -2,61 +2,6 @@
 <issues format="6" by="lint 8.13.1" type="baseline" client="gradle" dependencies="false" name="AGP (8.13.1)" variant="all" version="8.13.1">
 
     <issue
-        id="MissingClass"
-        message="Class referenced in the manifest, `leakcanary.internal.activity.LeakLauncherActivity`, was not found in the project or the libraries"
-        errorLine1="            android:name=&quot;leakcanary.internal.activity.LeakLauncherActivity&quot;"
-        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/debug/AndroidManifest.xml"
-            line="5"
-            column="27"/>
-    </issue>
-
-    <issue
-        id="ApplySharedPref"
-        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
-        errorLine1="            .edit().putBoolean(&quot;auto_highest_quality&quot;, value).commit()"
-        errorLine2="                                                              ~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/store/SettingsManager.kt"
-            line="1610"
-            column="63"/>
-    </issue>
-
-    <issue
-        id="ApplySharedPref"
-        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
-        errorLine1="            .commit()"
-        errorLine2="             ~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/store/SettingsManager.kt"
-            line="1630"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="ApplySharedPref"
-        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
-        errorLine1="            .edit().putString(&quot;path&quot;, path).commit() // commit 确保立即写入"
-        errorLine2="                                            ~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/store/SettingsManager.kt"
-            line="1970"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="ApplySharedPref"
-        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
-        errorLine1="            .edit().putString(&quot;tree_uri&quot;, uri).commit()"
-        errorLine2="                                               ~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/store/SettingsManager.kt"
-            line="1987"
-            column="48"/>
-    </issue>
-
-    <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
         errorLine1="                    count >= 1000 -> String.format(&quot;%.1fk&quot;, count / 1000f)"
@@ -432,28 +377,6 @@
 
     <issue
         id="NewApi"
-        message="Call requires API level 36 (current min is 26): `java.lang.Thread#threadId`"
-        errorLine1="                    setCustomKey(&quot;fatal_thread_id&quot;, thread.threadId())"
-        errorLine2="                                                           ~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/util/CrashReporter.kt"
-            line="130"
-            column="60"/>
-    </issue>
-
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 26): `android.os.storage.StorageVolume#getDirectory`"
-        errorLine1="                            val directory = storageVolume.directory"
-        errorLine2="                                                          ~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/util/FileUtils.kt"
-            line="36"
-            column="59"/>
-    </issue>
-
-    <issue
-        id="NewApi"
         message="Call requires API level 35 (current min is 26): `java.util.List#removeFirst` (Prior to API level 35, this call would resolve to a Kotlin stdlib extension function. You can use `removeAt(0)` instead.)"
         errorLine1="                    if (messages.size > 50) messages.removeFirst() // 横屏模式只保留最近50条"
         errorLine2="                                                     ~~~~~~~~~~~~~">
@@ -472,28 +395,6 @@
             file="src/main/java/com/android/purebilibili/feature/live/components/LiveChatSection.kt"
             line="53"
             column="55"/>
-    </issue>
-
-    <issue
-        id="NewApi"
-        message="Field requires API level 29 (current min is 26): `android.provider.MediaStore.Downloads#EXTERNAL_CONTENT_URI`"
-        errorLine1="            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/util/Logger.kt"
-            line="629"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="NewApi"
-        message="Field requires API level 29 (current min is 26): `android.provider.MediaStore.Downloads#EXTERNAL_CONTENT_URI`"
-        errorLine1="                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/util/Logger.kt"
-            line="640"
-            column="17"/>
     </issue>
 
     <issue
@@ -692,17 +593,6 @@
             file="src/main/java/com/android/purebilibili/MainActivity.kt"
             line="630"
             column="49"/>
-    </issue>
-
-    <issue
-        id="OldTargetApi"
-        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details."
-        errorLine1="        targetSdk = 35  // 保持35以避免Android 16的新运行时行为"
-        errorLine2="        ~~~~~~~~~~~~~~">
-        <location
-            file="build.gradle.kts"
-            line="28"
-            column="9"/>
     </issue>
 
     <issue
@@ -1929,50 +1819,6 @@
     <issue
         id="UnsafeOptInUsageError"
         message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="        AspectRatioFrameLayout.RESIZE_MODE_FILL -> cw to ch"
-        errorLine2="                               ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/danmaku/FaceOcclusionPolicy.kt"
-            line="275"
-            column="32"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH -> {"
-        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/danmaku/FaceOcclusionPolicy.kt"
-            line="276"
-            column="32"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="        AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT -> {"
-        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/danmaku/FaceOcclusionPolicy.kt"
-            line="280"
-            column="32"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> {"
-        errorLine2="                               ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/danmaku/FaceOcclusionPolicy.kt"
-            line="284"
-            column="32"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
         errorLine1="@OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API"
         errorLine2="       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
@@ -1990,105 +1836,6 @@
             file="src/main/java/com/android/purebilibili/MainActivity.kt"
             line="816"
             column="33"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="    FIT(&quot;适应&quot;, AspectRatioFrameLayout.RESIZE_MODE_FIT),"
-        errorLine2="                                     ~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/components/VideoAspectRatio.kt"
-            line="28"
-            column="38"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="    FILL(&quot;填充&quot;, AspectRatioFrameLayout.RESIZE_MODE_ZOOM),"
-        errorLine2="                                      ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/components/VideoAspectRatio.kt"
-            line="29"
-            column="39"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="    RATIO_16_9(&quot;16:9&quot;, AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH),"
-        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/components/VideoAspectRatio.kt"
-            line="30"
-            column="47"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="    RATIO_4_3(&quot;4:3&quot;, AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT),"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/components/VideoAspectRatio.kt"
-            line="31"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="    STRETCH(&quot;拉伸&quot;, AspectRatioFrameLayout.RESIZE_MODE_FILL);"
-        errorLine2="                                         ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/components/VideoAspectRatio.kt"
-            line="32"
-            column="42"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM"
-        errorLine2="                ~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/home/components/VideoPreviewDialog.kt"
-            line="315"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM"
-        errorLine2="                ~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/home/components/VideoPreviewDialog.kt"
-            line="315"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM"
-        errorLine2="                                                                       ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/home/components/VideoPreviewDialog.kt"
-            line="315"
-            column="72"/>
-    </issue>
-
-    <issue
-        id="UnsafeOptInUsageError"
-        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
-        errorLine1="    val videoSurface = playerView.videoSurfaceView"
-        errorLine2="                                  ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/util/VideoScreenshotUtils.kt"
-            line="84"
-            column="35"/>
     </issue>
 
     <issue
@@ -4423,50 +4170,6 @@
     </issue>
 
     <issue
-        id="FrequentlyChangingValue"
-        message="Reading a value annotated with @FrequentlyChangingValue inside composition"
-        errorLine1="                                    val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction"
-        errorLine2="                                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/screen/AudioModeScreen.kt"
-            line="525"
-            column="99"/>
-    </issue>
-
-    <issue
-        id="FrequentlyChangingValue"
-        message="Reading a value annotated with @FrequentlyChangingValue inside composition"
-        errorLine1="                    val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction"
-        errorLine2="                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/dynamic/components/ImagePreviewDialog.kt"
-            line="415"
-            column="83"/>
-    </issue>
-
-    <issue
-        id="FrequentlyChangingValue"
-        message="Reading a value annotated with @FrequentlyChangingValue inside composition"
-        errorLine1="                    pageOffsetFraction = pagerState.currentPageOffsetFraction"
-        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/dynamic/components/ImagePreviewDialog.kt"
-            line="556"
-            column="53"/>
-    </issue>
-
-    <issue
-        id="FrequentlyChangingValue"
-        message="Reading a value annotated with @FrequentlyChangingValue inside composition"
-        errorLine1="                val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction"
-        errorLine2="                                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/onboarding/OnboardingScreen.kt"
-            line="76"
-            column="79"/>
-    </issue>
-
-    <issue
         id="VectorPath"
         message="Very long vector path (12973 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
         errorLine1="        android:pathData=&quot;M452 258L460.5 260L464.5 260L466.5 259Q468 262.5 469.5 260L472.5 262L474 261.5L473.5 263L475.5 262L477.5 263L479.5 262L483 263Q481.9 265.7 484.5 265L487.5 264L489 264.5L487 265.5L491.5 268L492 266Q494.7 264.9 494 267.5L496.5 270L499 268.5L499.5 270L501 269.5L500.5 271L508.5 272L510.5 271L510.5 273L514.5 272L517.5 274L519.5 273L521 273.5L521.5 272L522 274L524 273.5L523.5 272L525.5 274L527.5 272L529.5 274L532 273.5L533.5 271L535.5 273L540 269.5L540.5 271L541.5 270L544 271.5L546.5 267L547 269Q550 270.3 549 266.5L548.5 265L551 265.5L551.5 267L556.5 264L558.5 265L563 264L563.5 262L565.5 263L569.5 260L569.5 262L572.5 260L575 261.5L577.5 258L578 260L580.5 261L582.5 259L587 259.5Q586.3 261.8 588.5 261L590.5 260L593.5 261Q595 258.5 596.5 262L598.5 261L600 264L605.5 265L608 264Q606.9 266.7 609.5 266L611 269Q614.8 267.5 614 270.5L616 270.5L616.5 272L620 271.5L619.5 273L623 274.5L622.5 276L624 276Q622.5 279.7 625.5 279L629 280L633.5 288L638 289.5L637.5 291Q639.8 290.3 639 292.5L641 297L644 298.5L646 301.5L644 301.5Q643.2 304.1 646.5 303L648 304.5Q644.3 306.3 647.5 308L649 307.5L648.5 306L651 307.5L650 309.5L654 314.5L653 317.5L654.5 319L656 318.5L657 322.5L656.5 324L658 324.5L656 325.5L659 326.5L658.5 328L661.5 330L661.5 332L663 332.5L662.5 334Q664.8 333.3 664 335.5L665 338.5L668 342.5L667.5 344L669 344.5L668.5 346L672 347.5L670 348.5L672 349L673 351.5L672.5 353Q674.8 352.3 674 354.5L677 355.5L675 356.5L677.5 360Q679.8 359.3 679 361.5L680 364.5Q678.9 367.8 681.5 367L681.5 368Q679.3 367.3 680 369.5L682 369.5L685 373.5L684.5 375L688 376L687 380.5L688 383L690.5 382L690 383.5L690.5 386L692 385.5L693 389L695.5 388L695 389.5L696 391.5L695 393.5L696 398.5L697 402.5L696 405.5L697 407.5L696 409.5L698 409.5L696.5 412L699 412.5Q695 414.5 699 416.5Q698.3 420.8 701 421.5L699 421.5L698 424.5L701 425.5L697 426.5L699 427L698 434.5L700.5 438L698 439.5L698.5 442L700 442.5L700 444.5L698 448.5L699 450.5L698.5 452Q700.8 451.3 700 453.5L696 456.5L698 457.5L696 458L695 461.5L697 462L697.5 464L699 463.5Q695.5 465 698 466.5Q697.3 468.8 699.5 468L699.5 469L697 470.5Q701.5 473 696 475.5L696.5 477L698.5 476Q701.5 477.5 698.5 479L698.5 477Q695.9 476.2 697 479.5L696 484.5L697.5 484L699 484.5L697 485L698 487.5L696 488L697 491.5L696 493.5Q698.5 495 695 496.5L696 498.5L696 502.5L695 506.5L695 508.5L697 514.5L695 515.5L697 519.5Q694.2 521.3 698.5 523L700 522.5L699 524.5L699.5 527L701 527.5L699 528Q698 531 701 530L701 532.5L699.5 535L701.5 534L702 536.5Q701 540.3 704 539L704 542.5L707 544.5L707 546.5L707.5 549L709 548.5L710.5 551Q713.1 550.2 712 553.5L712 555.5L716.5 565L718 565.5L716 566L716.5 568Q717.8 565.8 719 568.5L718 572.5L720 573L720.5 578L722 577.5L723 579.5L721.5 579L720 579.5L722 583.5L720.5 586L723 587.5L721.5 587Q718.9 586.2 720 589.5L721.5 592L720 591.5Q719.3 594.1 722 593L722 595L719 596.5L722 601.5Q719.8 602.8 721 607.5L719 609.5Q721.5 611 718 612.5L717 617.5L718 620Q715 618.8 716 622.5L716.5 624L715 624.5L717 625.5L715 626L711.5 634L710 634.5L712 635.5L710 636L709 638.5L711 639.5L707 640L706 642.5L707 645Q704.3 643.9 705 646.5L705.5 648Q703.3 647.3 704 649.5L704 651.5Q704.8 653.8 702.5 653Q697.7 655.5 699.5 658L698 657.5L696.5 660Q694.3 659.3 695 661.5L696 662.5L693.5 667Q692.3 664.8 691 667.5Q692.1 670.8 689.5 670L688 669.5Q688.8 671.8 686.5 671L684.5 674L683.5 672Q679.3 673.3 680 678L676 679.5L676.5 681L672.5 680L669 681.5L671 682.5Q669.7 685.7 665 685.5L665.5 687L661.5 687Q658.9 686.3 660 689L657.5 689L656 688.5Q656.8 690.8 654.5 690L652.5 693L651.5 690L651 693L647.5 692L644 693.5Q644.9 696.5 640.5 695L638.5 694L638.5 696Q637 692.5 635.5 695L628 696.5L628.5 698L626 697L625.5 699L624.5 697L623 699.5L623.5 701L620.5 702L619 701.5L617.5 704L613.5 706L613.5 704L612 704Q613.5 707.7 610.5 707L608.5 707L603 710.5L603.5 712L598.5 709L597.5 711Q599.8 710.3 599 712.5L596.5 711L595.5 712L592.5 711L590.5 714Q586.8 715.3 588 711.5L587 711.5L585.5 714L585.5 712L582.5 714L579 715.5L579.5 717Q575.8 715 577.5 713L573 714L573 712L567 712L566.5 714L566 712Q562.6 712.8 561.5 710L561 712Q555.9 713 554.5 709L553 710.5L554.5 713Q550.2 711.3 553 709.5L551.5 707L549 707.5L551 708.5L546.5 711L546.5 709L545 708.5L547 707.5L544 707L542 710.5L544 711.5L542.5 712L536 709.5L537 707.5L534 707.5Q535.1 710.8 532.5 710L531.5 707L529.5 708L527.5 708Q525.3 708.8 526 706.5L522.5 707L517.5 709L516 708.5L515.5 710L513.5 707L509.5 709L505.5 707L504 706.5L507 705.5Q501.2 706.3 499.5 703L498.5 706L498 704L495.5 705L493 704L492.5 702L491 704.5L493 705L492.5 707L487.5 702L486.5 703L484.5 704L483 703.5L482.5 705Q481 701.5 479.5 704Q476.2 702.9 477 705.5L476 705.5L474.5 703L472.5 703L467.5 704Q466 701.5 464.5 705L459.5 704L458.5 705L456 703.5L455 705.5L455.5 707L452.5 706L448.5 706Q445.9 706.7 447 704L443 704Q444.1 701.3 441.5 702L441.5 704L438 704.5L438.5 706L435.5 704L433.5 704Q431.3 704.8 432 702.5L429.5 704L428 703.5L430 702.5L424.5 700L422 700.5L421.5 703L420.5 700L419.5 702L418.5 700L417 700.5L417.5 699L416 698.5Q418.3 697.3 415.5 696L414.5 698L414 696L409.5 695L408 695.5L408 693.5L407.5 690L406.5 692L404 691L403.5 688L402.5 689Q400.8 685.9 399 687.5L400 686.5L396.5 683L395 683.5L395.5 682Q392.2 683.1 393 680.5L392 678L387 676.5L387 674.5L386.5 673L385.5 675L384.5 672L384 675L382 674.5L383 672.5L381 672.5Q381.8 668.8 379.5 668L378.5 670L376 667.5L376 663.5Q377.1 660.2 374.5 661L374.5 660L376 659.5L373.5 657L371.5 657L369 655.5L370 653.5L367 652.5L369 651.5L366 650L365.5 648L364.5 649L360 645.5L359.5 647L357.5 643L354.5 642L352 643L352.5 641L354 641.5Q354.7 638.9 352 640L352 637.5L353 635.5L348.5 630L346 631.5L344.5 628L343 628.5L341.5 626L338.5 625L336 626.5L337.5 624L336 623.5L336.5 622L335 621.5L335.5 620L333 618.5L331.5 616Q329.8 618.8 328 614.5L325.5 611L324 610.5Q326.3 609.3 323.5 608L321 609.5L321.5 608Q318.9 608.8 320 605.5L319.5 603L317 603.5L317.5 605L315 604.5L315.5 603L312 601.5L312.5 600L311 599.5Q313.5 598 310 596.5L311 594.5L309 593.5L308.5 596L308 594L305.5 595L307 592.5L306 591.5L306 589L304 588.5L304 584.5L302.5 585Q300.3 585.8 301 583.5Q303.3 582.2 300.5 581L298 580.5L299 578.5L297 578.5L297.5 577Q294.9 577.8 296 574.5L293 573.5L296 572.5L293.5 571L292 571.5Q292.8 567.8 290.5 567L288.5 568L288.5 567Q290.8 567.8 290 565.5L287 564L288 561.5L285 559.5L283.5 554L281.5 555L280 551.5L279 549.5L279 547.5L275 541L272 540.5L274 539.5L272 536L274 535.5Q270.9 534.1 271.5 529L270.5 531L269 526.5L269.5 525L267 523.5L267.5 522L266 521.5L268 520.5L266.5 517L265 517.5L264 513.5L265 511.5L264.5 510L266 510.5L264 507.5L264 505.5L265 503.5L263 500.5L264 497L262 496.5L264 496L262 492.5L265 490.5L263 489.5Q265.3 488.2 264 483.5L266.5 479L268 479.5L269 477.5L268 475.5L268.5 473L270 472.5L269.5 471Q273.7 472.3 272 467.5L275 465.5L274.5 464L277 465L278 462.5L277.5 461L279.5 462L280 459.5L281 457.5L280.5 456Q283.1 456.7 282 454L285 454L285 450.5L286 448L288.5 449L289 446Q291.7 447.1 291 444.5L289 444.5Q290.5 441.5 292 444.5L292.5 446L295 442.5L293 441.5L294.5 441L296 441.5L296.5 439L297.5 440Q299.3 436.9 301 438.5L303.5 432Q305.8 432.8 305 430.5L307 430.5Q307.8 428.3 305.5 429L305.5 428L308 428L308 426Q310.7 427.1 310 424.5L311.5 422L312.5 424L314 422.5Q310.3 420.8 313.5 419Q315 421.5 316.5 418L318 417.5Q315.8 416.3 318.5 415Q319.8 417.2 321 414.5L320 411.5L323 409.5L321 408.5L322.5 408Q324 410.5 325.5 407L328 405.5L327 403.5L329 401.5L328.5 398L330.5 399L329.5 396Q332.1 396.7 331 394L334 394L334 392.5L334 390.5L334.5 389Q335.8 391.3 337 388.5L336 385.5L338.5 382L341 383L339 379.5L341 379.5L342.5 377Q345.5 377.9 344 373.5L347 367.5L346.5 366L348 365.5L347.5 364L349 364.5L348 360.5L351 359.5L353 353L355 352.5L353 351.5L354.5 351L356.5 352L356 350.5Q355.3 348.3 357.5 349L357.5 348L356 347.5L359 346.5Q356.5 345 360 343.5L360 341Q363 342.3 362 338.5L362.5 336L364.5 336L368 335L370 330.5L369.5 329Q370.8 331.3 372 328.5L371.5 327L375 326.5L373 325.5L376 323.5Q374.3 318.7 378.5 320L380 317L382 316.5L381.5 315Q383.8 315.8 383 313.5L384 310L386 309.5Q383.8 308.2 386.5 307Q387.8 309.3 389 306.5L388.5 305L390 305.5Q389.3 302.9 392 304L392 301L393.5 301L395 299.5L394.5 296L396.5 297L396.5 295L399 294.5Q396.5 293 400 291.5L401.5 289L405 286.5L405.5 285L406.5 287L408 283L412 282L412.5 280L414 280.5L416 276L418 275.5L417.5 274Q419 276.5 420.5 273L424 272Q422.8 269 426.5 270L426.5 268L429.5 268L435.5 263L437.5 263L439.5 262Q441 264.5 442.5 261L446.5 260Q448 262.5 449.5 259L451.5 260L452 258ZM447 281L445 283L443 282L442 284L441 283Q438 282 439 285L438 284L437 286L436 285L435 287L434 286L433 288L430 289L425 294L426 295L424 296L424 298L423 298L423 300L420 306Q422 312 419 314L421 323L424 329Q429 336 439 339L454 339L462 335L472 323Q478 331 479 344L431 344L430 345L404 346L403 347L400 346L396 348Q394 345 393 349L391 348L390 350L388 350Q389 353 385 351L385 353L378 359Q375 360 377 362L376 362L376 364L374 365L374 367L373 367L373 369L371 370L372 372L371 371L370 373L371 374Q368 373 369 376L369 380L367 382L368 384L366 384L367 387Q368 389 365 388L366 391Q367 393 364 392L365 396L363 399L364 402L362 404L363 406L361 409L362 415L361 414L360 416L360 418L361 420L360 434Q357 434 358 439L358 441L359 445Q360 450 357 452L357 463L358 469L365 470L369 469L371 463L370 461L370 455L372 448L371 446Q370 440 373 439L372 437L374 422L374 420Q376 401 381 386L384 381L383 380L389 369L397 363L410 360Q415 359 417 361L423 359L479 359L481 359L482 360L504 360L505 361L546 363L547 364L573 366L574 367L581 367L582 368L607 371Q608 374 610 372L624 375L628 377L629 376L641 381L645 386L645 387Q647 386 646 389L646 391L648 391L650 398L651 411L652 412L651 417L653 425L653 440L652 441Q651 445 653 447L652 450L653 455L652 477Q648 478 651 480L649 504L647 507L648 509Q649 512 646 511L647 515L645 518L646 521Q642 522 645 524L640 543L633 557L627 564Q622 558 614 555L599 551L584 550L583 549L552 549L543 551L537 554Q529 559 527 571L527 586L530 601L537 614L548 628L562 638L574 641Q578 644 579 650L582 663L582 671L587 673L598 673L600 672L603 668L602 654L599 645L601 642Q617 656 648 656L651 657L665 653L667 653Q666 650 669 651L671 651L671 649L674 648Q677 649 676 647Q677 644 679 646L686 637L689 635Q687 633 690 632Q689 629 692 630L691 629L693 628L692 627L694 626L693 624L695 623L694 621L695 619L695 617L697 614L696 609L696 607L697 602L697 598L695 596L694 589L692 585L693 584L692 583L692 582L690 581L688 575L674 564Q671 565 672 563L671 563L666 560L664 561L660 559L644 561L639 564L637 564Q649 553 654 536Q657 534 655 533L658 527L657 525L659 524L658 522L660 519L659 517L660 512L662 510L661 508L663 504L662 501L664 491L664 483Q667 482 666 478L665 475Q664 467 667 464L667 449L666 448Q664 441 667 440L666 438L667 436Q669 423 665 416Q663 409 666 408Q667 404 664 405Q665 397 662 393L663 391Q664 388 662 389L662 388Q663 385 661 386L661 385Q662 382 660 383L660 382L659 381L659 380L657 379L656 376L648 368L648 367L645 365L643 365L642 364Q640 365 639 362L638 363L636 361L635 362L633 360L631 361L626 359L594 353L560 350Q561 340 566 332Q565 329 568 330L571 337Q577 345 589 348Q603 350 610 344Q619 338 621 326Q623 311 617 305Q613 303 616 302L609 295Q606 296 607 294L604 292Q601 293 602 291L601 291Q598 292 599 290L598 290Q595 291 596 288L593 289L590 288L581 288L580 289L578 288L568 292Q566 295 565 293L564 295L562 296L553 306L551 307L551 309L549 310L549 312L543 324L538 348L526 346L511 346L510 345L502 345L501 335L496 317L485 295L479 291Q480 288 477 289L475 287L474 287L473 286L472 286L469 284Q465 285 466 282L464 282Q462 285 461 281L458 282Q450 284 447 281ZM438 378L432 380L421 381L412 385Q404 391 401 401L399 411L399 419L398 420L398 433L397 434L397 497L398 498L399 511L403 521L413 529L433 536L435 535L455 539L478 541L482 543L484 542L489 543L491 543L508 544L509 545L523 545L524 546L549 546L555 548L569 548L571 548L580 546L595 545L608 540Q614 536 616 529L619 524L618 523L620 513L622 511L621 509L623 503L622 501L622 496L624 490L624 488L623 486Q622 480 624 479L624 426L623 423L624 418L622 416Q622 405 617 401Q612 393 602 391L583 387L551 384L544 382L542 383Q537 381 529 382L528 381L496 380L495 379L467 379L466 378L449 378L448 379L439 379L438 378ZM288 449L286 451L288 451L288 449ZM327 461L325 463L323 462L322 464L318 465L316 465L315 467L309 471L302 480L300 481L300 483L299 483L299 485L298 485Q299 487 296 489L297 491L294 496L295 499L294 503L295 507L294 510L296 516L296 518Q295 520 298 519L298 522L304 532Q303 535 306 534L332 567Q331 569 334 568L336 572Q349 584 365 594Q379 603 399 606Q416 608 425 602L426 603L423 607L417 623L414 636L414 642L412 645L413 647Q414 653 411 655L412 659Q414 664 411 666L412 669L421 673L423 672L425 673L432 671L431 670L431 660L432 659L434 637L438 621L445 602L449 583L455 575L460 577L475 590L485 595L508 600L522 600L520 594L520 575L523 564L490 563L489 562L464 561L427 554L416 548L375 512L377 506L377 495L373 484L367 478L362 478L356 481L356 483L350 473Q343 462 327 461ZM316 599L315 602L316 602L316 599ZM341 623L339 625L341 625L341 623ZM354 638L354 639L357 641L357 639L354 638ZM430 700Q430 704 432 701L430 700ZM491 700Q489 703 492 702L491 700ZM532 704L531 706L534 706L532 704ZM511 705L512 707Q513 704 511 705ZM510 706Q508 709 511 708L510 706Z&quot;"
@@ -4475,127 +4178,6 @@
             file="src/main/res/drawable/ic_launcher_foreground_flat.xml"
             line="2940"
             column="27"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableLongStateOf` instead of `mutableStateOf`"
-        errorLine1="    var lastClickTime by remember { mutableStateOf(0L) }"
-        errorLine2="                                    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt"
-            line="307"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var selectedCount by remember { mutableStateOf(1) }"
-        errorLine2="                                    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/components/CoinDialog.kt"
-            line="34"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var currentTab by remember { mutableStateOf(0) } // 0=Kaomoji, 1=Emoji, 2+=API Packages"
-        errorLine2="                                 ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/components/CommentInputDialog.kt"
-            line="119"
-            column="34"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var selectedRegionCid by rememberSaveable { mutableStateOf(86) }"
-        errorLine2="                                                ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/login/LoginComponents.kt"
-            line="621"
-            column="49"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableLongStateOf` instead of `mutableStateOf`"
-        errorLine1="        mutableStateOf(if (useSharedPlayer) initialInfo.cid else 0L)"
-        errorLine2="        ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt"
-            line="309"
-            column="9"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableLongStateOf` instead of `mutableStateOf`"
-        errorLine1="        mutableStateOf(if (useSharedPlayer) initialInfo.aid else 0L)"
-        errorLine2="        ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt"
-            line="312"
-            column="9"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableLongStateOf` instead of `mutableStateOf`"
-        errorLine1="    var lastPipUpdateElapsedMs by remember { mutableStateOf(0L) }"
-        errorLine2="                                             ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreen.kt"
-            line="975"
-            column="46"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableLongStateOf` instead of `mutableStateOf`"
-        errorLine1="    var savedPosition by remember { mutableStateOf(-1L) }"
-        errorLine2="                                    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/state/VideoPlayerState.kt"
-            line="467"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var selectedTab by remember { mutableStateOf(0) } // 0: Mobile, 1: Tablet"
-        errorLine2="                                  ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/profile/WallpaperAdjustmentSheet.kt"
-            line="34"
-            column="35"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableFloatStateOf` instead of `mutableStateOf`"
-        errorLine1="    var mobileBias by remember { mutableStateOf(initialMobileBias) }"
-        errorLine2="                                 ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/profile/WallpaperAdjustmentSheet.kt"
-            line="35"
-            column="34"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableFloatStateOf` instead of `mutableStateOf`"
-        errorLine1="    var tabletBias by remember { mutableStateOf(initialTabletBias) }"
-        errorLine2="                                 ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/profile/WallpaperAdjustmentSheet.kt"
-            line="36"
-            column="34"/>
     </issue>
 
     <issue
@@ -5002,61 +4584,6 @@
         message="The resource `R.raw.utyan_new` appears to be unused">
         <location
             file="src/main/res/raw/utyan_new.json"/>
-    </issue>
-
-    <issue
-        id="UseOfNonLambdaOffsetOverload"
-        message="State backed values should use the lambda overload of Modifier.offset"
-        errorLine1="                    .offset(x = if (isDragging) 8.dp else 6.dp)"
-        errorLine2="                     ~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/bangumi/ui/player/BangumiPlayerComponents.kt"
-            line="876"
-            column="22"/>
-    </issue>
-
-    <issue
-        id="UseOfNonLambdaOffsetOverload"
-        message="State backed values should use the lambda overload of Modifier.offset"
-        errorLine1="                            .offset(x = animatedX)"
-        errorLine2="                             ~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/settings/screen/BottomBarSettingsScreen.kt"
-            line="891"
-            column="30"/>
-    </issue>
-
-    <issue
-        id="UseOfNonLambdaOffsetOverload"
-        message="State backed values should use the lambda overload of Modifier.offset"
-        errorLine1="                            .offset("
-        errorLine2="                             ~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/video/ui/overlay/BottomControlBar.kt"
-            line="1077"
-            column="30"/>
-    </issue>
-
-    <issue
-        id="UseOfNonLambdaOffsetOverload"
-        message="State backed values should use the lambda overload of Modifier.offset"
-        errorLine1="                .offset(x = (-132 + drift).dp, y = (-92).dp)"
-        errorLine2="                 ~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/login/LoginComponents.kt"
-            line="267"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="UseOfNonLambdaOffsetOverload"
-        message="State backed values should use the lambda overload of Modifier.offset"
-        errorLine1="                .offset(x = (-76 - drift).dp, y = 180.dp)"
-        errorLine2="                 ~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/feature/login/LoginComponents.kt"
-            line="283"
-            column="18"/>
     </issue>
 
     <issue
@@ -7326,17 +6853,6 @@
         <location
             file="build.gradle.kts"
             line="199"
-            column="20"/>
-    </issue>
-
-    <issue
-        id="UseTomlInstead"
-        message="Use version catalog instead"
-        errorLine1="    implementation(&quot;io.github.kyant0:backdrop:1.0.6&quot;)"
-        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="build.gradle.kts"
-            line="203"
             column="20"/>
     </issue>
 

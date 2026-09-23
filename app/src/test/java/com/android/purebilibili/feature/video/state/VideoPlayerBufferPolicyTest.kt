@@ -14,6 +14,7 @@ class VideoPlayerBufferPolicyTest {
         assertEquals(40000, policy.maxBufferMs)
         assertEquals(700, policy.bufferForPlaybackMs)
         assertEquals(1400, policy.bufferForPlaybackAfterRebufferMs)
+        assertEquals(2000, policy.earlyPlaybackMaxBufferMs)
     }
 
     @Test
@@ -24,6 +25,29 @@ class VideoPlayerBufferPolicyTest {
         assertEquals(45000, policy.maxBufferMs)
         assertEquals(1000, policy.bufferForPlaybackMs)
         assertEquals(2200, policy.bufferForPlaybackAfterRebufferMs)
+        assertEquals(2000, policy.earlyPlaybackMaxBufferMs)
         assertTrue(policy.bufferForPlaybackAfterRebufferMs >= policy.bufferForPlaybackMs)
+    }
+
+    @Test
+    fun firstQuarterLimitsForwardBufferButLaterPlaybackDoesNot() {
+        assertTrue(
+            shouldLimitEarlyPlaybackBuffer(
+                playbackPositionUs = 59_999_999L,
+                mediaPeriodDurationUs = 240_000_000L
+            )
+        )
+        assertTrue(
+            !shouldLimitEarlyPlaybackBuffer(
+                playbackPositionUs = 60_000_000L,
+                mediaPeriodDurationUs = 240_000_000L
+            )
+        )
+        assertTrue(
+            !shouldLimitEarlyPlaybackBuffer(
+                playbackPositionUs = 0L,
+                mediaPeriodDurationUs = -1L
+            )
+        )
     }
 }

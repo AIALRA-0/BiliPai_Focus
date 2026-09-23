@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.profile
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.FollowBangumiItem
 import com.android.purebilibili.data.model.response.MemberAccountData
@@ -11,18 +13,53 @@ import com.android.purebilibili.data.model.response.SpaceDynamicRichText
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
 import com.android.purebilibili.feature.home.UserState
+import com.android.purebilibili.feature.list.resolveFavoriteFolderMediaId
 
 enum class ProfileSpaceMainTab(val title: String) {
     HOME("主页"),
     DYNAMIC("动态"),
     CONTRIBUTION("投稿"),
     FAVORITE("收藏"),
-    BANGUMI("追番")
+    BANGUMI("番剧")
 }
 
 data class ProfileSpaceTabItem(
     val tab: ProfileSpaceMainTab,
     val title: String
+)
+
+data class ProfileSpaceTabChromeSpec(
+    val rowContainerAlpha: Float,
+    val controlContainerAlpha: Float,
+    val selectedIndicatorAlpha: Float,
+    val selectedTextAlpha: Float,
+    val unselectedTextAlpha: Float,
+    val rowHorizontalInsetDp: Int,
+    val controlHorizontalInsetDp: Int,
+    val rowVerticalInsetDp: Int
+)
+
+data class ProfileSpaceContentPanelSpec(
+    val horizontalInsetDp: Int,
+    val topOverlapDp: Int,
+    val topPaddingDp: Int,
+    val bottomPaddingDp: Int,
+    val heroBottomInsetDp: Int
+)
+
+data class ProfileSpaceWallpaperChromePalette(
+    val rowContainerColor: Color,
+    val controlContainerColor: Color,
+    val selectedTextColor: Color,
+    val unselectedTextColor: Color,
+    val indicatorColor: Color,
+    val serviceContainerColor: Color,
+    val serviceBorderColor: Color,
+    val serviceTextColor: Color,
+    val contentPanelColor: Color,
+    val contentPanelBorderColor: Color,
+    val sectionTextColor: Color,
+    val cardContainerColor: Color
 )
 
 enum class ProfileSpaceHomeSection {
@@ -34,12 +71,27 @@ enum class ProfileSpaceHomeSection {
     SERVICES
 }
 
+enum class ProfileContributionLoadState {
+    IDLE,
+    LOADING,
+    LOADED,
+    ERROR
+}
+
+enum class ProfileContributionContentState {
+    CONTENT,
+    LOADING,
+    EMPTY,
+    ERROR
+}
+
 data class ProfileSpaceUiState(
     val selectedTab: ProfileSpaceMainTab = ProfileSpaceMainTab.HOME,
     val isLoading: Boolean = false,
     val favoriteFolders: List<FavFolder> = emptyList(),
     val bangumiItems: List<FollowBangumiItem> = emptyList(),
     val contributionVideos: List<SpaceVideoItem> = emptyList(),
+    val contributionLoadState: ProfileContributionLoadState = ProfileContributionLoadState.IDLE,
     val coinVideos: List<SpaceAggregateArchiveItem> = emptyList(),
     val likeVideos: List<SpaceAggregateArchiveItem> = emptyList(),
     val dynamicItems: List<SpaceDynamicItem> = emptyList(),
@@ -51,6 +103,11 @@ data class ProfileSpaceUiState(
     val message: String? = null,
     val signSaveMessage: String? = null,
     val isSavingSign: Boolean = false
+)
+
+data class ProfileFavoritePreviewCoverTarget(
+    val mediaId: Long,
+    val folderId: Long
 )
 
 data class ProfileEditableAccountState(
@@ -80,20 +137,123 @@ fun defaultProfileSpaceTabs(): List<ProfileSpaceTabItem> {
     }
 }
 
+fun resolveProfileSpaceTabChromeSpec(): ProfileSpaceTabChromeSpec {
+    return ProfileSpaceTabChromeSpec(
+        rowContainerAlpha = 0f,
+        controlContainerAlpha = 0.24f,
+        selectedIndicatorAlpha = 0.18f,
+        selectedTextAlpha = 1f,
+        unselectedTextAlpha = 0.72f,
+        rowHorizontalInsetDp = 2,
+        controlHorizontalInsetDp = 2,
+        rowVerticalInsetDp = 0
+    )
+}
+
+fun resolveProfileSpaceContentPanelSpec(): ProfileSpaceContentPanelSpec {
+    return ProfileSpaceContentPanelSpec(
+        horizontalInsetDp = 12,
+        topOverlapDp = 28,
+        topPaddingDp = 14,
+        bottomPaddingDp = 24,
+        heroBottomInsetDp = 40
+    )
+}
+
+fun resolveProfileSpaceWallpaperChromePalette(
+    wallpaperColor: Color,
+    fallbackSurfaceColor: Color,
+    fallbackContentColor: Color
+): ProfileSpaceWallpaperChromePalette {
+    val hasWallpaper = wallpaperColor.alpha > 0f
+    val source = if (hasWallpaper) wallpaperColor else fallbackSurfaceColor
+    val isDarkWallpaper = source.luminance() < 0.45f
+    val glassBase = if (isDarkWallpaper) Color.Black else Color.White
+    val readableText = if (isDarkWallpaper) Color.White else Color.Black
+    val chromeSpec = resolveProfileSpaceTabChromeSpec()
+    val serviceText = if (hasWallpaper) {
+        readableText
+    } else {
+        fallbackContentColor
+    }
+    val panelAlpha = if (isDarkWallpaper) 0.34f else 0.30f
+    val controlAlpha = if (isDarkWallpaper) 0.26f else 0.22f
+    val cardAlpha = if (isDarkWallpaper) 0.22f else 0.18f
+    return ProfileSpaceWallpaperChromePalette(
+        rowContainerColor = Color.Transparent,
+        controlContainerColor = if (hasWallpaper) {
+            glassBase.copy(alpha = controlAlpha)
+        } else {
+            fallbackSurfaceColor.copy(alpha = chromeSpec.controlContainerAlpha)
+        },
+        selectedTextColor = serviceText.copy(alpha = chromeSpec.selectedTextAlpha),
+        unselectedTextColor = serviceText.copy(alpha = chromeSpec.unselectedTextAlpha),
+        indicatorColor = serviceText.copy(alpha = chromeSpec.selectedIndicatorAlpha),
+        serviceContainerColor = if (hasWallpaper) Color.Transparent else fallbackSurfaceColor,
+        serviceBorderColor = if (hasWallpaper) {
+            readableText.copy(alpha = 0.12f)
+        } else {
+            Color.Transparent
+        },
+        serviceTextColor = serviceText,
+        contentPanelColor = if (hasWallpaper) {
+            glassBase.copy(alpha = panelAlpha)
+        } else {
+            fallbackSurfaceColor
+        },
+        contentPanelBorderColor = if (hasWallpaper) {
+            readableText.copy(alpha = 0.14f)
+        } else {
+            Color.Transparent
+        },
+        sectionTextColor = serviceText,
+        cardContainerColor = if (hasWallpaper) {
+            glassBase.copy(alpha = cardAlpha)
+        } else {
+            fallbackSurfaceColor.copy(alpha = 0.72f)
+        }
+    )
+}
+
+private fun calculateProfileSpaceContrast(foreground: Color, background: Color): Float {
+    val lighter = maxOf(foreground.luminance(), background.luminance())
+    val darker = minOf(foreground.luminance(), background.luminance())
+    return (lighter + 0.05f) / (darker + 0.05f)
+}
+
 fun resolveProfileSpaceHomeSections(
     favoriteFolders: List<FavFolder>,
     bangumiItems: List<FollowBangumiItem>,
     coinVideos: List<SpaceAggregateArchiveItem>,
     likeVideos: List<SpaceAggregateArchiveItem>,
-    contributionVideos: List<SpaceVideoItem>
+    contributionVideos: List<SpaceVideoItem>,
+    includeDashboardOwnedSections: Boolean = true,
 ): List<ProfileSpaceHomeSection> {
     return buildList {
-        if (favoriteFolders.any { it.id > 0L && it.title.isNotBlank() }) add(ProfileSpaceHomeSection.FAVORITES)
+        if (
+            includeDashboardOwnedSections &&
+            favoriteFolders.any { it.id > 0L && it.title.isNotBlank() }
+        ) {
+            add(ProfileSpaceHomeSection.FAVORITES)
+        }
         if (bangumiItems.any { it.seasonId > 0L && it.title.isNotBlank() }) add(ProfileSpaceHomeSection.BANGUMI)
         if (coinVideos.any { it.aid > 0L && it.title.isNotBlank() }) add(ProfileSpaceHomeSection.COIN_VIDEOS)
         if (likeVideos.any { it.aid > 0L && it.title.isNotBlank() }) add(ProfileSpaceHomeSection.LIKE_VIDEOS)
         if (contributionVideos.any { it.bvid.isNotBlank() || it.aid > 0L }) add(ProfileSpaceHomeSection.CONTRIBUTIONS)
-        add(ProfileSpaceHomeSection.SERVICES)
+        if (includeDashboardOwnedSections) add(ProfileSpaceHomeSection.SERVICES)
+    }
+}
+
+fun resolveProfileContributionContentState(
+    loadState: ProfileContributionLoadState,
+    hasVideos: Boolean
+): ProfileContributionContentState {
+    if (hasVideos) return ProfileContributionContentState.CONTENT
+    return when (loadState) {
+        ProfileContributionLoadState.IDLE,
+        ProfileContributionLoadState.LOADING -> ProfileContributionContentState.LOADING
+        ProfileContributionLoadState.LOADED -> ProfileContributionContentState.EMPTY
+        ProfileContributionLoadState.ERROR -> ProfileContributionContentState.ERROR
     }
 }
 
@@ -158,6 +318,164 @@ fun resolveProfileSpaceStateFromAggregate(
         likeVideoCount = aggregate?.likeArchive?.count ?: aggregate?.likeArchive?.item.orEmpty().size,
         dynamicItems = dynamicItems.filter { it.visible }
     )
+}
+
+internal fun mergeProfileAggregateState(
+    current: ProfileSpaceUiState,
+    aggregate: SpaceAggregateData
+): ProfileSpaceUiState {
+    val aggregateFavoriteFolders = aggregate.favourite2?.item.orEmpty()
+        .map(::mapProfileAggregateFavoriteFolder)
+    val contributionVideos = aggregate.archive?.item.orEmpty().map(::mapProfileAggregateVideoItem)
+    val shouldSeedContributions = current.contributionLoadState != ProfileContributionLoadState.LOADED &&
+        current.contributionVideos.isEmpty()
+    return current.copy(
+        favoriteFolders = if (aggregate.favourite2 != null) {
+            mergeProfileFavoriteFolders(current.favoriteFolders, aggregateFavoriteFolders)
+        } else {
+            current.favoriteFolders
+        },
+        favoriteFolderCount = aggregate.favourite2?.count ?: current.favoriteFolderCount,
+        contributionVideos = if (aggregate.archive != null && shouldSeedContributions) {
+            contributionVideos
+        } else {
+            current.contributionVideos
+        },
+        contributionVideoCount = if (aggregate.archive != null && shouldSeedContributions) {
+            aggregate.archive.count
+        } else {
+            current.contributionVideoCount
+        },
+        coinVideos = aggregate.coinArchive?.item ?: current.coinVideos,
+        coinVideoCount = aggregate.coinArchive?.count ?: current.coinVideoCount,
+        likeVideos = aggregate.likeArchive?.item ?: current.likeVideos,
+        likeVideoCount = aggregate.likeArchive?.count ?: current.likeVideoCount
+    )
+}
+
+/**
+ * 聚合接口常只给 count、不带 item（本人空间更常见）。
+ * count 大于已有列表时，需要再走 arc/search 补齐投稿。
+ */
+internal fun shouldHydrateProfileContributionVideos(
+    contributionVideoCount: Int,
+    seededVideoCount: Int,
+    pageSize: Int = PROFILE_CONTRIBUTION_PAGE_SIZE
+): Boolean {
+    if (contributionVideoCount <= 0) return false
+    val expectedVisibleCount = minOf(contributionVideoCount, pageSize.coerceAtLeast(1))
+    return seededVideoCount < expectedVisibleCount
+}
+
+internal fun mergeProfileContributionVideoState(
+    current: ProfileSpaceUiState,
+    videos: List<SpaceVideoItem>,
+    totalCount: Int
+): ProfileSpaceUiState {
+    return current.copy(
+        contributionVideos = videos,
+        contributionVideoCount = maxOf(totalCount, videos.size),
+        contributionLoadState = ProfileContributionLoadState.LOADED
+    )
+}
+
+internal const val PROFILE_CONTRIBUTION_PAGE_SIZE = 30
+
+internal fun mergeProfileFavoriteFolderState(
+    current: ProfileSpaceUiState,
+    folders: List<FavFolder>
+): ProfileSpaceUiState {
+    val merged = mergeProfileFavoriteFolders(current.favoriteFolders, folders)
+    return current.copy(
+        favoriteFolders = merged,
+        favoriteFolderCount = maxOf(current.favoriteFolderCount, folders.size)
+    )
+}
+
+internal fun resolveProfileFavoritePreviewCoverTargets(
+    folders: List<FavFolder>,
+    maxVisibleFolders: Int = 6
+): List<ProfileFavoritePreviewCoverTarget> {
+    return folders.asSequence()
+        .take(maxVisibleFolders)
+        .filter { folder -> folder.cover.isBlank() && folder.media_count > 0 }
+        .mapNotNull { folder ->
+            val mediaId = resolveFavoriteFolderMediaId(folder)
+            mediaId.takeIf { it > 0L }?.let {
+                ProfileFavoritePreviewCoverTarget(
+                    mediaId = mediaId,
+                    folderId = folder.id
+                )
+            }
+        }
+        .toList()
+}
+
+internal fun mergeProfileFavoritePreviewCovers(
+    folders: List<FavFolder>,
+    coversByMediaId: Map<Long, String>
+): List<FavFolder> {
+    if (folders.isEmpty() || coversByMediaId.isEmpty()) return folders
+    return folders.map { folder ->
+        if (folder.cover.isNotBlank()) {
+            folder
+        } else {
+            val mediaId = resolveFavoriteFolderMediaId(folder)
+            val cover = coversByMediaId[mediaId]?.trim().orEmpty()
+            if (cover.isBlank()) folder else folder.copy(cover = cover)
+        }
+    }
+}
+
+internal fun mergeProfileBangumiState(
+    current: ProfileSpaceUiState,
+    items: List<FollowBangumiItem>
+): ProfileSpaceUiState {
+    return current.copy(
+        bangumiItems = items,
+        bangumiCount = items.size
+    )
+}
+
+internal fun mergeProfileDynamicState(
+    current: ProfileSpaceUiState,
+    items: List<SpaceDynamicItem>
+): ProfileSpaceUiState {
+    return current.copy(dynamicItems = items.filter { it.visible })
+}
+
+internal fun shouldApplyProfileLoadResult(
+    requestGeneration: Long,
+    currentGeneration: Long,
+    requestedMid: Long,
+    currentMid: Long?
+): Boolean {
+    return requestGeneration == currentGeneration && requestedMid == currentMid
+}
+
+private fun mergeProfileFavoriteFolders(
+    current: List<FavFolder>,
+    incoming: List<FavFolder>
+): List<FavFolder> {
+    if (current.isEmpty()) return incoming
+    if (incoming.isEmpty()) return current
+
+    val mergedById = current.associateByTo(LinkedHashMap()) { it.id }
+    incoming.forEach { folder ->
+        val existing = mergedById[folder.id]
+        mergedById[folder.id] = if (existing == null) {
+            folder
+        } else {
+            folder.copy(
+                fid = folder.fid.takeIf { it > 0L } ?: existing.fid,
+                mid = folder.mid.takeIf { it > 0L } ?: existing.mid,
+                title = folder.title.ifBlank { existing.title },
+                cover = folder.cover.ifBlank { existing.cover },
+                media_count = maxOf(folder.media_count, existing.media_count)
+            )
+        }
+    }
+    return mergedById.values.toList()
 }
 
 private fun mapProfileAggregateVideoItem(item: SpaceAggregateArchiveItem): SpaceVideoItem {

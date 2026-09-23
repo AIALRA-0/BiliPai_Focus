@@ -1,13 +1,11 @@
 package com.android.purebilibili.feature.settings
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,13 +18,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.R
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
-import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.AppSpacingTokens
 
 /**
  *  开源许可证数据类
@@ -186,12 +183,8 @@ val openSourceLibraries = listOf(
         url = "https://github.com/chrisbanes/haze",
         description = "毛玻璃效果"
     ),
-    OpenSourceLibrary(
-        name = "Compose Shimmer",
-        license = "Apache 2.0",
-        url = "https://github.com/valentinilk/compose-shimmer",
-        description = "Shimmer 加载动画"
-    ),
+    // Compose Shimmer 已随依赖一并移除：骨架屏改用自研实现，APK 里不再包含该库。
+    // 致谢列表应当反映实际分发的内容，列一个没有随包发出的库是不准确的。
     OpenSourceLibrary(
         name = "Cupertino",
         license = "Apache 2.0",
@@ -199,22 +192,16 @@ val openSourceLibraries = listOf(
         description = "Compose Cupertino 组件与图标"
     ),
     OpenSourceLibrary(
-        name = "Backdrop",
-        license = "Apache 2.0",
-        url = "https://github.com/Kyant0/AndroidLiquidGlass",
-        description = "液态玻璃/背景折射效果依赖"
+        name = "BBPlayer",
+        license = "MIT",
+        url = "https://github.com/bbplayer-app/BBPlayer",
+        description = "多来源歌词匹配与播放器交互实现参考"
     ),
     OpenSourceLibrary(
         name = "KernelSU",
         license = "GPL-3.0",
         url = "https://github.com/tiann/KernelSU",
         description = "液态玻璃交互与管理界面细节参考"
-    ),
-    OpenSourceLibrary(
-        name = "NagramX",
-        license = "GPL-3.0",
-        url = "https://github.com/risin42/NagramX",
-        description = "液态玻璃视觉层次与动画细节参考"
     ),
     OpenSourceLibrary(
         name = "DanmakuRenderEngine",
@@ -245,24 +232,6 @@ val openSourceLibraries = listOf(
         license = "Apache 2.0",
         url = "https://github.com/androidx/androidx",
         description = "媒体路由与投屏设备发现"
-    ),
-    OpenSourceLibrary(
-        name = "Cling",
-        license = "LGPL-2.1",
-        url = "https://github.com/4thline/cling",
-        description = "UPnP/DLNA 投屏协议支持"
-    ),
-    OpenSourceLibrary(
-        name = "Jetty",
-        license = "EPL-1.0 / Apache 2.0",
-        url = "https://github.com/eclipse/jetty.project",
-        description = "本地服务与 HTTP 支持"
-    ),
-    OpenSourceLibrary(
-        name = "Java Servlet API",
-        license = "CDDL / GPLv2 with Classpath Exception",
-        url = "https://github.com/javaee/servlet-spec",
-        description = "Servlet 接口规范"
     ),
     OpenSourceLibrary(
         name = "NanoHTTPD",
@@ -331,69 +300,50 @@ fun OpenSourceLicensesScreen(
     val uriHandler = LocalUriHandler.current
     val screenTitle = stringResource(R.string.open_source_licenses_title)
     val backLabel = stringResource(R.string.common_back)
-    val contentBottomPadding = resolveBottomSafeAreaPadding(
-        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-        extraBottomPadding = 16.dp
-    )
-    
-    AdaptiveScaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppSurfaceTokens.cardContainer(),
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        containerColor = AppSurfaceTokens.groupedListContainer(),
-        //  [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = 16.dp,
-                end = 16.dp,
-                bottom = contentBottomPadding
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+    val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    SettingsPageScaffold(
+        title = screenTitle,
+        onBack = onBack,
+        backContentDescription = backLabel,
+        bottomContentPadding = bottomContentPadding,
+        lazyListContent = {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
+                Column(
+                    modifier = Modifier.padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AppText(
                         text = "本应用使用了以下开源组件，感谢所有开源贡献者！",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text(
+                    AppText(
                         text = "说明：该列表按当前工程依赖、投屏/测试模块以及明确参考实现整理，可能不包含全部传递依赖或完整法律清单。",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
             }
-            
+
             items(openSourceLibraries, key = { it.name }) { library ->
                 LicenseCard(
                     library = library,
-                    onClick = { uriHandler.openUri(library.url) }
+                    onClick = { uriHandler.openUri(library.url) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-            
-            item { Spacer(modifier = Modifier.height(32.dp)) }
-        }
-    }
+
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        },
+    )
 }
 
 /**
@@ -402,11 +352,13 @@ fun OpenSourceLicensesScreen(
 @Composable
 fun LicenseCard(
     library: OpenSourceLibrary,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = Modifier
+    AppSurface(
+        modifier = modifier
             .fillMaxWidth()
+            .padding(bottom = 8.dp)
             .clip(AppShapes.container(ContainerLevel.Card))
             .clickable(onClick = onClick),
         color = AppSurfaceTokens.cardContainer(),
@@ -419,14 +371,14 @@ fun LicenseCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     text = library.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 if (library.description.isNotEmpty()) {
-                    Text(
+                    AppText(
                         text = library.description,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -438,18 +390,18 @@ fun LicenseCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
+                    AppSurface(
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = AppShapes.container(ContainerLevel.Tag)
                     ) {
-                        Text(
+                        AppText(
                             text = library.license,
-                            fontSize = 11.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = 2.dp)
                         )
                     }
-                    Text(
+                    AppText(
                         text = "GitHub/链接",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
@@ -457,7 +409,7 @@ fun LicenseCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(
+                AppText(
                     text = library.url,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
@@ -466,8 +418,8 @@ fun LicenseCard(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            Icon(
-                CupertinoIcons.Default.ChevronForward,
+            AppIcon(
+                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp)

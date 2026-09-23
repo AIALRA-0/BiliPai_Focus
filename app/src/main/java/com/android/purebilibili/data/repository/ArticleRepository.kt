@@ -1,11 +1,14 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.network.OPUS_DETAIL_FEATURES
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ArticleViewData
 import com.android.purebilibili.feature.article.ArticleContentBlock
+import com.android.purebilibili.feature.article.opusContentBlocksToArticleBlocks
 import com.android.purebilibili.feature.article.parseArticleContentBlocks
+import com.android.purebilibili.feature.article.selectRicherArticleBlocks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -45,8 +48,36 @@ object ArticleRepository {
                 throw IllegalStateException(response.message.ifBlank { "Article detail unavailable" })
             }
 
-            response.data.toUiModel()
+            val fromView = response.data.toUiModel()
+            val opusBlocks = fetchOpusArticleBlocks(response.data.dynamicId)
+            val merged = if (opusBlocks.isEmpty()) {
+                fromView
+            } else {
+                fromView.copy(blocks = selectRicherArticleBlocks(fromView.blocks, opusBlocks))
+            }
+            runCatching { HistoryRepository.reportArticleView(merged.articleId) }
+            merged
         }
+    }
+
+    private suspend fun fetchOpusArticleBlocks(dynamicId: String): List<ArticleContentBlock> {
+        val opusId = dynamicId.trim()
+        if (opusId.isEmpty()) return emptyList()
+        return runCatching {
+            val response = NetworkModule.dynamicApi.getOpusDetail(
+                signWithWbi(
+                    mapOf(
+                        "id" to opusId,
+                        "timezone_offset" to "-480",
+                        "features" to OPUS_DETAIL_FEATURES
+                    )
+                )
+            )
+            if (response.code != 0) return@runCatching emptyList()
+            opusContentBlocksToArticleBlocks(
+                response.data?.item?.modules?.module_dynamic?.major?.opus?.contentBlocks.orEmpty()
+            )
+        }.getOrDefault(emptyList())
     }
 
     private fun ArticleViewData.toUiModel(): ArticleDetailUiModel {
@@ -69,8 +100,7 @@ object ArticleRepository {
         val resolvedBanner = listOfNotNull(
             bannerUrl.normalizeImageUrl(),
             originImageUrls.firstOrNull()?.normalizeImageUrl(),
-            imageUrls.firstOrNull()?.normalizeImageUrl(),
-            parsedBlocks.filterIsInstance<ArticleContentBlock.Image>().firstOrNull()?.url
+            imageUrls.firstOrNull()?.normalizeImageUrl()
         ).firstOrNull()
 
         return ArticleDetailUiModel(

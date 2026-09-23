@@ -9,7 +9,7 @@ sealed interface BilibiliNavigationTarget {
     data class Search(val keyword: String) : BilibiliNavigationTarget
     data class Space(val mid: Long) : BilibiliNavigationTarget
     data class Live(val roomId: Long) : BilibiliNavigationTarget
-    data class BangumiSeason(val seasonId: Long) : BilibiliNavigationTarget
+    data class BangumiSeason(val seasonId: Long, val mediaId: Long = 0L) : BilibiliNavigationTarget
     data class BangumiEpisode(val epId: Long) : BilibiliNavigationTarget
     data class Music(val musicId: String) : BilibiliNavigationTarget
     data class Article(val articleId: Long) : BilibiliNavigationTarget
@@ -56,7 +56,7 @@ object BilibiliNavigationTargetParser {
         val normalizedInput = normalizeInput(input) ?: input.trim()
         val plainTextTarget = mapParseResult(BilibiliUrlParser.parse(normalizedInput))
         if ("://" !in normalizedInput) {
-            return plainTextTarget
+            return plainTextTarget ?: parseBangumiPlayValue(normalizedInput)
         }
 
         val uri = runCatching { URI(normalizedInput) }.getOrNull() ?: return null
@@ -126,12 +126,28 @@ object BilibiliNavigationTargetParser {
                 resolveBangumiTarget(pathSegments)?.let { return it }
             }
 
+            host == "cheese" -> {
+                val seasonIndex = pathSegments.indexOfFirst { it.equals("season", ignoreCase = true) }
+                if (seasonIndex >= 0) {
+                    pathSegments.getOrNull(seasonIndex + 1)?.toLongOrNull()?.let {
+                        return BilibiliNavigationTarget.BangumiSeason(it)
+                    }
+                }
+                resolveBangumiTarget(pathSegments)?.let { return it }
+            }
+
             host == "pgc" -> {
                 resolvePgcTarget(pathSegments)?.let { return it }
             }
 
             host == "read" -> {
                 resolveArticleTarget(pathSegments, queryMap, allowBareReadPath = true)?.let { return it }
+            }
+
+            host == "article" -> {
+                pathSegments.firstOrNull()?.takeIf(::isNumericId)?.toLongOrNull()?.let {
+                    return BilibiliNavigationTarget.Article(it)
+                }
             }
 
             host == "music" -> {
@@ -208,6 +224,11 @@ object BilibiliNavigationTargetParser {
             }
         }
 
+        val mediaIndex = pathSegments.indexOfFirst { it.equals("media", ignoreCase = true) }
+        if (mediaIndex >= 0) {
+            parseBangumiPlayValue(pathSegments.getOrNull(mediaIndex + 1).orEmpty())?.let { return it }
+        }
+
         return null
     }
 
@@ -260,6 +281,10 @@ object BilibiliNavigationTargetParser {
     }
 
     private fun resolvePgcTarget(pathSegments: List<String>): BilibiliNavigationTarget? {
+        val mediaIndex = pathSegments.indexOfFirst { it.equals("media", ignoreCase = true) }
+        if (mediaIndex >= 0) {
+            parseBangumiPlayValue(pathSegments.getOrNull(mediaIndex + 1).orEmpty())?.let { return it }
+        }
         val seasonIndex = pathSegments.indexOfFirst { it.equals("season", ignoreCase = true) }
         if (seasonIndex < 0) return null
 
@@ -284,6 +309,11 @@ object BilibiliNavigationTargetParser {
                 .removePrefix("EP")
                 .toLongOrNull()
                 ?.let { BilibiliNavigationTarget.BangumiEpisode(it) }
+
+            value.startsWith("md", ignoreCase = true) -> value.removePrefix("md")
+                .removePrefix("MD")
+                .toLongOrNull()
+                ?.let { BilibiliNavigationTarget.BangumiSeason(seasonId = 0L, mediaId = it) }
 
             else -> null
         }

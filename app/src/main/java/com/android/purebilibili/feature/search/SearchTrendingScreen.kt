@@ -1,4 +1,9 @@
 package com.android.purebilibili.feature.search
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -17,21 +22,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.North
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.CircularProgressIndicator
+import com.android.purebilibili.core.ui.skeleton.TrendingListSkeleton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -49,8 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor
+import androidx.compose.ui.graphics.RectangleShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,21 +63,22 @@ fun SearchTrendingScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val pullRefreshState = rememberPullToRefreshState()
 
-    Scaffold(
+    AppScaffold(
+        blurContentReady = !state.isLoading,
         topBar = {
-            TopAppBar(
-                title = { Text("bilibili 热搜") },
+            AppTopBar(
+                title = "bilibili 热搜",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "返回"
                         )
                     }
                 },
                 actions = {
-                    IconButton(onClick = viewModel::refresh) {
-                        Icon(
+                    AppIconButton(onClick = viewModel::refresh) {
+                        AppIcon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "刷新"
                         )
@@ -91,14 +93,12 @@ fun SearchTrendingScreen(
         containerColor = globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.background)
     ) { paddingValues ->
         when {
-            state.isLoading -> Box(
+            state.isLoading -> TrendingListSkeleton(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
+                itemCount = 10,
+            )
 
             state.error != null && state.items.isEmpty() -> Box(
                 modifier = Modifier
@@ -107,23 +107,24 @@ fun SearchTrendingScreen(
                     .clickable(onClick = viewModel::refresh),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
+                AppText(
                     text = state.error ?: "加载失败，点击重试",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            else -> ComfortablePullToRefreshBox(
+            // Scaffold padding applied on the box — indicator at content top.
+            else -> AdaptivePullToRefreshBox(
                 isRefreshing = state.isRefreshing,
                 onRefresh = viewModel::refresh,
                 state = pullRefreshState,
+                indicatorTopInset = paddingValues.calculateTopPadding(),
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 24.dp)
+                    contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = paddingValues.calculateBottomPadding() + 24.dp)
                 ) {
                     item {
                         SearchTrendingHero()
@@ -144,6 +145,9 @@ fun SearchTrendingScreen(
 
 @Composable
 private fun SearchTrendingHero() {
+    val heroPrimary = MaterialTheme.colorScheme.primary
+    val heroPrimaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val heroTertiary = MaterialTheme.colorScheme.tertiary
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -151,9 +155,9 @@ private fun SearchTrendingHero() {
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color(0xFF8AA2FF),
-                        Color(0xFF4B6BFF),
-                        Color(0xFF2C48E8)
+                        heroPrimary,
+                        heroPrimaryContainer,
+                        heroTertiary,
                     )
                 )
             )
@@ -165,7 +169,7 @@ private fun SearchTrendingHero() {
                 center = Offset(x = size.width * 0.18f, y = size.height * 0.46f)
             )
             drawCircle(
-                color = Color(0xFFFF8ED8).copy(alpha = 0.25f),
+                color = heroTertiary.copy(alpha = 0.25f),
                 radius = size.minDimension * 0.20f,
                 center = Offset(x = size.width * 0.88f, y = size.height * 0.82f)
             )
@@ -190,7 +194,7 @@ private fun SearchTrendingHero() {
                 )
             }
         }
-        Icon(
+        AppIcon(
             imageVector = Icons.Rounded.Search,
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.18f),
@@ -199,15 +203,14 @@ private fun SearchTrendingHero() {
                 .padding(start = 28.dp)
                 .size(164.dp)
         )
-        Text(
+        AppText(
             text = "bilibili 热搜",
             modifier = Modifier
                 .align(Alignment.Center)
                 .padding(horizontal = 24.dp),
             color = Color.White,
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontWeight = FontWeight.Black,
-                fontSize = 46.sp
+            style = MaterialTheme.typography.displayMedium.copy(
+                fontWeight = FontWeight.Black
             )
         )
     }
@@ -220,10 +223,10 @@ private fun SearchTrendingRow(
     pinnedCount: Int,
     onClick: () -> Unit
 ) {
-    Surface(
+    AppSurface(
         onClick = onClick,
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(0.dp)
+        shape = RectangleShape
     ) {
         Column {
             Row(
@@ -237,7 +240,7 @@ private fun SearchTrendingRow(
                     pinnedCount = pinnedCount
                 )
                 Spacer(modifier = Modifier.width(18.dp))
-                Text(
+                AppText(
                     text = item.title,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -252,7 +255,7 @@ private fun SearchTrendingRow(
                         modifier = Modifier.width(28.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        coil.compose.AsyncImage(
+                        coil3.compose.AsyncImage(
                             model = item.iconUrl,
                             contentDescription = null,
                             modifier = Modifier.size(width = 24.dp, height = 18.dp)
@@ -261,18 +264,18 @@ private fun SearchTrendingRow(
 
                     item.showLiveBadge -> SearchKeywordBadge(
                         text = "直播中",
-                        containerColor = Color(0xFFFF6B97),
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
                     )
 
-                    !item.subtitle.isNullOrBlank() -> Text(
+                    !item.subtitle.isNullOrBlank() -> AppText(
                         text = item.subtitle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
-            androidx.compose.material3.HorizontalDivider(
+            AppHorizontalDivider(
                 modifier = Modifier.padding(start = 78.dp),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             )
@@ -286,22 +289,22 @@ private fun SearchTrendingRank(
     pinnedCount: Int
 ) {
     if (index < pinnedCount) {
-        Icon(
+        AppIcon(
             imageVector = Icons.Rounded.North,
             contentDescription = null,
-            tint = Color(0xFFD94343),
+            tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(20.dp)
         )
         return
     }
 
     val rank = index + 1 - pinnedCount
-    Text(
+    AppText(
         text = rank.toString(),
         color = when (rank) {
-            1 -> Color(0xFFFFA000)
-            2 -> Color(0xFF7BA5E6)
-            3 -> Color(0xFFE39B6B)
+            1 -> MaterialTheme.colorScheme.tertiary
+            2 -> MaterialTheme.colorScheme.secondary
+            3 -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
         },
         style = MaterialTheme.typography.titleLarge.copy(

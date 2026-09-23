@@ -2,6 +2,7 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * 核心列表模型 - 视频、推荐、热门、分区相关
@@ -175,7 +176,14 @@ data class FollowingUser(
     val sign: String = "",
     val mtime: Long = 0,
     @SerialName("official_verify")
-    val officialVerify: OfficialVerify = OfficialVerify()
+    val officialVerify: OfficialVerify = OfficialVerify(),
+    val vip: FollowingVip? = null,
+)
+
+@Serializable
+data class FollowingVip(
+    val vipType: Int = 0,
+    val vipStatus: Int = 0,
 )
 
 // --- 1. 核心通用视频模型 (UI层使用) ---
@@ -187,6 +195,7 @@ data class VideoItem(
     val aid: Long = 0,   // [修复] 新增 aid 字段，移动端推荐流可能只返回 aid
     val cid: Long = 0,   //  明确的 CID 字段，用于播放
     val title: String = "",
+    val searchHighlightedTitle: String = "",
     val pic: String = "",
     val owner: Owner = Owner(),
     val stat: Stat = Stat(),
@@ -197,13 +206,48 @@ data class VideoItem(
     val view_at: Long = 0,
     val pubdate: Long = 0,
     val isVertical: Boolean = false,  //  是否为竖屏视频
+    val isFollowed: Boolean = false,  //  是否已关注该 UP 主(web 推荐接口的 is_followed)
     val isCollectionResource: Boolean = false,
     val collectionId: Long = 0,
     val collectionMid: Long = 0,
     val collectionMediaCount: Int = 0,
     val collectionSubtitle: String = "",
-    val rights: VideoRights? = null
+    val rights: VideoRights? = null,
+    val recommendationFeedback: RecommendationFeedbackMetadata? = null,
+    val contentType: String = "",
+    val navigationUrl: String = "",
 )
+
+@Serializable
+data class RecommendationFeedbackMetadata(
+    val goto: String = "",
+    val param: String = "",
+    val reasons: List<RecommendationFeedbackReason> = emptyList(),
+    val supportsServerSync: Boolean = false
+)
+
+@Serializable
+data class RecommendationFeedbackReason(
+    val id: Long? = null,
+    val name: String = "",
+    val toast: String = "",
+    val type: RecommendationFeedbackType = RecommendationFeedbackType.DISLIKE,
+    val localAction: RecommendationFeedbackLocalAction = RecommendationFeedbackLocalAction.VIDEO_ONLY
+)
+
+@Serializable
+enum class RecommendationFeedbackType {
+    DISLIKE,
+    FEEDBACK
+}
+
+@Serializable
+enum class RecommendationFeedbackLocalAction {
+    VIDEO_ONLY,
+    CREATOR,
+    CATEGORY,
+    SIMILAR_CONTENT
+}
 
 @Serializable
 data class VideoRights(
@@ -281,7 +325,11 @@ data class RecommendItem(
     val tname: String = "",
     //  [新增] 视频尺寸信息 (用于判断竖屏视频)
     val dimension: Dimension? = null,
-    val rights: VideoRights? = null
+    val rights: VideoRights? = null,
+    //  [新增] 是否已关注该 UP 主(推荐流过滤已关注豁免用; 接口返回 0/1 整数)
+    @SerialName("is_followed")
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    val isFollowed: Boolean = false
 ) {
     fun toVideoItem(): VideoItem {
         return VideoItem(
@@ -303,6 +351,7 @@ data class RecommendItem(
             duration = duration ?: 0,
             pubdate = pubdate ?: 0L,
             isVertical = dimension?.isVertical == true,
+            isFollowed = isFollowed,
             rights = rights
         )
     }
@@ -585,6 +634,7 @@ data class MobileFeedItem(
     val duration: Long = 0,
     val args: MobileFeedArgs? = null,
     @SerialName("player_args") val playerArgs: MobileFeedPlayerArgs? = null,
+    @SerialName("three_point_v2") val threePointV2: List<MobileFeedThreePoint> = emptyList(),
     @SerialName("cover_left_text_1") val coverLeftText1: String = "",  // 播放量
     @SerialName("cover_left_text_2") val coverLeftText2: String = ""   // 弹幕数
 ) {
@@ -619,7 +669,36 @@ data class MobileFeedItem(
                 view = parseStatText(coverLeftText1),
                 danmaku = parseStatText(coverLeftText2)
             ),
-            duration = duration.toInt()
+            tid = args?.tid?.takeIf { it > 0 } ?: args?.rid ?: 0,
+            tname = args?.let { it.tname.ifBlank { it.rname } }.orEmpty(),
+            duration = duration.toInt(),
+            recommendationFeedback = RecommendationFeedbackMetadata(
+                goto = goto,
+                param = param,
+                reasons = threePointV2.flatMap { group ->
+                    val type = when (group.type) {
+                        "feedback" -> RecommendationFeedbackType.FEEDBACK
+                        "dislike" -> RecommendationFeedbackType.DISLIKE
+                        else -> null
+                    } ?: return@flatMap emptyList()
+                    group.reasons.mapNotNull { reason ->
+                        reason.name.takeIf { it.isNotBlank() }?.let {
+                            RecommendationFeedbackReason(
+                                id = reason.id,
+                                name = it,
+                                toast = reason.toast,
+                                type = type,
+                                localAction = resolveRecommendationFeedbackLocalAction(
+                                    type = type,
+                                    reasonId = reason.id,
+                                    reasonName = it
+                                )
+                            )
+                        }
+                    }
+                },
+                supportsServerSync = goto.isNotBlank() && param.isNotBlank()
+            )
         )
     }
     
@@ -640,8 +719,63 @@ data class MobileFeedArgs(
     @SerialName("up_id") val upId: Long = 0,
     @SerialName("up_name") val upName: String = "",
     @SerialName("up_face") val upFace: String = "",
-    val aid: Long = 0
+    val aid: Long = 0,
+    val rid: Int = 0,
+    val rname: String = "",
+    val tid: Int = 0,
+    val tname: String = ""
 )
+
+@Serializable
+data class MobileFeedThreePoint(
+    val title: String = "",
+    val type: String = "",
+    val reasons: List<MobileFeedFeedbackReason> = emptyList()
+)
+
+@Serializable
+data class MobileFeedFeedbackReason(
+    val id: Long = 0,
+    val name: String = "",
+    val toast: String = ""
+)
+
+internal fun resolveRecommendationFeedbackLocalAction(
+    type: RecommendationFeedbackType,
+    reasonId: Long,
+    reasonName: String = ""
+): RecommendationFeedbackLocalAction {
+    if (type == RecommendationFeedbackType.FEEDBACK) {
+        return RecommendationFeedbackLocalAction.VIDEO_ONLY
+    }
+    return when (reasonId) {
+        4L -> RecommendationFeedbackLocalAction.CREATOR
+        2L, 3L -> RecommendationFeedbackLocalAction.CATEGORY
+        12L -> RecommendationFeedbackLocalAction.SIMILAR_CONTENT
+        // 服务端 reason id 可能变更；用文案再推断一次，避免全部退化为“仅当前视频”。
+        else -> inferRecommendationFeedbackLocalActionFromName(reasonName)
+    }
+}
+
+internal fun inferRecommendationFeedbackLocalActionFromName(
+    reasonName: String
+): RecommendationFeedbackLocalAction {
+    val normalized = reasonName.trim().lowercase()
+    if (normalized.isBlank()) return RecommendationFeedbackLocalAction.VIDEO_ONLY
+    return when {
+        normalized.contains("up主") ||
+            normalized.startsWith("up:") ||
+            normalized.startsWith("up：") ||
+            normalized.contains("up主:") ||
+            normalized.contains("up主：") -> RecommendationFeedbackLocalAction.CREATOR
+        normalized.contains("分区") -> RecommendationFeedbackLocalAction.CATEGORY
+        normalized.contains("此类") ||
+            normalized.contains("相似") ||
+            normalized.contains("过多") ||
+            normalized.contains("同类") -> RecommendationFeedbackLocalAction.SIMILAR_CONTENT
+        else -> RecommendationFeedbackLocalAction.VIDEO_ONLY
+    }
+}
 
 @Serializable
 data class MobileFeedPlayerArgs(

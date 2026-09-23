@@ -3,35 +3,22 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
-    return pointerInput(onTap) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            down.consume()
-            val up = waitForUpOrCancellation()
-            if (up != null) {
-                up.consume()
-                onTap()
-            }
-        }
-    }
-}
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.appDesktopFocusableItemVisuals
 
 /**
  *  横屏弹幕输入框组件
@@ -47,17 +34,18 @@ fun LandscapeDanmakuInput(
 ) {
     Box(
         modifier = modifier
-            .height(34.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .heightIn(min = 48.dp)
+            .clip(AppShapes.container(ContainerLevel.Card))
             .background(Color.White.copy(alpha = 0.15f))
-            .consumeTap(onClick)
+            .appDesktopFocusableItemVisuals()
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Text(
+        AppText(
             text = placeholder,
             color = Color.White.copy(alpha = 0.6f),
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Normal,
             maxLines = 1
         )
@@ -75,15 +63,22 @@ fun LandscapeQuickActionButton(
 ) {
     Box(
         modifier = modifier
-            .size(32.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.15f))
-            .clickable(onClick = onClick),
+            .size(48.dp)
+            .appDesktopFocusableItemVisuals()
+            .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = emoji,
-            fontSize = 14.sp
-        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(AppShapes.container(ContainerLevel.Card))
+                .background(Color.White.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppText(
+                text = emoji,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
     }
 }

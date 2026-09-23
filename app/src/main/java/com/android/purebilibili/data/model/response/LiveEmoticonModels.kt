@@ -45,5 +45,7 @@ data class EmoticonPkg(
 data class LiveDanmakuEmoticon(
     val emoji: String = "",
     val url: String = "",
-    val des: String = ""
+    val des: String = "",
+    // 表情唯一标识（如 official_331），发送表情弹幕时作为 emoticon_unique 上报
+    val emoticon_unique: String = ""
 )

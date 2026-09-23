@@ -1,7 +1,11 @@
 package com.android.purebilibili.feature.home
 
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.ui.AppPullRefreshIndicatorStyle
+import com.android.purebilibili.core.ui.AppPullRefreshMotionStyle
+import com.android.purebilibili.core.ui.PresetPrimitiveRenderer
+import com.android.purebilibili.core.ui.resolveAppPullRefreshProfile
+import com.android.purebilibili.core.ui.resolvePullRefreshThresholdDp
+import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -12,60 +16,55 @@ class HomePullRefreshUiPolicyTest {
     @Test
     fun `material md3 preset uses native refresh motion style`() {
         assertEquals(
-            HomePullRefreshMotionStyle.MD3,
-            resolveHomePullRefreshMotionStyle(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3
-            )
-        )
-        assertEquals(
-            HomePullRefreshMotionStyle.IOS,
-            resolveHomePullRefreshMotionStyle(
-                uiPreset = UiPreset.IOS,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3
-            )
+            AppPullRefreshMotionStyle.PLATFORM,
+            resolveAppPullRefreshProfile(PresetPrimitiveRenderer.MATERIAL3).motionStyle
         )
     }
 
     @Test
     fun `miuix variant keeps material pull motion for previous md3 behavior`() {
         assertEquals(
-            HomePullRefreshMotionStyle.MD3,
-            resolveHomePullRefreshMotionStyle(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
-            )
+            AppPullRefreshMotionStyle.PLATFORM,
+            resolveAppPullRefreshProfile(PresetPrimitiveRenderer.MIUIX_BRIDGED).motionStyle
         )
     }
 
     @Test
-    fun `pull refresh indicator style routes md3 screenshot and miuix legacy material separately`() {
+    fun `pull refresh indicator style routes native material and miuix separately`() {
         assertEquals(
-            HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE,
-            resolveHomePullRefreshIndicatorStyle(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3
-            )
+            AppPullRefreshIndicatorStyle.MATERIAL_DEFAULT,
+            resolveAppPullRefreshProfile(PresetPrimitiveRenderer.MATERIAL3).indicatorStyle
         )
         assertEquals(
-            HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT,
-            resolveHomePullRefreshIndicatorStyle(
-                uiPreset = UiPreset.MD3,
-                androidNativeVariant = AndroidNativeVariant.MIUIX
-            )
+            AppPullRefreshIndicatorStyle.MIUIX_NATIVE,
+            resolveAppPullRefreshProfile(PresetPrimitiveRenderer.MIUIX_BRIDGED).indicatorStyle
         )
-        assertEquals(
-            HomePullRefreshIndicatorStyle.IOS,
-            resolveHomePullRefreshIndicatorStyle(
-                uiPreset = UiPreset.IOS,
-                androidNativeVariant = AndroidNativeVariant.MATERIAL3
-            )
-        )
+    }
+
+    @Test
+    fun `home screen routes miuix native refresh through adaptive container`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
+
+        assertTrue(source.contains("AdaptivePullToRefreshBox("))
+        assertTrue(source.contains("AppPullRefreshIndicatorStyle.MIUIX_NATIVE -> Unit"))
+        // Overlay chrome height via indicatorTopInset (not scaffold default 0).
+        assertTrue(source.contains("indicatorTopInset = homeRefreshIndicatorTopInset"))
+        assertTrue(source.contains("homeRefreshIndicatorTopInset = listTopPadding"))
     }
 
     @Test
     fun `resolvePullRefreshThresholdDp returns comfortable trigger distance`() {
-        assertEquals(56f, resolvePullRefreshThresholdDp(), 0.001f)
+        assertEquals(44f, resolvePullRefreshThresholdDp(), 0.001f)
+    }
+
+    private fun loadSource(path: String): String {
+        val normalizedPath = path.removePrefix("app/")
+        val sourceFile = listOf(
+            File(path),
+            File(normalizedPath)
+        ).firstOrNull { it.exists() }
+        require(sourceFile != null) { "Cannot locate $path from ${File(".").absolutePath}" }
+        return sourceFile.readText()
     }
 
     @Test
@@ -75,7 +74,7 @@ class HomePullRefreshUiPolicyTest {
             dragMultiplier = 0.5f
         )
 
-        assertEquals(112f, requiredFingerTravelDp, 0.001f)
+        assertEquals(88f, requiredFingerTravelDp, 0.001f)
         assertTrue(requiredFingerTravelDp < 160f)
     }
 
@@ -98,6 +97,19 @@ class HomePullRefreshUiPolicyTest {
                 newItemsCount = 3,
                 isRefreshing = false,
                 firstVisibleItemIndex = 2,
+                firstVisibleItemScrollOffset = 0
+            )
+        )
+    }
+
+    @Test
+    fun `shouldResetToTopAfterIncrementalRefresh returns true for follow even at top`() {
+        assertTrue(
+            shouldResetToTopAfterIncrementalRefresh(
+                currentCategory = HomeCategory.FOLLOW,
+                newItemsCount = 2,
+                isRefreshing = false,
+                firstVisibleItemIndex = 0,
                 firstVisibleItemScrollOffset = 0
             )
         )
@@ -208,7 +220,7 @@ class HomePullRefreshUiPolicyTest {
             resolvePullContentOffsetFraction(
                 distanceFraction = 0f,
                 isRefreshing = true,
-                motionStyle = HomePullRefreshMotionStyle.IOS
+                motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
         )
@@ -221,7 +233,7 @@ class HomePullRefreshUiPolicyTest {
             resolvePullContentOffsetFraction(
                 distanceFraction = 0f,
                 isRefreshing = false,
-                motionStyle = HomePullRefreshMotionStyle.IOS
+                motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
         )
@@ -234,7 +246,7 @@ class HomePullRefreshUiPolicyTest {
             resolvePullContentOffsetFraction(
                 distanceFraction = 1.2f,
                 isRefreshing = false,
-                motionStyle = HomePullRefreshMotionStyle.MD3
+                motionStyle = AppPullRefreshMotionStyle.PLATFORM
             ),
             0.001f
         )
@@ -245,21 +257,31 @@ class HomePullRefreshUiPolicyTest {
         val lightPull = resolvePullContentOffsetFraction(
             distanceFraction = 0.4f,
             isRefreshing = false,
-            motionStyle = HomePullRefreshMotionStyle.MD3,
-            indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+            motionStyle = AppPullRefreshMotionStyle.PLATFORM,
+            indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
         )
         val heavyPull = resolvePullContentOffsetFraction(
             distanceFraction = 1.2f,
             isRefreshing = false,
-            motionStyle = HomePullRefreshMotionStyle.MD3,
-            indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+            motionStyle = AppPullRefreshMotionStyle.PLATFORM,
+            indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
         )
 
         assertTrue(lightPull > 0f)
         assertTrue(heavyPull > lightPull)
-        assertEquals(0.4f, lightPull, 0.001f)
-        assertEquals(1.12f, heavyPull, 0.001f)
-        assertTrue(heavyPull <= 1.12f)
+        assertEquals(0.351f, lightPull, 0.001f)
+        assertEquals(0.805f, heavyPull, 0.001f)
+        assertTrue(heavyPull < 1.12f)
+    }
+
+    @Test
+    fun `md3 screenshot pull offset applies progressive drag resistance`() {
+        assertEquals(0f, resolveMd3ScreenshotPullOffsetFraction(0f), 0.001f)
+        assertEquals(0.741f, resolveMd3ScreenshotPullOffsetFraction(1f), 0.001f)
+        assertTrue(
+            resolveMd3ScreenshotPullOffsetFraction(0.5f) <
+                resolveMd3ScreenshotPullOffsetFraction(1f)
+        )
     }
 
     @Test
@@ -272,12 +294,12 @@ class HomePullRefreshUiPolicyTest {
             indicatorHeightDp = indicatorHeight,
             hasHintText = true
         )
-        val contentOffset = resolvePullContentMaxOffsetDp(HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE) *
+        val contentOffset = resolvePullContentMaxOffsetDp(AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE) *
             resolvePullContentOffsetFraction(
                 distanceFraction = 1f,
                 isRefreshing = false,
-                motionStyle = HomePullRefreshMotionStyle.MD3,
-                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+                motionStyle = AppPullRefreshMotionStyle.PLATFORM,
+                indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
             )
 
         assertTrue(contentOffset >= indicatorTotalHeight + 8f)
@@ -290,8 +312,8 @@ class HomePullRefreshUiPolicyTest {
             resolvePullContentOffsetFraction(
                 distanceFraction = 0.6f,
                 isRefreshing = false,
-                motionStyle = HomePullRefreshMotionStyle.MD3,
-                indicatorStyle = HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT
+                motionStyle = AppPullRefreshMotionStyle.PLATFORM,
+                indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_DEFAULT
             ),
             0.001f
         )
@@ -300,8 +322,8 @@ class HomePullRefreshUiPolicyTest {
             resolvePullContentOffsetFraction(
                 distanceFraction = 1.2f,
                 isRefreshing = false,
-                motionStyle = HomePullRefreshMotionStyle.MD3,
-                indicatorStyle = HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT
+                motionStyle = AppPullRefreshMotionStyle.PLATFORM,
+                indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_DEFAULT
             ),
             0.001f
         )
@@ -310,8 +332,8 @@ class HomePullRefreshUiPolicyTest {
     @Test
     fun `md3 screenshot pull content max offset reserves indicator distance`() {
         assertEquals(
-            196f,
-            resolvePullContentMaxOffsetDp(HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE),
+            172f,
+            resolvePullContentMaxOffsetDp(AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE),
             0.001f
         )
     }
@@ -325,8 +347,8 @@ class HomePullRefreshUiPolicyTest {
                 isRefreshing = true,
                 isStateAnimating = false,
                 previousOffsetFraction = 0.9f,
-                motionStyle = HomePullRefreshMotionStyle.MD3,
-                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+                motionStyle = AppPullRefreshMotionStyle.PLATFORM,
+                indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
             ),
             0.001f
         )
@@ -335,14 +357,14 @@ class HomePullRefreshUiPolicyTest {
     @Test
     fun `stable md3 screenshot pull offset follows finger back toward top`() {
         assertEquals(
-            0.5f,
+            0.426f,
             resolveStablePullContentOffsetFraction(
                 distanceFraction = 0.5f,
                 isRefreshing = false,
                 isStateAnimating = false,
                 previousOffsetFraction = 0.9f,
-                motionStyle = HomePullRefreshMotionStyle.MD3,
-                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+                motionStyle = AppPullRefreshMotionStyle.PLATFORM,
+                indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
             ),
             0.001f
         )
@@ -361,6 +383,7 @@ class HomePullRefreshUiPolicyTest {
 
         assertEquals(44f, initialHeight, 0.001f)
         assertTrue(releaseHeight > initialHeight)
+        assertEquals(70f, releaseHeight, 0.001f)
         assertEquals(42f, resolveMd3ScreenshotRefreshIndicatorHeightDp(progress = 1f, isRefreshing = true), 0.001f)
     }
 
@@ -415,7 +438,7 @@ class HomePullRefreshUiPolicyTest {
                 isRefreshing = false,
                 isStateAnimating = false,
                 previousOffsetFraction = 0.8f,
-                motionStyle = HomePullRefreshMotionStyle.IOS
+                motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
         )
@@ -430,7 +453,7 @@ class HomePullRefreshUiPolicyTest {
                 isRefreshing = false,
                 isStateAnimating = false,
                 previousOffsetFraction = 0.3f,
-                motionStyle = HomePullRefreshMotionStyle.IOS
+                motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
         )
@@ -445,7 +468,7 @@ class HomePullRefreshUiPolicyTest {
                 isRefreshing = false,
                 isStateAnimating = false,
                 previousOffsetFraction = 0.8f,
-                motionStyle = HomePullRefreshMotionStyle.IOS
+                motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
         )
@@ -460,7 +483,7 @@ class HomePullRefreshUiPolicyTest {
                 isRefreshing = true,
                 isStateAnimating = false,
                 previousOffsetFraction = 0.8f,
-                motionStyle = HomePullRefreshMotionStyle.IOS
+                motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
         )
@@ -498,7 +521,7 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 0.6f,
                 isRefreshing = false,
                 isStateAnimating = true,
-                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+                indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
             )
         )
     }
@@ -512,7 +535,7 @@ class HomePullRefreshUiPolicyTest {
                 isRefreshing = false,
                 isStateAnimating = false,
                 previousOffsetFraction = 0.8f,
-                motionStyle = HomePullRefreshMotionStyle.MD3
+                motionStyle = AppPullRefreshMotionStyle.PLATFORM
             ),
             0.001f
         )

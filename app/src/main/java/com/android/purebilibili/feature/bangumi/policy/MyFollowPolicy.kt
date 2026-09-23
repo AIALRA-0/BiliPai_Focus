@@ -24,37 +24,42 @@ fun resolveMyFollowItemLazyKey(
     index: Int,
     item: FollowBangumiItem
 ): String {
-    val businessKey = when {
+    return "my_follow_${resolveMyFollowItemBusinessKey(item)}_$index"
+}
+
+fun resolveMyFollowItemBusinessKey(item: FollowBangumiItem): String = when {
         item.seasonId > 0L -> "season_${item.seasonId}"
         item.mediaId > 0L -> "media_${item.mediaId}"
         item.firstEp > 0L -> "ep_${item.firstEp}"
         item.url.isNotBlank() -> "url_${item.url.hashCode()}"
         item.title.isNotBlank() -> "title_${item.title.hashCode()}"
         else -> "unknown"
-    }
-    return "my_follow_${businessKey}_$index"
 }
 
 fun resolveBangumiIndexItemLazyKey(
     index: Int,
     item: BangumiItem
 ): String {
-    val businessKey = when {
+    return "bangumi_index_${resolveBangumiIndexItemBusinessKey(item)}_$index"
+}
+
+fun resolveBangumiIndexItemBusinessKey(item: BangumiItem): String = when {
         item.seasonId > 0L -> "season_${item.seasonId}"
         item.mediaId > 0L -> "media_${item.mediaId}"
         item.newEp?.id?.takeIf { it > 0L } != null -> "ep_${item.newEp.id}"
         item.title.isNotBlank() -> "title_${item.title.hashCode()}"
         item.cover.isNotBlank() -> "cover_${item.cover.hashCode()}"
         else -> "unknown"
-    }
-    return "bangumi_index_${businessKey}_$index"
 }
 
 fun resolveBangumiSearchItemLazyKey(
     index: Int,
     item: BangumiSearchItem
 ): String {
-    val businessKey = when {
+    return "bangumi_search_${resolveBangumiSearchItemBusinessKey(item)}_$index"
+}
+
+fun resolveBangumiSearchItemBusinessKey(item: BangumiSearchItem): String = when {
         item.seasonId > 0L -> "season_${item.seasonId}"
         item.pgcSeasonId > 0L -> "season_${item.pgcSeasonId}"
         item.mediaId > 0L -> "media_${item.mediaId}"
@@ -63,8 +68,6 @@ fun resolveBangumiSearchItemLazyKey(
         item.orgTitle.isNotBlank() -> "org_title_${item.orgTitle.hashCode()}"
         item.title.isNotBlank() -> "title_${item.title.hashCode()}"
         else -> "unknown"
-    }
-    return "bangumi_search_${businessKey}_$index"
 }
 
 fun resolveTimelineEpisodeLazyKey(

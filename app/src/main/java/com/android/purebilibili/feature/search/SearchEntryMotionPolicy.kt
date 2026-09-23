@@ -39,3 +39,19 @@ internal fun resolveSearchEntryMotionSpec(
         )
     }
 }
+
+internal fun resolveSearchExitMotionSpec(
+    entrySpec: SearchEntryMotionSpec?,
+    screenHeightDp: Int,
+): SearchEntryMotionSpec? {
+    return entrySpec?.copy(
+        durationMillis = 300,
+        initialAlpha = 0.16f,
+        initialScale = 0.74f,
+        initialTranslationYDp = (screenHeightDp - 136)
+            .coerceAtLeast(360)
+            .toFloat(),
+        transformOriginPivotX = 0.88f,
+        transformOriginPivotY = 1f,
+    )
+}

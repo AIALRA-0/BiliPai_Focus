@@ -1,12 +1,17 @@
 package com.android.purebilibili.feature.download
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
+import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
+import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
+import com.android.purebilibili.core.ui.LocalNavigationBackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -27,7 +32,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -38,16 +45,36 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppCommentIcon
+import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
+import com.android.purebilibili.core.ui.rememberAppPlayIcon
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
+import com.android.purebilibili.core.store.DanmakuSettings
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
-import com.bytedance.danmaku.render.engine.DanmakuView
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import com.android.purebilibili.feature.video.ui.gesture.GestureLevelKind
+import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayContent
+import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelIcon
+import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
+import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
+import com.android.purebilibili.danmaku.engine.DanmakuRenderView
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FastForward
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.SkipNext
+import androidx.compose.material.icons.outlined.SkipPrevious
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -55,6 +82,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.abs
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  * 手势模式枚举
@@ -74,13 +103,29 @@ fun OfflineVideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val displayContext = LocalAppWindowAdaptiveInfo.current.displayContext
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     val miniPlayerManager = remember(context) { MiniPlayerManager.getInstance(context) }
-    val danmakuManager = rememberDanmakuManager()
+    val playerChromeProfile = rememberAppPlayerChromeProfile()
+    val backIcon = rememberAppBackIcon()
+    val commentIcon = rememberAppCommentIcon()
+    val playIcon = rememberAppPlayIcon()
+    val gestureLevelOverlayStyle =
+        rememberGestureLevelOverlayStyle(playerChromeProfile.tabPresentation)
     
     val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
     var currentTaskId by remember(taskId) { mutableStateOf(taskId) }
+    val danmakuManager = rememberDanmakuManager("offline:$currentTaskId")
+    val configuration = LocalConfiguration.current
+    val danmakuSettingsScope = remember(configuration.orientation) {
+        resolveDanmakuSettingsScope(
+            isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        )
+    }
+    val danmakuSettings by SettingsManager
+        .getDanmakuSettings(context, danmakuSettingsScope)
+        .collectAsStateWithLifecycle(initialValue = DanmakuSettings())
     val task = tasks[currentTaskId]
     
     // === 状态管理 ===
@@ -120,6 +165,13 @@ fun OfflineVideoPlayerScreen(
     var longPressSpeedVisible by remember { mutableStateOf(false) }
     val longPressSpeed = 2.0f
     var danmakuEnabled by remember(currentTaskId) { mutableStateOf(true) }
+
+    LaunchedEffect(danmakuManager, danmakuSettings) {
+        danmakuManager.updateSettings(settings = danmakuSettings)
+    }
+    LaunchedEffect(currentTaskId, danmakuSettings.enabled) {
+        danmakuEnabled = danmakuSettings.enabled
+    }
     
     // 双击跳转秒数
     val seekForwardSeconds = 10
@@ -131,9 +183,9 @@ fun OfflineVideoPlayerScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("视频文件不存在", color = Color.White)
+                AppText("视频文件不存在", color = Color.White)
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = onBack) { Text("返回") }
+                AppButton(onClick = onBack) { AppText("返回") }
             }
         }
         return
@@ -146,9 +198,9 @@ fun OfflineVideoPlayerScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("视频文件已被删除", color = Color.White)
+                AppText("视频文件已被删除", color = Color.White)
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = onBack) { Text("返回") }
+                AppButton(onClick = onBack) { AppText("返回") }
             }
         }
         return
@@ -177,24 +229,25 @@ fun OfflineVideoPlayerScreen(
     val offlineMiniPlayerPayload = remember(task) {
         resolveOfflineMiniPlayerPayload(task)
     }
-    val localDanmakuSegments by produceState<List<ByteArray>>(
-        initialValue = emptyList(),
-        key1 = task.localDanmakuSegmentPaths
+    val localDanmakuSource by produceState(
+        initialValue = LocalDanmakuSource(),
+        key1 = task.localDanmakuSegmentPaths,
+        key2 = task.localDanmakuMetadataPath
     ) {
         value = if (task.localDanmakuSegmentPaths.isEmpty()) {
-            emptyList()
+            LocalDanmakuSource()
         } else {
             withContext(Dispatchers.IO) {
-                DownloadDanmakuAssetService.readLocalSegments(task)
+                DownloadDanmakuAssetService.readLocalSource(task)
             }
         }
     }
     val danmakuAvailable = shouldShowOfflineDanmakuControl(
-        localSegmentCount = localDanmakuSegments.size,
+        localSegmentCount = localDanmakuSource.totalFileCount,
         isAudioOnly = task.isAudioOnly
     )
     val showDanmakuLayer = shouldShowOfflineDanmakuLayer(
-        localSegmentCount = localDanmakuSegments.size,
+        localSegmentCount = localDanmakuSource.totalFileCount,
         isAudioOnly = task.isAudioOnly,
         danmakuEnabled = danmakuEnabled
     )
@@ -256,13 +309,28 @@ fun OfflineVideoPlayerScreen(
     
     fun applyWindowMode(fullscreen: Boolean) {
         val act = getActivity() ?: return
+        val requestedOrientation = when (
+            resolveOfflineRequestedOrientationMode(
+                isFullscreen = fullscreen,
+                displayContext = displayContext,
+            )
+        ) {
+            OfflineRequestedOrientationMode.Unspecified ->
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            OfflineRequestedOrientationMode.SensorLandscape ->
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            OfflineRequestedOrientationMode.Portrait ->
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        act.applyPlayerRequestedOrientation(
+            requestedOrientation = requestedOrientation,
+            displayContext = displayContext,
+        )
         if (fullscreen) {
-            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val windowInsetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
             windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
             windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
-            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             val windowInsetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
             windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
         }
@@ -296,9 +364,26 @@ fun OfflineVideoPlayerScreen(
     }
     
     // 返回键处理
-    BackHandler(enabled = isFullscreen) { toggleFullscreen() }
+    LocalNavigationBackHandler(enabled = isFullscreen) { toggleFullscreen() }
     
-    LaunchedEffect(activity, isFullscreen) {
+    var previousOfflineDisplayRole by remember {
+        mutableStateOf(displayContext.foldableDisplayRole)
+    }
+    LaunchedEffect(activity, displayContext.foldableDisplayRole) {
+        if (
+            com.android.purebilibili.core.util.shouldReleaseOrientationLockOnDisplayRoleChange(
+                previousRole = previousOfflineDisplayRole,
+                nextRole = displayContext.foldableDisplayRole,
+            )
+        ) {
+            activity?.applyPlayerRequestedOrientation(
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                displayContext = displayContext,
+            )
+        }
+        previousOfflineDisplayRole = displayContext.foldableDisplayRole
+    }
+    LaunchedEffect(activity, displayContext, isFullscreen) {
         applyWindowMode(isFullscreen)
     }
 
@@ -318,14 +403,14 @@ fun OfflineVideoPlayerScreen(
         danmakuManager.attachPlayer(player)
         onDispose {
             persistCurrentPlaybackPosition(task, player)
-            danmakuManager.detachView()
+            danmakuManager.detachPlayer(player)
             if (miniPlayerManager.isPlayerManaged(player)) {
                 miniPlayerManager.dismiss()
             } else {
                 miniPlayerManager.clearExternalPlayerIfMatches(player)
             }
             player.release()
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.applyPlayerRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
             activity?.let { act ->
                 val windowInsetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
                 windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
@@ -333,9 +418,13 @@ fun OfflineVideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(danmakuManager, task.id, localDanmakuSegments) {
-        if (localDanmakuSegments.isNotEmpty()) {
-            danmakuManager.loadLocalDanmaku(task.cid, localDanmakuSegments)
+    LaunchedEffect(danmakuManager, task.id, localDanmakuSource) {
+        if (localDanmakuSource.totalFileCount > 0) {
+            danmakuManager.loadLocalDanmaku(
+                cid = task.cid,
+                standardSegmentPaths = localDanmakuSource.standardSegmentPaths,
+                specialSegmentPaths = localDanmakuSource.specialSegmentPaths
+            )
         }
     }
 
@@ -501,7 +590,11 @@ fun OfflineVideoPlayerScreen(
                                         }
                                         gesturePercent = newBrightness
                                     }
-                                    gestureIcon = CupertinoIcons.Default.SunMax
+                                    gestureIcon = resolveGestureLevelIcon(
+                                        style = gestureLevelOverlayStyle,
+                                        kind = GestureLevelKind.Brightness,
+                                        percent = gesturePercent
+                                    )
                                 }
                                 GestureMode.Volume -> {
                                     totalDragDistanceY -= dragAmount.y
@@ -512,11 +605,11 @@ fun OfflineVideoPlayerScreen(
                                     audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
                                     gesturePercent = newVolPercent
                                     
-                                    gestureIcon = when {
-                                        gesturePercent < 0.01f -> CupertinoIcons.Default.SpeakerSlash
-                                        gesturePercent < 0.5f -> CupertinoIcons.Default.Speaker
-                                        else -> CupertinoIcons.Default.SpeakerWave2
-                                    }
+                                    gestureIcon = resolveGestureLevelIcon(
+                                        style = gestureLevelOverlayStyle,
+                                        kind = GestureLevelKind.Volume,
+                                        percent = gesturePercent
+                                    )
                                 }
                                 else -> {}
                             }
@@ -587,7 +680,7 @@ fun OfflineVideoPlayerScreen(
         if (danmakuAvailable) {
             AndroidView(
                 factory = { ctx ->
-                    DanmakuView(ctx).apply {
+                    DanmakuRenderView(ctx).apply {
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         configureAsPassiveDanmakuOverlay()
                         danmakuManager.attachView(this)
@@ -607,6 +700,7 @@ fun OfflineVideoPlayerScreen(
                         }
                     }
                 },
+                onRelease = { view -> danmakuManager.detachView(view) },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -624,55 +718,65 @@ fun OfflineVideoPlayerScreen(
         }
         
         // 3. 手势指示器（亮度/音量/进度）
-        AnimatedVisibility(
-            visible = isGestureVisible,
-            modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(120.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (gestureMode == GestureMode.Seek) {
+        if (isGestureVisible) {
+            if (gestureMode == GestureMode.Seek) {
+                Box(
+                    modifier = Modifier.align(Alignment.Center),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         val durationSeconds = (player.duration / 1000).coerceAtLeast(1)
                         val targetSeconds = (seekTargetTime / 1000).toInt()
-                        
-                        Text(
+                        AppText(
                             text = "${FormatUtils.formatDuration(targetSeconds)} / ${FormatUtils.formatDuration(durationSeconds.toInt())}",
                             color = Color.White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        
                         val deltaSeconds = (seekTargetTime - startPosition) / 1000
                         val sign = if (deltaSeconds > 0) "+" else ""
                         if (deltaSeconds != 0L) {
-                            Text(
+                            AppText(
                                 text = "($sign${deltaSeconds}s)",
                                 color = if (deltaSeconds > 0) Color.Green else Color.Red,
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                    } else {
-                        Icon(
-                            imageVector = gestureIcon ?: CupertinoIcons.Default.SunMax,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "${(gesturePercent * 100).toInt()}%",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                        )
                     }
+                }
+            } else if (
+                gestureMode == GestureMode.Brightness ||
+                gestureMode == GestureMode.Volume
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    GestureLevelOverlayContent(
+                        mode = if (gestureMode == GestureMode.Brightness) {
+                            VideoGestureMode.Brightness
+                        } else {
+                            VideoGestureMode.Volume
+                        },
+                        percent = gesturePercent,
+                        style = gestureLevelOverlayStyle,
+                        modifier = Modifier
+                            .align(
+                                if (playerChromeProfile.effects.usesTonalContainerTreatment) {
+                                    if (gestureMode == GestureMode.Volume) {
+                                        Alignment.CenterEnd
+                                    } else {
+                                        Alignment.CenterStart
+                                    }
+                                } else {
+                                    Alignment.Center
+                                }
+                            )
+                            .then(
+                                if (playerChromeProfile.effects.usesTonalContainerTreatment) {
+                                    Modifier.padding(horizontal = 22.dp)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    )
                 }
             }
         }
@@ -687,10 +791,10 @@ fun OfflineVideoPlayerScreen(
             Box(
                 modifier = Modifier
                     .size(100.dp)
-                    .background(Color.Black.copy(0.75f), RoundedCornerShape(20.dp)),
+                    .background(Color.Black.copy(0.75f), AppShapes.container(ContainerLevel.Floating)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
+                AppText(
                     text = seekFeedbackText ?: "",
                     color = if (seekFeedbackText?.startsWith("+") == true) Color.Green else Color.Red,
                     style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
@@ -705,22 +809,22 @@ fun OfflineVideoPlayerScreen(
             enter = scaleIn() + fadeIn(),
             exit = scaleOut() + fadeOut()
         ) {
-            Surface(
+            AppSurface(
                 color = Color.Black.copy(alpha = 0.7f),
-                shape = RoundedCornerShape(20.dp)
+                shape = AppShapes.container(ContainerLevel.Floating)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        CupertinoIcons.Default.Forward,
+                    AppIcon(
+                        Icons.Outlined.FastForward,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
+                    AppText(
                         text = "${longPressSpeed}x 倍速播放中",
                         color = Color.White,
                         fontWeight = FontWeight.Bold
@@ -781,21 +885,21 @@ fun OfflineVideoPlayerScreen(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { if (isFullscreen) toggleFullscreen() else onBack() }) {
-                    Icon(
-                        CupertinoIcons.Default.ChevronBackward,
+                AppIconButton(onClick = { if (isFullscreen) toggleFullscreen() else onBack() }) {
+                    AppIcon(
+                        backIcon,
                         contentDescription = "返回",
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                 }
                 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
                 
-                Text(
+                AppText(
                     text = task.episodeLabel?.takeIf { it.isNotBlank() } ?: task.title,
                     color = Color.White,
-                    fontSize = 16.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     modifier = Modifier.weight(1f)
@@ -814,7 +918,7 @@ fun OfflineVideoPlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small)
             ) {
                 // 进度条
                 OfflineProgressBar(
@@ -824,61 +928,61 @@ fun OfflineVideoPlayerScreen(
                     onSeek = { seekToPosition(it) }
                 )
                 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
 
                 if (episodeQueue.size > 1 && currentEpisodeIndex >= 0) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 4.dp),
+                            .padding(bottom = AppSpacingTokens.ExtraSmall),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
                     ) {
-                        Surface(
+                        AppSurface(
                             onClick = {
-                                val previousTask = episodeQueue.getOrNull(currentEpisodeIndex - 1) ?: return@Surface
+                                val previousTask = episodeQueue.getOrNull(currentEpisodeIndex - 1) ?: return@AppSurface
                                 switchEpisode(previousTask.id)
                             },
                             enabled = currentEpisodeIndex > 0,
                             color = Color.White.copy(alpha = if (currentEpisodeIndex > 0) 0.15f else 0.08f),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = AppShapes.container(ContainerLevel.Chip)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    CupertinoIcons.Default.BackwardEnd,
+                                AppIcon(
+                                    Icons.Outlined.SkipPrevious,
                                     contentDescription = "上一集",
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("上一集", color = Color.White, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                                AppText("上一集", color = Color.White, style = MaterialTheme.typography.labelMedium)
                             }
                         }
-                        Text(
+                        AppText(
                             text = "${currentEpisodeIndex + 1}/${episodeQueue.size}",
                             color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 12.sp
+                            style = MaterialTheme.typography.labelMedium
                         )
-                        Surface(
+                        AppSurface(
                             onClick = {
-                                val nextTask = episodeQueue.getOrNull(currentEpisodeIndex + 1) ?: return@Surface
+                                val nextTask = episodeQueue.getOrNull(currentEpisodeIndex + 1) ?: return@AppSurface
                                 switchEpisode(nextTask.id)
                             },
                             enabled = currentEpisodeIndex < episodeQueue.lastIndex,
                             color = Color.White.copy(alpha = if (currentEpisodeIndex < episodeQueue.lastIndex) 0.15f else 0.08f),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = AppShapes.container(ContainerLevel.Chip)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("下一集", color = Color.White, fontSize = 12.sp)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    CupertinoIcons.Default.ForwardEnd,
+                                AppText("下一集", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                                AppIcon(
+                                    Icons.Outlined.SkipNext,
                                     contentDescription = "下一集",
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
@@ -895,7 +999,7 @@ fun OfflineVideoPlayerScreen(
                 ) {
                     val activeControlColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
                     // 播放/暂停按钮
-                    IconButton(
+                    AppIconButton(
                         onClick = {
                             if (player.playbackState == Player.STATE_ENDED) {
                                 player.seekTo(0)
@@ -908,8 +1012,8 @@ fun OfflineVideoPlayerScreen(
                         },
                         modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(
-                            if (isPlaying) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
+                        AppIcon(
+                            if (isPlaying) Icons.Outlined.Pause else playIcon,
                             contentDescription = if (isPlaying) "暂停" else "播放",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
@@ -917,28 +1021,28 @@ fun OfflineVideoPlayerScreen(
                     }
                     
                     // 时间显示
-                    Text(
+                    AppText(
                         text = "${FormatUtils.formatDuration((progressState.current / 1000).toInt())} / ${FormatUtils.formatDuration((progressState.duration / 1000).toInt())}",
                         color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 12.sp
+                        style = MaterialTheme.typography.labelMedium
                     )
                     
                     Spacer(modifier = Modifier.weight(1f))
 
                     if (danmakuAvailable) {
-                        Surface(
+                        AppSurface(
                             onClick = { danmakuEnabled = !danmakuEnabled },
                             color = if (danmakuEnabled) {
                                 activeControlColors.backgroundColor.copy(alpha = 0.9f)
                             } else {
                                 Color.White.copy(alpha = 0.15f)
                             },
-                            shape = RoundedCornerShape(8.dp),
+                            shape = AppShapes.container(ContainerLevel.Chip),
                             modifier = Modifier.size(40.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
+                                AppIcon(
+                                    commentIcon,
                                     contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
                                     tint = if (danmakuEnabled) activeControlColors.contentColor else Color.White,
                                     modifier = Modifier.size(22.dp)
@@ -950,19 +1054,19 @@ fun OfflineVideoPlayerScreen(
                     }
                     
                     // 📺 全屏按钮
-                    Surface(
+                    AppSurface(
                         onClick = { toggleFullscreen() },
                         color = if (!isFullscreen) {
                             activeControlColors.backgroundColor.copy(alpha = 0.9f)
                         } else {
                             Color.White.copy(alpha = 0.15f)
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = AppShapes.container(ContainerLevel.Chip),
                         modifier = Modifier.size(40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(
-                                if (isFullscreen) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft else CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
+                            AppIcon(
+                                if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
                                 contentDescription = if (isFullscreen) "退出全屏" else "全屏",
                                 tint = if (!isFullscreen) activeControlColors.contentColor else Color.White,
                                 modifier = Modifier.size(22.dp)
@@ -980,15 +1084,15 @@ fun OfflineVideoPlayerScreen(
             enter = scaleIn() + fadeIn(),
             exit = scaleOut() + fadeOut()
         ) {
-            Surface(
+            AppSurface(
                 onClick = { player.play() },
                 color = Color.Black.copy(alpha = 0.5f),
                 shape = CircleShape,
                 modifier = Modifier.size(72.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        CupertinoIcons.Default.Play,
+                    AppIcon(
+                        playIcon,
                         contentDescription = "播放",
                         tint = Color.White.copy(alpha = 0.95f),
                         modifier = Modifier.size(42.dp)
@@ -1035,7 +1139,7 @@ private fun OfflineProgressBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(24.dp)
+            .height(48.dp)
             .pointerInput(duration) {
                 detectTapGestures { offset ->
                     val targetPosition = resolveOfflineSeekPositionFromTouch(
@@ -1085,7 +1189,7 @@ private fun OfflineProgressBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(3.dp)
-                .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(1.5.dp))
+                .background(Color.White.copy(alpha = 0.3f), AppShapes.container(ContainerLevel.Micro))
         )
         
         // 缓冲进度
@@ -1093,7 +1197,7 @@ private fun OfflineProgressBar(
             modifier = Modifier
                 .fillMaxWidth(bufferedProgress.coerceIn(0f, 1f))
                 .height(3.dp)
-                .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(1.5.dp))
+                .background(Color.White.copy(alpha = 0.5f), AppShapes.container(ContainerLevel.Micro))
         )
         
         // 当前进度
@@ -1101,7 +1205,7 @@ private fun OfflineProgressBar(
             modifier = Modifier
                 .fillMaxWidth(displayProgress.coerceIn(0f, 1f))
                 .height(3.dp)
-                .background(primaryColor, RoundedCornerShape(1.5.dp))
+                .background(primaryColor, AppShapes.container(ContainerLevel.Micro))
         )
         
         // 滑块（圆点）
@@ -1110,7 +1214,7 @@ private fun OfflineProgressBar(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .size(if (isDragging) 16.dp else 12.dp)
-                    .offset(x = if (isDragging) 8.dp else 6.dp)
+                    .offset { IntOffset(x = (if (isDragging) 8.dp else 6.dp).roundToPx(), y = 0) }
                     .background(primaryColor, CircleShape)
             )
         }

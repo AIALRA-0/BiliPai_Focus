@@ -21,8 +21,70 @@ import kotlin.test.assertTrue
 class SubReplyDetailPresentationPolicyTest {
 
     @Test
+    fun `sub reply detail avatar size matches the main comment list`() {
+        assertEquals(
+            resolveReplyItemLayoutPolicy().avatarSizeDp,
+            resolveSubReplyDetailAvatarSizeDp()
+        )
+    }
+
+    @Test
     fun `section title should include current reply count`() {
         assertEquals("相关回复共14条", resolveSubReplyDetailSectionTitle(replyCount = 14))
+        assertEquals(
+            "相关回复共200条",
+            resolveSubReplyDetailSectionTitle(replyCount = 200, loadedReplyCount = 40)
+        )
+        assertEquals(
+            "相关回复共200条（已加载40条）",
+            resolveSubReplyDetailSectionTitle(
+                replyCount = 200,
+                loadedReplyCount = 40,
+                showLoadedReplyCount = true,
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply prefetch continues when list cannot scroll but more replies remain`() {
+        assertTrue(
+            shouldPrefetchSubRepliesWhenListNotScrollable(
+                loadedReplyCount = 20,
+                totalReplyCount = 157,
+                isLoading = false,
+                isEnd = false,
+                canScrollForward = false
+            )
+        )
+        assertFalse(
+            shouldPrefetchSubRepliesWhenListNotScrollable(
+                loadedReplyCount = 20,
+                totalReplyCount = 157,
+                isLoading = false,
+                isEnd = false,
+                canScrollForward = true
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply manual load more appears while declared total exceeds loaded count`() {
+        assertTrue(
+            shouldShowSubReplyManualLoadMore(
+                loadedReplyCount = 20,
+                totalReplyCount = 157,
+                isLoading = false,
+                isEnd = false
+            )
+        )
+        assertFalse(
+            shouldShowSubReplyManualLoadMore(
+                loadedReplyCount = 157,
+                totalReplyCount = 157,
+                isLoading = false,
+                isEnd = false
+            )
+        )
     }
 
     @Test
@@ -133,9 +195,9 @@ class SubReplyDetailPresentationPolicyTest {
     }
 
     @Test
-    fun `sub reply detail display count lets detail response correct stale root preview count`() {
+    fun `sub reply detail display count preserves larger root declared count`() {
         assertEquals(
-            1,
+            2,
             resolveSubReplyDetailDisplayCount(
                 rootReply = ReplyItem(count = 2, rcount = 2),
                 loadedReplyCount = 1,
@@ -157,9 +219,9 @@ class SubReplyDetailPresentationPolicyTest {
     }
 
     @Test
-    fun `sub reply loaded total count lets detail response correct stale root preview count`() {
+    fun `sub reply loaded total count preserves larger root declared count`() {
         assertEquals(
-            1,
+            2,
             resolveSubReplyLoadedTotalCount(
                 rootReply = ReplyItem(count = 2, rcount = 2),
                 loadedReplyCount = 1,
@@ -169,14 +231,29 @@ class SubReplyDetailPresentationPolicyTest {
     }
 
     @Test
-    fun `sub reply remote total count follows reply detail page count before root count`() {
+    fun `sub reply remote total count uses max of declared counts to avoid window-size undercount`() {
         val data = ReplyData(
             cursor = ReplyCursor(allCount = 2),
             page = ReplyPage(count = 1),
             root = ReplyItem(count = 2, rcount = 1)
         )
 
-        assertEquals(1, resolveSubReplyRemoteTotalCount(data))
+        // 修复二级评论数量口径后：page.count 可能是分页窗口大小而非总数，
+        // 取所有可用声明的最大值，避免“显示还有 N 条，详情却在首屏结束”。
+        assertEquals(2, resolveSubReplyRemoteTotalCount(data))
+    }
+
+    @Test
+    fun `sub reply loaded total count keeps previous remote total on sparse page`() {
+        assertEquals(
+            120,
+            resolveSubReplyLoadedTotalCount(
+                rootReply = ReplyItem(count = 120, rcount = 120),
+                loadedReplyCount = 60,
+                remoteReplyCount = 0,
+                previousTotalCount = 120
+            )
+        )
     }
 
     @Test
@@ -288,6 +365,46 @@ class SubReplyDetailPresentationPolicyTest {
     }
 
     @Test
+    fun `leaving conversation restores saved scroll instead of jumping to top`() {
+        assertEquals(
+            SubReplyDetailScrollRestoreAction.RESTORE_SAVED,
+            resolveSubReplyDetailScrollRestoreAction(
+                previousConversationMode = true,
+                currentConversationMode = false,
+                hasSavedPosition = true,
+            )
+        )
+        assertEquals(
+            SubReplyDetailScrollRestoreAction.SCROLL_TO_TOP,
+            resolveSubReplyDetailScrollRestoreAction(
+                previousConversationMode = true,
+                currentConversationMode = false,
+                hasSavedPosition = false,
+            )
+        )
+        assertEquals(
+            SubReplyDetailScrollRestoreAction.SCROLL_TO_TOP,
+            resolveSubReplyDetailScrollRestoreAction(
+                previousConversationMode = false,
+                currentConversationMode = true,
+                hasSavedPosition = true,
+            )
+        )
+        assertTrue(
+            shouldSaveSubReplyDetailScrollBeforeConversationEnter(
+                previousConversationMode = false,
+                currentConversationMode = true,
+            )
+        )
+        assertFalse(
+            shouldSaveSubReplyDetailScrollBeforeConversationEnter(
+                previousConversationMode = true,
+                currentConversationMode = false,
+            )
+        )
+    }
+
+    @Test
     fun `auxiliary label should prefer garb card number when available`() {
         assertEquals(
             "CO.013992",
@@ -308,6 +425,19 @@ class SubReplyDetailPresentationPolicyTest {
                 item = buildReply(message = "test")
             )
         )
+    }
+
+    @Test
+    fun `auxiliary decoration remains visible when an image has no fan number`() {
+        val decoration = resolveSubReplyAuxiliaryDecoration(
+            item = buildReply(
+                message = "test",
+                garbCardImage = "https://example.com/decoration.png"
+            )
+        )
+
+        assertEquals("https://example.com/decoration.png", decoration?.imageUrl)
+        assertEquals(null, decoration?.label)
     }
 
     @Test
@@ -338,11 +468,24 @@ class SubReplyDetailPresentationPolicyTest {
     fun `auxiliary badge visual spec keeps decoration legible`() {
         val spec = resolveSubReplyAuxiliaryBadgeVisualSpec()
 
-        assertEquals(46, spec.imageSizeDp)
-        assertEquals(12, spec.imageCornerRadiusDp)
-        assertEquals(8, spec.imageLabelSpacingDp)
-        assertEquals(12, spec.labelFontSizeSp)
-        assertEquals(12, spec.labelLineHeightSp)
+        assertEquals(36, spec.imageSizeDp)
+        assertEquals(10, spec.imageCornerRadiusDp)
+        assertEquals(4, spec.imageLabelSpacingDp)
+        assertEquals(10, spec.labelFontSizeSp)
+        assertEquals(10, spec.labelLineHeightSp)
+    }
+
+    @Test
+    fun `thread auxiliary decoration crops transparent canvas before fitting`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailComponents.kt")
+            .readText()
+        val badgeSource = source
+            .substringAfter("private fun SubReplyAuxiliaryBadge(")
+            .substringBefore("private fun SubReplyTextAction(")
+
+        assertTrue(badgeSource.contains(".size(Size.ORIGINAL)"))
+        assertTrue(badgeSource.contains(".transformations(TransparentBoundsCropTransformation)"))
+        assertTrue(badgeSource.contains("contentScale = ContentScale.Fit"))
     }
 
     @Test
@@ -389,6 +532,7 @@ class SubReplyDetailPresentationPolicyTest {
     private fun buildReply(
         rpid: Long = 200L,
         message: String,
+        garbCardImage: String = "",
         garbCardNumber: String = "",
         userSailingV2: ReplyUserSailing? = null,
         parent: Long = 0L,
@@ -401,6 +545,7 @@ class SubReplyDetailPresentationPolicyTest {
             member = ReplyMember(
                 mid = "12",
                 uname = "ReplyUser",
+                garbCardImage = garbCardImage,
                 garbCardNumber = garbCardNumber,
                 userSailingV2 = userSailingV2
             ),

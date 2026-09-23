@@ -1,11 +1,43 @@
 package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TabletCinemaLayoutPolicyTest {
+
+    @Test
+    fun cinemaOpenCurtainHostsDanmakuSendAndToggle() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/TabletCinemaLayout.kt"
+        ).readText()
+
+        assertTrue(source.contains("TabletSecondaryDanmakuActions("))
+        assertTrue(source.contains("playbackActions.showDanmakuSendDialog"))
+        assertTrue(source.contains("onDanmakuInputClick = playbackActions.showDanmakuSendDialog"))
+        assertTrue(shouldShowTabletCinemaDanmakuActions(TabletSideCurtainState.OPEN))
+        assertFalse(shouldShowTabletCinemaDanmakuActions(TabletSideCurtainState.PEEK))
+        assertTrue(shouldShowTabletSecondaryDanmakuActions())
+    }
+
+    @Test
+    fun cinemaCommentsReuseTheFullCommentAndEngagementDock() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/TabletCinemaLayout.kt"
+        ).readText()
+        val commentsPane = source
+            .substringAfter("private fun CinemaCommentsPane(")
+            .substringBefore("private fun CinemaRelatedPane(")
+
+        assertTrue(commentsPane.contains("BottomInputBar("))
+        assertTrue(commentsPane.contains("engagementActions.toggleLike"))
+        assertTrue(commentsPane.contains("engagementActions.openCoinDialog"))
+        assertTrue(commentsPane.contains("playbackActions.openRootCommentComposer"))
+        assertFalse(commentsPane.contains("写评论，直接和 UP 主交流"))
+    }
 
     @Test
     fun largeTabletGetsWiderCurtainAndPlayerCap() {
@@ -50,6 +82,45 @@ class TabletCinemaLayoutPolicyTest {
         assertTrue(policy.curtainOpenWidthDp in 379..382)
         assertTrue(policy.horizontalPaddingDp in 16..17)
         assertTrue(policy.playerMaxWidthDp in 1090..1100)
+    }
+
+    @Test
+    fun cinemaPlayerViewportUsesActualPrimaryPaneWidthWhenCurtainIsOpen() {
+        assertEquals(
+            600,
+            resolveCinemaPlayerViewportWidthDp(
+                availableWidthDp = 600,
+                playerMaxWidthDp = 1095,
+            )
+        )
+    }
+
+    @Test
+    fun cinemaPlayerViewportStillHonorsPlayerWidthCapOnUltraWideScreens() {
+        assertEquals(
+            1280,
+            resolveCinemaPlayerViewportWidthDp(
+                availableWidthDp = 1400,
+                playerMaxWidthDp = 1280,
+            )
+        )
+    }
+
+    @Test
+    fun cinemaPlayerViewportIsForwardedToPlayerChrome() {
+        val cinemaSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/TabletCinemaLayout.kt"
+        ).readText()
+        val playerSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt"
+        ).readText()
+        val overlaySource = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt"
+        ).readText()
+
+        assertTrue(cinemaSource.contains("viewportWidthDpOverride = playerViewportWidthDp"))
+        assertTrue(playerSource.contains("viewportWidthDpOverride = uiLayoutWidthDp"))
+        assertTrue(overlaySource.contains("viewportWidthDpOverride = viewportWidthDpOverride"))
     }
 
     @Test
@@ -122,7 +193,15 @@ class TabletCinemaLayoutPolicyTest {
     }
 
     @Test
-    fun initialCurtainStateUsesScreenWidthBuckets() {
+    fun initialCurtainStateOpensOnAllTabletWidths() {
+        assertEquals(
+            TabletSideCurtainState.OPEN,
+            resolveInitialCurtainState(widthDp = 840)
+        )
+        assertEquals(
+            TabletSideCurtainState.OPEN,
+            resolveInitialCurtainState(widthDp = 960)
+        )
         assertEquals(
             TabletSideCurtainState.OPEN,
             resolveInitialCurtainState(widthDp = 1080)
@@ -173,9 +252,9 @@ class TabletCinemaLayoutPolicyTest {
     }
 
     @Test
-    fun commentsTab_autoSwitchesToRelatedAfterLoadedEmptyComments() {
+    fun commentsTab_staysOnCommentsWhenLoadedEmpty() {
         assertEquals(
-            1,
+            0,
             resolveCinemaSideCurtainSelectedTab(
                 currentSelectedTab = 0,
                 replyCount = 0,

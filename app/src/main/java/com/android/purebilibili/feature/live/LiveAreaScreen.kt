@@ -1,20 +1,21 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.navigation.animatePagerSelection
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -23,24 +24,37 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
+import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.responsiveContentWidth
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.skeleton.ContentCategoryGridSkeleton
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,21 +64,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.android.purebilibili.data.model.response.LiveAreaChild
 import com.android.purebilibili.data.model.response.LiveFavoriteTagEntry
 import com.android.purebilibili.data.model.response.LiveAreaParent
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.data.repository.LiveRepository
-import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
+
 import kotlinx.coroutines.launch
 
 @Composable
@@ -72,7 +84,18 @@ fun LiveAreaScreen(
     onBack: () -> Unit,
     onAreaClick: (Int, Int, String) -> Unit
 ) {
-    val metrics = resolveLivePiliPlusHomeMetrics()
+    val topChromePolicy = rememberAppTopChromePolicy()
+    val visualSpec = remember(topChromePolicy.tabPresentation) {
+        resolveLiveVisualSpec(topChromePolicy.tabPresentation)
+    }
+    val metrics = visualSpec.homeMetrics
+    val windowSizeClass = LocalWindowSizeClass.current
+    val gridColumns = remember(windowSizeClass.widthDp, windowSizeClass.isTablet) {
+        resolveLiveBiliPaiGridColumns(
+            widthDp = windowSizeClass.widthDp.value.toInt(),
+            isTabletLayout = windowSizeClass.isTablet,
+        )
+    }
     val colorScheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -97,77 +120,28 @@ fun LiveAreaScreen(
             }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colorScheme.background)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "返回",
-                    tint = colorScheme.onBackground
-                )
-            }
-            Text(
-                text = "全部标签",
-                color = colorScheme.onBackground,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
+    AppScaffold(
+        blurContentReady = !isLoading,
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            Column {
+            AppTopBar(
+                title = "全部标签",
+                navigationIcon = {
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "返回",
+                        )
+                    }
+                },
+                actions = {
+                    AppTextButton(onClick = { isEditing = !isEditing }) {
+                        AppText(if (isEditing) "完成" else "编辑")
+                    }
+                },
             )
-            TextButton(onClick = { isEditing = !isEditing }) {
-                Text(if (isEditing) "完成" else "编辑")
-            }
-        }
-
-        when {
-            isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            error != null -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = error ?: "", color = colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        onClick = {
-                            isLoading = true
-                            error = null
-                            reloadKey += 1
-                        }
-                    ) {
-                        Text("重试")
-                    }
-                }
-            }
-            areas.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = "暂无直播标签", color = colorScheme.onSurfaceVariant)
-            }
-            areas.isNotEmpty() -> {
-                LaunchedEffect(areas.size) {
-                    if (areas.isNotEmpty() && selectedTab > areas.lastIndex) {
-                        selectedTab = areas.lastIndex
-                    }
-                }
-                LaunchedEffect(selectedTab, areas.size) {
-                    if (areas.isEmpty()) return@LaunchedEffect
-                    val target = selectedTab.coerceIn(0, areas.lastIndex)
-                    if (pagerState.currentPage != target) {
-                        pagerState.animateScrollToPage(target)
-                    }
-                }
-                LaunchedEffect(pagerState.currentPage, areas.size) {
-                    if (areas.isNotEmpty() && selectedTab != pagerState.currentPage) {
-                        selectedTab = pagerState.currentPage
-                    }
-                }
+                if (!isLoading && error == null && areas.isNotEmpty()) {
                 LiveFavoriteTagsPanel(
                     favoriteTags = favoriteTags,
                     isEditing = isEditing,
@@ -191,11 +165,74 @@ fun LiveAreaScreen(
                     horizontalPadding = metrics.safeSpaceDp.dp,
                     onTabSelected = { selectedTab = it }
                 )
+                }
+            }
+        },
+        containerColor = colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                ,
+        ) {
+        when {
+            isLoading -> ContentCategoryGridSkeleton(
+                columns = gridColumns,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = metrics.safeSpaceDp.dp,
+                    end = metrics.safeSpaceDp.dp,
+                    top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
+                    bottom = LocalBottomBarContentPadding.current,
+                ),
+            )
+            error != null -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AppText(text = error ?: "", color = colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(AppSpacingTokens.Small))
+                    AppTextButton(
+                        onClick = {
+                            isLoading = true
+                            error = null
+                            reloadKey += 1
+                        }
+                    ) {
+                        AppText("重试")
+                    }
+                }
+            }
+            areas.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                AppText(text = "暂无直播标签", color = colorScheme.onSurfaceVariant)
+            }
+            areas.isNotEmpty() -> {
+                LaunchedEffect(areas.size) {
+                    if (areas.isNotEmpty() && selectedTab > areas.lastIndex) {
+                        selectedTab = areas.lastIndex
+                    }
+                }
+                LaunchedEffect(selectedTab, areas.size) {
+                    if (areas.isEmpty()) return@LaunchedEffect
+                    val target = selectedTab.coerceIn(0, areas.lastIndex)
+                    if (pagerState.currentPage != target) {
+                        animatePagerSelection(pagerState, target)
+                    }
+                }
+                LaunchedEffect(pagerState.currentPage, areas.size) {
+                    if (areas.isNotEmpty() && selectedTab != pagerState.currentPage) {
+                        selectedTab = pagerState.currentPage
+                    }
+                }
                 HorizontalPager(
                     state = pagerState,
+                    userScrollEnabled = false,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .verticalPriorityHorizontalPagerSwipe(
+                            state = pagerState,
+                            enabled = true,
+                        )
                 ) { page ->
                     val selectedArea = areas.getOrNull(page)
                     if (selectedArea != null) {
@@ -203,16 +240,18 @@ fun LiveAreaScreen(
                             sortLiveAreaChildrenForDisplay(selectedArea.list.orEmpty())
                         }
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(4),
+                            columns = GridCells.Fixed(gridColumns),
                             contentPadding = PaddingValues(
                                 start = metrics.safeSpaceDp.dp,
                                 end = metrics.safeSpaceDp.dp,
-                                top = 12.dp,
-                                bottom = 100.dp
+                                top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
+                                bottom = LocalBottomBarContentPadding.current,
                             ),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxSize()
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                            modifier = Modifier
+                                .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
+                                .fillMaxSize()
                         ) {
                             items(displayChildren, key = { it.id }) { child ->
                                 val childAreaId = child.id.toIntOrNull() ?: 0
@@ -245,6 +284,7 @@ fun LiveAreaScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -255,57 +295,22 @@ private fun LiveAreaParentTabRow(
     onTabSelected: (Int) -> Unit
 ) {
     if (areas.isEmpty()) return
-    val segmentedSpec = remember { resolveLiveAreaParentSegmentedControlSpec() }
-    val scrollState = rememberScrollState()
-    val density = LocalDensity.current
     val safeSelectedTab = selectedTab.coerceIn(0, areas.lastIndex)
-    val itemWidthPx = with(density) { (segmentedSpec.itemWidthDp ?: 0).dp.toPx() }
-    val scrollEdgeBufferPx = with(density) { 20.dp.toPx() }
-    var indicatorPosition by remember { mutableFloatStateOf(safeSelectedTab.toFloat()) }
-
-    LaunchedEffect(safeSelectedTab) {
-        indicatorPosition = safeSelectedTab.toFloat()
+    val options = remember(areas) {
+        areas.mapIndexed { index, area -> AppSegmentOption(index, area.name) }
     }
-
-    LaunchedEffect(indicatorPosition, areas.size, scrollState.maxValue, itemWidthPx) {
-        if (itemWidthPx <= 0f || scrollState.maxValue <= 0) return@LaunchedEffect
-        val contentWidthPx = itemWidthPx * areas.size +
-            with(density) { (segmentedSpec.containerHorizontalPaddingDp * 2).dp.toPx() }
-        val viewportWidthPx = (contentWidthPx - scrollState.maxValue).coerceAtLeast(1f)
-        val targetScroll = resolveLiveHomeCategoryFollowScrollTarget(
-            indicatorPosition = indicatorPosition,
-            itemWidthPx = itemWidthPx,
-            itemCount = areas.size,
-            viewportWidthPx = viewportWidthPx,
-            currentScrollPx = scrollState.value.toFloat(),
-            maxScrollPx = scrollState.maxValue.toFloat(),
-            edgeBufferPx = scrollEdgeBufferPx
-        )
-
-        if (kotlin.math.abs(targetScroll - scrollState.value) > 1) {
-            scrollState.scrollTo(targetScroll)
-        }
-    }
-
-    Row(
+    val uiStyle = LocalAppUiStyle.current
+    val effectiveHorizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3) 0.dp else horizontalPadding
+    AppThemeAdaptiveTabRow(
+        options = options,
+        selectedValue = safeSelectedTab,
+        onSelectionChange = onTabSelected,
+        scrollable = true,
+        minTabWidth = AppChromeSizeTokens.MinimumTouchTarget,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = horizontalPadding)
-            .height(segmentedSpec.heightDp.dp)
-            .horizontalScroll(scrollState, enabled = false),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BottomBarLiquidSegmentedControl(
-            items = areas.map { it.name },
-            selectedIndex = safeSelectedTab,
-            onSelected = onTabSelected,
-            itemWidth = segmentedSpec.itemWidthDp?.dp,
-            labelFontSize = segmentedSpec.labelFontSizeSp.sp,
-            containerHorizontalPadding = segmentedSpec.containerHorizontalPaddingDp.dp,
-            containerVerticalPadding = segmentedSpec.containerVerticalPaddingDp.dp,
-            onIndicatorPositionChanged = { indicatorPosition = it }
-        )
-    }
+            .padding(horizontal = effectiveHorizontalPadding),
+    )
 }
 
 @Composable
@@ -319,33 +324,33 @@ private fun LiveFavoriteTagsPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = AppSpacingTokens.Medium)
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(
+            AppText(
                 text = "我的常用标签  ",
                 color = colorScheme.onBackground,
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
-            Text(
+            AppText(
                 text = "点击进入标签",
                 color = colorScheme.outline,
-                fontSize = 13.sp
+                style = MaterialTheme.typography.bodySmall,
             )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(AppSpacingTokens.Small))
         if (favoriteTags.isEmpty()) {
-            Text(
+            AppText(
                 text = "编辑时点亮标签，常用分区会显示在这里",
                 color = colorScheme.outline,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = AppSpacingTokens.Small)
             )
         } else {
             LazyRow(
-                contentPadding = PaddingValues(end = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(end = AppSpacingTokens.Medium),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
             ) {
                 items(favoriteTags, key = { "${it.parentAreaId}_${it.areaId}" }) { child ->
                     LiveFavoriteTagCard(
@@ -357,7 +362,7 @@ private fun LiveFavoriteTagsPanel(
                 }
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
     }
 }
 
@@ -370,39 +375,42 @@ private fun LiveFavoriteTagCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     Box {
-        Surface(
+        AppSurface(
             onClick = { if (isEditing) onRemove() else onClick() },
-            color = colorScheme.surface,
-            shape = RoundedCornerShape(8.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, colorScheme.outline.copy(alpha = 0.28f)),
+            color = AppSurfaceTokens.cardContainer(),
+            shape = AppShapes.borderedContainer(ContainerLevel.Card),
+            border = androidx.compose.foundation.BorderStroke(
+                AppSurfaceTokens.OutlineWidth,
+                colorScheme.outline.copy(alpha = 0.28f),
+            ),
             modifier = Modifier
-                .width(86.dp)
-                .height(92.dp)
+                .width(AppSpacingTokens.TripleExtraLarge * 2)
+                .height(AppSpacingTokens.TripleExtraLarge * 2)
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                modifier = Modifier.padding(AppSpacingTokens.Small),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 LiveAreaIcon(
                     imageUrl = child.coverUrl,
                     title = child.title,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge)
                 )
-                Spacer(Modifier.height(5.dp))
-                Text(
+                Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppText(
                     text = child.title,
                     color = colorScheme.onSurface,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
                 )
                 if (child.parentTitle.isNotBlank()) {
-                    Text(
+                    AppText(
                         text = child.parentTitle,
                         color = colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center
@@ -411,20 +419,25 @@ private fun LiveFavoriteTagCard(
             }
         }
         if (isEditing) {
-            Surface(
-                onClick = onRemove,
-                shape = CircleShape,
-                color = colorScheme.errorContainer,
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(24.dp)
+                    .size(AppSpacingTokens.TripleExtraLarge)
+                    .clickable(onClick = onRemove),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.StarBorder,
-                    contentDescription = "移除常用标签",
-                    tint = colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(4.dp)
-                )
+                AppSurface(
+                    shape = CircleShape,
+                    color = colorScheme.errorContainer,
+                    modifier = Modifier.size(AppSpacingTokens.ExtraLarge),
+                ) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.StarBorder,
+                        contentDescription = "移除常用标签",
+                        tint = colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(AppSpacingTokens.ExtraSmall)
+                    )
+                }
             }
         }
     }
@@ -438,17 +451,17 @@ private fun LiveAreaIcon(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     if (imageUrl.isBlank()) {
-        Surface(
-            color = colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(8.dp),
+        AppSurface(
+            color = AppSurfaceTokens.surfaceContainer(),
+            shape = AppShapes.container(ContainerLevel.Tag),
             modifier = modifier
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(
+                AppText(
                     text = title.take(1),
                     color = colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 18.sp
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
         }
@@ -457,7 +470,7 @@ private fun LiveAreaIcon(
             model = imageUrl,
             contentDescription = "$title 图标",
             contentScale = ContentScale.Fit,
-            modifier = modifier.clip(RoundedCornerShape(8.dp))
+            modifier = modifier.clip(AppShapes.container(ContainerLevel.Tag))
         )
     }
 }
@@ -472,7 +485,7 @@ private fun LiveAreaGridItem(
     val colorScheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
-            .height(80.dp)
+            .height(AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -480,32 +493,32 @@ private fun LiveAreaGridItem(
             LiveAreaIcon(
                 imageUrl = child.pic,
                 title = child.name,
-                modifier = Modifier.size(45.dp)
+                modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge)
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
+            Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+            AppText(
                 text = child.name,
                 color = colorScheme.onSurface,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
         }
         if (isEditing && child.id != "0") {
-            Surface(
+            AppSurface(
                 shape = CircleShape,
-                color = if (isFavorite) colorScheme.surfaceVariant else colorScheme.secondaryContainer,
+                color = if (isFavorite) colorScheme.surfaceVariant else colorScheme.surfaceContainerHighest,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(end = 16.dp)
-                    .size(17.dp)
+                    .padding(end = AppSpacingTokens.Large)
+                    .size(AppSpacingTokens.Large)
             ) {
-                Icon(
+                AppIcon(
                     imageVector = if (isFavorite) Icons.Outlined.Star else Icons.Outlined.StarBorder,
                     contentDescription = if (isFavorite) "取消收藏" else "收藏标签",
-                    tint = if (isFavorite) colorScheme.onSurfaceVariant else colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(2.dp)
+                    tint = if (isFavorite) colorScheme.onSurfaceVariant else colorScheme.onSurface,
+                    modifier = Modifier.padding(AppSpacingTokens.Micro)
                 )
             }
         }

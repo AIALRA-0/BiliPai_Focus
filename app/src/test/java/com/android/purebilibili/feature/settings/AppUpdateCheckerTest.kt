@@ -22,6 +22,46 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `Focus patch successor remains detectable by old version-name-only clients`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("9.1.1-focus.4", "9.1.1-focus.5"))
+        assertTrue(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = "9.1.1-focus.4",
+                currentVersionCode = 226,
+                latestVersion = "9.1.1-focus.5",
+                buildMetadata = null
+            )
+        )
+    }
+
+    @Test
+    fun `update endpoints stay on Focus and retain a Focus fallback`() {
+        val endpoints = AppUpdateChecker.resolveEndpointCandidates(
+            primary = AppUpdateEndpointSet(
+                releasesApi = "https://api.github.com/repos/example/BiliPai_Focus/releases",
+                repositoryBuildGradleUrl = "https://raw.githubusercontent.com/example/BiliPai_Focus/main/app/build.gradle.kts",
+                repositoryUrl = "https://github.com/example/BiliPai_Focus",
+                releasesPageUrl = "https://github.com/example/BiliPai_Focus/releases"
+            )
+        )
+
+        assertEquals(2, endpoints.size)
+        assertEquals("https://github.com/example/BiliPai_Focus", endpoints[0].repositoryUrl)
+        assertEquals("https://api.github.com/repos/AIALRA-0/BiliPai_Focus/releases", endpoints[1].releasesApi)
+    }
+
+    @Test
+    fun `repository version fallback reads Focus version without switching repositories`() {
+        val candidate = AppUpdateChecker.parseRepositoryVersionCandidate(
+            rawBuildGradle = "defaultConfig { versionName = \"9.1.1-focus.5\" }",
+            repositoryUrl = "https://github.com/AIALRA-0/BiliPai_Focus"
+        )
+
+        assertEquals("9.1.1-focus.5", candidate?.tagName)
+        assertEquals("https://github.com/AIALRA-0/BiliPai_Focus/releases", candidate?.releaseUrl)
+    }
+
+    @Test
     fun `isRemoteNewer should handle different part lengths`() {
         assertTrue(AppUpdateChecker.isRemoteNewer("5.3", "5.3.1"))
         assertFalse(AppUpdateChecker.isRemoteNewer("5.3.1", "5.3"))
@@ -48,7 +88,7 @@ class AppUpdateCheckerTest {
     }
 
     @Test
-    fun `selectLatestReleaseCandidate should allow prerelease when current version is beta`() {
+    fun `selectLatestReleaseCandidate should ignore prereleases even on a beta install`() {
         val release = AppUpdateChecker.selectLatestReleaseCandidate(
             rawReleaseJson = """
             [
@@ -68,14 +108,17 @@ class AppUpdateCheckerTest {
                 "published_at": "2026-03-14T10:00:00Z",
                 "draft": false,
                 "prerelease": false,
-                "assets": []
+                "assets": [{
+                  "name": "BiliPai-v6.9.9.apk",
+                  "browser_download_url": "https://example.com/stable.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
               }
             ]
-            """.trimIndent(),
-            currentVersion = "7.0.0 Beta1"
+            """.trimIndent()
         )
 
-        assertEquals("v7.0.0 Beta2", release?.tagName)
+        assertEquals("v6.9.9", release?.tagName)
     }
 
     @Test
@@ -99,33 +142,154 @@ class AppUpdateCheckerTest {
                 "published_at": "2026-03-14T10:00:00Z",
                 "draft": false,
                 "prerelease": false,
-                "assets": []
+                "assets": [{
+                  "name": "BiliPai-v7.0.0.apk",
+                  "browser_download_url": "https://example.com/stable.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
               }
             ]
-            """.trimIndent(),
-            currentVersion = "7.0.0"
+            """.trimIndent()
         )
 
         assertEquals("v7.0.0", release?.tagName)
     }
 
     @Test
-    fun `parseRepositoryVersionCandidate should read version from remote gradle file`() {
-        val candidate = AppUpdateChecker.parseRepositoryVersionCandidate(
-            rawBuildGradle = """
-            android {
-                defaultConfig {
-                    versionCode = 119
-                    versionName = "7.0.0 RC2"
-                }
-            }
+    fun `selectLatestReleaseCandidate should ignore stable releases without an apk`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [{
+              "tag_name": "v8.0.0",
+              "draft": false,
+              "prerelease": false,
+              "assets": [{
+                "name": "build-metadata.json",
+                "browser_download_url": "https://example.com/build-metadata.json",
+                "content_type": "application/json"
+              }]
+            }]
             """.trimIndent()
         )
 
-        assertEquals("7.0.0 RC2", candidate?.tagName)
-        assertEquals("https://github.com/AIALRA-0/BiliPai_Focus", candidate?.releaseUrl)
-        assertTrue(candidate?.releaseNotes?.contains("未创建 GitHub Release") == true)
-        assertTrue(candidate?.isPrerelease == true)
+        assertEquals(null, release)
+    }
+
+    @Test
+    fun `selectLatestReleaseCandidate should include prerelease with apk for beta channel`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [
+              {
+                "tag_name": "v7.1.0 Beta1",
+                "html_url": "https://example.com/beta",
+                "body": "beta notes",
+                "published_at": "2026-03-15T10:00:00Z",
+                "draft": false,
+                "prerelease": true,
+                "assets": [{
+                  "name": "BiliPai-v7.1.0-Beta1.apk",
+                  "browser_download_url": "https://example.com/beta.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
+              },
+              {
+                "tag_name": "v7.0.0",
+                "html_url": "https://example.com/stable",
+                "body": "stable notes",
+                "published_at": "2026-03-14T10:00:00Z",
+                "draft": false,
+                "prerelease": false,
+                "assets": [{
+                  "name": "BiliPai-v7.0.0.apk",
+                  "browser_download_url": "https://example.com/stable.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
+              }
+            ]
+            """.trimIndent(),
+            includePrerelease = true
+        )
+
+        assertEquals("v7.1.0 Beta1", release?.tagName)
+    }
+
+    @Test
+    fun `beta channel should fall back to stable when prerelease has no apk`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [
+              {
+                "tag_name": "v7.1.0 Beta1",
+                "html_url": "https://example.com/beta",
+                "body": "beta notes",
+                "published_at": "2026-03-15T10:00:00Z",
+                "draft": false,
+                "prerelease": true,
+                "assets": [{
+                  "name": "build-metadata.json",
+                  "browser_download_url": "https://example.com/build-metadata.json",
+                  "content_type": "application/json"
+                }]
+              },
+              {
+                "tag_name": "v7.0.0",
+                "html_url": "https://example.com/stable",
+                "body": "stable notes",
+                "published_at": "2026-03-14T10:00:00Z",
+                "draft": false,
+                "prerelease": false,
+                "assets": [{
+                  "name": "BiliPai-v7.0.0.apk",
+                  "browser_download_url": "https://example.com/stable.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
+              }
+            ]
+            """.trimIndent(),
+            includePrerelease = true
+        )
+
+        assertEquals("v7.0.0", release?.tagName)
+    }
+
+    @Test
+    fun `stable channel should keep ignoring prerelease when includePrerelease is false`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [
+              {
+                "tag_name": "v7.1.0 Beta1",
+                "html_url": "https://example.com/beta",
+                "body": "beta notes",
+                "published_at": "2026-03-15T10:00:00Z",
+                "draft": false,
+                "prerelease": true,
+                "assets": [{
+                  "name": "BiliPai-v7.1.0-Beta1.apk",
+                  "browser_download_url": "https://example.com/beta.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
+              },
+              {
+                "tag_name": "v7.0.0",
+                "html_url": "https://example.com/stable",
+                "body": "stable notes",
+                "published_at": "2026-03-14T10:00:00Z",
+                "draft": false,
+                "prerelease": false,
+                "assets": [{
+                  "name": "BiliPai-v7.0.0.apk",
+                  "browser_download_url": "https://example.com/stable.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
+              }
+            ]
+            """.trimIndent(),
+            includePrerelease = false
+        )
+
+        assertEquals("v7.0.0", release?.tagName)
     }
 
     @Test
@@ -186,7 +350,7 @@ class AppUpdateCheckerTest {
                 "immutable": true,
                 "assets": [
                   {
-                    "name": "BiliPai-release-7.3.3.apk",
+                    "name": "BiliPai-Focus-7.3.3.apk",
                     "browser_download_url": "https://example.com/app.apk",
                     "size": 100,
                     "content_type": "application/vnd.android.package-archive",
@@ -213,8 +377,7 @@ class AppUpdateCheckerTest {
                 ]
               }
             ]
-            """.trimIndent(),
-            currentVersion = "7.3.3"
+            """.trimIndent()
         )
 
         assertTrue(release?.isImmutable == true)
@@ -231,18 +394,18 @@ class AppUpdateCheckerTest {
             """
             {
               "schemaVersion": 1,
-              "appId": "com.android.purebilibili",
-              "versionName": "7.3.3",
-              "versionCode": 135,
+              "appId": "com.android.purebilibili.focus",
+              "versionName": "9.1.1-focus.5",
+              "versionCode": 385,
               "gitCommitSha": "abcdef1234567890",
-              "gitRef": "refs/tags/v7.3.3",
+              "gitRef": "refs/tags/v9.1.1-focus.5",
               "workflowRunId": "123456789",
-              "workflowRunUrl": "https://github.com/jay3-yy/BiliPai/actions/runs/123456789",
-              "releaseTag": "v7.3.3",
+              "workflowRunUrl": "https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/123456789",
+              "releaseTag": "v9.1.1-focus.5",
               "generatedAt": "2026-04-03T10:00:00Z",
               "artifacts": [
                 {
-                  "name": "BiliPai-release-7.3.3.apk",
+                  "name": "BiliPai-Focus-9.1.1-focus.5.apk",
                   "sha256": "feedbeef",
                   "sizeBytes": 100
                 }
@@ -252,8 +415,9 @@ class AppUpdateCheckerTest {
         )
 
         assertEquals("abcdef1234567890", metadata?.gitCommitSha)
+        assertEquals("com.android.purebilibili.focus", metadata?.appId)
         assertEquals("123456789", metadata?.workflowRunId)
-        assertEquals("v7.3.3", metadata?.releaseTag)
+        assertEquals("v9.1.1-focus.5", metadata?.releaseTag)
         assertEquals("feedbeef", metadata?.artifacts?.singleOrNull()?.sha256)
     }
 
@@ -262,15 +426,91 @@ class AppUpdateCheckerTest {
         val metadata = AppUpdateChecker.parseVerificationMetadata(
             """
             {
-              "attestationUrl": "https://github.com/jay3-yy/BiliPai/attestations/123",
+              "attestationUrl": "https://github.com/AIALRA-0/BiliPai_Focus/attestations/123",
               "bundleFileName": "build-provenance.intoto.jsonl",
               "predicateType": "https://slsa.dev/provenance/v1"
             }
             """.trimIndent()
         )
 
-        assertEquals("https://github.com/jay3-yy/BiliPai/attestations/123", metadata?.attestationUrl)
+        assertEquals("https://github.com/AIALRA-0/BiliPai_Focus/attestations/123", metadata?.attestationUrl)
         assertEquals("build-provenance.intoto.jsonl", metadata?.bundleFileName)
         assertEquals("https://slsa.dev/provenance/v1", metadata?.predicateType)
+    }
+
+    @Test
+    fun `latest published stable release wins across version epochs`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [
+              {
+                "tag_name": "v9.9.9.8.7",
+                "published_at": "2026-08-02T10:00:00Z",
+                "draft": false,
+                "prerelease": false,
+                "assets": [{
+                  "name": "BiliPai-9.9.9.8.7.apk",
+                  "browser_download_url": "https://example.com/legacy.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
+              },
+              {
+                "tag_name": "v0.1.0",
+                "published_at": "2026-08-04T10:00:00Z",
+                "draft": false,
+                "prerelease": false,
+                "assets": [{
+                  "name": "BiliPai-0.1.0.apk",
+                  "browser_download_url": "https://example.com/current.apk",
+                  "content_type": "application/vnd.android.package-archive"
+                }]
+              }
+            ]
+            """.trimIndent()
+        )
+
+        assertEquals("v0.1.0", release?.tagName)
+    }
+
+    @Test
+    fun `version code is authoritative when release metadata is available`() {
+        val metadata = AppReleaseBuildMetadata(versionName = "0.1.1", versionCode = 283)
+
+        assertTrue(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = "0.1.0",
+                currentVersionCode = 282,
+                latestVersion = "0.1.1",
+                buildMetadata = metadata
+            )
+        )
+        assertFalse(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = "0.1.0",
+                currentVersionCode = 283,
+                latestVersion = "0.1.1",
+                buildMetadata = metadata
+            )
+        )
+    }
+
+    @Test
+    fun `metadata fallback compares version names only within the same epoch`() {
+        assertTrue(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = "0.1.0",
+                currentVersionCode = 282,
+                latestVersion = "0.1.1",
+                buildMetadata = null
+            )
+        )
+        assertFalse(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = "9.9.9.8.7",
+                currentVersionCode = 281,
+                latestVersion = "0.1.0",
+                buildMetadata = null
+            )
+        )
     }
 }

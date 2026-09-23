@@ -2,6 +2,7 @@ package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.data.model.response.AiModelResult
 import com.android.purebilibili.data.model.response.AiSummaryResponse
+import java.io.IOException
 import retrofit2.HttpException
 
 internal enum class AiSummaryFetchStatus {
@@ -113,7 +114,14 @@ internal fun diagnoseAiSummaryResponse(response: AiSummaryResponse): AiSummaryFe
 internal fun diagnoseAiSummaryFailure(throwable: Throwable): AiSummaryFetchDiagnosis {
     val httpCode = (throwable as? HttpException)?.code()
     val message = throwable.message.orEmpty()
-    val isRetryable = httpCode == 412 || message.contains("412")
+    val isRetryableHttpCode = httpCode == 408 ||
+        httpCode == 412 ||
+        httpCode == 425 ||
+        httpCode == 429 ||
+        (httpCode != null && httpCode in 500..599)
+    val isRetryable = throwable is IOException ||
+        isRetryableHttpCode ||
+        (httpCode == null && message.contains("412"))
 
     return AiSummaryFetchDiagnosis(
         status = if (isRetryable) AiSummaryFetchStatus.RETRYABLE_FAILURE else AiSummaryFetchStatus.FAILURE,

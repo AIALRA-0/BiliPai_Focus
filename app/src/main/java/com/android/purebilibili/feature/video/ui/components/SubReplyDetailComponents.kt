@@ -1,10 +1,14 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import coil3.request.crossfade
+import coil3.request.transformations
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+
 import android.content.Intent
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -16,6 +20,8 @@ import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -31,6 +37,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,22 +46,25 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppIconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,10 +75,13 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.android.purebilibili.core.ui.common.CopySelectionDialog
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Size
+import com.android.purebilibili.core.ui.common.TextSelectionBottomSheet
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.rememberStoragePermissionState
 import com.android.purebilibili.data.model.response.ReplyItem
@@ -78,14 +91,13 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextConte
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
 import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
-import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
+import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
-import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.HandThumbsup
-import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
-import io.github.alexzhirkevich.cupertino.icons.outlined.Trash
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import androidx.compose.material.icons.outlined.Delete
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -106,6 +118,10 @@ internal data class SubReplyDetailLayoutPolicy(
     val overlayRootCommentEntry: Boolean
 )
 
+/** Keeps the thread-detail avatar bound in sync with the main comment list. */
+internal fun resolveSubReplyDetailAvatarSizeDp(): Int =
+    resolveReplyItemLayoutPolicy().avatarSizeDp
+
 internal data class SubReplyAuxiliaryBadgeVisualSpec(
     val imageSizeDp: Int,
     val imageCornerRadiusDp: Int,
@@ -114,11 +130,44 @@ internal data class SubReplyAuxiliaryBadgeVisualSpec(
     val labelLineHeightSp: Int
 )
 
+internal data class SubReplyAuxiliaryDecoration(
+    val imageUrl: String?,
+    val label: String?
+)
+
 internal data class SubReplyDetailListScrollResetKey(
     val rootReplyId: Long,
     val conversationMode: Boolean,
     val firstConversationReplyId: Long?
 )
+
+internal data class SubReplyDetailSavedScrollPosition(
+    val index: Int,
+    val scrollOffset: Int,
+)
+
+internal enum class SubReplyDetailScrollRestoreAction {
+    SCROLL_TO_TOP,
+    RESTORE_SAVED,
+}
+
+internal fun resolveSubReplyDetailScrollRestoreAction(
+    previousConversationMode: Boolean?,
+    currentConversationMode: Boolean,
+    hasSavedPosition: Boolean,
+): SubReplyDetailScrollRestoreAction {
+    if (previousConversationMode == true && !currentConversationMode && hasSavedPosition) {
+        return SubReplyDetailScrollRestoreAction.RESTORE_SAVED
+    }
+    return SubReplyDetailScrollRestoreAction.SCROLL_TO_TOP
+}
+
+internal fun shouldSaveSubReplyDetailScrollBeforeConversationEnter(
+    previousConversationMode: Boolean?,
+    currentConversationMode: Boolean,
+): Boolean {
+    return previousConversationMode == false && currentConversationMode
+}
 
 internal data class SubReplyDetailRevealSpec(
     val delayMillis: Int,
@@ -141,11 +190,11 @@ internal fun resolveSubReplyDetailLayoutPolicy(
 
 internal fun resolveSubReplyAuxiliaryBadgeVisualSpec(): SubReplyAuxiliaryBadgeVisualSpec {
     return SubReplyAuxiliaryBadgeVisualSpec(
-        imageSizeDp = 46,
-        imageCornerRadiusDp = 12,
-        imageLabelSpacingDp = 8,
-        labelFontSizeSp = 12,
-        labelLineHeightSp = 12
+        imageSizeDp = 36,
+        imageCornerRadiusDp = 10,
+        imageLabelSpacingDp = 4,
+        labelFontSizeSp = 10,
+        labelLineHeightSp = 10
     )
 }
 
@@ -164,8 +213,63 @@ internal fun resolveSubReplyDetailRevealSpec(
     )
 }
 
-internal fun resolveSubReplyDetailSectionTitle(replyCount: Int): String {
-    return "相关回复共${replyCount.coerceAtLeast(0)}条"
+internal fun resolveSubReplyDetailSectionTitle(
+    replyCount: Int,
+    loadedReplyCount: Int = replyCount,
+    showLoadedReplyCount: Boolean = false,
+): String {
+    val total = replyCount.coerceAtLeast(0)
+    val loaded = loadedReplyCount.coerceAtLeast(0)
+    return if (showLoadedReplyCount && total > loaded) {
+        "相关回复共${total}条（已加载${loaded}条）"
+    } else {
+        "相关回复共${total}条"
+    }
+}
+
+internal fun resolveLazyListCanScrollForward(
+    lastVisibleIndex: Int,
+    lastVisibleEndOffset: Int,
+    totalItemsCount: Int,
+    viewportEndOffset: Int
+): Boolean {
+    if (totalItemsCount <= 0 || lastVisibleIndex < 0) return false
+    if (lastVisibleIndex < totalItemsCount - 1) return true
+    return lastVisibleEndOffset > viewportEndOffset
+}
+
+internal fun shouldLoadMoreSubReplyList(
+    lastVisibleIndex: Int,
+    totalItemsCount: Int,
+    isLoading: Boolean,
+    isEnd: Boolean,
+    prefetchThreshold: Int = 2
+): Boolean {
+    if (isLoading || isEnd || totalItemsCount <= 0 || lastVisibleIndex < 0) return false
+    val triggerIndex = (totalItemsCount - 1 - prefetchThreshold).coerceAtLeast(0)
+    return lastVisibleIndex >= triggerIndex
+}
+
+internal fun shouldPrefetchSubRepliesWhenListNotScrollable(
+    loadedReplyCount: Int,
+    totalReplyCount: Int,
+    isLoading: Boolean,
+    isEnd: Boolean,
+    canScrollForward: Boolean
+): Boolean {
+    if (isLoading || isEnd) return false
+    if (totalReplyCount <= loadedReplyCount.coerceAtLeast(0)) return false
+    return !canScrollForward
+}
+
+internal fun shouldShowSubReplyManualLoadMore(
+    loadedReplyCount: Int,
+    totalReplyCount: Int,
+    isLoading: Boolean,
+    isEnd: Boolean
+): Boolean {
+    if (isLoading || isEnd) return false
+    return totalReplyCount > loadedReplyCount.coerceAtLeast(0)
 }
 
 internal fun resolveSubReplyDetailDisplayCount(
@@ -173,12 +277,9 @@ internal fun resolveSubReplyDetailDisplayCount(
     loadedReplyCount: Int,
     remoteReplyCount: Int = 0
 ): Int {
-    if (remoteReplyCount > 0) {
-        return maxOf(remoteReplyCount, loadedReplyCount).coerceAtLeast(0)
-    }
-
     return maxOf(
         resolveReplyThreadCount(rootReply),
+        remoteReplyCount,
         loadedReplyCount
     ).coerceAtLeast(0)
 }
@@ -288,6 +389,21 @@ internal fun resolveSubReplyAuxiliaryImageUrl(item: ReplyItem): String? {
     ).firstOrNull { it.isNotBlank() }
 }
 
+internal fun resolveSubReplyAuxiliaryDecoration(
+    item: ReplyItem
+): SubReplyAuxiliaryDecoration? {
+    val imageUrl = resolveSubReplyAuxiliaryImageUrl(item)
+    val label = resolveSubReplyAuxiliaryLabel(item)
+    return if (imageUrl.isNullOrBlank() && label.isNullOrBlank()) {
+        null
+    } else {
+        SubReplyAuxiliaryDecoration(
+            imageUrl = imageUrl,
+            label = label
+        )
+    }
+}
+
 @Composable
 internal fun VideoInlineSubReplyDetailContent(
     state: SubReplyUiState,
@@ -295,6 +411,7 @@ internal fun VideoInlineSubReplyDetailContent(
     emoteMap: Map<String, String>,
     maxTimestampMs: Long?,
     onLoadMore: () -> Unit,
+    onSortModeChange: (SubReplySortMode) -> Unit,
     onDismiss: () -> Unit,
     onRootCommentClick: () -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
@@ -304,22 +421,28 @@ internal fun VideoInlineSubReplyDetailContent(
     onConversationBack: () -> Unit,
     onDissolveStart: (Long) -> Unit,
     onDeleteComment: (Long) -> Unit,
+    onCheckCommentFraud: (ReplyItem) -> Unit = {},
     onCommentLike: (Long) -> Unit,
+    onCommentHate: (Long) -> Unit,
     onReportComment: (Long, Int) -> Unit,
     onUrlClick: (String) -> Unit,
     showIdentityDecorations: Boolean,
-    onAvatarClick: (String) -> Unit
+    onAvatarClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val rootReply = state.rootReply
     if (!state.visible || rootReply == null) return
 
-    BackHandler(enabled = true) {
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) {
         onDismiss()
     }
 
     SubReplyDetailContent(
         rootReply = rootReply,
         subReplies = state.items,
+        sortMode = state.sortMode,
+        error = state.error,
+        onSortModeChange = onSortModeChange,
         remoteReplyCount = state.totalCount,
         isLoading = state.isLoading,
         isEnd = state.isEnd,
@@ -340,14 +463,18 @@ internal fun VideoInlineSubReplyDetailContent(
         currentMid = commentState.currentMid,
         onDissolveStart = onDissolveStart,
         onDeleteComment = onDeleteComment,
+        onCheckCommentFraud = onCheckCommentFraud,
         onCommentLike = onCommentLike,
+        onCommentHate = onCommentHate,
         onReportComment = onReportComment,
         likedComments = commentState.likedComments,
+        hatedComments = commentState.hatedComments,
         onUrlClick = onUrlClick,
         showIdentityDecorations = showIdentityDecorations,
         onAvatarClick = onAvatarClick,
         maxTimestampMs = maxTimestampMs,
-        targetReplyId = state.targetReplyId
+        targetReplyId = state.targetReplyId,
+        modifier = modifier,
     )
 }
 
@@ -355,10 +482,13 @@ internal fun VideoInlineSubReplyDetailContent(
 internal fun SubReplyDetailContent(
     rootReply: ReplyItem,
     subReplies: List<ReplyItem>,
+    sortMode: SubReplySortMode,
+    error: String?,
     isLoading: Boolean,
     isEnd: Boolean,
     emoteMap: Map<String, String>,
     onLoadMore: () -> Unit,
+    onSortModeChange: (SubReplySortMode) -> Unit,
     onDismiss: () -> Unit,
     applyStatusBarPadding: Boolean = false,
     onRootCommentClick: (() -> Unit)? = null,
@@ -374,23 +504,37 @@ internal fun SubReplyDetailContent(
     currentMid: Long = 0,
     onDissolveStart: ((Long) -> Unit)? = null,
     onDeleteComment: ((Long) -> Unit)? = null,
+    onCheckCommentFraud: ((ReplyItem) -> Unit)? = null,
     onCommentLike: ((Long) -> Unit)? = null,
+    onCommentHate: ((Long) -> Unit)? = null,
     onReportComment: ((Long, Int) -> Unit)? = null,
     likedComments: Set<Long> = emptySet(),
+    hatedComments: Set<Long> = emptySet(),
     onUrlClick: ((String) -> Unit)? = null,
     showIdentityDecorations: Boolean = true,
     onAvatarClick: ((String) -> Unit)? = null,
     maxTimestampMs: Long? = null,
     remoteReplyCount: Int = 0,
-    targetReplyId: Long = 0
+    targetReplyId: Long = 0,
+    headerDragModifier: Modifier = Modifier,
+    modifier: Modifier = Modifier,
 ) {
     val layoutPolicy = remember {
         resolveSubReplyDetailLayoutPolicy(showRootCommentEntry = false)
     }
     val appearance = rememberVideoCommentAppearance()
+    val context = LocalContext.current
+    val showLoadedReplyCount by com.android.purebilibili.core.store.SettingsManager
+        .getSubReplyLoadedCountEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val unusedShowUpFlag = showUpFlag
     val listState = rememberLazyListState()
+    var highlightedTargetId by remember(rootReply.rpid) { mutableLongStateOf(0L) }
     var conversationAnchor by remember(rootReply.rpid) { mutableStateOf<ReplyItem?>(null) }
+    var previousConversationMode by remember(rootReply.rpid) { mutableStateOf<Boolean?>(null) }
+    var savedListScroll by remember(rootReply.rpid) {
+        mutableStateOf<SubReplyDetailSavedScrollPosition?>(null)
+    }
     val visibleReplies = remember(subReplies, conversationAnchor, isConversationMode) {
         val anchor = conversationAnchor
         if (anchor == null || isConversationMode) {
@@ -422,36 +566,138 @@ internal fun SubReplyDetailContent(
             visibleReplies = visibleReplies
         )
     }
-    val shouldLoadMore by remember {
+    val captureListScrollForConversation: () -> Unit = {
+        savedListScroll = SubReplyDetailSavedScrollPosition(
+            index = listState.firstVisibleItemIndex,
+            scrollOffset = listState.firstVisibleItemScrollOffset,
+        )
+    }
+    val listScrollMetrics by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            !localConversationMode &&
-                lastVisible >= layoutInfo.totalItemsCount - 2 &&
-                !isLoading &&
-                !isEnd
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+            Triple(
+                lastVisibleItem?.index ?: -1,
+                (lastVisibleItem?.offset ?: 0) + (lastVisibleItem?.size ?: 0),
+                layoutInfo.totalItemsCount to layoutInfo.viewportEndOffset
+            )
         }
+    }
+    val canScrollForward = remember(listScrollMetrics) {
+        val (lastVisibleIndex, lastVisibleEndOffset, totalAndViewport) = listScrollMetrics
+        val (totalItemsCount, viewportEndOffset) = totalAndViewport
+        resolveLazyListCanScrollForward(
+            lastVisibleIndex = lastVisibleIndex,
+            lastVisibleEndOffset = lastVisibleEndOffset,
+            totalItemsCount = totalItemsCount,
+            viewportEndOffset = viewportEndOffset
+        )
+    }
+    val shouldLoadMore by remember(isLoading, isEnd, error, localConversationMode) {
+        derivedStateOf {
+            val (lastVisibleIndex, _, totalAndViewport) = listScrollMetrics
+            error == null && !localConversationMode &&
+                shouldLoadMoreSubReplyList(
+                    lastVisibleIndex = lastVisibleIndex,
+                    totalItemsCount = totalAndViewport.first,
+                    isLoading = isLoading,
+                    isEnd = isEnd
+                )
+        }
+    }
+    val shouldPrefetchShortList by remember(
+        isLoading, isEnd, error, localConversationMode, visibleReplies.size, detailReplyDisplayCount
+    ) {
+        derivedStateOf {
+            error == null && !localConversationMode &&
+                shouldPrefetchSubRepliesWhenListNotScrollable(
+                    loadedReplyCount = visibleReplies.size,
+                    totalReplyCount = detailReplyDisplayCount,
+                    isLoading = isLoading,
+                    isEnd = isEnd,
+                    canScrollForward = canScrollForward
+                )
+        }
+    }
+    val showManualLoadMore = remember(
+        visibleReplies.size,
+        detailReplyDisplayCount,
+        isLoading,
+        isEnd,
+        localConversationMode
+    ) {
+        !localConversationMode &&
+            shouldShowSubReplyManualLoadMore(
+                loadedReplyCount = visibleReplies.size,
+                totalReplyCount = detailReplyDisplayCount,
+                isLoading = isLoading,
+                isEnd = isEnd
+            )
     }
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) onLoadMore()
     }
-    LaunchedEffect(listScrollResetKey) {
-        listState.scrollToItem(0)
+    LaunchedEffect(shouldPrefetchShortList, visibleReplies.size, detailReplyDisplayCount) {
+        if (shouldPrefetchShortList) onLoadMore()
+    }
+    LaunchedEffect(listScrollResetKey, sortMode) {
+        val previousMode = previousConversationMode
+        val currentMode = listScrollResetKey.conversationMode
+        when (
+            resolveSubReplyDetailScrollRestoreAction(
+                previousConversationMode = previousMode,
+                currentConversationMode = currentMode,
+                hasSavedPosition = savedListScroll != null,
+            )
+        ) {
+            SubReplyDetailScrollRestoreAction.RESTORE_SAVED -> {
+                val saved = savedListScroll
+                if (saved != null) {
+                    listState.scrollToItem(
+                        index = saved.index,
+                        scrollOffset = saved.scrollOffset,
+                    )
+                } else {
+                    listState.scrollToItem(0)
+                }
+            }
+            SubReplyDetailScrollRestoreAction.SCROLL_TO_TOP -> {
+                if (
+                    shouldSaveSubReplyDetailScrollBeforeConversationEnter(
+                        previousConversationMode = previousMode,
+                        currentConversationMode = currentMode,
+                    ) && savedListScroll == null
+                ) {
+                    captureListScrollForConversation()
+                }
+                listState.scrollToItem(0)
+            }
+        }
+        previousConversationMode = currentMode
     }
     LaunchedEffect(targetReplyId, visibleReplies, isLoading, isEnd) {
+        if (targetReplyId <= 0L) {
+            highlightedTargetId = 0L
+            return@LaunchedEffect
+        }
         val targetIndex = resolveSubReplyTargetListIndex(
             rootReplyId = rootReply.rpid,
             visibleReplies = visibleReplies,
             targetReplyId = targetReplyId
         )
         when {
-            targetIndex != null -> listState.animateScrollToItem(targetIndex)
+            targetIndex != null -> {
+                listState.animateScrollToItem(targetIndex)
+                highlightedTargetId = targetReplyId
+                delay(1_400)
+                highlightedTargetId = 0L
+            }
             targetReplyId > 0L && !isLoading && !isEnd && !effectiveConversationMode -> onLoadMore()
         }
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(appearance.panelColor)
     ) {
@@ -460,24 +706,24 @@ internal fun SubReplyDetailContent(
                 .fillMaxWidth()
                 .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
                 .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
+                .then(headerDragModifier)
                 .testTag(SUB_REPLY_DETAIL_HEADER_TAG)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
+                AppText(
                     text = if (effectiveConversationMode) "对话详情" else "评论详情",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = appearance.primaryTextColor
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(
+                AppIconButton(
                     onClick = onDismiss,
                     modifier = Modifier.testTag(SUB_REPLY_DETAIL_CLOSE_TAG)
                 ) {
-                    Icon(
+                    AppIcon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "Close",
                         tint = appearance.primaryTextColor
@@ -485,7 +731,7 @@ internal fun SubReplyDetailContent(
                 }
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = appearance.dividerColor)
+        AppHorizontalDivider(thickness = 0.5.dp, color = appearance.dividerColor)
 
         LazyColumn(
             state = listState,
@@ -514,15 +760,24 @@ internal fun SubReplyDetailContent(
                             onDeleteClick = if (currentMid > 0 && rootReply.mid == currentMid) {
                                 { onDeleteComment?.invoke(rootReply.rpid) }
                             } else null,
+                            onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && rootReply.mid == currentMid) {
+                                { onCheckCommentFraud.invoke(rootReply) }
+                            } else null,
                             onLikeClick = { onCommentLike?.invoke(rootReply.rpid) },
+                            onHateClick = { onCommentHate?.invoke(rootReply.rpid) },
                             isLiked = rootReply.action == 1 || rootReply.rpid in likedComments,
+                            isHated = rootReply.action == 2 || rootReply.rpid in hatedComments,
                             onUrlClick = onUrlClick,
                             maxTimestampMs = maxTimestampMs,
                             onReportClick = onReportComment?.let { report -> { reason -> report(rootReply.rpid, reason) } },
                             onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
                             showConversationAction = false,
                             onConversationClick = null,
-                            auxiliaryLabel = null,
+                            auxiliaryDecoration = if (showIdentityDecorations) {
+                                resolveSubReplyAuxiliaryDecoration(rootReply)
+                            } else {
+                                null
+                            },
                             showTrailingDivider = false
                         )
                     }
@@ -532,7 +787,7 @@ internal fun SubReplyDetailContent(
                     levelIndex = 1
                 ) {
                     Column {
-                        HorizontalDivider(thickness = 8.dp, color = appearance.sectionDividerColor)
+                        AppHorizontalDivider(thickness = 8.dp, color = appearance.sectionDividerColor)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -540,23 +795,25 @@ internal fun SubReplyDetailContent(
                                 .testTag(SUB_REPLY_DETAIL_SECTION_TAG),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
+                            AppText(
                                 text = if (effectiveConversationMode) {
                                     resolveSubReplyConversationSectionTitle(replyCount = visibleReplies.size)
                                 } else {
-                                    resolveSubReplyDetailSectionTitle(replyCount = detailReplyDisplayCount)
+                                    resolveSubReplyDetailSectionTitle(
+                                        replyCount = detailReplyDisplayCount,
+                                        loadedReplyCount = visibleReplies.size,
+                                        showLoadedReplyCount = showLoadedReplyCount,
+                                    )
                                 },
-                                fontSize = 14.sp,
-                                color = appearance.primaryTextColor,
-                                fontWeight = FontWeight.Medium
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                color = appearance.primaryTextColor
                             )
                             Spacer(modifier = Modifier.weight(1f))
                             if (effectiveConversationMode) {
-                                Text(
+                                AppText(
                                     text = "返回全部回复",
-                                    fontSize = 14.sp,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                     color = appearance.sortTint,
-                                    fontWeight = FontWeight.Medium,
                                     modifier = Modifier
                                         .clickable {
                                             if (isConversationMode) {
@@ -569,26 +826,29 @@ internal fun SubReplyDetailContent(
                                 )
                             } else {
                                 Row(
-                                    modifier = Modifier.testTag(SUB_REPLY_DETAIL_SORT_TAG),
+                                    modifier = Modifier
+                                        .testTag(SUB_REPLY_DETAIL_SORT_TAG)
+                                        .clickable(enabled = !isLoading) { onSortModeChange(sortMode.toggled()) }
+                                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                                        .padding(horizontal = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Icon(
+                                    AppIcon(
                                         imageVector = Icons.AutoMirrored.Outlined.Sort,
-                                        contentDescription = "Sort",
+                                        contentDescription = "切换楼中楼排序",
                                         tint = appearance.sortTint,
                                         modifier = Modifier.size(16.dp)
                                     )
-                                    Text(
-                                        text = "按时间",
-                                        fontSize = 14.sp,
-                                        color = appearance.sortTint,
-                                        fontWeight = FontWeight.Medium
+                                    AppText(
+                                        text = sortMode.label,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = appearance.sortTint
                                     )
                                 }
                             }
                         }
-                        HorizontalDivider(
+                        AppHorizontalDivider(
                             thickness = 0.5.dp,
                             color = appearance.dividerColor
                         )
@@ -609,6 +869,7 @@ internal fun SubReplyDetailContent(
                     SubReplyDetailItem(
                             item = item,
                             appearance = appearance,
+                            highlighted = item.rpid == highlightedTargetId,
                             isRootItem = false,
                             upMid = upMid,
                             emoteMap = emoteMap,
@@ -621,8 +882,13 @@ internal fun SubReplyDetailContent(
                             } else {
                                 null
                             },
+                            onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && item.mid == currentMid) {
+                                { onCheckCommentFraud.invoke(item) }
+                            } else null,
                             onLikeClick = { onCommentLike?.invoke(item.rpid) },
+                            onHateClick = { onCommentHate?.invoke(item.rpid) },
                             isLiked = item.action == 1 || item.rpid in likedComments,
+                            isHated = item.action == 2 || item.rpid in hatedComments,
                             onUrlClick = onUrlClick,
                             maxTimestampMs = maxTimestampMs,
                             onReportClick = onReportComment?.let { report -> { reason -> report(item.rpid, reason) } },
@@ -632,14 +898,15 @@ internal fun SubReplyDetailContent(
                                 hasConversationHandler = true
                             ),
                             onConversationClick = {
+                                captureListScrollForConversation()
                                 if (onConversationClick != null) {
                                     onConversationClick(item)
                                 } else {
                                     conversationAnchor = item
                                 }
                             },
-                            auxiliaryLabel = if (showIdentityDecorations) {
-                                resolveSubReplyAuxiliaryLabel(item)
+                            auxiliaryDecoration = if (showIdentityDecorations) {
+                                resolveSubReplyAuxiliaryDecoration(item)
                             } else {
                                 null
                             },
@@ -648,15 +915,47 @@ internal fun SubReplyDetailContent(
                 }
             }
 
+            if (isLoading && visibleReplies.isEmpty()) {
+                item(key = "subreply_skeleton") {
+                    com.android.purebilibili.core.ui.skeleton.CommentListColumnSkeleton(itemCount = 4)
+                }
+            }
+
             item(key = "footer") {
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CupertinoActivityIndicator()
+                when {
+                    error != null && !isLoading -> {
+                        AppText(
+                            text = "$error，点击重试",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onLoadMore)
+                                .sizeIn(minHeight = 48.dp)
+                                .padding(16.dp),
+                            textAlign = TextAlign.Center,
+                            color = appearance.sortTint,
+                        )
+                    }
+                    isLoading && visibleReplies.isNotEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AdaptiveLoadingIndicator()
+                        }
+                    }
+                    showManualLoadMore -> {
+                        AppText(
+                            text = "加载更多回复",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onLoadMore)
+                                .padding(horizontal = 16.dp, vertical = 18.dp),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = appearance.sortTint
+                        )
                     }
                 }
             }
@@ -668,6 +967,7 @@ internal fun SubReplyDetailContent(
 private fun SubReplyDetailItem(
     item: ReplyItem,
     appearance: SubReplyDetailAppearance,
+    highlighted: Boolean = false,
     isRootItem: Boolean,
     upMid: Long,
     emoteMap: Map<String, String>,
@@ -676,17 +976,29 @@ private fun SubReplyDetailItem(
     onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)?,
     onReplyClick: () -> Unit,
     onDeleteClick: (() -> Unit)?,
+    onCheckFraudClick: (() -> Unit)? = null,
     onLikeClick: (() -> Unit)?,
+    onHateClick: (() -> Unit)?,
     isLiked: Boolean,
+    isHated: Boolean,
     onUrlClick: ((String) -> Unit)?,
     maxTimestampMs: Long?,
     onReportClick: ((Int) -> Unit)?,
     onAvatarClick: (String) -> Unit,
     showConversationAction: Boolean,
     onConversationClick: (() -> Unit)?,
-    auxiliaryLabel: String?,
+    auxiliaryDecoration: SubReplyAuxiliaryDecoration?,
     showTrailingDivider: Boolean
 ) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (highlighted) {
+            appearance.accentColor.copy(alpha = 0.14f)
+        } else {
+            appearance.panelColor
+        },
+        animationSpec = tween(durationMillis = 280),
+        label = "subReplyTargetHighlight"
+    )
     val displayLocation = remember(item.replyControl?.location) {
         resolveReplyLocationText(item.replyControl?.location)
     }
@@ -735,7 +1047,7 @@ private fun SubReplyDetailItem(
             }
         }
     }
-    val avatarSize = if (isRootItem) 44.dp else 40.dp
+    val avatarSize = remember { resolveSubReplyDetailAvatarSizeDp().dp }
     val nameColor = if (item.member.vip?.vipStatus == 1) {
         appearance.accentColor
     } else {
@@ -749,6 +1061,13 @@ private fun SubReplyDetailItem(
     var showFreeCopyDialog by remember(item.rpid) { mutableStateOf(false) }
     var showReportDialog by remember(item.rpid) { mutableStateOf(false) }
     var pendingSaveReply by remember(item.rpid) { mutableStateOf<ReplyItem?>(null) }
+    // [新增] 评论翻译状态
+    val canTranslate = item.replyControl?.translationSwitch == 2
+    var translatedMessage by remember(item.rpid) { mutableStateOf<String?>(null) }
+    var isTranslating by remember(item.rpid) { mutableStateOf(false) }
+    val displayMessage = remember(translatedMessage, item.content.message) {
+        translatedMessage ?: item.content.message
+    }
     val copyText = remember(item.content.message) { item.content.message.trim() }
     val replyMemberMid = remember(item.member.mid, item.mid) { resolveReplyMemberMid(item) }
     fun launchSaveReplyCommentImage(reply: ReplyItem) {
@@ -798,13 +1117,16 @@ private fun SubReplyDetailItem(
 
     if (showActionSheet) {
         ReplyActionSheet(
+            queryAuthorUid = replyMemberMid,
             canDelete = onDeleteClick != null,
             canReport = onReportClick != null,
             canShare = shouldSupportReplyShare(item),
             canBlockUser = replyMemberMid > 0L,
+            canCopyUsername = item.member.uname.isNotBlank(),
             onDismiss = { showActionSheet = false },
             onCopyAll = { copyToClipboard(copyText, "评论内容") },
             onFreeCopy = { showFreeCopyDialog = true },
+            onCopyUsername = { copyToClipboard(item.member.uname, "用户名") },
             onSave = {
                 requestSaveReplyCommentImage()
             },
@@ -817,12 +1139,15 @@ private fun SubReplyDetailItem(
             },
             onReport = { showReportDialog = true },
             onToggleTop = {},
+            onCheckFraud = {
+                onCheckFraudClick?.invoke()
+            },
             onDelete = { onDeleteClick?.invoke() }
         )
     }
 
     if (showFreeCopyDialog) {
-        CopySelectionDialog(
+        TextSelectionBottomSheet(
             text = copyText,
             title = "选择评论内容",
             onDismiss = { showFreeCopyDialog = false }
@@ -841,7 +1166,7 @@ private fun SubReplyDetailItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(appearance.panelColor)
+            .drawBehind { drawRect(backgroundColor) }
             .combinedClickable(
                 onClick = {},
                 onLongClick = { showActionSheet = true }
@@ -852,17 +1177,19 @@ private fun SubReplyDetailItem(
                 .fillMaxWidth()
                 .padding(top = 14.dp, bottom = 14.dp, start = 16.dp, end = 16.dp)
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(item.member.avatar))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(avatarSize)
-                    .clip(CircleShape)
-                    .background(appearance.placeholderColor)
-                    .clickable { onAvatarClick(item.member.mid) }
+            ReplyMemberAvatar(
+                member = item.member,
+                placeholderColor = appearance.placeholderColor,
+                lightweightMode = false,
+                modifier = Modifier.size(avatarSize),
+                // Some dynamic/comment endpoints omit member.mid while still providing the
+                // canonical author id on ReplyItem.mid. Use the shared resolver so avatars in
+                //楼中楼 navigate consistently with inline user mentions and root comments.
+                onClick = {
+                    resolveReplyMemberMid(item)
+                        .takeIf { it > 0L }
+                        ?.let { onAvatarClick(it.toString()) }
+                }
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -877,10 +1204,9 @@ private fun SubReplyDetailItem(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
+                            AppText(
                                 text = item.member.uname,
-                                fontSize = if (isRootItem) 15.sp else 14.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                style = if (isRootItem) MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold) else MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                 color = nameColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -900,30 +1226,29 @@ private fun SubReplyDetailItem(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        Text(
+                        AppText(
                             text = metadataText,
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             color = appearance.secondaryTextColor
                         )
                     }
 
-                    if (!isRootItem && auxiliaryLabel != null) {
+                    if (auxiliaryDecoration != null) {
                         Spacer(modifier = Modifier.width(12.dp))
                         SubReplyAuxiliaryBadge(
-                            item = item,
-                            auxiliaryLabel = auxiliaryLabel,
+                            decoration = auxiliaryDecoration,
                             appearance = appearance
                         )
                     }
 
                     Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(
+                    AppIconButton(
                         onClick = { showActionSheet = true },
                         modifier = Modifier
                             .size(40.dp)
                             .testTag("$COMMENT_ACTION_BUTTON_TAG_PREFIX${item.rpid}")
                     ) {
-                        Icon(
+                        AppIcon(
                             imageVector = Icons.Filled.MoreVert,
                             contentDescription = "评论操作",
                             tint = appearance.actionTint,
@@ -934,8 +1259,8 @@ private fun SubReplyDetailItem(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 ReplyMessageText(
-                    text = item.content.message,
-                    fontSize = if (isRootItem) 16.sp else 15.sp,
+                    text = displayMessage,
+                    fontSize = if (isRootItem) MaterialTheme.typography.bodyLarge.fontSize else MaterialTheme.typography.bodyMedium.fontSize,
                     color = appearance.primaryTextColor,
                     emoteMap = localEmoteMap,
                     content = item.content,
@@ -984,6 +1309,60 @@ private fun SubReplyDetailItem(
                         onClick = onReplyClick
                     )
 
+                    // [新增] 翻译按钮 (胶囊样式)
+                    if (canTranslate) {
+                        val isTranslated = translatedMessage != null
+                        val translateLabel = if (isTranslating) "翻译中" else if (isTranslated) "原文" else "翻译"
+                        AppSurface(
+                            shape = AppShapes.container(ContainerLevel.Pill),
+                            color = if (isTranslated) appearance.accentColor.copy(alpha = 0.14f) else appearance.actionTint.copy(alpha = 0.10f),
+                            modifier = Modifier
+                                .clickable(enabled = !isTranslating) {
+                                    if (isTranslated) {
+                                        translatedMessage = null
+                                    } else {
+                                        scope.launch {
+                                            isTranslating = true
+                                            val result = com.android.purebilibili.data.repository.CommentGrpcRepository.translateReply(
+                                                type = item.replyType.toLong(),
+                                                oid = item.oid,
+                                                rpid = item.rpid
+                                            )
+                                            result.onSuccess { translated ->
+                                                if (!translated.isNullOrBlank()) {
+                                                    translatedMessage = translated
+                                                } else {
+                                                    Toast.makeText(context, "翻译结果为空", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }.onFailure { e ->
+                                                Toast.makeText(context, "${e.javaClass.simpleName}: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                            isTranslating = false
+                                        }
+                                    }
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                AppIcon(
+                                    imageVector = Icons.Outlined.Translate,
+                                    contentDescription = null,
+                                    tint = if (isTranslated) appearance.accentColor else appearance.actionTint,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                AppText(
+                                    text = translateLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (isTranslated) appearance.accentColor else appearance.actionTint
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
                     if (!specialLabelText.isNullOrEmpty()) {
                         Spacer(modifier = Modifier.width(10.dp))
                         ReplySpecialLabelChip(text = specialLabelText)
@@ -991,9 +1370,9 @@ private fun SubReplyDetailItem(
 
                     if (showConversationAction) {
                         Spacer(modifier = Modifier.width(18.dp))
-                        Text(
+                        AppText(
                             text = "查看对话",
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             color = appearance.actionTint,
                             modifier = Modifier
                                 .testTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${item.rpid}")
@@ -1006,18 +1385,17 @@ private fun SubReplyDetailItem(
                     Spacer(modifier = Modifier.weight(1f))
 
                     if (onDeleteClick != null) {
-                        Icon(
-                            imageVector = CupertinoIcons.Outlined.Trash,
-                            contentDescription = "Delete",
-                            tint = appearance.actionTint,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { onDeleteClick() }
-                        )
+                        AppIconButton(onClick = onDeleteClick) {
+                            AppIcon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = "删除",
+                                tint = appearance.actionTint,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                         Spacer(modifier = Modifier.width(18.dp))
                     }
 
-                    val likeIcon = rememberAppLikeIcon()
                     val likeFilledIcon = rememberAppLikeFilledIcon()
 
                     Row(
@@ -1026,27 +1404,40 @@ private fun SubReplyDetailItem(
                             .clickable(enabled = onLikeClick != null) { onLikeClick?.invoke() }
                             .padding(4.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isLiked) likeFilledIcon else likeIcon,
+                        AppIcon(
+                            imageVector = likeFilledIcon,
                             contentDescription = "Like",
-                            tint = if (isLiked) appearance.primaryTextColor else appearance.actionTint,
+                            tint = if (isLiked) appearance.accentColor else appearance.actionTint,
                             modifier = Modifier.size(16.dp)
                         )
                         if (displayLikeCount > 0) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(
+                            AppText(
                                 text = FormatUtils.formatStat(displayLikeCount.toLong()),
-                                fontSize = 12.sp,
-                                color = if (isLiked) appearance.primaryTextColor else appearance.actionTint
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isLiked) appearance.accentColor else appearance.actionTint
                             )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    AppIconButton(
+                        onClick = { onHateClick?.invoke() },
+                        enabled = onHateClick != null
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Filled.ThumbDown,
+                            contentDescription = if (isHated) "取消点踩" else "点踩评论",
+                            tint = if (isHated) MaterialTheme.colorScheme.error else appearance.actionTint,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
         }
 
         if (showTrailingDivider) {
-            HorizontalDivider(
+            AppHorizontalDivider(
                 modifier = Modifier.padding(start = 68.dp),
                 thickness = 0.5.dp,
                 color = appearance.dividerColor
@@ -1096,37 +1487,41 @@ private fun SubReplyDetailStaggeredReveal(
 
 @Composable
 private fun SubReplyAuxiliaryBadge(
-    item: ReplyItem,
-    auxiliaryLabel: String,
+    decoration: SubReplyAuxiliaryDecoration,
     appearance: SubReplyDetailAppearance
 ) {
     val visualSpec = remember { resolveSubReplyAuxiliaryBadgeVisualSpec() }
     Column(
         horizontalAlignment = Alignment.End
     ) {
-        val auxiliaryImage = remember(item) { resolveSubReplyAuxiliaryImageUrl(item) }
-        if (!auxiliaryImage.isNullOrBlank()) {
+        if (!decoration.imageUrl.isNullOrBlank()) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(auxiliaryImage))
+                    .data(resolveDecorationImageUrl(decoration.imageUrl))
+                    .size(Size.ORIGINAL)
+                    .transformations(TransparentBoundsCropTransformation)
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .size(visualSpec.imageSizeDp.dp)
                     .clip(RoundedCornerShape(visualSpec.imageCornerRadiusDp.dp))
                     .background(appearance.placeholderColor)
             )
-            Spacer(modifier = Modifier.height(visualSpec.imageLabelSpacingDp.dp))
+            if (!decoration.label.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(visualSpec.imageLabelSpacingDp.dp))
+            }
         }
-        Text(
-            text = auxiliaryLabel.replace("NO.", "NO.\n"),
-            fontSize = visualSpec.labelFontSizeSp.sp,
-            lineHeight = visualSpec.labelLineHeightSp.sp,
-            color = appearance.auxiliaryTint,
-            fontWeight = FontWeight.SemiBold
-        )
+        if (!decoration.label.isNullOrBlank()) {
+            AppText(
+                text = decoration.label.replace("NO.", "NO.\n"),
+                fontSize = visualSpec.labelFontSizeSp.sp,
+                lineHeight = visualSpec.labelLineHeightSp.sp,
+                color = appearance.auxiliaryTint,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
 
@@ -1138,18 +1533,20 @@ private fun SubReplyTextAction(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
     ) {
-        Icon(
+        AppIcon(
             imageVector = Icons.AutoMirrored.Outlined.Reply,
             contentDescription = label,
             tint = appearance.actionTint,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(6.dp))
-        Text(
+        AppText(
             text = label,
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.labelMedium,
             color = appearance.actionTint
         )
     }

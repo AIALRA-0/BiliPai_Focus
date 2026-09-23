@@ -1,6 +1,6 @@
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.android")
+    // AGP 9+ built-in Kotlin
     id("org.jetbrains.kotlin.plugin.serialization")
     id("maven-publish")
 }
@@ -10,7 +10,7 @@ version = "0.1.0-SNAPSHOT"
 
 android {
     namespace = "com.android.purebilibili.plugin.sdk"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26

@@ -1,4 +1,5 @@
 package com.android.purebilibili.feature.live.components
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,15 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,7 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.live.resolveLiveSheetVisualSpec
 import com.android.purebilibili.feature.live.AnchorInfo
 import com.android.purebilibili.feature.live.RoomInfo
 import com.android.purebilibili.feature.live.formatLiveDuration
@@ -47,6 +50,7 @@ fun LiveContributionRankSheet(
     roomInfo: RoomInfo,
     onDismiss: () -> Unit
 ) {
+    val visualSpec = remember { resolveLiveSheetVisualSpec() }
     var selectedTab by remember { mutableIntStateOf(0) }
     var items by remember { mutableStateOf<List<LiveContributionRankItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -76,43 +80,45 @@ fun LiveContributionRankSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    AppModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(
+                    horizontal = AppSpacingTokens.ExtraLarge,
+                    vertical = AppSpacingTokens.Small
+                ),
+            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Large)
         ) {
-            Text(
+            AppText(
                 text = "高能榜",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 22.sp,
+                color = AppSurfaceTokens.onSurface(),
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
-            Text(
+            AppText(
                 text = roomTitle.ifBlank { anchorInfo.uname },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp
+                color = AppSurfaceTokens.onSurfaceVariantSummary(),
+                style = MaterialTheme.typography.bodySmall
             )
-            PrimaryTabRow(selectedTabIndex = selectedTab) {
-                rankTypes.forEachIndexed { index, type ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { Text(type.title) }
-                    )
-                }
-            }
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
+            AppThemeAdaptiveTabRow(
+                options = rankTypes.mapIndexed { index, type ->
+                    AppSegmentOption(index, type.title)
+                },
+                selectedValue = selectedTab,
+                onSelectionChange = { selectedTab = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            AppSurface(
+                shape = AppShapes.container(ContainerLevel.Card),
+                color = AppSurfaceTokens.cardContainer()
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(AppSpacingTokens.Large),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
                     ) {
                         RankMetricRow("主播", anchorInfo.uname.ifBlank { "直播间" })
                         RankMetricRow("人气", formatLiveViewerCount(roomInfo.online))
@@ -120,38 +126,38 @@ fun LiveContributionRankSheet(
                         RankMetricRow("高能观众", roomInfo.onlineRankText.ifBlank { "暂无数据" })
                         RankMetricRow("开播时长", formatLiveDuration(roomInfo.liveStartTime).ifBlank { "刚刚开播" })
                     }
-                    HorizontalDivider()
+                    AppHorizontalDivider(color = AppSurfaceTokens.divider())
                     when {
                         isLoading -> {
-                            Text(
+                            AppText(
                                 text = "榜单加载中…",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(16.dp)
+                                color = AppSurfaceTokens.onSurfaceVariantSummary(),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(AppSpacingTokens.Large)
                             )
                         }
                         error != null -> {
-                            Text(
+                            AppText(
                                 text = error ?: "",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(16.dp)
+                                color = AppSurfaceTokens.onSurfaceVariantSummary(),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(AppSpacingTokens.Large)
                             )
                         }
                         items.isEmpty() -> {
-                            Text(
+                            AppText(
                                 text = "当前榜单暂无数据",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(16.dp)
+                                color = AppSurfaceTokens.onSurfaceVariantSummary(),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(AppSpacingTokens.Large)
                             )
                         }
                         else -> {
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 360.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    .heightIn(max = visualSpec.contributionListMaxHeightDp.dp),
+                                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
                             ) {
                                 items(items, key = { "${it.uid}_${it.rank}" }) { item ->
                                     RankItemRow(item = item)
@@ -174,16 +180,16 @@ private fun RankMetricRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
+        AppText(
             text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp
+            color = AppSurfaceTokens.onSurfaceVariantSummary(),
+            style = MaterialTheme.typography.bodySmall
         )
-        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-        Text(
+        androidx.compose.foundation.layout.Spacer(Modifier.width(AppSpacingTokens.Small))
+        AppText(
             text = value,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 14.sp,
+            color = AppSurfaceTokens.onSurface(),
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -200,45 +206,48 @@ private fun RankItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(
+                horizontal = AppSpacingTokens.Large,
+                vertical = AppSpacingTokens.Small
+            ),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
             modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
         ) {
-            Text(
+            AppText(
                 text = item.rank.takeIf { it > 0 }?.toString() ?: "-",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 14.sp,
+                color = AppSurfaceTokens.primary(),
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     text = item.name.ifBlank { "用户" },
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 14.sp,
+                    color = AppSurfaceTokens.onSurface(),
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 val medal = item.medalInfo
                 if (medal != null && medal.medalName.isNotBlank()) {
-                    Text(
+                    AppText(
                         text = "${medal.medalName} Lv.${medal.level}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp
+                        color = AppSurfaceTokens.onSurfaceVariantSummary(),
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
             }
         }
-        Text(
+        AppText(
             text = item.score.takeIf { it > 0 }?.toString() ?: "-",
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 13.sp,
+            color = AppSurfaceTokens.onSurface(),
+            style = MaterialTheme.typography.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 8.dp)
+            modifier = Modifier.padding(start = AppSpacingTokens.Small)
         )
     }
 }

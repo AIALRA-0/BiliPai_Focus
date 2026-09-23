@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings
 
 internal enum class AppUpdateDownloadStatus {
     IDLE,
+    QUEUED,
     DOWNLOADING,
     COMPLETED,
     FAILED
@@ -13,7 +14,8 @@ internal data class AppUpdateDownloadState(
     val downloadedBytes: Long = 0L,
     val totalBytes: Long = 0L,
     val filePath: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val checksumProvided: Boolean = false
 )
 
 internal fun startAppUpdateDownload(totalBytes: Long): AppUpdateDownloadState {

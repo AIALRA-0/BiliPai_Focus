@@ -10,6 +10,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
@@ -41,6 +42,23 @@ data class DynamicFeedData(
     val update_num: Int = 0
 )
 
+/**
+ * 动态未读数（红点）轻量接口
+ * API: x/polymer/web-dynamic/v1/feed/all/update
+ * 只返回本次更新基线以上的新动态条数，避免轮询时拉全量 feed。
+ */
+@Serializable
+data class DynamicUpdateCountResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: DynamicUpdateCountData? = null
+)
+
+@Serializable
+data class DynamicUpdateCountData(
+    val update_num: Int = 0
+)
+
 @Serializable
 data class DynamicDetailResponse(
     val code: Int = 0,
@@ -50,7 +68,16 @@ data class DynamicDetailResponse(
 
 @Serializable
 data class DynamicDetailData(
-    val item: DynamicItem? = null
+    val item: DynamicItem? = null,
+    val fallback: DynamicOpusFallback? = null
+)
+
+@Serializable
+data class DynamicOpusFallback(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val id: Long = 0,
+    @Serializable(with = FlexibleIntSerializer::class)
+    val type: Int = 0
 )
 
 @Serializable
@@ -119,7 +146,25 @@ data class TopicCardList(
     @SerialName("has_more")
     val hasMore: Boolean = false,
     val offset: String = "",
-    val items: List<TopicDynamicCardItem> = emptyList()
+    val items: List<TopicDynamicCardItem> = emptyList(),
+    @SerialName("topic_sort_by_conf")
+    val topicSortByConf: TopicSortByConf? = null,
+)
+
+@Serializable
+data class TopicSortByConf(
+    @SerialName("all_sort_by")
+    val allSortBy: List<TopicSortOption> = emptyList(),
+    @SerialName("show_sort_by")
+    val showSortBy: Int = 0,
+)
+
+@Serializable
+data class TopicSortOption(
+    @SerialName("sort_by")
+    val sortBy: Int = 0,
+    @SerialName("sort_name")
+    val sortName: String = "",
 )
 
 @Serializable
@@ -164,15 +209,20 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
                         module_author = parsed.module_author ?: merged.module_author,
                         module_dynamic = parsed.module_dynamic ?: merged.module_dynamic,
                         module_more = parsed.module_more ?: merged.module_more,
-                        module_stat = parsed.module_stat ?: merged.module_stat
+                        module_stat = parsed.module_stat ?: merged.module_stat,
+                        module_fold = parsed.module_fold ?: merged.module_fold,
+                        module_tag = parsed.module_tag ?: merged.module_tag,
+                        module_dispute = parsed.module_dispute ?: merged.module_dispute
                     )
 
                     val moduleType = obj["module_type"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                    if (moduleType == "MODULE_TYPE_TITLE" || obj["module_title"] != null) {
-                        opusTitle = obj["module_title"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+                    val titleModule = obj["module_title"] as? JsonObject
+                    if (moduleType == "MODULE_TYPE_TITLE" || titleModule != null) {
+                        opusTitle = titleModule?.get("text")?.jsonPrimitive?.contentOrNull
                     }
-                    if (moduleType == "MODULE_TYPE_CONTENT" || obj["module_content"] != null) {
-                        val paragraphs = obj["module_content"]?.jsonObject?.get("paragraphs") as? JsonArray
+                    val contentModule = obj["module_content"] as? JsonObject
+                    if (moduleType == "MODULE_TYPE_CONTENT" || contentModule != null) {
+                        val paragraphs = contentModule?.get("paragraphs") as? JsonArray
                         paragraphs?.forEach { paragraphNode ->
                             val paragraph = paragraphNode as? JsonObject ?: return@forEach
                             opusContentBlocks += extractParagraphBlocks(paragraph)
@@ -194,42 +244,181 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
 
     private fun extractParagraphBlocks(paragraph: JsonObject): List<OpusContentBlock> {
         val blocks = mutableListOf<OpusContentBlock>()
-        extractParagraphText(paragraph)?.let { blocks += OpusContentBlock.Text(it) }
-        extractParagraphPics(paragraph).forEach { pic ->
+        val paragraphType = paragraph["para_type"]?.jsonPrimitive?.intOrNull ?: 0
+        val alignment = paragraph["align"]?.jsonPrimitive?.intOrNull ?: 0
+        extractParagraphHeading(paragraph)?.let {
+            blocks += OpusContentBlock.Heading(text = it, alignment = alignment)
+        }
+        val listBlock = extractParagraphList(paragraph, alignment)
+        val codeText = extractParagraphCode(paragraph)
+        listBlock?.let { blocks += it }
+        codeText?.let { blocks += OpusContentBlock.Code(it) }
+        if (paragraphType == 3) {
+            blocks += OpusContentBlock.Divider(extractParagraphLinePic(paragraph))
+        }
+        if (listBlock == null && codeText == null && paragraphType != 3) {
+            extractParagraphText(paragraph)?.let { text ->
+                if (blocks.none { it.plainText == text }) {
+                    blocks += if (paragraphType == 4) {
+                        OpusContentBlock.Quote(text = text, alignment = alignment)
+                    } else {
+                        OpusContentBlock.Text(
+                            text = text,
+                            alignment = alignment,
+                            richTextNodes = extractParagraphRichTextNodes(paragraph),
+                        )
+                    }
+                }
+            }
+        }
+        extractParagraphPics(paragraph, includeLinePic = paragraphType != 3).forEach { pic ->
             blocks += OpusContentBlock.Image(pic)
         }
         extractParagraphLinkCard(paragraph)?.let { blocks += OpusContentBlock.LinkCard(it) }
         return blocks
     }
 
-    private fun extractParagraphText(paragraph: JsonObject): String? {
-        val nodes = paragraph["text"]?.jsonObject?.get("nodes") as? JsonArray ?: return null
-        val text = buildString {
+    private fun extractParagraphHeading(paragraph: JsonObject): String? {
+        val nodes = paragraph["heading"]
+            ?.let { runCatching { it.jsonObject }.getOrNull() }
+            ?.get("nodes")
+        return extractParagraphNodesText(nodes).takeIf { it.isNotBlank() }
+    }
+
+    private fun extractParagraphList(
+        paragraph: JsonObject,
+        alignment: Int,
+    ): OpusContentBlock.ListBlock? {
+        val listObject = paragraph["list"]?.let { runCatching { it.jsonObject }.getOrNull() } ?: return null
+        val ordered = listObject["style"]?.jsonPrimitive?.intOrNull == 1
+        val items = listObject["items"]
+            ?.let { runCatching { it.jsonArray }.getOrNull() }
+            .orEmpty()
+            .mapNotNull { item ->
+                val itemObject = item as? JsonObject ?: return@mapNotNull null
+                extractParagraphNodesText(itemObject["nodes"]).takeIf { it.isNotBlank() }
+            }
+        if (items.isEmpty()) return null
+        return OpusContentBlock.ListBlock(
+            items = items,
+            ordered = ordered,
+            alignment = alignment,
+        )
+    }
+
+    private fun extractParagraphCode(paragraph: JsonObject): String? {
+        val codeObject = paragraph["code"]?.let { runCatching { it.jsonObject }.getOrNull() } ?: return null
+        return codeObject["content"]?.jsonPrimitive?.contentOrNull
+            ?.replace("&quot;", "\"")
+            ?.replace("&amp;", "&")
+            ?.replace("&lt;", "<")
+            ?.replace("&gt;", ">")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun extractParagraphNodesText(nodesElement: kotlinx.serialization.json.JsonElement?): String {
+        val nodes = nodesElement as? JsonArray ?: return ""
+        return buildString {
             nodes.forEach { node ->
                 val nodeObject = node as? JsonObject ?: return@forEach
-                val words = nodeObject["word"]
-                    ?.jsonObject
+                val words = (nodeObject["word"] as? JsonObject)
                     ?.get("words")
                     ?.jsonPrimitive
                     ?.contentOrNull
-                    ?: nodeObject["rich"]
-                        ?.jsonObject
+                    ?: (nodeObject["rich"] as? JsonObject)
                         ?.get("text")
                         ?.jsonPrimitive
                         ?.contentOrNull
-                    ?: nodeObject["rich"]
-                        ?.jsonObject
+                    ?: (nodeObject["rich"] as? JsonObject)
                         ?.get("orig_text")
                         ?.jsonPrimitive
                         ?.contentOrNull
-                    ?: return@forEach
-                append(words)
+                    ?: ((nodeObject["rich"] as? JsonObject)?.get("emoji") as? JsonObject)
+                        ?.get("text")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                    ?: (nodeObject["formula"] as? JsonObject)
+                        ?.get("latex_content")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                if (!words.isNullOrBlank()) append(words)
             }
         }.trim()
-        return text.takeIf { it.isNotBlank() }
     }
 
-    private fun extractParagraphPics(paragraph: JsonObject): List<OpusPic> {
+    private fun extractParagraphText(paragraph: JsonObject): String? {
+        val nodes = paragraph["text"]
+            ?.let { runCatching { it.jsonObject }.getOrNull() }
+            ?.get("nodes")
+        return extractParagraphNodesText(nodes).takeIf { it.isNotBlank() }
+    }
+
+    private fun extractParagraphRichTextNodes(paragraph: JsonObject): List<RichTextNode> {
+        val nodes = (paragraph["text"] as? JsonObject)?.get("nodes") as? JsonArray
+            ?: return emptyList()
+        val parsedNodes = nodes.mapNotNull { nodeElement ->
+            val node = nodeElement as? JsonObject ?: return@mapNotNull null
+            (node["rich"] as? JsonObject)?.let { rich ->
+                val emoji = parseParagraphEmojiInfo(rich["emoji"] as? JsonObject)
+                val emojiText = emoji?.text.orEmpty()
+                val rawText = rich["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val rawOrigText = rich["orig_text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val text = rawText.ifBlank { rawOrigText.ifBlank { emojiText } }
+                val origText = rawOrigText.ifBlank { rawText.ifBlank { emojiText } }
+                val richNode = RichTextNode(
+                    type = rich["type"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    text = text,
+                    orig_text = origText,
+                    emoji = emoji,
+                    jump_url = rich["jump_url"]?.jsonPrimitive?.contentOrNull,
+                    rid = rich["rid"]?.jsonPrimitive?.contentOrNull,
+                )
+                richNode
+            } ?: (node["word"] as? JsonObject)
+                ?.get("words")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { words -> RichTextNode(type = "RICH_TEXT_NODE_TYPE_TEXT", text = words) }
+                ?: (node["formula"] as? JsonObject)
+                    ?.get("latex_content")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { formula ->
+                        // Keep formula nodes in the stream so an otherwise complete
+                        // paragraph is not downgraded to plain text (which would also
+                        // lose AT metadata next to the formula).
+                        RichTextNode(type = "RICH_TEXT_NODE_TYPE_TEXT", text = formula)
+                    }
+        }
+        return parsedNodes.filter { it.text.isNotBlank() || it.orig_text.isNotBlank() || it.emoji != null }
+    }
+
+    private fun parseParagraphEmojiInfo(emojiObject: JsonObject?): EmojiInfo? {
+        if (emojiObject == null) return null
+        val iconUrl = emojiObject["icon_url"]?.jsonPrimitive?.contentOrNull
+            ?: emojiObject["url"]?.jsonPrimitive?.contentOrNull
+            ?: ""
+        val webpUrl = emojiObject["webp_url"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val gifUrl = emojiObject["gif_url"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val size = emojiObject["size"]?.jsonPrimitive?.intOrNull ?: 1
+        val text = emojiObject["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        if (iconUrl.isBlank() && webpUrl.isBlank() && gifUrl.isBlank() && text.isBlank()) return null
+        return EmojiInfo(
+            icon_url = iconUrl,
+            webp_url = webpUrl,
+            gif_url = gifUrl,
+            size = size,
+            text = text,
+        )
+    }
+
+    private fun extractParagraphPics(
+        paragraph: JsonObject,
+        includeLinePic: Boolean,
+    ): List<OpusPic> {
         val results = mutableListOf<OpusPic>()
         val picObject = paragraph["pic"]?.let { runCatching { it.jsonObject }.getOrNull() }
         val pics = picObject?.get("pics") as? JsonArray
@@ -240,14 +429,24 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
         if (results.isEmpty()) {
             parseOpusPic(picObject)?.let(results::add)
         }
-        paragraph["line"]
-            ?.let { runCatching { it.jsonObject }.getOrNull() }
-            ?.get("pic")
-            ?.let { runCatching { it.jsonObject }.getOrNull() }
-            ?.let(::parseOpusPic)
-            ?.let(results::add)
+        if (results.isEmpty()) {
+            val picsAtRoot = paragraph["pics"] as? JsonArray
+            picsAtRoot?.mapNotNullTo(results) { picNode ->
+                val pic = picNode as? JsonObject ?: return@mapNotNullTo null
+                parseOpusPic(pic)
+            }
+        }
+        if (includeLinePic) {
+            extractParagraphLinePic(paragraph)?.let(results::add)
+        }
         return results
     }
+
+    private fun extractParagraphLinePic(paragraph: JsonObject): OpusPic? = paragraph["line"]
+        ?.let { runCatching { it.jsonObject }.getOrNull() }
+        ?.get("pic")
+        ?.let { runCatching { it.jsonObject }.getOrNull() }
+        ?.let(::parseOpusPic)
 
     private fun parseOpusPic(pic: JsonObject?): OpusPic? {
         if (pic == null) return null
@@ -257,7 +456,8 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
             url = normalizeOpusImageUrl(url),
             width = pic["width"]?.jsonPrimitive?.intOrNull ?: 0,
             height = pic["height"]?.jsonPrimitive?.intOrNull ?: 0,
-            size = pic["size"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            size = pic["size"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+            live_url = pic["live_url"]?.jsonPrimitive?.contentOrNull,
         )
     }
 
@@ -277,6 +477,9 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
             "LINK_CARD_TYPE_MUSIC" -> parseMusicLinkCard(card, type)
             "LINK_CARD_TYPE_GOODS" -> parseGoodsLinkCard(card, type)
             "LINK_CARD_TYPE_VOTE" -> parseVoteLinkCard(card, type)
+            "LINK_CARD_TYPE_RESERVE" -> parseReserveLinkCard(card, type)
+            "LINK_CARD_TYPE_MATCH" -> parseMatchLinkCard(card, type)
+            "LINK_CARD_TYPE_UPOWER_LOTTERY" -> parseUpowerLotteryLinkCard(card, type)
             "LINK_CARD_TYPE_ITEM_NULL" -> parseItemNullLinkCard(card, type)
             else -> parseGenericLinkCard(card, type)
         }.takeIf { it.title.isNotBlank() || it.cover.isNotBlank() || it.jumpUrl.isNotBlank() }
@@ -386,6 +589,59 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
         )
     }
 
+    private fun parseReserveLinkCard(card: JsonObject, type: String): OpusLinkCard {
+        val reserve = card.objectValue("reserve")
+        val button = reserve.objectValue("button")
+        val buttonStatus = button.stringValue("status").toIntOrNull() ?: 0
+        val buttonState = if (buttonStatus == 2) button.objectValue("check") else button.objectValue("uncheck")
+        return OpusLinkCard(
+            type = type,
+            oid = card.stringValue("oid").ifBlank { reserve.stringValue("rid") },
+            title = reserve.stringValue("title").ifBlank { "预约" },
+            description = listOf(
+                reserve.objectValue("desc1").stringValue("text"),
+                reserve.objectValue("desc2").stringValue("text"),
+                reserve.objectValue("desc3").stringValue("text"),
+            ).filter(String::isNotBlank).joinToString(" · "),
+            jumpUrl = reserve.stringValue("jump_url").ifBlank { button.stringValue("jump_url") },
+            badgeText = buttonState.stringValue("text").ifBlank {
+                button.objectValue("jump_style").stringValue("text")
+            },
+        )
+    }
+
+    private fun parseMatchLinkCard(card: JsonObject, type: String): OpusLinkCard {
+        val match = card.objectValue("match")
+        val matchInfo = match.objectValue("match_info")
+        return OpusLinkCard(
+            type = type,
+            oid = card.stringValue("oid").ifBlank { match.stringValue("id") },
+            title = match.stringValue("title").ifBlank { matchInfo.stringValue("title") },
+            description = match.stringValue("sub_title").ifBlank { matchInfo.stringValue("sub_title") },
+            label = "赛事",
+            cover = normalizeOptionalOpusImageUrl(match.stringValue("cover")),
+            jumpUrl = match.stringValue("jump_url"),
+        )
+    }
+
+    private fun parseUpowerLotteryLinkCard(card: JsonObject, type: String): OpusLinkCard {
+        val lottery = card.objectValue("upower_lottery")
+        val button = lottery.objectValue("button")
+        return OpusLinkCard(
+            type = type,
+            oid = card.stringValue("oid").ifBlank { lottery.stringValue("rid") },
+            title = lottery.stringValue("title").ifBlank { "充电专属抽奖" },
+            description = listOf(
+                lottery.objectValue("desc").stringValue("text"),
+                lottery.objectValue("hint").stringValue("text"),
+            ).filter(String::isNotBlank).joinToString(" · "),
+            label = "充电专属抽奖",
+            jumpUrl = lottery.stringValue("jump_url").ifBlank { button.stringValue("jump_url") },
+            badgeText = button.objectValue("jump_style").stringValue("text")
+                .ifBlank { button.objectValue("check").stringValue("text") },
+        )
+    }
+
     private fun parseItemNullLinkCard(card: JsonObject, type: String): OpusLinkCard {
         val itemNull = card.objectValue("item_null")
         return OpusLinkCard(
@@ -435,14 +691,18 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
     ): DynamicModules {
         val existing = module_dynamic
         val paragraphTexts = contentBlocks.mapNotNull { block ->
-            (block as? OpusContentBlock.Text)?.text
+            block.plainText.takeIf(String::isNotBlank)
         }
         val pics = contentBlocks.mapNotNull { block ->
-            (block as? OpusContentBlock.Image)?.pic
+            when (block) {
+                is OpusContentBlock.Image -> block.pic
+                is OpusContentBlock.Divider -> block.pic
+                else -> null
+            }
         }
         val descText = paragraphTexts.joinToString(separator = "\n").trim()
         val cleanTitle = title?.trim().takeUnless { it.isNullOrBlank() }
-        val hasDerivedContent = descText.isNotBlank() || pics.isNotEmpty() || cleanTitle != null
+        val hasDerivedContent = contentBlocks.isNotEmpty() || descText.isNotBlank() || pics.isNotEmpty() || cleanTitle != null
         if (!hasDerivedContent) return this
 
         val existingDesc = existing?.desc
@@ -453,13 +713,24 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
             descText.length > existingDescText.length -> descText
             else -> existingDescText
         }
+        val allBlockRichTextNodes = contentBlocks.flatMap { block ->
+            when (block) {
+                is OpusContentBlock.Text -> block.richTextNodes
+                else -> emptyList()
+            }
+        }
+        val mergedRichTextNodes = if (allBlockRichTextNodes.isNotEmpty()) {
+            allBlockRichTextNodes
+        } else {
+            existingDesc?.rich_text_nodes.orEmpty()
+        }
         val mergedDesc = if (mergedDescText.isNotBlank()) {
             DynamicDesc(
                 text = mergedDescText,
-                rich_text_nodes = if (mergedDescText == existingDescText) {
-                    existingDesc?.rich_text_nodes.orEmpty()
+                rich_text_nodes = if (mergedDescText == existingDescText && existingDesc != null && existingDesc.rich_text_nodes.isNotEmpty()) {
+                    existingDesc.rich_text_nodes
                 } else {
-                    emptyList()
+                    mergedRichTextNodes
                 }
             )
         } else {
@@ -472,22 +743,20 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
             jump_url = existingOpus?.jump_url.orEmpty(),
             title = cleanTitle ?: existingOpus?.title,
             summary = when {
-                mergedDescText.isNotBlank() -> OpusSummary(text = mergedDescText)
+                mergedDescText.isNotBlank() -> OpusSummary(
+                    text = mergedDescText,
+                    rich_text_nodes = mergedRichTextNodes
+                )
                 existingOpus?.summary != null -> existingOpus.summary
                 else -> null
             },
             pics = if (pics.isNotEmpty()) pics else existingOpus?.pics.orEmpty(),
             contentBlocks = if (contentBlocks.isNotEmpty()) contentBlocks else existingOpus?.contentBlocks.orEmpty()
         )
-        val mergedMajor = DynamicMajor(
+        val mergedMajor = existingMajor?.copy(
             type = "MAJOR_TYPE_OPUS",
-            archive = existingMajor?.archive,
-            article = existingMajor?.article,
-            draw = existingMajor?.draw,
-            live_rcmd = existingMajor?.live_rcmd,
             opus = mergedOpus,
-            ugc_season = existingMajor?.ugc_season
-        )
+        ) ?: DynamicMajor(type = "MAJOR_TYPE_OPUS", opus = mergedOpus)
         return copy(
             module_dynamic = DynamicContentModule(
                 desc = mergedDesc ?: existingDesc,
@@ -495,7 +764,9 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
                     mergedMajor
                 } else {
                     existingMajor
-                }
+                },
+                additional = existing?.additional,
+                topic = existing?.topic,
             )
         )
     }
@@ -516,7 +787,105 @@ data class DynamicModules(
     val module_author: DynamicAuthorModule? = null,
     val module_dynamic: DynamicContentModule? = null,
     val module_more: DynamicMoreModule? = null,
-    val module_stat: DynamicStatModule? = null
+    val module_stat: DynamicStatModule? = null,
+    // 相关动态折叠条（"展开x条相关动态"）
+    val module_fold: DynamicFoldModule? = null,
+    // 置顶标记（text == "置顶" 时置顶）
+    val module_tag: DynamicTagModule? = null,
+    // 违规/风险提示条
+    val module_dispute: DynamicDisputeModule? = null
+)
+
+@Serializable
+data class DynamicFoldModule(
+    val ids: List<String> = emptyList(),
+    val statement: String = "",
+    val users: List<DynamicFoldUser> = emptyList()
+)
+
+@Serializable
+data class DynamicFoldUser(
+    val mid: Long = 0,
+    val face: String = ""
+)
+
+@Serializable
+data class DynamicTagModule(
+    val text: String = ""
+)
+
+@Serializable
+data class DynamicDisputeModule(
+    val title: String = "",
+    val desc: String = "",
+    val jump_url: String = ""
+)
+
+// --- 评论互动设置（评论精选 / 评论开关） ---
+// API: x/v2/reply/subject/interaction-status
+@Serializable
+data class ReplyInteractionResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: ReplyInteractionData? = null
+)
+
+@Serializable
+data class ReplyInteractionData(
+    val up_reply_selection: ReplyInteractionStatus? = null,
+    val up_reply: ReplyInteractionStatus? = null
+)
+
+@Serializable
+data class ReplyInteractionStatus(
+    val status: Int = 0, // 1 = 开启中
+    val can_modify: Boolean = false
+)
+
+// --- 关注 UP 列表（含未读标记，供 UP 列表红点） ---
+// API: dynamic_svr/v1/dynamic_svr/w_dyn_uplist
+@Serializable
+data class UplistResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: UplistData? = null
+)
+
+@Serializable
+data class UplistData(
+    val items: List<UplistItem> = emptyList()
+)
+
+@Serializable
+data class UplistItem(
+    val user_profile: UplistUserProfile? = null,
+    @SerialName("has_update") val has_update: Int = 0
+)
+
+@Serializable
+data class UplistUserProfile(
+    val info: UplistUserInfo? = null
+)
+
+@Serializable
+data class UplistUserInfo(
+    val uid: Long = 0,
+    val uname: String = "",
+    val face: String = ""
+)
+
+// --- 发布纯文本动态响应（防 shadow-ban 校验用） ---
+// API: dynamic_svr/v1/dynamic_svr/create
+@Serializable
+data class DynamicCreateResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: DynamicCreateData? = null
+)
+
+@Serializable
+data class DynamicCreateData(
+    @SerialName("dynamic_id_str") val dynamic_id_str: String = ""
 )
 
 @Serializable
@@ -545,7 +914,13 @@ data class DynamicThreePointParams(
     val dyn_id_str: String = "",
     @Serializable(with = FlexibleIntSerializer::class)
     val dyn_type: Int = 0,
-    val rid_str: String = ""
+    val rid_str: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    val dynamic_id: String = "",
+    @Serializable(with = FlexibleIntSerializer::class)
+    val status: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class)
+    val type: Int = 0
 )
 
 // --- 作者模块 ---
@@ -555,6 +930,7 @@ data class DynamicAuthorModule(
     val name: String = "",
     val face: String = "",
     val pub_time: String = "", // "昨天 18:00"
+    @Serializable(with = FlexibleLongSerializer::class)
     val pub_ts: Long = 0, // 时间戳
     @Serializable(with = FlexibleNullableBooleanSerializer::class)
     val following: Boolean? = null,
@@ -586,7 +962,153 @@ data class DecorateInfo(
 @Serializable
 data class DynamicContentModule(
     val desc: DynamicDesc? = null,
-    val major: DynamicMajor? = null
+    val major: DynamicMajor? = null,
+    val additional: DynamicAdditional? = null,
+    val topic: DynamicTopic? = null,
+)
+
+@Serializable
+data class DynamicTopic(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val id: Long = 0,
+    val name: String = "",
+)
+
+@Serializable
+data class DynamicAdditional(
+    val type: String = "",
+    val common: DynamicAdditionalCommon? = null,
+    val ugc: DynamicAdditionalUgc? = null,
+    val reserve: DynamicAdditionalReserve? = null,
+    val goods: DynamicAdditionalGoods? = null,
+    val vote: DynamicAdditionalVote? = null,
+    val match: DynamicAdditionalMatch? = null,
+    val upower_lottery: DynamicAdditionalUpowerLottery? = null
+)
+
+@Serializable
+data class DynamicAdditionalCommon(
+    val button: DynamicCardButton? = null,
+    val cover: String = "",
+    val desc1: String = "",
+    val desc2: String = "",
+    val head_text: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    val id_str: String = "",
+    val jump_url: String = "",
+    val style: Int = 0,
+    val sub_type: String = "",
+    val title: String = ""
+)
+
+@Serializable
+data class DynamicAdditionalUgc(
+    val title: String = "",
+    val cover: String = "",
+    val desc_second: String = "",
+    val jump_url: String = ""
+)
+
+@Serializable
+data class DynamicAdditionalReserve(
+    val title: String = "",
+    val state: Int = 0,
+    val desc1: DynamicAdditionalText? = null,
+    val desc2: DynamicAdditionalText? = null,
+    val desc3: DynamicAdditionalText? = null,
+    val button: DynamicCardButton? = null,
+    val jump_url: String = "",
+    @Serializable(with = FlexibleLongSerializer::class)
+    val reserve_total: Long = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val rid: Long = 0,
+    val stype: Int = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val up_mid: Long = 0
+)
+
+@Serializable
+data class DynamicReserveClickResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: DynamicReserveClickData? = null,
+)
+
+@Serializable
+data class DynamicReserveClickData(
+    val desc_update: String = "",
+    @Serializable(with = FlexibleLongSerializer::class)
+    val reserve_update: Long = 0,
+    @Serializable(with = FlexibleIntSerializer::class)
+    val final_btn_status: Int = 0,
+)
+
+@Serializable
+data class DynamicAdditionalGoods(
+    val head_text: String = "",
+    val items: List<DynamicAdditionalGoodsItem> = emptyList()
+)
+
+@Serializable
+data class DynamicAdditionalGoodsItem(
+    val name: String = "",
+    val brief: String = "",
+    val cover: String = "",
+    val jump_url: String = ""
+)
+
+@Serializable
+data class DynamicAdditionalVote(
+    val desc: String = "",
+    val join_num: Int = 0,
+    val vote_id: Long = 0
+)
+
+@Serializable
+data class DynamicAdditionalMatch(
+    val title: String = "",
+    val sub_title: String = "",
+    val jump_url: String = ""
+)
+
+@Serializable
+data class DynamicAdditionalUpowerLottery(
+    val button: DynamicCardButton? = null,
+    val desc: DynamicAdditionalText? = null,
+    val hint: DynamicAdditionalText? = null,
+    val jump_url: String = "",
+    @Serializable(with = FlexibleLongSerializer::class)
+    val rid: Long = 0,
+    val state: Int = 0,
+    val title: String = "",
+    @Serializable(with = FlexibleLongSerializer::class)
+    val up_mid: Long = 0,
+    val upower_action_state: Int = 0,
+    val upower_level: Int = 0
+)
+
+@Serializable
+data class DynamicCardButton(
+    val jump_style: DynamicCardButtonStyle? = null,
+    val jump_url: String = "",
+    val type: Int = 0,
+    val status: Int = 0,
+    val check: DynamicCardButtonStyle? = null,
+    val uncheck: DynamicCardButtonStyle? = null
+)
+
+@Serializable
+data class DynamicCardButtonStyle(
+    val disable: Int = 0,
+    val icon_url: String = "",
+    val text: String = "",
+    val toast: String = ""
+)
+
+@Serializable
+data class DynamicAdditionalText(
+    val text: String = "",
+    val jump_url: String = "",
 )
 
 @Serializable
@@ -597,15 +1119,25 @@ data class DynamicDesc(
 
 @Serializable
 data class RichTextNode(
-    val type: String = "", // TEXT, EMOJI, AT, TOPIC
+    val type: String = "", // TEXT, EMOJI, AT, TOPIC / RICH_TEXT_NODE_TYPE_*
     val text: String = "",
+    /** 部分接口只填 orig_text；渲染时与 text 互为兜底 */
+    val orig_text: String = "",
     val emoji: EmojiInfo? = null,
-    val jump_url: String? = null
+    val jump_url: String? = null,
+    /** AT 节点对应用户 mid；API 可能给 number，用 flexible string 避免解析失败 */
+    @Serializable(with = FlexibleStringSerializer::class)
+    val rid: String? = null
 )
 
 @Serializable
 data class EmojiInfo(
+    /** 主图；部分接口用 url 字段（评论/表情面板风格） */
+    @JsonNames("url")
     val icon_url: String = "",
+    val webp_url: String = "",
+    val gif_url: String = "",
+    @Serializable(with = FlexibleIntSerializer::class)
     val size: Int = 1,
     val text: String = ""
 )
@@ -618,9 +1150,17 @@ data class DynamicMajor(
     val pgc: ArchiveMajor? = null, // 番剧/影视
     val article: ArticleMajor? = null, // 专栏
     val draw: DrawMajor? = null, // 图片
-    val live_rcmd: LiveRcmdMajor? = null, //  直播
+    val live_rcmd: LiveRcmdMajor? = null, //  直播推荐
+    val live: LiveMajor? = null, // DYNAMIC_TYPE_LIVE
     val opus: OpusMajor? = null, //  [新增] 图文动态 (新版格式)
-    val ugc_season: UgcSeasonMajor? = null // [新增] 合集
+    val ugc_season: UgcSeasonMajor? = null, // [新增] 合集
+    val medialist: MedialistMajor? = null,
+    val courses: CoursesMajor? = null,
+    val subscription_new: SubscriptionNewMajor? = null,
+    val common: CommonMajor? = null,
+    val music: MusicMajor? = null,
+    val none: NoneMajor? = null,
+    val upower_common: UpowerCommonMajor? = null
 )
 
 //  [新增] 图文动态 (MAJOR_TYPE_OPUS) - B站新版图文格式
@@ -635,10 +1175,37 @@ data class OpusMajor(
 )
 
 sealed interface OpusContentBlock {
-    data class Text(val text: String) : OpusContentBlock
+    data class Text(
+        val text: String,
+        val alignment: Int = 0,
+        val richTextNodes: List<RichTextNode> = emptyList(),
+    ) : OpusContentBlock
+    data class Heading(val text: String, val level: Int = 2, val alignment: Int = 0) : OpusContentBlock
+    data class Quote(val text: String, val alignment: Int = 0) : OpusContentBlock
+    data class ListBlock(
+        val items: List<String>,
+        val ordered: Boolean,
+        val alignment: Int = 0,
+    ) : OpusContentBlock
+    data class Code(val text: String, val language: String = "") : OpusContentBlock
+    data class Divider(val pic: OpusPic? = null) : OpusContentBlock
     data class Image(val pic: OpusPic) : OpusContentBlock
     data class LinkCard(val card: OpusLinkCard) : OpusContentBlock
 }
+
+val OpusContentBlock.plainText: String
+    get() = when (this) {
+        is OpusContentBlock.Text -> text
+        is OpusContentBlock.Heading -> text
+        is OpusContentBlock.Quote -> text
+        is OpusContentBlock.ListBlock -> items.mapIndexed { index, item ->
+            if (ordered) "${index + 1}. $item" else "• $item"
+        }.joinToString("\n")
+        is OpusContentBlock.Code -> text
+        is OpusContentBlock.Divider,
+        is OpusContentBlock.Image,
+        is OpusContentBlock.LinkCard -> ""
+    }
 
 @Serializable
 data class OpusLinkCard(
@@ -657,13 +1224,110 @@ data class OpusPic(
     val url: String = "",
     val width: Int = 0,
     val height: Int = 0,
-    val size: Double = 0.0
+    val size: Double = 0.0,
+    val live_url: String? = null,
 )
 
 @Serializable
 data class OpusSummary(
     val text: String = "",
     val rich_text_nodes: List<RichTextNode> = emptyList()
+)
+
+@Serializable
+data class LiveMajor(
+    @Serializable(with = FlexibleStringSerializer::class)
+    val id: String = "",
+    val title: String = "",
+    val cover: String = "",
+    val jump_url: String = "",
+    val desc_first: String = "",
+    val desc_second: String = "",
+    val live_state: Int = 0,
+    val reserve_type: Int = 0,
+    val badge: DynamicMajorBadge? = null
+)
+
+@Serializable
+data class MedialistMajor(
+    @Serializable(with = FlexibleStringSerializer::class)
+    val id: String = "",
+    val title: String = "",
+    val cover: String = "",
+    val jump_url: String = "",
+    val sub_title: String = "",
+    val badge: DynamicMajorBadge? = null,
+)
+
+@Serializable
+data class CoursesMajor(
+    @Serializable(with = FlexibleStringSerializer::class)
+    val id: String = "",
+    val title: String = "",
+    val cover: String = "",
+    val jump_url: String = "",
+    val desc: String = "",
+    val sub_title: String = "",
+    val badge: DynamicMajorBadge? = null
+)
+
+@Serializable
+data class CommonMajor(
+    val badge: DynamicMajorBadge? = null,
+    val biz_type: Int = 0,
+    val cover: String = "",
+    val desc: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    val id: String = "",
+    val jump_url: String = "",
+    val label: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    val sketch_id: String = "",
+    val style: Int = 0,
+    val title: String = ""
+)
+
+@Serializable
+data class MusicMajor(
+    val cover: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    val id: String = "",
+    val jump_url: String = "",
+    val label: String = "",
+    val title: String = ""
+)
+
+@Serializable
+data class NoneMajor(
+    val tips: String = ""
+)
+
+@Serializable
+data class UpowerCommonMajor(
+    val background: DynamicThemeImage? = null,
+    val button: DynamicCardButton? = null,
+    val icon: DynamicThemeImage? = null,
+    val jump_url: String = "",
+    @Serializable(with = FlexibleLongSerializer::class)
+    val rid: Long = 0,
+    val title: String = "",
+    val title_prefix: String = "",
+    val type: Int = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val up_mid: Long = 0,
+    val upower_action_state: Int = 0,
+    val upower_level: Int = 0
+)
+
+@Serializable
+data class DynamicThemeImage(
+    val dark_src: String = "",
+    val light_src: String = ""
+)
+
+@Serializable
+data class SubscriptionNewMajor(
+    val live_rcmd: LiveRcmdMajor? = null
 )
 
 //  直播推荐
@@ -687,7 +1351,9 @@ data class UgcSeasonMajor(
     val sign_state: Int = 0,
     val type: Int = 0, // 1=合集
     val stat: UgcSeasonStat = UgcSeasonStat(),
-    val archive: ArchiveMajor? = null // 播放第一集或最新一集
+    val archive: ArchiveMajor? = null, // 播放第一集或最新一集
+    @Serializable(with = FlexibleLongSerializer::class)
+    val mid: Long = 0 // [新增] UP主真实mid
 )
 
 @Serializable
@@ -749,7 +1415,8 @@ data class DrawMajor(
 data class DrawItem(
     val src: String = "", // 图片 URL
     val width: Int = 0,
-    val height: Int = 0
+    val height: Int = 0,
+    val live_url: String? = null,
 )
 
 @Serializable
@@ -775,7 +1442,10 @@ data class DynamicStatModule(
 data class StatItem(
     val count: Int = 0,
     @Serializable(with = FlexibleBooleanSerializer::class)
-    val forbidden: Boolean = false
+    val forbidden: Boolean = false,
+    /** Server-side interaction state. BiliBili may return 0/1 or a boolean. */
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    val status: Boolean = false,
 )
 
 // --- 动态类型枚举 ---

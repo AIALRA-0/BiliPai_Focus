@@ -8,8 +8,6 @@ import java.util.TimeZone
 object FormatUtils {
     private const val DEFAULT_IMAGE_WIDTH = 640
     private const val DEFAULT_IMAGE_HEIGHT = 400
-    private const val COVER_IMAGE_WIDTH = 480
-    private const val COVER_IMAGE_HEIGHT = 300
     private const val COVER_IMAGE_LOW_WIDTH = 240
     private const val COVER_IMAGE_LOW_HEIGHT = 150
 
@@ -68,7 +66,7 @@ object FormatUtils {
         return if (useLowQuality) {
             buildSizedImageUrl(normalized, width = COVER_IMAGE_LOW_WIDTH, height = COVER_IMAGE_LOW_HEIGHT)
         } else {
-            buildSizedImageUrl(normalized, width = COVER_IMAGE_WIDTH, height = COVER_IMAGE_HEIGHT)
+            normalized
         }
     }
 
@@ -110,33 +108,44 @@ object FormatUtils {
     
     /**
      *  格式化发布时间 (相对时间 + 日期)
-     * 例如: "3小时前" / "昨天" / "2024-01-15"
+     * PiliPlus 全局视频发布时间规则，例如: "3小时前" / "昨天 18:30" / "08-20"
      */
     fun formatPublishTime(
         timestampSeconds: Long,
-        nowMs: Long = System.currentTimeMillis()
+        nowMs: Long = System.currentTimeMillis(),
+        zoneId: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+        locale: Locale = Locale.getDefault(),
     ): String {
         if (timestampSeconds <= 0) return ""
-        
-        val pubTime = timestampSeconds * 1000L
-        val diff = (nowMs - pubTime).coerceAtLeast(0L)
-        
-        val seconds = diff / 1000
-        val minutes = seconds / 60
-        val hours = minutes / 60
-        val days = hours / 24
-        
-        return when {
-            seconds < 60 -> "刚刚"
-            minutes < 60 -> "${minutes}分钟前"
-            hours < 24 -> "${hours}小时前"
-            days == 1L -> "昨天"
-            days < 7 -> "${days}天前"
-            else -> {
-                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                sdf.format(Date(pubTime))
-            }
+
+        val published = java.time.Instant.ofEpochSecond(timestampSeconds).atZone(zoneId)
+        val now = java.time.Instant.ofEpochMilli(nowMs).atZone(zoneId)
+        val elapsedMinutes = java.time.temporal.ChronoUnit.MINUTES
+            .between(published, now)
+            .coerceAtLeast(0L)
+        if (elapsedMinutes < 1L) return "刚刚"
+        if (elapsedMinutes < 60L) return "${elapsedMinutes}分钟前"
+
+        val elapsedHours = java.time.temporal.ChronoUnit.HOURS
+            .between(published, now)
+            .coerceAtLeast(0L)
+        if (elapsedHours < 24L) return "${elapsedHours}小时前"
+
+        val elapsedDays = java.time.temporal.ChronoUnit.DAYS
+            .between(published.toLocalDate(), now.toLocalDate())
+            .coerceAtLeast(0L)
+        if (elapsedDays == 1L) {
+            val time = java.time.format.DateTimeFormatter
+                .ofPattern("HH:mm", locale)
+                .format(published)
+            return "昨天 $time"
         }
+        if (elapsedDays < 4L) return "${elapsedDays}天前"
+
+        val pattern = if (published.year == now.year) "MM-dd" else "yyyy-MM-dd"
+        return java.time.format.DateTimeFormatter
+            .ofPattern(pattern, locale)
+            .format(published)
     }
 
     fun formatPrecisePublishTime(

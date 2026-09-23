@@ -1,10 +1,39 @@
 package com.android.purebilibili.feature.video.ui.section
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class VideoPlayerSeekGesturePolicyTest {
+
+    @Test
+    fun `fullscreen overlay reuses horizontal seek direction policy`() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/FullscreenPlayerOverlay.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/FullscreenPlayerOverlay.kt"),
+        ).first { it.exists() }.readText()
+
+        assertTrue(source.contains("shouldEngageHorizontalPlayerSeek"))
+    }
+
+    @Test
+    fun `player seek requires horizontal dominance over vertical drift`() {
+        assertTrue(
+            shouldEngageHorizontalPlayerSeek(
+                totalDragDistanceX = 80f,
+                totalDragDistanceY = 20f,
+            )
+        )
+        assertFalse(
+            shouldEngageHorizontalPlayerSeek(
+                totalDragDistanceX = 80f,
+                totalDragDistanceY = 70f,
+            )
+        )
+    }
 
     @Test
     fun `fullscreen fixed setting uses precise proportional range`() {
@@ -18,7 +47,7 @@ class VideoPlayerSeekGesturePolicyTest {
             gestureSensitivity = 1f
         )
 
-        assertEquals(3_000L, delta)
+        assertEquals(6_000L, delta)
     }
 
     @Test
@@ -63,7 +92,7 @@ class VideoPlayerSeekGesturePolicyTest {
             gestureSensitivity = 1.2f
         )
 
-        assertEquals(2_250L, delta)
+        assertEquals(4_500L, delta)
     }
 
     @Test
@@ -93,7 +122,32 @@ class VideoPlayerSeekGesturePolicyTest {
             gestureSensitivity = 1f
         )
 
-        assertEquals(250L, delta)
+        assertEquals(500L, delta)
+    }
+
+    @Test
+    fun `configured seek range reaches selected maximum after half screen drag`() {
+        val fullscreenDelta = resolveHorizontalSeekDeltaMs(
+            isFullscreen = true,
+            fullscreenSwipeSeekEnabled = true,
+            totalDragDistanceX = 400f,
+            containerWidthPx = 800f,
+            fullscreenSwipeSeekSeconds = 30,
+            inlineSwipeSeekSeconds = 60,
+            gestureSensitivity = 1f
+        )
+        val inlineDelta = resolveHorizontalSeekDeltaMs(
+            isFullscreen = false,
+            fullscreenSwipeSeekEnabled = true,
+            totalDragDistanceX = 400f,
+            containerWidthPx = 800f,
+            fullscreenSwipeSeekSeconds = 30,
+            inlineSwipeSeekSeconds = 60,
+            gestureSensitivity = 1f
+        )
+
+        assertEquals(30_000L, fullscreenDelta)
+        assertEquals(60_000L, inlineDelta)
     }
 
     @Test
@@ -125,6 +179,34 @@ class VideoPlayerSeekGesturePolicyTest {
             shouldCommitGestureSeek(
                 currentPositionMs = 100_000L,
                 targetPositionMs = 102_000L
+            )
+        )
+    }
+
+    @Test
+    fun `seek step haptic ticks once per second of target progress`() {
+        assertFalse(
+            shouldTriggerSeekStepHaptic(
+                previousTargetMs = 10_200L,
+                currentTargetMs = 10_800L
+            )
+        )
+        assertTrue(
+            shouldTriggerSeekStepHaptic(
+                previousTargetMs = 10_200L,
+                currentTargetMs = 11_100L
+            )
+        )
+        assertTrue(
+            shouldTriggerSeekStepHaptic(
+                previousTargetMs = 11_100L,
+                currentTargetMs = 9_900L
+            )
+        )
+        assertFalse(
+            shouldTriggerSeekStepHaptic(
+                previousTargetMs = 5_000L,
+                currentTargetMs = 5_000L
             )
         )
     }

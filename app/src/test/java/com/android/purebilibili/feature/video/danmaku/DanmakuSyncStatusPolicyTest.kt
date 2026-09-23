@@ -69,6 +69,19 @@ class DanmakuSyncStatusPolicyTest {
     }
 
     @Test
+    fun cloudSyncGate_requiresLoginAndEnabledToggle() {
+        assertTrue(shouldSyncDanmakuSettingsToCloud(isLoggedIn = true, cloudSyncEnabled = true))
+        assertFalse(shouldSyncDanmakuSettingsToCloud(isLoggedIn = false, cloudSyncEnabled = true))
+        assertFalse(shouldSyncDanmakuSettingsToCloud(isLoggedIn = true, cloudSyncEnabled = false))
+    }
+
+    @Test
+    fun cloudSyncToggleSubtitle_explainsCrossDeviceImpact() {
+        assertTrue(resolveDanmakuCloudSyncToggleSubtitle(enabled = true).contains("网页版"))
+        assertTrue(resolveDanmakuCloudSyncToggleSubtitle(enabled = false).contains("本机"))
+    }
+
+    @Test
     fun newerManualRequest_bypassesDebounceGate() {
         assertTrue(
             shouldRunDanmakuManualCloudSync(

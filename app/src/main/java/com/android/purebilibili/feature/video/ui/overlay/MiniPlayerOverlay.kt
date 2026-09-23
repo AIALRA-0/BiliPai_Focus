@@ -1,5 +1,7 @@
 // 文件路径: feature/video/MiniPlayerOverlay.kt
 package com.android.purebilibili.feature.video.ui.overlay
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.core.util.Logger
@@ -7,27 +9,30 @@ import com.android.purebilibili.core.util.Logger
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -41,15 +46,26 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.ui.PlayerView
+import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.rememberAppClearIcon
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardDefaults
+import com.android.purebilibili.core.ui.components.AppCardShape
+import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
-//  已改用 MaterialTheme.colorScheme.primary
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.motion.iosMorphTween
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 
 private const val TAG = "MiniPlayerOverlay"
 private const val AUTO_HIDE_DELAY_MS = 3000L
+private const val MINI_PLAYER_VISIBILITY_DURATION_MILLIS = 280
 
 /**
  *  小窗播放器覆盖层
@@ -66,9 +82,9 @@ private const val AUTO_HIDE_DELAY_MS = 3000L
 fun MiniPlayerOverlay(
     miniPlayerManager: MiniPlayerManager,
     onExpandClick: () -> Unit,
+    onPictureInPictureClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val clearIcon = rememberAppClearIcon()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
@@ -89,17 +105,60 @@ fun MiniPlayerOverlay(
     
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
+    val playerChromeProfile = rememberAppPlayerChromeProfile()
+    val reduceMotion = rememberSystemReduceMotion()
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveMiniPlayerOverlayLayoutPolicy(
             widthDp = configuration.screenWidthDp
         )
     }
+    val shellVisual = remember(layoutPolicy, playerChromeProfile) {
+        resolveMiniPlayerOverlayShellVisual(
+            layout = layoutPolicy,
+            chromeProfile = playerChromeProfile,
+        )
+    }
+    val accentColor = if (shellVisual.useThemePrimaryAccent) {
+        AppSurfaceTokens.primary()
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
 
-    val miniPlayerWidth = layoutPolicy.miniPlayerWidthDp.dp
-    val miniPlayerHeight = layoutPolicy.miniPlayerHeightDp.dp
     val padding = layoutPolicy.outerPaddingDp.dp
     val headerHeight = layoutPolicy.headerHeightDp.dp // 顶部可拖动区域高度
     val touchSlopPx = LocalViewConfiguration.current.touchSlop
+    val resizeBounds = remember(configuration.screenWidthDp, configuration.screenHeightDp, layoutPolicy) {
+        resolveMiniPlayerResizeBounds(
+            defaultWidthDp = layoutPolicy.miniPlayerWidthDp,
+            defaultHeightDp = layoutPolicy.miniPlayerHeightDp,
+            screenWidthDp = configuration.screenWidthDp,
+            screenHeightDp = configuration.screenHeightDp,
+            outerPaddingDp = layoutPolicy.outerPaddingDp,
+            topInsetDp = layoutPolicy.dragTopInsetDp,
+            bottomInsetDp = layoutPolicy.dragBottomInsetDp
+        )
+    }
+    var miniPlayerWidthDp by rememberSaveable(configuration.screenWidthDp) {
+        mutableFloatStateOf(layoutPolicy.miniPlayerWidthDp.toFloat())
+    }
+    LaunchedEffect(resizeBounds) {
+        miniPlayerWidthDp = miniPlayerWidthDp.coerceIn(
+            resizeBounds.minWidthDp,
+            resizeBounds.maxWidthDp
+        )
+    }
+    val adaptiveDimensions = remember(miniPlayerManager.videoAspectRatio, miniPlayerWidthDp, layoutPolicy) {
+        resolveAdaptiveMiniPlayerDimensions(
+            videoAspectRatio = miniPlayerManager.videoAspectRatio,
+            currentWidthDp = miniPlayerWidthDp,
+            defaultHeightDp = layoutPolicy.miniPlayerHeightDp.toFloat()
+        )
+    }
+    val miniPlayerAspectRatio = adaptiveDimensions.aspectRatio
+    val miniPlayerWidthDpEffective = adaptiveDimensions.widthDp
+    val miniPlayerHeightDp = adaptiveDimensions.heightDp
+    val miniPlayerWidth = miniPlayerWidthDpEffective.dp
+    val miniPlayerHeight = miniPlayerHeightDp.dp
 
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
@@ -125,11 +184,9 @@ fun MiniPlayerOverlay(
         dragTopInsetPx,
         dragBottomInsetPx
     ) {
-        clampMiniPlayerOverlayOffset(
-            offsetX = cardBounds?.left
-                ?: if (entryFromLeft) paddingPx else screenWidthPx - miniPlayerWidthPx - paddingPx,
-            offsetY = cardBounds?.top
-                ?: (screenHeightPx - miniPlayerHeightPx - paddingPx - dragBottomInsetPx),
+        resolveMiniPlayerInitialOverlayOffset(
+            cardLeftPx = cardBounds?.left,
+            entryFromLeft = entryFromLeft,
             screenWidthPx = screenWidthPx,
             screenHeightPx = screenHeightPx,
             miniPlayerWidthPx = miniPlayerWidthPx,
@@ -165,9 +222,16 @@ fun MiniPlayerOverlay(
     
     // 位置拖动状态
     var isDraggingPosition by remember { mutableStateOf(false) }
+    var isResizing by remember { mutableStateOf(false) }
     var contentDragIntent by remember { mutableStateOf(MiniPlayerContentDragIntent.UNDECIDED) }
     var contentDragTotalX by remember { mutableFloatStateOf(0f) }
     var contentDragTotalY by remember { mutableFloatStateOf(0f) }
+    val chrome = resolveMiniPlayerOverlayChrome(
+        showControls = showControls,
+        isDraggingProgress = isDraggingProgress,
+        isDraggingPosition = isDraggingPosition,
+        isResizing = isResizing
+    )
     
     // 播放器状态
     //  [修复] 在退出动画期间保持旧 Player 引用，防止画面跳变
@@ -209,7 +273,7 @@ fun MiniPlayerOverlay(
     
     // 自动隐藏控制按钮
     LaunchedEffect(showControls, lastInteractionTime) {
-        if (showControls && !isDraggingPosition && !isDraggingProgress) {
+        if (showControls && !isDraggingPosition && !isDraggingProgress && !isResizing) {
             delay(AUTO_HIDE_DELAY_MS)
             if (System.currentTimeMillis() - lastInteractionTime >= AUTO_HIDE_DELAY_MS) {
                 showControls = false
@@ -233,7 +297,7 @@ fun MiniPlayerOverlay(
     val targetOffsetY = if (isStashed) stashedOffsetY else offsetY
 
     fun clampCurrentOffset() {
-        val clamped = clampMiniPlayerOverlayOffset(
+        val clamped = resolveMiniPlayerOffsetAfterSizeChanged(
             offsetX = offsetX,
             offsetY = offsetY,
             screenWidthPx = screenWidthPx,
@@ -273,44 +337,69 @@ fun MiniPlayerOverlay(
         clampCurrentOffset()
     }
 
+    LaunchedEffect(
+        miniPlayerWidthPx,
+        miniPlayerHeightPx,
+        screenWidthPx,
+        screenHeightPx
+    ) {
+        clampCurrentOffset()
+    }
+
     val animatedOffsetX by animateFloatAsState(
         targetValue = targetOffsetX,
-        animationSpec = if (isDraggingPosition) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
+            snap()
+        } else {
+            spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)
+        },
         label = "offsetX"
     )
     val animatedOffsetY by animateFloatAsState(
         targetValue = targetOffsetY,
-        animationSpec = if (isDraggingPosition) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
+            snap()
+        } else {
+            spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)
+        },
         label = "offsetY"
     )
 
+    val visibilitySlideSpec: FiniteAnimationSpec<IntOffset> =
+        iosMorphTween(MINI_PLAYER_VISIBILITY_DURATION_MILLIS)
+    val visibilityFadeSpec: FiniteAnimationSpec<Float> =
+        iosMorphTween(if (reduceMotion) 160 else MINI_PLAYER_VISIBILITY_DURATION_MILLIS)
+    val enterTransition = if (reduceMotion) {
+        fadeIn(animationSpec = visibilityFadeSpec)
+    } else {
+        (when (cardPosition) {
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT ->
+                slideInHorizontally(animationSpec = visibilitySlideSpec, initialOffsetX = { -it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT ->
+                slideInHorizontally(animationSpec = visibilitySlideSpec, initialOffsetX = { it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE ->
+                slideInVertically(animationSpec = visibilitySlideSpec, initialOffsetY = { -it })
+        }) + fadeIn(animationSpec = visibilityFadeSpec)
+    }
+    val exitTransition = if (!miniPlayerManager.shouldAnimateExit) {
+        ExitTransition.None
+    } else if (reduceMotion) {
+        fadeOut(animationSpec = visibilityFadeSpec)
+    } else {
+        (when (cardPosition) {
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT ->
+                slideOutHorizontally(animationSpec = visibilitySlideSpec, targetOffsetX = { -it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT ->
+                slideOutHorizontally(animationSpec = visibilitySlideSpec, targetOffsetX = { it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE ->
+                slideOutVertically(animationSpec = visibilitySlideSpec, targetOffsetY = { -it })
+        }) + fadeOut(animationSpec = visibilityFadeSpec)
+    }
+
     AnimatedVisibility(
         visible = miniPlayerManager.isMiniMode && miniPlayerManager.isActive,
-        //  [修改] 根据卡片在屏幕中的水平分块决定动画方向
-        //  Left: 从左往右飞出 (SlideIn Left)
-        //  Right: 从右往左飞出 (SlideIn Right)
-        //  Middle: 从上往下飞出 (SlideIn Top)
-        enter = (when (cardPosition) {
-            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT -> 
-                slideInHorizontally(initialOffsetX = { -it }) // 从左侧滑入
-            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT -> 
-                slideInHorizontally(initialOffsetX = { it })  // 从右侧滑入
-            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE -> 
-                slideInVertically(initialOffsetY = { -it })   // 从顶部滑入
-        }) + fadeIn(),
-        
-        exit = if (miniPlayerManager.shouldAnimateExit) {
-            (when (cardPosition) {
-                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT -> 
-                    slideOutHorizontally(targetOffsetX = { -it })
-                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT -> 
-                    slideOutHorizontally(targetOffsetX = { it })
-                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE -> 
-                    slideOutVertically(targetOffsetY = { -it })
-            }) + fadeOut()
-        } else {
-            ExitTransition.None
-        },
+        enter = enterTransition,
+        exit = exitTransition,
             modifier = modifier.zIndex(100f)
     ) {
         if (isStashed) {
@@ -320,6 +409,8 @@ fun MiniPlayerOverlay(
                     .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                     .zIndex(101f),
                 layoutPolicy = layoutPolicy,
+                shellVisual = shellVisual,
+                accentColor = accentColor,
                 side = stashSide,
                 onUnstash = {
                     isStashed = false
@@ -342,18 +433,57 @@ fun MiniPlayerOverlay(
             )
         } else {
             // 正常播放器视图
-            Card(
+            val miniPlayerCornerRadius = shellVisual.cardCornerRadiusDp.dp
+            val miniPlayerShape = RoundedCornerShape(miniPlayerCornerRadius)
+            AppCard(
                 modifier = Modifier
                     .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                     .width(miniPlayerWidth)
                     .height(miniPlayerHeight)
                     .shadow(
-                        layoutPolicy.cardShadowDp.dp,
-                        RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp)
-                    ),
-                shape = RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.Black),
-                elevation = CardDefaults.cardElevation(defaultElevation = layoutPolicy.cardElevationDp.dp)
+                        shellVisual.cardShadowDp.dp,
+                        miniPlayerShape,
+                    )
+                    .then(
+                        if (shellVisual.cardElevationDp > 0) {
+                            // MD3 keeps its existing card elevation; the MIUIX policy resolves to 0.
+                            Modifier.shadow(shellVisual.cardElevationDp.dp, miniPlayerShape)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .pointerInput(resizeBounds) {
+                        awaitEachGesture {
+                            var isPinching = false
+                            do {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val activePointers = event.changes.filter { it.pressed }
+                                if (activePointers.size >= 2) {
+                                    val zoom = event.calculateZoom()
+                                    if (zoom != 1f) {
+                                        miniPlayerWidthDp = (miniPlayerWidthDp * zoom).coerceIn(
+                                            resizeBounds.minWidthDp,
+                                            resizeBounds.maxWidthDp
+                                        )
+                                    }
+                                    isPinching = true
+                                    isResizing = true
+                                    showControls = true
+                                    activePointers.forEach { it.consume() }
+                                } else if (isPinching) {
+                                    activePointers.forEach { it.consume() }
+                                }
+                            } while (event.changes.any { it.pressed })
+
+                            if (isPinching) {
+                                isResizing = false
+                                clampCurrentOffset()
+                                lastInteractionTime = System.currentTimeMillis()
+                            }
+                        }
+                    },
+                shape = AppCardShape.Uniform(miniPlayerCornerRadius),
+                colors = AppCardDefaults.colors(containerColor = Color.Black),
             ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // 视频画面
@@ -369,7 +499,7 @@ fun MiniPlayerOverlay(
                         update = { view -> view.player = exoPlayer },
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp))
+                            .clip(RoundedCornerShape(shellVisual.cardCornerRadiusDp.dp))
                             //  视频区域：左右滑动调节进度（直播模式禁用）
                             .pointerInput(miniPlayerManager.isLiveMode, miniPlayerWidthPx, duration, touchSlopPx) {
                                 detectDragGestures(
@@ -397,10 +527,12 @@ fun MiniPlayerOverlay(
                                                 isDraggingProgress = false
                                                 dragProgressDelta = 0f
                                                 dragProgressStartPosition = 0L
+                                                lastInteractionTime = System.currentTimeMillis()
                                             }
                                             MiniPlayerContentDragIntent.MOVE -> {
                                                 isDraggingPosition = false
                                                 snapMiniPlayerToNearestHorizontalEdge()
+                                                lastInteractionTime = System.currentTimeMillis()
                                             }
                                             MiniPlayerContentDragIntent.UNDECIDED -> Unit
                                         }
@@ -413,6 +545,7 @@ fun MiniPlayerOverlay(
                                         isDraggingPosition = false
                                         dragProgressDelta = 0f
                                         dragProgressStartPosition = 0L
+                                        lastInteractionTime = System.currentTimeMillis()
                                         contentDragIntent = MiniPlayerContentDragIntent.UNDECIDED
                                         contentDragTotalX = 0f
                                         contentDragTotalY = 0f
@@ -477,14 +610,6 @@ fun MiniPlayerOverlay(
                         .fillMaxWidth()
                         .height(headerHeight)
                         .align(Alignment.TopCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.6f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
                         .pointerInput(Unit) {
                             detectDragGestures(
                                 onDragStart = {
@@ -495,9 +620,11 @@ fun MiniPlayerOverlay(
                                 onDragEnd = {
                                     isDraggingPosition = false
                                     snapMiniPlayerToNearestHorizontalEdge()
+                                    lastInteractionTime = System.currentTimeMillis()
                                 },
                                 onDragCancel = {
                                     isDraggingPosition = false
+                                    lastInteractionTime = System.currentTimeMillis()
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
@@ -506,94 +633,130 @@ fun MiniPlayerOverlay(
                             )
                         }
                 ) {
-                    // 标题
-                    Text(
-                        text = miniPlayerManager.currentTitle,
-                        color = Color.White,
-                        fontSize = layoutPolicy.titleFontSp.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(
-                                start = layoutPolicy.titleStartPaddingDp.dp,
-                                end = layoutPolicy.titleEndPaddingDp.dp
-                            )
-                    )
-                    
-                    //  右上角按钮组
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = layoutPolicy.headerButtonRowEndPaddingDp.dp),
-                        horizontalArrangement = Arrangement.spacedBy(layoutPolicy.headerButtonSpacingDp.dp)
-                    ) {
-                        // [新增] 贴边隐藏按钮
-                        Surface(
-                            onClick = {
-                                // 计算最近的边
-                                val centerX = offsetX + miniPlayerWidthPx / 2
-                                stashSide = if (centerX < screenWidthPx / 2) {
-                                    com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
-                                } else {
-                                    com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT
-                                }
-                                stashedOffsetY = offsetY
-                                isStashed = true
-                            },
-                            modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.5f)
-                        ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Default.Minus, // 使用 Minus 图标作为隐藏/最小化
-                                contentDescription = "隐藏",
-                                tint = Color.White,
+                    if (chrome.showHeaderChrome) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.6f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+
+                        // 标题 - 仅在宽度充裕时显示，避免竖屏窄卡片被顶满/遮挡
+                        if (miniPlayerWidthDpEffective >= 180f) {
+                            AppText(
+                                text = miniPlayerManager.currentTitle,
+                                color = Color.White,
+                                fontSize = layoutPolicy.titleFontSp.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier
-                                    .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
-                                    .size(layoutPolicy.headerButtonIconSizeDp.dp)
+                                    .align(Alignment.CenterStart)
+                                    .padding(
+                                        start = layoutPolicy.titleStartPaddingDp.dp,
+                                        end = layoutPolicy.titleEndPaddingDp.dp
+                                    )
                             )
                         }
 
-                        // 展开按钮
-                        Surface(
-                            onClick = { onExpandClick() },
-                            modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.5f)
+                        //  右上角按钮组
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = layoutPolicy.headerButtonRowEndPaddingDp.dp),
+                            horizontalArrangement = Arrangement.spacedBy(layoutPolicy.headerButtonSpacingDp.dp)
                         ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
-                                contentDescription = "展开",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
-                                    .size(layoutPolicy.headerButtonIconSizeDp.dp)
-                            )
-                        }
-                        
-                        // 关闭按钮
-                        Surface(
-                            onClick = { miniPlayerManager.dismiss() },
-                            modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
-                            shape = CircleShape,
-                            color = com.android.purebilibili.core.theme.iOSRed.copy(alpha = 0.7f)
-                        ) {
-                            Icon(
-                                imageVector = clearIcon,
-                                contentDescription = "关闭",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
-                                    .size(layoutPolicy.headerButtonIconSizeDp.dp)
-                            )
+                            // [新增] 贴边隐藏按钮
+                            AppSurface(
+                                onClick = {
+                                    // 计算最近的边
+                                    val centerX = offsetX + miniPlayerWidthPx / 2
+                                    stashSide = if (centerX < screenWidthPx / 2) {
+                                        com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
+                                    } else {
+                                        com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT
+                                    }
+                                    stashedOffsetY = offsetY
+                                    isStashed = true
+                                },
+                                modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.5f)
+                            ) {
+                                AppIcon(
+                                    imageVector = Icons.Outlined.Remove, // 使用 Remove 图标作为隐藏/最小化
+                                    contentDescription = "隐藏",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
+                                        .size(layoutPolicy.headerButtonIconSizeDp.dp)
+                                )
+                            }
+
+                            // 展开按钮（画中画）- 在极窄竖屏时收起以保证基础控制按键间距
+                            if (onPictureInPictureClick != null && miniPlayerWidthDpEffective >= 140f) {
+                                AppSurface(
+                                    onClick = onPictureInPictureClick,
+                                    modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.5f)
+                                ) {
+                                    AppIcon(
+                                        imageVector = Icons.Outlined.PictureInPictureAlt,
+                                        contentDescription = "切换到画中画",
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
+                                            .size(layoutPolicy.headerButtonIconSizeDp.dp)
+                                    )
+                                }
+                            }
+
+                            // 展开按钮
+                            AppSurface(
+                                onClick = { onExpandClick() },
+                                modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.5f)
+                            ) {
+                                AppIcon(
+                                    imageVector = Icons.Outlined.FullscreenExit,
+                                    contentDescription = "展开",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
+                                        .size(layoutPolicy.headerButtonIconSizeDp.dp)
+                                )
+                            }
+
+                            // 关闭按钮
+                            AppSurface(
+                                onClick = { miniPlayerManager.dismiss() },
+                                modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
+                                shape = CircleShape,
+                                color = com.android.purebilibili.core.theme.iOSRed.copy(alpha = 0.7f)
+                            ) {
+                                AppIcon(
+                                    imageVector = clearIcon,
+                                    contentDescription = "关闭",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
+                                        .size(layoutPolicy.headerButtonIconSizeDp.dp)
+                                )
+                            }
                         }
                     }
                 }
 
                 // 控制层 - 播放按钮等（位于中间和底部）
-                if (showControls || isDraggingProgress) {
+                if (chrome.showCenterControls) {
                     // 底部渐变
                     Box(
                         modifier = Modifier
@@ -608,17 +771,17 @@ fun MiniPlayerOverlay(
                     )
 
                     // 播放/暂停按钮
-                    Surface(
+                    AppSurface(
                         onClick = { 
                             lastInteractionTime = System.currentTimeMillis()
                             player?.let { if (it.isPlaying) it.pause() else it.play() }
                         },
                         modifier = Modifier.align(Alignment.Center),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                        color = accentColor.copy(alpha = 0.9f)
                     ) {
-                        Icon(
-                            imageVector = if (isPlaying) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
+                        AppIcon(
+                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (isPlaying) "暂停" else "播放",
                             tint = Color.White,
                             modifier = Modifier
@@ -628,16 +791,16 @@ fun MiniPlayerOverlay(
                     }
                     
                     // 底部提示
-                    if (isDraggingProgress) {
-                        Surface(
+                    if (chrome.showSeekHint) {
+                        AppSurface(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = layoutPolicy.seekHintBottomPaddingDp.dp),
-                            shape = RoundedCornerShape(layoutPolicy.seekHintCornerRadiusDp.dp),
+                            shape = RoundedCornerShape(shellVisual.seekHintCornerRadiusDp.dp),
                             color = Color.Black.copy(alpha = 0.7f)
                         ) {
                             val timeText = "${formatMiniTime(seekPreviewPosition)} / ${formatMiniTime(duration)}"
-                            Text(
+                            AppText(
                                 text = timeText,
                                 color = Color.White,
                                 fontSize = layoutPolicy.seekHintFontSp.sp,
@@ -648,8 +811,8 @@ fun MiniPlayerOverlay(
                                 )
                             )
                         }
-                    } else if (!isDraggingPosition) {
-                        Text(
+                    } else if (chrome.showDragHint) {
+                        AppText(
                             text = if (miniPlayerManager.isLiveMode) "拖动小窗移动 | 双击展开" else "拖动小窗移动 | 左右滑动调进度",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = layoutPolicy.dragHintFontSp.sp,
@@ -668,7 +831,7 @@ fun MiniPlayerOverlay(
                                 .padding(start = 8.dp, top = 8.dp)
                                 .background(
                                     color = Color(0xFFFF4444).copy(alpha = 0.9f),
-                                    shape = RoundedCornerShape(4.dp)
+                                    shape = AppShapes.container(ContainerLevel.Tag)
                                 )
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
@@ -678,10 +841,10 @@ fun MiniPlayerOverlay(
                                     .background(Color.White, CircleShape)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(
+                            AppText(
                                 text = "直播",
                                 color = Color.White,
-                                fontSize = 10.sp,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -689,22 +852,75 @@ fun MiniPlayerOverlay(
                 }
 
                 // 进度条 - 仅视频模式显示（直播没有进度）
-                if (!miniPlayerManager.isLiveMode) {
-                LinearProgressIndicator(
+                if (!miniPlayerManager.isLiveMode && chrome.showProgressBar) {
+                AppLinearProgressIndicator(
                     progress = { currentProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(layoutPolicy.progressBarHeightDp.dp)
                         .align(Alignment.BottomCenter)
+                        .alpha(chrome.progressBarAlpha)
                         .clip(
                             RoundedCornerShape(
-                                bottomStart = layoutPolicy.cardCornerRadiusDp.dp,
-                                bottomEnd = layoutPolicy.cardCornerRadiusDp.dp
+                                bottomStart = shellVisual.cardCornerRadiusDp.dp,
+                                bottomEnd = shellVisual.cardCornerRadiusDp.dp
                             )
                         ),
-                    color = if (isDraggingProgress) Color.Yellow else MaterialTheme.colorScheme.primary,
+                    color = if (isDraggingProgress) Color.Yellow else accentColor,
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
+                }
+
+                if (chrome.showResizeHandle) {
+                    AppSurface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(48.dp)
+                            .pointerInput(resizeBounds, miniPlayerAspectRatio) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        isResizing = true
+                                        showControls = true
+                                        lastInteractionTime = System.currentTimeMillis()
+                                    },
+                                    onDragEnd = {
+                                        isResizing = false
+                                        clampCurrentOffset()
+                                        lastInteractionTime = System.currentTimeMillis()
+                                    },
+                                    onDragCancel = {
+                                        isResizing = false
+                                        clampCurrentOffset()
+                                        lastInteractionTime = System.currentTimeMillis()
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        val currentWidthPx = with(density) { miniPlayerWidthDp.dp.toPx() }
+                                        val resizedWidthPx = resolveResizedMiniPlayerWidth(
+                                            currentWidthPx = currentWidthPx,
+                                            dragDeltaX = dragAmount.x,
+                                            dragDeltaY = dragAmount.y,
+                                            aspectRatio = miniPlayerAspectRatio,
+                                            minWidthPx = with(density) { resizeBounds.minWidthDp.dp.toPx() },
+                                            maxWidthPx = with(density) { resizeBounds.maxWidthDp.dp.toPx() }
+                                        )
+                                        miniPlayerWidthDp = with(density) { resizedWidthPx.toDp().value }
+                                    }
+                                )
+                            },
+                        shape = AppShapes.diagonalTopStartBottomEnd(
+                            topStart = AppShapes.containerCornerDp(ContainerLevel.Card),
+                            bottomEnd = shellVisual.cardCornerRadiusDp.dp,
+                        ),
+                        color = Color.Black.copy(alpha = 0.35f)
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.FullscreenExit,
+                            contentDescription = "拖动调整小窗大小",
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.padding(15.dp)
+                        )
+                    }
                 }
             }
         }
@@ -719,25 +935,23 @@ fun MiniPlayerOverlay(
 private fun StashedMiniPlayerView(
     modifier: Modifier,
     layoutPolicy: MiniPlayerOverlayLayoutPolicy,
+    shellVisual: MiniPlayerOverlayShellVisual,
+    accentColor: Color,
     side: com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition,
     onUnstash: () -> Unit,
     onDrag: (Float) -> Unit
 ) {
     val isLeft = side == com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
     // 形状：贴边的一侧是平的，另一侧是圆的
+    val stashedCorner =
+        shellVisual.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp
     val shape = if (isLeft) {
-        RoundedCornerShape(
-            topEnd = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp,
-            bottomEnd = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp
-        )
+        AppShapes.endRounded(stashedCorner)
     } else {
-        RoundedCornerShape(
-            topStart = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp,
-            bottomStart = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp
-        )
+        AppShapes.startRounded(stashedCorner)
     }
 
-    Surface(
+    AppSurface(
         modifier = modifier
             .width(layoutPolicy.stashedWidthDp.dp)
             .height(layoutPolicy.stashedHeightDp.dp)
@@ -750,12 +964,16 @@ private fun StashedMiniPlayerView(
                 )
         },
         shape = shape,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-        shadowElevation = layoutPolicy.stashedShadowDp.dp,
+        color = accentColor.copy(alpha = 0.9f),
+        shadowElevation = if (shellVisual.useThemePrimaryAccent) {
+            (layoutPolicy.stashedShadowDp * 0.55f).dp
+        } else {
+            layoutPolicy.stashedShadowDp.dp
+        },
         onClick = onUnstash
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(
+            AppIcon(
                 imageVector = if (isLeft) Icons.Filled.ChevronRight else Icons.Filled.ChevronLeft,
                 contentDescription = "Show",
                 tint = Color.White,

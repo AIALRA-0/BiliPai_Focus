@@ -2,10 +2,14 @@ package com.android.purebilibili.feature.home
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.core.store.HomeCardInfoGlassMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
+import com.android.purebilibili.core.store.HomeWallpaperEffectScope
+import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class HomeGlassVisualPolicyTest {
@@ -89,9 +93,35 @@ class HomeGlassVisualPolicyTest {
     }
 
     @Test
-    fun refreshTipKeepsGlassStyleWhenAnyBackdropEffectIsActive() {
+    fun refreshTipUsesPlainMaterialStyleWhenLiquidGlassIsDisabledEvenIfBlurIsActive() {
         val appearance = resolveHomeRefreshTipAppearance(
             liquidGlassEnabled = false,
+            blurEnabled = true
+        )
+
+        assertEquals(HomeRefreshTipSurfaceStyle.PLAIN, appearance.surfaceStyle)
+        assertEquals(0f, appearance.borderWidthDp)
+        assertEquals(1f, appearance.tonalElevationDp)
+        assertEquals(1f, appearance.shadowElevationDp)
+    }
+
+    @Test
+    fun refreshTipUsesPlainMaterialStyleWhenLiquidGlassIsEnabledButBlurIsDisabled() {
+        val appearance = resolveHomeRefreshTipAppearance(
+            liquidGlassEnabled = true,
+            blurEnabled = false
+        )
+
+        assertEquals(HomeRefreshTipSurfaceStyle.PLAIN, appearance.surfaceStyle)
+        assertEquals(0f, appearance.borderWidthDp)
+        assertEquals(1f, appearance.tonalElevationDp)
+        assertEquals(1f, appearance.shadowElevationDp)
+    }
+
+    @Test
+    fun refreshTipKeepsGlassStyleWhenLiquidGlassAndBlurAreEnabled() {
+        val appearance = resolveHomeRefreshTipAppearance(
+            liquidGlassEnabled = true,
             blurEnabled = true
         )
 
@@ -186,6 +216,195 @@ class HomeGlassVisualPolicyTest {
     }
 
     @Test
+    fun globalHomeWallpaperBackdropVisibility_followsScopeAndRoute() {
+        assertFalse(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.HOME_ONLY,
+                currentRoute = "dynamic",
+            )
+        )
+        assertFalse(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                currentRoute = "home",
+            )
+        )
+        assertTrue(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                currentRoute = "chat/123/1?name=UP主",
+            )
+        )
+        assertFalse(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                currentRoute = "dynamic",
+            )
+        )
+        assertFalse(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                currentRoute = "message/reply_me",
+            )
+        )
+        assertFalse(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                currentRoute = null,
+            )
+        )
+        assertFalse(
+            shouldExposeGlobalHomeWallpaperChrome(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                hasWallpaperUri = true,
+                currentRoute = "history",
+            )
+        )
+        assertFalse(
+            shouldExposeGlobalHomeWallpaperChrome(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                hasWallpaperUri = false,
+                currentRoute = "history",
+            )
+        )
+        assertEquals("home", resolveGlobalHomeWallpaperRoute("main_host", "home"))
+        assertEquals("dynamic", resolveGlobalHomeWallpaperRoute("main_host", "dynamic"))
+        assertEquals("video/BV1", resolveGlobalHomeWallpaperRoute("video/BV1", "home"))
+        assertFalse(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                currentRoute = "main_host",
+                mainHostTabRoute = "home",
+            )
+        )
+        assertFalse(
+            shouldRenderGlobalHomeWallpaperBackdrop(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                currentRoute = "main_host",
+                mainHostTabRoute = "dynamic",
+            )
+        )
+        assertFalse(
+            shouldExposeGlobalHomeWallpaperChrome(
+                effectScope = HomeWallpaperEffectScope.GLOBAL,
+                hasWallpaperUri = true,
+                currentRoute = "main_host",
+                mainHostTabRoute = "history",
+            )
+        )
+    }
+
+    @Test
+    fun globalHomeWallpaperDoesNotFollowVideoCardDepth() {
+        assertFalse(
+            shouldApplyVideoCardDepthToGlobalHomeWallpaper(
+                wallpaperVisible = true,
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+            )
+        )
+        assertFalse(
+            shouldApplyVideoCardDepthToGlobalHomeWallpaper(
+                wallpaperVisible = true,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+            )
+        )
+        assertFalse(
+            shouldApplyVideoCardDepthToGlobalHomeWallpaper(
+                wallpaperVisible = true,
+                phase = VideoCardTransitionBackgroundPhase.HELD,
+            )
+        )
+        assertFalse(
+            shouldApplyVideoCardDepthToGlobalHomeWallpaper(
+                wallpaperVisible = true,
+                phase = VideoCardTransitionBackgroundPhase.RETURNING,
+            )
+        )
+        assertFalse(
+            shouldApplyVideoCardDepthToGlobalHomeWallpaper(
+                wallpaperVisible = false,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+            )
+        )
+    }
+
+    @Test
+    fun globalHomeWallpaperBackdropUsesWeakPresenceProtection() {
+        val homeOnly = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+        val global = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false,
+            globalWallpaper = true
+        )
+
+        assertTrue(global.baseBackgroundAlpha > homeOnly.baseBackgroundAlpha)
+        assertTrue(global.scrimAlpha > homeOnly.scrimAlpha)
+        assertTrue(global.blurRadiusDp < homeOnly.blurRadiusDp)
+        assertTrue(global.blurRadiusDp <= 14f)
+    }
+
+    @Test
+    fun globalHomeWallpaperBackdropGetsMoreConservativeInDataSaver() {
+        val normal = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false,
+            globalWallpaper = true
+        )
+        val dataSaver = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = true,
+            globalWallpaper = true
+        )
+
+        assertTrue(dataSaver.baseBackgroundAlpha > normal.baseBackgroundAlpha)
+        assertTrue(dataSaver.detailAlpha < normal.detailAlpha)
+        assertTrue(dataSaver.blurRadiusDp <= 8f)
+    }
+
+    @Test
+    fun homeWallpaperDecodeSizeCapsLargeScreensAndDataSaver() {
+        assertEquals(
+            1080 to 1920,
+            resolveHomeWallpaperDecodeSizePx(
+                screenWidthDp = 1200,
+                screenHeightDp = 900,
+                density = 3f,
+                isDataSaverActive = false
+            )
+        )
+        assertEquals(
+            720 to 1280,
+            resolveHomeWallpaperDecodeSizePx(
+                screenWidthDp = 1200,
+                screenHeightDp = 900,
+                density = 3f,
+                isDataSaverActive = true
+            )
+        )
+        assertEquals(
+            540 to 960,
+            resolveHomeWallpaperDecodeSizePx(
+                screenWidthDp = 1200,
+                screenHeightDp = 900,
+                density = 3f,
+                isDataSaverActive = false,
+                blurRadiusDp = 24f
+            )
+        )
+    }
+
+    @Test
     fun cardInfoSurfaceLetsWallpaperTintThroughWhenEnabled() {
         val appearance = resolveHomeCardInfoSurfaceAppearance(
             wallpaperTintEnabled = true,
@@ -260,6 +479,104 @@ class HomeGlassVisualPolicyTest {
         )
 
         assertTrue(strongBlur.containerAlpha > softBlur.containerAlpha)
+    }
+
+    @Test
+    fun cardInfoRealtimeBlurAndLiquidGlassAreIndependent() {
+        val blurOnly = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false,
+            infoGlassMode = HomeCardInfoGlassMode.REALTIME_BLUR,
+            hasWallpaperHazeState = true,
+            hasLayerBackdrop = true,
+            blurEnabled = true
+        )
+        val liquidOnly = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false,
+            infoGlassMode = HomeCardInfoGlassMode.REALTIME_LIQUID_GLASS,
+            hasWallpaperHazeState = true,
+            hasLayerBackdrop = true,
+            blurEnabled = true
+        )
+        val both = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false,
+            infoGlassMode = HomeCardInfoGlassMode.BLUR_AND_LIQUID,
+            hasWallpaperHazeState = true,
+            hasLayerBackdrop = true,
+            blurEnabled = true
+        )
+        assertTrue(blurOnly.useRealtimeHaze)
+        assertFalse(blurOnly.useRealtimeLiquidGlass)
+        assertFalse(liquidOnly.useRealtimeHaze)
+        assertTrue(liquidOnly.useRealtimeLiquidGlass)
+        assertTrue(both.useRealtimeHaze)
+        assertTrue(both.useRealtimeLiquidGlass)
+        // Keep fill light so frosted wallpaper is visible (was invisible before).
+        assertTrue(blurOnly.containerAlpha <= 0.14f)
+    }
+
+    @Test
+    fun cardInfoRealtimeBlurRequiresWallpaperHazeState() {
+        val appearance = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false,
+            infoGlassMode = HomeCardInfoGlassMode.REALTIME_BLUR,
+            hasWallpaperHazeState = false,
+            hasLayerBackdrop = true,
+            blurEnabled = true
+        )
+        assertFalse(appearance.useRealtimeHaze)
+        assertEquals(0.16f, appearance.containerAlpha)
+    }
+
+    @Test
+    fun cardInfoLiquidGlassRequiresLayerBackdrop() {
+        assertFalse(
+            shouldUseRealtimeHomeCardInfoLiquidGlass(
+                infoGlassMode = HomeCardInfoGlassMode.REALTIME_LIQUID_GLASS,
+                hasLayerBackdrop = false,
+                blurEnabled = true,
+                isDataSaverActive = false
+            )
+        )
+        assertTrue(
+            shouldUseRealtimeHomeCardInfoLiquidGlass(
+                infoGlassMode = HomeCardInfoGlassMode.REALTIME_LIQUID_GLASS,
+                hasLayerBackdrop = true,
+                blurEnabled = true,
+                isDataSaverActive = false
+            )
+        )
+    }
+
+    @Test
+    fun cardInfoRealtimeEffectsDisabledInDataSaver() {
+        assertFalse(
+            shouldUseRealtimeHomeCardInfoBlur(
+                infoGlassMode = HomeCardInfoGlassMode.BLUR_AND_LIQUID,
+                hasWallpaperHazeState = true,
+                blurEnabled = true,
+                isDataSaverActive = true
+            )
+        )
+        assertFalse(
+            shouldUseRealtimeHomeCardInfoLiquidGlass(
+                infoGlassMode = HomeCardInfoGlassMode.BLUR_AND_LIQUID,
+                hasLayerBackdrop = true,
+                blurEnabled = true,
+                isDataSaverActive = true
+            )
+        )
     }
 
     @Test

@@ -13,6 +13,8 @@ enum class CommentFraudStatus {
     DELETED,
     /** 疑似审核中 */
     UNDER_REVIEW,
+    /** 评论数据存在但前端隐藏（invisible，可能被 UP 拉黑） */
+    INVISIBLE,
     /** 检测失败 / 未知 */
     UNKNOWN
 }

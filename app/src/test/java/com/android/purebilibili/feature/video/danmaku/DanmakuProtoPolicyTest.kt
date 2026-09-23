@@ -113,7 +113,7 @@ class DanmakuProtoPolicyTest {
     }
 
     @Test
-    fun parseDmSegMobileReply_readsPiliPlusExtendedElemFields() {
+    fun parseDmSegMobileReply_readsBiliPaiExtendedElemFields() {
         val elem = buildList<Byte> {
             addFieldVarint(fieldNumber = 1, value = 123L)
             addFieldVarint(fieldNumber = 2, value = 4567L)
@@ -124,6 +124,7 @@ class DanmakuProtoPolicyTest {
             addFieldBytes(fieldNumber = 7, value = "关注弹幕".encodeToByteArray())
             addFieldVarint(fieldNumber = 9, value = 8L)
             addFieldVarint(fieldNumber = 11, value = 0L)
+            addFieldVarint(fieldNumber = 13, value = 4L)
             addFieldVarint(fieldNumber = 15, value = 12L)
             addFieldVarint(
                 fieldNumber = 24,
@@ -144,6 +145,8 @@ class DanmakuProtoPolicyTest {
         assertEquals(4567, item.progress)
         assertEquals("关注弹幕", item.content)
         assertEquals(8, item.weight)
+        assertEquals(25, item.fontsize)
+        assertEquals(4, item.attr)
         assertEquals(12L, item.like)
         assertEquals(DanmakuProto.DmColorfulTypeVipGradualColor, item.colorful)
         assertEquals(3, item.count)

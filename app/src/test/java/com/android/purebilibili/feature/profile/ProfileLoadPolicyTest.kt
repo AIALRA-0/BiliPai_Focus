@@ -40,7 +40,7 @@ class ProfileLoadPolicyTest {
     }
 
     @Test
-    fun inFlightLoad_rejectsDuplicateForceOrAutomaticRequests() {
+    fun inFlightLoad_rejectsAutomaticButAllowsForceToInvalidateOldLoad() {
         assertFalse(
             shouldStartProfileLoad(
                 hasLoadedOnce = false,
@@ -48,11 +48,36 @@ class ProfileLoadPolicyTest {
                 force = false
             )
         )
-        assertFalse(
+        assertTrue(
             shouldStartProfileLoad(
                 hasLoadedOnce = true,
                 isLoadInFlight = true,
                 force = true
+            )
+        )
+    }
+
+    @Test
+    fun accountSessionRefresh_forcesExactlyOneProfileReload() {
+        assertTrue(
+            shouldForceProfileLoadForAccountSessionRefresh(
+                isCurrentPage = true,
+                accountSessionRefreshGeneration = 1,
+                handledAccountSessionRefreshGeneration = 0
+            )
+        )
+        assertFalse(
+            shouldForceProfileLoadForAccountSessionRefresh(
+                isCurrentPage = true,
+                accountSessionRefreshGeneration = 1,
+                handledAccountSessionRefreshGeneration = 1
+            )
+        )
+        assertFalse(
+            shouldForceProfileLoadForAccountSessionRefresh(
+                isCurrentPage = false,
+                accountSessionRefreshGeneration = 2,
+                handledAccountSessionRefreshGeneration = 1
             )
         )
     }

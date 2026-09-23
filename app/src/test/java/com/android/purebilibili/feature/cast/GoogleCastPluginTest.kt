@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.plugin.googlecast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cast
 import com.android.purebilibili.core.plugin.CastPluginApi
+import com.android.purebilibili.core.plugin.CastDiscoveryRequirement
 import com.android.purebilibili.plugin.sdk.PluginCapability
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,6 +17,7 @@ class GoogleCastPluginTest {
     fun `plugin is CastPluginApi`() {
         val api: CastPluginApi = plugin
         assertEquals(plugin.id, api.id)
+        assertEquals(CastDiscoveryRequirement.NONE, api.discoveryRequirement)
     }
 
     @Test
@@ -40,7 +42,7 @@ class GoogleCastPluginTest {
 
     @Test
     fun `version is 0 dot 1 dot 0`() {
-        assertEquals("0.1.0", plugin.version)
+        assertEquals("0.1.1", plugin.version)
     }
 
     @Test
@@ -53,7 +55,7 @@ class GoogleCastPluginTest {
         val manifest = plugin.capabilityManifest
         assertEquals("google_cast", manifest.pluginId)
         assertEquals("Google Cast", manifest.displayName)
-        assertEquals("0.1.0", manifest.version)
+        assertEquals("0.1.1", manifest.version)
         assertEquals(1, manifest.apiVersion)
         assertEquals(
             "com.android.purebilibili.feature.plugin.googlecast.GoogleCastPlugin",

@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.dynamic
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicModules
 import com.android.purebilibili.data.model.response.DynamicAuthorModule
+import com.android.purebilibili.data.model.response.ArticleMajor
+import com.android.purebilibili.data.model.response.DynamicContentModule
+import com.android.purebilibili.data.model.response.DynamicMajor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -46,7 +49,6 @@ class DynamicUserRequestPolicyTest {
                 nextUid = 123L,
                 currentItems = listOf(DynamicItem(id_str = "cached")),
                 userError = null,
-                localMatchCount = 1
             )
         )
         assertTrue(
@@ -55,7 +57,6 @@ class DynamicUserRequestPolicyTest {
                 nextUid = 123L,
                 currentItems = emptyList(),
                 userError = null,
-                localMatchCount = 0
             )
         )
         assertTrue(
@@ -64,7 +65,6 @@ class DynamicUserRequestPolicyTest {
                 nextUid = 123L,
                 currentItems = listOf(DynamicItem(id_str = "cached")),
                 userError = "加载失败",
-                localMatchCount = 1
             )
         )
     }
@@ -87,14 +87,13 @@ class DynamicUserRequestPolicyTest {
     }
 
     @Test
-    fun `selected user auto load only starts when local timeline has no match`() {
-        assertFalse(
+    fun `selected user always loads authoritative space feed while showing local matches`() {
+        assertTrue(
             shouldAutoLoadSelectedUserDynamics(
                 previousUid = null,
                 nextUid = 10001L,
                 currentItems = emptyList(),
                 userError = null,
-                localMatchCount = 2
             )
         )
         assertTrue(
@@ -103,7 +102,71 @@ class DynamicUserRequestPolicyTest {
                 nextUid = 10001L,
                 currentItems = emptyList(),
                 userError = null,
-                localMatchCount = 0
+            )
+        )
+    }
+
+    @Test
+    fun `selected user content filter keeps author and content axes independent`() {
+        val video = DynamicItem(
+            id_str = "video",
+            type = "DYNAMIC_TYPE_AV",
+        )
+        val article = DynamicItem(
+            id_str = "article",
+            type = "DYNAMIC_TYPE_DRAW",
+        )
+        val legacyArticle = DynamicItem(
+            id_str = "legacy-article",
+            type = "DYNAMIC_TYPE_NONE",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(article = ArticleMajor(id = 123L)),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf("video"),
+            filterSelectedUserDynamicItems(
+                items = listOf(video, article),
+                filter = DynamicUserContentFilter.VIDEO,
+            ).map { it.id_str },
+        )
+        assertEquals(
+            listOf("article", "legacy-article"),
+            filterSelectedUserDynamicItems(
+                items = listOf(video, article, legacyArticle),
+                filter = DynamicUserContentFilter.ARTICLE,
+            ).map { it.id_str },
+        )
+    }
+
+    @Test
+    fun `empty concrete user filter does not trigger unbounded pagination`() {
+        assertEquals(
+            listOf("全部", "视频", "图文专栏"),
+            DynamicUserContentFilter.entries.map(DynamicUserContentFilter::label),
+        )
+        assertTrue(
+            shouldAutoLoadMoreForUserContentFilter(
+                isSelectedUserFeed = true,
+                filter = DynamicUserContentFilter.ALL,
+                visibleItemCount = 0,
+            )
+        )
+        assertFalse(
+            shouldAutoLoadMoreForUserContentFilter(
+                isSelectedUserFeed = true,
+                filter = DynamicUserContentFilter.ARTICLE,
+                visibleItemCount = 0,
+            )
+        )
+        assertTrue(
+            shouldAutoLoadMoreForUserContentFilter(
+                isSelectedUserFeed = true,
+                filter = DynamicUserContentFilter.ARTICLE,
+                visibleItemCount = 1,
             )
         )
     }

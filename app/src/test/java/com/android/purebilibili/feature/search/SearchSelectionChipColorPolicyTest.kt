@@ -29,7 +29,7 @@ class SearchSelectionChipColorPolicyTest {
     }
 
     @Test
-    fun `selected type chip keeps primary when contrast is healthy`() {
+    fun `selected type chip on dark surface uses soft primaryContainer fill`() {
         val scheme = darkColorScheme(
             primary = Color(0xFF0057D8),
             onPrimary = Color.White,
@@ -45,8 +45,9 @@ class SearchSelectionChipColorPolicyTest {
             colorScheme = scheme
         )
 
-        assertEquals(scheme.primary, colors.backgroundColor)
-        assertEquals(scheme.onPrimary, colors.textColor)
+        // Dark filled selection prefers tonal container (not neon solid primary).
+        assertEquals(scheme.primaryContainer, colors.backgroundColor)
+        assertEquals(scheme.onPrimaryContainer, colors.textColor)
     }
 
     @Test

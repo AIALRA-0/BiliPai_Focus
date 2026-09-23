@@ -1,6 +1,11 @@
 // 文件路径: feature/video/ui/components/CollectionSheet.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,20 +21,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.ui.rememberAppClearIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.data.model.response.UgcEpisode
 import com.android.purebilibili.data.model.response.UgcSeason
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.Play
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PlayArrow
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText
 
 /**
  *  视频合集底部弹窗
@@ -56,10 +63,18 @@ fun CollectionSheet(
             currentCid = currentCid
         )
     }
-    val sortMode by SettingsManager
+    val storedSortMode by SettingsManager
         .getCollectionSortMode(context, collectionSubscriptionId)
-        .collectAsStateWithLifecycle(initialValue = CollectionSortMode.ASCENDING
-        )
+        .collectAsStateWithLifecycle(initialValue = CollectionSortMode.ASCENDING)
+    var localSortMode by remember(collectionSubscriptionId) {
+        mutableStateOf<CollectionSortMode?>(null)
+    }
+    LaunchedEffect(storedSortMode) {
+        if (localSortMode == storedSortMode) {
+            localSortMode = null
+        }
+    }
+    val sortMode = localSortMode ?: storedSortMode
     val sortedEpisodes = remember(allEpisodes, sortMode, currentBvid, currentCid) {
         sortCollectionEpisodes(
             episodes = allEpisodes,
@@ -74,7 +89,7 @@ fun CollectionSheet(
         currentCid = currentCid
     )
     
-    com.android.purebilibili.core.ui.IOSModalBottomSheet(
+    com.android.purebilibili.core.ui.AppModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         windowInsets = WindowInsets(0.dp)  //  沉浸式
@@ -92,7 +107,7 @@ fun CollectionSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    AppText(
                         text = ugcSeason.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
@@ -101,7 +116,7 @@ fun CollectionSheet(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(
+                    AppText(
                         text = "共 ${allEpisodes.size} 个视频",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -112,11 +127,11 @@ fun CollectionSheet(
                     collectionId = collectionSubscriptionId,
                     currentBvid = currentBvid,
                     currentAid = currentAid,
-                    fontSize = 13.sp
+                    fontSize = MaterialTheme.typography.labelMedium.fontSize
                 )
 
-                IconButton(onClick = onDismiss) {
-                    Icon(
+                AppIconButton(onClick = onDismiss) {
+                    AppIcon(
                         clearIcon,
                         contentDescription = "关闭",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -124,7 +139,7 @@ fun CollectionSheet(
                 }
             }
             
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             val sortModes = remember { CollectionSortMode.entries.toList() }
 
@@ -135,16 +150,17 @@ fun CollectionSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
+                AppText(
                     text = "排序",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                iOSSegmentedControl(
+                CommentSegmentedControl(
                     items = sortModes.map(::resolveCollectionSortLabel),
                     selectedIndex = sortModes.indexOf(sortMode).coerceAtLeast(0),
                     onScaleChange = { index ->
                         sortModes.getOrNull(index)?.let { nextMode ->
+                            localSortMode = nextMode
                             scope.launch {
                                 SettingsManager.setCollectionSortMode(context, collectionSubscriptionId, nextMode)
                             }
@@ -153,7 +169,7 @@ fun CollectionSheet(
                 )
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             
             //  视频列表
             val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -200,7 +216,7 @@ fun CollectionSheet(
                                 }
                             }
                             .background(
-                                if (isCurrentEpisode) iOSBlue.copy(alpha = 0.1f)
+                                if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                                 else Color.Transparent
                             )
                             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -211,7 +227,7 @@ fun CollectionSheet(
                             modifier = Modifier
                                 .width(120.dp)
                                 .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(AppShapes.container(ContainerLevel.Chip))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             // 封面图
@@ -227,26 +243,14 @@ fun CollectionSheet(
                                 )
                             }
                             
-                            // 时长标签
                             episode.arc?.duration?.let { duration ->
                                 if (duration > 0) {
-                                    Box(
+                                    VideoCardCoverDurationText(
+                                        text = formatDuration(duration),
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
-                                            .padding(4.dp)
-                                            .background(
-                                                Color.Black.copy(alpha = 0.7f),
-                                                RoundedCornerShape(4.dp)
-                                            )
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = formatDuration(duration),
-                                            fontSize = 10.sp,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
+                                            .padding(4.dp),
+                                    )
                                 }
                             }
                             
@@ -255,11 +259,11 @@ fun CollectionSheet(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .background(iOSBlue.copy(alpha = 0.5f)),
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        CupertinoIcons.Default.Play,
+                                    AppIcon(
+                                        Icons.Outlined.PlayArrow,
                                         contentDescription = null,
                                         tint = Color.White,
                                         modifier = Modifier.size(28.dp)
@@ -272,10 +276,10 @@ fun CollectionSheet(
                         
                         //  视频信息
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
+                            AppText(
                                 text = episode.title,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (isCurrentEpisode) iOSBlue 
+                                color = if (isCurrentEpisode) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (isCurrentEpisode) FontWeight.SemiBold 
                                             else FontWeight.Normal,
@@ -285,11 +289,11 @@ fun CollectionSheet(
                             
                             if (metadataText.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(
+                                AppText(
                                     text = metadataText,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isCurrentEpisode) {
-                                        iOSBlue
+                                        MaterialTheme.colorScheme.primary
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },

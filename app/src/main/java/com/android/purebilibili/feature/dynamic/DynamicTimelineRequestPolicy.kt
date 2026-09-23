@@ -8,3 +8,11 @@ internal fun shouldApplyTimelineFeedResult(
 ): Boolean {
     return currentRequestType == requestType && activeRequestToken == requestToken
 }
+
+internal fun shouldApplyTimelineFeedResult(
+    activeRequestTokens: Map<String, Long>,
+    requestType: String,
+    requestToken: Long
+): Boolean {
+    return activeRequestTokens[requestType] == requestToken
+}

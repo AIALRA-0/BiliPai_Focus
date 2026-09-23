@@ -13,6 +13,7 @@ class ShortcutDeepLinkRouteTest {
         assertEquals(ScreenRoutes.Login.route, resolveShortcutRoute("login"))
         assertEquals(ScreenRoutes.PlaybackSettings.route, resolveShortcutRoute("playback"))
         assertEquals(ScreenRoutes.PluginsSettings.createRoute(), resolveShortcutRoute("plugins"))
+        assertEquals(ScreenRoutes.WatchLater.route, resolveShortcutRoute("watch_later"))
     }
 
     @Test

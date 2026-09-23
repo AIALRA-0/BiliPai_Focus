@@ -21,7 +21,6 @@ class PlaybackProgressManager {
     companion object {
         private const val TAG = "PlaybackProgressManager"
         private const val PREFS_NAME = "video_progress"
-        private const val MAX_CACHE_SIZE = 100
         private const val MIN_PROGRESS_TO_SAVE = 5000L // 5秒以上才保存
         private const val MAX_PERCENT_TO_RESTORE = 0.95f // 超过95%不恢复（已看完）
         
@@ -40,8 +39,8 @@ class PlaybackProgressManager {
     
     private var prefs: SharedPreferences? = null
     
-    // Memory cache for fast access
-    private val memoryCache = LinkedHashMap<String, Long>(MAX_CACHE_SIZE, 0.75f, true)
+    // [性能优化] 使用 ConcurrentHashMap 保障主线程在滑动渲染热路径上的无锁极速读取（O(1) Lock-free）
+    private val memoryCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     private fun buildProgressKey(bvid: String, cid: Long): String {
         return if (cid > 0L) "$bvid#$cid" else bvid
@@ -71,23 +70,17 @@ class PlaybackProgressManager {
             Logger.d(TAG, "Video $key completed (${positionMs}ms / ${durationMs}ms), cleared progress")
             return
         }
-        
-        // Remove oldest entry if cache is full
-        if (memoryCache.size >= MAX_CACHE_SIZE) {
-            val oldestKey = memoryCache.keys.firstOrNull()
-            if (oldestKey != null) {
-                memoryCache.remove(oldestKey)
-                prefs?.edit()?.remove(oldestKey)?.apply()
-            }
-        }
-        
+
         memoryCache[key] = positionMs
+        if (cid > 0L) {
+            memoryCache[buildProgressKey(bvid, cid = 0L)] = positionMs
+        }
+
         prefs?.edit()?.apply {
             putLong(key, positionMs)
             if (cid > 0L) {
                 // 空间页等入口拿不到 cid 时，用 bvid 级进度兜底；播放器加载后仍优先 cid 精确进度。
                 putLong(buildProgressKey(bvid, cid = 0L), positionMs)
-                memoryCache[buildProgressKey(bvid, cid = 0L)] = positionMs
             }
         }?.apply()
         Logger.d(TAG, "Saved position for $key: ${positionMs}ms")
@@ -106,27 +99,12 @@ class PlaybackProgressManager {
     
     /**
      * Get cached playback position
+     * [性能关键路径] 滑动列表热路径，严禁加锁、严禁同步读磁盘 SharedPreferences、严禁高频输出日志。
      */
     fun getCachedPosition(bvid: String, cid: Long): Long {
+        if (bvid.isEmpty()) return 0L
         val key = buildProgressKey(bvid, cid)
-        // First check memory cache
-        var position = memoryCache[key]
-        
-        // If not in memory, check SharedPreferences
-        if (position == null) {
-            position = prefs?.getLong(key, 0L) ?: 0L
-            if (position > 0) {
-                memoryCache[key] = position
-            }
-        }
-        
-        if (position > 0) {
-            Logger.d(TAG, "Retrieved position for $key: ${position}ms")
-            return position
-        }
-        // cid 精确查询用于分 P/明确页面恢复，不能回退到 bvid 级进度，
-        // 否则切到未看过的分 P 会继承上一分 P 刚保存的位置。
-        return 0L
+        return memoryCache[key]?.takeIf { it > 0L } ?: 0L
     }
 
     fun getCachedPosition(bvid: String): Long {
@@ -139,12 +117,15 @@ class PlaybackProgressManager {
     fun clearPosition(bvid: String, cid: Long) {
         val key = buildProgressKey(bvid, cid)
         memoryCache.remove(key)
+        if (cid > 0L) {
+            val bvidKey = buildProgressKey(bvid, cid = 0L)
+            memoryCache.remove(bvidKey)
+        }
         prefs?.edit()?.apply {
             remove(key)
             if (cid > 0L) {
                 val bvidKey = buildProgressKey(bvid, cid = 0L)
                 remove(bvidKey)
-                memoryCache.remove(bvidKey)
             }
         }?.apply()
         Logger.d(TAG, "Cleared position for $key")

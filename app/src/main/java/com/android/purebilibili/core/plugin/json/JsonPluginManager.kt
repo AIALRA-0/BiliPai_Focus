@@ -6,7 +6,14 @@ import android.net.Uri
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.plugin.DanmakuItem
 import com.android.purebilibili.core.plugin.DanmakuStyle
+import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_DANMAKU_COOLDOWN_MS
+import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_ENABLED_COOLDOWN_MS
+import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_FEED_COOLDOWN_MS
+import com.android.purebilibili.core.plugin.PluginEffectHintBus
 import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.plugin.resolveDanmakuFilterEffectHint
+import com.android.purebilibili.core.plugin.resolveFeedFilterEffectHint
+import com.android.purebilibili.core.plugin.resolvePluginEnabledEffectHint
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlinx.coroutines.Dispatchers
@@ -176,6 +183,15 @@ object JsonPluginManager {
             if (targetType == "danmaku") {
                 PluginManager.notifyDanmakuPluginsUpdated()
             }
+            if (enabled) {
+                val pluginName = _plugins.value.firstOrNull { it.plugin.id == pluginId }?.plugin?.name
+                if (!pluginName.isNullOrBlank()) {
+                    PluginEffectHintBus.tryEmit(
+                        resolvePluginEnabledEffectHint(pluginId, pluginName),
+                        cooldownMs = PLUGIN_EFFECT_HINT_ENABLED_COOLDOWN_MS
+                    )
+                }
+            }
         }
     }
     
@@ -232,6 +248,13 @@ object JsonPluginManager {
         _lastFilteredCount.value = filteredCount
         if (filteredCount > 0) {
             Logger.d(TAG, " 本次过滤了 $filteredCount 个视频")
+            val names = statsDelta.keys.mapNotNull { pluginId ->
+                feedPlugins.firstOrNull { it.plugin.id == pluginId }?.plugin?.name
+            }
+            PluginEffectHintBus.tryEmit(
+                resolveFeedFilterEffectHint(filteredCount, names),
+                cooldownMs = PLUGIN_EFFECT_HINT_FEED_COOLDOWN_MS
+            )
         }
 
         return result
@@ -314,9 +337,16 @@ object JsonPluginManager {
      */
     fun shouldShowDanmaku(danmaku: DanmakuItem): Boolean {
         val danmakuPlugins = _plugins.value.filter { it.enabled && it.plugin.type == "danmaku" }
-        return danmakuPlugins.all { loaded ->
-            RuleEngine.shouldShowDanmaku(danmaku, loaded.plugin.rules)
+        for (loaded in danmakuPlugins) {
+            if (!RuleEngine.shouldShowDanmaku(danmaku, loaded.plugin.rules)) {
+                PluginEffectHintBus.tryEmit(
+                    resolveDanmakuFilterEffectHint(loaded.plugin.id, loaded.plugin.name),
+                    cooldownMs = PLUGIN_EFFECT_HINT_DANMAKU_COOLDOWN_MS
+                )
+                return false
+            }
         }
+        return true
     }
     
     /**

@@ -40,12 +40,47 @@ class HomeCardEnterAnimationPolicyTest {
     }
 
     @Test
+    fun scrolling_disablesEnterAnimationAtMount() {
+        assertFalse(
+            resolveHomeCardEnterAnimationEnabledAtMount(
+                baseAnimationEnabled = true,
+                isReturningFromDetail = false,
+                isSwitchingCategory = false,
+                isScrollInProgress = true
+            )
+        )
+    }
+
+    @Test
     fun normalHomeMount_enablesEnterAnimation() {
         assertTrue(
             resolveHomeCardEnterAnimationEnabledAtMount(
                 baseAnimationEnabled = true,
                 isReturningFromDetail = false,
-                isSwitchingCategory = false
+                isSwitchingCategory = false,
+                isScrollInProgress = false
+            )
+        )
+    }
+
+    @Test
+    fun bothAnimationAndTransitionEnabled_coordinatesWithSharedTransition() {
+        assertTrue(
+            shouldCoordinateCardEnterWithSharedTransition(
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = true
+            )
+        )
+        assertFalse(
+            shouldCoordinateCardEnterWithSharedTransition(
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = false
+            )
+        )
+        assertFalse(
+            shouldCoordinateCardEnterWithSharedTransition(
+                cardAnimationEnabled = false,
+                cardTransitionEnabled = true
             )
         )
     }

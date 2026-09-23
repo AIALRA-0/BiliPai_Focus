@@ -4,27 +4,21 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
+import com.android.purebilibili.core.ui.AppWindowSystemUiController
 
 object ScreenUtils {
     fun setFullScreen(context: Context, isFull: Boolean) {
         val activity = context.findActivity() ?: return
-        val window = activity.window
-        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-
         if (isFull) {
             // 切横屏
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            // 隐藏状态栏和导航栏
-            insetsController.hide(WindowInsetsCompat.Type.systemBars())
-            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            activity.applyPlayerRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
+            AppWindowSystemUiController.requestDesktopFullscreen(activity, enter = true)
+            AppWindowSystemUiController.enterImmersive(activity.window)
         } else {
             // 切竖屏
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            // 显示状态栏
-            insetsController.show(WindowInsetsCompat.Type.systemBars())
+            activity.applyPlayerRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
+            AppWindowSystemUiController.showSystemBars(activity.window)
+            AppWindowSystemUiController.requestDesktopFullscreen(activity, enter = false)
         }
     }
 

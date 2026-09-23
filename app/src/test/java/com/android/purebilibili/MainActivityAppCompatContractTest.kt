@@ -40,27 +40,30 @@ class MainActivityAppCompatContractTest {
     }
 
     @Test
-    fun splashTheme_shouldReuseLauncherMipmapAssets() {
+    fun maidSplashTheme_shouldUseRoundedLayeredDrawables() {
         val lightThemes = loadResourceText("values/themes.xml")
         val nightThemes = loadResourceText("values-night/themes.xml")
 
         assertTrue(
-            lightThemes.contains("""<item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai</item>"""),
-            "Light splash theme should reuse the launcher mipmap instead of packaging duplicate splash bitmaps"
+            lightThemes.contains("""<item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_blue_snow_maid</item>"""),
+            "Light splash theme should use the rounded layered maid drawable"
         )
         assertTrue(
-            nightThemes.contains("""<item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai</item>"""),
-            "Night splash theme should reuse the launcher mipmap instead of packaging duplicate splash bitmaps"
+            nightThemes.contains("""<item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_blue_snow_maid</item>"""),
+            "Night splash theme should use the rounded layered maid drawable"
         )
         assertTrue(
             lightThemes.contains("""<item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>"""),
             "Light splash theme should not add a second icon background around the adaptive icon"
         )
-        assertTrue(
-            !lightThemes.contains("""windowSplashScreenAnimatedIcon">@drawable/splash_icon_""") &&
-                !nightThemes.contains("""windowSplashScreenAnimatedIcon">@drawable/splash_icon_"""),
-            "Splash themes should not reference duplicate drawable-nodpi splash assets"
-        )
+        listOf("drawable", "drawable-night").forEach { directory ->
+            listOf("splash_icon_blue_snow_maid.xml", "splash_icon_blue_snow_maid_front.xml")
+                .forEach { fileName ->
+                    val drawable = loadResourceText("$directory/$fileName")
+                    assertTrue(drawable.contains("""<corners android:radius="26dp" />"""))
+                    assertTrue(drawable.contains("""@mipmap/ic_launcher_blue_snow_maid"""))
+                }
+        }
         assertTrue(
             !splashDrawableVectorExists(),
             "Splash theme should not keep the hand-drawn drawable foreground vector"
@@ -81,6 +84,151 @@ class MainActivityAppCompatContractTest {
         assertTrue(
             bilipaiWhiteTheme.contains("""<item name="windowSplashScreenBackground">@color/splash_bilipai_white_background</item>"""),
             "BiliPai white splash theme should not inherit a white splash background because its rounded white shell becomes invisible"
+        )
+    }
+
+    @Test
+    fun bilipaiWhiteIcon_shouldUseCenteredFlatGeneratedArtwork() {
+        val background = loadResourceText("drawable/ic_launcher_bilipai_white_background.xml")
+        assertTrue(
+            background.contains("android:fillColor=\"#FFFFFFFF\"") &&
+                !background.contains("<gradient") &&
+                !background.contains("#161C5C75"),
+            "BiliPai white adaptive background should remain flat white without the retired glossy haze"
+        )
+
+        val rows = readPngRgbaRows(
+            loadResourceFile("mipmap-xxxhdpi/ic_launcher_bilipai_white_foreground.png")
+        )
+        val imageWidth = rows.first().size / 4
+        val opaquePoints = buildList {
+            rows.forEachIndexed { y, row ->
+                for (x in 0 until imageWidth) {
+                    if (row[x * 4 + 3] >= 128) add(x to y)
+                }
+            }
+        }
+        val minX = opaquePoints.minOf { it.first }
+        val maxX = opaquePoints.maxOf { it.first }
+        val minY = opaquePoints.minOf { it.second }
+        val maxY = opaquePoints.maxOf { it.second }
+        val artworkWidthRatio = (maxX - minX + 1).toFloat() / imageWidth
+        val artworkHeightRatio = (maxY - minY + 1).toFloat() / rows.size
+        val artworkCenterX = (minX + maxX) / 2f
+        val artworkCenterY = (minY + maxY) / 2f
+        val canvasCenter = (imageWidth - 1) / 2f
+
+        assertTrue(
+            artworkWidthRatio in 0.64f..0.67f && artworkHeightRatio in 0.57f..0.60f,
+            "BiliPai white TV and wordmark should stay large enough to read at launcher size"
+        )
+        assertTrue(
+            artworkCenterX == canvasCenter && artworkCenterY == canvasCenter,
+            "BiliPai white TV and wordmark should remain exactly centered in the adaptive foreground"
+        )
+    }
+
+    @Test
+    fun bilipaiMonet_shouldUseTheOfficialThemedAdaptiveIconContract() {
+        listOf(
+            "ic_launcher_bilipai",
+            "ic_launcher_bilipai_round",
+            "ic_launcher_bilipai_pink",
+            "ic_launcher_bilipai_pink_round",
+            "ic_launcher_bilipai_white",
+            "ic_launcher_bilipai_white_round"
+        ).forEach { iconName ->
+            val adaptiveIcon = loadResourceText("mipmap-anydpi-v26/$iconName.xml")
+            assertTrue(
+                adaptiveIcon.contains(
+                    "<monochrome android:drawable=\"@mipmap/ic_launcher_bilipai_monet_foreground\" />"
+                ),
+                "$iconName should derive its themed icon from the real BiliPai logo, not a hand-drawn substitute"
+            )
+        }
+        assertTrue(
+            !resourcePathExists("drawable/ic_launcher_bilipai_monochrome.xml"),
+            "The retired hand-drawn TV/play monochrome icon should not remain packaged"
+        )
+
+        listOf("", "_round").forEach { suffix ->
+            val adaptiveIcon = loadResourceText("mipmap-anydpi-v26/ic_launcher_bilipai_monet$suffix.xml")
+            assertTrue(
+                adaptiveIcon.contains("<foreground android:drawable=\"@mipmap/ic_launcher_bilipai_monet_foreground\" />") &&
+                    adaptiveIcon.contains("<monochrome android:drawable=\"@mipmap/ic_launcher_bilipai_monet_foreground\" />"),
+                "BiliPai Monet$suffix should let the launcher tint the same clean logo used by its color icon"
+            )
+            assertTrue(
+                !resourcePathExists("mipmap-anydpi-v31/ic_launcher_bilipai_monet$suffix.xml"),
+                "BiliPai Monet$suffix should not replace the official monochrome path with an Android 12 override"
+            )
+        }
+        assertTrue(
+            !resourcePathExists("drawable-v31/ic_launcher_bilipai_monet_background.xml"),
+            "BiliPai Monet should not simulate themed icons by drawing private system accent resources"
+        )
+        assertTrue(
+            !loadResourceText("drawable/ic_launcher_bilipai_monet_background.xml").contains("system_accent") &&
+                !loadResourceText("drawable-night/ic_launcher_bilipai_monet_background.xml").contains("system_accent"),
+            "BiliPai Monet color fallbacks should remain deterministic when the launcher does not theme icons"
+        )
+
+        val splashAdaptiveIcon = loadResourceText("mipmap-anydpi-v26/splash_icon_bilipai_monet.xml")
+        val splashForeground = loadResourceText("drawable/splash_icon_bilipai_monet_foreground.xml")
+        assertTrue(
+            splashAdaptiveIcon.contains("@color/splash_bilipai_monet_background") &&
+                splashAdaptiveIcon.contains("@drawable/splash_icon_bilipai_monet_foreground"),
+            "BiliPai Monet splash should use a dedicated adaptive icon so the system starting window is dynamically colored"
+        )
+        assertTrue(
+            splashForeground.contains("@mipmap/ic_launcher_bilipai_monet_foreground") &&
+                splashForeground.contains("@color/splash_bilipai_monet_foreground"),
+            "BiliPai Monet splash should tint the same clean monochrome artwork as the launcher"
+        )
+        assertTrue(
+            loadResourceText("values-v31/colors.xml").contains(
+                "<color name=\"splash_bilipai_monet_background\">@android:color/system_accent1_100</color>"
+            ) && loadResourceText("values-v31/colors.xml").contains(
+                "<color name=\"splash_bilipai_monet_foreground\">@android:color/system_accent1_700</color>"
+            ),
+            "Light Monet splash should follow AOSP themed-icon dynamic color roles"
+        )
+        assertTrue(
+            loadResourceText("values-night-v31/colors.xml").contains(
+                "<color name=\"splash_bilipai_monet_background\">@android:color/system_accent2_800</color>"
+            ) && loadResourceText("values-night-v31/colors.xml").contains(
+                "<color name=\"splash_bilipai_monet_foreground\">@android:color/system_accent1_200</color>"
+            ),
+            "Dark Monet splash should follow AOSP themed-icon dynamic color roles"
+        )
+        listOf("values/themes.xml", "values-night/themes.xml").forEach { themePath ->
+            val monetTheme = Regex(
+                """<style name="Theme\.PureBiliBili\.Splash\.BiliPaiMonet"[\s\S]*?</style>"""
+            ).find(loadResourceText(themePath))?.value.orEmpty()
+            assertTrue(
+                monetTheme.contains(
+                    """<item name="windowSplashScreenAnimatedIcon">@mipmap/splash_icon_bilipai_monet</item>"""
+                ),
+                "$themePath should use the dynamically colored Monet splash icon"
+            )
+        }
+
+        val rows = readPngRgbaRows(
+            loadResourceFile("mipmap-xxxhdpi/ic_launcher_bilipai_monet_foreground.png")
+        )
+        val width = rows.first().size / 4
+        val opaquePoints = buildList {
+            rows.forEachIndexed { y, row ->
+                for (x in 0 until width) {
+                    if (row[x * 4 + 3] != 0) add(x to y)
+                }
+            }
+        }
+        val artworkWidth = opaquePoints.maxOf { it.first } - opaquePoints.minOf { it.first } + 1
+        val artworkHeight = opaquePoints.maxOf { it.second } - opaquePoints.minOf { it.second } + 1
+        assertTrue(
+            artworkWidth in 192..264 && artworkHeight in 192..264,
+            "BiliPai Monet logo should remain inside Android's 48dp..66dp adaptive-icon safe zone"
         )
     }
 
@@ -107,13 +255,52 @@ class MainActivityAppCompatContractTest {
     }
 
     @Test
+    fun retiredLauncherIcons_shouldNotKeepDedicatedResources() {
+        val retiredResourceNames = listOf(
+            "ic_launcher_anime",
+            "ic_launcher_flat",
+            "ic_launcher_flat_round",
+            "ic_launcher_headphone",
+            "ic_launcher_telegram_blue",
+            "ic_launcher_telegram_blue_round",
+            "ic_launcher_telegram_dark",
+            "ic_launcher_telegram_dark_round"
+        )
+        val source = listOf(
+            loadResourceText("../AndroidManifest.xml"),
+            loadResourceText("values/themes.xml"),
+            loadResourceText("values-night/themes.xml"),
+            loadMainActivitySource(),
+            loadMiniPlayerManagerSource()
+        ).joinToString("\n")
+
+        retiredResourceNames.forEach { resourceName ->
+            assertTrue(
+                !source.contains(resourceName),
+                "$resourceName should not be referenced after the launcher option is retired"
+            )
+        }
+        assertTrue(
+            !Regex("""(?:@mipmap/|R\.mipmap\.)ic_launcher(?:[\"\s,)]|$)""").containsMatchIn(source),
+            "retired Yuki launcher resource should not be referenced"
+        )
+    }
+
+    @Test
     fun legacyLauncherBitmaps_shouldBeRgbaPngWithTransparentCorners() {
         val iconNames = listOf(
-            "ic_launcher.png",
-            "ic_launcher_round.png",
+            "ic_launcher_blue_snow_maid.png",
+            "ic_launcher_blue_snow_maid_round.png",
+            "ic_launcher_blue_snow_maid_announcement.png",
+            "ic_launcher_blue_snow_maid_announcement_round.png",
+            "ic_launcher_blue_snow_maid_announcement_light.png",
+            "ic_launcher_blue_snow_maid_announcement_light_round.png",
+            "ic_launcher_blue_snow_maid_announcement_dark.png",
+            "ic_launcher_blue_snow_maid_announcement_dark_round.png",
+            "ic_launcher_blue_snow_maid_front.png",
+            "ic_launcher_blue_snow_maid_front_round.png",
             "ic_launcher_3d.png",
             "ic_launcher_3d_round.png",
-            "ic_launcher_anime.png",
             "ic_launcher_bilipai.png",
             "ic_launcher_bilipai_round.png",
             "ic_launcher_bilipai_monet.png",
@@ -121,10 +308,7 @@ class MainActivityAppCompatContractTest {
             "ic_launcher_bilipai_pink.png",
             "ic_launcher_bilipai_pink_round.png",
             "ic_launcher_bilipai_white.png",
-            "ic_launcher_bilipai_white_round.png",
-            "ic_launcher_flat.png",
-            "ic_launcher_flat_round.png",
-            "ic_launcher_headphone.png"
+            "ic_launcher_bilipai_white_round.png"
         )
 
         listOf("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi").forEach { density ->
@@ -140,22 +324,335 @@ class MainActivityAppCompatContractTest {
     }
 
     @Test
+    fun launcherTargets_shouldReferenceDedicatedRoundIcons() {
+        val manifest = loadResourceText("../AndroidManifest.xml")
+        listOf(
+            "MainActivitySplashIcon3D" to "ic_launcher_3d_round",
+            "MainActivitySplashBiliPai" to "ic_launcher_bilipai_round",
+            "MainActivitySplashBiliPaiPink" to "ic_launcher_bilipai_pink_round",
+            "MainActivitySplashBiliPaiWhite" to "ic_launcher_bilipai_white_round",
+            "MainActivitySplashBiliPaiMonet" to "ic_launcher_bilipai_monet_round"
+        ).forEach { (activityName, roundIconName) ->
+            val activityDeclaration = Regex(
+                """<activity\s+android:name="\.$activityName".*?/>""",
+                RegexOption.DOT_MATCHES_ALL
+            ).find(manifest)?.value
+
+            assertTrue(
+                activityDeclaration?.contains(
+                    """android:roundIcon="@mipmap/$roundIconName"""
+                ) == true,
+                "$activityName should expose its dedicated round icon to system component resolvers"
+            )
+        }
+    }
+
+    @Test
+    fun blueSnowMaidAdaptiveForegrounds_shouldKeepThemeAwareOuterShell() {
+        listOf(
+            "drawable/ic_launcher_blue_snow_maid_background.xml",
+            "drawable/ic_launcher_blue_snow_maid_background_light.xml"
+        ).forEach { resourcePath ->
+            assertTrue(
+                loadResourceText(resourcePath).contains("#FFFFFFFF"),
+                "$resourcePath should keep a light outer field around the circular portrait"
+            )
+        }
+        listOf(
+            "drawable/ic_launcher_blue_snow_maid_background_dark.xml",
+            "drawable-night/ic_launcher_blue_snow_maid_background.xml"
+        ).forEach { resourcePath ->
+            assertTrue(
+                loadResourceText(resourcePath).contains("#FF090A0C"),
+                "$resourcePath should keep a dark outer field around the circular portrait"
+            )
+        }
+        assertTrue(
+            loadResourceText("drawable/ic_launcher_blue_snow_maid_announcement_background.xml")
+                .contains("#FFFFFFFF"),
+            "The light announcement icon should keep its distinct white circular background"
+        )
+        listOf(
+            "drawable/ic_launcher_blue_snow_maid_announcement_background_dark.xml",
+            "drawable-night/ic_launcher_blue_snow_maid_announcement_background.xml"
+        ).forEach { resourcePath ->
+            assertTrue(
+                loadResourceText(resourcePath).contains("#FF090A0C"),
+                "$resourcePath should keep the announcement icon's distinct black circular background"
+            )
+        }
+
+        listOf("ic_launcher_blue_snow_maid_foreground.png").forEach { fileName ->
+            val rows = readPngRgbaRows(loadResourceFile("mipmap-xxxhdpi/$fileName"))
+            val imageWidth = rows.first().size / 4
+            val opaqueXs = buildList {
+                rows.forEach { row ->
+                    for (x in 0 until imageWidth) {
+                        if (row[x * 4 + 3] != 0) add(x)
+                    }
+                }
+            }
+            val foregroundWidthRatio = (opaqueXs.max() - opaqueXs.min() + 1).toFloat() / imageWidth
+            assertTrue(
+                foregroundWidthRatio in 0.57f..0.59f,
+                "$fileName should preserve the circular portrait and theme-aware outer field on rounded-square launchers"
+            )
+        }
+
+        val frontRows = readPngRgbaRows(
+            loadResourceFile("mipmap-xxxhdpi/ic_launcher_blue_snow_maid_front_foreground.png")
+        )
+        val frontWidth = frontRows.first().size / 4
+        val frontOpaqueXs = buildList {
+            frontRows.forEach { row ->
+                for (x in 0 until frontWidth) {
+                    if (row[x * 4 + 3] != 0) add(x)
+                }
+            }
+        }
+        val frontWidthRatio =
+            (frontOpaqueXs.max() - frontOpaqueXs.min() + 1).toFloat() / frontWidth
+        assertTrue(
+            frontWidthRatio in 0.57f..0.59f,
+            "Front maid foreground should preserve the same theme-aware outer field without being cropped"
+        )
+
+        val announcementRows = readPngRgbaRows(
+            loadResourceFile("mipmap-xxxhdpi/ic_launcher_blue_snow_maid_announcement_foreground.png")
+        )
+        val announcementWidth = announcementRows.first().size / 4
+        val announcementOpaqueXs = buildList {
+            announcementRows.forEach { row ->
+                for (x in 0 until announcementWidth) {
+                    if (row[x * 4 + 3] != 0) add(x)
+                }
+            }
+        }
+        val announcementWidthRatio =
+            (announcementOpaqueXs.max() - announcementOpaqueXs.min() + 1).toFloat() / announcementWidth
+        assertTrue(
+            announcementWidthRatio in 0.48f..0.50f,
+            "Announcement foreground should leave comfortable breathing room inside Android's adaptive-icon safe zone"
+        )
+
+        listOf(
+            "ic_launcher_blue_snow_maid_monochrome.png",
+            "ic_launcher_blue_snow_maid_announcement_monochrome.png",
+            "ic_launcher_blue_snow_maid_front_monochrome.png"
+        ).forEach { fileName ->
+            val rows = readPngRgbaRows(loadResourceFile("mipmap-xxxhdpi/$fileName"))
+            val centerAlpha = rows[rows.size / 2][rows.first().size / 2 + 3]
+            assertTrue(
+                centerAlpha >= 240,
+                "$fileName should keep the face in positive space so themed icons do not render a dark facial mask"
+            )
+        }
+
+        val sideMaidRows = readPngRgbaRows(
+            loadResourceFile("mipmap-xxxhdpi/ic_launcher_blue_snow_maid_monochrome.png")
+        )
+        fun negativeEyeArea(centerX: Int, centerY: Int): Int =
+            (centerY - 19..centerY + 19).sumOf { y ->
+                (centerX - 19..centerX + 19).count { x ->
+                    sideMaidRows[y][x * 4 + 3] < 128
+                }
+            }
+        val leftEyeArea = negativeEyeArea(centerX = 216, centerY = 204)
+        val rightEyeArea = negativeEyeArea(centerX = 264, centerY = 216)
+        assertTrue(
+            leftEyeArea >= 600 &&
+                rightEyeArea >= 600 &&
+                leftEyeArea - rightEyeArea in -100..100,
+            "The tilted maid themed icon should retain two balanced solid pupil shapes along the facial axis"
+        )
+
+        listOf(
+            "mipmap-anydpi-v26/ic_launcher_blue_snow_maid_announcement.xml",
+            "mipmap-anydpi-v26/ic_launcher_blue_snow_maid_announcement_round.xml",
+            "mipmap-anydpi-v26/ic_launcher_blue_snow_maid_announcement_light.xml",
+            "mipmap-anydpi-v26/ic_launcher_blue_snow_maid_announcement_light_round.xml",
+            "mipmap-anydpi-v26/ic_launcher_blue_snow_maid_announcement_dark.xml",
+            "mipmap-anydpi-v26/ic_launcher_blue_snow_maid_announcement_dark_round.xml",
+            "mipmap-night-anydpi-v26/ic_launcher_blue_snow_maid_announcement.xml",
+            "mipmap-night-anydpi-v26/ic_launcher_blue_snow_maid_announcement_round.xml"
+        ).forEach { resourcePath ->
+            assertTrue(
+                loadResourceText(resourcePath).contains(
+                    "<monochrome android:drawable=\"@mipmap/ic_launcher_blue_snow_maid_announcement_monochrome\" />"
+                ),
+                "$resourcePath should expose the announcement-specific Android themed icon"
+            )
+        }
+    }
+
+    @Test
+    fun blueSnowMaidLauncherIcons_shouldUseThemeAwareAdaptiveShellsAndCircularFallbacks() {
+        assertTrue(
+            loadResourceText("drawable-night/ic_launcher_blue_snow_maid_background.xml")
+                .contains("#FF090A0C"),
+            "Dark mode adaptive icons should use the dark outer field around the circular portrait"
+        )
+        assertTrue(
+            loadResourceText("drawable-night/ic_launcher_blue_snow_maid_announcement_background.xml")
+                .contains("#FF090A0C"),
+            "Announcement icon should keep its distinct black field in dark mode"
+        )
+        mapOf(
+            "ic_launcher_blue_snow_maid" to "ic_launcher_blue_snow_maid_background_dark",
+            "ic_launcher_blue_snow_maid_announcement" to
+                "ic_launcher_blue_snow_maid_announcement_background_dark",
+            "ic_launcher_blue_snow_maid_front" to "ic_launcher_blue_snow_maid_background_dark"
+        ).forEach { (iconStem, backgroundStem) ->
+            listOf("", "_round").forEach { suffix ->
+                assertTrue(
+                    loadResourceText("mipmap-night-anydpi-v26/$iconStem$suffix.xml")
+                        .contains("@drawable/$backgroundStem"),
+                    "$iconStem$suffix should remain adaptive in dark mode instead of falling back to a legacy PNG"
+                )
+            }
+        }
+        val announcementFallbackRows = readPngRgbaRows(
+            loadResourceFile("mipmap-night-xxxhdpi/ic_launcher_blue_snow_maid_announcement_round.png")
+        )
+        val announcementCorner = announcementFallbackRows.first().take(4)
+        assertTrue(
+            announcementCorner[3] == 0,
+            "Announcement fallback icon should be a circle instead of a square shell"
+        )
+        val announcementCenterTop =
+            announcementFallbackRows[4].slice(96 * 4 until 96 * 4 + 4)
+        assertTrue(
+            announcementCenterTop[0] <= 16 && announcementCenterTop[1] <= 16 &&
+                announcementCenterTop[2] <= 16 && announcementCenterTop[3] > 0,
+            "The dark announcement fallback should reach its circular edge with black, not blue"
+        )
+
+        mapOf(
+            "mdpi" to (48 to 108),
+            "hdpi" to (72 to 162),
+            "xhdpi" to (96 to 216),
+            "xxhdpi" to (144 to 324),
+            "xxxhdpi" to (192 to 432)
+        ).forEach { (density, sizes) ->
+            listOf(
+                "ic_launcher_blue_snow_maid.png",
+                "ic_launcher_blue_snow_maid_round.png",
+                "ic_launcher_blue_snow_maid_announcement.png",
+                "ic_launcher_blue_snow_maid_announcement_round.png",
+                "ic_launcher_blue_snow_maid_front.png",
+                "ic_launcher_blue_snow_maid_front_round.png"
+            ).forEach { fileName ->
+                val file = loadResourceFile("mipmap-night-$density/$fileName")
+                val header = readPngHeader(file)
+                assertTrue(header.width == sizes.first && header.height == sizes.first)
+                assertTrue(header.colorType == 6 && readPngCornerAlphaValues(file).all { it == 0 })
+            }
+            listOf(
+                "ic_launcher_blue_snow_maid_foreground.png",
+                "ic_launcher_blue_snow_maid_announcement_foreground.png",
+                "ic_launcher_blue_snow_maid_front_foreground.png"
+            ).forEach { fileName ->
+                val header = readPngHeader(loadResourceFile("mipmap-night-$density/$fileName"))
+                assertTrue(header.width == sizes.second && header.height == sizes.second && header.colorType == 6)
+            }
+        }
+
+        val darkRows = readPngRgbaRows(
+            loadResourceFile("mipmap-night-xxxhdpi/ic_launcher_blue_snow_maid_front.png")
+        )
+        val edgeBluePixel = darkRows[4].slice(96 * 4 until 96 * 4 + 4)
+        assertTrue(
+            edgeBluePixel[3] > 0 && edgeBluePixel[2] > edgeBluePixel[0] + 80,
+            "Dark fallback icons should reach their circular edge with blue artwork, not a black rounded rectangle"
+        )
+    }
+
+    @Test
+    fun fixedMaidAppearanceResources_shouldMatchTheirLightAndDarkMasters() {
+        listOf(
+            "ic_launcher_blue_snow_maid",
+            "ic_launcher_blue_snow_maid_announcement",
+            "ic_launcher_blue_snow_maid_front"
+        )
+            .forEach { stem ->
+                listOf("", "_round", "_foreground").forEach { suffix ->
+                    val lightMaster = loadResourceFile("mipmap-xxxhdpi/$stem$suffix.png")
+                    val fixedLight = loadResourceFile("mipmap-xxxhdpi/${stem}_light$suffix.png")
+                    val darkMaster = loadResourceFile("mipmap-night-xxxhdpi/$stem$suffix.png")
+                    val fixedDark = loadResourceFile("mipmap-xxxhdpi/${stem}_dark$suffix.png")
+                    assertTrue(lightMaster.readBytes().contentEquals(fixedLight.readBytes()))
+                    assertTrue(darkMaster.readBytes().contentEquals(fixedDark.readBytes()))
+                }
+            }
+
+        val lightAdaptive = loadResourceText("mipmap-anydpi-v26/ic_launcher_blue_snow_maid_light.xml")
+        val darkAdaptive = loadResourceText("mipmap-anydpi-v26/ic_launcher_blue_snow_maid_dark.xml")
+        assertTrue(lightAdaptive.contains("@drawable/ic_launcher_blue_snow_maid_background_light"))
+        assertTrue(darkAdaptive.contains("@drawable/ic_launcher_blue_snow_maid_background_dark"))
+        listOf(
+            "ic_launcher_blue_snow_maid_announcement_light.xml",
+            "ic_launcher_blue_snow_maid_announcement_light_round.xml"
+        ).forEach { fileName ->
+            assertTrue(
+                loadResourceText("mipmap-anydpi-v26/$fileName")
+                    .contains("@drawable/ic_launcher_blue_snow_maid_announcement_background"),
+                "$fileName should keep the announcement icon's white background"
+            )
+        }
+        listOf(
+            "ic_launcher_blue_snow_maid_announcement_dark.xml",
+            "ic_launcher_blue_snow_maid_announcement_dark_round.xml"
+        ).forEach { fileName ->
+            assertTrue(
+                loadResourceText("mipmap-anydpi-v26/$fileName")
+                    .contains("@drawable/ic_launcher_blue_snow_maid_announcement_background_dark"),
+                "$fileName should keep the announcement icon's black background"
+            )
+        }
+        assertTrue(
+            loadResourceText("drawable/splash_icon_blue_snow_maid_light.xml")
+                .contains("#FFFFFFFF")
+        )
+        assertTrue(
+            loadResourceText("drawable/splash_icon_blue_snow_maid_dark.xml")
+                .contains("#FF090A0C")
+        )
+        assertTrue(
+            loadResourceText("drawable/splash_icon_blue_snow_maid_announcement_light.xml")
+                .contains("#FFFFFFFF")
+        )
+        assertTrue(
+            loadResourceText("drawable/splash_icon_blue_snow_maid_announcement_dark.xml")
+                .contains("#FF090A0C")
+        )
+    }
+
+    @Test
     fun launcherAliases_shouldBindMatchingSplashThemesForSelectedIcons() {
         val manifest = loadResourceText("../AndroidManifest.xml")
 
         mapOf(
+            "MainActivityAliasBlueSnowMaid" to SplashAliasContract("MainActivitySplashBlueSnowMaid", "Theme.PureBiliBili.Splash.BlueSnowMaid", "ic_launcher_blue_snow_maid", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_round"),
+            "MainActivityAliasBlueSnowMaidAnnouncement" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncement", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncement", "ic_launcher_blue_snow_maid_announcement", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_announcement_round"),
+            "MainActivityAliasBlueSnowMaidAnnouncementLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncementLight", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncementLight", "ic_launcher_blue_snow_maid_announcement_light", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_announcement_light_round"),
+            "MainActivityAliasBlueSnowMaidAnnouncementDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncementDark", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncementDark", "ic_launcher_blue_snow_maid_announcement_dark", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_announcement_dark_round"),
+            "MainActivityAliasBlueSnowMaidFront" to SplashAliasContract("MainActivitySplashBlueSnowMaidFront", "Theme.PureBiliBili.Splash.BlueSnowMaidFront", "ic_launcher_blue_snow_maid_front", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_front_round"),
+            "MainActivityAliasBlueSnowMaidLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidLight", "Theme.PureBiliBili.Splash.BlueSnowMaidLight", "ic_launcher_blue_snow_maid_light", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_light_round"),
+            "MainActivityAliasBlueSnowMaidDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidDark", "Theme.PureBiliBili.Splash.BlueSnowMaidDark", "ic_launcher_blue_snow_maid_dark", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_dark_round"),
+            "MainActivityAliasBlueSnowMaidFrontLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidFrontLight", "Theme.PureBiliBili.Splash.BlueSnowMaidFrontLight", "ic_launcher_blue_snow_maid_front_light", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_front_light_round"),
+            "MainActivityAliasBlueSnowMaidFrontDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidFrontDark", "Theme.PureBiliBili.Splash.BlueSnowMaidFrontDark", "ic_launcher_blue_snow_maid_front_dark", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_front_dark_round"),
             "MainActivityAlias3DLauncher" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
             "MainActivityAlias3D" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
             "MainActivityAliasBiliPai" to SplashAliasContract("MainActivitySplashBiliPai", "Theme.PureBiliBili.Splash.BiliPai", "ic_launcher_bilipai"),
             "MainActivityAliasBiliPaiPink" to SplashAliasContract("MainActivitySplashBiliPaiPink", "Theme.PureBiliBili.Splash.BiliPaiPink", "ic_launcher_bilipai_pink"),
             "MainActivityAliasBiliPaiWhite" to SplashAliasContract("MainActivitySplashBiliPaiWhite", "Theme.PureBiliBili.Splash.BiliPaiWhite", "ic_launcher_bilipai_white"),
             "MainActivityAliasBiliPaiMonet" to SplashAliasContract("MainActivitySplashBiliPaiMonet", "Theme.PureBiliBili.Splash.BiliPaiMonet", "ic_launcher_bilipai_monet"),
-            "MainActivityAliasFlat" to SplashAliasContract("MainActivitySplashFlat", "Theme.PureBiliBili.Splash.Flat", "ic_launcher_flat"),
-            "MainActivityAliasTelegramBlue" to SplashAliasContract("MainActivitySplashTelegramBlue", "Theme.PureBiliBili.Splash.TelegramBlue", "ic_launcher_telegram_blue"),
-            "MainActivityAliasDark" to SplashAliasContract("MainActivitySplashTelegramDark", "Theme.PureBiliBili.Splash.TelegramDark", "ic_launcher_telegram_dark"),
-            "MainActivityAliasYuki" to SplashAliasContract("MainActivitySplashYuki", "Theme.PureBiliBili.Splash.Yuki", "ic_launcher"),
-            "MainActivityAliasAnime" to SplashAliasContract("MainActivitySplashAnime", "Theme.PureBiliBili.Splash.Anime", "ic_launcher_anime"),
-            "MainActivityAliasHeadphone" to SplashAliasContract("MainActivitySplashHeadphone", "Theme.PureBiliBili.Splash.Headphone", "ic_launcher_headphone")
+            "MainActivityAliasFlat" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
+            "MainActivityAliasTelegramBlue" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
+            "MainActivityAliasDark" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
+            "MainActivityAliasYuki" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
+            "MainActivityAliasAnime" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
+            "MainActivityAliasHeadphone" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d")
         ).forEach { (alias, contract) ->
             val aliasBlock = Regex(
                 """<activity-alias\b(?=[^>]*android:name="\.$alias")[\s\S]*?</activity-alias>"""
@@ -177,8 +674,12 @@ class MainActivityAppCompatContractTest {
                 "${contract.targetActivity} should bind ${contract.theme} so Android splash follows the selected launcher icon"
             )
             assertTrue(
-                targetActivityBlock.contains("""android:icon="@mipmap/${contract.launcherIcon}""""),
-                "${contract.targetActivity} should reuse ${contract.launcherIcon} instead of exposing duplicate splash drawables"
+                targetActivityBlock.contains("""android:icon="${contract.splashActivityIcon}""""),
+                "${contract.targetActivity} should use the selected adaptive launcher icon"
+            )
+            assertTrue(
+                targetActivityBlock.contains("""android:roundIcon="${contract.splashActivityRoundIcon}""""),
+                "${contract.targetActivity} should expose the selected adaptive round icon"
             )
         }
     }
@@ -201,17 +702,26 @@ class MainActivityAppCompatContractTest {
         )
 
         listOf(
+            "MainActivityAliasBlueSnowMaidNoIcon" to "ic_launcher_blue_snow_maid",
+            "MainActivityAliasBlueSnowMaidAnnouncementNoIcon" to "ic_launcher_blue_snow_maid_announcement",
+            "MainActivityAliasBlueSnowMaidAnnouncementLightNoIcon" to "ic_launcher_blue_snow_maid_announcement_light",
+            "MainActivityAliasBlueSnowMaidAnnouncementDarkNoIcon" to "ic_launcher_blue_snow_maid_announcement_dark",
+            "MainActivityAliasBlueSnowMaidFrontNoIcon" to "ic_launcher_blue_snow_maid_front",
+            "MainActivityAliasBlueSnowMaidLightNoIcon" to "ic_launcher_blue_snow_maid_light",
+            "MainActivityAliasBlueSnowMaidDarkNoIcon" to "ic_launcher_blue_snow_maid_dark",
+            "MainActivityAliasBlueSnowMaidFrontLightNoIcon" to "ic_launcher_blue_snow_maid_front_light",
+            "MainActivityAliasBlueSnowMaidFrontDarkNoIcon" to "ic_launcher_blue_snow_maid_front_dark",
             "MainActivityAlias3DNoIcon" to "ic_launcher_3d",
             "MainActivityAliasBiliPaiNoIcon" to "ic_launcher_bilipai",
             "MainActivityAliasBiliPaiPinkNoIcon" to "ic_launcher_bilipai_pink",
             "MainActivityAliasBiliPaiWhiteNoIcon" to "ic_launcher_bilipai_white",
             "MainActivityAliasBiliPaiMonetNoIcon" to "ic_launcher_bilipai_monet",
-            "MainActivityAliasFlatNoIcon" to "ic_launcher_flat",
-            "MainActivityAliasTelegramBlueNoIcon" to "ic_launcher_telegram_blue",
-            "MainActivityAliasDarkNoIcon" to "ic_launcher_telegram_dark",
-            "MainActivityAliasYukiNoIcon" to "ic_launcher",
-            "MainActivityAliasAnimeNoIcon" to "ic_launcher_anime",
-            "MainActivityAliasHeadphoneNoIcon" to "ic_launcher_headphone"
+            "MainActivityAliasFlatNoIcon" to "ic_launcher_3d",
+            "MainActivityAliasTelegramBlueNoIcon" to "ic_launcher_3d",
+            "MainActivityAliasDarkNoIcon" to "ic_launcher_3d",
+            "MainActivityAliasYukiNoIcon" to "ic_launcher_3d",
+            "MainActivityAliasAnimeNoIcon" to "ic_launcher_3d",
+            "MainActivityAliasHeadphoneNoIcon" to "ic_launcher_3d"
         ).forEach { (alias, launcherIcon) ->
             val aliasBlock = Regex(
                 """<activity-alias\b(?=[^>]*android:name="\.$alias")[\s\S]*?</activity-alias>"""
@@ -231,6 +741,24 @@ class MainActivityAppCompatContractTest {
     @Test
     fun splashFlyout_shouldReuseLauncherIconForSelectedLauncherComponent() {
         mapOf(
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaid" to R.mipmap.ic_launcher_blue_snow_maid,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaid" to R.drawable.splash_icon_blue_snow_maid,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidAnnouncement" to R.mipmap.ic_launcher_blue_snow_maid_announcement,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidAnnouncement" to R.drawable.splash_icon_blue_snow_maid_announcement,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidAnnouncementLight" to R.mipmap.ic_launcher_blue_snow_maid_announcement_light,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidAnnouncementLight" to R.drawable.splash_icon_blue_snow_maid_announcement_light,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidAnnouncementDark" to R.mipmap.ic_launcher_blue_snow_maid_announcement_dark,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidAnnouncementDark" to R.drawable.splash_icon_blue_snow_maid_announcement_dark,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidFront" to R.mipmap.ic_launcher_blue_snow_maid_front,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidFront" to R.drawable.splash_icon_blue_snow_maid_front,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidLight" to R.mipmap.ic_launcher_blue_snow_maid_light,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidLight" to R.drawable.splash_icon_blue_snow_maid_light,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidDark" to R.mipmap.ic_launcher_blue_snow_maid_dark,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidDark" to R.drawable.splash_icon_blue_snow_maid_dark,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidFrontLight" to R.mipmap.ic_launcher_blue_snow_maid_front_light,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidFrontLight" to R.drawable.splash_icon_blue_snow_maid_front_light,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidFrontDark" to R.mipmap.ic_launcher_blue_snow_maid_front_dark,
+            "com.android.purebilibili.MainActivitySplashBlueSnowMaidFrontDark" to R.drawable.splash_icon_blue_snow_maid_front_dark,
             "com.android.purebilibili.MainActivityAlias3DLauncher" to R.mipmap.ic_launcher_3d,
             "com.android.purebilibili.MainActivitySplashIcon3D" to R.mipmap.ic_launcher_3d,
             "com.android.purebilibili.MainActivityAliasBiliPai" to R.mipmap.ic_launcher_bilipai,
@@ -238,12 +766,15 @@ class MainActivityAppCompatContractTest {
             "com.android.purebilibili.MainActivityAliasBiliPaiPink" to R.mipmap.ic_launcher_bilipai_pink,
             "com.android.purebilibili.MainActivityAliasBiliPaiWhite" to R.mipmap.ic_launcher_bilipai_white,
             "com.android.purebilibili.MainActivityAliasBiliPaiMonet" to R.mipmap.ic_launcher_bilipai_monet,
-            "com.android.purebilibili.MainActivityAliasFlat" to R.mipmap.ic_launcher_flat,
-            "com.android.purebilibili.MainActivityAliasTelegramBlue" to R.mipmap.ic_launcher_telegram_blue,
-            "com.android.purebilibili.MainActivityAliasDark" to R.mipmap.ic_launcher_telegram_dark,
-            "com.android.purebilibili.MainActivityAliasYuki" to R.mipmap.ic_launcher,
-            "com.android.purebilibili.MainActivityAliasAnime" to R.mipmap.ic_launcher_anime,
-            "com.android.purebilibili.MainActivityAliasHeadphone" to R.mipmap.ic_launcher_headphone,
+            "com.android.purebilibili.MainActivitySplashBiliPaiMonet" to R.mipmap.splash_icon_bilipai_monet,
+            "com.android.purebilibili.MainActivityAliasFlat" to R.mipmap.ic_launcher_3d,
+            "com.android.purebilibili.MainActivityAliasTelegramBlue" to R.mipmap.ic_launcher_3d,
+            "com.android.purebilibili.MainActivityAliasDark" to R.mipmap.ic_launcher_3d,
+            "com.android.purebilibili.MainActivityAliasYuki" to R.mipmap.ic_launcher_3d,
+            "com.android.purebilibili.MainActivityAliasAnime" to R.mipmap.ic_launcher_3d,
+            "com.android.purebilibili.MainActivityAliasHeadphone" to R.mipmap.ic_launcher_3d,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidNoIcon" to R.mipmap.ic_launcher_blue_snow_maid,
+            "com.android.purebilibili.MainActivityAliasBlueSnowMaidFrontNoIcon" to R.mipmap.ic_launcher_blue_snow_maid_front,
             "com.android.purebilibili.MainActivityAlias3DNoIcon" to R.mipmap.ic_launcher_3d
         ).forEach { (className, iconResId) ->
             assertTrue(
@@ -254,10 +785,34 @@ class MainActivityAppCompatContractTest {
     }
 
     @Test
+    fun blueSnowMaid_shouldBeManifestDefaultAndPlayStoreAssetShouldBeValid() {
+        val manifest = loadResourceText("../AndroidManifest.xml")
+        val defaultAliasBlock = Regex(
+            """<activity-alias\b(?=[^>]*android:name="\.MainActivityAliasBlueSnowMaid")[\s\S]*?</activity-alias>"""
+        ).find(manifest)?.value.orEmpty()
+        val legacyDefaultAliasBlock = Regex(
+            """<activity-alias\b(?=[^>]*android:name="\.MainActivityAlias3DLauncher")[\s\S]*?</activity-alias>"""
+        ).find(manifest)?.value.orEmpty()
+        val playStoreIcon = listOf(
+            File("app/src/main/ic_launcher-playstore.png"),
+            File("src/main/ic_launcher-playstore.png")
+        ).firstOrNull { it.exists() } ?: error("Cannot locate ic_launcher-playstore.png")
+        val playStoreHeader = readPngHeader(playStoreIcon)
+
+        assertTrue(manifest.contains("""android:icon="@mipmap/ic_launcher_blue_snow_maid"""))
+        assertTrue(manifest.contains("""android:roundIcon="@mipmap/ic_launcher_blue_snow_maid_round"""))
+        assertTrue(defaultAliasBlock.contains("""android:enabled="true"""))
+        assertTrue(legacyDefaultAliasBlock.contains("""android:enabled="false"""))
+        assertTrue(playStoreHeader.width == 512 && playStoreHeader.height == 512)
+        assertTrue(playStoreHeader.colorType == 6, "Play Store icon should be an RGBA PNG")
+        assertTrue(playStoreIcon.length() <= 1_024L * 1_024L, "Play Store icon should stay within 1 MB")
+    }
+
+    @Test
     fun appIconSwitch_shouldNotRequestAppRestartOrRecreate() {
         val settingsViewModelSource = loadSettingsViewModelSource()
         val launcherAliasSwitchBody = Regex(
-            """private suspend fun applyLauncherAliasForCurrentSplashIconSetting\(iconKey: String\) \{[\s\S]*?\n    \}"""
+            """private suspend fun applyLauncherAliasForCurrentSplashIconSetting\([\s\S]*?\n    \}"""
         ).find(settingsViewModelSource)?.value ?: Regex(
             """fun setAppIcon\(iconKey: String\) \{[\s\S]*?\n    \}"""
         ).find(settingsViewModelSource)?.value.orEmpty()
@@ -290,8 +845,8 @@ class MainActivityAppCompatContractTest {
             "Theme root should build a miuix ThemeController"
         )
         assertTrue(
-            mainActivitySource.contains("appThemeSettings.uiPreset"),
-            "MainActivity should keep reading UiPreset when iOS and Android Native presets are available again"
+            mainActivitySource.contains("appThemeSettings.uiStyle"),
+            "MainActivity should read the two-value AppUiStyle directly from startup theme settings"
         )
         assertTrue(
             mainActivitySource.contains("AppThemeSettings(") ||
@@ -327,7 +882,9 @@ class MainActivityAppCompatContractTest {
     private data class SplashAliasContract(
         val targetActivity: String,
         val theme: String,
-        val launcherIcon: String
+        val launcherIcon: String,
+        val splashActivityIcon: String = "@mipmap/$launcherIcon",
+        val splashActivityRoundIcon: String = splashActivityIcon
     )
 
     private fun readPngHeader(file: File): PngHeader {
@@ -348,6 +905,19 @@ class MainActivityAppCompatContractTest {
     }
 
     private fun readPngCornerAlphaValues(file: File): List<Int> {
+        val rows = readPngRgbaRows(file)
+        val width = rows.first().size / 4
+        val height = rows.size
+        fun alphaAt(x: Int, y: Int): Int = rows[y][x * 4 + 3]
+        return listOf(
+            alphaAt(0, 0),
+            alphaAt(width - 1, 0),
+            alphaAt(0, height - 1),
+            alphaAt(width - 1, height - 1)
+        )
+    }
+
+    private fun readPngRgbaRows(file: File): List<IntArray> {
         val bytes = file.readBytes()
         var offset = 8
         var width = 0
@@ -376,17 +946,10 @@ class MainActivityAppCompatContractTest {
         assertTrue(bitDepth == 8 && colorType == 6, "${file.name} should be an 8-bit RGBA PNG")
 
         val inflated = InflaterInputStream(idat.toByteArray().inputStream()).readBytes()
-        val rows = decodePngRgbaRows(
+        return decodePngRgbaRows(
             inflated = inflated,
             width = width,
             height = height
-        )
-        fun alphaAt(x: Int, y: Int): Int = rows[y][x * 4 + 3]
-        return listOf(
-            alphaAt(0, 0),
-            alphaAt(width - 1, 0),
-            alphaAt(0, height - 1),
-            alphaAt(width - 1, height - 1)
         )
     }
 
@@ -558,6 +1121,16 @@ class MainActivityAppCompatContractTest {
         )
         val sourceFile = candidates.firstOrNull { it.exists() }
             ?: error("Cannot locate MainActivity.kt from ${File(".").absolutePath}")
+        return sourceFile.readText()
+    }
+
+    private fun loadMiniPlayerManagerSource(): String {
+        val candidates = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/player/MiniPlayerManager.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/player/MiniPlayerManager.kt")
+        )
+        val sourceFile = candidates.firstOrNull { it.exists() }
+            ?: error("Cannot locate MiniPlayerManager.kt from ${File(".").absolutePath}")
         return sourceFile.readText()
     }
 

@@ -48,4 +48,18 @@ class MineSideDrawerLayoutPolicyTest {
         assertEquals(52, policy.profileAvatarSizeDp)
         assertEquals(20, policy.profileChevronSizeDp)
     }
+
+    @Test
+    fun footerSpacerReservesBottomOverlayAndClampsNegativeInput() {
+        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 393)
+
+        assertEquals(
+            policy.footerSpacerHeightDp + 104,
+            resolveMineSideDrawerFooterSpacerHeightDp(policy, bottomOverlayHeightDp = 104)
+        )
+        assertEquals(
+            policy.footerSpacerHeightDp,
+            resolveMineSideDrawerFooterSpacerHeightDp(policy, bottomOverlayHeightDp = -12)
+        )
+    }
 }

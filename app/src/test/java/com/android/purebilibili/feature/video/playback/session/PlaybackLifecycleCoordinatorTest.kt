@@ -22,6 +22,22 @@ class PlaybackLifecycleCoordinatorTest {
     }
 
     @Test
+    fun pauseDecision_keepsSharedPlayerRunningWhileAudioModeCoversVideoDetail() {
+        val decision = resolvePlaybackPauseDecision(
+            isMiniMode = false,
+            isPip = false,
+            isInAudioMode = true,
+            isBackgroundAudio = false,
+            wasPlaybackActive = true,
+            hasRecentUserLeaveHint = false,
+        )
+
+        assertTrue(decision.shouldContinuePlayback)
+        assertFalse(decision.shouldPausePlayback)
+        assertFalse(decision.shouldPersistTransientResumeIntent)
+    }
+
+    @Test
     fun pauseDecision_marksBackgroundAudioOnlyWhenUserActuallyLeftApp() {
         val decision = resolvePlaybackPauseDecision(
             isMiniMode = false,

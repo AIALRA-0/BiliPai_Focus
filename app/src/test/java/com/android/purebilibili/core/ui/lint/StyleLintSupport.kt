@@ -34,14 +34,58 @@ internal object StyleLintSupport {
         val offenders = mutableListOf<String>()
         featureKtFiles().forEach { (file, relativePath) ->
             if (relativePath in allowlist) return@forEach
-            file.useLines { lines ->
-                lines.forEachIndexed { idx, line ->
-                    if (pattern.containsMatchIn(line)) {
-                        offenders.add("$relativePath:${idx + 1}: ${line.trim()}")
-                    }
-                }
-            }
+            offenders += findMatches(file, relativePath, pattern)
         }
         return offenders
+    }
+
+    fun findOffendersInMigratedFeatures(
+        pattern: Regex,
+        allowlist: Set<String> = emptySet(),
+    ): List<String> {
+        val offenders = mutableListOf<String>()
+        featureKtFiles().forEach { (file, relativePath) ->
+            if (StyleLintAllowlist.MIGRATED_TOKEN_PREFIXES.none(relativePath::startsWith)) {
+                return@forEach
+            }
+            if (relativePath in allowlist) {
+                return@forEach
+            }
+            if (isTestedNamedTokenException(file, relativePath)) {
+                return@forEach
+            }
+            offenders += findMatches(file, relativePath, pattern)
+        }
+        return offenders
+    }
+
+    private fun findMatches(file: File, relativePath: String, pattern: Regex): List<String> {
+        val source = file.readText()
+        return pattern.findAll(source).map { match ->
+            val lineNumber = source.substring(0, match.range.first).count { it == '\n' }
+            val lineStart = source.lastIndexOf('\n', match.range.first - 1) + 1
+            val lineEnd = source.indexOf('\n', match.range.last + 1).let { if (it == -1) source.length else it }
+            "$relativePath:${lineNumber + 1}: ${source.substring(lineStart, lineEnd).trim()}"
+        }.toList()
+    }
+
+    private fun isTestedNamedTokenException(file: File, relativePath: String): Boolean {
+        if (
+            !relativePath.endsWith("Policy.kt") &&
+            !relativePath.endsWith("Spec.kt") &&
+            !relativePath.endsWith("Palette.kt")
+        ) {
+            return false
+        }
+        val testRoot = when {
+            File("src/test/java").exists() -> File("src/test/java")
+            File("app/src/test/java").exists() -> File("app/src/test/java")
+            else -> return false
+        }
+        val expectedNames = setOf(
+            file.nameWithoutExtension + "Test.kt",
+            file.nameWithoutExtension + "PolicyTest.kt",
+        )
+        return testRoot.walkTopDown().any { it.isFile && it.name in expectedNames }
     }
 }

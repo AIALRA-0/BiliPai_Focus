@@ -6,8 +6,24 @@ import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlayMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PlaybackCompletionPolicyTest {
+
+    @Test
+    fun `comment interaction suppresses playback completion navigation`() {
+        assertTrue(
+            shouldSuppressPlaybackCompletionForCommentInteraction(
+                commentInteractionActive = true
+            )
+        )
+        assertFalse(
+            shouldSuppressPlaybackCompletionForCommentInteraction(
+                commentInteractionActive = false
+            )
+        )
+    }
 
     @Test
     fun `stop mode always stops after ended`() {
@@ -62,23 +78,42 @@ class PlaybackCompletionPolicyTest {
     }
 
     @Test
-    fun `auto continue uses legacy autoplay gate for normal videos`() {
+    fun `auto mode stops when current video has no next page or season episode`() {
         assertEquals(
             PlaybackEndAction.STOP,
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
-                autoPlayEnabled = false,
+                autoPlayEnabled = true,
                 isExternalPlaylist = false,
-                externalPlaylistAutoContinueEnabled = true
+                externalPlaylistAutoContinueEnabled = false
             )
         )
+    }
+
+    @Test
+    fun `auto mode continues when current video has next page or season episode`() {
         assertEquals(
             PlaybackEndAction.AUTO_CONTINUE,
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
                 autoPlayEnabled = true,
                 isExternalPlaylist = false,
-                externalPlaylistAutoContinueEnabled = false
+                externalPlaylistAutoContinueEnabled = false,
+                hasNextPageOrSeasonTarget = true
+            )
+        )
+    }
+
+    @Test
+    fun `auto mode stops before next page or season episode when autoplay switch is off`() {
+        assertEquals(
+            PlaybackEndAction.STOP,
+            resolvePlaybackEndAction(
+                behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
+                autoPlayEnabled = false,
+                isExternalPlaylist = false,
+                externalPlaylistAutoContinueEnabled = true,
+                hasNextPageOrSeasonTarget = true
             )
         )
     }

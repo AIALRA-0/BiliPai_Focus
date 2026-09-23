@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.space
 
+import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.SeasonArchiveItem
 import com.android.purebilibili.data.model.response.SeasonArchiveStat
@@ -12,6 +13,10 @@ import com.android.purebilibili.data.model.response.SeriesMeta
 import com.android.purebilibili.data.model.response.SpaceAggregateCard
 import com.android.purebilibili.data.model.response.SpaceAggregateData
 import com.android.purebilibili.data.model.response.SpaceAggregateImages
+import com.android.purebilibili.data.model.response.SpaceAggregateRelation
+import com.android.purebilibili.data.model.response.SpaceAggregateTab
+import com.android.purebilibili.data.model.response.SpaceAggregateArchiveItem
+import com.android.purebilibili.data.model.response.SpaceTagItem
 import com.android.purebilibili.data.model.response.SpaceTopArcData
 import com.android.purebilibili.data.model.response.SpaceUserInfo
 import com.android.purebilibili.data.model.response.SpaceVideoItem
@@ -23,6 +28,61 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SpaceLoadPolicyTest {
+
+    @Test
+    fun `aggregate video target falls back to bilibili video deep link when bvid is absent`() {
+        assertEquals(
+            "av2001",
+            resolveSpaceAggregateVideoId(
+                SpaceAggregateArchiveItem(
+                    aid = 2001L,
+                    uri = "bilibili://video/2001",
+                    goto = "av",
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `aggregate video target falls back to numeric archive param`() {
+        assertEquals(
+            "av2002",
+            resolveSpaceAggregateVideoId(
+                SpaceAggregateArchiveItem(
+                    aid = 2002L,
+                    param = "2002",
+                    goto = "av",
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `aggregate pgc item is not mistaken for a regular video`() {
+        assertNull(
+            resolveSpaceAggregateVideoId(
+                SpaceAggregateArchiveItem(
+                    aid = 3001L,
+                    param = "3001",
+                    goto = "bangumi",
+                    uri = "bilibili://bangumi/play/ep3001",
+                    isPgc = true,
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `aggregate lazy keys stay unique when api omits archive ids`() {
+        val emptyIdentityItem = SpaceAggregateArchiveItem()
+
+        val firstKey = resolveSpaceAggregateLazyItemKey("coin", 0, emptyIdentityItem)
+        val secondKey = resolveSpaceAggregateLazyItemKey("coin", 1, emptyIdentityItem)
+
+        assertEquals("coin_0__0", firstKey)
+        assertEquals("coin_0__1", secondKey)
+        assertTrue(firstKey != secondKey)
+    }
 
     @Test
     fun `oldest publish sort keeps pubdate api key but exposes dedicated label`() {
@@ -137,23 +197,32 @@ class SpaceLoadPolicyTest {
     }
 
     @Test
+    fun resolveSpaceSearchEntryLabel_andVisibility() {
+        assertEquals("搜索 TA 的动态", resolveSpaceSearchEntryLabel(SpaceSearchScope.DYNAMIC))
+        assertEquals("搜索 TA 的视频", resolveSpaceSearchEntryLabel(SpaceSearchScope.VIDEO))
+        assertTrue(shouldShowSpaceSearchEntry(SpaceSearchScope.DYNAMIC, isSearchMode = false))
+        assertFalse(shouldShowSpaceSearchEntry(SpaceSearchScope.DYNAMIC, isSearchMode = true))
+        assertFalse(shouldShowSpaceSearchEntry(SpaceSearchScope.NONE, isSearchMode = false))
+    }
+
+    @Test
     fun resolveSpaceSearchBarGridItemIndex_keepsSearchBarVisibleAfterTopBarClick() {
         assertEquals(
-            2,
+            1,
             resolveSpaceSearchBarGridItemIndex(
                 scope = SpaceSearchScope.DYNAMIC,
                 hasContributionToolbar = false
             )
         )
         assertEquals(
-            3,
+            1,
             resolveSpaceSearchBarGridItemIndex(
                 scope = SpaceSearchScope.VIDEO,
                 hasContributionToolbar = true
             )
         )
         assertEquals(
-            2,
+            1,
             resolveSpaceSearchBarGridItemIndex(
                 scope = SpaceSearchScope.VIDEO,
                 hasContributionToolbar = false
@@ -197,13 +266,22 @@ class SpaceLoadPolicyTest {
     fun shouldEnableSpaceLazyGridSharedTransition_requiresBothScopes() {
         assertTrue(
             shouldEnableSpaceLazyGridSharedTransition(
+                transitionEnabled = true,
                 hasSharedTransitionScope = true,
                 hasAnimatedVisibilityScope = true
             )
         )
         assertFalse(
             shouldEnableSpaceLazyGridSharedTransition(
+                transitionEnabled = true,
                 hasSharedTransitionScope = false,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertFalse(
+            shouldEnableSpaceLazyGridSharedTransition(
+                transitionEnabled = false,
+                hasSharedTransitionScope = true,
                 hasAnimatedVisibilityScope = true
             )
         )
@@ -428,7 +506,100 @@ class SpaceLoadPolicyTest {
         assertEquals(2, resolveSpaceContentGridColumnCount(widthDp = 360))
         assertEquals(2, resolveSpaceContentGridColumnCount(widthDp = 412))
         assertEquals(3, resolveSpaceContentGridColumnCount(widthDp = 700))
-        assertEquals(4, resolveSpaceContentGridColumnCount(widthDp = 960))
+        // 与首页信息流共用自适应列数策略：980dp 内容上限内按 180dp 最小卡宽自适应。
+        assertEquals(5, resolveSpaceContentGridColumnCount(widthDp = 960))
+    }
+
+    @Test
+    fun `space adaptive layout follows window width for tablets and unfolded foldables`() {
+        val compact = resolveSpaceAdaptiveLayoutSpec(widthDp = 412)
+        val medium = resolveSpaceAdaptiveLayoutSpec(widthDp = 700)
+        val expanded = resolveSpaceAdaptiveLayoutSpec(widthDp = 1000)
+        val large = resolveSpaceAdaptiveLayoutSpec(widthDp = 1280)
+
+        assertEquals(980, compact.contentMaxWidthDp)
+        assertEquals(1, compact.dynamicColumns)
+        assertFalse(compact.useExpandedHeader)
+        assertEquals(980, medium.contentMaxWidthDp)
+        assertEquals(1, medium.dynamicColumns)
+        assertTrue(medium.useExpandedHeader)
+        assertEquals(1280, expanded.contentMaxWidthDp)
+        assertEquals(2, expanded.dynamicColumns)
+        assertTrue(expanded.useExpandedHeader)
+        assertEquals(1280, large.contentMaxWidthDp)
+        assertEquals(3, large.dynamicColumns)
+        assertTrue(large.useExpandedHeader)
+        assertEquals(720, large.listContentMaxWidthDp)
+        val phoneBanner = resolveSpaceBannerMetrics(
+            renderedBannerWidthDp = 393f,
+            windowWidthDp = 393f,
+            windowHeightDp = 851f,
+        )
+        assertFalse(phoneBanner.cropToFill)
+        assertEquals(393f / SPACE_BANNER_ASPECT_RATIO, phoneBanner.heightDp, 0.01f)
+        assertEquals(393f / SPACE_BANNER_ASPECT_RATIO, phoneBanner.heroHeightDp, 0.01f)
+        val phoneBannerWithInset = resolveSpaceBannerMetrics(
+            renderedBannerWidthDp = 393f,
+            windowWidthDp = 393f,
+            windowHeightDp = 851f,
+            topInsetDp = 104f,
+        )
+        assertFalse(phoneBannerWithInset.cropToFill)
+        assertEquals(393f / SPACE_BANNER_ASPECT_RATIO + 104f, phoneBannerWithInset.heightDp, 0.01f)
+        assertEquals(393f / SPACE_BANNER_ASPECT_RATIO, phoneBannerWithInset.heroHeightDp, 0.01f)
+        val landscapeTabletBanner = resolveSpaceBannerMetrics(
+            renderedBannerWidthDp = 1280f,
+            windowWidthDp = 1280f,
+            windowHeightDp = 800f,
+        )
+        assertTrue(landscapeTabletBanner.cropToFill)
+        assertEquals(SPACE_WIDE_BANNER_MAX_HEIGHT_DP, landscapeTabletBanner.heightDp, 0.01f)
+        val compactCover = resolveSpaceBannerMetrics(
+            renderedBannerWidthDp = 421f,
+            windowWidthDp = 421f,
+            windowHeightDp = 616f,
+        )
+        assertFalse(compactCover.cropToFill)
+        assertEquals(421f / SPACE_BANNER_ASPECT_RATIO, compactCover.heightDp, 0.01f)
+        assertEquals(
+            7,
+            resolveSpaceContentGridColumnCount(
+                widthDp = 1280,
+                contentMaxWidthDp = large.contentMaxWidthDp,
+                widthSizeClass = com.android.purebilibili.core.util.WindowWidthSizeClass.Large,
+            ),
+        )
+    }
+
+    @Test
+    fun `resolveSpaceContentGridColumnCount honors home feed fixed column and width presets`() {
+        assertEquals(
+            3,
+            resolveSpaceContentGridColumnCount(
+                widthDp = 412,
+                fixedColumnCount = 3
+            )
+        )
+        assertEquals(
+            2,
+            resolveSpaceContentGridColumnCount(
+                widthDp = 412,
+                cardWidthPreset = HomeFeedCardWidthPreset.WIDE
+            )
+        )
+        // 与首页一致：即使超宽卡预设，窄屏仍保底 2 列。
+        assertEquals(
+            2,
+            resolveSpaceContentGridColumnCount(
+                widthDp = 412,
+                cardWidthPreset = HomeFeedCardWidthPreset.ULTRA_WIDE
+            )
+        )
+        // 大屏按空间页 980dp 内容宽度上限截断，而不是屏幕全宽。
+        assertEquals(
+            5,
+            resolveSpaceContentGridColumnCount(widthDp = 1600)
+        )
     }
 
     @Test
@@ -463,7 +634,7 @@ class SpaceLoadPolicyTest {
     }
 
     @Test
-    fun `contribution video item key changes with layout mode`() {
+    fun `contribution video item key survives layout changes for continuous reflow`() {
         val gridKey = resolveSpaceContributionVideoItemKey(
             layoutMode = SpaceContributionVideoLayoutMode.GRID,
             bvid = "BV1xx",
@@ -475,8 +646,8 @@ class SpaceLoadPolicyTest {
             aid = 123
         )
 
-        assertEquals("space_video_GRID_BV1xx_123", gridKey)
-        assertEquals("space_video_SINGLE_COLUMN_BV1xx_123", singleColumnKey)
+        assertEquals("space_video_BV1xx_123", gridKey)
+        assertEquals(gridKey, singleColumnKey)
     }
 
     @Test
@@ -527,6 +698,17 @@ class SpaceLoadPolicyTest {
                 seededVideoCount = 0,
                 pageSize = 30,
                 selectedSubTab = SpaceSubTab.AUDIO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertTrue(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 0,
+                pageSize = 30,
+                selectedSubTab = SpaceSubTab.CHARGING_VIDEO,
                 selectedTid = 0,
                 currentOrder = VideoSortOrder.PUBDATE,
                 currentKeyword = ""
@@ -606,6 +788,74 @@ class SpaceLoadPolicyTest {
     }
 
     @Test
+    fun `resolveSpaceInitialSeedFromAggregate keeps PiliPlus space tag contract`() {
+        val seed = resolveSpaceInitialSeedFromAggregate(
+            data = SpaceAggregateData(
+                card = SpaceAggregateCard(
+                    mid = "42",
+                    spaceTag = listOf(
+                        SpaceTagItem(type = "location", title = "IP属地：广东"),
+                        SpaceTagItem(type = "real_name", title = "已实名认证"),
+                        SpaceTagItem(type = "other", title = "不应展示")
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("IP属地：广东", "已实名认证"),
+            seed?.userInfo?.spaceTags?.map { it.title }
+        )
+        assertEquals("IP属地：广东", seed?.userInfo?.ipLocation)
+    }
+
+    @Test
+    fun `resolveSpaceAggregateTopPhoto prefers collection top simple image`() {
+        val images = SpaceAggregateImages(
+            imgUrl = "https://i0.hdslb.com/bfs/space/fallback.jpg",
+            collectionTopSimple = com.android.purebilibili.data.model.response.SpaceCollectionTopSimple(
+                top = com.android.purebilibili.data.model.response.SpaceCollectionTop(
+                    result = listOf(
+                        com.android.purebilibili.data.model.response.SpaceCollectionTopItem(
+                            item = com.android.purebilibili.data.model.response.SpaceCollectionTopItemDetail(
+                                image = com.android.purebilibili.data.model.response.SpaceCollectionTopImage(
+                                    defaultImage = "https://i0.hdslb.com/bfs/space/collection-default.png"
+                                )
+                            ),
+                            cover = "https://i0.hdslb.com/bfs/space/collection-cover.png"
+                        )
+                    )
+                )
+            )
+        )
+
+        val resolved = resolveSpaceAggregateTopPhoto(images)
+        assertEquals("https://i0.hdslb.com/bfs/space/collection-default.png", resolved)
+    }
+
+    @Test
+    fun `resolveSpaceAggregateTopPhoto falls back to collection cover then imgUrl`() {
+        val coverOnly = SpaceAggregateImages(
+            imgUrl = "https://i0.hdslb.com/bfs/space/fallback.jpg",
+            collectionTopSimple = com.android.purebilibili.data.model.response.SpaceCollectionTopSimple(
+                top = com.android.purebilibili.data.model.response.SpaceCollectionTop(
+                    result = listOf(
+                        com.android.purebilibili.data.model.response.SpaceCollectionTopItem(
+                            cover = "https://i0.hdslb.com/bfs/space/collection-cover.png"
+                        )
+                    )
+                )
+            )
+        )
+        assertEquals("https://i0.hdslb.com/bfs/space/collection-cover.png", resolveSpaceAggregateTopPhoto(coverOnly))
+
+        val imgUrlOnly = SpaceAggregateImages(
+            imgUrl = "https://i0.hdslb.com/bfs/space/img-url.jpg"
+        )
+        assertEquals("https://i0.hdslb.com/bfs/space/img-url.jpg", resolveSpaceAggregateTopPhoto(imgUrlOnly))
+    }
+
+    @Test
     fun `shouldApplySpaceVideoResult requires matching list generation and filters`() {
         assertTrue(
             shouldApplySpaceVideoResult(
@@ -666,5 +916,113 @@ class SpaceLoadPolicyTest {
         )
 
         assertEquals(listOf("BV1", "BV2", "BV3"), merged.map { it.bvid })
+    }
+
+    @Test
+    fun `bangumi pagination stops when api page adds no unique items`() {
+        assertFalse(
+            shouldContinueSpaceBangumiPagination(
+                previousItemCount = 30,
+                mergedItemCount = 30,
+                incomingItemCount = 30,
+                responsePage = 2,
+                pageSize = 30,
+                total = 91,
+            ),
+        )
+        assertTrue(
+            shouldContinueSpaceBangumiPagination(
+                previousItemCount = 30,
+                mergedItemCount = 60,
+                incomingItemCount = 30,
+                responsePage = 2,
+                pageSize = 30,
+                total = 91,
+            ),
+        )
+        assertFalse(
+            shouldContinueSpaceBangumiPagination(
+                previousItemCount = 60,
+                mergedItemCount = 91,
+                incomingItemCount = 31,
+                responsePage = 3,
+                pageSize = 30,
+                total = 91,
+            ),
+        )
+    }
+
+    @Test
+    fun `parseTopImageDy calculates vertical bias matching PiliPlus dy formula`() {
+        assertEquals(0f, parseTopImageDy("0-0-396", 396.0), 0.001f)
+        assertEquals(-0.5f, parseTopImageDy("0-0-198", 396.0), 0.001f)
+        assertEquals(0.5f, parseTopImageDy("0-198-396", 396.0), 0.001f)
+        assertEquals(0f, parseTopImageDy("", 396.0))
+        assertEquals(0f, parseTopImageDy("invalid", 396.0))
+    }
+
+    @Test
+    fun `resolveSpaceRelationState aligns with PiliPlus relation determination`() {
+        // Blacklisted
+        assertEquals(
+            Pair(false, 128),
+            resolveSpaceRelationState(aggregateRelation = -1)
+        )
+        // Followed with special relation
+        assertEquals(
+            Pair(true, -10),
+            resolveSpaceRelationState(
+                aggregateRelation = 0,
+                relSpecial = 1,
+                cardRelation = SpaceAggregateRelation(status = 2, isFollow = 1)
+            )
+        )
+        // Followed mutual
+        assertEquals(
+            Pair(true, 6),
+            resolveSpaceRelationState(
+                aggregateRelation = 0,
+                relSpecial = 0,
+                cardRelation = SpaceAggregateRelation(status = 6, isFollow = 1)
+            )
+        )
+        // Followed standard
+        assertEquals(
+            Pair(true, 2),
+            resolveSpaceRelationState(
+                aggregateRelation = 0,
+                relSpecial = 0,
+                cardRelation = SpaceAggregateRelation(status = 2, isFollow = 1)
+            )
+        )
+        // Not followed even if status has residual value 2
+        assertEquals(
+            Pair(false, 0),
+            resolveSpaceRelationState(
+                aggregateRelation = 0,
+                relSpecial = 0,
+                cardRelation = SpaceAggregateRelation(status = 2, isFollow = 0)
+            )
+        )
+        // Null card relation
+        assertEquals(
+            Pair(false, 0),
+            resolveSpaceRelationState()
+        )
+    }
+
+    @Test
+    fun `resolveSpaceInitialSeedFromAggregate detects cheese tab in tab2`() {
+        val seed = resolveSpaceInitialSeedFromAggregate(
+            data = SpaceAggregateData(
+                card = SpaceAggregateCard(mid = "123", name = "Teacher"),
+                tab2 = listOf(
+                    SpaceAggregateTab(title = "主页", param = "home"),
+                    SpaceAggregateTab(title = "课堂", param = "cheese")
+                )
+            )
+        )
+
+        assertTrue(seed?.hasCheeseTab == true)
     }
 }

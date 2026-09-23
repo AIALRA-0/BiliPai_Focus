@@ -16,16 +16,24 @@ data class StoredAccountSession(
     val csrf: String = "",
     val accessToken: String = "",
     val refreshToken: String = "",
+    val accessTokenPlatform: String = TokenManager.ACCESS_TOKEN_PLATFORM_TV,
     val buvid3: String = "",
     val isVip: Boolean = false,
     val vipLabel: String = "",
     val lastUsedAt: Long = 0L
 )
 
+data class AccountSessionSnapshot(
+    val accounts: List<StoredAccountSession> = emptyList(),
+    val activeAccountMid: Long? = null,
+    val playbackAccountMid: Long? = null,
+)
+
 object AccountSessionStore {
     private const val SP_NAME = "multi_account_sessions"
     private const val KEY_ACCOUNTS = "accounts"
     private const val KEY_ACTIVE_MID = "active_mid"
+    private const val KEY_PLAYBACK_MID = "playback_mid"
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -36,16 +44,54 @@ object AccountSessionStore {
         val raw = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .getString(KEY_ACCOUNTS, null)
             .orEmpty()
+            .let(SessionStorageCipher::decrypt)
         if (raw.isBlank()) return emptyList()
         return runCatching {
             json.decodeFromString<List<StoredAccountSession>>(raw)
         }.getOrDefault(emptyList()).sortedByDescending { it.lastUsedAt }
     }
 
+    /** Reads all account-session UI data in one storage pass. Callers should use an IO dispatcher. */
+    fun readSnapshot(context: Context): AccountSessionSnapshot = AccountSessionSnapshot(
+        accounts = getAccounts(context),
+        activeAccountMid = getActiveAccountMid(context),
+        playbackAccountMid = getPlaybackAccountMid(context),
+    )
+
     fun getActiveAccountMid(context: Context): Long? {
         return context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .getLong(KEY_ACTIVE_MID, 0L)
             .takeIf { it > 0L }
+    }
+
+    /**
+     * The optional account whose server-side entitlement is used only while
+     * requesting playback URLs. A missing value means "use the main account".
+     */
+    fun getPlaybackAccountMid(context: Context): Long? {
+        return context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+            .getLong(KEY_PLAYBACK_MID, 0L)
+            .takeIf { it > 0L }
+    }
+
+    fun getPlaybackAccount(context: Context): StoredAccountSession? {
+        val mid = getPlaybackAccountMid(context) ?: return null
+        return getAccounts(context).firstOrNull { it.mid == mid && it.sessData.isNotBlank() }
+    }
+
+    /** Selects an already-verified local account for playback without switching the app account. */
+    fun setPlaybackAccountMid(context: Context, mid: Long?): Boolean {
+        if (mid != null && getAccounts(context).none { it.mid == mid && it.sessData.isNotBlank() }) {
+            return false
+        }
+        context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .apply {
+                if (mid == null) remove(KEY_PLAYBACK_MID) else putLong(KEY_PLAYBACK_MID, mid)
+            }
+            .apply()
+        NetworkModule.clearPlaybackAccountClient()
+        return true
     }
 
     fun clearActiveAccount(context: Context) {
@@ -66,6 +112,10 @@ object AccountSessionStore {
         val editor = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit()
         if (getActiveAccountMid(context) == mid) {
             editor.remove(KEY_ACTIVE_MID)
+        }
+        if (getPlaybackAccountMid(context) == mid) {
+            editor.remove(KEY_PLAYBACK_MID)
+            NetworkModule.clearPlaybackAccountClient()
         }
         editor.apply()
         return true
@@ -89,6 +139,7 @@ object AccountSessionStore {
             csrf = TokenManager.csrfCache.orEmpty(),
             accessToken = TokenManager.accessTokenCache.orEmpty(),
             refreshToken = TokenManager.refreshTokenCache.orEmpty(),
+            accessTokenPlatform = TokenManager.accessTokenPlatformCache,
             buvid3 = TokenManager.buvid3Cache.orEmpty(),
             isVip = navData?.vip?.status == 1 || TokenManager.isVipCache,
             vipLabel = navData?.vip?.label?.text.orEmpty().ifBlank { previous?.vipLabel.orEmpty() },
@@ -116,6 +167,7 @@ object AccountSessionStore {
             mid = target.mid,
             accessToken = target.accessToken,
             refreshToken = target.refreshToken,
+            accessTokenPlatform = target.accessTokenPlatform,
             buvid3 = target.buvid3,
             isVip = target.isVip
         )
@@ -129,6 +181,27 @@ object AccountSessionStore {
         return true
     }
 
+    /** Imports a session received through an authenticated BiliPai transfer. */
+    suspend fun importTransferredSession(
+        context: Context,
+        bundle: com.android.purebilibili.feature.login.BiliPaiSessionBundle,
+    ): Boolean {
+        if (bundle.mid <= 0L || bundle.sessData.isBlank()) return false
+        NetworkModule.clearRuntimeCookies()
+        TokenManager.applyStoredSession(
+            context = context,
+            sessData = bundle.sessData,
+            csrf = bundle.csrf,
+            mid = bundle.mid,
+            accessToken = bundle.accessToken,
+            refreshToken = bundle.refreshToken,
+            accessTokenPlatform = bundle.accessTokenPlatform,
+            buvid3 = bundle.buvid3,
+            isVip = bundle.isVip,
+        )
+        return upsertCurrentAccount(context)?.mid == bundle.mid
+    }
+
     private fun persistAccounts(
         context: Context,
         accounts: List<StoredAccountSession>
@@ -136,7 +209,7 @@ object AccountSessionStore {
         val payload = json.encodeToString(accounts)
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_ACCOUNTS, payload)
+            .putString(KEY_ACCOUNTS, SessionStorageCipher.encrypt(payload))
             .apply()
     }
 

@@ -33,6 +33,18 @@ internal fun shouldSendPlaybackHeartbeat(
         currentCid > 0L
 }
 
+internal fun shouldSendInitialPlaybackHeartbeat(
+    isActivelyPlaying: Boolean,
+    isInBackground: Boolean,
+    currentBvid: String,
+    currentCid: Long
+): Boolean {
+    return isActivelyPlaying &&
+        !isInBackground &&
+        currentBvid.isNotBlank() &&
+        currentCid > 0L
+}
+
 internal fun resolvePlaybackHeartbeatSessionStartTsSec(
     existingStartTsSec: Long,
     nowEpochSec: Long

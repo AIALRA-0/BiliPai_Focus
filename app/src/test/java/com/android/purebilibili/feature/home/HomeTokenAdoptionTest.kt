@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
  * 冻结 home 第一批低风险文件的 token 迁移状态。
  *
  * Task 5 的全量目标是整个 feature/home，本测试先锁住已经完成迁移的文件，
- * 避免后续继续推进 BottomBar / iOSHomeHeader / 卡片大文件时把小文件回退。
+ * 避免后续继续推进 BottomBar / HomeHeader / 卡片大文件时把小文件回退。
  */
 class HomeTokenAdoptionTest {
 
@@ -22,7 +22,7 @@ class HomeTokenAdoptionTest {
         "src/main/java/com/android/purebilibili/feature/home/components/BottomBarLiquidSegmentedControl.kt",
         "src/main/java/com/android/purebilibili/feature/home/components/CrashTrackingConsentDialog.kt",
         "src/main/java/com/android/purebilibili/feature/home/components/HomeTopTabChrome.kt",
-        "src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt",
+        "src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt",
         "src/main/java/com/android/purebilibili/feature/home/components/MineSideDrawer.kt",
         "src/main/java/com/android/purebilibili/feature/home/components/SideBar.kt",
         "src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt",
@@ -32,7 +32,7 @@ class HomeTokenAdoptionTest {
     )
 
     private val migratedHomeMotionFiles = listOf(
-        "src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt",
+        "src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt",
         "src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt"
     )
 

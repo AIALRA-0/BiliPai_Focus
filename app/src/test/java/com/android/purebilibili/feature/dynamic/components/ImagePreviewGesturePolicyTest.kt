@@ -20,6 +20,37 @@ class ImagePreviewGesturePolicyTest {
     }
 
     @Test
+    fun resolveZoomableImageGestureMode_prefersVerticalDismissForSingleFingerSwipe() {
+        assertEquals(
+            ZoomableImageGestureMode.VERTICAL_DISMISS,
+            resolveZoomableImageGestureMode(
+                isMultiTouch = false,
+                scale = 1f,
+                panX = 8f,
+                panY = 40f
+            )
+        )
+        assertEquals(
+            ZoomableImageGestureMode.HORIZONTAL_PAGER,
+            resolveZoomableImageGestureMode(
+                isMultiTouch = false,
+                scale = 1f,
+                panX = 40f,
+                panY = 8f
+            )
+        )
+        assertEquals(
+            ZoomableImageGestureMode.IMAGE_INTERACTION,
+            resolveZoomableImageGestureMode(
+                isMultiTouch = true,
+                scale = 1f,
+                panX = 8f,
+                panY = 40f
+            )
+        )
+    }
+
+    @Test
     fun resolveImagePreviewVerticalDismissDecision_dismissesLargeDownwardDrag() {
         val decision = resolveImagePreviewVerticalDismissDecision(
             dragOffsetYPx = 220f,

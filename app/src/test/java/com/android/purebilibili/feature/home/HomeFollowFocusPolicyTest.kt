@@ -19,6 +19,12 @@ import kotlin.test.assertTrue
 class HomeFollowFocusPolicyTest {
 
     @Test
+    fun `follow fetch result is rejected after focus settings change`() {
+        assertFalse(shouldApplyHomeFollowFetchSnapshot(requestRevision = 4L, currentRevision = 5L))
+        assertTrue(shouldApplyHomeFollowFetchSnapshot(requestRevision = 5L, currentRevision = 5L))
+    }
+
+    @Test
     fun `recommend manual refresh starts from fresh feed index instead of old pagination tail`() {
         assertEquals(
             0,

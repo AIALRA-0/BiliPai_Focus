@@ -50,8 +50,8 @@ class BottomBarDynamicReminderBadgePolicyTest {
             File("src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
         ).first { it.exists() }.readText()
         val itemSource = source
-            .substringAfter("@Composable\nprivate fun RowScope.AndroidNativeBottomBarItem(")
-            .substringBefore("private fun resolveMaterialBottomBarIcon(")
+            .substringAfter("private fun RowScope.AndroidNativeBottomBarItem(")
+            .substringBefore("internal fun resolveMaterialBottomBarIcon(")
 
         assertFalse(itemSource.contains(".clip(resolveSharedBottomBarCapsuleShape())"))
     }

@@ -24,6 +24,42 @@ class MiniPlayerOverlayPositionPolicyTest {
     }
 
     @Test
+    fun initialOffset_usesCurrentMiniPlayerSizeWhenUserPreviouslyResized() {
+        val result = resolveMiniPlayerInitialOverlayOffset(
+            cardLeftPx = 760f,
+            entryFromLeft = false,
+            screenWidthPx = 1080f,
+            screenHeightPx = 2400f,
+            miniPlayerWidthPx = 640f,
+            miniPlayerHeightPx = 360f,
+            outerPaddingPx = 24f,
+            topInsetPx = 50f,
+            bottomInsetPx = 100f
+        )
+
+        assertEquals(416f, result.x, 0.001f)
+        assertEquals(1916f, result.y, 0.001f)
+    }
+
+    @Test
+    fun resizeFromRightEdge_keepsOffsetInsideBoundsForNewWidth() {
+        val result = resolveMiniPlayerOffsetAfterSizeChanged(
+            offsetX = 636f,
+            offsetY = 320f,
+            screenWidthPx = 1080f,
+            screenHeightPx = 2400f,
+            miniPlayerWidthPx = 640f,
+            miniPlayerHeightPx = 360f,
+            outerPaddingPx = 24f,
+            topInsetPx = 50f,
+            bottomInsetPx = 100f
+        )
+
+        assertEquals(416f, result.x, 0.001f)
+        assertEquals(320f, result.y, 0.001f)
+    }
+
+    @Test
     fun offsetClamp_preservesInBoundsPosition() {
         val result = clampMiniPlayerOverlayOffset(
             offsetX = 120f,
@@ -39,6 +75,20 @@ class MiniPlayerOverlayPositionPolicyTest {
 
         assertEquals(120f, result.x, 0.001f)
         assertEquals(320f, result.y, 0.001f)
+    }
+
+    @Test
+    fun dockedBottomOffset_keepsMiniPlayerAboveHomeBottomBarArea() {
+        assertEquals(
+            2030f,
+            resolveMiniPlayerDockedBottomOffsetY(
+                screenHeightPx = 2400f,
+                miniPlayerHeightPx = 240f,
+                outerPaddingPx = 24f,
+                bottomInsetPx = 106f
+            ),
+            0.001f
+        )
     }
 
     @Test
@@ -143,6 +193,50 @@ class MiniPlayerOverlayPositionPolicyTest {
                 miniPlayerWidthPx = 400f,
                 durationMs = 0L
             )
+        )
+    }
+
+    @Test
+    fun resizeBounds_keepMiniPlayerVisibleAndAllowUsefulScaling() {
+        val bounds = resolveMiniPlayerResizeBounds(
+            defaultWidthDp = 220,
+            defaultHeightDp = 130,
+            screenWidthDp = 393,
+            screenHeightDp = 852,
+            outerPaddingDp = 12,
+            topInsetDp = 50,
+            bottomInsetDp = 100
+        )
+
+        assertEquals(168f, bounds.minWidthDp, 0.001f)
+        assertEquals(369f, bounds.maxWidthDp, 0.001f)
+    }
+
+    @Test
+    fun resizeDrag_projectsBothAxesAndClampsWidth() {
+        assertEquals(
+            300.76923f,
+            resolveResizedMiniPlayerWidth(
+                currentWidthPx = 220f,
+                dragDeltaX = 60f,
+                dragDeltaY = 60f,
+                aspectRatio = 220f / 130f,
+                minWidthPx = 168f,
+                maxWidthPx = 360f
+            ),
+            0.001f
+        )
+        assertEquals(
+            168f,
+            resolveResizedMiniPlayerWidth(
+                currentWidthPx = 220f,
+                dragDeltaX = -200f,
+                dragDeltaY = -200f,
+                aspectRatio = 220f / 130f,
+                minWidthPx = 168f,
+                maxWidthPx = 360f
+            ),
+            0.001f
         )
     }
 }

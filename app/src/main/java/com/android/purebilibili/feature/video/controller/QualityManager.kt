@@ -24,12 +24,14 @@ class QualityManager {
         
         // Quality ID to label mapping
         private val QUALITY_LABELS = mapOf(
+            129 to "HDR Vivid",
             127 to "8K",
             126 to "杜比视界",
             125 to "HDR 真彩",
             120 to "4K",
             116 to "1080P60",
             112 to "1080P+",
+            100 to "智能修复",
             80 to "1080P",
             74 to "720P60",
             64 to "720P",
@@ -38,7 +40,7 @@ class QualityManager {
         )
         
         // Quality fallback chain: high to low
-        private val QUALITY_CHAIN = listOf(127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16)
+        private val QUALITY_CHAIN = listOf(129, 127, 126, 125, 120, 116, 112, 100, 80, 74, 64, 32, 16)
     }
     
     /**
@@ -121,7 +123,7 @@ class QualityManager {
      * Check if quality requires VIP
      */
     fun requiresVip(qualityId: Int): Boolean {
-        return qualityId >= 112
+        return qualityId == 100 || qualityId >= 112
     }
     
     /**
@@ -146,12 +148,20 @@ class QualityManager {
         isVip: Boolean,
         isHdrSupported: Boolean = true,
         isDolbyVisionSupported: Boolean = true,
-        serverAdvertisedQualities: List<Int> = emptyList()
+        serverAdvertisedQualities: List<Int> = emptyList(),
+        serverPlayableQualities: List<Int> = emptyList()
     ): QualityPermissionResult {
         // [New] 检查是否开启“解锁高画质” - REVERTED
         // if (context != null) ...
         
         val label = getQualityLabel(qualityId)
+
+        // A concrete playable DASH representation is authoritative. Local login/VIP
+        // state can lag behind the authenticated playurl response and must not block it.
+        if (qualityId in serverPlayableQualities) {
+            Logger.d(TAG, "Quality $qualityId permitted by exact playable server track")
+            return QualityPermissionResult.Permitted
+        }
         
         return when {
             // VIP 画质 (≥112): 需要大会员

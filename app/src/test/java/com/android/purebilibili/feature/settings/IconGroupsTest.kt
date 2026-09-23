@@ -1,26 +1,60 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.R
+import com.android.purebilibili.core.store.AppIconAppearance
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class IconGroupsTest {
 
     @Test
-    fun getIconGroups_containsBiliPaiAndHeadphone_withoutRemovedOptions() {
+    fun getIconGroups_onlyContainsCurrentBrandIcons() {
         val keys = getIconGroups().flatMap { group -> group.icons }.map { option -> option.key }.toSet()
 
-        assertTrue(keys.contains("icon_bilipai"))
-        assertTrue(keys.contains("icon_bilipai_pink"))
-        assertTrue(keys.contains("icon_bilipai_white"))
-        assertTrue(keys.contains("icon_bilipai_monet"))
-        assertTrue(keys.contains("Headphone"))
-        kotlin.test.assertFalse(keys.contains("icon_blue"))
-        kotlin.test.assertFalse(keys.contains("icon_neon"))
-        kotlin.test.assertFalse(keys.contains("icon_telegram_blue_coin"))
-        kotlin.test.assertFalse(keys.contains("icon_telegram_green"))
-        kotlin.test.assertFalse(keys.contains("icon_telegram_pink"))
-        kotlin.test.assertFalse(keys.contains("icon_telegram_purple"))
-        kotlin.test.assertFalse(keys.contains("icon_flat_material"))
-        kotlin.test.assertFalse(keys.contains("icon_retro"))
+        assertEquals(
+            setOf(
+                "icon_blue_snow_maid",
+                "icon_blue_snow_maid_announcement",
+                "icon_blue_snow_maid_front",
+                "icon_3d",
+                "icon_bilipai",
+                "icon_bilipai_pink",
+                "icon_bilipai_white",
+                "icon_bilipai_monet"
+            ),
+            keys
+        )
+    }
+
+    @Test
+    fun resolveIconOptionPreviewRes_usesFixedMaidAppearanceResources() {
+        assertEquals(
+            R.mipmap.ic_launcher_blue_snow_maid_dark_round,
+            resolveIconOptionPreviewRes("icon_blue_snow_maid", AppIconAppearance.DARK)
+        )
+        assertEquals(
+            R.mipmap.ic_launcher_blue_snow_maid_front_light_round,
+            resolveIconOptionPreviewRes("icon_blue_snow_maid_front", AppIconAppearance.LIGHT)
+        )
+        assertEquals(
+            R.mipmap.ic_launcher_blue_snow_maid_announcement_dark_round,
+            resolveIconOptionPreviewRes("icon_blue_snow_maid_announcement", AppIconAppearance.DARK)
+        )
+        assertEquals(
+            R.mipmap.ic_launcher_bilipai_round,
+            resolveIconOptionPreviewRes("icon_bilipai", AppIconAppearance.DARK)
+        )
+    }
+
+    @Test
+    fun systemAboutOverview_usesTheSelectedAppIconAndAppearance() {
+        val source = java.io.File(
+            "src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt"
+        ).readText()
+
+        assertTrue(source.contains("appIconKey = state.appIcon"))
+        assertTrue(source.contains("resolveIconOptionPreviewRes(appIconKey, appIconAppearance)"))
+        assertTrue(source.contains("model = appIconRes"))
     }
 }

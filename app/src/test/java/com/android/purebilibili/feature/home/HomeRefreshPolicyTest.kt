@@ -11,6 +11,55 @@ import kotlin.test.assertTrue
 class HomeRefreshPolicyTest {
 
     @Test
+    fun normalRefreshOnlyDeduplicatesWithinResponse() {
+        val output = selectHomeFeedIncomingVideos(
+            responseVideos = listOf(
+                VideoItem(bvid = "BV1"),
+                VideoItem(bvid = "BV1"),
+                VideoItem(bvid = "BV2"),
+            ),
+            currentVideos = listOf(VideoItem(bvid = "BV1")),
+            isLoadMore = false,
+            isIncrementalRefresh = false,
+        )
+
+        assertEquals(listOf("BV1", "BV2"), output.map { it.bvid })
+    }
+
+    @Test
+    fun loadMoreExcludesOnlyVideosAlreadyInCurrentList() {
+        val output = selectHomeFeedIncomingVideos(
+            responseVideos = listOf(
+                VideoItem(bvid = "BV1"),
+                VideoItem(bvid = "BV2"),
+                VideoItem(bvid = "BV3"),
+            ),
+            currentVideos = listOf(VideoItem(bvid = "BV1")),
+            isLoadMore = true,
+            isIncrementalRefresh = false,
+        )
+
+        assertEquals(listOf("BV2", "BV3"), output.map { it.bvid })
+    }
+
+    @Test
+    fun incrementalRefreshExcludesCurrentListAndKeepsEvenBatch() {
+        val output = selectHomeFeedIncomingVideos(
+            responseVideos = listOf(
+                VideoItem(bvid = "BV1"),
+                VideoItem(bvid = "BV2"),
+                VideoItem(bvid = "BV3"),
+                VideoItem(bvid = "BV4"),
+            ),
+            currentVideos = listOf(VideoItem(bvid = "BV1")),
+            isLoadMore = false,
+            isIncrementalRefresh = true,
+        )
+
+        assertEquals(listOf("BV2", "BV3"), output.map { it.bvid })
+    }
+
+    @Test
     fun trimIncrementalRefreshVideosToEvenCount_keepsSingleItem() {
         val input = listOf(VideoItem(bvid = "BV1"))
 
@@ -139,10 +188,189 @@ class HomeRefreshPolicyTest {
     }
 
     @Test
-    fun resolveRecommendFeedCursorAfterSuccess_resetsOnRefreshAndAdvancesOnLoadMore() {
+    fun resolvePagedFeedPageToFetch_advancesOnManualRefreshForRegionStyleFeeds() {
+        assertEquals(
+            1,
+            resolvePagedFeedPageToFetch(
+                isLoadMore = false,
+                isManualRefresh = false,
+                currentPageIndex = 3,
+                advanceOnManualRefresh = true
+            )
+        )
+        assertEquals(
+            4,
+            resolvePagedFeedPageToFetch(
+                isLoadMore = false,
+                isManualRefresh = true,
+                currentPageIndex = 3,
+                advanceOnManualRefresh = true
+            )
+        )
+        assertEquals(
+            1,
+            resolvePagedFeedPageToFetch(
+                isLoadMore = false,
+                isManualRefresh = true,
+                currentPageIndex = 3,
+                advanceOnManualRefresh = false
+            )
+        )
+        assertEquals(
+            4,
+            resolvePagedFeedPageToFetch(
+                isLoadMore = true,
+                isManualRefresh = false,
+                currentPageIndex = 3,
+                advanceOnManualRefresh = true
+            )
+        )
+    }
+
+    @Test
+    fun shouldAdvancePagedFeedOnManualRefresh_forRegionAndPopularComprehensiveOnly() {
+        assertTrue(
+            shouldAdvancePagedFeedOnManualRefresh(
+                category = HomeCategory.GAME,
+                popularSubCategory = PopularSubCategory.COMPREHENSIVE
+            )
+        )
+        assertTrue(
+            shouldAdvancePagedFeedOnManualRefresh(
+                category = HomeCategory.POPULAR,
+                popularSubCategory = PopularSubCategory.COMPREHENSIVE
+            )
+        )
+        assertFalse(
+            shouldAdvancePagedFeedOnManualRefresh(
+                category = HomeCategory.POPULAR,
+                popularSubCategory = PopularSubCategory.RANKING
+            )
+        )
+        assertFalse(
+            shouldAdvancePagedFeedOnManualRefresh(
+                category = HomeCategory.RECOMMEND,
+                popularSubCategory = PopularSubCategory.COMPREHENSIVE
+            )
+        )
+        assertFalse(
+            shouldAdvancePagedFeedOnManualRefresh(
+                category = HomeCategory.FOLLOW,
+                popularSubCategory = PopularSubCategory.COMPREHENSIVE
+            )
+        )
+    }
+
+    @Test
+    fun resolvePagedFeedPageIndexAfterFetch_keepsAdvancedPageAndWrapsOnEmpty() {
         assertEquals(
             2,
-            resolveRecommendFeedCursorAfterSuccess(
+            resolvePagedFeedPageIndexAfterFetch(
+                isLoadMore = false,
+                isManualRefresh = true,
+                advanceOnManualRefresh = true,
+                pageToFetch = 2,
+                incomingCount = 8,
+                previousPageIndex = 1
+            )
+        )
+        assertEquals(
+            0,
+            resolvePagedFeedPageIndexAfterFetch(
+                isLoadMore = false,
+                isManualRefresh = true,
+                advanceOnManualRefresh = true,
+                pageToFetch = 5,
+                incomingCount = 0,
+                previousPageIndex = 4
+            )
+        )
+        assertEquals(
+            1,
+            resolvePagedFeedPageIndexAfterFetch(
+                isLoadMore = false,
+                isManualRefresh = true,
+                advanceOnManualRefresh = false,
+                pageToFetch = 1,
+                incomingCount = 8,
+                previousPageIndex = 3
+            )
+        )
+        assertEquals(
+            4,
+            resolvePagedFeedPageIndexAfterFetch(
+                isLoadMore = true,
+                isManualRefresh = false,
+                advanceOnManualRefresh = true,
+                pageToFetch = 4,
+                incomingCount = 8,
+                previousPageIndex = 3
+            )
+        )
+    }
+
+    @Test
+    fun resolveHomeFollowRefreshNewItemsCount_usesApiUpdateNumOnlyWithBaseline() {
+        assertEquals(
+            null,
+            resolveHomeFollowRefreshNewItemsCount(
+                usedUpdateBaseline = false,
+                apiUpdateNum = 0,
+                insertedVideoCount = 0
+            )
+        )
+        assertEquals(
+            0,
+            resolveHomeFollowRefreshNewItemsCount(
+                usedUpdateBaseline = true,
+                apiUpdateNum = 0,
+                insertedVideoCount = 0
+            )
+        )
+        assertEquals(
+            2,
+            resolveHomeFollowRefreshNewItemsCount(
+                usedUpdateBaseline = true,
+                apiUpdateNum = 5,
+                insertedVideoCount = 2
+            )
+        )
+        assertEquals(
+            0,
+            resolveHomeFollowRefreshNewItemsCount(
+                usedUpdateBaseline = true,
+                apiUpdateNum = 3,
+                insertedVideoCount = 0
+            )
+        )
+    }
+
+    @Test
+    fun shouldFullReplaceFollowFeedAfterBaselineProbe_onlyWhenIncrementalDisabledAndHasUpdates() {
+        assertTrue(
+            shouldFullReplaceFollowFeedAfterBaselineProbe(
+                incrementalRefreshEnabled = false,
+                apiUpdateNum = 3
+            )
+        )
+        assertFalse(
+            shouldFullReplaceFollowFeedAfterBaselineProbe(
+                incrementalRefreshEnabled = true,
+                apiUpdateNum = 3
+            )
+        )
+        assertFalse(
+            shouldFullReplaceFollowFeedAfterBaselineProbe(
+                incrementalRefreshEnabled = false,
+                apiUpdateNum = 0
+            )
+        )
+    }
+
+    @Test
+    fun shouldAdvanceRecommendFeedRequestIndex_whenRecommendRequestReturnedAnyValidVideo() {
+        assertTrue(
+            shouldAdvanceRecommendFeedRequestIndex(
                 category = HomeCategory.RECOMMEND,
                 isLoadMore = false,
                 currentRefreshIndex = 9,
@@ -206,6 +434,24 @@ class HomeRefreshPolicyTest {
             "新卡片到达后再处理回顶和新增提示"
         )
         assertTrue(source.indexOf("shouldResetToTopAfterIncrementalRefresh(") > source.indexOf("refreshNewItemsKey"))
+        assertTrue(
+            source.contains("HomeCategory.FOLLOW -> gridStates[HomeCategory.FOLLOW]"),
+            "关注流新增内容后也必须回顶，否则 prepend 会被 LazyGrid key 锚住旧卡片"
+        )
+    }
+
+    @Test
+    fun undoRefreshButton_consumesHorizontalDragsBeforeTheDrawer() {
+        val source = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
+        ).first { it.exists() }.readText()
+        val undoButton = source
+            .substringAfter("onClick = { viewModel.undoRefresh() },")
+            .substringBefore("colors = androidx.compose.material3.ButtonDefaults.buttonColors(")
+
+        assertTrue(undoButton.contains("detectHorizontalDragGestures"))
+        assertTrue(undoButton.contains("change.consume()"))
     }
 
     @Test
@@ -335,4 +581,48 @@ class HomeRefreshPolicyTest {
             )
         )
     }
+    @Test
+    fun resolveRecommendFeedCursorAfterSuccess_resetsOnRefreshAndAdvancesOnLoadMore() {
+        assertEquals(
+            2,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = false,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 2,
+                validVideoCount = 8,
+            ),
+        )
+        assertEquals(
+            10,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = true,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 10,
+                validVideoCount = 8,
+            ),
+        )
+        assertEquals(
+            9,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = false,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 2,
+                validVideoCount = 0,
+            ),
+        )
+        assertEquals(
+            9,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.POPULAR,
+                isLoadMore = false,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 2,
+                validVideoCount = 8,
+            ),
+        )
+    }
+
 }

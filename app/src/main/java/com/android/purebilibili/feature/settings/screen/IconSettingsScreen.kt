@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.settings
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
+import com.android.purebilibili.core.ui.components.AppSegmentOption
 
 import android.widget.Toast
 
@@ -18,8 +21,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,16 +38,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.android.purebilibili.R
+import com.android.purebilibili.core.store.AppIconAppearance
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.*
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
+import com.android.purebilibili.feature.settings.ui.settingsScrollContentPadding
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
-import com.android.purebilibili.core.ui.rememberAppBackIcon
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.Info
-import io.github.alexzhirkevich.cupertino.icons.filled.CheckmarkCircle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
@@ -74,30 +77,41 @@ fun getIconGroups(): List<IconGroup> {
         IconGroup(
             title = "精选",
             icons = listOf(
+                IconOption("icon_blue_snow_maid", "蓝雪女仆", "蓝白女仆主题", R.mipmap.ic_launcher_blue_snow_maid_round),
+                IconOption("icon_blue_snow_maid_announcement", "蓝雪女仆·喇叭", "居中扩音器主题", R.mipmap.ic_launcher_blue_snow_maid_announcement_round),
+                IconOption("icon_blue_snow_maid_front", "蓝雪女仆·正面", "正面微笑主题", R.mipmap.ic_launcher_blue_snow_maid_front_round),
                 IconOption("icon_3d", "3D立体", "全新3D设计", R.mipmap.ic_launcher_3d_foreground),
                 IconOption("icon_bilipai", "BiliPai", "全新品牌图标", R.mipmap.ic_launcher_bilipai_round),
                 IconOption("icon_bilipai_pink", "BiliPai 粉", "同款粉色", R.mipmap.ic_launcher_bilipai_pink_round),
                 IconOption("icon_bilipai_white", "BiliPai 白", "霜白配色", R.mipmap.ic_launcher_bilipai_white_round),
-                IconOption("icon_bilipai_monet", "BiliPai Monet", "跟随壁纸取色", R.mipmap.ic_launcher_bilipai_monet_round),
-                IconOption("Yuki", "比心少女", "经典二次元", R.mipmap.ic_launcher_round),
-                IconOption("icon_anime", "蓝发电视", "bilibili风格", R.mipmap.ic_launcher_anime),
-                IconOption("Headphone", "耳机少女", "经典头像", R.mipmap.ic_launcher_headphone)
-            )
-        ),
-        IconGroup(
-            title = "经典设计",
-            icons = listOf(
-                IconOption("icon_flat", "扁平", "现代极简", R.mipmap.ic_launcher_flat_round),
-            )
-        ),
-        IconGroup(
-            title = "Telegram 风格",
-            icons = listOf(
-                IconOption("icon_telegram_blue", "纸飞机蓝", "Telegram 蓝", R.mipmap.ic_launcher_telegram_blue_round),
-                IconOption("icon_telegram_dark", "暗夜蓝", "Telegram 黑", R.mipmap.ic_launcher_telegram_dark_round),
+                IconOption("icon_bilipai_monet", "BiliPai Monet", "随系统主题图标取色", R.mipmap.ic_launcher_bilipai_monet_round)
             )
         )
     )
+}
+
+internal fun resolveIconOptionPreviewRes(
+    iconKey: String,
+    appearance: AppIconAppearance
+): Int {
+    return when (iconKey to appearance) {
+        "icon_blue_snow_maid" to AppIconAppearance.LIGHT ->
+            R.mipmap.ic_launcher_blue_snow_maid_light_round
+        "icon_blue_snow_maid" to AppIconAppearance.DARK ->
+            R.mipmap.ic_launcher_blue_snow_maid_dark_round
+        "icon_blue_snow_maid_announcement" to AppIconAppearance.LIGHT ->
+            R.mipmap.ic_launcher_blue_snow_maid_announcement_light_round
+        "icon_blue_snow_maid_announcement" to AppIconAppearance.DARK ->
+            R.mipmap.ic_launcher_blue_snow_maid_announcement_dark_round
+        "icon_blue_snow_maid_front" to AppIconAppearance.LIGHT ->
+            R.mipmap.ic_launcher_blue_snow_maid_front_light_round
+        "icon_blue_snow_maid_front" to AppIconAppearance.DARK ->
+            R.mipmap.ic_launcher_blue_snow_maid_front_dark_round
+        else -> getIconGroups()
+            .flatMap { it.icons }
+            .first { it.key == iconKey }
+            .iconRes
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,39 +122,27 @@ fun IconSettingsScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val iconAppearance by SettingsManager.getAppIconAppearance(context)
+        .collectAsStateWithLifecycle(initialValue = AppIconAppearance.FOLLOW_SYSTEM)
     val screenTitle = stringResource(R.string.icon_settings_title)
     val backLabel = stringResource(R.string.common_back)
     
     val iconGroups = getIconGroups()
+    val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    AdaptiveScaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                )
-            )
-        },
-        containerColor = resolveIconSettingsContainerColor(
-            background = MaterialTheme.colorScheme.background,
-            surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
+    SettingsPageScaffold(
+        title = screenTitle,
+        onBack = onBack,
+        backContentDescription = backLabel,
+        bottomContentPadding = bottomContentPadding,
+        scrollHost = SettingsPageScrollHost.External,
+    ) {
         IconSettingsContent(
-            modifier = Modifier.padding(padding),
             state = state,
             viewModel = viewModel,
             context = context,
-            iconGroups = iconGroups
+            iconGroups = iconGroups,
+            iconAppearance = iconAppearance,
         )
     }
 }
@@ -159,7 +161,8 @@ fun IconSettingsContent(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
     context: android.content.Context,
-    iconGroups: List<IconGroup>
+    iconGroups: List<IconGroup>,
+    iconAppearance: AppIconAppearance
 ) {
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
@@ -170,19 +173,10 @@ fun IconSettingsContent(
     
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 100.dp),
-        contentPadding = PaddingValues(
-            top = 16.dp, // Removed padding.calculateTopPadding() because modifier handles it? 
-            // Warning: modifier.padding(padding) applies padding to the container. 
-            // LazyVerticalGrid contentPadding joins with that?
-            // Usually we want contentPadding to include the system bars if strictly necessary, 
-            // but here `padding` passed from Scaffold includes TopBar height.
-            // If I apply `modifier.padding(padding)` to `IconSettingsContent`, 
-            // then `LazyVerticalGrid` starts BELOW the TopBar.
-            // So `contentPadding.top` should just be the extra spacing (16.dp).
-            
-            bottom = contentBottomPadding,
-            start = 16.dp,
-            end = 16.dp
+        contentPadding = settingsScrollContentPadding(
+            extraTop = 16.dp,
+            extraBottom = contentBottomPadding,
+            extraHorizontal = 16.dp,
         ),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -194,19 +188,19 @@ fun IconSettingsContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        .clip(AppShapes.container(ContainerLevel.Card))
+                        .background(AppSurfaceTokens.cardContainer())
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        CupertinoIcons.Outlined.Info,
+                    AppIcon(
+                        com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_info_24),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(
+                    AppText(
                         text = "图标切换可能需要几秒钟生效，系统可能会短暂卡顿。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -214,10 +208,31 @@ fun IconSettingsContent(
                 }
             }
 
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(AppShapes.container(ContainerLevel.Card))
+                        .background(AppSurfaceTokens.cardContainer())
+                ) {
+                    SettingsSingleChoicePreference(
+                        title = "女仆图标外观",
+                        subtitle = "可跟随系统，或在任意系统主题下固定明亮、暗黑外壳",
+                        options = listOf(
+                            AppSegmentOption(AppIconAppearance.FOLLOW_SYSTEM, "跟随系统"),
+                            AppSegmentOption(AppIconAppearance.LIGHT, "明亮"),
+                            AppSegmentOption(AppIconAppearance.DARK, "暗黑")
+                        ),
+                        selectedValue = iconAppearance,
+                        onSelectionChange = viewModel::setAppIconAppearance
+                    )
+                }
+            }
+
             iconGroups.forEach { group ->
                 // 分组标题
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text(
+                    AppText(
                         text = group.title,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
@@ -231,7 +246,7 @@ fun IconSettingsContent(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(AppShapes.container(ContainerLevel.Dialog))
                             .clickable {
                                 if (!isSelected) {
                                     Toast.makeText(context, "正在切换图标...", Toast.LENGTH_SHORT).show()
@@ -246,23 +261,23 @@ fun IconSettingsContent(
                         ) {
                             // 图标主体
                             // iOS App Icon 形状: 连续曲率圆角 (Squircle)
-                            // 这里用 RoundedCornerShape(22%) 模拟
+                            val iconShape = AppShapes.container(ContainerLevel.Dialog)
                             AsyncImage(
-                                model = option.iconRes,
+                                model = resolveIconOptionPreviewRes(option.key, iconAppearance),
                                 contentDescription = option.name,
                                 modifier = Modifier
                                     .size(64.dp)
                                     .shadow(
                                         elevation = 8.dp,
-                                        shape = RoundedCornerShape(14.dp),
+                                        shape = iconShape,
                                         spotColor = Color.Black.copy(alpha = 0.15f)
                                     )
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .clip(iconShape)
                                     .then(
                                         if (isSelected) Modifier.border(
                                             width = 2.dp,
                                             color = MaterialTheme.colorScheme.primary,
-                                            shape = RoundedCornerShape(14.dp)
+                                            shape = iconShape
                                         ) else Modifier
                                     )
                             )
@@ -276,21 +291,21 @@ fun IconSettingsContent(
                                     .align(Alignment.BottomEnd)
                                     .offset(x = 6.dp, y = 6.dp)
                             ) {
-                                Icon(
-                                    CupertinoIcons.Filled.CheckmarkCircle,
+                                AppIcon(
+                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_circle_fill_24),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier
                                         .size(24.dp)
-                                        .background(MaterialTheme.colorScheme.surface, androidx.compose.foundation.shape.CircleShape)
-                                        .border(2.dp, MaterialTheme.colorScheme.surface, androidx.compose.foundation.shape.CircleShape)
+                                        .background(AppSurfaceTokens.cardContainer(), androidx.compose.foundation.shape.CircleShape)
+                                        .border(2.dp, AppSurfaceTokens.cardContainer(), androidx.compose.foundation.shape.CircleShape)
                                 )
                             }
                         }
                         
                         Spacer(modifier = Modifier.height(10.dp))
                         
-                        Text(
+                        AppText(
                             text = option.name,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,

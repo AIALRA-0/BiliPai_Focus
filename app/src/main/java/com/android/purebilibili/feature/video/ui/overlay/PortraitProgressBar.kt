@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,9 +31,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.data.model.response.VideoshotData
-import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble
+import com.android.purebilibili.feature.video.ui.components.CompactSeekPreview
 import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubblePlacement
 import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubbleSimple
+import com.android.purebilibili.feature.video.ui.components.resolveCompactSeekPreviewSize
+import com.android.purebilibili.feature.video.ui.components.resolveSeekPreviewBubbleOffsetPx
 import kotlin.math.roundToInt
 
 /**
@@ -51,6 +54,7 @@ fun PortraitBottomContainer(
     onSeekDragUpdate: (Long) -> Unit = {},
     onSeekDragCancel: () -> Unit = {},
     videoshotData: VideoshotData? = null,
+    videoAspectRatio: Float? = null,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -87,7 +91,8 @@ fun PortraitBottomContainer(
             onSeekDragCancel = onSeekDragCancel,
             duration = duration, // 传递时长用于显示
             bufferProgress = bufferProgress,
-            videoshotData = videoshotData
+            videoshotData = videoshotData,
+            videoAspectRatio = videoAspectRatio
         )
     }
 }
@@ -110,10 +115,18 @@ fun ThinWigglyProgressBar(
     onSeekDragCancel: () -> Unit = {},
     duration: Long,
     bufferProgress: Float = 0f,
-    videoshotData: VideoshotData? = null
+    videoshotData: VideoshotData? = null,
+    videoAspectRatio: Float? = null,
+    modifier: Modifier = Modifier,
 ) {
+    val configuration = LocalConfiguration.current
     var dragTargetPositionMs by remember { mutableLongStateOf(seekPositionMs.coerceAtLeast(0L)) }
     var containerWidth by remember { mutableFloatStateOf(0f) }
+    val currentOnSeek by rememberUpdatedState(onSeek)
+    val currentOnSeekStart by rememberUpdatedState(onSeekStart)
+    val currentOnSeekDragStart by rememberUpdatedState(onSeekDragStart)
+    val currentOnSeekDragUpdate by rememberUpdatedState(onSeekDragUpdate)
+    val currentOnSeekDragCancel by rememberUpdatedState(onSeekDragCancel)
     val activePositionMs = resolveSeekPreviewTargetPositionMs(
         displayPositionMs = seekPositionMs,
         dragTargetPositionMs = dragTargetPositionMs,
@@ -147,11 +160,11 @@ fun ThinWigglyProgressBar(
     val thumbSizePx = with(LocalDensity.current) { thumbSize.toPx() }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight()
             .onSizeChanged { containerWidth = it.width.toFloat() }
-            .pointerInput(Unit) {
+            .pointerInput(duration) {
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
                         val targetPositionMs = resolveSeekPositionFromTouch(
@@ -160,8 +173,8 @@ fun ThinWigglyProgressBar(
                             durationMs = duration
                         )
                         dragTargetPositionMs = targetPositionMs
-                        onSeekStart()
-                        onSeekDragStart(targetPositionMs)
+                        currentOnSeekStart()
+                        currentOnSeekDragStart(targetPositionMs)
                     },
                     onDragEnd = {
                         val committedProgress = if (duration > 0L) {
@@ -169,10 +182,10 @@ fun ThinWigglyProgressBar(
                         } else {
                             0f
                         }
-                        onSeek(committedProgress.coerceIn(0f, 1f))
+                        currentOnSeek(committedProgress.coerceIn(0f, 1f))
                     },
                     onDragCancel = {
-                        onSeekDragCancel()
+                        currentOnSeekDragCancel()
                     },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
@@ -182,12 +195,12 @@ fun ThinWigglyProgressBar(
                             durationMs = duration
                         )
                         dragTargetPositionMs = targetPositionMs
-                        onSeekDragUpdate(targetPositionMs)
+                        currentOnSeekDragUpdate(targetPositionMs)
                     }
                 )
             }
             // 也支持点击跳转
-            .pointerInput(Unit) {
+            .pointerInput(duration) {
                 detectTapGestures(
                     onPress = { offset ->
                         val targetPositionMs = resolveSeekPositionFromTouch(
@@ -196,19 +209,19 @@ fun ThinWigglyProgressBar(
                             durationMs = duration
                         )
                         dragTargetPositionMs = targetPositionMs
-                        onSeekStart()
-                        onSeekDragStart(targetPositionMs)
+                        currentOnSeekStart()
+                        currentOnSeekDragStart(targetPositionMs)
                         val released = tryAwaitRelease()
                         if (released) {
-                            onSeekDragUpdate(targetPositionMs)
+                            currentOnSeekDragUpdate(targetPositionMs)
                             val committedProgress = if (duration > 0L) {
                                 targetPositionMs.toFloat() / duration.toFloat()
                             } else {
                                 0f
                             }
-                            onSeek(committedProgress.coerceIn(0f, 1f))
+                            currentOnSeek(committedProgress.coerceIn(0f, 1f))
                         } else {
-                            onSeekDragCancel()
+                            currentOnSeekDragCancel()
                         }
                     }
                 ) 
@@ -269,35 +282,59 @@ fun ThinWigglyProgressBar(
             }
 
             if (videoshotData != null && videoshotData.isValid) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = layoutPolicy.previewBubbleOffsetYDp.dp)
+                val isPortraitVideo = videoAspectRatio
+                    ?.let { it.isFinite() && it > 0f && it < 1f }
+                    ?: false
+                val compactPreviewOffsetY = if (isPortraitVideo) {
+                    layoutPolicy.compactPortraitPreviewOffsetYDp
+                } else {
+                    layoutPolicy.compactLandscapePreviewOffsetYDp
+                }
+                val compactPreviewSize = remember(
+                    videoshotData.img_x_size,
+                    videoshotData.img_y_size,
+                    configuration.screenWidthDp,
+                    videoAspectRatio
                 ) {
-                    SeekPreviewBubble(
-                        videoshotData = videoshotData,
-                        targetPositionMs = previewPositionMs,
-                        currentPositionMs = currentPositionMs,
-                        durationMs = duration,
-                        offsetX = 0f,
-                        containerWidth = 0f,
-                        placement = SeekPreviewBubblePlacement.Centered
+                    resolveCompactSeekPreviewSize(
+                        sourceWidthPx = videoshotData.img_x_size,
+                        sourceHeightPx = videoshotData.img_y_size,
+                        screenWidthDp = configuration.screenWidthDp,
+                        videoAspectRatio = videoAspectRatio
                     )
                 }
+                val previewWidthPx = with(LocalDensity.current) {
+                    compactPreviewSize.widthDp.dp.toPx()
+                }
+                val previewOffsetX = resolveSeekPreviewBubbleOffsetPx(
+                    placement = SeekPreviewBubblePlacement.Anchored,
+                    offsetX = containerWidth * displayProgress,
+                    containerWidth = containerWidth,
+                    bubbleWidthPx = previewWidthPx
+                )
+                val previewOffsetYPx = with(LocalDensity.current) {
+                    compactPreviewOffsetY.dp.roundToPx()
+                }
+                CompactSeekPreview(
+                    videoshotData = videoshotData,
+                    targetPositionMs = previewPositionMs,
+                    durationMs = duration,
+                    videoAspectRatio = videoAspectRatio,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { IntOffset(previewOffsetX, previewOffsetYPx) }
+                )
             } else {
-                Box(
+                SeekPreviewBubbleSimple(
+                    targetPositionMs = previewPositionMs,
+                    currentPositionMs = currentPositionMs,
+                    offsetX = containerWidth * displayProgress,
+                    containerWidth = containerWidth,
+                    placement = SeekPreviewBubblePlacement.Anchored,
                     modifier = Modifier
-                        .align(Alignment.TopCenter)
+                        .align(Alignment.TopStart)
                         .offset(y = layoutPolicy.bubbleOffsetYDp.dp)
-                ) {
-                    SeekPreviewBubbleSimple(
-                        targetPositionMs = previewPositionMs,
-                        currentPositionMs = currentPositionMs,
-                        offsetX = 0f,
-                        containerWidth = 0f,
-                        placement = SeekPreviewBubblePlacement.Centered
-                    )
-                }
+                )
             }
         }
     }

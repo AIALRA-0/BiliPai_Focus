@@ -2,20 +2,15 @@ package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  *  iOS 风格毛玻璃卡片
@@ -53,25 +48,14 @@ fun GlassCard(
     )
 }
 
-/**
- *  iOS 风格时长标签 (毛玻璃效果)
- * 注意：此组件用于视频封面上，保持固定的黑色半透明背景以确保可读性
- */
+/** Cover duration overlay. Matches the home feed shadow text, not a black capsule. */
 @Composable
 fun GlassDurationTag(
     duration: String,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(Color.Black.copy(alpha = 0.55f))
-            .padding(horizontal = 6.dp, vertical = 3.dp)
-    ) {
-        androidx.compose.material3.Text(
-            text = duration,
-            color = Color.White,
-            fontSize = 11.sp
-        )
-    }
+    com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
+        text = duration,
+        modifier = modifier,
+    )
 }

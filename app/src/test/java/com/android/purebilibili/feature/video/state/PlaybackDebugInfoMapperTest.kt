@@ -70,6 +70,47 @@ class PlaybackDebugInfoMapperTest {
     }
 
     @Test
+    fun applyMediaTransitionFirstFrameReset_clearsStaleFirstFrameFlag() {
+        val rendered = applyRenderedFirstFrameDebugInfo(current = PlaybackDebugInfo())
+        val reset = applyMediaTransitionFirstFrameReset(current = rendered)
+
+        assertEquals("", reset.firstFrame)
+        assertEquals("media transition", reset.lastVideoEvent)
+        assertEquals("", applyMediaTransitionFirstFrameReset(current = PlaybackDebugInfo()).firstFrame)
+    }
+
+    @Test
+    fun repeatMediaItemTransition_preservesRenderedFirstFrame() {
+        assertEquals(
+            false,
+            shouldResetFirstFrameForMediaItemTransition(
+                Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
+            )
+        )
+        assertEquals(
+            true,
+            shouldResetFirstFrameForMediaItemTransition(
+                Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+            )
+        )
+    }
+
+    @Test
+    fun applyPlaybackLoadErrorDebugInfo_tracksAndTransitionClearsLatestError() {
+        val failed = applyPlaybackLoadErrorDebugInfo(
+            current = PlaybackDebugInfo(),
+            errorCodeName = "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+            message = "timeout"
+        )
+
+        assertEquals(
+            "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED: timeout",
+            failed.lastLoadError
+        )
+        assertEquals("", applyMediaTransitionFirstFrameReset(failed).lastLoadError)
+    }
+
+    @Test
     fun applyDroppedVideoFramesDebugInfo_accumulatesFrameDrops() {
         val result = applyDroppedVideoFramesDebugInfo(
             current = PlaybackDebugInfo(droppedFrames = "5"),

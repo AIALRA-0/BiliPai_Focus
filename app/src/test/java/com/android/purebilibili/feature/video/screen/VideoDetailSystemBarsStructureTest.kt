@@ -8,9 +8,9 @@ class VideoDetailSystemBarsStructureTest {
 
     @Test
     fun videoDetailScreenDoesNotApplySystemBarsFromSideEffect() {
-        val source = File("src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreen.kt")
+        val source = File("src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPlatformPolicy.kt")
             .takeIf { it.exists() }
-            ?: File("app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreen.kt")
+            ?: File("app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPlatformPolicy.kt")
 
         assertFalse(source.readText().contains("SideEffect {"))
     }

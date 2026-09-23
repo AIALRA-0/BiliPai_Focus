@@ -30,11 +30,14 @@ internal data class DynamicDetailInteractionModel(
 
 internal fun resolveDynamicCommentPayload(
     data: ReplyData,
-    fallbackCount: Int
+    fallbackCount: Int,
+    includeHotReplies: Boolean = true
 ): DynamicCommentPayload {
     val replies = buildList {
         addAll(data.collectTopReplies())
-        addAll(data.hots.orEmpty())
+        if (includeHotReplies) {
+            addAll(data.hots.orEmpty())
+        }
         addAll(data.replies.orEmpty())
     }.distinctBy { it.rpid }
 
@@ -77,10 +80,25 @@ internal fun resolveDynamicMainCommentPageEnd(
     loadedReplyCount: Int,
     totalCount: Int
 ): Boolean {
+    if (fetchedReplyCount <= 0) return true
     if (totalCount > loadedReplyCount.coerceAtLeast(0)) {
         return false
     }
-    return cursorIsEnd || fetchedReplyCount <= 0
+    return cursorIsEnd
+}
+
+internal fun shouldLoadMoreDynamicDetailComments(
+    lastVisibleIndex: Int,
+    itemCount: Int,
+    loadedCount: Int,
+    totalCount: Int,
+    isLoading: Boolean,
+    isLoadingMore: Boolean,
+): Boolean {
+    if (isLoading || isLoadingMore) return false
+    if (itemCount <= 0 || lastVisibleIndex < 0) return false
+    if (loadedCount >= totalCount) return false
+    return lastVisibleIndex >= itemCount - 4
 }
 
 internal fun resolveDynamicDetailInteractionModel(
@@ -96,7 +114,9 @@ internal fun resolveDynamicSubReplyStateAfterSuccess(
     currentState: SubReplyUiState,
     newItems: List<ReplyItem>,
     page: Int,
-    isEnd: Boolean
+    isEnd: Boolean,
+    totalCount: Int = currentState.totalCount,
+    grpcNextOffset: String? = currentState.grpcNextOffset
 ): SubReplyUiState {
     val mergedItems = if (page == 1) {
         newItems
@@ -105,10 +125,16 @@ internal fun resolveDynamicSubReplyStateAfterSuccess(
     }
     return currentState.copy(
         items = mergedItems.toImmutableList(),
+        totalCount = totalCount,
         isLoading = false,
         page = page,
         isEnd = isEnd,
-        error = null
+        error = null,
+        baseItems = mergedItems.toImmutableList(),
+        basePage = page,
+        baseIsEnd = isEnd,
+        grpcNextOffset = grpcNextOffset,
+        baseGrpcNextOffset = grpcNextOffset
     )
 }
 

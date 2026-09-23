@@ -64,6 +64,7 @@ class RecommendationPluginSdkTest {
         assertEquals("知识", result.items.single().video.partitionName)
         assertEquals(42, result.items.single().video.replyCount)
         assertEquals(listOf("Kotlin"), result.items.single().video.tags)
+        assertEquals(RecommendationStrategy.BALANCED, request.strategy)
         assertTrue(result.items.single().explanation.isNotBlank())
     }
 }

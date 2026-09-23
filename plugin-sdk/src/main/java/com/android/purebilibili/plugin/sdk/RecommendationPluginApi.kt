@@ -9,6 +9,13 @@ enum class RecommendationMode {
 }
 
 @Serializable
+enum class RecommendationStrategy {
+    BALANCED,
+    AFFINITY,
+    EXPLORE
+}
+
+@Serializable
 data class PluginVideoCandidate(
     val bvid: String,
     val title: String,
@@ -56,7 +63,8 @@ data class RecommendationRequest(
     val sceneSignals: RecommendationSceneSignals = RecommendationSceneSignals(eyeCareNightActive = false),
     val mode: RecommendationMode,
     val queueLimit: Int,
-    val groupLimit: Int
+    val groupLimit: Int,
+    val strategy: RecommendationStrategy = RecommendationStrategy.BALANCED
 )
 
 @Serializable
@@ -87,7 +95,8 @@ data class RecommendationGroupItem(
     val id: String,
     val title: String,
     val subtitle: String? = null,
-    val score: Double? = null
+    val score: Double? = null,
+    val watchCount: Int? = null
 )
 
 @Serializable

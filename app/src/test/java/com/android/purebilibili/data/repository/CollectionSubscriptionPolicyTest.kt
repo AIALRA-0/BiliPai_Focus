@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 class CollectionSubscriptionPolicyTest {
 
     @Test
-    fun `subscription request matches PiliPlus favorite season endpoint and form fields`() {
+    fun `subscription request matches BiliPai favorite season endpoint and form fields`() {
         val request = buildCollectionSubscriptionRequest(
             seasonId = 725909L,
             subscribe = true,
@@ -20,7 +20,7 @@ class CollectionSubscriptionPolicyTest {
     }
 
     @Test
-    fun `unsubscription request matches PiliPlus unfavorite season endpoint`() {
+    fun `unsubscription request matches BiliPai unfavorite season endpoint`() {
         val request = buildCollectionSubscriptionRequest(
             seasonId = 725909L,
             subscribe = false,

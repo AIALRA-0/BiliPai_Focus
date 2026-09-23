@@ -1,4 +1,9 @@
+// Copyright 2026, compose-miuix-ui contributors
+// SPDX-License-Identifier: Apache-2.0
+
 package com.android.purebilibili.feature.home.components.liquid
+
+// Adapted from Kyant0/AndroidLiquidGlass — https://github.com/Kyant0/AndroidLiquidGlass (Apache 2.0).
 
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.ui.unit.LayoutDirection
@@ -7,6 +12,14 @@ import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.runtimeShaderEffect
 
+/**
+ * Rounded-rect refraction lens with optional chromatic dispersion.
+ *
+ * @param chromaticAberration Strength of the rim chromatic dispersion. `0` disables the
+ *  effect (cheaper non-dispersion shader is used). Typical values: `0.1` for subtle,
+ *  `0.2` for Apple-pill-like, `0.3+` for pronounced rainbow halo. The dispersion offset
+ *  scales with the refraction depth so it concentrates at the rim band's outer edge.
+ */
 fun BackdropEffectScope.lens(
     refractionHeight: Float,
     refractionAmount: Float,
@@ -115,13 +128,14 @@ uniform float depthEffect;
 $ROUNDED_RECT_SDF
 
 float circleMap(float x) {
-    return 1.0 - sqrt(1.0 - x * x);
+    float clampedX = clamp(x, 0.0, 1.0);
+    return 1.0 - sqrt(max(1.0 - clampedX * clampedX, 0.0));
 }
 
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = (coord + offset) - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
 
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
     if (-sd >= refractionHeight) {
@@ -152,13 +166,14 @@ uniform float chromaticAberration;
 $ROUNDED_RECT_SDF
 
 float circleMap(float x) {
-    return 1.0 - sqrt(1.0 - x * x);
+    float clampedX = clamp(x, 0.0, 1.0);
+    return 1.0 - sqrt(max(1.0 - clampedX * clampedX, 0.0));
 }
 
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = (coord + offset) - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
 
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
     if (-sd >= refractionHeight) {
@@ -174,40 +189,12 @@ half4 main(float2 coord) {
     float dispersionIntensity = chromaticAberration * ((centeredCoord.x * centeredCoord.y) / (halfSize.x * halfSize.y));
     float2 dispersedCoord = d * grad * dispersionIntensity;
 
-    half4 color = half4(0.0);
+    // 物理光学三通道（RGB）波长色散：采样数从 7 次降低至 3 次（减少 57% GPU 纹理采样），
+    // 消除冗余多次采样的混色浑浊感，色散边缘更清澈通透，大幅降低显存带宽与 TMU 压力。
+    half r = content.eval(refractedCoord + dispersedCoord).r;
+    half4 gSample = content.eval(refractedCoord);
+    half b = content.eval(refractedCoord - dispersedCoord).b;
 
-    half4 red = content.eval(refractedCoord + dispersedCoord);
-    color.r += red.r / 3.5;
-    color.a += red.a / 7.0;
-
-    half4 orange = content.eval(refractedCoord + dispersedCoord * (2.0 / 3.0));
-    color.r += orange.r / 3.5;
-    color.g += orange.g / 7.0;
-    color.a += orange.a / 7.0;
-
-    half4 yellow = content.eval(refractedCoord + dispersedCoord * (1.0 / 3.0));
-    color.r += yellow.r / 3.5;
-    color.g += yellow.g / 3.5;
-    color.a += yellow.a / 7.0;
-
-    half4 green = content.eval(refractedCoord);
-    color.g += green.g / 3.5;
-    color.a += green.a / 7.0;
-
-    half4 cyan = content.eval(refractedCoord - dispersedCoord * (1.0 / 3.0));
-    color.g += cyan.g / 3.5;
-    color.b += cyan.b / 3.0;
-    color.a += cyan.a / 7.0;
-
-    half4 blue = content.eval(refractedCoord - dispersedCoord * (2.0 / 3.0));
-    color.b += blue.b / 3.0;
-    color.a += blue.a / 7.0;
-
-    half4 purple = content.eval(refractedCoord - dispersedCoord);
-    color.r += purple.r / 7.0;
-    color.b += purple.b / 3.0;
-    color.a += purple.a / 7.0;
-
-    return color;
+    return half4(r, gSample.g, b, gSample.a);
 }
 """

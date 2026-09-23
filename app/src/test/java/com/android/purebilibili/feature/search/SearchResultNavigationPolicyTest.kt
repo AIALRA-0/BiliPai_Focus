@@ -6,6 +6,64 @@ import kotlin.test.assertEquals
 class SearchResultNavigationPolicyTest {
 
     @Test
+    fun videoNavigation_opensStandardVideoWhenBvidExists() {
+        assertEquals(
+            SearchResultNavigationTarget.Video("BV1xx411c7mD"),
+            resolveVideoSearchNavigationTarget(
+                bvid = " BV1xx411c7mD ",
+                contentType = "video",
+                navigationUrl = "https://www.bilibili.com/video/BV1xx411c7mD",
+                title = "普通视频"
+            )
+        )
+    }
+
+    @Test
+    fun videoNavigation_opensClassroomResultInCoursePlayerWhenSeasonIdPresent() {
+        assertEquals(
+            SearchResultNavigationTarget.Course(
+                seasonId = 37632L,
+                epId = 0L
+            ),
+            resolveVideoSearchNavigationTarget(
+                bvid = "",
+                contentType = "ketang",
+                navigationUrl = "https://www.bilibili.com/cheese/play/ss37632",
+                title = "系统课程"
+            )
+        )
+    }
+
+    @Test
+    fun videoNavigation_opensClassroomResultInWebPageWhenSeasonIdMissing() {
+        assertEquals(
+            SearchResultNavigationTarget.Web(
+                url = "https://www.bilibili.com/cheese/intro",
+                title = "系统课程"
+            ),
+            resolveVideoSearchNavigationTarget(
+                bvid = "",
+                contentType = "ketang",
+                navigationUrl = "https://www.bilibili.com/cheese/intro",
+                title = "系统课程"
+            )
+        )
+    }
+
+    @Test
+    fun videoNavigation_ignoresUnknownBlankBvidResult() {
+        assertEquals(
+            SearchResultNavigationTarget.None,
+            resolveVideoSearchNavigationTarget(
+                bvid = "",
+                contentType = "unknown",
+                navigationUrl = "https://example.com",
+                title = "未知结果"
+            )
+        )
+    }
+
+    @Test
     fun liveUserNavigation_opensLiveRoomWhenUserIsLive() {
         val target = resolveLiveUserSearchNavigationTarget(
             roomId = 5441L,

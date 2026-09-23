@@ -2,8 +2,19 @@ package com.android.purebilibili.core.util
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
+import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
+import com.android.purebilibili.core.ui.transition.resolveVideoCardSourceLayout
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 
 private const val QUICK_RETURN_THRESHOLD_MS = 500L
+private const val HOME_CATEGORY_SOURCE_PREFIX = "home?category="
 
 internal fun shouldUseQuickReturnSharedTransitionPolicy(
     detailEnterUptimeMs: Long,
@@ -21,11 +32,16 @@ internal fun shouldUseQuickReturnSharedTransitionPolicy(
  * 将缩放动画指向正确的卡片位置
  */
 object CardPositionManager {
+    private val videoCardSourceInstanceSequence = AtomicLong(0L)
     
     /**
      * 最后点击的卡片边界（在 Root 坐标系中）
      */
     var lastClickedCardBounds: Rect? = null
+        private set
+
+    /** 最后点击卡片的真实封面边界（在 Root 坐标系中）。 */
+    var lastClickedCoverBounds: Rect? = null
         private set
     
     /**
@@ -37,7 +53,36 @@ object CardPositionManager {
     var lastClickedVideoSourceKey: String? = null
         private set
 
+    internal var lastClickedVideoSourceInstanceId: Long? = null
+        private set
+
+    internal fun newVideoCardSourceInstanceId(): Long =
+        videoCardSourceInstanceSequence.incrementAndGet()
+
     var lastClickedVideoSourceCornerDp: Int? = null
+        private set
+
+    // internal: VideoCardSourceLayout is module-internal and must not leak from a public API.
+    internal var lastClickedVideoSourceLayout: VideoCardSourceLayout =
+        VideoCardSourceLayout.COVER_ONLY
+        private set
+
+    internal var lastClickedVideoSourceChromeSnapshot: VideoCardSourceChromeSnapshot? = null
+        private set
+
+    /** Frozen display list of the stationary card; drawn with drawLayer on the flying entry. */
+    internal var lastClickedNativeCardLayer: GraphicsLayer? = null
+        private set
+
+    /**
+     * Frozen cover overlays (gradient, play/danmaku, duration) without the thumbnail.
+     * Drawn over the live flying cover so stats-on-cover cards keep their rest chrome.
+     */
+    internal var lastClickedNativeCoverOverlayLayer: GraphicsLayer? = null
+        private set
+
+    /** Stable click-time pixels used when the source composable leaves composition. */
+    internal var lastClickedNativeCardBitmap: ImageBitmap? by mutableStateOf(null)
         private set
     
     /**
@@ -60,6 +105,9 @@ object CardPositionManager {
     var lastScreenDensity: Float = 3f
         private set
 
+    private var lastRecordedScreenWidth: Float = 0f
+    private var lastRecordedScreenHeight: Float = 0f
+
     /**
      * 记录卡片位置
      * @param bounds 卡片在 Root 坐标系中的边界
@@ -78,9 +126,16 @@ object CardPositionManager {
         bottomBarHeightDp: Float = 80f  //  底部导航栏默认高度
     ) {
         lastClickedVideoSourceKey = null
+        lastClickedVideoSourceInstanceId = null
         lastClickedVideoSourceCornerDp = null
+        lastClickedCoverBounds = null
+        lastClickedVideoSourceLayout = VideoCardSourceLayout.COVER_ONLY
+        lastClickedVideoSourceChromeSnapshot = null
+        clearNativeVideoCardLayers()
         lastClickedCardBounds = bounds
         lastScreenDensity = density
+        lastRecordedScreenWidth = screenWidth
+        lastRecordedScreenHeight = screenHeight
         isSingleColumnCard = isSingleColumn
         //  [修复] 计算可见区域的底边界（屏幕高度减去底部导航栏）
         val bottomBarHeightPx = bottomBarHeightDp * density
@@ -103,7 +158,7 @@ object CardPositionManager {
         )
     }
 
-    fun recordVideoCardPosition(
+    internal fun recordVideoCardPosition(
         bvid: String,
         sourceRoute: String?,
         bounds: Rect,
@@ -112,7 +167,11 @@ object CardPositionManager {
         isSingleColumn: Boolean = false,
         density: Float = 3f,
         bottomBarHeightDp: Float = 80f,
-        sourceCornerDp: Int? = null
+        sourceCornerDp: Int? = null,
+        coverBounds: Rect? = null,
+        sourceLayout: VideoCardSourceLayout? = null,
+        sourceChromeSnapshot: VideoCardSourceChromeSnapshot? = null,
+        sourceInstanceId: Long? = null,
     ) {
         recordCardPosition(
             bounds = bounds,
@@ -123,23 +182,90 @@ object CardPositionManager {
             bottomBarHeightDp = bottomBarHeightDp
         )
         val normalizedBvid = bvid.trim()
-        val normalizedRoute = sourceRoute?.substringBefore("?")?.takeIf { it.isNotBlank() }
+        val normalizedRoute = normalizeVideoCardSourceRoute(sourceRoute)
         lastClickedVideoSourceKey = if (normalizedBvid.isNotEmpty() && normalizedRoute != null) {
             "$normalizedRoute:$normalizedBvid"
         } else {
             null
         }
+        lastClickedVideoSourceInstanceId = sourceInstanceId
         lastClickedVideoSourceCornerDp = sourceCornerDp?.coerceAtLeast(0)
+        lastClickedCoverBounds = coverBounds
+            ?.takeIf { it.width > 1f && it.height > 1f }
+            ?.let { Rect(it.left, it.top, it.right, it.bottom) }
+        lastClickedVideoSourceLayout = sourceLayout ?: resolveVideoCardSourceLayout(
+            cardBounds = lastClickedCardBounds,
+            coverBounds = lastClickedCoverBounds,
+        )
+        lastClickedVideoSourceChromeSnapshot = sourceChromeSnapshot
     }
+
+    internal fun recordNativeCardLayer(layer: GraphicsLayer?) {
+        lastClickedNativeCardLayer = layer
+    }
+
+    internal fun recordNativeCoverOverlayLayer(layer: GraphicsLayer?) {
+        lastClickedNativeCoverOverlayLayer = layer
+    }
+
+    internal fun recordNativeCardBitmap(
+        bitmap: ImageBitmap?,
+        expectedSourceKey: String?,
+    ) {
+        if (lastClickedVideoSourceKey == expectedSourceKey) {
+            lastClickedNativeCardBitmap = bitmap
+        }
+    }
+
+    /** Release native display lists once their navigation transition has settled. */
+    internal fun clearNativeVideoCardLayers() {
+        lastClickedNativeCardLayer = null
+        lastClickedNativeCoverOverlayLayer = null
+        lastClickedNativeCardBitmap = null
+    }
+
+    /** Drop click-time geometry when the window changed after the source was captured. */
+    internal fun invalidateVideoSourceIfWindowChanged(
+        screenWidth: Float,
+        screenHeight: Float,
+        tolerancePx: Float = 1f,
+    ) {
+        if (lastClickedCardBounds == null) return
+        if (abs(lastRecordedScreenWidth - screenWidth) > tolerancePx ||
+            abs(lastRecordedScreenHeight - screenHeight) > tolerancePx
+        ) {
+            clear()
+        }
+    }
+
+    internal fun isNativeVideoCardLayerCurrentOwner(layer: GraphicsLayer): Boolean =
+        lastClickedNativeCardLayer === layer
+
+    internal fun isNativeCoverOverlayLayerCurrentOwner(layer: GraphicsLayer): Boolean =
+        lastClickedNativeCoverOverlayLayer === layer
     
     /**
      * 清除记录的位置
      */
     fun clear() {
         lastClickedCardBounds = null
+        lastClickedCoverBounds = null
         lastClickedCardCenter = null
         lastClickedVideoSourceKey = null
+        lastClickedVideoSourceInstanceId = null
         lastClickedVideoSourceCornerDp = null
+        lastClickedVideoSourceLayout = VideoCardSourceLayout.COVER_ONLY
+        lastClickedVideoSourceChromeSnapshot = null
+        lastRecordedScreenWidth = 0f
+        lastRecordedScreenHeight = 0f
+        clearNativeVideoCardLayers()
+    }
+
+    /**
+     * 相关推荐 pop 回父详情后，把 source key 恢复为进入 related 前的列表来源。
+     */
+    fun restoreVideoSourceKey(sourceKey: String?) {
+        lastClickedVideoSourceKey = sourceKey?.trim()?.takeIf { it.isNotEmpty() }
     }
     
     /**
@@ -163,7 +289,7 @@ object CardPositionManager {
                 else -> CardHorizontalPosition.MIDDLE
             }
         }
-
+    
     /**
      *  判断最后点击的卡片是否在屏幕左侧
      * 用于小窗入场动画方向
@@ -179,7 +305,20 @@ object CardPositionManager {
     val isCardFullyVisible: Boolean
         get() {
             val bounds = lastClickedCardBounds ?: return true
+            if (isSingleColumnCard) {
+                val minVisibleHeightPx = 80 * lastScreenDensity
+                return bounds.bottom > minVisibleHeightPx && (bounds.bottom - bounds.top) > minVisibleHeightPx
+            }
             val headerHeightPx = 156 * lastScreenDensity  // 156dp header height
             return bounds.top >= headerHeightPx
         }
+}
+
+private fun normalizeVideoCardSourceRoute(sourceRoute: String?): String? {
+    val normalized = sourceRoute?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return if (normalized.startsWith(HOME_CATEGORY_SOURCE_PREFIX)) {
+        normalized
+    } else {
+        normalized.substringBefore("?")
+    }
 }

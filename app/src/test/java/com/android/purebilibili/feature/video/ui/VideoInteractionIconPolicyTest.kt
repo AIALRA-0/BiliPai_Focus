@@ -46,21 +46,17 @@ class VideoInteractionIconPolicyTest {
     }
 
     @Test
-    fun `audio mode interaction row uses app semantic interaction icons`() {
-        val source = File("src/main/java/com/android/purebilibili/feature/video/screen/AudioModeScreen.kt")
+    fun `audio mode delegates to the shared music player without legacy video action icons`() {
+        val audioModeSource = File("src/main/java/com/android/purebilibili/feature/video/screen/AudioModeScreen.kt")
+            .readText()
+        val playerSource = File("src/main/java/com/android/purebilibili/feature/video/screen/AudioModeMusicPlayer.kt")
             .readText()
 
-        listOf(
-            "rememberAppBookmarkIcon",
-            "rememberAppCoinIcon",
-            "rememberAppLikeIcon",
-            "rememberAppLikeFilledIcon"
-        ).forEach { helper ->
-            assertTrue(source.contains(helper), "Audio mode interaction row should use $helper for preset-aware icons.")
-        }
-        assertFalse(source.contains("AppIcons.BiliCoin"))
-        assertFalse(source.contains("CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Default.HandThumbsup"))
-        assertFalse(source.contains("CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark"))
+        assertTrue(audioModeSource.contains("AudioModeMusicPlayer("))
+        assertTrue(playerSource.contains("MusicPlayerContent("))
+        assertFalse(audioModeSource.contains("AppIcons.BiliCoin"))
+        assertFalse(audioModeSource.contains("CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Default.HandThumbsup"))
+        assertFalse(audioModeSource.contains("CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark"))
     }
 
     @Test

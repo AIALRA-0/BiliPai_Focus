@@ -12,6 +12,7 @@ class MainActivityAudioModePipPolicyTest {
             shouldTriggerPlaybackRoutePip(
                 isInVideoDetail = false,
                 isInAudioMode = true,
+                isInMiniMode = false,
                 audioModeAutoPipEnabled = false,
                 shouldEnterPip = true,
                 isActuallyPlaying = true
@@ -25,6 +26,7 @@ class MainActivityAudioModePipPolicyTest {
             shouldTriggerPlaybackRoutePip(
                 isInVideoDetail = false,
                 isInAudioMode = true,
+                isInMiniMode = false,
                 audioModeAutoPipEnabled = true,
                 shouldEnterPip = true,
                 isActuallyPlaying = true
@@ -38,6 +40,21 @@ class MainActivityAudioModePipPolicyTest {
             shouldTriggerPlaybackRoutePip(
                 isInVideoDetail = true,
                 isInAudioMode = false,
+                isInMiniMode = false,
+                audioModeAutoPipEnabled = false,
+                shouldEnterPip = true,
+                isActuallyPlaying = true
+            )
+        )
+    }
+
+    @Test
+    fun `active mini player can transition to system pip`() {
+        assertTrue(
+            shouldTriggerPlaybackRoutePip(
+                isInVideoDetail = false,
+                isInAudioMode = false,
+                isInMiniMode = true,
                 audioModeAutoPipEnabled = false,
                 shouldEnterPip = true,
                 isActuallyPlaying = true

@@ -1,5 +1,20 @@
 package com.android.purebilibili.core.ui.transition
 
+private const val HOME_CATEGORY_SOURCE_PREFIX = "home?category="
+
+/**
+ * 共享元素 / CardPosition / VideoDetail.sourceRoute 统一归一化：
+ * 去掉 title 等 query，避免合集详情 `season_series_detail/...?title=` 与详情页剥 query 后 key 对不上。
+ */
+internal fun normalizeSharedElementSourceRoute(sourceRoute: String?): String? {
+    val normalized = sourceRoute?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return if (normalized.startsWith(HOME_CATEGORY_SOURCE_PREFIX)) {
+        normalized
+    } else {
+        normalized.substringBefore("?")
+    }
+}
+
 internal sealed interface BiliPaiSharedElementKey {
     val sourceRoute: String?
 
@@ -40,7 +55,8 @@ internal enum class VideoSharedElement {
     UP_ACTION,
     AVATAR,
     VIEWS,
-    DANMAKU
+    DANMAKU,
+    DURATION
 }
 
 internal fun videoCardShellSharedElementKey(
@@ -50,7 +66,7 @@ internal fun videoCardShellSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.CARD_SHELL,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -61,7 +77,7 @@ internal fun videoCoverSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.COVER,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -72,7 +88,7 @@ internal fun videoPlayerSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.PLAYER,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -83,7 +99,7 @@ internal fun videoTitleSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.TITLE,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -94,7 +110,7 @@ internal fun videoUpNameSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.UP_NAME,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -105,7 +121,7 @@ internal fun videoUpActionSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.UP_ACTION,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -116,7 +132,7 @@ internal fun videoAvatarSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.AVATAR,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -127,7 +143,7 @@ internal fun videoViewsSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.VIEWS,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -138,7 +154,18 @@ internal fun videoDanmakuSharedElementKey(
     return BiliPaiSharedElementKey.Video(
         bvid = bvid,
         element = VideoSharedElement.DANMAKU,
-        sourceRoute = sourceRoute
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
+    )
+}
+
+internal fun videoDurationSharedElementKey(
+    bvid: String,
+    sourceRoute: String? = null
+): BiliPaiSharedElementKey.Video {
+    return BiliPaiSharedElementKey.Video(
+        bvid = bvid,
+        element = VideoSharedElement.DURATION,
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
     )
 }
 
@@ -146,19 +173,28 @@ internal fun liveCoverSharedElementKey(
     roomId: Long,
     sourceRoute: String? = null
 ): BiliPaiSharedElementKey.Live {
-    return BiliPaiSharedElementKey.Live(roomId = roomId, sourceRoute = sourceRoute)
+    return BiliPaiSharedElementKey.Live(
+        roomId = roomId,
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
+    )
 }
 
 internal fun avatarSharedElementKey(
     mid: Long,
     sourceRoute: String? = null
 ): BiliPaiSharedElementKey.Avatar {
-    return BiliPaiSharedElementKey.Avatar(mid = mid, sourceRoute = sourceRoute)
+    return BiliPaiSharedElementKey.Avatar(
+        mid = mid,
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
+    )
 }
 
 internal fun articleCoverSharedElementKey(
     articleId: Long,
     sourceRoute: String? = null
 ): BiliPaiSharedElementKey.ArticleCover {
-    return BiliPaiSharedElementKey.ArticleCover(articleId = articleId, sourceRoute = sourceRoute)
+    return BiliPaiSharedElementKey.ArticleCover(
+        articleId = articleId,
+        sourceRoute = normalizeSharedElementSourceRoute(sourceRoute)
+    )
 }

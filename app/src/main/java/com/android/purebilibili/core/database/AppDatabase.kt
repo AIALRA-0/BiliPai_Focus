@@ -10,11 +10,18 @@ import com.android.purebilibili.core.database.dao.SearchHistoryDao
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.database.entity.BlockedUp
 import com.android.purebilibili.core.database.dao.BlockedUpDao
+import com.android.purebilibili.core.database.dao.CommentFraudDao
+import com.android.purebilibili.core.database.entity.CommentFraudRecord
 
-@Database(entities = [SearchHistory::class, BlockedUp::class], version = 4, exportSchema = false)
+@Database(
+    entities = [SearchHistory::class, BlockedUp::class, CommentFraudRecord::class],
+    version = 6,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun searchHistoryDao(): SearchHistoryDao
     abstract fun blockedUpDao(): BlockedUpDao
+    abstract fun commentFraudDao(): CommentFraudDao
 
     companion object {
         @Volatile
@@ -27,9 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                    .addMigrations(MIGRATION_3_4)
-                    //  数据库迁移：Schema 变更时清空旧数据
-                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_6)
                     .build()
                 INSTANCE = instance
                 instance
@@ -46,6 +51,30 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE blocked_ups ADD COLUMN archiveCount INTEGER")
                 db.execSQL("ALTER TABLE blocked_ups ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE blocked_ups ADD COLUMN lastSyncedAt INTEGER")
+            }
+        }
+
+        // Version 6 adds comment fraud history; preserve existing search history and blocked UPs.
+        private val MIGRATION_4_6 = object : Migration(4, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `comment_fraud_records` (
+                        `rpid` INTEGER NOT NULL,
+                        `oid` INTEGER NOT NULL,
+                        `type` INTEGER NOT NULL,
+                        `root` INTEGER NOT NULL,
+                        `parent` INTEGER NOT NULL,
+                        `uid` INTEGER NOT NULL,
+                        `source_id` TEXT,
+                        `origin_url` TEXT,
+                        `message` TEXT NOT NULL,
+                        `initial_status` TEXT,
+                        `status` TEXT NOT NULL,
+                        `post_time` INTEGER NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        PRIMARY KEY(`rpid`)
+                    )""".trimIndent()
+                )
             }
         }
     }

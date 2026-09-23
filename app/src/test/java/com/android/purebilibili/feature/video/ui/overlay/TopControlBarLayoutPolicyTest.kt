@@ -64,15 +64,25 @@ class TopControlBarLayoutPolicyTest {
     }
 
     @Test
-    fun fullscreenTopBar_appliesStatusBarPaddingForSafeTapArea() {
+    fun topBar_appliesStatusBarPaddingWhenSystemBarVisible() {
+        // 状态栏仍显示（含过渡沉浸但未隐藏系统栏）：顶栏必须 pad。
         assertTrue(
             shouldApplyStatusBarPaddingToTopControlBar(
-                isFullscreen = true
+                isFullscreen = false,
+                statusBarVisible = true,
+            )
+        )
+        // 全屏/「播放页隐藏状态栏」后系统栏已藏：顶栏贴顶沉浸。
+        assertFalse(
+            shouldApplyStatusBarPaddingToTopControlBar(
+                isFullscreen = true,
+                statusBarVisible = false,
             )
         )
         assertFalse(
             shouldApplyStatusBarPaddingToTopControlBar(
-                isFullscreen = false
+                isFullscreen = false,
+                statusBarVisible = false,
             )
         )
     }

@@ -52,6 +52,7 @@ internal fun toRelatedVideoFromWatchLater(item: WatchLaterItem): RelatedVideo? {
             favorite = item.stat?.favorite ?: 0,
             share = item.stat?.share ?: 0
         ),
-        duration = item.duration ?: 0
+        duration = item.duration ?: 0,
+        pubdate = item.pubdate ?: 0L,
     )
 }

@@ -1,8 +1,6 @@
 package com.android.purebilibili.feature.live
 
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
-import com.android.purebilibili.core.ui.resolveCompactCapsuleChromeSpec
+import com.android.purebilibili.core.ui.CompactCapsuleChromeSpec
 
 internal data class LiveCategorySegmentedControlSpec(
     val itemWidthDp: Int?,
@@ -10,7 +8,8 @@ internal data class LiveCategorySegmentedControlSpec(
     val indicatorHeightDp: Int,
     val labelFontSizeSp: Int,
     val containerHorizontalPaddingDp: Int,
-    val containerVerticalPaddingDp: Int
+    val containerVerticalPaddingDp: Int,
+    val edgeBufferDp: Int,
 )
 
 internal fun resolveLiveHomeCategorySelectedIndex(
@@ -22,15 +21,19 @@ internal fun resolveLiveHomeCategorySelectedIndex(
     return if (areaIndex >= 0) areaIndex + 1 else 0
 }
 
-internal fun resolveLiveHomeCategorySegmentedControlSpec(): LiveCategorySegmentedControlSpec {
-    val compactChrome = resolveCompactCapsuleChromeSpec(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+internal fun resolveLiveHomeCategorySegmentedControlSpec(
+    compactChrome: CompactCapsuleChromeSpec,
+): LiveCategorySegmentedControlSpec {
     return LiveCategorySegmentedControlSpec(
         itemWidthDp = 82,
         heightDp = compactChrome.primaryHeightDp,
-        indicatorHeightDp = 30,
+        indicatorHeightDp = com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(
+            compactChrome.primaryHeightDp.toFloat()
+        ),
         labelFontSizeSp = 14,
         containerHorizontalPaddingDp = 4,
-        containerVerticalPaddingDp = 4
+        containerVerticalPaddingDp = 4,
+        edgeBufferDp = 20,
     )
 }
 
@@ -60,14 +63,18 @@ internal fun resolveLiveHomeCategoryFollowScrollTarget(
     return rawTarget.toInt().coerceIn(0, maxScrollPx.toInt())
 }
 
-internal fun resolveLiveAreaParentSegmentedControlSpec(): LiveCategorySegmentedControlSpec {
-    val compactChrome = resolveCompactCapsuleChromeSpec(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+internal fun resolveLiveAreaParentSegmentedControlSpec(
+    compactChrome: CompactCapsuleChromeSpec,
+): LiveCategorySegmentedControlSpec {
     return LiveCategorySegmentedControlSpec(
         itemWidthDp = 112,
         heightDp = compactChrome.primaryHeightDp,
-        indicatorHeightDp = 30,
+        indicatorHeightDp = com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(
+            compactChrome.primaryHeightDp.toFloat()
+        ),
         labelFontSizeSp = 16,
         containerHorizontalPaddingDp = 4,
-        containerVerticalPaddingDp = 4
+        containerVerticalPaddingDp = 4,
+        edgeBufferDp = 20,
     )
 }

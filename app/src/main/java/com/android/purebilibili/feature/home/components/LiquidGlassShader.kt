@@ -1,13 +1,6 @@
 /*
- * Liquid-glass edge-refraction AGSL shader.
- *
- * Ported verbatim from NagramX (risin42/NagramX),
- * TMessagesProj/src/main/res/raw/liquid_glass_shader.agsl, a GPL-3.0 work
- * derived from Telegram for Android. Reused here under GPL-3.0; BiliPai is
- * licensed GPL-3.0, so the licenses are compatible. Attribution retained.
- *
- * 仅做边缘折射；foreground_color_premultiplied 设为透明，底色由调用方
- * onDrawSurface 单独绘制，避免双重染色。
+ * BiliPai 自有 AGSL shader，用于给玻璃底栏边缘提供轻量折射感。
+ * 仅做边缘采样偏移；底色由调用方 onDrawSurface 单独绘制，避免双重染色。
  */
 package com.android.purebilibili.feature.home.components
 
@@ -45,20 +38,12 @@ half4 main(in float2 fragCoord) {
   half2 p = fragCoord - center;
   half sd = sdfRect(p, radius);
   half2 uv = fragCoord;
-  if (sd < 0.0) {
-    half sdX = sdfRect(p + half2(1.0, 0.0), radius);
-    half sdY = sdfRect(p + half2(0.0, 1.0), radius);
 
-    half n_cos = max(thickness + sd, 0.0) / thickness;
-    half n_cos2 = n_cos * n_cos;
-    half n_sin = sqrt(1.0 - n_cos2);
-    half3 normal = normalize(half3((sdX - sd) * n_cos, (sdY - sd) * n_cos, n_sin));
-
-    half3 refract_vec = refract(half3(0.0, 0.0, -1.0), normal, 1.0 / refract_index);
-    half h = sd < -thickness ? thickness : sqrt(sd * (-2.0 * thickness - sd));
-    half refract_length = (h + 8.0 * thickness) / -refract_vec.z;
-
-    uv += refract_vec.xy * refract_length * refract_intensity;
+  if (sd < 0.0 && thickness > 0.0 && refract_intensity > 0.0) {
+    half edge = clamp((thickness + sd) / thickness, 0.0, 1.0);
+    half strength = edge * edge * refract_intensity;
+    half2 direction = normalize(p / max(size, half2(1.0, 1.0)));
+    uv += direction * strength * max(refract_index - 1.0, 0.0);
   }
 
   return srcOver(half4(foreground_color_premultiplied), img.eval(uv));

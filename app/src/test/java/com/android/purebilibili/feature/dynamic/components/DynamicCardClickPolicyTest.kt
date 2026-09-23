@@ -6,6 +6,8 @@ import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicMajor
 import com.android.purebilibili.data.model.response.DynamicModules
+import com.android.purebilibili.data.model.response.DrawMajor
+import com.android.purebilibili.data.model.response.DrawItem
 import com.android.purebilibili.data.model.response.OpusContentBlock
 import com.android.purebilibili.data.model.response.OpusLinkCard
 import com.android.purebilibili.data.model.response.OpusMajor
@@ -16,6 +18,76 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DynamicCardClickPolicyTest {
+
+    @Test
+    fun renderableDynamicImages_dropBlankAndDuplicateUrls() {
+        val drawItems = resolveRenderableDrawItems(
+            listOf(
+                DrawItem(src = " "),
+                DrawItem(src = "https://i0.hdslb.com/one.jpg"),
+                DrawItem(src = "http://i0.hdslb.com/one.jpg"),
+            )
+        )
+        val opusPics = resolveRenderableOpusPics(
+            listOf(
+                OpusPic(url = ""),
+                OpusPic(url = " https://i0.hdslb.com/one.jpg "),
+                OpusPic(url = "http://i0.hdslb.com/one.jpg"),
+            )
+        )
+
+        assertEquals(listOf("https://i0.hdslb.com/one.jpg"), drawItems.map { it.src })
+        assertEquals(listOf("https://i0.hdslb.com/one.jpg"), opusPics.map { it.url })
+    }
+
+    @Test
+    fun drawGridUsesOpusPicturesAsCanonicalSourceWhenAvailable() {
+        assertEquals(
+            false,
+            shouldRenderDynamicDrawGrid(
+                hasFullOpusImageContent = false,
+                opusPics = listOf(OpusPic(url = "https://i0.hdslb.com/one.jpg")),
+            ),
+        )
+        assertEquals(
+            true,
+            shouldRenderDynamicDrawGrid(
+                hasFullOpusImageContent = false,
+                opusPics = listOf(OpusPic(url = " ")),
+            ),
+        )
+    }
+
+    @Test
+    fun mediaPreviewUsesTheSameFilteredOpusImagesAsTheRenderedGrid() {
+        val item = DynamicItem(
+            id_str = "single-picture-dynamic",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        draw = DrawMajor(items = listOf(DrawItem(src = "https://i0.hdslb.com/duplicate.jpg"))),
+                        opus = OpusMajor(
+                            pics = listOf(
+                                OpusPic(url = " "),
+                                OpusPic(url = "https://i0.hdslb.com/one.jpg"),
+                                OpusPic(url = "http://i0.hdslb.com/one.jpg"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val action = resolveDynamicCardMediaAction(item, clickedIndex = 0)
+
+        assertEquals(
+            DynamicCardMediaAction.PreviewImages(
+                images = listOf("https://i0.hdslb.com/one.jpg"),
+                initialIndex = 0,
+            ),
+            action,
+        )
+    }
 
     @Test
     fun resolveDynamicCardPrimaryAction_prefersVideoWhenArchiveBvidExists() {
@@ -34,6 +106,34 @@ class DynamicCardClickPolicyTest {
 
         assertTrue(action is DynamicCardPrimaryAction.OpenVideo)
         assertEquals("BV1xx411c7mD", (action as DynamicCardPrimaryAction.OpenVideo).bvid)
+    }
+
+    @Test
+    fun resolveDynamicCardPrimaryAction_opensLiveForLiveMajor() {
+        val item = DynamicItem(
+            id_str = "live-dyn",
+            type = "DYNAMIC_TYPE_LIVE",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        live = com.android.purebilibili.data.model.response.LiveMajor(
+                            id = "22759954",
+                            title = "直播标题"
+                        )
+                    )
+                ),
+                module_author = com.android.purebilibili.data.model.response.DynamicAuthorModule(
+                    name = "主播"
+                )
+            )
+        )
+
+        val action = resolveDynamicCardPrimaryAction(item)
+
+        assertTrue(action is DynamicCardPrimaryAction.OpenLive)
+        assertEquals(22759954L, (action as DynamicCardPrimaryAction.OpenLive).roomId)
+        assertEquals("直播标题", action.title)
+        assertEquals("主播", action.uname)
     }
 
     @Test
@@ -69,6 +169,31 @@ class DynamicCardClickPolicyTest {
 
         assertTrue(action is DynamicCardPrimaryAction.OpenDynamicDetail)
         assertEquals("1200069469486972932", (action as DynamicCardPrimaryAction.OpenDynamicDetail).dynamicId)
+    }
+
+    @Test
+    fun resolveDynamicCardPrimaryAction_usesLegacyArticleJumpUrlWhenPayloadIdIsMissing() {
+        val item = DynamicItem(
+            id_str = "dynamic-article",
+            type = "DYNAMIC_TYPE_ARTICLE",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        type = "MAJOR_TYPE_ARTICLE",
+                        article = ArticleMajor(
+                            id = 0L,
+                            title = "旧版专栏",
+                            jump_url = "https://www.bilibili.com/read/cv123456",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            DynamicCardPrimaryAction.OpenArticle(123456L, "旧版专栏"),
+            resolveDynamicCardPrimaryAction(item),
+        )
     }
 
     @Test
@@ -343,9 +468,94 @@ class DynamicCardClickPolicyTest {
     }
 
     @Test
+    fun resolveDynamicOpusPresentationBlocks_dropsBlankAndDuplicateImageBlocks() {
+        val image = OpusPic(url = "https://i0.hdslb.com/one.jpg")
+        val blocks = listOf(
+            OpusContentBlock.Image(OpusPic(url = " ")),
+            OpusContentBlock.Image(image),
+            OpusContentBlock.Divider(image.copy(url = "http://i0.hdslb.com/one.jpg")),
+        )
+
+        assertEquals(
+            listOf(
+                OpusContentBlock.Image(image),
+                OpusContentBlock.Divider(pic = null),
+            ),
+            resolveDynamicOpusPresentationBlocks(
+                opus = OpusMajor(contentBlocks = blocks),
+                isDetail = true,
+            ),
+        )
+    }
+
+    @Test
+    fun detailPreviewUsesTheSameValidImagesAsRenderedBodyBlocks() {
+        val opus = OpusMajor(
+            pics = listOf(
+                OpusPic(url = "https://i0.hdslb.com/stale-feed-image.jpg"),
+                OpusPic(url = " "),
+            ),
+            contentBlocks = listOf(
+                OpusContentBlock.Text("正文"),
+                OpusContentBlock.Image(OpusPic(url = " https://i0.hdslb.com/body-image.jpg ")),
+                OpusContentBlock.Divider(OpusPic(url = "http://i0.hdslb.com/body-image.jpg")),
+            ),
+        )
+        val blocks = resolveDynamicOpusPresentationBlocks(opus = opus, isDetail = true)
+
+        assertEquals(
+            listOf("https://i0.hdslb.com/body-image.jpg"),
+            resolveDynamicOpusPreviewPics(opus, blocks).map { it.url },
+        )
+        assertTrue(shouldRenderDynamicOpusBlocksAsFullBody(opus, blocks))
+    }
+
+    @Test
+    fun shouldRenderDynamicOpusBlocksAsFullBody_usesGridForStandalonePics() {
+        val textBlock = OpusContentBlock.Text("完整正文")
+        val opusWithStandalonePic = OpusMajor(
+            pics = listOf(OpusPic(url = "https://i0.hdslb.com/standalone.jpg")),
+            contentBlocks = listOf(textBlock),
+        )
+
+        assertEquals(
+            false,
+            shouldRenderDynamicOpusBlocksAsFullBody(
+                opus = opusWithStandalonePic,
+                presentationBlocks = opusWithStandalonePic.contentBlocks,
+            ),
+        )
+        assertEquals(
+            true,
+            shouldRenderDynamicOpusBlocksAsFullBody(
+                opus = opusWithStandalonePic.copy(
+                    contentBlocks = listOf(
+                        textBlock,
+                        OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/embedded.jpg")),
+                    ),
+                ),
+                presentationBlocks = listOf(
+                    textBlock,
+                    OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/embedded.jpg")),
+                ),
+            ),
+        )
+        assertEquals(
+            true,
+            shouldRenderDynamicOpusBlocksAsFullBody(
+                opus = OpusMajor(contentBlocks = listOf(textBlock)),
+                presentationBlocks = listOf(textBlock),
+            ),
+        )
+    }
+
+    @Test
     fun resolveDynamicOpusPreviewImageLimit_removesNineImageLimitOnDetailPage() {
         assertEquals(null, resolveDynamicOpusPreviewImageLimit(isDetail = true))
-        assertEquals(9, resolveDynamicOpusPreviewImageLimit(isDetail = false))
+        assertEquals(
+            DYNAMIC_FEED_PREVIEW_MAX_IMAGES,
+            resolveDynamicOpusPreviewImageLimit(isDetail = false)
+        )
     }
 
     @Test
@@ -413,5 +623,90 @@ class DynamicCardClickPolicyTest {
                 )
             )
         )
+    }
+
+    @Test
+    fun resolveDynamicHeadlineTitle_prefersOpusTitle() {
+        val opus = OpusMajor(title = "Opus专栏文章标题")
+        val article = ArticleMajor(title = "旧专栏标题")
+
+        assertEquals("Opus专栏文章标题", resolveDynamicHeadlineTitle(opus, article))
+    }
+
+    @Test
+    fun resolveDynamicHeadlineTitle_fallsBackToArticleTitle() {
+        val article = ArticleMajor(title = "文章专栏标题")
+
+        assertEquals("文章专栏标题", resolveDynamicHeadlineTitle(null, article))
+    }
+
+    @Test
+    fun resolveDynamicHeadlineTitle_returnsNullWhenBlankOrMissing() {
+        assertEquals(null, resolveDynamicHeadlineTitle(OpusMajor(title = "  "), ArticleMajor(title = "")))
+        assertEquals(null, resolveDynamicHeadlineTitle(null, null))
+    }
+
+    @Test
+    fun resolveDynamicAuthorClickMid_returnsNullForUgcSeasonWithoutOwnerMid() {
+        val item = DynamicItem(
+            type = "DYNAMIC_TYPE_UGC_SEASON",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 123456L, name = "装机猿PC问答3"),
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        type = "MAJOR_TYPE_UGC_SEASON",
+                        ugc_season = UgcSeasonMajor(id = 123456L, title = "装机猿PC问答3", mid = 0L)
+                    )
+                )
+            )
+        )
+
+        val targetMid = resolveDynamicAuthorClickMid(item)
+
+        assertNull(targetMid)
+    }
+
+    @Test
+    fun resolveDynamicAuthorClickMid_returnsOwnerMidWhenUgcSeasonSuppliesMid() {
+        val item = DynamicItem(
+            type = "DYNAMIC_TYPE_UGC_SEASON",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 9999L, name = "装机猿PC问答3"),
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        type = "MAJOR_TYPE_UGC_SEASON",
+                        ugc_season = UgcSeasonMajor(id = 9999L, title = "装机猿PC问答3", mid = 260882L)
+                    )
+                )
+            )
+        )
+
+        val targetMid = resolveDynamicAuthorClickMid(item)
+
+        assertEquals(260882L, targetMid)
+    }
+
+    @Test
+    fun resolveDynamicAuthorClickMid_returnsNullForPgcDynamic() {
+        val item = DynamicItem(
+            type = "DYNAMIC_TYPE_PGC",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 111L, name = "哔哩哔哩番剧")
+            )
+        )
+
+        assertNull(resolveDynamicAuthorClickMid(item))
+    }
+
+    @Test
+    fun resolveDynamicAuthorClickMid_returnsAuthorMidForRegularUserDynamic() {
+        val item = DynamicItem(
+            type = "DYNAMIC_TYPE_AV",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 260882L, name = "远古时代装机猿")
+            )
+        )
+
+        assertEquals(260882L, resolveDynamicAuthorClickMid(item))
     }
 }

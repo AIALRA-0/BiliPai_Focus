@@ -8,6 +8,14 @@ import kotlin.test.assertNull
 class BilibiliNavigationTargetParserTest {
 
     @Test
+    fun parse_commentSpaceSchema_resolvesSpaceTarget() {
+        val target = BilibiliNavigationTargetParser.parse("bilibili://space/495695169")
+
+        assertIs<BilibiliNavigationTarget.Space>(target)
+        assertEquals(495695169L, target.mid)
+    }
+
+    @Test
     fun parse_wrappedSpaceUrl_resolvesSpaceTarget() {
         val target = BilibiliNavigationTargetParser.parse(
             "bilibili://browser?url=https%3A%2F%2Fspace.bilibili.com%2F123456"
@@ -35,6 +43,61 @@ class BilibiliNavigationTargetParserTest {
 
         assertIs<BilibiliNavigationTarget.BangumiSeason>(target)
         assertEquals(39708L, target.seasonId)
+    }
+
+    @Test
+    fun parse_cheeseSeasonUrl_resolvesSeasonTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://www.bilibili.com/cheese/play/ss150"
+        )
+
+        assertIs<BilibiliNavigationTarget.BangumiSeason>(target)
+        assertEquals(150L, target.seasonId)
+    }
+
+    @Test
+    fun parse_cheeseEpisodeUrl_resolvesEpisodeTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://www.bilibili.com/cheese/play/ep2425"
+        )
+
+        assertIs<BilibiliNavigationTarget.BangumiEpisode>(target)
+        assertEquals(2425L, target.epId)
+    }
+
+    @Test
+    fun parse_cheeseCustomSchemeSeason_resolvesSeasonTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "bilibili://cheese/season/150"
+        )
+
+        assertIs<BilibiliNavigationTarget.BangumiSeason>(target)
+        assertEquals(150L, target.seasonId)
+    }
+
+    @Test
+    fun parse_cheeseCustomSchemePlay_resolvesSeasonTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "bilibili://cheese/play/ss150"
+        )
+
+        assertIs<BilibiliNavigationTarget.BangumiSeason>(target)
+        assertEquals(150L, target.seasonId)
+    }
+
+    @Test
+    fun parse_bangumiMediaUrl_resolvesMediaTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://www.bilibili.com/bangumi/media/md28237119"
+        )
+
+        assertIs<BilibiliNavigationTarget.BangumiSeason>(target)
+        assertEquals(0L, target.seasonId)
+        assertEquals(28237119L, target.mediaId)
+        assertEquals(
+            target,
+            BilibiliNavigationTargetParser.parse("md28237119")
+        )
     }
 
     @Test

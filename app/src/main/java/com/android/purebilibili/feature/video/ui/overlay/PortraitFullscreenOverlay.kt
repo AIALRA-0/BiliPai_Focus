@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.video.ui.overlay
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -7,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -30,20 +31,30 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import coil3.compose.AsyncImage
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.MoreVert
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
+import com.android.purebilibili.feature.video.ui.components.DolbyBadge
+import com.android.purebilibili.feature.video.ui.components.HiResBadge
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
-import com.android.purebilibili.core.theme.BiliPink
+
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppIconButtonDefaults
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.VideoshotData
+import com.android.purebilibili.data.model.response.UgcSeason
+import com.android.purebilibili.feature.video.ui.components.CollectionRow
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 internal fun shouldShowPortraitViewCount(viewCount: Int, compactMode: Boolean): Boolean {
     return viewCount > 0 && !compactMode
@@ -71,6 +82,9 @@ internal fun resolvePortraitProgressTimeLabel(
 @Composable
 fun PortraitFullscreenOverlay(
     title: String,
+    ugcSeason: UgcSeason? = null,
+    currentBvid: String = "",
+    currentCid: Long = 0L,
     authorName: String = "",
     authorFace: String = "",
     isPlaying: Boolean,
@@ -79,6 +93,7 @@ fun PortraitFullscreenOverlay(
     // 互动数据
     statView: Int = 0,
     statLike: Int = 0,
+    statCoin: Int = 0,
     statDanmaku: Int = 0,
     statReply: Int = 0,
     statFavorite: Int = 0,
@@ -107,6 +122,9 @@ fun PortraitFullscreenOverlay(
     // 控制状态
     currentSpeed: Float,
     currentQualityLabel: String,
+    currentAudioQualityLabel: String,
+    isHiResAudioSelected: Boolean,
+    isDolbyAudioSelected: Boolean,
     currentRatio: VideoAspectRatio,
     danmakuEnabled: Boolean,
     isStatusBarHidden: Boolean,
@@ -115,6 +133,7 @@ fun PortraitFullscreenOverlay(
     showControls: Boolean = true,
     commentExpansionProgress: Float = 0f,
     videoshotData: VideoshotData? = null,
+    videoAspectRatio: Float? = null,
     isPlaybackRecovering: Boolean = false,
     
     // 回调
@@ -130,7 +149,11 @@ fun PortraitFullscreenOverlay(
     onSeekDragCancel: () -> Unit = {},
     onSpeedClick: () -> Unit,
     onQualityClick: () -> Unit,
+    onAudioQualityClick: () -> Unit,
     onRatioClick: () -> Unit,
+    showSubtitleChip: Boolean = false,
+    subtitleEnabled: Boolean = false,
+    onSubtitleClick: () -> Unit = {},
     onDanmakuToggle: () -> Unit,
     onDanmakuInputClick: () -> Unit,
     onToggleStatusBar: () -> Unit,
@@ -191,10 +214,6 @@ fun PortraitFullscreenOverlay(
                     onBack = onBack,
                     onHomeClick = onHomeClick,
                     viewCount = statView,
-                    danmakuEnabled = danmakuEnabled,
-                    onDanmakuToggle = onDanmakuToggle,
-                    isStatusBarHidden = isStatusBarHidden,
-                    onToggleStatusBar = onToggleStatusBar,
                     onSearchClick = onSearchClick,
                     onMoreClick = onMoreClick,
                     modifier = Modifier.graphicsLayer {
@@ -207,12 +226,15 @@ fun PortraitFullscreenOverlay(
                 PortraitInteractionBar(
                     isLiked = isLiked,
                     likeCount = statLike,
+                    isCoined = isCoined,
+                    coinCount = statCoin,
                     isFavorited = isFavorited,
                     favoriteCount = statFavorite,
                     commentCount = statReply.takeIf { it > 0 } ?: statDanmaku, // 优先用评论数，没有则用弹幕数代替展示
                     shareCount = statShare,
                     onLikeClick = onLikeClick,
                     onLikeLongClick = onLikeLongClick,
+                    onCoinClick = onCoinClick,
                     onFavoriteClick = onFavoriteClick,
                     onCommentClick = onCommentClick,
                     onShareClick = onShareClick,
@@ -240,6 +262,11 @@ fun PortraitFullscreenOverlay(
                         authorName = authorName,
                         authorFace = authorFace,
                         title = title,
+                        ugcSeason = ugcSeason,
+                        currentBvid = currentBvid,
+                        currentCid = currentCid,
+                        isPlaying = isPlaying,
+                        onCollectionClick = onDetailClick,
                         isFollowing = isFollowing,
                         onFollowClick = onFollowClick,
                         onTitleClick = onTitleClick,
@@ -253,7 +280,18 @@ fun PortraitFullscreenOverlay(
                     PortraitProgressControlStrip(
                         timeLabel = progressTimeLabel,
                         currentSpeed = currentSpeed,
+                        currentQualityLabel = currentQualityLabel,
+                        currentAudioQualityLabel = currentAudioQualityLabel,
+                        isHiResAudioSelected = isHiResAudioSelected,
+                        isDolbyAudioSelected = isDolbyAudioSelected,
+                        currentRatioLabel = currentRatio.displayName,
+                        showSubtitleChip = showSubtitleChip,
+                        subtitleEnabled = subtitleEnabled,
                         onSpeedClick = onSpeedClick,
+                        onQualityClick = onQualityClick,
+                        onAudioQualityClick = onAudioQualityClick,
+                        onRatioClick = onRatioClick,
+                        onSubtitleClick = onSubtitleClick,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = progressLayoutPolicy.horizontalPaddingDp.dp)
@@ -276,7 +314,8 @@ fun PortraitFullscreenOverlay(
                         onSeekDragStart = onSeekDragStart,
                         onSeekDragUpdate = onSeekDragUpdate,
                         onSeekDragCancel = onSeekDragCancel,
-                        videoshotData = videoshotData
+                        videoshotData = videoshotData,
+                        videoAspectRatio = videoAspectRatio
                     )
                     
                     // 底部输入栏占位 (Input Bar Spacer)
@@ -300,6 +339,8 @@ fun PortraitFullscreenOverlay(
                 // 4. 底部输入栏 (Input Bar) - Keep strict bottom alignment (Overlay)
                 PortraitBottomInputBar(
                     onInputClick = onDanmakuInputClick,
+                    danmakuEnabled = danmakuEnabled,
+                    onDanmakuToggle = onDanmakuToggle,
                     onRotateClick = onRotateToLandscape,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -316,25 +357,24 @@ fun PortraitFullscreenOverlay(
                     exit = fadeOut(),
                     modifier = Modifier.align(Alignment.Center)
                 ) {
-                    Surface(
+                    AppSurface(
                         color = Color.Black.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(18.dp)
+                        shape = AppShapes.container(ContainerLevel.Card)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CircularProgressIndicator(
+                            AppCircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 color = Color.White,
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(
+                            AppText(
                                 text = "正在恢复播放...",
                                 color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                             )
                         }
                     }
@@ -395,36 +435,105 @@ private fun PortraitReadableTextScrims(
 private fun PortraitProgressControlStrip(
     timeLabel: String,
     currentSpeed: Float,
+    currentQualityLabel: String,
+    currentAudioQualityLabel: String,
+    isHiResAudioSelected: Boolean,
+    isDolbyAudioSelected: Boolean,
+    currentRatioLabel: String,
+    showSubtitleChip: Boolean = false,
+    subtitleEnabled: Boolean = false,
     onSpeedClick: () -> Unit,
+    onQualityClick: () -> Unit,
+    onAudioQualityClick: () -> Unit,
+    onRatioClick: () -> Unit,
+    onSubtitleClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.height(40.dp),
+        // Keep the time readout closer to the progress bar on portrait video.
+        modifier = modifier.height(46.dp).padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
+        AppText(
             text = timeLabel,
             color = Color.White.copy(alpha = 0.86f),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium)
         )
         Spacer(modifier = Modifier.weight(1f))
-        Surface(
-            onClick = onSpeedClick,
-            shape = RoundedCornerShape(999.dp),
-            color = Color.White.copy(alpha = 0.14f),
-            contentColor = if (currentSpeed == 1.0f) {
-                Color.White
-            } else {
-                MaterialTheme.colorScheme.primary
-            }
-        ) {
-            Text(
-                text = PlaybackSpeed.formatSpeed(currentSpeed),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        if (showSubtitleChip) {
+            PortraitChromeChip(
+                label = "字幕",
+                highlighted = subtitleEnabled,
+                onClick = onSubtitleClick
             )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        PortraitChromeChip(
+            label = currentAudioQualityLabel,
+            highlighted = false,
+            showHiResBadge = isHiResAudioSelected,
+            showDolbyBadge = isDolbyAudioSelected,
+            onClick = onAudioQualityClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        PortraitChromeChip(
+            label = currentQualityLabel,
+            highlighted = false,
+            onClick = onQualityClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        PortraitChromeChip(
+            label = currentRatioLabel,
+            highlighted = false,
+            onClick = onRatioClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        PortraitChromeChip(
+            label = PlaybackSpeed.formatSpeed(currentSpeed),
+            highlighted = currentSpeed != 1.0f,
+            onClick = onSpeedClick
+        )
+    }
+}
+
+@Composable
+private fun PortraitChromeChip(
+    label: String,
+    highlighted: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    showHiResBadge: Boolean = false,
+    showDolbyBadge: Boolean = false
+) {
+    AppSurface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = AppShapes.container(ContainerLevel.Pill),
+        color = Color.White.copy(alpha = 0.14f),
+        contentColor = if (highlighted) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            Color.White
+        }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AppText(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (showHiResBadge) {
+                Spacer(modifier = Modifier.width(4.dp))
+                HiResBadge()
+            }
+            if (showDolbyBadge) {
+                Spacer(modifier = Modifier.width(4.dp))
+                DolbyBadge()
+            }
         }
     }
 }
@@ -438,10 +547,6 @@ private fun PortraitTopControlBar(
     onBack: () -> Unit,
     onHomeClick: () -> Unit,
     viewCount: Int,
-    danmakuEnabled: Boolean,
-    onDanmakuToggle: () -> Unit,
-    isStatusBarHidden: Boolean,
-    onToggleStatusBar: () -> Unit,
     onSearchClick: () -> Unit,
     onMoreClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -460,25 +565,25 @@ private fun PortraitTopControlBar(
             modifier = Modifier.align(Alignment.CenterStart),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
+            AppIconButton(
                 onClick = onBack,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent),
+                colors = AppIconButtonDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier.size(layoutPolicy.topBackButtonSizeDp.dp)
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.ChevronBackward,
+                AppIcon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
                     contentDescription = "返回",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.topBackIconSizeDp.dp)
                 )
             }
-            IconButton(
+            AppIconButton(
                 onClick = onHomeClick,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent),
+                colors = AppIconButtonDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier.size(layoutPolicy.topBackButtonSizeDp.dp)
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.House,
+                AppIcon(
+                    imageVector = Icons.Outlined.Home,
                     contentDescription = "主界面",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.topBackIconSizeDp.dp)
@@ -486,7 +591,7 @@ private fun PortraitTopControlBar(
             }
             Spacer(modifier = Modifier.width(layoutPolicy.topViewCountStartSpacingDp.dp))
             if (shouldShowPortraitViewCount(viewCount = viewCount, compactMode = layoutPolicy.compactMode)) {
-                Text(
+                AppText(
                     text = "${FormatUtils.formatStat(viewCount.toLong())}播放",
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = layoutPolicy.topViewCountFontSp.sp
@@ -500,36 +605,8 @@ private fun PortraitTopControlBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(layoutPolicy.topActionSpacingDp.dp)
         ) {
-            val danmakuToggleInteraction = remember { MutableInteractionSource() }
-            val danmakuActiveColor = MaterialTheme.colorScheme.primary
-            val danmakuInactiveColor = Color.White.copy(alpha = 0.74f)
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (danmakuEnabled) {
-                            danmakuActiveColor.copy(alpha = 0.2f)
-                        } else {
-                            danmakuInactiveColor.copy(alpha = 0.14f)
-                        }
-                    )
-                    .clickable(
-                        interactionSource = danmakuToggleInteraction,
-                        indication = null,
-                        onClick = onDanmakuToggle
-                    )
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
-                    contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                    tint = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
-                    modifier = Modifier.size(layoutPolicy.topActionIconSizeDp.dp)
-                )
-            }
-            IconButton(onClick = onSearchClick) {
-                Icon(
+            AppIconButton(onClick = onSearchClick) {
+                AppIcon(
                     imageVector = Icons.Rounded.Search,
                     contentDescription = "搜索",
                     tint = Color.White,
@@ -537,8 +614,8 @@ private fun PortraitTopControlBar(
                 )
             }
             if (shouldShowPortraitTopMoreAction()) {
-                IconButton(onClick = onMoreClick) {
-                    Icon(
+                AppIconButton(onClick = onMoreClick) {
+                    AppIcon(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = "菜单",
                         tint = Color.White,
@@ -559,6 +636,11 @@ private fun PortraitVideoInfo(
     authorName: String,
     authorFace: String,
     title: String,
+    ugcSeason: UgcSeason? = null,
+    currentBvid: String = "",
+    currentCid: Long = 0L,
+    isPlaying: Boolean = false,
+    onCollectionClick: () -> Unit = {},
     isFollowing: Boolean,
     onFollowClick: () -> Unit,
     onTitleClick: () -> Unit,
@@ -589,9 +671,9 @@ private fun PortraitVideoInfo(
                 Spacer(modifier = Modifier.width(layoutPolicy.avatarNameSpacingDp.dp))
             }
             
-            // 名字
-            Text(
-                text = "@$authorName",
+            // 名字（seed 未带 owner 时勿只渲染裸 `@`）
+            AppText(
+                text = com.android.purebilibili.feature.video.ui.pager.resolvePortraitAuthorLabel(authorName),
                 color = Color.White,
                 fontSize = layoutPolicy.authorNameFontSp.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -608,7 +690,7 @@ private fun PortraitVideoInfo(
             val buttonText = if (isFollowed) "已关注" else "关注"
             val iconVisible = !isFollowed
 
-            Surface(
+            AppSurface(
                 shape = RoundedCornerShape(layoutPolicy.followButtonCornerRadiusDp.dp),
                 color = buttonColor,
                 modifier = Modifier
@@ -620,7 +702,7 @@ private fun PortraitVideoInfo(
                     modifier = Modifier.padding(horizontal = layoutPolicy.followButtonHorizontalPaddingDp.dp)
                 ) {
                     if (iconVisible) {
-                        Icon(
+                        AppIcon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = null,
                             tint = contentColor,
@@ -628,7 +710,7 @@ private fun PortraitVideoInfo(
                         )
                         Spacer(modifier = Modifier.width(layoutPolicy.followIconSpacingDp.dp))
                     }
-                    Text(
+                    AppText(
                         text = buttonText,
                         color = contentColor,
                         fontSize = layoutPolicy.followTextFontSp.sp,
@@ -639,7 +721,7 @@ private fun PortraitVideoInfo(
         }
 
         // 第二行：标题
-        Text(
+        AppText(
             text = title,
             color = Color.White.copy(alpha = 0.9f),
             fontSize = layoutPolicy.titleFontSp.sp,
@@ -649,5 +731,16 @@ private fun PortraitVideoInfo(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.clickable { onTitleClick() }
         )
+        if (ugcSeason != null && ugcSeason.id > 0L) {
+            CollectionRow(
+                    ugcSeason = ugcSeason,
+                    currentBvid = currentBvid,
+                    currentCid = currentCid,
+                    isPlaying = isPlaying,
+                    immersive = true,
+                    onClick = onCollectionClick,
+                    modifier = Modifier.padding(bottom = 6.dp)
+            )
+        }
     }
 }

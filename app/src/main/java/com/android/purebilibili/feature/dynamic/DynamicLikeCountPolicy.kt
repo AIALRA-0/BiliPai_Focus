@@ -3,6 +3,26 @@ package com.android.purebilibili.feature.dynamic
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicStatModule
 
+internal class DynamicLikeRequestGate {
+    private val activeDynamicIds = mutableSetOf<String>()
+
+    fun tryAcquire(dynamicId: String): Boolean = synchronized(activeDynamicIds) {
+        activeDynamicIds.add(dynamicId)
+    }
+
+    fun release(dynamicId: String) {
+        synchronized(activeDynamicIds) {
+            activeDynamicIds.remove(dynamicId)
+        }
+    }
+}
+
+internal fun resolveDynamicLikeState(
+    localOverride: Boolean?,
+    localLiked: Boolean,
+    serverLiked: Boolean?,
+): Boolean = localOverride ?: (localLiked || serverLiked == true)
+
 internal fun applyDynamicLikeCountChange(
     items: List<DynamicItem>,
     dynamicId: String,
@@ -22,7 +42,7 @@ internal fun applyDynamicLikeCountChange(
         item.copy(
             modules = item.modules.copy(
                 module_stat = statModule.copy(
-                    like = statModule.like.copy(count = updatedCount)
+                    like = statModule.like.copy(count = updatedCount, status = toLiked)
                 )
             )
         )

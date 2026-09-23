@@ -86,4 +86,26 @@ class HistoryModelsMappingTest {
         assertEquals(223344L, item.cid)
         assertEquals(66, item.progress)
     }
+
+    @Test
+    fun `cheese history maps seasonId epid and cheese business`() {
+        val data = HistoryData(
+            title = "course",
+            progress = 120,
+            history = HistoryPage(
+                oid = 3344L,
+                epid = 7788L,
+                cid = 9900L,
+                business = "cheese"
+            )
+        )
+
+        val item = data.toHistoryItem()
+
+        assertEquals(HistoryBusiness.CHEESE, item.business)
+        assertEquals(3344L, item.seasonId)
+        assertEquals(7788L, item.epid)
+        assertEquals(9900L, item.cid)
+        assertEquals(120, item.progress)
+    }
 }

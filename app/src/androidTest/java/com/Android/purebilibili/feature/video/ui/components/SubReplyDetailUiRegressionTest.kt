@@ -6,7 +6,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
@@ -28,7 +30,9 @@ import com.android.purebilibili.feature.video.ui.components.COMMENT_SUB_REPLY_PR
 import com.android.purebilibili.feature.video.ui.components.COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
+import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
+import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -57,6 +61,7 @@ class SubReplyDetailUiRegressionTest {
                         state = buildSubReplyState(),
                         emoteMap = emptyMap(),
                         onDismiss = {},
+                        onSortModeChange = {},
                         onLoadMore = {}
                     )
                 }
@@ -71,6 +76,35 @@ class SubReplyDetailUiRegressionTest {
     }
 
     @Test
+    fun sortingDispatchesToOwnerAndReflectsItsState() {
+        val state = mutableStateOf(buildSubReplyState().copy(isEnd = true))
+        val requestedModes = mutableListOf<SubReplySortMode>()
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = state.value,
+                    emoteMap = emptyMap(),
+                    onDismiss = {},
+                    onLoadMore = {},
+                    onSortModeChange = { mode ->
+                        requestedModes += mode
+                        state.value = state.value.copy(sortMode = mode)
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("按时间").performClick()
+        composeTestRule.onNodeWithText("按热度").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithText("按时间").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            assertEquals(listOf(SubReplySortMode.HOT, SubReplySortMode.TIME), requestedModes)
+            state.value = state.value.copy(isLoading = true)
+        }
+        composeTestRule.onNodeWithTag("subreply_detail_sort").assertIsNotEnabled()
+    }
+
+    @Test
     fun directedChildReply_showsConversationAffordance() {
         composeTestRule.setContent {
             MaterialTheme {
@@ -81,6 +115,7 @@ class SubReplyDetailUiRegressionTest {
                         state = buildSubReplyState(),
                         emoteMap = emptyMap(),
                         onDismiss = {},
+                        onSortModeChange = {},
                         onLoadMore = {}
                     )
                 }
@@ -109,6 +144,7 @@ class SubReplyDetailUiRegressionTest {
                         state = buildSubReplyState(),
                         emoteMap = emptyMap(),
                         onDismiss = {},
+                        onSortModeChange = {},
                         onLoadMore = {},
                         onImagePreview = { images, index, _, _ ->
                             previewedImage = images[index]
@@ -137,7 +173,7 @@ class SubReplyDetailUiRegressionTest {
                     item = buildReplyWithPreview(),
                     emoteMap = emptyMap(),
                     onClick = {},
-                    onSubClick = { openedReplyId = it.rpid },
+                    onSubClick = { reply, _ -> openedReplyId = reply.rpid },
                     onAvatarClick = {}
                 )
             }
@@ -162,7 +198,7 @@ class SubReplyDetailUiRegressionTest {
                     item = buildReplyWithPreview(),
                     emoteMap = emptyMap(),
                     onClick = {},
-                    onSubClick = { openedReplyId = it.rpid },
+                    onSubClick = { reply, _ -> openedReplyId = reply.rpid },
                     onAvatarClick = {}
                 )
             }
@@ -187,7 +223,7 @@ class SubReplyDetailUiRegressionTest {
                     item = buildReplyWithPreview(),
                     emoteMap = emptyMap(),
                     onClick = {},
-                    onSubClick = { openedReplyId = it.rpid },
+                    onSubClick = { reply, _ -> openedReplyId = reply.rpid },
                     onAvatarClick = {}
                 )
             }
@@ -214,7 +250,7 @@ class SubReplyDetailUiRegressionTest {
                     item = buildReplyWithPreview(),
                     emoteMap = emptyMap(),
                     onClick = {},
-                    onSubClick = { openedReplyId = it.rpid },
+                    onSubClick = { reply, _ -> openedReplyId = reply.rpid },
                     onAvatarClick = {}
                 )
             }
@@ -241,7 +277,7 @@ class SubReplyDetailUiRegressionTest {
                     item = buildReplyWithPreview(),
                     emoteMap = emptyMap(),
                     onClick = {},
-                    onSubClick = { openedReplyId = it.rpid },
+                    onSubClick = { reply, _ -> openedReplyId = reply.rpid },
                     onAvatarClick = {}
                 )
             }
@@ -271,7 +307,7 @@ class SubReplyDetailUiRegressionTest {
                     item = buildReplyWithPreview(),
                     emoteMap = emptyMap(),
                     onClick = {},
-                    onSubClick = {},
+                    onSubClick = { _, _ -> },
                     onAvatarClick = {}
                 )
             }
@@ -359,7 +395,7 @@ class SubReplyDetailUiRegressionTest {
                     ),
                     content = ReplyContent(message = "回复 @ReplyTextOnly：没错")
                 )
-            )
+            ).toImmutableList()
         )
     }
 

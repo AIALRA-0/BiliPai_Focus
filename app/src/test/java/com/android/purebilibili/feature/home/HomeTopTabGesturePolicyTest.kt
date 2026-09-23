@@ -1,12 +1,25 @@
 package com.android.purebilibili.feature.home
 
 import androidx.compose.ui.unit.dp
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class HomeTopTabGesturePolicyTest {
+
+    @Test
+    fun topTabDragUsesSharedHorizontalDominanceGuard() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt"),
+            File("src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt"),
+        ).first { it.exists() }.readText()
+
+        assertTrue(source.contains("shouldEngageHorizontalDrag"))
+        assertTrue(source.contains("resolveScrollableTabIndicatorFollowDeltaPx("))
+        assertTrue(source.contains("listState.dispatchRawDelta("))
+    }
 
     @Test
     fun dragDown_collapsesExpandedTabs() {
@@ -79,6 +92,28 @@ class HomeTopTabGesturePolicyTest {
             resolveHomeTopTabsAutoCollapsed(
                 currentHeaderOffsetPx = 0f,
                 isTopTabAutoCollapseEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun reverseScroll_expandsTabsImmediatelyEvenWhenSearchIsStillCollapsed() {
+        assertFalse(
+            reduceHomeTopTabsAutoCollapseState(
+                isCollapsed = true,
+                scrollDeltaY = 8f,
+                isTopTabAutoCollapseEnabled = true,
+            )
+        )
+    }
+
+    @Test
+    fun forwardScroll_collapsesTabs() {
+        assertTrue(
+            reduceHomeTopTabsAutoCollapseState(
+                isCollapsed = false,
+                scrollDeltaY = -8f,
+                isTopTabAutoCollapseEnabled = true,
             )
         )
     }

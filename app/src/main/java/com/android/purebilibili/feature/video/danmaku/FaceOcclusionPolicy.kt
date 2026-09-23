@@ -255,6 +255,7 @@ internal data class FaceViewportRect(
         get() = (bottom - top).coerceAtLeast(0f)
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal fun resolveVideoContentRect(
     containerWidth: Int,
     containerHeight: Int,

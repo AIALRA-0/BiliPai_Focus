@@ -30,18 +30,28 @@ val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { nu
 val LocalAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 
 /**
+ * 全局共享元素动画开关，所有来源页和目标页必须共同遵守。
+ */
+val LocalSharedTransitionEnabled = compositionLocalOf { false }
+
+/**
  *  SharedTransitionLayout 包装器
  * 包裹整个应用的导航，提供共享元素过渡能力
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SharedTransitionProvider(
+    enabled: Boolean,
     content: @Composable () -> Unit
 ) {
     SharedTransitionLayout(
         modifier = Modifier.fillMaxSize()  // 📐 [修复] 确保在平板上填充整个屏幕
     ) {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+        val sharedTransitionScope = if (enabled) this else null
+        CompositionLocalProvider(
+            LocalSharedTransitionScope provides sharedTransitionScope,
+            LocalSharedTransitionEnabled provides enabled
+        ) {
             content()
         }
     }

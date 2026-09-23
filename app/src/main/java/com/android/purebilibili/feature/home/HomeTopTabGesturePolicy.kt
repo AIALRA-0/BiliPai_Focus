@@ -33,6 +33,20 @@ internal fun resolveHomeTopTabsAutoCollapsed(
     return currentHeaderOffsetPx <= -collapseThresholdPx
 }
 
+internal fun reduceHomeTopTabsAutoCollapseState(
+    isCollapsed: Boolean,
+    scrollDeltaY: Float,
+    isTopTabAutoCollapseEnabled: Boolean,
+    minimumScrollDeltaPx: Float = 0.5f
+): Boolean {
+    if (!isTopTabAutoCollapseEnabled) return false
+    return when {
+        scrollDeltaY <= -minimumScrollDeltaPx -> true
+        scrollDeltaY >= minimumScrollDeltaPx -> false
+        else -> isCollapsed
+    }
+}
+
 internal fun resolveHomeTopTabPresentationHeight(
     expandedHeight: Dp,
     isCollapsed: Boolean,

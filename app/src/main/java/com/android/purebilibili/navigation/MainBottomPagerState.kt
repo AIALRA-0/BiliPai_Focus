@@ -1,10 +1,8 @@
 package com.android.purebilibili.navigation
 
-import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +14,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 
+/**
+ * 底栏 HorizontalPager 状态。切页由 UserInput 优先级接管 Pager。
+ */
+@Stable
 internal class MainBottomPagerState(
     val pagerState: PagerState,
     private val coroutineScope: CoroutineScope
@@ -29,57 +31,48 @@ internal class MainBottomPagerState(
     var navigationStartPage by mutableIntStateOf(pagerState.currentPage)
         private set
 
+    /** Continuous position shared by the pager and the bottom-bar indicator. */
+    val indicatorPosition: Float
+        get() = pagerState.currentPage + pagerState.currentPageOffsetFraction
+
+    /** True for both user-driven and programmatic pager movement. */
+    val isScrollInProgress: Boolean
+        get() = pagerState.isScrollInProgress
+
+    /** Stable adapters for UI components that observe values from snapshotFlow. */
+    val indicatorPositionProvider: () -> Float = { indicatorPosition }
+    val scrollInProgressProvider: () -> Boolean = { isScrollInProgress }
+
     private var navJob: Job? = null
 
-    fun animateToPage(targetIndex: Int) {
-        if (targetIndex == selectedPage) return
+    /**
+     * MainPagerState 目标页切换：
+     * - 先更新 [selectedPage]（底栏指示器跟目标页）；
+     * - 再在 Pager 的 UserInput mutation 中逐帧滚动到目标，避免反向切页被旧状态取消。
+     */
+    fun switchToPage(targetIndex: Int) {
+        val lastPage = pagerState.pageCount - 1
+        if (lastPage < 0) return
+        val safeTargetIndex = targetIndex.coerceIn(0, lastPage)
+        if (safeTargetIndex == selectedPage) return
 
-        val previousJob = navJob
-        navJob = null
-        previousJob?.cancel()
+        navJob?.cancel()
 
         navigationStartPage = pagerState.currentPage
-        selectedPage = targetIndex
+        selectedPage = safeTargetIndex
         isNavigating = true
-
-        val layoutInfo = pagerState.layoutInfo
-        val pageSize = layoutInfo.pageSize + layoutInfo.pageSpacing
-        if (pageSize <= 0) {
-            navJob = coroutineScope.launch {
-                try {
-                    pagerState.scrollToPage(targetIndex)
-                } finally {
-                    isNavigating = false
-                    selectedPage = targetIndex
-                    navigationStartPage = targetIndex
-                }
-            }
-            return
-        }
-
-        val currentDistanceInPages =
-            targetIndex - pagerState.currentPage - pagerState.currentPageOffsetFraction
-        val scrollPixels = currentDistanceInPages * pageSize
-        val duration = resolveBottomPagerNavigationDurationMillis(
-            currentPage = pagerState.currentPage,
-            targetPage = targetIndex
-        )
 
         navJob = coroutineScope.launch {
             val myJob = coroutineContext.job
             try {
-                pagerState.animateScrollBy(
-                    value = scrollPixels,
-                    animationSpec = tween(easing = EaseInOut, durationMillis = duration)
-                )
+                animatePagerSelection(pagerState, safeTargetIndex)
             } finally {
                 if (navJob == myJob) {
-                    if (pagerState.currentPage != targetIndex) {
-                        pagerState.scrollToPage(targetIndex)
-                    }
                     isNavigating = false
-                    selectedPage = targetIndex
-                    navigationStartPage = targetIndex
+                    if (pagerState.currentPage != safeTargetIndex) {
+                        selectedPage = pagerState.currentPage
+                    }
+                    navigationStartPage = pagerState.currentPage
                 }
             }
         }
@@ -88,33 +81,6 @@ internal class MainBottomPagerState(
     fun syncPage() {
         if (!isNavigating && selectedPage != pagerState.currentPage) {
             selectedPage = pagerState.currentPage
-        }
-    }
-
-    /**
-     * 立即跳到目标页，不播放横向滚动动画。
-     * 用于「返回首页」按钮：在视频详情把 MainHost 完全遮挡时静默切到 HOME，
-     * 待 [popBiliPaiNavKeyToRoot] 触发的横向过渡播放时背后已经是首页。
-     */
-    fun snapToPage(targetIndex: Int) {
-        if (targetIndex == pagerState.currentPage && targetIndex == selectedPage) {
-            return
-        }
-        val previousJob = navJob
-        navJob = null
-        previousJob?.cancel()
-        navigationStartPage = targetIndex
-        selectedPage = targetIndex
-        isNavigating = false
-        navJob = coroutineScope.launch {
-            try {
-                pagerState.scrollToPage(targetIndex)
-            } finally {
-                if (pagerState.currentPage == targetIndex) {
-                    selectedPage = targetIndex
-                    navigationStartPage = targetIndex
-                }
-            }
         }
     }
 }

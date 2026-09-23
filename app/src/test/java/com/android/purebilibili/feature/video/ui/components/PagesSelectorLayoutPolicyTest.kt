@@ -9,6 +9,19 @@ import kotlin.test.assertTrue
 class PagesSelectorLayoutPolicyTest {
 
     @Test
+    fun `page cards reserve two title lines so items stay equal height`() {
+        val source = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/feature/video/ui/components/PagesSelector.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/feature/video/ui/components/PagesSelector.kt"),
+        ).first { it.exists() }.readText()
+        val itemBlock = source
+            .substringAfter("private fun PageSelectorItem(")
+
+        assertTrue(itemBlock.contains("minLines = 2"))
+        assertTrue(itemBlock.contains("maxLines = 2"))
+    }
+
+    @Test
     fun compactPortraitWithManyPages_prefersPreviewWithExpandEntry() {
         val policy = resolvePagesSelectorLayoutPolicy(
             widthDp = 393,

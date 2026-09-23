@@ -28,6 +28,9 @@ internal data class BottomPagerRenderBudget(
 )
 
 internal const val BOTTOM_TAB_RENDER_BUDGET_HOLD_MILLIS = 220L
+internal const val BOTTOM_BAR_MAX_VISIBLE_ITEMS = 5
+// 底栏最多有 5 个栏目；预组合其余 4 页，避免跨多页动画途中临时创建中间页面。
+internal const val BOTTOM_PAGER_MAX_PRELOAD_DISTANCE = BOTTOM_BAR_MAX_VISIBLE_ITEMS - 1
 
 internal fun resolveTopLevelNavigationAction(
     currentRoute: String?,
@@ -53,6 +56,22 @@ internal fun resolveBottomBarSelectionAction(
         BottomBarSelectionAction.RESELECT
     } else {
         BottomBarSelectionAction.NAVIGATE
+    }
+}
+
+internal fun shouldScrollToTopOnBottomBarReselect(item: BottomNavItem): Boolean {
+    return when (item) {
+        BottomNavItem.HOME,
+        BottomNavItem.DYNAMIC,
+        BottomNavItem.HISTORY,
+        BottomNavItem.PROFILE,
+        BottomNavItem.FAVORITE,
+        BottomNavItem.LIVE,
+        BottomNavItem.WATCHLATER -> true
+        BottomNavItem.LISTEN_VIDEO,
+        BottomNavItem.SETTINGS,
+        BottomNavItem.PLUGINS,
+        BottomNavItem.STORY -> false
     }
 }
 
@@ -92,6 +111,23 @@ internal fun resolveBottomPagerItemForPage(
     return visibleItems.getOrNull(page) ?: BottomNavItem.HOME
 }
 
+internal fun shouldResetNavigation3BackStackForBottomPager(
+    currentStack: List<BiliPaiNavKey>
+): Boolean {
+    // Sibling tabs switch entirely inside the pager. BiliPai only needs Nav3 here when leaving a
+    // secondary destination; rebuilding an existing MainHost invalidates the
+    // composable that currently owns the pager mutation.
+    return currentStack.size != 1 || currentStack.singleOrNull() != BiliPaiNavKey.MainHost
+}
+
+internal fun resolveVisibleBottomBarItems(
+    orderedVisibleTabIds: List<String>
+): List<BottomNavItem> {
+    return orderedVisibleTabIds
+        .mapNotNull { id -> BottomNavItem.entries.find { it.name == id } }
+        .take(BOTTOM_BAR_MAX_VISIBLE_ITEMS)
+}
+
 internal fun resolveActiveBottomTabRoute(
     currentKey: BiliPaiNavKey?,
     currentBottomItem: BottomNavItem
@@ -110,12 +146,17 @@ internal fun shouldShowBottomBarForNavigation(
     shouldHideBottomBarOnTablet: Boolean,
     shouldDeferReveal: Boolean
 ): Boolean {
-    return activeRoute != ScreenRoutes.Story.route &&
+    return !activeRoute.orEmpty().startsWith("story") &&
         activeRoute in visibleBottomBarRoutes &&
         !useSideNavigation &&
         !shouldHideBottomBarOnTablet &&
         !shouldDeferReveal
 }
+
+internal fun shouldMountSidebarForNavigation(
+    routeAllowsSidebar: Boolean,
+    isVideoDetailDestination: Boolean
+): Boolean = routeAllowsSidebar && !isVideoDetailDestination
 
 internal fun resolveVideoCardSourceRouteForNavigation(
     currentRoute: String?,
@@ -124,37 +165,56 @@ internal fun resolveVideoCardSourceRouteForNavigation(
     visibleBottomBarRoutes: Set<String>
 ): String? {
     if (videoBvid.isBlank() || lastClickedVideoSourceKey.isNullOrBlank()) return null
-    val routeBase = currentRoute?.substringBefore("?")
+    val routeBase = normalizeVideoCardNavigationSourceRoute(currentRoute)
     val currentRouteMatch = routeBase
         ?.takeIf { route -> lastClickedVideoSourceKey == "$route:$videoBvid" }
     if (currentRouteMatch != null) return currentRouteMatch
 
-    return visibleBottomBarRoutes.firstOrNull { route ->
+    // Bottom-bar tabs first (MainHost top is not the card host).
+    visibleBottomBarRoutes.firstOrNull { route ->
         lastClickedVideoSourceKey == "$route:$videoBvid"
+    }?.let { return it }
+
+    // Search / Space / History / video-related / collection hosts are not bottom-bar routes.
+    // Still honor the recorded card key so predictive-back sharedBounds land on the same route.
+    return resolveClickedVideoSourceRoute(lastClickedVideoSourceKey, videoBvid)
+}
+
+private fun normalizeVideoCardNavigationSourceRoute(route: String?): String? {
+    val normalized = route?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return if (normalized.startsWith("home?category=")) {
+        ScreenRoutes.Home.route
+    } else {
+        normalized.substringBefore("?")
     }
+}
+
+private fun resolveClickedVideoSourceRoute(
+    lastClickedVideoSourceKey: String,
+    videoBvid: String
+): String? {
+    val expectedSuffix = ":$videoBvid"
+    return lastClickedVideoSourceKey
+        .takeIf { it.endsWith(expectedSuffix) }
+        ?.removeSuffix(expectedSuffix)
+        ?.takeIf { it.isNotBlank() }
 }
 
 internal fun resolveBottomPagerSaveableStateKey(item: BottomNavItem): String {
     return "bottom:${item.route}"
 }
 
-internal fun resolveBottomPagerNavigationDurationMillis(
-    currentPage: Int,
-    targetPage: Int
-): Int {
-    val distance = kotlin.math.abs(targetPage - currentPage).coerceAtLeast(2)
-    return 100 * distance + 100
+internal fun resolveBottomPagerNavigationDurationMillis(pageDistance: Int): Int {
+    val distance = pageDistance.coerceAtLeast(2)
+    return distance * 100 + 100
 }
 
 internal fun resolveBottomPagerBeyondViewportPageCount(
-    contentReady: Boolean,
-    isNavigating: Boolean,
-    currentPage: Int,
-    selectedPage: Int
+    pageCount: Int,
+    contentReady: Boolean
 ): Int {
     if (!contentReady) return 0
-    if (!isNavigating) return 0
-    return kotlin.math.abs(selectedPage - currentPage)
+    return pageCount.coerceIn(1, BOTTOM_BAR_MAX_VISIBLE_ITEMS) - 1
 }
 
 internal fun resolveBottomPagerRenderBudget(isNavigating: Boolean): BottomPagerRenderBudget {
@@ -167,6 +227,18 @@ internal fun resolveBottomPagerRenderBudget(isNavigating: Boolean): BottomPagerR
 
 internal fun shouldEnableBottomPagerUserScroll(): Boolean = false
 
+/**
+ * BiliPai MainScreen composition:
+ * `if (isCurrentPage || contentReady) XxxPager(...)`
+ *
+ * After first-frame ready, lightweight bottom-tab slots stay mounted so
+ * [MainBottomPagerState.switchToPage] `animateScrollBy` far jumps
+ * (rightmost → home) scroll across real pages instead of empty Boxes.
+ * Story is intentionally excluded while inactive: mounting it creates a real media player and
+ * playback loading session, which is not safe or useful as visual-only pager precomposition.
+ *
+ * Before ready, only mount start / selected / current to keep cold start light.
+ */
 internal fun shouldComposeBottomPagerPage(
     item: BottomNavItem,
     page: Int,
@@ -176,18 +248,16 @@ internal fun shouldComposeBottomPagerPage(
     navigationStartPage: Int,
     contentReady: Boolean
 ): Boolean {
+    val isTransitionParticipant = page == currentPage ||
+        page == selectedPage ||
+        page == navigationStartPage
     if (item == BottomNavItem.STORY) {
-        return page == currentPage || page == selectedPage
+        return isTransitionParticipant
     }
-    if (!contentReady) {
-        return page == navigationStartPage || page == selectedPage
+    if (contentReady) {
+        return true
     }
-    if (isNavigating) {
-        return page == navigationStartPage ||
-            page == currentPage ||
-            page == selectedPage
-    }
-    return page == selectedPage
+    return isTransitionParticipant
 }
 
 internal fun shouldBypassNavigationDebounceForRoute(targetRoute: String): Boolean {
@@ -207,6 +277,7 @@ internal fun shouldPreserveProfileStackForShortcut(targetRoute: String): Boolean
     return targetRoute == ScreenRoutes.Settings.route ||
         targetRoute == ScreenRoutes.History.route ||
         targetRoute == ScreenRoutes.Favorite.route ||
+        targetRoute == ScreenRoutes.LikedVideos.route ||
         targetRoute == ScreenRoutes.WatchLater.route ||
         targetRoute == ScreenRoutes.DownloadList.route ||
         targetRoute == ScreenRoutes.Inbox.route ||

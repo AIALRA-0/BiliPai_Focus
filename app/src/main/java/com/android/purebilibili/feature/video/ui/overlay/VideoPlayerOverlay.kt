@@ -1,8 +1,15 @@
 // 文件路径: feature/video/VideoPlayerOverlay.kt
 package com.android.purebilibili.feature.video.ui.overlay
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
+import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 
 import android.content.ClipData
 import android.content.Context
+import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -17,10 +24,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,27 +35,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntSize
 import androidx.media3.common.Player
+import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
-import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.store.PortraitDanmakuDisplayAreaMode
+
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.ui.blur.BlurSurfaceType
+import com.android.purebilibili.core.ui.blur.shouldAllowRuntimeShaderBackedHazeEffect
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 // Import reusable components from standalone files
 import com.android.purebilibili.feature.video.ui.components.QualitySelectionMenu
+import com.android.purebilibili.feature.video.ui.components.AudioQualitySelectionMenuDialog
 import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDialog
+import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuPlacement
+import com.android.purebilibili.feature.video.ui.components.PlayerListPopupPlacement
 import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
+import com.android.purebilibili.feature.video.ui.components.LandscapeDanmakuComposer
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
 import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.ChapterListPanel
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.feature.video.ui.components.resolveCurrentUgcEpisodeLazyListIndex
+import com.android.purebilibili.feature.video.ui.components.LandscapeSidePanel
+import com.android.purebilibili.feature.video.ui.components.LandscapeSidePanelEdge
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.data.repository.VideoRepository
@@ -57,9 +76,22 @@ import com.android.purebilibili.data.repository.selectCastDashAudio
 import com.android.purebilibili.data.repository.selectCastDashVideo
 import com.android.purebilibili.feature.plugin.CdnLineDiagnostic
 import com.android.purebilibili.feature.video.playback.dash.buildLocalDashManifest
+import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
+import com.android.purebilibili.feature.video.playback.audio.resolveAudioQualityControlPresentation
 import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
 import com.android.purebilibili.feature.video.progress.PbpRidgeSample
-import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import com.android.purebilibili.feature.anime4k.VideoEnhancementAlgorithm
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
+import com.android.purebilibili.core.plugin.skin.UiSkinAnimatedAsset
+import com.android.purebilibili.core.plugin.skin.UiSkinSurface
+import com.android.purebilibili.core.plugin.skin.assetPath
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppTextButton
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -70,12 +102,18 @@ import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.BottomProgressBehavior
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.feature.video.screen.resolveVideoDetailSystemBarsVisibilityPolicy
+import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.core.util.WindowWidthSizeClass
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.util.NetworkUtils
+import com.android.purebilibili.feature.anime4k.Anime4KBypassReason
+import com.android.purebilibili.feature.anime4k.Anime4KPreset
+import com.android.purebilibili.feature.anime4k.DEFAULT_FSR_SHARPNESS
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -83,6 +121,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
 import com.android.purebilibili.core.ui.rememberAppCoinIcon
@@ -116,13 +155,16 @@ import androidx.lifecycle.compose.currentStateAsState
 import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
 import dev.chrisbanes.haze.HazeState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 internal fun shouldShowEpisodeEntryFromVideoData(
     relatedVideosCount: Int,
     hasSeasonEpisodes: Boolean,
-    pagesCount: Int
+    pagesCount: Int,
+    hasFavoritePlaylist: Boolean = false
 ): Boolean {
-    return pagesCount > 1 || relatedVideosCount > 0 || hasSeasonEpisodes
+    return pagesCount > 1 || hasSeasonEpisodes || hasFavoritePlaylist
 }
 
 internal data class NextEpisodeTarget(
@@ -272,6 +314,18 @@ internal fun shouldPollInlineVideoOverlayProgress(
     return playerExists && hostLifecycleStarted
 }
 
+internal fun resolveInlineVideoOverlayProgressPollingIntervalMs(
+    controlsVisible: Boolean,
+    isPlaying: Boolean,
+    highFrequencyProgressActive: Boolean
+): Long {
+    return when {
+        highFrequencyProgressActive -> 100L
+        controlsVisible && isPlaying -> 200L
+        else -> 1000L
+    }
+}
+
 internal fun resolveOverlayPlaybackButtonPlayingState(
     isPlaying: Boolean,
     playWhenReady: Boolean,
@@ -342,6 +396,17 @@ internal fun resolvePageSelectorSheetOuterBottomPaddingDp(
     return if (isFullscreen) 0 else 8
 }
 
+internal fun resolvePageSelectorSheetMaxWidthDp(
+    windowWidthDp: Int,
+    isFullscreen: Boolean
+): Int? {
+    return if (isFullscreen || windowWidthDp >= 600) {
+        640
+    } else {
+        null
+    }
+}
+
 internal fun shouldShowPersistentBottomProgressBar(
     controlsVisible: Boolean,
     isFullscreen: Boolean,
@@ -359,9 +424,10 @@ internal fun shouldShowPersistentBottomProgressBar(
 internal fun shouldAutoHideInlineControlsAfterDelay(
     controlsVisible: Boolean,
     isPlaying: Boolean,
-    isSeekScrubbing: Boolean
+    isSeekScrubbing: Boolean,
+    floatingPanelVisible: Boolean = false
 ): Boolean {
-    return controlsVisible && isPlaying && !isSeekScrubbing
+    return controlsVisible && isPlaying && !isSeekScrubbing && !floatingPanelVisible
 }
 
 internal fun shouldCancelSeekScrubWhenControlsHidden(
@@ -376,6 +442,22 @@ internal fun resolveDisplayedOnlineCount(
     showOnlineCount: Boolean
 ): String {
     return if (showOnlineCount) onlineCount else ""
+}
+
+@Composable
+private fun SkinAwareLoadingIndicator(color: Color) {
+    val skinPath = LocalUiSkinState.current.assetPath(UiSkinSurface.LOADING_INDICATOR) {
+        it.loadingAnimation ?: it.loadingFrame
+    }
+    if (skinPath != null) {
+        UiSkinAnimatedAsset(
+            path = skinPath,
+            size = 48.dp,
+            contentDescription = "加载中",
+        )
+    } else {
+        AdaptiveLoadingIndicator(color = color)
+    }
 }
 
 private const val CENTER_PLAY_BUTTON_SEEK_TRANSITION_GRACE_MS = 350L
@@ -395,6 +477,9 @@ fun VideoPlayerOverlay(
     onQualitySelected: (Int) -> Unit,
 
     onBack: () -> Unit,
+    onLandscapeCommentClick: () -> Unit = {},
+    landscapeCommentPanelVisible: Boolean = false,
+    landscapeCommentPanelOnLeft: Boolean = true,
     onHomeClick: () -> Unit = onBack,
     onToggleFullscreen: () -> Unit,
     // [New] Player Data for Download
@@ -411,8 +496,10 @@ fun VideoPlayerOverlay(
     // 🔒 [新增] 屏幕锁定
     isScreenLocked: Boolean = false,
     onLockToggle: () -> Unit = {},
-    showStats: Boolean = false,
+    insightMode: PlayerSettingsStore.PlayerInsightMode = PlayerSettingsStore.PlayerInsightMode.OFF,
     debugInfo: PlaybackDebugInfo = PlaybackDebugInfo(),
+    playerViewportSize: IntSize = IntSize.Zero,
+    viewportWidthDpOverride: Int? = null,
     diagnosticEvents: List<String> = emptyList(),
     pendingUserAction: PendingPlaybackUserAction? = null,
     hasPendingSeekResume: Boolean = false,
@@ -420,11 +507,29 @@ fun VideoPlayerOverlay(
     realResolution: String = "",
     isQualitySwitching: Boolean = false,
     isBuffering: Boolean = false,  // 缓冲状态
+    onBottomControlsSizeChanged: (Int) -> Unit = {},
     isVip: Boolean = false,
     //  [新增] 弹幕开关和设置
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {},
     onDanmakuInputClick: () -> Unit = {},
+    danmakuComposerVisible: Boolean = false,
+    onDismissDanmakuComposer: () -> Unit = {},
+    onSendDanmakuComposer: (
+        message: String,
+        color: Int,
+        mode: Int,
+        fontSize: Int,
+        attentionCommand: Boolean
+    ) -> Unit = { _, _, _, _, _ -> },
+    isSendingDanmakuComposer: Boolean = false,
+    danmakuComposerInitialText: String = "",
+    danmakuComposerInitialAttentionCommand: Boolean = false,
+    danmakuComposerInitialColor: Int = 16777215,
+    danmakuComposerInitialMode: Int = 1,
+    danmakuComposerInitialFontSize: Int = 25,
+    onDanmakuComposerDraftChange: (String, Boolean) -> Unit = { _, _ -> },
+    onDanmakuComposerSelectionChange: (Int, Int, Int) -> Unit = { _, _, _ -> },
     danmakuOpacity: Float = 0.85f,
     danmakuFontScale: Float = 1.0f,
     danmakuFontWeight: Int = 5,
@@ -449,7 +554,11 @@ fun VideoPlayerOverlay(
     danmakuBlockRulesRaw: String = "",
     danmakuSmartOcclusion: Boolean = true,
     danmakuFullscreenPanelWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
+    portraitDanmakuDisplayAreaMode: PortraitDanmakuDisplayAreaMode =
+        PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT,
+    danmakuSettingsScope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT,
     showDanmakuSyncSection: Boolean = false,
+    danmakuCloudSyncEnabled: Boolean = true,
     danmakuSyncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
@@ -475,6 +584,8 @@ fun VideoPlayerOverlay(
     onDanmakuBlockRulesRawChange: (String) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
     onDanmakuFullscreenPanelWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
+    onPortraitDanmakuDisplayAreaModeChange: (PortraitDanmakuDisplayAreaMode) -> Unit = {},
+    onDanmakuCloudSyncEnabledChange: (Boolean) -> Unit = {},
     onDanmakuSyncNowClick: () -> Unit = {},
     subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
@@ -530,13 +641,26 @@ fun VideoPlayerOverlay(
     onSeekTo: ((Long) -> Unit)? = null,
     progressDisplayOverridePositionMs: Long? = null,
     isPlaybackTransitionPending: Boolean = false,
+    highFrequencyProgressActive: Boolean = false,
     // [New] Codec & Audio Params
     currentCodec: String = "hev1",
     onCodecChange: (String) -> Unit = {},
     currentSecondCodec: String = "avc1",
     onSecondCodecChange: (String) -> Unit = {},
     currentAudioQuality: Int = -1,
+    selectedAudioQuality: Int = -1,
+    availableAudioQualities: List<AudioQualityOption> = emptyList(),
     onAudioQualityChange: (Int) -> Unit = {},
+    anime4kEnabled: Boolean = false,
+    anime4kAvailable: Boolean = false,
+    anime4kBypassReason: Anime4KBypassReason = Anime4KBypassReason.DISABLED,
+    videoEnhancementAlgorithm: VideoEnhancementAlgorithm = VideoEnhancementAlgorithm.ANIME4K,
+    anime4kPreset: Anime4KPreset = Anime4KPreset.FAST,
+    fsrSharpness: Float = DEFAULT_FSR_SHARPNESS,
+    onAnime4kToggle: (Boolean) -> Unit = {},
+    onVideoEnhancementAlgorithmChange: (VideoEnhancementAlgorithm) -> Unit = {},
+    onAnime4kPresetChange: (Anime4KPreset) -> Unit = {},
+    onFsrSharpnessChange: (Float) -> Unit = {},
     // [New] AI Audio Translation
     aiAudioInfo: com.android.purebilibili.data.model.response.AiAudioInfo? = null,
     currentAudioLang: String? = null,
@@ -551,6 +675,11 @@ fun VideoPlayerOverlay(
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
     onPlaybackSpeedChange: (Float) -> Unit = { speed -> player.setPlaybackSpeed(speed) },
+    endDrawerVisible: Boolean = false,
+    endDrawerInitialTab: Int = 0,
+    endDrawerReservedWidth: androidx.compose.ui.unit.Dp = 0.dp,
+    onShowEndDrawer: (Int) -> Unit = {},
+    onDismissEndDrawer: () -> Unit = {},
     
     // [新增] 侧边栏抽屉数据与交互
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
@@ -573,14 +702,17 @@ fun VideoPlayerOverlay(
     pages: List<com.android.purebilibili.data.model.response.Page> = emptyList(),
     currentPageIndex: Int = 0,
     onPageSelect: (Int) -> Unit = {},
+    hasFavoritePlaylist: Boolean = false,
+    onFavoritePlaylistClick: () -> Unit = {},
     drawerHazeState: HazeState? = null,
+    statusBarAmbientFrame: State<ImageBitmap?>? = null,
+    statusBarBackdropHeight: androidx.compose.ui.unit.Dp = 0.dp,
+    onShowDanmakuPool: (() -> Unit)? = null,
 ) {
     var showQualityMenu by remember { mutableStateOf(false) }
+    var showAudioQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showRatioMenu by remember { mutableStateOf(false) }
-    // [新增] 侧边栏显示状态
-    var showEndDrawer by remember { mutableStateOf(false) }
-    var endDrawerInitialTab by remember { mutableIntStateOf(0) }
     var showDanmakuSettings by remember { mutableStateOf(false) }
     var showVideoSettings by remember { mutableStateOf(false) }  //  新增
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
@@ -599,9 +731,22 @@ fun VideoPlayerOverlay(
     }
     var showPlaybackOrderSheet by remember { mutableStateOf(false) }
     var showPageSelectorSheet by remember { mutableStateOf(false) }
+    var bottomControlFloatingPanelVisible by remember { mutableStateOf(false) }
+    // 换集后强制关掉分集/菜单等全屏遮罩，避免 Dialog/Sheet 残留挡触摸。
+    LaunchedEffect(bvid, cid) {
+        showPageSelectorSheet = false
+        showQualityMenu = false
+        showAudioQualityMenu = false
+        showSpeedMenu = false
+        showRatioMenu = false
+        showDanmakuSettings = false
+        showChapterList = false
+        showPlaybackOrderSheet = false
+        showCastDialog = false
+    }
     var currentSpeed by remember(player) { mutableFloatStateOf(player.playbackParameters.speed) }
     //  使用传入的比例状态
-    var isPlaying by remember {
+    var isPlaying by remember(player) {
         mutableStateOf(
             resolveOverlayPlaybackButtonPlayingState(
                 isPlaying = player.isPlaying,
@@ -620,20 +765,64 @@ fun VideoPlayerOverlay(
     val fullscreenLockButtonState = remember(isScreenLocked) {
         resolveFullscreenLockButtonVisualState(isScreenLocked = isScreenLocked)
     }
+    val audioQualityPresentation = remember(availableAudioQualities, selectedAudioQuality) {
+        resolveAudioQualityControlPresentation(
+            options = availableAudioQualities,
+            selectedAudioQuality = selectedAudioQuality
+        )
+    }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
     val configuration = LocalConfiguration.current
-    val effectiveDebugInfo = remember(debugInfo, realResolution) {
-        if (debugInfo.resolution.isBlank() && realResolution.isNotBlank()) {
-            debugInfo.copy(resolution = realResolution)
-        } else {
-            debugInfo
-        }
+    val effectiveDebugInfo = remember(
+        debugInfo,
+        realResolution,
+        playerViewportSize,
+        currentVideoUrl,
+        currentCdnIndex,
+        cdnCount,
+        player.playbackState,
+        player.currentPosition,
+        player.bufferedPosition,
+        player.playerError
+    ) {
+        val viewport = playerViewportSize
+            .takeIf { it.width > 0 && it.height > 0 }
+            ?.let { "${it.width} x ${it.height}" }
+            .orEmpty()
+        val cdnHost = runCatching { android.net.Uri.parse(currentVideoUrl).host.orEmpty() }
+            .getOrDefault("")
+        debugInfo.copy(
+            resolution = debugInfo.resolution.ifBlank { realResolution },
+            playerViewport = viewport,
+            cdnHost = cdnHost,
+            cdnIndex = "${currentCdnIndex + 1}/${cdnCount.coerceAtLeast(1)}",
+            networkType = NetworkUtils.getNetworkTypeLabel(context),
+            forwardBuffer = "${(player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)} ms",
+            lastLoadError = player.playerError?.let { error ->
+                listOf(error.errorCodeName, error.message.orEmpty())
+                    .filter { it.isNotBlank() }
+                    .joinToString(": ")
+            } ?: debugInfo.lastLoadError
+        )
     }
     val debugRows = remember(effectiveDebugInfo) {
         resolvePlaybackDebugRows(effectiveDebugInfo)
     }
+    val insightPresentation = remember(effectiveDebugInfo) {
+        resolvePlaybackInsightPresentation(effectiveDebugInfo)
+    }
+    val insightPanelLayoutPolicy = remember(
+        configuration.screenWidthDp,
+        configuration.screenHeightDp
+    ) {
+        resolvePlaybackInsightPanelLayoutPolicy(
+            screenWidthDp = configuration.screenWidthDp,
+            screenHeightDp = configuration.screenHeightDp
+        )
+    }
+    var showInsightDetails by remember(player, bvid, cid) { mutableStateOf(false) }
     var bufferingStartedAtMs by remember(player) { mutableLongStateOf(0L) }
     var waitingFirstFrameStartedAtMs by remember(player, bvid, cid) { mutableLongStateOf(0L) }
     var playbackIssueSignal by remember(player, bvid, cid) { mutableStateOf<PlaybackIssueSignal?>(null) }
@@ -652,13 +841,22 @@ fun VideoPlayerOverlay(
         playerDiagnosticLoggingEnabled
     ) {
         { issue ->
+            val liveDebugInfo = effectiveDebugInfo.copy(
+                networkType = NetworkUtils.getNetworkTypeLabel(context),
+                forwardBuffer = "${(player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)} ms",
+                lastLoadError = player.playerError?.let { error ->
+                    listOf(error.errorCodeName, error.message.orEmpty())
+                        .filter { it.isNotBlank() }
+                        .joinToString(": ")
+                } ?: effectiveDebugInfo.lastLoadError
+            )
             buildPlaybackDiagnosticReport(
                 title = videoTitle.ifBlank { title },
                 bvid = bvid,
                 cid = cid,
                 currentPositionMs = player.currentPosition,
                 bufferedPositionMs = player.bufferedPosition,
-                debugInfo = effectiveDebugInfo,
+                debugInfo = liveDebugInfo,
                 recentEvents = buildList {
                     issue?.let { add("detectedIssue=${it.type}") }
                     pendingUserAction?.let { action ->
@@ -786,7 +984,17 @@ fun VideoPlayerOverlay(
         )
     val bottomProgressBehavior by SettingsManager
         .getBottomProgressBehavior(context)
-        .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_SHOW
+        .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_HIDE
+        )
+    val playerControlVisibility by SettingsManager
+        .getPlayerControlVisibilitySettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
+        )
+    val progressPlacement by SettingsManager
+        .getPlayerProgressPlacement(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.PlayerProgressPlacement.ABOVE_CONTROLS
         )
     val displayedOnlineCount = remember(onlineCount, showOnlineCount) {
         resolveDisplayedOnlineCount(
@@ -800,7 +1008,8 @@ fun VideoPlayerOverlay(
             hasSeasonEpisodes = ugcSeason?.sections?.any { section ->
                 section.episodes.isNotEmpty()
             } == true,
-            pagesCount = pages.size
+            pagesCount = pages.size,
+            hasFavoritePlaylist = hasFavoritePlaylist
         )
     }
     val nextEpisodeTarget = remember(
@@ -825,6 +1034,28 @@ fun VideoPlayerOverlay(
         .getPlaybackCompletionBehavior(context)
         .collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC
         )
+    // The legacy preference key now enables the inline-player Haze status-bar backdrop.
+    val immersiveVideoPageStatusBar by SettingsManager
+        .getHideVideoPageStatusBar(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.getHideVideoPageStatusBarSync(context),
+        )
+    val playerChromeStatusBarVisible = !resolveVideoDetailSystemBarsVisibilityPolicy(
+        isFullscreenMode = isFullscreen,
+        hideVideoPageStatusBar = immersiveVideoPageStatusBar,
+        isInPipMode = false,
+        isScreenActive = true,
+        isPortraitFullscreen = false,
+    ).hideStatusBars
+    val effectiveProgressPlacement = remember(
+        progressPlacement,
+        isFullscreen
+    ) {
+        resolveVideoDetailProgressPlacement(
+            requestedPlacement = progressPlacement,
+            isFullscreen = isFullscreen
+        )
+    }
 
     DisposableEffect(player) {
         currentSpeed = player.playbackParameters.speed
@@ -846,43 +1077,32 @@ fun VideoPlayerOverlay(
             widthDp = configuration.screenWidthDp
         )
     }
-
-    // 📺 按需权限请求
-    val dlnaPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val isGranted = permissions.values.all { it }
-        if (isGranted) {
-            showCastDialog = true
-        } else {
-            com.android.purebilibili.core.util.Logger.d("VideoPlayerOverlay", "DLNA permissions denied")
-        }
+    val landscapeCommentReservedWidth = if (landscapeCommentPanelVisible) {
+        resolveLandscapeEndDrawerLayoutPolicy(configuration.screenWidthDp).drawerWidthDp.dp
+    } else {
+        0.dp
     }
+    val overlayContentModifier = Modifier
+        .fillMaxSize()
+        .padding(
+            start = if (landscapeCommentPanelOnLeft) landscapeCommentReservedWidth else 0.dp,
+            end = endDrawerReservedWidth +
+                if (landscapeCommentPanelOnLeft) 0.dp else landscapeCommentReservedWidth,
+        )
 
-    val onCastClickAction = {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.NEARBY_WIFI_DEVICES) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                 showCastDialog = true
-            } else {
-                dlnaPermissionLauncher.launch(arrayOf(android.Manifest.permission.NEARBY_WIFI_DEVICES))
-            }
-        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                 showCastDialog = true
-            } else {
-                dlnaPermissionLauncher.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION))
-            }
-        } else {
-            showCastDialog = true
-        }
-    }
+    // 先打开设备面板；只有用户选择搜索 DLNA 时才请求原始局域网权限。
+    val onCastClickAction = { showCastDialog = true }
 
     val progressState by produceState(
         initialValue = PlayerProgress(),
         player,
+        bvid,
+        cid,
+        videoDuration,
         isVisible,
         hostLifecycleStarted,
-        hasPendingSeekResume
+        hasPendingSeekResume,
+        highFrequencyProgressActive
     ) {
         if (!shouldPollInlineVideoOverlayProgress(
                 playerExists = true,
@@ -924,7 +1144,11 @@ fun VideoPlayerOverlay(
                 playbackState = player.playbackState,
                 hasPendingSeekResume = hasPendingSeekResume
             )
-            val delayMs = if (isVisible && player.isPlaying) 200L else 500L
+            val delayMs = resolveInlineVideoOverlayProgressPollingIntervalMs(
+                controlsVisible = isVisible,
+                isPlaying = player.isPlaying,
+                highFrequencyProgressActive = highFrequencyProgressActive
+            )
             delay(delayMs)
         }
     }
@@ -977,12 +1201,18 @@ fun VideoPlayerOverlay(
         else viewPoints.lastOrNull { effectiveProgressState.current >= it.fromMs }?.content
     }
 
-    LaunchedEffect(isVisible, effectiveIsPlaying, isSeekScrubbing) {
+    LaunchedEffect(
+        isVisible,
+        effectiveIsPlaying,
+        isSeekScrubbing,
+        bottomControlFloatingPanelVisible
+    ) {
         if (
             shouldAutoHideInlineControlsAfterDelay(
                 controlsVisible = isVisible,
                 isPlaying = effectiveIsPlaying,
-                isSeekScrubbing = isSeekScrubbing
+                isSeekScrubbing = isSeekScrubbing,
+                floatingPanelVisible = bottomControlFloatingPanelVisible
             )
         ) {
             delay(4000)
@@ -990,7 +1220,8 @@ fun VideoPlayerOverlay(
                 shouldAutoHideInlineControlsAfterDelay(
                     controlsVisible = isVisible,
                     isPlaying = effectiveIsPlaying,
-                    isSeekScrubbing = isSeekScrubbing
+                    isSeekScrubbing = isSeekScrubbing,
+                    floatingPanelVisible = bottomControlFloatingPanelVisible
                 )
             ) {
                 onToggleVisible()
@@ -1087,26 +1318,47 @@ fun VideoPlayerOverlay(
         modifier = Modifier
             .fillMaxSize()
     ) {
+        if (!isFullscreen) {
+            ImmersiveStatusBarBackdrop(
+                ambientFrame = statusBarAmbientFrame,
+                height = statusBarBackdropHeight,
+                useAmbientHaze = immersiveVideoPageStatusBar,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
+
         // --- 1. 顶部渐变遮罩 ---
         AnimatedVisibility(
             visible = isVisible,
             enter = fadeIn(),
             exit = fadeOut(),
             //  [修复] align 必须在 AnimatedVisibility 的 modifier 上，而不是内部 Box 上
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(end = endDrawerReservedWidth)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(overlayVisualPolicy.topScrimHeightDp.dp)
                     .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.75f),
-                                Color.Black.copy(alpha = 0.1f),
-                                Color.Transparent
+                        if (!isFullscreen) {
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0f to Color.Transparent,
+                                    0.2f to Color.Black.copy(alpha = 0.52f),
+                                    1f to Color.Transparent,
+                                )
                             )
-                        )
+                        } else {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.75f),
+                                    Color.Black.copy(alpha = 0.1f),
+                                    Color.Transparent
+                                )
+                            )
+                        }
                     )
             )
         }
@@ -1116,7 +1368,9 @@ fun VideoPlayerOverlay(
             visible = isVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(end = endDrawerReservedWidth)
         ) {
             Box(
                 modifier = Modifier
@@ -1145,17 +1399,20 @@ fun VideoPlayerOverlay(
             PersistentBottomProgressBar(
                 current = displayedProgressState.current,
                 duration = displayedProgressState.duration,
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(end = endDrawerReservedWidth)
             )
         }
 
         // --- 3. 控制栏内容 (锁定时隐藏) ---
+        val showPlayerChrome = (isVisible && !isScreenLocked) || danmakuComposerVisible
         AnimatedVisibility(
-            visible = isVisible && !isScreenLocked,  // 🔒 锁定时隐藏控制栏
+            visible = showPlayerChrome,
             enter = fadeIn(tween(300)),
             exit = fadeOut(tween(300)),
             //  [修复] 确保 AnimatedVisibility 填充整个父容器
-            modifier = Modifier.fillMaxSize()
+            modifier = overlayContentModifier
         ) {
             //  [修复] 使用 Box 分别定位顶部和底部控制栏
             Box(modifier = Modifier.fillMaxSize()) {
@@ -1165,6 +1422,7 @@ fun VideoPlayerOverlay(
                         title = title,
                         onlineCount = displayedOnlineCount,
                         isFullscreen = isFullscreen,
+                        statusBarVisible = playerChromeStatusBarVisible,
                         showBatteryLevel = showFullscreenBatteryLevel,
                         showCurrentTime = showFullscreenTime,
                         showInteractiveActions = showFullscreenActionItems,
@@ -1183,10 +1441,11 @@ fun VideoPlayerOverlay(
                                 ShareUtils.shareVideo(context, title, bvid)
                             }
                         },
+                        onCommentClick = onLandscapeCommentClick,
                         onCastClick = onCastClickAction,
+                        showCastButton = playerControlVisibility.showCastButton,
                         onMoreClick = {
-                            endDrawerInitialTab = 0
-                            showEndDrawer = true
+                            onShowEndDrawer(0)
                         },
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
@@ -1195,6 +1454,7 @@ fun VideoPlayerOverlay(
                     val context = LocalContext.current
                     PortraitTopBar(
                         onlineCount = displayedOnlineCount,
+                        viewportWidthDpOverride = viewportWidthDpOverride,
                         onBack = onBack,
                         onHome = onHomeClick,
                         onSettings = { showVideoSettings = true },
@@ -1207,12 +1467,35 @@ fun VideoPlayerOverlay(
                         isAudioOnly = isAudioOnly,
                         //  [新增] 投屏按钮
                         onCastClick = onCastClickAction,
+                        showCastButton = playerControlVisibility.showCastButton,
+                        statusBarVisible = playerChromeStatusBarVisible,
                         modifier = Modifier.align(Alignment.TopStart)
                     )
                 }
                 
-                //  [修复] 底部控制栏 - 固定在底部
-                BottomControlBar(
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .onSizeChanged { onBottomControlsSizeChanged(it.height) }
+                ) {
+                    if (isFullscreen && danmakuComposerVisible) {
+                        LandscapeDanmakuComposer(
+                            visible = true,
+                            onDismiss = onDismissDanmakuComposer,
+                            onSend = onSendDanmakuComposer,
+                            isSending = isSendingDanmakuComposer,
+                            initialColor = danmakuComposerInitialColor,
+                            initialMode = danmakuComposerInitialMode,
+                            initialFontSize = danmakuComposerInitialFontSize,
+                            initialText = danmakuComposerInitialText,
+                            initialAttentionCommand = danmakuComposerInitialAttentionCommand,
+                            onDraftChange = onDanmakuComposerDraftChange,
+                            onSelectionChange = onDanmakuComposerSelectionChange
+                        )
+                    }
+
+                    BottomControlBar(
+                    viewportWidthDpOverride = viewportWidthDpOverride,
                     isPlaying = effectiveIsPlaying,
                     progress = displayedProgressState,
                     isFullscreen = isFullscreen,
@@ -1231,6 +1514,7 @@ fun VideoPlayerOverlay(
                     onSpeedClick = { showSpeedMenu = true },
                     onRatioClick = { showRatioMenu = true },
                     onNextEpisodeClick = {
+                        onDismissEndDrawer()
                         val target = nextEpisodeTarget
                         when {
                             target?.nextPageIndex != null -> onPageSelect(target.nextPageIndex)
@@ -1241,9 +1525,12 @@ fun VideoPlayerOverlay(
                     onEpisodeClick = {
                         if (pages.size > 1) {
                             showPageSelectorSheet = true
+                        } else if (ugcSeason?.sections?.any { it.episodes.isNotEmpty() } == true) {
+                            onShowEndDrawer(1)
+                        } else if (hasFavoritePlaylist) {
+                            onFavoritePlaylistClick()
                         } else {
-                            endDrawerInitialTab = if (ugcSeason?.sections?.any { it.episodes.isNotEmpty() } == true) 1 else 0
-                            showEndDrawer = true
+                            onShowEndDrawer(0)
                         }
                     },
                     hasEpisodeEntry = hasEpisodeEntry,
@@ -1251,10 +1538,24 @@ fun VideoPlayerOverlay(
                     //  [新增] 竖屏模式弹幕和清晰度控制
                     danmakuEnabled = danmakuEnabled,
                     onDanmakuToggle = onDanmakuToggle,
-                    onDanmakuInputClick = onDanmakuInputClick,
                     onDanmakuSettingsClick = { showDanmakuSettings = true },
+                    onDanmakuInputClick = onDanmakuInputClick,
+                    isLoggedIn = isLoggedIn,
                     subtitleControlState = subtitleControlState,
                     subtitleControlCallbacks = subtitleControlCallbacks,
+                    anime4kEnabled = anime4kEnabled,
+                    anime4kAvailable = anime4kAvailable,
+                    videoEnhancementAlgorithm = videoEnhancementAlgorithm,
+                    anime4kPreset = anime4kPreset,
+                    fsrSharpness = fsrSharpness,
+                    onAnime4kToggle = onAnime4kToggle,
+                    onVideoEnhancementAlgorithmChange = onVideoEnhancementAlgorithmChange,
+                    onAnime4kPresetChange = onAnime4kPresetChange,
+                    onFsrSharpnessChange = onFsrSharpnessChange,
+                    currentAudioQualityLabel = audioQualityPresentation.label,
+                    isHiResAudioSelected = audioQualityPresentation.showHiResBadge,
+                    isDolbyAudioSelected = audioQualityPresentation.showDolbyBadge,
+                    onAudioQualityClick = { showAudioQualityMenu = true },
                     currentQualityLabel = currentQualityLabel,
                     onQualityClick = { showQualityMenu = true },
                     // 🖼️ [新增] 视频预览图数据
@@ -1278,33 +1579,36 @@ fun VideoPlayerOverlay(
                         compact = !isFullscreen
                     ),
                     onPlaybackOrderClick = { showPlaybackOrderSheet = true },
-                    //  [修复] 传入 modifier 确保在底部
-                    modifier = Modifier.align(Alignment.BottomStart)
+                    onFloatingPanelVisibilityChange = { visible ->
+                        bottomControlFloatingPanelVisible = visible
+                    },
+                    progressPlacement = effectiveProgressPlacement
                 )
+                }
             }
         }
         
         // --- 3.5 🔒 [新增] 屏幕锁定按钮 (仅全屏模式) ---
         if (isFullscreen && showFullscreenLockButton) {
             AnimatedVisibility(
-                visible = isVisible || isScreenLocked,  // 锁定时始终显示解锁按钮
+                visible = isVisible,  // 锁定后按控制栏状态自动隐藏
                 enter = fadeIn(tween(200)),
                 exit = fadeOut(tween(200)),
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
             ) {
-                Surface(
+                AppSurface(
                     onClick = onLockToggle,
                     color = Color.Black.copy(alpha = 0.6f),
                     shape = RoundedCornerShape(overlayVisualPolicy.lockButtonCornerRadiusDp.dp),
                     modifier = Modifier.size(overlayVisualPolicy.lockButtonSizeDp.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
+                        AppIcon(
                             when (fullscreenLockButtonState.icon) {
-                                FullscreenLockButtonIcon.LOCKED -> CupertinoIcons.Default.Lock
-                                FullscreenLockButtonIcon.UNLOCKED -> CupertinoIcons.Default.LockOpen
+                                FullscreenLockButtonIcon.LOCKED -> Icons.Outlined.Lock
+                                FullscreenLockButtonIcon.UNLOCKED -> Icons.Outlined.LockOpen
                             },
                             contentDescription = fullscreenLockButtonState.contentDescription,
                             tint = if (fullscreenLockButtonState.highlighted) {
@@ -1328,15 +1632,15 @@ fun VideoPlayerOverlay(
                     .align(Alignment.CenterEnd)
                     .padding(end = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
             ) {
-                Surface(
+                AppSurface(
                     onClick = onCaptureScreenshot,
                     color = Color.Black.copy(alpha = 0.6f),
                     shape = RoundedCornerShape(overlayVisualPolicy.lockButtonCornerRadiusDp.dp),
                     modifier = Modifier.size(overlayVisualPolicy.lockButtonSizeDp.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            imageVector = CupertinoIcons.Default.Camera,
+                        AppIcon(
+                            imageVector = Icons.Outlined.Camera,
                             contentDescription = "截图",
                             tint = Color.White,
                             modifier = Modifier.size(overlayVisualPolicy.lockIconSizeDp.dp)
@@ -1346,137 +1650,175 @@ fun VideoPlayerOverlay(
             }
         }
 
-        // --- 4.  [新增] 真实分辨率统计信息 (仅在设置开启时显示) ---
-        if (showStats && debugRows.isNotEmpty() && isVisible) {
-            Box(
+        val showInsightHud = shouldShowPlaybackInsightHud(
+            mode = insightMode,
+            hasMeasuredData = debugRows.isNotEmpty(),
+            controlsVisible = isVisible,
+            screenLocked = isScreenLocked,
+            level = insightPresentation.level
+        )
+        if (showInsightHud) {
+            AppSurface(
+                onClick = { showInsightDetails = true },
+                color = Color.Black.copy(alpha = 0.68f),
+                contentColor = Color.White,
+                shape = AppShapes.container(ContainerLevel.Dialog),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(
                         top = overlayVisualPolicy.statsTopPaddingDp.dp,
                         end = overlayVisualPolicy.statsEndPaddingDp.dp
                     )
-                    .padding(
-                        horizontal = overlayVisualPolicy.statsHorizontalPaddingDp.dp,
-                        vertical = overlayVisualPolicy.statsVerticalPaddingDp.dp
-                    )
+                    .heightIn(min = 48.dp)
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Player stats",
-                            color = Color.White.copy(alpha = 0.82f),
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(
+                                color = when (insightPresentation.level) {
+                                    PlaybackInsightLevel.LIVE -> Color(0xFF66E28A)
+                                    PlaybackInsightLevel.ATTENTION -> Color(0xFFFFB74D)
+                                    PlaybackInsightLevel.UNAVAILABLE -> Color(0xFFB0B4BA)
+                                },
+                                shape = CircleShape
+                            )
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        AppText(
+                            text = insightPresentation.summary,
+                            color = Color.White,
                             style = MaterialTheme.typography.labelMedium,
                             fontSize = overlayVisualPolicy.statsFontSp.sp,
-                            fontFamily = FontFamily.Monospace
+                            maxLines = 1
                         )
-                        if (playerDiagnosticLoggingEnabled) {
-                            Text(
-                                text = "Copy diag",
-                                color = BiliPink,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontSize = overlayVisualPolicy.statsFontSp.sp,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.clickable {
-                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                                        as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        ClipData.newPlainText(
-                                            "BiliPai Player Diagnostics",
-                                            exportDiagnosticReport(null)
-                                        )
-                                    )
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "播放器诊断已复制",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    debugRows.forEach { row ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.widthIn(min = 164.dp)
-                        ) {
-                            Text(
-                                text = row.label,
-                                color = Color.White.copy(alpha = 0.72f),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = overlayVisualPolicy.statsFontSp.sp,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            Text(
-                                text = row.value,
-                                color = Color(0xFF9BFFB0),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = overlayVisualPolicy.statsFontSp.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                        AppText(
+                            text = insightPresentation.statusText,
+                            color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = (overlayVisualPolicy.statsFontSp - 1f).coerceAtLeast(9f).sp
+                        )
                     }
                 }
             }
         }
 
-        if (playerDiagnosticLoggingEnabled) playbackIssueSignal?.let { signal ->
-            AlertDialog(
-                onDismissRequest = {
-                    dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
-                    playbackIssueSignal = null
-                },
-                title = {
-                    Text(signal.title)
-                },
-                text = {
-                    Text(signal.message)
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val savedPath = Logger.exportPlayerDiagnostic(
-                                context = context,
-                                content = exportDiagnosticReport(signal)
+        if (showInsightDetails) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.12f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { showInsightDetails = false }
+                    )
+            )
+            PlaybackInsightPanel(
+                presentation = insightPresentation,
+                diagnosticEvents = diagnosticEvents,
+                onCopyReport = if (playerDiagnosticLoggingEnabled) {
+                    {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(
+                            ClipData.newPlainText(
+                                "BiliPai Player Diagnostics",
+                                exportDiagnosticReport(null)
                             )
-                            if (savedPath != null) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "已导出到: $savedPath",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "导出失败，请稍后重试",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                            dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
-                            playbackIssueSignal = null
-                        }
-                    ) {
-                        Text("导出日志")
+                        )
+                        android.widget.Toast.makeText(
+                            context,
+                            "播放器诊断已复制",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
                     }
+                } else {
+                    null
                 },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
-                            playbackIssueSignal = null
-                        }
+                onDismiss = { showInsightDetails = false },
+                hazeState = drawerHazeState,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(insightPanelLayoutPolicy.edgePaddingDp.dp)
+                    .width(insightPanelLayoutPolicy.widthDp.dp)
+                    .heightIn(max = insightPanelLayoutPolicy.maxHeightDp.dp)
+            )
+        }
+
+        if (playerDiagnosticLoggingEnabled) playbackIssueSignal?.let { signal ->
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn() + slideInVertically { -it / 2 },
+                exit = fadeOut() + slideOutVertically { -it / 2 },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                AppSurface(
+                    shape = AppShapes.container(ContainerLevel.Card),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    contentColor = Color.White,
+                    tonalElevation = 0.dp
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(start = 14.dp, end = 4.dp)
                     ) {
-                        Text("关闭")
+                        AppText(
+                            text = signal.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AppTextButton(
+                            onClick = {
+                                showInsightDetails = true
+                                dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                                playbackIssueSignal = null
+                            }
+                        ) {
+                            AppText("查看")
+                        }
+                        AppTextButton(
+                            onClick = {
+                                val savedPath = Logger.exportPlayerDiagnostic(
+                                    context = context,
+                                    content = exportDiagnosticReport(signal)
+                                )
+                                android.widget.Toast.makeText(
+                                    context,
+                                    if (savedPath != null) "已导出到: $savedPath" else "导出失败，请稍后重试",
+                                    if (savedPath != null) {
+                                        android.widget.Toast.LENGTH_LONG
+                                    } else {
+                                        android.widget.Toast.LENGTH_SHORT
+                                    }
+                                ).show()
+                                dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                                playbackIssueSignal = null
+                            }
+                        ) {
+                            AppText("导出")
+                        }
+                        AppIconButton(
+                            onClick = {
+                                dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                                playbackIssueSignal = null
+                            }
+                        ) {
+                            AppIcon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "关闭卡顿提示"
+                            )
+                        }
                     }
                 }
-            )
+            }
         }
 
         // --- 5. 中央播放/暂停大图标 (仅全屏模式显示) ---
@@ -1496,9 +1838,14 @@ fun VideoPlayerOverlay(
             enter = scaleIn(tween(250)) + fadeIn(tween(200)),
             exit = scaleOut(tween(200)) + fadeOut(tween(200))
         ) {
+            val resumeFromCenterButton = {
+                playPlayerFromUserAction(player)
+                isPlaying = true
+            }
             OverlayPlaybackButton(
                 isPlaying = false,
-                onClick = { playPlayerFromUserAction(player); isPlaying = true },
+                onClick = resumeFromCenterButton,
+                onDoubleClick = resumeFromCenterButton,
                 outerSize = overlayVisualPolicy.centerPlayButtonSizeDp.dp,
                 innerSize = overlayVisualPolicy.centerPlayInnerButtonSizeDp.dp,
                 glyphSize = overlayVisualPolicy.centerPlayIconSizeDp.dp
@@ -1516,9 +1863,7 @@ fun VideoPlayerOverlay(
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(200))
         ) {
-            CupertinoActivityIndicator(
-                color = centerLoadingVisualState.indicatorColor
-            )
+            SkinAwareLoadingIndicator(color = centerLoadingVisualState.indicatorColor)
         }
 
         AnimatedVisibility(
@@ -1528,7 +1873,7 @@ fun VideoPlayerOverlay(
             exit = fadeOut(tween(200))
         ) {
             val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
-            Surface(
+            AppSurface(
                 color = Color.Black.copy(alpha = 0.72f),
                 shape = RoundedCornerShape(overlayVisualPolicy.qualitySwitchCornerRadiusDp.dp),
                 modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)
@@ -1540,11 +1885,9 @@ fun VideoPlayerOverlay(
                         vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
                     )
                 ) {
-                    CupertinoActivityIndicator(
-                        color = centerLoadingVisualState.indicatorColor
-                    )
+                    SkinAwareLoadingIndicator(color = centerLoadingVisualState.indicatorColor)
                     Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
-                    Text(
+                    AppText(
                         text = loadingState.primaryText,
                         color = centerLoadingVisualState.primaryTextColor,
                         fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
@@ -1552,7 +1895,7 @@ fun VideoPlayerOverlay(
                     )
                     loadingState.secondaryText?.let { secondaryText ->
                         Spacer(modifier = Modifier.height(6.dp))
-                        Text(
+                        AppText(
                             text = secondaryText,
                             color = centerLoadingVisualState.secondaryTextColor,
                             fontSize = (overlayVisualPolicy.qualitySwitchMessageFontSp - 1).sp,
@@ -1570,7 +1913,7 @@ fun VideoPlayerOverlay(
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(200))
         ) {
-            Surface(
+            AppSurface(
                 color = Color.Black.copy(alpha = 0.7f),
                 shape = RoundedCornerShape(overlayVisualPolicy.qualitySwitchCornerRadiusDp.dp),
                 modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)
@@ -1582,12 +1925,9 @@ fun VideoPlayerOverlay(
                         vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
                     )
                 ) {
-                    //  iOS 风格加载器
-                    CupertinoActivityIndicator(
-                        color = centerLoadingVisualState.indicatorColor
-                    )
+                    SkinAwareLoadingIndicator(color = centerLoadingVisualState.indicatorColor)
                     Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
-                    Text(
+                    AppText(
                         text = "正在切换清晰度...",
                         color = centerLoadingVisualState.primaryTextColor,
                         fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
@@ -1611,7 +1951,21 @@ fun VideoPlayerOverlay(
                     showQualityMenu = false
                 },
                 onDismiss = { showQualityMenu = false },
-                useDialog = true
+                useDialog = true,
+                placement = if (isFullscreen) PlayerListPopupPlacement.END_BOTTOM else PlayerListPopupPlacement.CENTER,
+            )
+        }
+
+        if (showAudioQualityMenu) {
+            AudioQualitySelectionMenuDialog(
+                options = availableAudioQualities,
+                requestedAudioQuality = currentAudioQuality,
+                onAudioQualitySelected = { preferenceId ->
+                    onAudioQualityChange(preferenceId)
+                    showAudioQualityMenu = false
+                },
+                onDismiss = { showAudioQualityMenu = false },
+                placement = if (isFullscreen) PlayerListPopupPlacement.END_BOTTOM else PlayerListPopupPlacement.CENTER,
             )
         }
         
@@ -1627,7 +1981,12 @@ fun VideoPlayerOverlay(
                     }
                     showSpeedMenu = false
                 },
-                onDismiss = { showSpeedMenu = false }
+                onDismiss = { showSpeedMenu = false },
+                placement = if (isFullscreen) {
+                    SpeedSelectionMenuPlacement.RIGHT_SIDE
+                } else {
+                    SpeedSelectionMenuPlacement.CENTER
+                }
             )
         }
         
@@ -1658,9 +2017,7 @@ fun VideoPlayerOverlay(
         if (showDanmakuSettings) {
             DanmakuSettingsPanel(
                 isFullscreen = isFullscreen,
-                settingsScope = com.android.purebilibili.core.store.resolveDanmakuSettingsScope(
-                    isLandscape = isFullscreen
-                ),
+                settingsScope = danmakuSettingsScope,
                 opacity = danmakuOpacity,
                 fontScale = danmakuFontScale,
                 showAdvancedSection = true,
@@ -1684,10 +2041,13 @@ fun VideoPlayerOverlay(
                 allowSpecial = danmakuAllowSpecial,
                 hideInteractiveCommands = danmakuHideInteractiveCommands,
                 showBlockRuleEditor = true,
+                showSmartOcclusionSection = true,
                 blockRulesRaw = danmakuBlockRulesRaw,
                 smartOcclusion = danmakuSmartOcclusion,
                 fullscreenWidthMode = danmakuFullscreenPanelWidthMode,
+                portraitDisplayAreaMode = portraitDanmakuDisplayAreaMode,
                 showSyncSection = showDanmakuSyncSection,
+                cloudSyncEnabled = danmakuCloudSyncEnabled,
                 syncUiState = danmakuSyncUiState,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
@@ -1713,7 +2073,15 @@ fun VideoPlayerOverlay(
                 onBlockRulesRawChange = onDanmakuBlockRulesRawChange,
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                 onFullscreenWidthModeChange = onDanmakuFullscreenPanelWidthModeChange,
+                onPortraitDisplayAreaModeChange = onPortraitDanmakuDisplayAreaModeChange,
+                onCloudSyncEnabledChange = onDanmakuCloudSyncEnabledChange,
                 onSyncNowClick = onDanmakuSyncNowClick,
+                onShowDanmakuPool = onShowDanmakuPool?.let { action ->
+                    {
+                        showDanmakuSettings = false
+                        action()
+                    }
+                },
                 onDismiss = { showDanmakuSettings = false }
             )
         }
@@ -1724,6 +2092,16 @@ fun VideoPlayerOverlay(
                 sleepTimerMinutes = sleepTimerMinutes,
                 onSleepTimerChange = onSleepTimerChange,
                 onReload = onReloadVideo,
+                onDanmakuSettingsClick = {
+                    showVideoSettings = false
+                    showDanmakuSettings = true
+                },
+                onShowDanmakuPool = onShowDanmakuPool?.let { action ->
+                    {
+                        showVideoSettings = false
+                        action()
+                    }
+                },
                 currentQualityLabel = currentQualityLabel,
                 qualityLabels = qualityLabels,
                 qualityIds = qualityIds,
@@ -1771,11 +2149,22 @@ fun VideoPlayerOverlay(
                     onSecondCodecChange(codec)
                     showVideoSettings = false
                 },
-                currentAudioQuality = currentAudioQuality,
+                currentAudioQuality = selectedAudioQuality,
+                availableAudioQualities = availableAudioQualities,
                 onAudioQualityChange = { quality ->
                     onAudioQualityChange(quality)
                     showVideoSettings = false
                 },
+                anime4kEnabled = anime4kEnabled,
+                anime4kAvailable = anime4kAvailable,
+                anime4kBypassReason = anime4kBypassReason,
+                videoEnhancementAlgorithm = videoEnhancementAlgorithm,
+                anime4kPreset = anime4kPreset,
+                fsrSharpness = fsrSharpness,
+                onAnime4kToggle = onAnime4kToggle,
+                onVideoEnhancementAlgorithmChange = onVideoEnhancementAlgorithmChange,
+                onAnime4kPresetChange = onAnime4kPresetChange,
+                onFsrSharpnessChange = onFsrSharpnessChange,
                 // [New] AI Audio
                 aiAudioInfo = aiAudioInfo,
                 currentAudioLang = currentAudioLang,
@@ -1803,6 +2192,7 @@ fun VideoPlayerOverlay(
         if (showPlaybackOrderSheet) {
             PlaybackOrderSelectionSheet(
                 currentBehavior = playbackCompletionBehavior,
+                isFullscreen = isFullscreen,
                 onSelect = { behavior ->
                     scope.launch {
                         SettingsManager.setPlaybackCompletionBehavior(context, behavior)
@@ -1836,11 +2226,23 @@ fun VideoPlayerOverlay(
                     },
                 contentAlignment = Alignment.BottomCenter
             ) {
-                Surface(
-                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                val pageSelectorMaxWidthDp = remember(configuration.screenWidthDp, isFullscreen) {
+                    resolvePageSelectorSheetMaxWidthDp(
+                        windowWidthDp = configuration.screenWidthDp,
+                        isFullscreen = isFullscreen
+                    )
+                }
+                AppSurface(
+                    shape = AppShapes.container(ContainerLevel.Sheet),
                     color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .then(
+                            if (pageSelectorMaxWidthDp != null) {
+                                Modifier.widthIn(max = pageSelectorMaxWidthDp.dp)
+                            } else {
+                                Modifier.fillMaxWidth()
+                            }
+                        )
                         .padding(
                             start = 8.dp,
                             top = 8.dp,
@@ -1861,10 +2263,11 @@ fun VideoPlayerOverlay(
                             pages = pages,
                             currentPageIndex = currentPageIndex,
                             forceGridMode = true,
+                            blockParentVerticalScroll = true,
                             onDismissRequest = { showPageSelectorSheet = false },
                             onPageSelect = { index ->
-                                onPageSelect(index)
                                 showPageSelectorSheet = false
+                                onPageSelect(index)
                             }
                         )
                     }
@@ -1872,11 +2275,11 @@ fun VideoPlayerOverlay(
             }
         }
 
-        if (shouldConsumeBackgroundGesturesForEndDrawer(showEndDrawer)) {
+        if (shouldConsumeBackgroundGesturesForEndDrawer(endDrawerVisible)) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .pointerInput(showEndDrawer) {
+                    .pointerInput(endDrawerVisible) {
                         detectDragGestures(
                             onDrag = { change, _ ->
                                 change.consume()
@@ -1888,8 +2291,8 @@ fun VideoPlayerOverlay(
         
         // --- 11. [新增] 侧边栏抽屉 ---
         LandscapeEndDrawer(
-            visible = showEndDrawer,
-            onDismiss = { showEndDrawer = false },
+            visible = endDrawerVisible && isFullscreen,
+            onDismiss = onDismissEndDrawer,
             relatedVideos = relatedVideos,
             ugcSeason = ugcSeason,
             currentBvid = bvid,
@@ -1900,8 +2303,8 @@ fun VideoPlayerOverlay(
             isFollowed = isFollowed,
             onToggleFollow = onToggleFollow,
             onVideoClick = { vid, options ->
+                onDismissEndDrawer()
                 onDrawerVideoClick(vid, options)
-                showEndDrawer = false
             },
             hazeState = drawerHazeState,
             modifier = Modifier.align(Alignment.CenterEnd)
@@ -2020,22 +2423,38 @@ private fun PortraitTopBar(
     onShare: () -> Unit,
     onAudioMode: () -> Unit,
     isAudioOnly: Boolean,
+    viewportWidthDpOverride: Int? = null,
     // 📺 [新增] 投屏
     onCastClick: () -> Unit = {},
+    showCastButton: Boolean = true,
+    /** 系统状态栏可见时为顶栏加 statusBarsPadding，避免与系统图标重叠。 */
+    statusBarVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    var showMoreMenu by remember { mutableStateOf(false) }
+    val useMiuixNonGlassChrome = isMiuixNonGlassEnabled()
     val configuration = LocalConfiguration.current
+    val uiLayoutWidthDp = remember(configuration.screenWidthDp, viewportWidthDpOverride) {
+        (viewportWidthDpOverride ?: configuration.screenWidthDp).coerceAtLeast(1)
+    }
     val moreIcon = rememberAppMoreIcon()
     val shareIcon = rememberAppShareIcon()
-    val layoutPolicy = remember(configuration.screenWidthDp) {
+    val layoutPolicy = remember(uiLayoutWidthDp) {
         resolvePortraitTopBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = uiLayoutWidthDp
         )
     }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (shouldApplyStatusBarPaddingToPortraitTopBar(statusBarVisible = statusBarVisible)) {
+                    Modifier.statusBarsPadding()
+                } else {
+                    Modifier
+                }
+            )
             .padding(
                 horizontal = layoutPolicy.horizontalPaddingDp.dp,
                 vertical = layoutPolicy.verticalPaddingDp.dp
@@ -2049,24 +2468,24 @@ private fun PortraitTopBar(
             horizontalArrangement = Arrangement.spacedBy(layoutPolicy.leftSectionSpacingDp.dp)
         ) {
             // 返回按钮 - 简洁无背景
-            IconButton(
+            AppIconButton(
                 onClick = onBack,
                 modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.ChevronBackward,
+                AppIcon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
                     contentDescription = "返回",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
 
-            IconButton(
+            AppIconButton(
                 onClick = onHome,
                 modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.House,
+                AppIcon(
+                    imageVector = Icons.Outlined.Home,
                     contentDescription = "主界面",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
@@ -2075,7 +2494,7 @@ private fun PortraitTopBar(
             
             // 👀 在线人数
             if (onlineCount.isNotEmpty()) {
-                Text(
+                AppText(
                     text = onlineCount,
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = layoutPolicy.onlineCountFontSp.sp,
@@ -2089,7 +2508,7 @@ private fun PortraitTopBar(
             horizontalArrangement = Arrangement.spacedBy(layoutPolicy.rightSectionSpacingDp.dp)
         ) {
             //  听视频模式按钮 - 激活时保留背景色
-            IconButton(
+            AppIconButton(
                 onClick = onAudioMode,
                 modifier = Modifier
                     .size(layoutPolicy.buttonSizeDp.dp)
@@ -2098,51 +2517,218 @@ private fun PortraitTopBar(
                         else Modifier
                     )
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.Headphones,
+                AppIcon(
+                    imageVector = Icons.Outlined.Headphones,
                     contentDescription = "听视频",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
 
-            // 📺 投屏按钮 - 无背景
-            IconButton(
-                onClick = onCastClick,
-                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
-            ) {
-                Icon(
-                    imageVector = io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.Tv,
-                    contentDescription = "投屏",
-                    tint = Color.White,
-                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
-                )
+            if (showCastButton) {
+                AppIconButton(
+                    onClick = onCastClick,
+                    modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
+                ) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.Tv,
+                        contentDescription = "投屏",
+                        tint = Color.White,
+                        modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
+                    )
+                }
             }
             
             //  设置按钮 - 无背景
-            IconButton(
-                onClick = onSettings,
+            AppIconButton(
+                onClick = { showMoreMenu = true },
                 modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
-                Icon(
+                AppIcon(
                     imageVector = moreIcon,
                     contentDescription = "设置",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
+
+            if (useMiuixNonGlassChrome) {
+                AppDropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false },
+                ) {
+                    AppDropdownMenuItem(
+                        text = { AppText("播放设置") },
+                        onClick = { showMoreMenu = false; onSettings() },
+                    )
+                    AppDropdownMenuItem(
+                        text = { AppText(if (isAudioOnly) "退出听视频" else "听视频") },
+                        onClick = { showMoreMenu = false; onAudioMode() },
+                    )
+                    AppDropdownMenuItem(
+                        text = { AppText("分享") },
+                        onClick = { showMoreMenu = false; onShare() },
+                    )
+                }
+            } else {
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("播放设置") },
+                        onClick = { showMoreMenu = false; onSettings() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (isAudioOnly) "退出听视频" else "听视频") },
+                        onClick = { showMoreMenu = false; onAudioMode() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("分享") },
+                        onClick = { showMoreMenu = false; onShare() }
+                    )
+                }
+            }
             
             // 分享按钮 - 无背景
-            IconButton(
+            AppIconButton(
                 onClick = onShare,
                 modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
-                Icon(
+                AppIcon(
                     imageVector = shareIcon,
                     contentDescription = "分享",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackInsightPanel(
+    presentation: PlaybackInsightPresentation,
+    diagnosticEvents: List<String>,
+    onCopyReport: (() -> Unit)?,
+    onDismiss: () -> Unit,
+    hazeState: HazeState?,
+    modifier: Modifier = Modifier
+) {
+    val panelShape = AppShapes.container(ContainerLevel.Floating)
+    val realtimeHazeState = hazeState?.takeIf {
+        shouldAllowRuntimeShaderBackedHazeEffect(Build.VERSION.SDK_INT)
+    }
+    AppSurface(
+        modifier = modifier.then(
+            if (realtimeHazeState != null) {
+                Modifier.unifiedBlur(
+                    hazeState = realtimeHazeState,
+                    shape = panelShape,
+                    surfaceType = BlurSurfaceType.DRAWER_OR_SHEET
+                )
+            } else {
+                Modifier
+            }
+        ),
+        shape = panelShape,
+        color = MaterialTheme.colorScheme.surface.copy(
+            alpha = if (realtimeHazeState != null) 0.72f else 0.94f
+        ),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
+        border = BorderStroke(
+            width = 0.6.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        )
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 4.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText("播放器洞察", style = MaterialTheme.typography.titleMedium)
+                    AppText(
+                        presentation.statusText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (onCopyReport != null) {
+                    AppTextButton(onClick = onCopyReport) {
+                        AppText("复制")
+                    }
+                }
+                AppIconButton(onClick = onDismiss) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "关闭"
+                    )
+                }
+            }
+            AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = false),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                presentation.sections.forEach { (section, rows) ->
+                    item(key = section.name) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AppText(
+                                section.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            rows.forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AppText(
+                                        row.label,
+                                        modifier = Modifier.weight(0.8f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                    AppText(
+                                        row.value,
+                                        modifier = Modifier.weight(1.2f),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                if (onCopyReport != null && diagnosticEvents.isNotEmpty()) {
+                    item(key = "diagnostic-events") {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AppText(
+                                "诊断事件",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            diagnosticEvents.takeLast(6).asReversed().forEach { event ->
+                                AppText(
+                                    event,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -2173,15 +2759,15 @@ fun LandscapeEndDrawer(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val widthSizeClass = remember(configuration.screenWidthDp) {
-        when {
-            configuration.screenWidthDp < 600 -> WindowWidthSizeClass.Compact
-            configuration.screenWidthDp < 840 -> WindowWidthSizeClass.Medium
-            else -> WindowWidthSizeClass.Expanded
-        }
+        com.android.purebilibili.core.util.resolveWindowWidthSizeClass(
+            configuration.screenWidthDp.dp
+        )
     }
-    val deviceUiProfile = remember(widthSizeClass) {
+    val foldPosture = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.posture
+    val deviceUiProfile = remember(widthSizeClass, foldPosture) {
         resolveDeviceUiProfile(
-            widthSizeClass = widthSizeClass
+            widthSizeClass = widthSizeClass,
+            foldPosture = foldPosture,
         )
     }
     val cardAnimationEnabled by SettingsManager
@@ -2208,10 +2794,11 @@ fun LandscapeEndDrawer(
     } else {
         Color.Black.copy(alpha = 0.10f)
     }
+    var requestDrawerDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     AnimatedVisibility(
         visible = visible,
-        enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
-        exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+        enter = fadeIn(),
+        exit = fadeOut(),
         modifier = modifier
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -2223,18 +2810,24 @@ fun LandscapeEndDrawer(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onDismiss
+                        onClick = { requestDrawerDismiss?.invoke() ?: onDismiss() }
                     )
             )
             
-            // 抽屉内容
-            Surface(
-                modifier = Modifier
-                    .width(layoutPolicy.drawerWidthDp.dp)
-                    .fillMaxHeight(),
-                color = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ) {
+            // 抽屉内容：横向拖动会跟手，松开后根据距离和速度回弹或关闭。
+            LandscapeSidePanel(
+                visible = true,
+                edge = LandscapeSidePanelEdge.End,
+                width = layoutPolicy.drawerWidthDp.dp,
+                onDismiss = onDismiss,
+                modifier = Modifier.fillMaxHeight(),
+            ) { requestDismiss ->
+                SideEffect { requestDrawerDismiss = requestDismiss }
+                AppSurface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -2262,7 +2855,7 @@ fun LandscapeEndDrawer(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             // 头像
-                            coil.compose.AsyncImage(
+                            coil3.compose.AsyncImage(
                                 model = ownerFace,
                                 contentDescription = null,
                                 modifier = Modifier
@@ -2275,7 +2868,7 @@ fun LandscapeEndDrawer(
                             Spacer(modifier = Modifier.width(layoutPolicy.headerSpacingDp.dp))
                             
                             // 名字
-                            Text(
+                            AppText(
                                 text = ownerName,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = layoutPolicy.titleFontSp.sp,
@@ -2288,7 +2881,7 @@ fun LandscapeEndDrawer(
                             Spacer(modifier = Modifier.width(layoutPolicy.headerSpacingDp.dp))
                             
                             // 关注按钮 (放在右上角)
-                            Button(
+                            AppButton(
                                 onClick = onToggleFollow,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (isFollowed) MaterialTheme.colorScheme.onSurface.copy(0.2f) else MaterialTheme.colorScheme.primary
@@ -2298,9 +2891,9 @@ fun LandscapeEndDrawer(
                                     vertical = 0.dp
                                 ),
                                 modifier = Modifier.height(layoutPolicy.followButtonHeightDp.dp),
-                                shape = RoundedCornerShape(16.dp)
+                                shape = AppShapes.container(ContainerLevel.Card)
                             ) {
-                                Text(
+                                AppText(
                                     if (isFollowed) "已关注" else "+ 关注",
                                     fontSize = layoutPolicy.followButtonFontSp.sp
                                 )
@@ -2308,7 +2901,7 @@ fun LandscapeEndDrawer(
                         }
                     }
                     
-                    HorizontalDivider(color = dividerColor)
+                    AppHorizontalDivider(color = dividerColor)
                     
                     // 2. Tab Row
                     val hasSeason = ugcSeason != null && ugcSeason.sections.isNotEmpty()
@@ -2320,25 +2913,22 @@ fun LandscapeEndDrawer(
                     }
                     
                     if (hasSeason) {
-                        PrimaryTabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = Color.Transparent,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = { selectedTab = 0 },
-                                text = { Text("推荐视频", fontSize = layoutPolicy.followButtonFontSp.sp) }
-                            )
-                            Tab(
-                                selected = selectedTab == 1,
-                                onClick = { selectedTab = 1 },
-                                text = { Text("合集列表", fontSize = layoutPolicy.followButtonFontSp.sp) }
-                            )
-                        }
+                        AppThemeAdaptiveTabRow(
+                            options = listOf(
+                                AppSegmentOption(0, "推荐视频"),
+                                AppSegmentOption(1, "合集列表"),
+                            ),
+                            selectedValue = selectedTab,
+                            onSelectionChange = { selectedTab = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = layoutPolicy.listContentPaddingDp.dp),
+                            labelFontSize = layoutPolicy.followButtonFontSp.sp,
+                            dragSelectionEnabled = false,
+                        )
                     } else {
                         // 只有推荐，显示标题
-                        Text(
+                        AppText(
                             text = "推荐视频",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -2401,7 +2991,7 @@ fun LandscapeEndDrawer(
                             ) {
                                 seasonSections.forEach { section ->
                                     item {
-                                        Text(
+                                        AppText(
                                             text = section.title,
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2434,6 +3024,7 @@ fun LandscapeEndDrawer(
                         }
                     }
                 }
+                }
             }
         }
     }
@@ -2455,17 +3046,17 @@ private fun InteractionButton(
             onClick = onClick
         )
     ) {
-        Icon(
+        AppIcon(
             imageVector = icon,
             contentDescription = label,
             tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        AppText(
             text = label,
             color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp
+            style = MaterialTheme.typography.labelSmall
         )
     }
 }
@@ -2645,7 +3236,7 @@ private fun LandscapeProgressIcon(
                 }
             }
             
-            Icon(
+            AppIcon(
                 imageVector = icon,
                 contentDescription = label,
                 tint = if (isActive) progressColor else MaterialTheme.colorScheme.onSurface,
@@ -2654,7 +3245,7 @@ private fun LandscapeProgressIcon(
         }
         
         Spacer(modifier = Modifier.height(layoutPolicy.interactionLabelTopSpacingDp.dp))
-        Text(
+        AppText(
             text = label,
             color = if (isActive) progressColor else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = layoutPolicy.interactionLabelFontSp.sp
@@ -2676,7 +3267,7 @@ private fun LandscapeVideoItem(
             .fillMaxWidth()
             .height(layoutPolicy.videoItemHeightDp.dp)
             .clickable(onClick = onClick)
-            .background(if (isCurrent) MaterialTheme.colorScheme.onSurface.copy(0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(if (isCurrent) MaterialTheme.colorScheme.onSurface.copy(0.1f) else Color.Transparent, AppShapes.container(ContainerLevel.Tag))
             .padding(4.dp)
     ) {
         // 封面
@@ -2684,23 +3275,19 @@ private fun LandscapeVideoItem(
             modifier = Modifier
                 .aspectRatio(16f / 9f)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(4.dp))
+                .clip(AppShapes.container(ContainerLevel.Tag))
         ) {
-             coil.compose.AsyncImage(
+             coil3.compose.AsyncImage(
                 model = video.pic,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            // 时长
-            Text(
+            com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
                 text = FormatUtils.formatDuration(video.duration),
-                color = Color.White,
-                fontSize = layoutPolicy.itemDurationFontSp.sp,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .background(Color.Black.copy(0.6f), RoundedCornerShape(2.dp))
-                    .padding(horizontal = 2.dp)
+                    .padding(horizontal = 2.dp),
             )
         }
         
@@ -2711,7 +3298,7 @@ private fun LandscapeVideoItem(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
+            AppText(
                 text = video.title,
                 color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 fontSize = layoutPolicy.itemTitleFontSp.sp,
@@ -2719,7 +3306,7 @@ private fun LandscapeVideoItem(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 lineHeight = (layoutPolicy.itemTitleFontSp + 3).sp
             )
-            Text(
+            AppText(
                 text = video.owner.name,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = layoutPolicy.itemMetaFontSp.sp
@@ -2742,7 +3329,7 @@ private fun LandscapeEpisodeItem(
             .fillMaxWidth()
             .height(layoutPolicy.episodeItemHeightDp.dp)
             .clickable(onClick = onClick)
-            .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
+            .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent, AppShapes.container(ContainerLevel.Tag))
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2752,32 +3339,28 @@ private fun LandscapeEpisodeItem(
                 modifier = Modifier
                     .aspectRatio(16f / 9f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(AppShapes.container(ContainerLevel.Tag))
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
-                coil.compose.AsyncImage(
+                coil3.compose.AsyncImage(
                     model = episode.arc.pic,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                // 时长
-                Text(
+                com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
                     text = FormatUtils.formatDuration(episode.arc.duration),
-                    color = Color.White,
-                    fontSize = layoutPolicy.itemDurationFontSp.sp,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .background(Color.Black.copy(0.6f), RoundedCornerShape(topStart = 4.dp))
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
         } else {
             // 无封面时的占位 (或纯文本模式)
              if (isCurrent) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.Play,
+                AppIcon(
+                    imageVector = Icons.Outlined.PlayArrow,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(layoutPolicy.metaIconSizeDp.dp)
@@ -2799,7 +3382,7 @@ private fun LandscapeEpisodeItem(
             verticalArrangement = Arrangement.SpaceAround // 分散对齐
         ) {
             // 标题
-            Text(
+            AppText(
                 text = episode.title,
                 color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 fontSize = layoutPolicy.itemTitleFontSp.sp,
@@ -2818,14 +3401,14 @@ private fun LandscapeEpisodeItem(
             if (episode.arc?.stat != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // 播放量
-                    Icon(
-                        imageVector = CupertinoIcons.Default.PlayCircle,
+                    AppIcon(
+                        imageVector = Icons.Outlined.PlayCircle,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(layoutPolicy.metaIconSizeDp.dp)
                     )
                     Spacer(modifier = Modifier.width(2.dp))
-                    Text(
+                    AppText(
                         text = FormatUtils.formatStat(episode.arc.stat.view.toLong()), 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = layoutPolicy.itemMetaFontSp.sp
@@ -2834,14 +3417,14 @@ private fun LandscapeEpisodeItem(
                     Spacer(modifier = Modifier.width(8.dp))
                     
                     // 弹幕
-                    Icon(
+                    AppIcon(
                         imageVector = Icons.Filled.ChatBubble, 
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(layoutPolicy.metaIconSizeDp.dp)
                     )
                     Spacer(modifier = Modifier.width(2.dp))
-                    Text(
+                    AppText(
                         text = FormatUtils.formatStat(episode.arc.stat.danmaku.toLong()), 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = layoutPolicy.itemMetaFontSp.sp

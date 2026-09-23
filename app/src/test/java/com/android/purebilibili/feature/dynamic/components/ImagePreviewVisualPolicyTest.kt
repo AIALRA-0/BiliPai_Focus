@@ -38,13 +38,27 @@ class ImagePreviewVisualPolicyTest {
         )
 
         assertEquals(24f, start.blurRadiusPx)
-        assertTrue(middle.blurRadiusPx in 11f..13f)
+        assertEquals(6f, middle.blurRadiusPx)
         assertEquals(0f, end.blurRadiusPx)
 
         assertTrue(start.contentAlpha < middle.contentAlpha)
         assertEquals(1f, end.contentAlpha)
         assertEquals(0f, start.backdropAlpha)
         assertEquals(1f, end.backdropAlpha)
+    }
+
+    @Test
+    fun `return transition keeps preview content sharp`() {
+        val frame = resolveImagePreviewVisualFrame(
+            visualProgress = 0.45f,
+            transitionEnabled = true,
+            maxBlurRadiusPx = 24f,
+            blurEnabled = false,
+        )
+
+        assertEquals(0f, frame.blurRadiusPx)
+        assertTrue(frame.contentAlpha < 1f)
+        assertEquals(0.45f, frame.backdropAlpha)
     }
 
     @Test
@@ -83,6 +97,21 @@ class ImagePreviewVisualPolicyTest {
         assertEquals(leftPanel.rotationY, -rightPanel.rotationY, 0.001f)
         assertEquals(leftPanel.alpha, rightPanel.alpha, 0.001f)
         assertTrue(leftPanel.scale < centered.scale)
+    }
+
+    @Test
+    fun `optional gallery 3d transform is subtle and symmetric`() {
+        val centered = resolveImagePreviewGalleryPageTransform(0f, 390f)
+        val left = resolveImagePreviewGalleryPageTransform(1f, 390f)
+        val right = resolveImagePreviewGalleryPageTransform(-1f, 390f)
+
+        assertEquals(0f, centered.rotationY, 0.001f)
+        assertEquals(1f, centered.scale, 0.001f)
+        assertEquals(-48f, left.rotationY, 0.001f)
+        assertEquals(48f, right.rotationY, 0.001f)
+        assertEquals(left.translationXPx, -right.translationXPx, 0.001f)
+        assertTrue(left.scale >= 0.94f)
+        assertTrue(left.alpha >= 0.84f)
     }
 
     @Test

@@ -6,14 +6,16 @@ This file is a compatibility alias for AI-oriented tooling.
 Maintained periodically, but still subject to freshness limits; reference only.
 会定期维护，但仍存在时效性限制，仅供参考。
 
-Current sync target / 当前同步目标：`2026-04-12 · v7.7.0`
+Current sync target / 当前同步目标：`2026-08-28 · build 0.2.3-beta.15 (324) · documented release v0.2.3-beta.15`
 
 ## Preferred Order / 推荐阅读顺序
 
 1. `llms.txt`
 2. `docs/wiki/AI.md`
 3. `README.md` / `README_EN.md`
-4. `CHANGELOG.md` + source code verification
+4. `docs/wiki/ROADMAP.md`
+5. `docs/wiki/FEATURE_MATRIX.md`
+6. `CHANGELOG.md` + source code verification
 
 ## Quick Routes / 快速入口
 
@@ -22,9 +24,12 @@ Current sync target / 当前同步目标：`2026-04-12 · v7.7.0`
 | AI / LLM canonical entry / AI / LLM 主入口 | `llms.txt` |
 | Repository path map / 仓库路径图 | `docs/wiki/AI.md` |
 | Project overview / 项目总览 | `README.md` |
+| Current priorities / 当前路线图 | `docs/wiki/ROADMAP.md` |
+| Feature status / 功能状态 | `docs/wiki/FEATURE_MATRIX.md` |
 | Latest release notes / 最新发布说明 | `CHANGELOG.md` |
 | Architecture / 架构 | `docs/wiki/ARCHITECTURE.md` |
 | QA / regression / QA 与回归 | `docs/wiki/QA.md` |
+| Repository structure rules / 仓库结构约束 | `STRUCTURE_GUIDELINES.adoc` |
 
 ## Rules / 使用规则
 
@@ -32,5 +37,7 @@ Current sync target / 当前同步目标：`2026-04-12 · v7.7.0`
 - 当工具需要根目录 LLM 入口文件时，优先使用 `llms.txt`。
 - Verify current behavior with source code and `CHANGELOG.md`.
 - 当前行为请以源码与 `CHANGELOG.md` 共同核验。
+- Use `docs/wiki/ROADMAP.md` for priorities, not as proof that a feature shipped.
+- 路线图仅用于判断优先级，不能据此认定功能已发布。
 - If this file and `llms.txt` disagree, trust `llms.txt`.
 - 如果本文件与 `llms.txt` 冲突，以 `llms.txt` 为准。

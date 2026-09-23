@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -41,5 +42,26 @@ class SettingsTabletLayoutPolicyTest {
     fun splitLayout_threshold_isExpanded_only() {
         assertEquals(false, shouldUseSettingsSplitLayout(widthDp = 720))
         assertEquals(true, shouldUseSettingsSplitLayout(widthDp = 1024))
+    }
+
+    @Test
+    fun singlePaneContent_canBeForcedInsideTabletDetailPane() {
+        assertEquals(false, shouldRenderSettingsSinglePaneContent(widthDp = 1024, forceSinglePaneContent = false))
+        assertEquals(true, shouldRenderSettingsSinglePaneContent(widthDp = 1024, forceSinglePaneContent = true))
+        assertEquals(true, shouldRenderSettingsSinglePaneContent(widthDp = 720, forceSinglePaneContent = false))
+    }
+
+    @Test
+    fun tabletLandscape_keepsMasterAndDetailContentScrollable() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt")
+        ).first { it.exists() }.readText()
+
+        assertTrue(source.contains("AppSplitLayout("))
+        assertTrue(source.contains("LazyColumn("))
+        assertTrue(source.contains("rightPane"))
+        assertTrue(source.contains("if (!selected)"))
+        assertTrue(source.contains("onCategoryClick(category)"))
     }
 }

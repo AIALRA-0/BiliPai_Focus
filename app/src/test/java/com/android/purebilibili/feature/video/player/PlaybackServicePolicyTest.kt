@@ -43,10 +43,10 @@ class PlaybackServicePolicyTest {
     fun `fallback notification icon should follow selected app icon`() {
         assertEquals(
             R.mipmap.ic_launcher_3d,
-            resolvePlaybackServiceFallbackIconRes("icon_blue")
+            resolvePlaybackServiceFallbackIconRes("icon_3d")
         )
         assertEquals(
-            R.mipmap.ic_launcher_3d,
+            R.mipmap.ic_launcher_blue_snow_maid_monochrome,
             resolvePlaybackServiceFallbackIconRes("unknown")
         )
     }

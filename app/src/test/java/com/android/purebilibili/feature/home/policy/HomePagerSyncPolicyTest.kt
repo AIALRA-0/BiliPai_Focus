@@ -16,8 +16,25 @@ class HomePagerSyncPolicyTest {
     }
 
     @Test
+    fun topPagerEnablesUserScrollEvenWhenHideTopTabsIsTrue() {
+        assertTrue(
+            shouldEnableHomeTopPagerUserScroll(
+                isTopLevelActive = true,
+                hideTopTabs = true
+            )
+        )
+        assertFalse(
+            shouldEnableHomeTopPagerUserScroll(
+                isTopLevelActive = false,
+                hideTopTabs = true
+            )
+        )
+    }
+
+    @Test
     fun pagerToCategorySync_waitsUntilScrollingStops() {
         val shouldSwitch = shouldSwitchHomeCategoryFromPager(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = true,
             pagerCurrentPage = 2,
             pagerScrolling = true,
@@ -30,6 +47,7 @@ class HomePagerSyncPolicyTest {
     @Test
     fun pagerToCategorySync_requiresInitialSync() {
         val shouldSwitch = shouldSwitchHomeCategoryFromPager(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = false,
             pagerCurrentPage = 2,
             pagerScrolling = false,
@@ -42,6 +60,7 @@ class HomePagerSyncPolicyTest {
     @Test
     fun pagerToCategorySync_switchesOnlyWhenSettledPageDiffers() {
         val shouldSwitch = shouldSwitchHomeCategoryFromPager(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = true,
             pagerCurrentPage = 2,
             pagerScrolling = false,
@@ -52,8 +71,22 @@ class HomePagerSyncPolicyTest {
     }
 
     @Test
+    fun pagerToCategorySync_pausesWhileVideoDetailCoversHome() {
+        val shouldSwitch = shouldSwitchHomeCategoryFromPager(
+            isTopLevelActive = false,
+            hasSyncedPagerWithState = true,
+            pagerCurrentPage = 1,
+            pagerScrolling = false,
+            currentCategoryIndex = 2
+        )
+
+        assertFalse(shouldSwitch)
+    }
+
+    @Test
     fun pagerToCategorySync_waitsDuringProgrammaticPageSwitch() {
         val shouldSwitch = shouldSwitchHomeCategoryFromPager(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = true,
             pagerCurrentPage = 0,
             pagerScrolling = false,
@@ -65,8 +98,9 @@ class HomePagerSyncPolicyTest {
     }
 
     @Test
-    fun pagerSettledAction_switchesCategory_whenSettledCategoryIsLive() {
+    fun pagerSettledAction_switchesToLive_whenSettledCategoryIsLive() {
         val action = resolveHomePagerSettledAction(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = true,
             pagerCurrentPage = 2,
             pagerScrolling = false,
@@ -78,14 +112,30 @@ class HomePagerSyncPolicyTest {
     }
 
     @Test
-    fun homeTopLiveCategory_isDisplayedInline() {
+    fun homeTopLiveAndAnimeCategories_displayInlineIndependentPages() {
         assertTrue(shouldDisplayHomeTopCategoryInline(HomeCategory.LIVE))
+        assertTrue(shouldDisplayHomeTopCategoryInline(HomeCategory.ANIME))
         assertTrue(shouldDisplayHomeTopCategoryInline(HomeCategory.RECOMMEND))
+    }
+
+    @Test
+    fun pagerSettledAction_switchesToAnime_whenSettledCategoryIsAnime() {
+        val action = resolveHomePagerSettledAction(
+            isTopLevelActive = true,
+            hasSyncedPagerWithState = true,
+            pagerCurrentPage = 2,
+            pagerScrolling = false,
+            currentCategoryIndex = 1,
+            settledCategory = HomeCategory.ANIME
+        )
+
+        assertEquals(HomePagerSettledAction.SWITCH_CATEGORY, action)
     }
 
     @Test
     fun pagerSettledAction_switchesCategory_forRegularSettledCategory() {
         val action = resolveHomePagerSettledAction(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = true,
             pagerCurrentPage = 2,
             pagerScrolling = false,
@@ -99,6 +149,7 @@ class HomePagerSyncPolicyTest {
     @Test
     fun pagerSettledAction_isNone_whenPagerShouldNotSync() {
         val action = resolveHomePagerSettledAction(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = true,
             pagerCurrentPage = 1,
             pagerScrolling = false,
@@ -112,6 +163,7 @@ class HomePagerSyncPolicyTest {
     @Test
     fun pagerSettledAction_isNone_duringProgrammaticPageSwitch() {
         val action = resolveHomePagerSettledAction(
+            isTopLevelActive = true,
             hasSyncedPagerWithState = true,
             pagerCurrentPage = 0,
             pagerScrolling = false,
@@ -129,6 +181,16 @@ class HomePagerSyncPolicyTest {
             shouldUseInitialHomePagerSnap(
                 hasSyncedPagerWithState = false,
                 targetPage = 0
+            )
+        )
+    }
+
+    @Test
+    fun restoredPagerPage_requiresResync_whenItDoesNotMatchCurrentCategory() {
+        assertFalse(
+            shouldTreatInitialHomePagerPageAsSyncedWithState(
+                initialEntry = HomeTopTabEntry.Category(HomeCategory.POPULAR),
+                currentCategory = HomeCategory.RECOMMEND
             )
         )
     }
@@ -228,6 +290,100 @@ class HomePagerSyncPolicyTest {
                 topTabEntries = entries,
                 currentCategory = HomeCategory.POPULAR,
                 displayedTabIndex = 0
+            )
+        )
+    }
+
+    @Test
+    fun pagerRestore_usesCurrentCategoryInsteadOfStaleRetainedCategory() {
+        val reorderedEntries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Category(HomeCategory.POPULAR),
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW)
+        )
+
+        assertEquals(
+            1,
+            resolveHomePagerTargetPage(
+                topTabEntries = reorderedEntries,
+                retainedEntry = HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+                currentCategory = HomeCategory.POPULAR,
+                hasSyncedPagerWithState = false
+            )
+        )
+    }
+
+    @Test
+    fun pagerRestore_resolvesPopularByStableEntryWhenRecommendMovesBack() {
+        val reorderedEntries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+            HomeTopTabEntry.Category(HomeCategory.POPULAR),
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND)
+        )
+
+        assertEquals(
+            1,
+            resolveHomePagerTargetPage(
+                topTabEntries = reorderedEntries,
+                retainedEntry = HomeTopTabEntry.Category(HomeCategory.POPULAR),
+                currentCategory = HomeCategory.POPULAR,
+                hasSyncedPagerWithState = false
+            )
+        )
+    }
+
+    @Test
+    fun pagerRestore_keepsPartitionInsteadOfFallingBackToCurrentCategory() {
+        val entries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Partition,
+            HomeTopTabEntry.Category(HomeCategory.POPULAR)
+        )
+
+        assertEquals(
+            1,
+            resolveHomePagerTargetPage(
+                topTabEntries = entries,
+                retainedEntry = HomeTopTabEntry.Partition,
+                currentCategory = HomeCategory.RECOMMEND,
+                hasSyncedPagerWithState = false
+            )
+        )
+    }
+
+    @Test
+    fun pagerStateDrive_followsCurrentCategoryAfterReturnSyncCompletes() {
+        val entries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+            HomeTopTabEntry.Category(HomeCategory.POPULAR),
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND)
+        )
+
+        assertEquals(
+            2,
+            resolveHomePagerTargetPage(
+                topTabEntries = entries,
+                retainedEntry = HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+                currentCategory = HomeCategory.RECOMMEND,
+                hasSyncedPagerWithState = true
+            )
+        )
+    }
+
+    @Test
+    fun pagerRestore_fallsBackToCurrentCategoryWhenRetainedEntryWasHidden() {
+        val entries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Category(HomeCategory.POPULAR)
+        )
+
+        assertEquals(
+            1,
+            resolveHomePagerTargetPage(
+                topTabEntries = entries,
+                retainedEntry = HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+                currentCategory = HomeCategory.POPULAR,
+                hasSyncedPagerWithState = false
             )
         )
     }

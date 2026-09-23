@@ -3,6 +3,7 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.data.model.response.AiModelResult
 import com.android.purebilibili.data.model.response.AiSummaryData
 import com.android.purebilibili.data.model.response.AiSummaryResponse
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -97,6 +98,27 @@ class AiSummaryFetchPolicyTest {
         val response = Response.error<Any>(
             412,
             "Precondition Failed".toResponseBody("text/plain".toMediaType())
+        )
+
+        val diagnosis = diagnoseAiSummaryFailure(HttpException(response))
+
+        assertEquals(AiSummaryFetchStatus.RETRYABLE_FAILURE, diagnosis.status)
+        assertTrue(diagnosis.shouldRetryRequest)
+    }
+
+    @Test
+    fun temporaryNetworkFailureIsMarkedRetryable() {
+        val diagnosis = diagnoseAiSummaryFailure(IOException("connection reset"))
+
+        assertEquals(AiSummaryFetchStatus.RETRYABLE_FAILURE, diagnosis.status)
+        assertTrue(diagnosis.shouldRetryRequest)
+    }
+
+    @Test
+    fun serverFailureIsMarkedRetryable() {
+        val response = Response.error<Any>(
+            503,
+            "Service Unavailable".toResponseBody("text/plain".toMediaType())
         )
 
         val diagnosis = diagnoseAiSummaryFailure(HttpException(response))

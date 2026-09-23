@@ -1,4 +1,7 @@
 package com.android.purebilibili.feature.live.components
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -12,21 +15,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.EmojiEmotions
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.ThumbUpOffAlt
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,19 +44,33 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.em
 import com.android.purebilibili.feature.live.LiveDanmakuItem
 import com.android.purebilibili.feature.live.rememberLiveChromePalette
-import com.android.purebilibili.feature.live.resolveLivePiliPlusChatBubbleTokens
-import com.android.purebilibili.feature.live.resolveLivePiliPlusRoomColorTokens
+import com.android.purebilibili.feature.live.resolveLiveBiliPaiChatBubbleTokens
+import com.android.purebilibili.feature.live.resolveLiveBiliPaiRoomColorTokens
+import com.android.purebilibili.feature.live.resolveLiveChatInputVisualSpec
 import com.android.purebilibili.feature.live.shouldRenderLiveDanmakuImageEmoticon
+import com.android.purebilibili.feature.live.LiveStatusPalette
+import com.android.purebilibili.feature.live.resolveLiveLevelColor
+import com.android.purebilibili.feature.live.resolveLiveMedalColor
+import com.android.purebilibili.feature.live.resolveLiveMedalBadgeVisualSpec
+import com.android.purebilibili.feature.live.resolveLiveSuperChatColor
 import com.android.purebilibili.feature.live.shouldRenderLiveDanmaku
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.Paperplane
-import io.github.alexzhirkevich.cupertino.icons.filled.TextBubble
+import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Send
 import kotlinx.coroutines.flow.SharedFlow
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
+import com.android.purebilibili.core.ui.components.AppFilledIconButton
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppIconButtonDefaults
+import com.android.purebilibili.core.ui.components.AppSurface
 
 /**
  * 直播聊天区域组件
@@ -73,10 +97,13 @@ fun LiveChatSection(
     modifier: Modifier = Modifier
 ) {
     val palette = rememberLiveChromePalette()
+    val chatVisualSpec = remember { resolveLiveChatInputVisualSpec() }
     val darkOverlay = isOverlay && palette.isDark
     val messages = remember { mutableStateListOf<LiveDanmakuItem>() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var isAnyMenuOpen by remember { mutableStateOf(false) }
+    var pendingScroll by remember { mutableStateOf(false) }
     val isAwayFromBottom by remember {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
@@ -89,17 +116,28 @@ fun LiveChatSection(
             // 确保列表操作在主线程执行 (Compose 状态修改必须在主线程)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
                 try {
-                    val shouldAutoScroll = !listState.isScrollInProgress && !isAwayFromBottom
+                    val shouldAutoScroll = !listState.isScrollInProgress && !isAwayFromBottom && !isAnyMenuOpen
                     messages.add(item)
                     if (messages.size > 200) messages.removeAt(0)
-                    // 只有当用户没有滚动时才自动滚动
-                    if (shouldAutoScroll && messages.isNotEmpty()) {
-                        listState.animateScrollToItem(messages.size - 1)
+                    // 节流平滑滚动（通知 LaunchedEffect 批处理）
+                    if (shouldAutoScroll) {
+                        pendingScroll = true
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("LiveChatSection", "❌ Message add error: ${e.message}")
                 }
             }
+        }
+    }
+
+    // 节流平滑滚动（300ms 批处理，对齐 PiliPlus 节流设计，防止瞬时密集弹幕引起的持续动画打断与掉帧）
+    LaunchedEffect(pendingScroll) {
+        if (pendingScroll) {
+            delay(300L)
+            if (!listState.isScrollInProgress && !isAwayFromBottom && !isAnyMenuOpen && messages.isNotEmpty()) {
+                listState.animateScrollToItem(messages.size - 1)
+            }
+            pendingScroll = false
         }
     }
     
@@ -111,37 +149,43 @@ fun LiveChatSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(
+                        horizontal = AppSpacingTokens.Large,
+                        vertical = AppSpacingTokens.Medium
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    AppText(
                         text = headerTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = palette.primaryText
                     )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
+                    Spacer(Modifier.height(AppSpacingTokens.Micro))
+                    AppText(
                         text = supportingText,
                         style = MaterialTheme.typography.bodySmall,
                         color = palette.secondaryText
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
+                AppSurface(
+                    shape = AppShapes.container(ContainerLevel.Pill),
                     color = palette.accentSoft
                 ) {
-                    Text(
+                    AppText(
                         text = "弹幕流",
                         color = palette.accentStrong,
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(
+                            horizontal = AppSpacingTokens.Medium,
+                            vertical = AppSpacingTokens.ExtraSmall
+                        )
                     )
                 }
             }
 
-            HorizontalDivider(color = palette.border)
+            AppHorizontalDivider(color = palette.border)
         }
 
         // 1. 聊天列表
@@ -154,11 +198,15 @@ fun LiveChatSection(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    horizontal = if (isOverlay) 12.dp else 16.dp,
-                    vertical = if (isOverlay) 8.dp else 12.dp
+                    horizontal = if (isOverlay) AppSpacingTokens.Medium else AppSpacingTokens.Large,
+                    vertical = if (isOverlay) AppSpacingTokens.Small else AppSpacingTokens.Medium
                 ),
                 verticalArrangement = Arrangement.spacedBy(
-                    space = if (isOverlay) 10.dp else 8.dp,
+                    space = if (isOverlay) {
+                        chatVisualSpec.overlayMessageSpaceDp.dp
+                    } else {
+                        AppSpacingTokens.Small
+                    },
                     alignment = Alignment.Bottom
                 )
             ) {
@@ -169,29 +217,51 @@ fun LiveChatSection(
                         onUserClick = onUserClick,
                         onAtUser = onAtUser,
                         onBlockUser = onBlockUser,
-                        onReportDanmaku = onReportDanmaku
+                        onReportDanmaku = onReportDanmaku,
+                        onMenuVisibilityChange = { isAnyMenuOpen = it }
                     )
                 }
             }
-            if (isAwayFromBottom) {
-                Surface(
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isAwayFromBottom,
+                enter = fadeIn() + scaleIn(initialScale = 0.85f),
+                exit = fadeOut() + scaleOut(targetScale = 0.85f),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = AppSpacingTokens.Medium,
+                        bottom = AppSpacingTokens.Small
+                    )
+            ) {
+                AppSurface(
                     onClick = {
                         scope.launch {
                             listState.animateScrollToItem(messages.lastIndex.coerceAtLeast(0))
                         }
                     },
-                    shape = RoundedCornerShape(18.dp),
+                    shape = AppShapes.container(ContainerLevel.Pill),
                     color = if (darkOverlay) palette.bubbleStrong else palette.surfaceMuted,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 8.dp)
                 ) {
-                    Text(
-                        text = "回到底部",
-                        color = if (darkOverlay) Color.White else palette.primaryText,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(
+                            horizontal = AppSpacingTokens.Medium,
+                            vertical = AppSpacingTokens.Small
+                        )
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = if (darkOverlay) LiveStatusPalette.MediaContent else palette.primaryText,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(AppSpacingTokens.ExtraSmall))
+                        AppText(
+                            text = "回到底部",
+                            color = if (darkOverlay) LiveStatusPalette.MediaContent else palette.primaryText,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
             }
         }
@@ -217,7 +287,8 @@ private fun ChatMessageItem(
     onUserClick: (Long) -> Unit,
     onAtUser: (LiveDanmakuItem) -> Unit,
     onBlockUser: (LiveDanmakuItem) -> Unit,
-    onReportDanmaku: (LiveDanmakuItem) -> Unit
+    onReportDanmaku: (LiveDanmakuItem) -> Unit,
+    onMenuVisibilityChange: (Boolean) -> Unit = {}
 ) {
     if (item.isSuperChat) {
         SuperChatMessageItem(item = item, isOverlay = isOverlay)
@@ -229,25 +300,33 @@ private fun ChatMessageItem(
     val context = LocalContext.current
     val palette = rememberLiveChromePalette()
     var showMenu by remember { mutableStateOf(false) }
-    val tokens = resolveLivePiliPlusChatBubbleTokens(isOverlay = isOverlay, isDark = palette.isDark)
+    LaunchedEffect(showMenu) {
+        onMenuVisibilityChange(showMenu)
+    }
+    val tokens = resolveLiveBiliPaiChatBubbleTokens(isOverlay = isOverlay, isDark = palette.isDark)
     val bubbleShape = RoundedCornerShape(tokens.cornerRadiusDp.dp)
+    val colorScheme = MaterialTheme.colorScheme
     val bubbleBackground = when {
-        isOverlay -> Color.Black.copy(alpha = tokens.backgroundAlpha)
-        else -> palette.surfaceMuted
+        isOverlay -> LiveStatusPalette.MediaScrim.copy(alpha = tokens.backgroundAlpha)
+        else -> colorScheme.surfaceContainerHigh
     }
 
+    // Match video/dynamic comments: semantic theme colors keep contrast consistent in both
+    // light and dark themes instead of relying on a separate hardcoded live palette.
+    val readableText = colorScheme.onSurface
+    val readableSecondaryText = colorScheme.onSurfaceVariant
     val usernameColor = if (item.isAdmin) {
-        Color(0xFFFF7B92)
+        LiveStatusPalette.AdminName
     } else if (item.isSelf) {
         palette.accentStrong
     } else if (isOverlay) {
-        Color.White.copy(alpha = tokens.nameAlpha)
+        LiveStatusPalette.MediaContent.copy(alpha = tokens.nameAlpha)
     } else {
-        palette.primaryText.copy(alpha = tokens.nameAlpha)
+        readableText.copy(alpha = tokens.nameAlpha.coerceAtLeast(0.9f))
     }
-    val bodyColor = if (isOverlay) Color.White else palette.primaryText
+    val bodyColor = if (isOverlay) LiveStatusPalette.MediaContent else readableText
     val emoticonMap by DanmakuEmoticonMapper.emoticonMap.collectAsStateWithLifecycle()
-    val replyColor = if (isOverlay) Color(0xFF8FD5FF) else palette.accent
+    val replyColor = if (isOverlay) LiveStatusPalette.Reply else readableSecondaryText
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val bubbleWidthFraction = if (isOverlay) 0.90f else 0.86f
@@ -261,7 +340,7 @@ private fun ChatMessageItem(
         Box(modifier = bubbleModifier) {
             if (shouldRenderLiveDanmakuImageEmoticon(item.emoticonUrl)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
+                    AppText(
                         text = "${item.uname.ifBlank { "直播观众" }}: ",
                         color = usernameColor,
                         fontSize = tokens.fontSizeSp.sp,
@@ -270,7 +349,7 @@ private fun ChatMessageItem(
                     AsyncImage(
                         model = item.emoticonUrl,
                         contentDescription = item.text,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(AppSpacingTokens.DoubleExtraLarge)
                     )
                 }
             } else {
@@ -290,7 +369,7 @@ private fun ChatMessageItem(
                             androidx.compose.ui.text.SpanStyle(
                                 color = replyColor,
                                 fontWeight = FontWeight.Medium,
-                                fontSize = 14.sp
+                                fontSize = tokens.fontSizeSp.sp
                             )
                         )
                         builder.append("@${item.replyToName} ")
@@ -321,9 +400,8 @@ private fun ChatMessageItem(
 
                 androidx.compose.foundation.text.BasicText(
                     text = annotatedText,
-                    style = TextStyle(
+                    style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = tokens.fontSizeSp.sp,
-                        lineHeight = 19.sp,
                         color = bodyColor,
                         fontWeight = FontWeight.Medium
                     ),
@@ -358,13 +436,13 @@ private fun LiveDanmakuUserMenu(
     onBlockUser: (LiveDanmakuItem) -> Unit,
     onReportDanmaku: (LiveDanmakuItem) -> Unit
 ) {
-    DropdownMenu(
+    AppDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss
     ) {
-        DropdownMenuItem(
+        AppDropdownMenuItem(
             text = {
-                Text(
+                AppText(
                     text = item.uname.ifBlank { "弹幕" },
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -373,40 +451,40 @@ private fun LiveDanmakuUserMenu(
             },
             onClick = {}
         )
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text("复制弹幕信息") },
+        AppHorizontalDivider()
+        AppDropdownMenuItem(
+            text = { AppText("复制弹幕信息") },
             onClick = {
                 onDismiss()
                 onCopyInfo()
             }
         )
-        DropdownMenuItem(
-            text = { Text("去TA的个人空间") },
+        AppDropdownMenuItem(
+            text = { AppText("去TA的个人空间") },
             enabled = item.uid > 0L,
             onClick = {
                 onDismiss()
                 onUserClick(item.uid)
             }
         )
-        DropdownMenuItem(
-            text = { Text("@TA") },
+        AppDropdownMenuItem(
+            text = { AppText("@TA") },
             enabled = item.uname.isNotBlank(),
             onClick = {
                 onDismiss()
                 onAtUser(item)
             }
         )
-        DropdownMenuItem(
-            text = { Text("屏蔽发送者") },
+        AppDropdownMenuItem(
+            text = { AppText("屏蔽发送者") },
             enabled = item.uname.isNotBlank() || item.uid > 0L,
             onClick = {
                 onDismiss()
                 onBlockUser(item)
             }
         )
-        DropdownMenuItem(
-            text = { Text("举报选中弹幕") },
+        AppDropdownMenuItem(
+            text = { AppText("举报选中弹幕") },
             enabled = item.text.isNotBlank(),
             onClick = {
                 onDismiss()
@@ -435,49 +513,53 @@ private fun SuperChatMessageItem(
     item: LiveDanmakuItem,
     isOverlay: Boolean
 ) {
-    val bg = if (item.superChatBackgroundColor != 0) {
-        Color(item.superChatBackgroundColor).copy(alpha = if (isOverlay) 0.82f else 1f)
-    } else {
-        Color(0xFFE6A23C).copy(alpha = if (isOverlay) 0.82f else 1f)
-    }
-    Surface(
+    val bg = resolveLiveSuperChatColor(item.superChatBackgroundColor)
+        .copy(alpha = if (isOverlay) 0.82f else 1f)
+    AppSurface(
         color = bg,
-        shape = RoundedCornerShape(8.dp),
+        shape = AppShapes.container(ContainerLevel.Card),
         modifier = Modifier.fillMaxWidth(if (isOverlay) 0.72f else 0.82f)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = AppSpacingTokens.Medium,
+                vertical = AppSpacingTokens.Small
+            )
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
+                AppText(
                     text = item.uname.ifBlank { "醒目留言" },
-                    color = Color.White,
+                    color = LiveStatusPalette.MediaContent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 if (item.superChatPrice.isNotBlank()) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.Black.copy(alpha = 0.18f)
+                    AppSurface(
+                        shape = AppShapes.container(ContainerLevel.Pill),
+                        color = LiveStatusPalette.MediaScrim.copy(alpha = 0.18f)
                     ) {
-                        Text(
+                        AppText(
                             text = item.superChatPrice,
-                            color = Color.White,
-                            fontSize = 12.sp,
+                            color = LiveStatusPalette.MediaContent,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(
+                                horizontal = AppSpacingTokens.Small,
+                                vertical = AppSpacingTokens.Micro
+                            )
                         )
                     }
                 }
             }
             if (item.text.isNotBlank()) {
-                Spacer(Modifier.height(5.dp))
-                Text(
+                Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppText(
                     text = item.text,
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    lineHeight = 19.sp,
+                    color = LiveStatusPalette.MediaContent,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = if (isOverlay) 2 else 4,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -489,31 +571,40 @@ private fun SuperChatMessageItem(
 // [新增] 粉丝牌组件
 @Composable
 private fun MedalBadge(name: String, level: Int, colorInt: Int) {
-    val color = if (colorInt != 0) Color(colorInt) else Color(0xFFFF6699)
+    val color = resolveLiveMedalColor(colorInt)
+    val visualSpec = remember { resolveLiveMedalBadgeVisualSpec() }
     
-    Surface(
+    AppSurface(
         color = color,
-        shape = RoundedCornerShape(4.dp),
-        modifier = Modifier.padding(top = 2.dp)
+        shape = AppShapes.container(ContainerLevel.Tag),
+        modifier = Modifier.padding(top = AppSpacingTokens.Micro)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.5.dp)
+            modifier = Modifier.padding(
+                horizontal = AppSpacingTokens.ExtraSmall,
+                vertical = visualSpec.verticalPaddingDp.dp,
+            )
         ) {
-            Text(
+            AppText(
                 text = name,
-                fontSize = 10.sp,
-                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                color = LiveStatusPalette.MediaContent,
                 fontWeight = FontWeight.Medium
             )
-            Spacer(Modifier.width(2.dp))
+            Spacer(Modifier.width(AppSpacingTokens.Micro))
             // 简单的竖线分隔
-            Box(Modifier.width(0.5.dp).height(8.dp).background(Color.White.copy(0.7f)))
-            Spacer(Modifier.width(2.dp))
-            Text(
+            Box(
+                Modifier
+                    .width(visualSpec.dividerWidthDp.dp)
+                    .height(AppSpacingTokens.Small)
+                    .background(LiveStatusPalette.MediaContent.copy(0.7f))
+            )
+            Spacer(Modifier.width(AppSpacingTokens.Micro))
+            AppText(
                 text = "$level",
-                fontSize = 10.sp,
-                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                color = LiveStatusPalette.MediaContent,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -525,24 +616,20 @@ private fun MedalBadge(name: String, level: Int, colorInt: Int) {
 private fun UserLevelBadge(level: Int) {
     // 简单的胶囊样式
     // 颜色根据等级变化 (简化处理：低等级灰/蓝，高等级橙/红)
-    val color = when {
-        level >= 40 -> Color(0xFFFF3333) // 红
-        level >= 20 -> Color(0xFFFFAA33) // 橙
-        else -> Color(0xFF66CCFF)        // 蓝
-    }
+    val color = resolveLiveLevelColor(level)
     
-    Surface(
-        border = androidx.compose.foundation.BorderStroke(1.dp, color),
-        shape = RoundedCornerShape(3.dp),
+    AppSurface(
+                border = androidx.compose.foundation.BorderStroke(AppSpacingTokens.Micro / 2, color),
+        shape = AppShapes.borderedContainer(ContainerLevel.Tag),
         color = Color.Transparent, // 空心
-        modifier = Modifier.padding(top = 2.dp)
+        modifier = Modifier.padding(top = AppSpacingTokens.Micro)
     ) {
-         Text(
+         AppText(
             text = "UL$level",
-            fontSize = 9.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = color,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 2.dp, vertical = 0.dp)
+            modifier = Modifier.padding(horizontal = AppSpacingTokens.Micro)
         )
     }
 }
@@ -559,23 +646,23 @@ private fun ChatInputBar(
     var text by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
     val palette = rememberLiveChromePalette()
-    val colorScheme = MaterialTheme.colorScheme
-    val roomTokens = resolveLivePiliPlusRoomColorTokens(
-        inputOverlayColor = colorScheme.onSurface,
-        inputContentColor = colorScheme.onSurface
+    val inputVisualSpec = remember { resolveLiveChatInputVisualSpec() }
+    val roomTokens = resolveLiveBiliPaiRoomColorTokens(
+        inputOverlayColor = LiveStatusPalette.MediaContent,
+        inputContentColor = LiveStatusPalette.MediaContent
     )
     val textColor = if (isOverlay) roomTokens.inputContentColor else palette.primaryText
     val placeholderColor = if (isOverlay) roomTokens.inputContentColor else palette.secondaryText
     val fieldColor = if (isOverlay) Color.Transparent else palette.searchField
     val iconTint = if (isOverlay) roomTokens.inputContentColor else palette.secondaryText
     
-    Surface(
+    AppSurface(
         color = if (isOverlay) roomTokens.inputOverlayColor.copy(alpha = roomTokens.inputContainerAlpha) else palette.surfaceElevated,
-        shape = if (isOverlay) RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp) else RoundedCornerShape(0.dp),
-        tonalElevation = if (isOverlay) 0.dp else 2.dp,
-        shadowElevation = 0.dp,
+        shape = if (isOverlay) AppShapes.container(ContainerLevel.Sheet) else RectangleShape,
+                tonalElevation = if (isOverlay) AppSpacingTokens.None else AppSpacingTokens.Micro,
+                shadowElevation = AppSpacingTokens.None,
         border = androidx.compose.foundation.BorderStroke(
-            1.dp,
+                    AppSpacingTokens.Micro / 2,
             if (isOverlay) roomTokens.inputOverlayColor.copy(alpha = 0.10f) else palette.border
         )
     ) {
@@ -583,47 +670,48 @@ private fun ChatInputBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(
+                    horizontal = AppSpacingTokens.Medium,
+                    vertical = AppSpacingTokens.Small
+                )
                 .imePadding(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
+            AppIconButton(
                 onClick = onToggleDanmaku,
-                modifier = Modifier.size(36.dp)
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Filled.TextBubble,
+                AppIcon(
+                    imageVector = Icons.Filled.ChatBubble,
                     contentDescription = if (isDanmakuEnabled) "关闭弹幕" else "开启弹幕",
                     tint = if (isDanmakuEnabled) iconTint else iconTint.copy(alpha = 0.42f),
-                    modifier = Modifier.size(21.dp)
+                    modifier = Modifier.size(inputVisualSpec.iconSizeDp.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
 
             // 输入框
             BasicTextField(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                textStyle = TextStyle(
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
                     color = textColor,
-                    fontSize = 15.sp
                 ),
                 cursorBrush = SolidColor(if (isOverlay) roomTokens.inputContentColor else palette.accent),
                 decorationBox = { innerTextField ->
                     Box(
                         modifier = Modifier
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(20.dp))
+                            .height(inputVisualSpec.inputFieldHeightDp.dp)
+                            .clip(AppShapes.container(ContainerLevel.Pill))
                             .background(fieldColor)
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = AppSpacingTokens.Large),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         if (text.isEmpty()) {
-                            Text(
+                            AppText(
                                 text = if (isOverlay) "发送弹幕" else "发个弹幕和主播互动吧~",
                                 color = placeholderColor,
-                                fontSize = 14.sp
+                                style = MaterialTheme.typography.bodyMedium
                             )
                         }
                         innerTextField()
@@ -632,28 +720,26 @@ private fun ChatInputBar(
                 modifier = Modifier.weight(1f)
             )
             
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
 
             LiveLikeButton(
                 tint = iconTint,
                 onLike = onLike
             )
 
-            IconButton(
+            AppIconButton(
                 onClick = onOpenEmote,
-                modifier = Modifier.size(36.dp)
             ) {
-                Icon(
+                AppIcon(
                     imageVector = Icons.Outlined.EmojiEmotions,
                     contentDescription = "表情",
                     tint = iconTint,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(inputVisualSpec.iconSizeDp.dp)
                 )
             }
-            
-            // 发送按钮
+
             val isEnabled = text.isNotBlank()
-            Surface(
+            AppFilledIconButton(
                 onClick = {
                     if (isEnabled) {
                         onSend(text)
@@ -662,43 +748,49 @@ private fun ChatInputBar(
                     }
                 },
                 enabled = isEnabled,
-                shape = CircleShape,
-                color = if (isEnabled) {
-                    if (isOverlay) roomTokens.inputContentColor.copy(alpha = 0.16f) else palette.accent
-                } else {
-                    if (isOverlay) roomTokens.inputContentColor.copy(alpha = 0.10f) else palette.surfaceMuted
-                },
-                modifier = Modifier.size(38.dp)
+                colors = AppIconButtonDefaults.colors(
+                    containerColor = if (isOverlay) {
+                        roomTokens.inputContentColor.copy(alpha = 0.16f)
+                    } else {
+                        palette.accent
+                    },
+                    contentColor = roomTokens.inputContentColor,
+                    disabledContainerColor = if (isOverlay) {
+                        roomTokens.inputContentColor.copy(alpha = 0.10f)
+                    } else {
+                        palette.surfaceMuted
+                    },
+                    disabledContentColor = iconTint.copy(alpha = 0.48f),
+                ),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = CupertinoIcons.Filled.Paperplane,
-                        contentDescription = "发送",
-                        tint = if (isEnabled) roomTokens.inputContentColor else iconTint.copy(alpha = 0.48f),
-                        modifier = Modifier.size(20.dp).offset(x = (-2).dp, y = 2.dp) // 视觉居中微调
-                    )
-                }
+                AppIcon(
+                    imageVector = Icons.Filled.Send,
+                    contentDescription = "发送",
+                    modifier = Modifier.size(inputVisualSpec.iconSizeDp.dp)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun LiveLikeButton(
+internal fun LiveLikeButton(
     tint: Color,
-    onLike: (Int) -> Unit
+    onLike: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var likeCount by remember { mutableStateOf(0) }
+    var likeCount by remember { mutableIntStateOf(0) }
     var flushJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
     val palette = rememberLiveChromePalette()
+    val visualSpec = remember { resolveLiveChatInputVisualSpec() }
 
     DisposableEffect(Unit) {
         onDispose { flushJob?.cancel() }
     }
 
     Box {
-        IconButton(
+        AppIconButton(
             onClick = {
                 likeCount += 1
                 flushJob?.cancel()
@@ -709,30 +801,46 @@ private fun LiveLikeButton(
                     if (count > 0) onLike(count)
                 }
             },
-            modifier = Modifier.size(36.dp)
         ) {
-            Icon(
+            AppIcon(
                 imageVector = Icons.Outlined.ThumbUpOffAlt,
                 contentDescription = "点赞",
                 tint = tint,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(visualSpec.iconSizeDp.dp)
             )
         }
-        if (likeCount > 0) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = palette.accent.copy(alpha = 0.96f),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 8.dp, y = (-6).dp)
-            ) {
-                Text(
-                    text = "x$likeCount",
-                    color = palette.onAccent,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                )
+        AnimatedContent(
+            targetState = likeCount,
+            transitionSpec = {
+                (scaleIn(initialScale = 0.72f) + fadeIn()) togetherWith
+                    (scaleOut(targetScale = 1.18f) + fadeOut())
+            },
+            label = "live-like-burst",
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(
+                    x = visualSpec.likeBadgeOffsetXDp.dp,
+                    y = visualSpec.likeBadgeOffsetYDp.dp,
+                ),
+        ) { count ->
+            if (count <= 0) {
+                Spacer(Modifier)
+            } else {
+                AppSurface(
+                    shape = AppShapes.container(ContainerLevel.Tag),
+                    color = palette.accent.copy(alpha = 0.96f),
+                ) {
+                    AppText(
+                        text = "x$count",
+                        color = palette.onAccent,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(
+                            horizontal = AppSpacingTokens.ExtraSmall,
+                            vertical = AppSpacingTokens.Micro
+                        )
+                    )
+                }
             }
         }
     }

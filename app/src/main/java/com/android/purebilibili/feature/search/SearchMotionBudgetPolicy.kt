@@ -22,11 +22,36 @@ internal fun shouldEnableSearchHazeSource(
     startupSettled: Boolean = true
 ): Boolean = startupSettled && !isSearching
 
+/**
+ * Keep the Miuix backdrop source mounted across result-type requests. Recreating it while a tab
+ * request is in flight briefly exposes the plain chrome until the new source records its first
+ * frame, which appears as a flash when switching between video, bangumi, and other result tabs.
+ */
+internal fun shouldKeepSearchChromeBackdropSource(
+    progressiveTopBlurEnabled: Boolean,
+    liquidGlassEnabled: Boolean,
+): Boolean = progressiveTopBlurEnabled || liquidGlassEnabled
+
 internal fun resolveEffectiveSearchMotionBudget(
     startupSettled: Boolean,
     baseBudget: SearchMotionBudget
 ): SearchMotionBudget {
     return if (startupSettled) baseBudget else SearchMotionBudget.REDUCED
+}
+
+/**
+ * 搜索结果卡片是否启用共享元素过渡。
+ *
+ * 与首页一致：仅跟随全局 [cardTransitionEnabled]，不再受搜索结果滚动/加载 budget 门控。
+ * budget 仍用于 haze、header blur、进场动画等轻量效果；sharedBounds 若因 REDUCED 未挂载，
+ * 点击视频会退化为普通 fade，与首页卡片放大过渡不一致。
+ */
+internal fun resolveEffectiveSearchCardTransitionEnabled(
+    cardTransitionEnabled: Boolean,
+    @Suppress("UNUSED_PARAMETER") motionBudget: SearchMotionBudget,
+    @Suppress("UNUSED_PARAMETER") isReturningFromVideoDetail: Boolean,
+): Boolean {
+    return cardTransitionEnabled
 }
 
 internal fun shouldBootstrapSearchLandingData(
@@ -37,12 +62,36 @@ internal fun shouldBootstrapSearchLandingData(
     return startupSettled && !showResults && query.isBlank()
 }
 
+/**
+ * Search is a navigation destination rather than an IME-first overlay. Do not focus the empty
+ * landing automatically: an automatic IME consumes the first system Back event, making a newly
+ * opened search page appear to require two Back actions to leave.
+ */
 internal fun shouldAutoFocusSearchField(
-    startupSettled: Boolean,
-    query: String
-): Boolean {
-    return startupSettled && query.isBlank()
+    @Suppress("UNUSED_PARAMETER") startupSettled: Boolean,
+    @Suppress("UNUSED_PARAMETER") query: String,
+    @Suppress("UNUSED_PARAMETER") showResults: Boolean = false,
+    @Suppress("UNUSED_PARAMETER") autoFocusConsumed: Boolean = false
+): Boolean = false
+
+enum class SearchBackAction {
+    LEAVE_SEARCH
 }
+
+/**
+ * Search has one navigation back action. Suggestions, IME focus, and result content are chrome
+ * inside the same destination; consuming Back for them makes users press Back twice to leave.
+ */
+internal fun resolveSearchBackAction(
+    @Suppress("UNUSED_PARAMETER") showResults: Boolean,
+    @Suppress("UNUSED_PARAMETER") suggestionsVisible: Boolean,
+    @Suppress("UNUSED_PARAMETER") searchFieldFocused: Boolean
+): SearchBackAction = SearchBackAction.LEAVE_SEARCH
+
+internal fun shouldClearSearchFocusWhenShowingResults(
+    showResults: Boolean,
+    previousShowResults: Boolean
+): Boolean = showResults && !previousShowResults
 
 internal fun shouldForceLowBudgetSearchHeaderBlur(
     isSearching: Boolean,

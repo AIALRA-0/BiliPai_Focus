@@ -39,6 +39,13 @@ class CommentMemberDecorationsParsingTest {
                         "master_status": 0,
                         "is_receive": 0
                       },
+                      "pendant": {
+                        "pid": 2511,
+                        "name": "官方头像挂件",
+                        "image": "https://example.com/pendant.png",
+                        "image_enhance": "https://example.com/pendant_enhance.webp",
+                        "image_enhance_frame": "https://example.com/pendant_frame.png"
+                      },
                       "nameplate": {
                         "nid": 20,
                         "name": "有爱大佬",
@@ -83,6 +90,10 @@ class CommentMemberDecorationsParsingTest {
         assertNotNull(fansDetail)
         assertEquals("测试粉丝团", requireFieldValue(fansDetail, "medalName"))
         assertEquals(18, requireFieldValue(fansDetail, "level"))
+
+        val pendant = requireFieldValue(member, "pendant")
+        assertNotNull(pendant)
+        assertEquals("https://example.com/pendant_frame.png", requireFieldValue(pendant, "imageEnhanceFrame"))
 
         val nameplate = requireFieldValue(member, "nameplate")
         assertNotNull(nameplate)

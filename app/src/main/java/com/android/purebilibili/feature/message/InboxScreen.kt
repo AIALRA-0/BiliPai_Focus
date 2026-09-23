@@ -1,5 +1,7 @@
 // 私信收件箱页面
 package com.android.purebilibili.feature.message
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -24,21 +26,34 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
-import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.theme.UiPreset
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
-import coil.compose.AsyncImage
-import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.rememberAppSemanticVisualPolicy
+import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSnackbar
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.SessionItem
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.AppSpacingTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,16 +75,17 @@ fun InboxScreen(
         }
     }
 
-    AdaptiveScaffold(
+    AppScaffold(
+        blurContentReady = !uiState.isLoading,
         topBar = {
-            AdaptiveTopAppBar(
+            AppTopBar(
                 title = "消息",
                 subtitle = uiState.unreadData?.let { unread ->
                     totalPrivateUnreadCount(unread).takeIf { it > 0 }?.let { "私信 $it 条未读" }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 }
             )
@@ -78,12 +94,13 @@ fun InboxScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
         ) {
             when {
                 uiState.isLoading -> {
-                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-                        modifier = Modifier.align(Alignment.Center)
+                    com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton(
+                        modifier = Modifier.fillMaxSize(),
+                        useUserRow = true,
+                        itemCount = 8,
                     )
                 }
                 uiState.error != null -> {
@@ -91,28 +108,30 @@ fun InboxScreen(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(uiState.error ?: "加载失败")
+                        AppText(uiState.error ?: "加载失败")
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.loadSessions() }) {
-                            Text("重试")
+                        AppButton(onClick = { viewModel.loadSessions() }) {
+                            AppText("重试")
                         }
                     }
                 }
                 uiState.sessions.isEmpty() -> {
-                    Text(
+                    AppText(
                         text = "暂无私信",
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 else -> {
-                    ComfortablePullToRefreshBox(
+                    // Scaffold body already below topBar.
+                    AdaptivePullToRefreshBox(
                         isRefreshing = uiState.isRefreshing,
-                        onRefresh = { viewModel.refresh() }
+                        onRefresh = { viewModel.refresh() },
+                        indicatorTopInset = paddingValues.calculateTopPadding()
                     ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 8.dp)
+                            contentPadding = PaddingValues(top = paddingValues.calculateTopPadding() + 8.dp, bottom = paddingValues.calculateBottomPadding() + 8.dp)
                         ) {
                             item {
                                 MessageCenterTopShortcutRow(
@@ -187,11 +206,11 @@ fun InboxScreen(
                                     ) {
                                         if (uiState.isLoadingMore) {
                                             com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-                                                modifier = Modifier.size(24.dp)
+                                                size = 24.dp
                                             )
                                         } else {
-                                            TextButton(onClick = { viewModel.loadMoreSessions() }) {
-                                                Text("加载更多")
+                                            AppTextButton(onClick = { viewModel.loadMoreSessions() }) {
+                                                AppText("加载更多")
                                             }
                                         }
                                     }
@@ -203,86 +222,86 @@ fun InboxScreen(
             }
 
             uiState.operationError?.let { error ->
-                Snackbar(
+                AppSnackbar(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(16.dp),
                     action = {
-                        TextButton(onClick = { viewModel.clearOperationError() }) {
-                            Text("知道了")
+                        AppTextButton(onClick = { viewModel.clearOperationError() }) {
+                            AppText("知道了")
                         }
                     }
                 ) {
-                    Text(error)
+                    AppText(error)
                 }
             }
         }
     }
 
     pendingRemoveSession?.let { session ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { pendingRemoveSession = null },
-            title = { Text("删除会话") },
-            text = { Text("会话会从列表中移除，但不会删除聊天记录。") },
+            title = { AppText("删除会话") },
+            text = { AppText("会话会从列表中移除，但不会删除聊天记录。") },
             confirmButton = {
-                TextButton(
+                AppTextButton(
                     onClick = {
                         viewModel.removeSession(session)
                         pendingRemoveSession = null
                     }
                 ) {
-                    Text("删除")
+                    AppText("删除")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingRemoveSession = null }) {
-                    Text("取消")
+                AppTextButton(onClick = { pendingRemoveSession = null }) {
+                    AppText("取消")
                 }
             }
         )
     }
 
     pendingInterceptSession?.let { session ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { pendingInterceptSession = null },
-            title = { Text("移入拦截") },
-            text = { Text("后续这类会话会进入拦截分类，仍可在拦截列表中查看和恢复。") },
+            title = { AppText("移入拦截") },
+            text = { AppText("后续这类会话会进入拦截分类，仍可在拦截列表中查看和恢复。") },
             confirmButton = {
-                TextButton(
+                AppTextButton(
                     onClick = {
                         viewModel.toggleIntercept(session)
                         pendingInterceptSession = null
                     }
                 ) {
-                    Text("移入")
+                    AppText("移入")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingInterceptSession = null }) {
-                    Text("取消")
+                AppTextButton(onClick = { pendingInterceptSession = null }) {
+                    AppText("取消")
                 }
             }
         )
     }
 
     if (showClearDustbinConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showClearDustbinConfirm = false },
-            title = { Text("清空拦截会话") },
-            text = { Text("所有拦截会话会从列表中移除，聊天记录仍由服务端保留。") },
+            title = { AppText("清空拦截会话") },
+            text = { AppText("所有拦截会话会从列表中移除，聊天记录仍由服务端保留。") },
             confirmButton = {
-                TextButton(
+                AppTextButton(
                     onClick = {
                         viewModel.clearDustbinSessions()
                         showClearDustbinConfirm = false
                     }
                 ) {
-                    Text("清空")
+                    AppText("清空")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDustbinConfirm = false }) {
-                    Text("取消")
+                AppTextButton(onClick = { showClearDustbinConfirm = false }) {
+                    AppText("取消")
                 }
             }
         )
@@ -302,7 +321,7 @@ private fun MessageCenterTopShortcutRow(
         val columns = if (maxWidth >= 820.dp) 4 else 2
 
         Column {
-            Text(
+            AppText(
                 text = "消息分类",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -341,16 +360,14 @@ private fun MessageCenterShortcutCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
-    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
-    Surface(
+    val useGroupedListCards = rememberAppSemanticVisualPolicy().prefersGroupedListCards
+    AppSurface(
         modifier = modifier
-            .height(if (isMiuix) 88.dp else 96.dp)
+            .height(if (useGroupedListCards) 88.dp else 96.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(if (isMiuix) 18.dp else 20.dp),
-        color = if (isMiuix) MiuixTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        border = if (isMiuix) {
+        shape = AppShapes.container(ContainerLevel.Card),
+        color = if (useGroupedListCards) AppSurfaceTokens.surfaceContainer() else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        border = if (useGroupedListCards) {
             androidx.compose.foundation.BorderStroke(
                 0.8.dp,
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
@@ -368,7 +385,7 @@ private fun MessageCenterShortcutCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
+                AppText(
                     text = item.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
@@ -384,14 +401,14 @@ private fun MessageCenterShortcutCard(
                             .padding(start = 8.dp)
                             .background(
                                 color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(999.dp)
+                                shape = AppShapes.container(ContainerLevel.Pill)
                             )
                             .padding(horizontal = 7.dp, vertical = 2.dp)
                     ) {
-                        Text(
+                        AppText(
                             text = if (item.unreadCount > 99) "99+" else item.unreadCount.toString(),
                             color = MaterialTheme.colorScheme.onPrimary,
-                            fontSize = 10.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -400,7 +417,7 @@ private fun MessageCenterShortcutCard(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            Text(
+            AppText(
                 text = if (item.unreadCount > 0) "${item.unreadCount} 条" else "查看",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -416,38 +433,41 @@ private fun MessageSessionCategoryRow(
     selectedCategory: MessageSessionCategory,
     onCategoryClick: (MessageSessionCategory) -> Unit
 ) {
+    val uiStyle = LocalAppUiStyle.current
+    val rowHorizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3) 0.dp else 16.dp
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(vertical = 8.dp)
     ) {
-        Text(
+        AppText(
             text = "私信会话",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
         )
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(end = 16.dp)
-        ) {
-            items(items, key = { it.category.name }) { item ->
-                FilterChip(
-                    selected = item.category == selectedCategory,
-                    onClick = { onCategoryClick(item.category) },
-                    label = {
-                        Text(
-                            text = if (item.unreadCount > 0) {
-                                "${item.category.title} ${if (item.unreadCount > 99) "99+" else item.unreadCount}"
-                            } else {
-                                item.category.title
-                            }
-                        )
-                    }
+        val options = remember(items) {
+            items.map { item ->
+                AppSegmentOption(
+                    value = item.category,
+                    label = if (item.unreadCount > 0) {
+                        "${item.category.title} ${if (item.unreadCount > 99) "99+" else item.unreadCount}"
+                    } else {
+                        item.category.title
+                    },
                 )
             }
         }
+        AppThemeAdaptiveTabRow(
+            options = options,
+            selectedValue = selectedCategory,
+            onSelectionChange = onCategoryClick,
+            scrollable = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rowHorizontalPadding),
+        )
     }
 }
 
@@ -464,20 +484,20 @@ private fun DustbinActionRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        OutlinedButton(
+        AppOutlinedButton(
             onClick = onMarkRead,
             enabled = !isOperating,
             modifier = Modifier.weight(1f)
         ) {
-            Text("全部已读")
+            AppText("全部已读")
         }
 
-        OutlinedButton(
+        AppOutlinedButton(
             onClick = onClear,
             enabled = !isOperating,
             modifier = Modifier.weight(1f)
         ) {
-            Text("清空拦截")
+            AppText("清空拦截")
         }
     }
 }
@@ -492,17 +512,16 @@ private fun MessageUnreadBadge(
             .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
             .background(
                 color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(8.dp)
+                shape = AppShapes.container(ContainerLevel.Chip)
             )
             .padding(horizontal = 4.dp, vertical = 1.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
+        AppText(
             text = text,
             color = MaterialTheme.colorScheme.onPrimary,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.SemiBold,
-            lineHeight = 12.sp
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
@@ -518,9 +537,7 @@ fun SessionListItem(
     onToggleIntercept: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
-    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
+    val useGroupedListCards = rememberAppSemanticVisualPolicy().prefersGroupedListCards
 
     val displayName = InboxUserInfoResolver.resolveDisplayName(
         cached = userInfo,
@@ -531,15 +548,19 @@ fun SessionListItem(
         session = session
     )
 
-    Surface(
+    AppSurface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = if (isMiuix) 12.dp else 0.dp, vertical = if (isMiuix) 3.dp else 0.dp),
-        shape = RoundedCornerShape(if (isMiuix) 16.dp else 0.dp),
+            .padding(horizontal = if (useGroupedListCards) 12.dp else 0.dp, vertical = if (useGroupedListCards) 3.dp else 0.dp),
+        shape = if (useGroupedListCards) {
+            AppShapes.container(ContainerLevel.Card)
+        } else {
+            RectangleShape
+        },
         color = when {
-            isMiuix && session.top_ts > 0 -> MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
-            isMiuix -> MiuixTheme.colorScheme.surfaceContainer
+            useGroupedListCards && session.top_ts > 0 -> AppSurfaceTokens.secondaryContainer().copy(alpha = 0.55f)
+            useGroupedListCards -> AppSurfaceTokens.surfaceContainer()
             session.top_ts > 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
             else -> Color.Transparent
         }
@@ -547,7 +568,7 @@ fun SessionListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = if (isMiuix) 10.dp else 12.dp),
+            .padding(horizontal = 16.dp, vertical = if (useGroupedListCards) 10.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box {
@@ -579,7 +600,7 @@ fun SessionListItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
+                AppText(
                     text = displayName,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
@@ -589,17 +610,17 @@ fun SessionListItem(
                 )
 
                 if (session.top_ts > 0) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
+                    Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                    AppText(
                         text = "置顶",
-                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .background(
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                RoundedCornerShape(2.dp)
+                                AppShapes.container(ContainerLevel.Tag)
                             )
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = 1.dp)
                     )
                 }
 
@@ -616,7 +637,7 @@ fun SessionListItem(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
+            AppText(
                 text = MessagePreviewParser.parseSessionPreview(
                     content = session.last_msg?.content,
                     msgType = session.last_msg?.msg_type ?: 1
@@ -631,18 +652,18 @@ fun SessionListItem(
         Spacer(modifier = Modifier.width(8.dp))
 
         Column(horizontalAlignment = Alignment.End) {
-            Text(
+            AppText(
                 text = formatTime(session.last_msg?.timestamp ?: 0),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Box {
-                IconButton(
+                AppIconButton(
                     onClick = { showMenu = true },
                     modifier = Modifier.size(24.dp)
                 ) {
-                    Icon(
+                    AppIcon(
                         Icons.Default.MoreVert,
                         contentDescription = "更多",
                         modifier = Modifier.size(16.dp),
@@ -650,35 +671,35 @@ fun SessionListItem(
                     )
                 }
 
-                DropdownMenu(
+                AppDropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text(if (session.top_ts > 0) "取消置顶" else "置顶") },
+                    AppDropdownMenuItem(
+                        text = { AppText(if (session.top_ts > 0) "取消置顶" else "置顶") },
                         onClick = {
                             showMenu = false
                             onToggleTop()
                         }
                     )
-                    DropdownMenuItem(
-                        text = { Text(if (session.is_dnd == 1) "关闭免打扰" else "开启免打扰") },
+                    AppDropdownMenuItem(
+                        text = { AppText(if (session.is_dnd == 1) "关闭免打扰" else "开启免打扰") },
                         onClick = {
                             showMenu = false
                             onToggleDnd()
                         }
                     )
                     if (session.session_type == 1) {
-                        DropdownMenuItem(
-                            text = { Text(if (session.is_intercept == 1) "移出拦截" else "移入拦截") },
+                        AppDropdownMenuItem(
+                            text = { AppText(if (session.is_intercept == 1) "移出拦截" else "移入拦截") },
                             onClick = {
                                 showMenu = false
                                 onToggleIntercept()
                             }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("删除会话") },
+                    AppDropdownMenuItem(
+                        text = { AppText("删除会话") },
                         onClick = {
                             showMenu = false
                             onRemove()
@@ -693,16 +714,16 @@ fun SessionListItem(
 
 @Composable
 private fun MessageSmallFlag(text: String) {
-    Text(
+    AppText(
         text = text,
-        fontSize = 10.sp,
+        style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
             .background(
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                RoundedCornerShape(2.dp)
+                AppShapes.container(ContainerLevel.Tag)
             )
-            .padding(horizontal = 4.dp, vertical = 1.dp)
+            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = 1.dp)
     )
 }
 

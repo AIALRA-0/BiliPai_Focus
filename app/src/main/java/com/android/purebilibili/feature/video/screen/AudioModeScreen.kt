@@ -4,87 +4,71 @@ import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
+import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import com.android.purebilibili.core.ui.AppAlertDialog
+import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.components.AppOutlinedTextField
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
-import coil.ImageLoader
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.theme.UiPreset
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
-import com.android.purebilibili.core.ui.rememberAppCoinIcon
-import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
-import com.android.purebilibili.core.ui.rememberAppLikeIcon
-import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
-import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
-import com.android.purebilibili.feature.video.ui.components.CoinDialog
+import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
+import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
 import com.android.purebilibili.feature.video.player.PlayMode
-import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.state.rememberVideoPlayerState
-import com.android.purebilibili.feature.video.ui.components.CollectionSheet  // 📂 [新增] 合集弹窗
-import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
-import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlin.math.roundToInt
+import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
+import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
+import com.android.purebilibili.feature.video.viewmodel.toEngagementSeed
+import com.android.purebilibili.feature.video.viewmodel.toSupplementSeed
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
-internal fun resolveAudioPlayModeLabel(mode: PlayMode): String {
-    return when (mode) {
-        PlayMode.SEQUENTIAL -> "顺序播放"
-        PlayMode.SHUFFLE -> "随机播放"
-        PlayMode.REPEAT_ONE -> "单曲循环"
-    }
+internal fun resolveAudioPlayModeLabel(mode: PlayMode): String = when (mode) {
+    PlayMode.SEQUENTIAL -> "顺序播放"
+    PlayMode.SHUFFLE -> "随机播放"
+    PlayMode.REPEAT_ONE -> "单曲循环"
+    PlayMode.REPEAT_ALL -> "列表循环"
 }
 
 internal fun shouldUseAudioModeLiquidPlayModeControl(
-    uiPreset: UiPreset,
+    supportsIndependentLiquidGlass: Boolean,
     androidNativeLiquidGlassEnabled: Boolean
-): Boolean {
-    return uiPreset != UiPreset.MD3 || androidNativeLiquidGlassEnabled
-}
+): Boolean = supportsIndependentLiquidGlass || androidNativeLiquidGlassEnabled
 
 internal enum class AudioModePlayPauseAction {
     PAUSE,
@@ -110,13 +94,21 @@ internal fun resolveAudioModePlayPauseAction(
 internal fun shouldCreateAudioModeStandalonePlayer(
     hasPlayer: Boolean,
     initialBvid: String
-): Boolean {
-    return !hasPlayer && initialBvid.isNotBlank()
-}
+): Boolean = !hasPlayer && initialBvid.isNotBlank()
 
 internal fun resolveAudioModePageSwitchAutoPlay(): Boolean = true
 
 internal fun resolveAudioModeCollectionSwitchAutoPlay(): Boolean = true
+
+internal fun resolveAudioModeOrientationActionLabel(isLandscape: Boolean): String =
+    if (isLandscape) "竖屏" else "横屏"
+
+internal fun resolveAudioModeRequestedOrientation(isLandscape: Boolean): Int =
+    if (isLandscape) {
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
 
 internal fun shouldShowAudioModePipButton(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.O
 
@@ -126,7 +118,6 @@ internal fun parseAudioModeSleepTimerInput(raw: String): Int? {
     if (trimmed.all { it.isDigit() }) {
         return trimmed.toIntOrNull()?.takeIf { it > 0 }
     }
-
     val match = Regex("""^(\d{1,3})\s*[:：]\s*(\d{1,2})$""").matchEntire(trimmed) ?: return null
     val hours = match.groupValues[1].toIntOrNull() ?: return null
     val minutes = match.groupValues[2].toIntOrNull() ?: return null
@@ -158,7 +149,7 @@ private tailrec fun Context.findHostActivity(): Activity? = when (this) {
     else -> null
 }
 
-private fun Player.handleAudioModePlayPause() {
+internal fun Player.handleAudioModePlayPause() {
     when (
         resolveAudioModePlayPauseAction(
             isPlaying = isPlaying,
@@ -182,8 +173,7 @@ private fun Player.handleAudioModePlayPause() {
 private fun enterAudioModePip(activity: Activity?) {
     if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInPictureInPictureMode) return
-    val paramsBuilder = PictureInPictureParams.Builder()
-        .setAspectRatio(Rational(16, 9))
+    val paramsBuilder = PictureInPictureParams.Builder().setAspectRatio(Rational(1, 1))
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         paramsBuilder.setSeamlessResizeEnabled(true)
     }
@@ -192,54 +182,66 @@ private fun enterAudioModePip(activity: Activity?) {
 
 @Composable
 fun AudioModeScreen(
-    viewModel: PlayerViewModel,
+    viewModel: VideoPlaybackViewModel,
+    engagementViewModel: com.android.purebilibili.feature.video.viewmodel.VideoEngagementViewModel =
+        androidx.lifecycle.viewmodel.compose.viewModel(),
+    composerViewModel: com.android.purebilibili.feature.video.viewmodel.VideoComposerViewModel =
+        androidx.lifecycle.viewmodel.compose.viewModel(),
+    supplementViewModel: com.android.purebilibili.feature.video.viewmodel.VideoSupplementViewModel =
+        androidx.lifecycle.viewmodel.compose.viewModel(),
     onBack: () -> Unit,
-    onVideoModeClick: (String, Long) -> Unit,  //  传递当前视频的 bvid/cid
+    onVideoModeClick: (String, Long) -> Unit,
     isInPipMode: Boolean = false,
     initialBvid: String = "",
     initialCid: Long = 0L,
-    initialResumePositionMs: Long = 0L
+    initialResumePositionMs: Long = 0L,
+    titleOverride: String? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val subjectSnapshot by viewModel.subjectSnapshot.collectAsStateWithLifecycle()
     val sleepTimerMinutes by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val uiPreset = LocalUiPreset.current
-    val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = HomeSettings(),
-        context = kotlin.coroutines.EmptyCoroutineContext
-    )
-    val useLiquidPlayModeControl = remember(uiPreset, homeSettings.androidNativeLiquidGlassEnabled) {
-        shouldUseAudioModeLiquidPlayModeControl(
-            uiPreset = uiPreset,
-            androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
-        )
-    }
-    val showPipButton = remember { shouldShowAudioModePipButton(Build.VERSION.SDK_INT) }
-    val enterPip = remember(context) { { enterAudioModePip(context.findHostActivity()) } }
-    val renderPolicy = remember(isInPipMode) {
-        resolveAudioModeRenderPolicy(isInPipMode = isInPipMode)
-    }
-    
-    //  投币对话框状态
-    val coinDialogVisible by viewModel.coinDialogVisible.collectAsStateWithLifecycle()
-    val currentCoinCount = (uiState as? PlayerUiState.Success)?.coinCount ?: 0
-    
-    //  缓存最后一次成功的状态，在加载时继续显示
-    var cachedSuccessState by remember { mutableStateOf<PlayerUiState.Success?>(null) }
-    
-    // 更新缓存
-    LaunchedEffect(uiState) {
-        if (uiState is PlayerUiState.Success) {
-            cachedSuccessState = uiState as PlayerUiState.Success
+    val configuration = LocalConfiguration.current
+    val activity = context.findHostActivity()
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val orientationActionLabel = resolveAudioModeOrientationActionLabel(isLandscape)
+    DisposableEffect(activity) {
+        val originalOrientation = activity?.requestedOrientation
+            ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        onDispose {
+            activity?.applyPlayerRequestedOrientation(originalOrientation)
         }
     }
-    
-    // 使用缓存的成功状态或当前状态
-    val displayState = when {
-        uiState is PlayerUiState.Success -> uiState as PlayerUiState.Success
-        cachedSuccessState != null -> cachedSuccessState!!
-        else -> null
+    val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(
+        initialValue = HomeSettings(),
+        context = kotlin.coroutines.EmptyCoroutineContext
+    )
+    val playerChromeProfile = rememberAppPlayerChromeProfile()
+    val liquidPlayModeControlEnabled = shouldUseAudioModeLiquidPlayModeControl(
+        supportsIndependentLiquidGlass =
+            playerChromeProfile.effects.supportsIndependentLiquidGlass,
+        androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+    )
+    var cachedSuccessState by remember { mutableStateOf<VideoPlaybackUiState.Success?>(null) }
+
+    LaunchedEffect(subjectSnapshot, uiState) {
+        val subject = subjectSnapshot ?: return@LaunchedEffect
+        val ready = uiState as? VideoPlaybackUiState.Success ?: return@LaunchedEffect
+        engagementViewModel.bindSubject(
+            subject,
+            ready.toEngagementSeed()
+        )
+        composerViewModel.bindSubject(subject)
+        supplementViewModel.bindSubject(
+            subject,
+            ready.toSupplementSeed()
+        )
     }
 
+    LaunchedEffect(uiState) {
+        if (uiState is VideoPlaybackUiState.Success) cachedSuccessState = uiState as VideoPlaybackUiState.Success
+    }
+    val displayState = (uiState as? VideoPlaybackUiState.Success) ?: cachedSuccessState
     val shouldCreateStandalonePlayer = remember(initialBvid) {
         shouldCreateAudioModeStandalonePlayer(
             hasPlayer = viewModel.currentPlayer != null,
@@ -257,7 +259,6 @@ fun AudioModeScreen(
     } else {
         null
     }
-    // 通过共享或听视频页自建的 ViewModel player 获取播放控制实例。
     val player = standalonePlayerState?.player ?: viewModel.currentPlayer
 
     LaunchedEffect(initialBvid, initialCid, initialResumePositionMs, shouldCreateStandalonePlayer) {
@@ -270,652 +271,79 @@ fun AudioModeScreen(
             )
         }
     }
-
-    //  封面显示模式状态
-    var isFullScreenCover by remember { mutableStateOf(false) }
-    
-    // 📂 [新增] 合集弹窗状态
-    var showCollectionSheet by remember { mutableStateOf(false) }
-    var pendingCollectionSwitchBvid by remember { mutableStateOf<String?>(null) }
-    var showSleepTimerDialog by remember { mutableStateOf(false) }
-    val controlsBottomPadding = resolveBottomSafeAreaPadding(
-        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-        extraBottomPadding = 24.dp
-    )
-
     DisposableEffect(viewModel) {
         viewModel.setAudioMode(true)
-        onDispose {
-            viewModel.setAudioMode(false)
-        }
+        AudioNowPlayingSession.markListening()
+        onDispose { viewModel.setAudioMode(false) }
     }
-    
-    AdaptiveScaffold(
-        containerColor = Color.Black,
-        //  沉浸式导航栏 - 移除系统窗口内边距
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            // 在具体布局中根据需要放置 TopBar
-        }
-    ) { paddingValues ->
-        // 忽略 Scaffold 的 paddingValues，自主控制布局
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            if (displayState != null) {
-                val info = displayState.info
-                val successState = displayState
-                
-                // ==================== 共享状态逻辑 ====================
-                val playlist by PlaylistManager.playlist.collectAsStateWithLifecycle()
-                val currentIndex by PlaylistManager.currentIndex.collectAsStateWithLifecycle()
-                val currentPlayMode by PlaylistManager.playMode.collectAsStateWithLifecycle()
-                
-                // 预加载相邻封面 - 使用 Coil 单例
-                val imageLoader = coil.Coil.imageLoader(context)
-                LaunchedEffect(currentIndex, playlist) {
-                    if (playlist.isNotEmpty()) {
-                        val nextIndex = (currentIndex + 1).takeIf { it < playlist.size }
-                        nextIndex?.let {
-                            imageLoader.enqueue(
-                                ImageRequest.Builder(context).data(FormatUtils.fixImageUrl(playlist[it].cover)).build()
-                            )
-                        }
-                        val prevIndex = (currentIndex - 1).takeIf { it >= 0 }
-                        prevIndex?.let {
-                            imageLoader.enqueue(
-                                ImageRequest.Builder(context).data(FormatUtils.fixImageUrl(playlist[it].cover)).build()
-                            )
-                        }
-                    }
-                }
-                
-                val pagerState = rememberPagerState(
-                    initialPage = currentIndex.coerceIn(0, (playlist.size - 1).coerceAtLeast(0)),
-                    pageCount = { playlist.size.coerceAtLeast(1) }
-                )
-                
-                val density = LocalDensity.current
 
-                // 同步 Pager 和 PlaylistManager
-                LaunchedEffect(currentIndex, playlist, pendingCollectionSwitchBvid) {
-                    if (pagerState.currentPage != currentIndex && currentIndex in 0 until playlist.size) {
-                        val currentPlaylistBvid = playlist.getOrNull(currentIndex)?.bvid
-                        if (pendingCollectionSwitchBvid != null && pendingCollectionSwitchBvid == currentPlaylistBvid) {
-                            pagerState.scrollToPage(currentIndex)
-                            pendingCollectionSwitchBvid = null
-                        } else {
-                            pagerState.animateScrollToPage(currentIndex)
-                        }
-                    }
-                }
-                // 当用户滑动 Pager 时，直接加载对应视频
-                LaunchedEffect(pagerState.settledPage) {
-                    val settledPage = pagerState.settledPage
-                    if (settledPage != currentIndex && playlist.isNotEmpty() && settledPage in playlist.indices) {
-                        val targetItem = PlaylistManager.playAt(settledPage)
-                        targetItem?.let {
-                            viewModel.loadVideo(
-                                bvid = it.bvid,
-                                autoPlay = resolveAudioModePageSwitchAutoPlay()
-                            )
-                        }
-                    }
-                }
-
-                // ==================== 共享 UI 组件 (控制栏) ====================
-                val controlsContent: @Composable () -> Unit = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 32.dp, end = 32.dp, bottom = controlsBottomPadding),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Spacer(modifier = Modifier.height(30.dp))
-
-                        // 1. 按钮行 - 视频模式 + 封面模式切换
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // 视频模式按钮
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .clickable { onVideoModeClick(info.bvid, info.cid) }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        CupertinoIcons.Default.PlayCircle,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "视频模式",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-
-                                // 封面模式切换按钮
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .clickable { isFullScreenCover = !isFullScreenCover }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        if (isFullScreenCover) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft
-                                        else CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        // 2. 视频信息
-                        Text(
-                            text = info.title,
-                            fontSize = 20.sp,
-                            lineHeight = 26.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = if (isFullScreenCover) TextAlign.Start else TextAlign.Center 
-                        )
-                        
-                        Spacer(modifier = Modifier.height(10.dp))
-                        
-                        Text(
-                            text = info.owner.name,
-                            fontSize = 16.sp,
-                            color = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = if (isFullScreenCover) TextAlign.Start else TextAlign.Center
-                        )
-                        
-                        // 🎵 [新增] 分P指示器 - 显示当前播放的分P
-                        val pages = info.pages
-                        if (pages.size > 1) {
-                            val currentPageIndex = pages.indexOfFirst { it.cid == info.cid }.coerceAtLeast(0)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "P${currentPageIndex + 1} / ${pages.size}",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = if (isFullScreenCover) TextAlign.Start else TextAlign.Center
-                            )
-                        }
-                        
-                        // 📂 [新增] 合集指示器 - 点击打开合集选择弹窗
-                        info.ugc_season?.let { season ->
-                            val allEpisodes = season.sections.flatMap { it.episodes }
-                            val currentEpIndex = allEpisodes.indexOfFirst { it.bvid == info.bvid }
-                            val currentPosition = if (currentEpIndex >= 0) currentEpIndex + 1 else 0
-                            val totalCount = allEpisodes.size.takeIf { it > 0 } ?: season.ep_count
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Surface(
-                                onClick = { showCollectionSheet = true },
-                                shape = RoundedCornerShape(16.dp),
-                                color = Color.White.copy(alpha = 0.15f)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "合集",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = season.title,
-                                        fontSize = 12.sp,
-                                        color = Color.White.copy(alpha = 0.9f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = 150.dp)
-                                    )
-                                    if (currentPosition > 0 && totalCount > 0) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "$currentPosition/$totalCount",
-                                            fontSize = 12.sp,
-                                            color = Color.White.copy(alpha = 0.6f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(32.dp))
-                        
-                        // 3. 互动按钮行
-                        val likeIcon = rememberAppLikeIcon()
-                        val likeFilledIcon = rememberAppLikeFilledIcon()
-                        val coinIcon = rememberAppCoinIcon()
-                        val favoriteIcon = rememberAppBookmarkIcon()
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            InteractionButton(
-                                icon = if (successState.isLiked) likeFilledIcon else likeIcon,
-                                label = FormatUtils.formatStat(info.stat.like.toLong()),
-                                isActive = successState.isLiked,
-                                onClick = { viewModel.toggleLike() }
-                            )
-                            InteractionButton(
-                                icon = coinIcon,
-                                label = FormatUtils.formatStat(info.stat.coin.toLong()),
-                                isActive = successState.coinCount > 0,
-                                onClick = { viewModel.openCoinDialog() }
-                            )
-                            InteractionButton(
-                                icon = favoriteIcon,
-                                label = FormatUtils.formatStat(info.stat.favorite.toLong()),
-                                isActive = successState.isFavorited,
-                                onClick = { viewModel.toggleFavorite() }
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(32.dp))
-                        
-                        // 4. 播放控制
-                        if (player != null) {
-                            PlayerControls(
-                                player = player,
-                                onPlayPause = { player.handleAudioModePlayPause() },
-                                onSeek = { pos -> 
-                                    player.seekTo(pos)
-                                    // [修复] 确保 seek 后音量正常
-                                    player.volume = 1.0f
-                                },
-                                onPrevious = { viewModel.playPreviousAudioModeTrack() },
-                                onNext = { viewModel.playNextAudioModeTrack() },
-                                currentPlayMode = currentPlayMode,
-                                onSelectPlayMode = { PlaylistManager.setPlayMode(it) },
-                                useLiquidPlayModeControl = useLiquidPlayModeControl
-                            )
-                        } else {
-                            Text("Connecting to player...", color = Color.White)
-                        }
-                        
-                        Spacer(modifier = Modifier.height(48.dp)) 
-                    }
-                }
-
-                // ==================== 布局分支 ====================
-                val artworkStyle = remember { resolveAudioModeCoverArtworkStyle() }
-
-                if (renderPolicy.showCompactPipCoverOnly) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        AsyncImage(
-                            model = FormatUtils.fixImageUrl(info.pic),
-                            contentDescription = "Audio cover",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                } else if (isFullScreenCover) {
-                    // ==================== 全屏模式 (沉浸式) ====================
-                    // 1. 底层：Pager 作为背景，填满全屏
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        if (playlist.isNotEmpty()) {
-                            VerticalPager(
-                                state = pagerState,
-                                modifier = Modifier.fillMaxSize(),
-                                beyondViewportPageCount = 1,
-                                key = { it }  // [修复] 使用索引作为 key，避免重复 bvid 导致崩溃
-                            ) { page ->
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    AsyncImage(
-                                        model = FormatUtils.fixImageUrl(playlist.getOrNull(page)?.cover ?: ""),
-                                        contentDescription = "Cover",
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .blur(20.dp), // 全屏模式背景模糊
-                                        contentScale = ContentScale.Crop,
-                                        alpha = 0.8f
-                                    )
-                                    // 黑色遮罩层 -> 让文字清晰
-                                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) // 增加遮罩浓度
-                                }
-                            }
-                        } else {
-                             Box(modifier = Modifier.fillMaxSize()) {
-                                AsyncImage(
-                                    model = FormatUtils.fixImageUrl(info.pic),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize().blur(20.dp),
-                                    contentScale = ContentScale.Crop,
-                                    alpha = 0.8f
-                                )
-                                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
-                             }
-                        }
-                    }
-                    
-                    // 2. 顶层：UI Overlay
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        if (renderPolicy.showTopBar) {
-                            AudioModeTopBar(
-                                onBack = onBack,
-                                showPipButton = showPipButton,
-                                onEnterPip = enterPip,
-                                sleepTimerMinutes = sleepTimerMinutes,
-                                onSleepTimerClick = { showSleepTimerDialog = true }
-                            )
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        if (renderPolicy.showControlsContent) {
-                            controlsContent()
-                        }
-                    }
-                    
-                } else {
-                    // ==================== 居中模式 (Apple Music 风格) ====================
-                    // 1. 底层：背景图 (模糊 + 遮罩)
-                    // [修复] 使用 pager 当前页的封面，确保切换时背景同步
-                    val currentCover = playlist.getOrNull(pagerState.currentPage)?.cover ?: info.pic
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        AsyncImage(
-                            model = FormatUtils.fixImageUrl(currentCover),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .blur(70.dp),
-                            contentScale = ContentScale.Crop,
-                            alpha = 0.72f
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.40f),
-                                            Color.Black.copy(alpha = artworkStyle.backgroundScrimAlphaPercent / 100f),
-                                            Color.Black.copy(alpha = 0.78f)
-                                        )
-                                    )
-                                )
-                        )
-                    }
-                    
-                    // 2. 内容层：TopBar + 中间 Pager + 底部 Controls
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        if (renderPolicy.showTopBar) {
-                            AudioModeTopBar(
-                                onBack = onBack,
-                                showPipButton = showPipButton,
-                                onEnterPip = enterPip,
-                                sleepTimerMinutes = sleepTimerMinutes,
-                                onSleepTimerClick = { showSleepTimerDialog = true }
-                            )
-                        }
-                        
-                        // 中间 Pager 区域 - 占据剩余空间
-                        BoxWithConstraints(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val coverSizeDp = resolveAudioModeArtworkSizeDp(
-                                availableWidthDp = maxWidth.value.roundToInt(),
-                                availableHeightDp = maxHeight.value.roundToInt()
-                            )
-                            if (playlist.isNotEmpty()) {
-                                VerticalPager(
-                                    state = pagerState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    // 关键：不设置 contentPadding，让 Pager 占满高度，这样旋转时不会在边界被裁剪
-                                    contentPadding = PaddingValues(vertical = 0.dp),
-                                    beyondViewportPageCount = 1,
-                                    key = { it }  // [修复] 使用索引作为 key，避免重复 bvid 导致崩溃
-                                ) { page ->
-                                    val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                                    val pageTransform = resolveAudioModeVerticalPageTransform(
-                                        pageOffset = pageOffset,
-                                        style = artworkStyle
-                                    )
-
-                                    // 轻量 3D：上下翻页时只做 layer 透视，不引入额外渲染管线。
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        // 实际的卡片内容框 - Apple Music 风格封面
-                                        Box(
-                                            modifier = Modifier
-                                                .width(coverSizeDp.widthDp.dp)
-                                                .height(coverSizeDp.heightDp.dp)
-                                                .graphicsLayer {
-                                                    rotationX = pageTransform.rotationXDegrees
-                                                    cameraDistance = 18f * density.density
-                                                    transformOrigin = TransformOrigin(
-                                                        pivotFractionX = 0.5f,
-                                                        pivotFractionY = pageTransform.pivotFractionY
-                                                    )
-                                                    translationY = pageTransform.translationYDp.dp.toPx()
-                                                    scaleX = pageTransform.scale
-                                                    scaleY = pageTransform.scale
-                                                    alpha = pageTransform.alpha
-                                                }
-                                        ) {
-                                            AudioModeArtworkCard(
-                                                coverUrl = playlist.getOrNull(page)?.cover.orEmpty(),
-                                                style = artworkStyle,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
-                                    }
-                                }
-                             } else {
-                                // 空列表兜底
-                                Box(
-                                    modifier = Modifier
-                                        .width(coverSizeDp.widthDp.dp)
-                                        .height(coverSizeDp.heightDp.dp)
-                                ) {
-                                    AudioModeArtworkCard(
-                                        coverUrl = info.pic,
-                                        style = artworkStyle,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                             }
-                        }
-                        
-                        // 底部控制栏
-                        if (renderPolicy.showControlsContent) {
-                            controlsContent()
-                        }
-                    }
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color.White)
-                }
-            }
-        }
+    if (displayState == null) {
+        AudioModeInitialState(
+            state = uiState,
+            title = titleOverride?.takeIf { it.isNotBlank() } ?: "正在加载音频",
+            onBack = onBack,
+            onRetry = { viewModel.retry() }
+        )
+        return
     }
-    
-    //  投币对话框
-    val userBalance by viewModel.userCoinBalance.collectAsStateWithLifecycle()
-    CoinDialog(
-        visible = coinDialogVisible,
-        currentCoinCount = currentCoinCount,
-        userBalance = userBalance,
-        onDismiss = { viewModel.closeCoinDialog() },
-        onConfirm = { count, alsoLike -> viewModel.doCoin(count, alsoLike) }
+
+    val enterPip = remember(context) { { enterAudioModePip(context.findHostActivity()) } }
+    AudioModeMusicPlayer(
+        viewModel = viewModel,
+        successState = displayState,
+        player = player,
+        onBack = onBack,
+        onVideoModeClick = onVideoModeClick,
+        isInPipMode = isInPipMode,
+        showPipButton = shouldShowAudioModePipButton(Build.VERSION.SDK_INT),
+        onEnterPip = enterPip,
+        sleepTimerMinutes = sleepTimerMinutes,
+        titleOverride = titleOverride,
+        liquidGlassEffectsEnabled = liquidPlayModeControlEnabled,
+        onToggleOrientation = {
+            activity?.applyPlayerRequestedOrientation(resolveAudioModeRequestedOrientation(isLandscape))
+        },
+        orientationActionLabel = orientationActionLabel,
+        engagementViewModel = engagementViewModel
     )
-    
-    // 📂 [新增] 合集选择弹窗
-    val currentInfo = (uiState as? PlayerUiState.Success)?.info
-    currentInfo?.ugc_season?.let { season ->
-        if (showCollectionSheet) {
-            CollectionSheet(
-                ugcSeason = season,
-                currentBvid = currentInfo.bvid,
-                currentCid = currentInfo.cid,
-                onDismiss = { showCollectionSheet = false },
-                onEpisodeClick = { episode ->
-                    showCollectionSheet = false
-                    pendingCollectionSwitchBvid = episode.bvid
-                    viewModel.loadVideo(
-                        bvid = episode.bvid,
-                        cid = episode.cid,
-                        autoPlay = resolveAudioModeCollectionSwitchAutoPlay()
-                    )
-                }
-            )
-        }
-    }
-
-    if (showSleepTimerDialog) {
-        AudioModeSleepTimerDialog(
-            currentMinutes = sleepTimerMinutes,
-            onDismiss = { showSleepTimerDialog = false },
-            onSelectPreset = { minutes ->
-                viewModel.setSleepTimer(minutes)
-                showSleepTimerDialog = false
-            },
-            onConfirmCustom = { minutes ->
-                viewModel.setSleepTimer(minutes)
-                showSleepTimerDialog = false
-            }
-        )
-    }
 }
 
 @Composable
-private fun AudioModeArtworkCard(
-    coverUrl: String,
-    style: AudioModeCoverArtworkStyle,
-    modifier: Modifier = Modifier
-) {
-    val shape = RoundedCornerShape(style.cornerRadiusDp.dp)
-    Box(
-        modifier = modifier
-            .shadow(
-                elevation = style.shadowElevationDp.dp,
-                shape = shape,
-                clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.46f),
-                spotColor = Color.Black.copy(alpha = 0.62f)
-            )
-            .clip(shape)
-            .background(Color(0xFF1C1C1E))
-            .border(
-                width = 0.8.dp,
-                color = Color.White.copy(alpha = 0.12f),
-                shape = shape
-            )
-    ) {
-        AsyncImage(
-            model = FormatUtils.fixImageUrl(coverUrl),
-            contentDescription = "Cover",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.10f),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.14f)
-                        )
-                    )
-                )
-        )
-    }
-}
-
-@Composable
-private fun AudioModeTopBar(
+private fun AudioModeInitialState(
+    state: VideoPlaybackUiState,
+    title: String,
     onBack: () -> Unit,
-    showPipButton: Boolean,
-    onEnterPip: () -> Unit,
-    sleepTimerMinutes: Int?,
-    onSleepTimerClick: () -> Unit
+    onRetry: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()  //  添加状态栏内边距以实现沉浸效果
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                CupertinoIcons.Default.ChevronDown, // 下箭头表示收起
-                contentDescription = "Back",
-                tint = Color.White
-            )
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        AppTextButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 40.dp, start = 12.dp)
+                .height(48.dp)
         ) {
-            Surface(
-                onClick = onSleepTimerClick,
-                shape = RoundedCornerShape(18.dp),
-                color = Color.White.copy(alpha = if (sleepTimerMinutes != null) 0.2f else 0.14f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        CupertinoIcons.Default.Timer,
-                        contentDescription = "Sleep timer",
-                        tint = if (sleepTimerMinutes != null) MaterialTheme.colorScheme.primary else Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = formatAudioModeSleepTimerButtonLabel(sleepTimerMinutes),
-                        color = if (sleepTimerMinutes != null) MaterialTheme.colorScheme.primary else Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+            AppText("返回")
+        }
+        Column(
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            when (state) {
+                is VideoPlaybackUiState.Error -> {
+                    AppText("音频加载失败", style = MaterialTheme.typography.headlineSmall)
+                    AppText(state.msg, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (state.canRetry) {
+                        AppTextButton(onClick = onRetry, modifier = Modifier.height(48.dp)) { AppText("重试") }
+                    }
                 }
-            }
-
-            if (showPipButton) {
-                IconButton(onClick = onEnterPip) {
-                    Icon(
-                        CupertinoIcons.Default.Pip,
-                        contentDescription = "Picture in picture",
-                        tint = Color.White
-                    )
+                else -> {
+                    AdaptiveLoadingIndicator()
+                    AppText(title)
+                    if (title != "正在加载音频") {
+                        AppText("正在加载音频", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -923,7 +351,7 @@ private fun AudioModeTopBar(
 }
 
 @Composable
-private fun AudioModeSleepTimerDialog(
+internal fun AudioModeSleepTimerDialog(
     currentMinutes: Int?,
     onDismiss: () -> Unit,
     onSelectPreset: (Int?) -> Unit,
@@ -932,21 +360,19 @@ private fun AudioModeSleepTimerDialog(
     var customInput by remember(currentMinutes) {
         mutableStateOf(formatAudioModeSleepTimerInput(currentMinutes))
     }
-    val parsedCustomMinutes = remember(customInput) {
-        parseAudioModeSleepTimerInput(customInput)
-    }
+    val parsedCustomMinutes = remember(customInput) { parseAudioModeSleepTimerInput(customInput) }
     val showCustomError = customInput.isNotBlank() && parsedCustomMinutes == null
     val presetOptions = listOf<Int?>(null, 15, 30, 60, 90)
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("定时关闭") },
+        title = { AppText("定时关闭") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(
+                AppText(
                     text = "选择常用时长，或输入分钟数 / 小时:分钟，例如 90、1:30。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
+                    style = MaterialTheme.typography.bodySmall
                 )
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -954,9 +380,9 @@ private fun AudioModeSleepTimerDialog(
                 ) {
                     presetOptions.forEach { minutes ->
                         val isSelected = currentMinutes == minutes
-                        Surface(
+                        AppSurface(
                             onClick = { onSelectPreset(minutes) },
-                            shape = RoundedCornerShape(16.dp),
+                            shape = AppShapes.container(ContainerLevel.Card),
                             color = if (isSelected) {
                                 MaterialTheme.colorScheme.primary
                             } else {
@@ -967,9 +393,9 @@ private fun AudioModeSleepTimerDialog(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
+                                AppText(
                                     text = formatAudioModeSleepTimerButtonLabel(minutes),
-                                    fontSize = 13.sp,
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = if (isSelected) {
                                         MaterialTheme.colorScheme.onPrimary
                                     } else {
@@ -980,18 +406,18 @@ private fun AudioModeSleepTimerDialog(
                         }
                     }
                 }
-                OutlinedTextField(
+                AppOutlinedTextField(
                     value = customInput,
                     onValueChange = { customInput = it.take(8) },
                     singleLine = true,
-                    label = { Text("自定义时间") },
-                    placeholder = { Text("例如 45 或 1:30") },
+                    label = { AppText("自定义时间") },
+                    placeholder = { AppText("例如 45 或 1:30") },
                     isError = showCustomError,
                     supportingText = {
                         if (showCustomError) {
-                            Text("请输入正整数分钟，或 小时:分钟，分钟需在 0-59。")
+                            AppText("请输入正整数分钟，或 小时:分钟，分钟需在 0-59。")
                         } else if (parsedCustomMinutes != null) {
-                            Text("将于 ${formatAudioModeSleepTimerButtonLabel(parsedCustomMinutes)}后暂停播放")
+                            AppText("将于 ${formatAudioModeSleepTimerButtonLabel(parsedCustomMinutes)}后暂停播放")
                         }
                     },
                     keyboardOptions = KeyboardOptions(
@@ -1003,267 +429,11 @@ private fun AudioModeSleepTimerDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            AppTextButton(
                 onClick = { parsedCustomMinutes?.let(onConfirmCustom) },
                 enabled = parsedCustomMinutes != null
-            ) {
-                Text("应用")
-            }
+            ) { AppText("应用") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
+        dismissButton = { AppTextButton(onClick = onDismiss) { AppText("取消") } }
     )
-}
-
-@Composable
-private fun InteractionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    isActive: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            color = if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PlayerControls(
-    player: Player,
-    onPlayPause: () -> Unit,
-    onSeek: (Long) -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    currentPlayMode: PlayMode,
-    onSelectPlayMode: (PlayMode) -> Unit,
-    useLiquidPlayModeControl: Boolean
-) {
-    var isDragging by remember { mutableStateOf(false) }
-    var draggingProgress by remember { mutableFloatStateOf(0f) }
-    
-    // [修复] 进度状态 - 使用 key 确保切换视频时重置
-    var currentPos by remember(player) { mutableLongStateOf(player.currentPosition) }
-    var duration by remember(player) { mutableLongStateOf(player.duration.coerceAtLeast(0)) }
-    var isPlaying by remember(player) { mutableStateOf(player.isPlaying) }
-    
-    LaunchedEffect(player) {
-        // [修复] 立即读取当前状态
-        currentPos = player.currentPosition
-        duration = player.duration.coerceAtLeast(0)
-        isPlaying = player.isPlaying
-        // 然后开始轮询
-        while (isActive) {
-            delay(500)
-            if (!isDragging) {
-                currentPos = player.currentPosition
-                duration = player.duration.coerceAtLeast(0)
-            }
-            isPlaying = player.isPlaying
-        }
-    }
-    
-    Column(modifier = Modifier.fillMaxWidth()) {
-        //  更细的进度条 - 使用自定义样式
-        Slider(
-            value = if (isDragging) draggingProgress else (if (duration > 0) currentPos.toFloat() / duration else 0f),
-            onValueChange = { 
-                isDragging = true
-                draggingProgress = it
-            },
-            onValueChangeFinished = {
-                val target = (draggingProgress * duration).toLong()
-                // [修复] 记录 seek 前的播放状态
-                val wasPlaying = player.isPlaying || player.playbackState == Player.STATE_BUFFERING
-                onSeek(target)
-                // [修复] 确保 seek 后恢复播放状态和音量
-                player.volume = 1.0f
-                if (wasPlaying) {
-                    player.play()
-                }
-                isDragging = false
-            },
-            modifier = Modifier.height(20.dp),  // 减小整体高度
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color.White,
-                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-            ),
-            thumb = {
-                //  更小的圆形滑块
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(Color.White, CircleShape)
-                )
-            },
-            track = { sliderState ->
-                //  更细的轨道
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(1.5.dp))
-                        .background(Color.White.copy(alpha = 0.2f))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(sliderState.value)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(1.5.dp))
-                            .background(Color.White)
-                    )
-                }
-            }
-        )
-        
-        // 时间
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = FormatUtils.formatDuration((currentPos / 1000).toInt()),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 12.sp
-            )
-            Text(
-                text = FormatUtils.formatDuration((duration / 1000).toInt()),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 12.sp
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-
-        AudioPlayModeSelector(
-            currentPlayMode = currentPlayMode,
-            onSelectPlayMode = onSelectPlayMode,
-            useLiquidPlayModeControl = useLiquidPlayModeControl
-        )
-
-        Spacer(modifier = Modifier.height(18.dp))
-        
-        // 播放控制按钮
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            //  上一个推荐视频
-            IconButton(onClick = onPrevious) {
-                Icon(
-                    CupertinoIcons.Default.BackwardEnd,
-                    contentDescription = "上一个",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            
-            // 播放/暂停
-            IconButton(
-                onClick = onPlayPause,
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(Color.White, CircleShape)
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) CupertinoIcons.Filled.Pause else CupertinoIcons.Filled.Play,
-                    contentDescription = "Play/Pause",
-                    tint = Color.Black,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-            
-            //  下一个推荐视频
-            IconButton(onClick = onNext) {
-                Icon(
-                    CupertinoIcons.Default.ForwardEnd,
-                    contentDescription = "下一个",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AudioPlayModeSelector(
-    currentPlayMode: PlayMode,
-    onSelectPlayMode: (PlayMode) -> Unit,
-    useLiquidPlayModeControl: Boolean
-) {
-    val playModes = remember {
-        listOf(PlayMode.SEQUENTIAL, PlayMode.SHUFFLE, PlayMode.REPEAT_ONE)
-    }
-    if (useLiquidPlayModeControl) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            BottomBarLiquidSegmentedControl(
-                items = playModes.map(::resolveAudioPlayModeLabel),
-                selectedIndex = playModes.indexOf(currentPlayMode).coerceAtLeast(0),
-                onSelected = { index ->
-                    playModes.getOrNull(index)?.let(onSelectPlayMode)
-                },
-                itemWidth = 86.dp,
-                labelFontSize = 13.sp,
-                containerHorizontalPadding = 3.dp,
-                containerVerticalPadding = 3.dp,
-                liquidGlassEffectsEnabled = true,
-                dragSelectionEnabled = true
-            )
-        }
-    } else {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            playModes.forEach { mode ->
-                val isSelected = currentPlayMode == mode
-                Surface(
-                    onClick = { onSelectPlayMode(mode) },
-                    shape = RoundedCornerShape(999.dp),
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                    } else {
-                        Color.White.copy(alpha = 0.15f)
-                    }
-                ) {
-                    Text(
-                        text = resolveAudioPlayModeLabel(mode),
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-    }
 }

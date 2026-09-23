@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.core.ui.CompactCapsuleChromeSpec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -36,27 +37,45 @@ class LiveHomeCategoryIndicatorPolicyTest {
     }
 
     @Test
-    fun `live home category control fits four visible items with matching indicator width`() {
-        val spec = resolveLiveHomeCategorySegmentedControlSpec()
+    fun `live home category control follows each chrome density`() {
+        val ios = resolveLiveHomeCategorySegmentedControlSpec(
+            compactChrome(primaryHeightDp = 44, compactChipHeightDp = 32),
+        )
+        val md3 = resolveLiveHomeCategorySegmentedControlSpec(
+            compactChrome(primaryHeightDp = 56, compactChipHeightDp = 28),
+        )
+        val miuix = resolveLiveHomeCategorySegmentedControlSpec(
+            compactChrome(primaryHeightDp = 48, compactChipHeightDp = 28),
+        )
 
-        assertEquals(82, spec.itemWidthDp)
-        assertEquals(44, spec.heightDp)
-        assertEquals(30, spec.indicatorHeightDp)
-        assertEquals(14, spec.labelFontSizeSp)
-        assertEquals(4, spec.containerHorizontalPaddingDp)
-        assertEquals(4, spec.containerVerticalPaddingDp)
+        assertEquals(44, ios.heightDp)
+        assertEquals(33, ios.indicatorHeightDp)
+        assertEquals(56, md3.heightDp)
+        assertEquals(42, md3.indicatorHeightDp)
+        assertEquals(48, miuix.heightDp)
+        assertEquals(36, miuix.indicatorHeightDp)
+        listOf(ios, md3, miuix).forEach { spec ->
+            assertEquals(82, spec.itemWidthDp)
+            assertEquals(14, spec.labelFontSizeSp)
+            assertEquals(4, spec.containerHorizontalPaddingDp)
+            assertEquals(4, spec.containerVerticalPaddingDp)
+            assertEquals(20, spec.edgeBufferDp)
+        }
     }
 
     @Test
     fun `all tags parent category uses fixed width so labels are not compressed`() {
-        val spec = resolveLiveAreaParentSegmentedControlSpec()
+        val spec = resolveLiveAreaParentSegmentedControlSpec(
+            compactChrome(primaryHeightDp = 56, compactChipHeightDp = 28),
+        )
 
         assertEquals(112, spec.itemWidthDp)
-        assertEquals(44, spec.heightDp)
-        assertEquals(30, spec.indicatorHeightDp)
+        assertEquals(56, spec.heightDp)
+        assertEquals(42, spec.indicatorHeightDp)
         assertEquals(16, spec.labelFontSizeSp)
         assertEquals(4, spec.containerHorizontalPaddingDp)
         assertEquals(4, spec.containerVerticalPaddingDp)
+        assertEquals(20, spec.edgeBufferDp)
     }
 
     @Test
@@ -103,4 +122,24 @@ class LiveHomeCategoryIndicatorPolicyTest {
 
         assertEquals(80, target)
     }
+
+    private fun compactChrome(
+        primaryHeightDp: Int,
+        compactChipHeightDp: Int,
+    ) = CompactCapsuleChromeSpec(
+        primaryHeightDp = primaryHeightDp,
+        secondaryButtonSizeDp = 48,
+        chipHeightDp = 32,
+        compactChipHeightDp = compactChipHeightDp,
+        primaryCornerRadiusDp = 16,
+        secondaryButtonCornerRadiusDp = 16,
+        chipCornerRadiusDp = 16,
+        compactChipCornerRadiusDp = 14,
+        iconSizeDp = 20,
+        smallIconSizeDp = 16,
+        inputHorizontalPaddingDp = 12,
+        chipHorizontalPaddingDp = 12,
+        compactChipHorizontalPaddingDp = 10,
+        standardGapDp = 8,
+    )
 }

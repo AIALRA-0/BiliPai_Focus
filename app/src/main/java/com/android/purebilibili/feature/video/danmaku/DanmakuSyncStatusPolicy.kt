@@ -59,3 +59,16 @@ internal fun shouldRunDanmakuManualCloudSync(
     val lastHandled = lastHandledManualRequestVersion ?: Long.MIN_VALUE
     return manualRequestVersion > lastHandled
 }
+
+internal fun shouldSyncDanmakuSettingsToCloud(
+    isLoggedIn: Boolean,
+    cloudSyncEnabled: Boolean
+): Boolean = isLoggedIn && cloudSyncEnabled
+
+internal fun resolveDanmakuCloudSyncToggleSubtitle(enabled: Boolean): String {
+    return if (enabled) {
+        "开启后，透明度、速度、显示区域等设置会同步到账号，并影响网页版等其它端"
+    } else {
+        "关闭后仅保存在本机，不会覆盖网页版或其它设备的弹幕显示"
+    }
+}

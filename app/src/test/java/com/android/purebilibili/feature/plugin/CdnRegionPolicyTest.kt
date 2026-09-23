@@ -25,6 +25,14 @@ class CdnRegionPolicyTest {
     )
 
     @Test
+    fun `plugin capability manifest keeps CDN optimizer release version`() {
+        val plugin = CdnRegionPlugin()
+
+        assertEquals("1.4.0", plugin.version)
+        assertEquals(plugin.version, plugin.capabilityManifest.version)
+    }
+
+    @Test
     fun `ip snapshot preserves public address and isp for internal cdn decisions`() {
         val snapshot = IpLocationSnapshot(
             addr = "36.40.120.145",
@@ -145,6 +153,77 @@ class CdnRegionPolicyTest {
         assertTrue(result.urls.contains("https://upos-sz-mirrorali.bilivideo.com/upgcxcode/1/2/video.m4s?deadline=1&gen=playurl"))
         assertTrue(result.urls.contains("https://backup.example.com/upgcxcode/1/2/video.m4s?deadline=1"))
         assertEquals(3, result.urls.size)
+    }
+
+    @Test
+    fun `custom rules use first valid match without chaining and preserve pairs`() {
+        val candidates = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://upos-sz-mirrorali.bilivideo.com/video.m4s?token=1"),
+            audioUrls = listOf("https://upos-sz-mirrorali.bilivideo.com/audio.m4s?token=1")
+        )
+
+        val rewritten = rewritePlaybackCdnCandidatesForCustomRules(
+            candidates = candidates,
+            rules = listOf(
+                CdnCustomRule(
+                    pattern = "upos-sz-mirrorali\\.bilivideo\\.com",
+                    replacement = "cn-hk-eq-01-03.bilivideo.com"
+                ),
+                CdnCustomRule(
+                    pattern = "cn-hk-eq-01-03",
+                    replacement = "must-not-chain"
+                )
+            )
+        )
+
+        assertEquals(1, rewritten.size)
+        assertEquals("https://cn-hk-eq-01-03.bilivideo.com/video.m4s?token=1", rewritten.single().videoUrl)
+        assertEquals("https://cn-hk-eq-01-03.bilivideo.com/audio.m4s?token=1", rewritten.single().audioUrl)
+        assertEquals(PlaybackCdnCandidateSource.CUSTOM, rewritten.single().source)
+        assertEquals(
+            PlaybackCdnCandidateSource.CUSTOM,
+            sortPlaybackCdnCandidatesByHealth(
+                candidates = rewritten + candidates,
+                healthByHost = mapOf(
+                    "upos-sz-mirrorali.bilivideo.com" to CdnCandidateHealth(
+                        host = "upos-sz-mirrorali.bilivideo.com",
+                        readyCount = 10,
+                        manualProbeSpeedKbps = 10_000
+                    )
+                )
+            ).first().source
+        )
+    }
+
+    @Test
+    fun `custom rules reject invalid regex and untrusted targets`() {
+        val candidates = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://upos-sz-mirrorali.bilivideo.com/video.m4s"),
+            audioUrls = emptyList()
+        )
+
+        assertTrue(validateCdnCustomRules(listOf(CdnCustomRule(pattern = "[", replacement = "x"))).single().error != null)
+        assertTrue(
+            rewritePlaybackCdnCandidatesForCustomRules(
+                candidates,
+                listOf(CdnCustomRule("https://[^/]+", "http://evil.example.com"))
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun `disabled custom rule does not rewrite`() {
+        val candidates = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://upos-sz-mirrorali.bilivideo.com/video.m4s"),
+            audioUrls = emptyList()
+        )
+
+        assertTrue(
+            rewritePlaybackCdnCandidatesForCustomRules(
+                candidates,
+                listOf(CdnCustomRule("upos-sz", "cn-hk-eq-01-03", enabled = false))
+            ).isEmpty()
+        )
     }
 
     @Test
@@ -324,5 +403,60 @@ class CdnRegionPolicyTest {
 
         assertEquals(42L, diagnostics.single().latencyMs)
         assertEquals("延迟较低", diagnostics.single().statusLabel)
+    }
+
+    @Test
+    fun `playback cdn names match PiliPlus provider labels`() {
+        assertEquals(
+            "ali（阿里云）",
+            resolvePlaybackCdnDisplayName("upos-sz-mirrorali.bilivideo.com", index = 0)
+        )
+        assertEquals(
+            "cosb（腾讯云，VOD加速类型）",
+            resolvePlaybackCdnDisplayName("upos-sz-mirrorcosb.bilivideo.com", index = 1)
+        )
+        assertEquals(
+            "hw（华为云，融合CDN）",
+            resolvePlaybackCdnDisplayName("upos-sz-mirrorhw.bilivideo.com", index = 2)
+        )
+    }
+
+    @Test
+    fun `unknown playback cdn names fall back to base and backup labels`() {
+        assertEquals("基础URL", resolvePlaybackCdnDisplayName("unknown.example.com", index = 0))
+        assertEquals("备用URL", resolvePlaybackCdnDisplayName("unknown.example.com", index = 1))
+    }
+
+    @Test
+    fun `global playback cdn preference rewrites paired tracks and preserves fallbacks`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://upos-sz-mirrorali.bilivideo.com/video.m4s?deadline=1",
+                "https://upos-sz-mirrorcos.bilivideo.com/video.m4s?deadline=1",
+            ),
+            audioUrls = listOf(
+                "https://upos-sz-mirrorali.bilivideo.com/audio.m4s?deadline=1",
+                "https://upos-sz-mirrorcos.bilivideo.com/audio.m4s?deadline=1",
+            ),
+        )
+
+        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.HW)
+
+        assertEquals("upos-sz-mirrorhw.bilivideo.com", hostFromCdnUrl(preferred.first().videoUrl))
+        assertEquals("upos-sz-mirrorhw.bilivideo.com", hostFromCdnUrl(preferred.first().audioUrl.orEmpty()))
+        assertTrue(preferred.drop(1).any { it.videoUrl == original.first().videoUrl })
+    }
+
+    @Test
+    fun `backup preference promotes returned backup without discarding base`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://base.bilivideo.com/v", "https://backup.bilivideo.com/v"),
+            audioUrls = emptyList(),
+        )
+
+        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.BACKUP_URL)
+
+        assertEquals("backup.bilivideo.com", hostFromCdnUrl(preferred.first().videoUrl))
+        assertEquals("base.bilivideo.com", hostFromCdnUrl(preferred.last().videoUrl))
     }
 }

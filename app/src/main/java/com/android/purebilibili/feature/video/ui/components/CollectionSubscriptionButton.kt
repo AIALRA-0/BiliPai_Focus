@@ -3,8 +3,8 @@ package com.android.purebilibili.feature.video.ui.components
 import android.widget.Toast
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -27,6 +28,7 @@ internal fun CollectionSubscriptionButton(
     currentBvid: String,
     currentAid: Long,
     fontSize: TextUnit,
+    immersive: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
 ) {
     val context = LocalContext.current
@@ -51,12 +53,12 @@ internal fun CollectionSubscriptionButton(
             }
     }
 
-    TextButton(
+    AppTextButton(
         enabled = !isUpdating,
         onClick = {
             if (collectionId <= 0L) {
                 Toast.makeText(context, "无法识别合集 ID", Toast.LENGTH_SHORT).show()
-                return@TextButton
+                return@AppTextButton
             }
             scope.launch {
                 isUpdating = true
@@ -90,9 +92,11 @@ internal fun CollectionSubscriptionButton(
         },
         contentPadding = contentPadding
     ) {
-        Text(
+        AppText(
             text = if (isSubscribed) "已订阅" else "订阅",
-            color = if (isSubscribed) {
+            color = if (immersive) {
+                Color.White.copy(alpha = if (isSubscribed) 0.92f else 0.78f)
+            } else if (isSubscribed) {
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant

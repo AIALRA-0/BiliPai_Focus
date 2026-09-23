@@ -8,6 +8,53 @@ import kotlin.test.assertTrue
 class AppNavigationPlaybackPolicyTest {
 
     @Test
+    fun audioNowPlayingBar_defaultsToVideoDetailAndCanOpenAudioMode() {
+        val detailRoute = resolveAudioNowPlayingBarExpandRoute(
+            opensAudioMode = false,
+            bvid = "BV1TEST",
+            cid = 42L,
+            coverUrl = "https://example.com/cover.jpg",
+        )
+        val audioRoute = resolveAudioNowPlayingBarExpandRoute(
+            opensAudioMode = true,
+            bvid = "BV1TEST",
+            cid = 42L,
+            coverUrl = "https://example.com/cover.jpg",
+        )
+
+        assertTrue(detailRoute.startsWith("video/BV1TEST?cid=42"))
+        assertEquals(ScreenRoutes.AudioMode.createRoute("BV1TEST", 42L), audioRoute)
+    }
+
+    @Test
+    fun miniPlayerTransition_doesNotMarkPlaybackAsNavigationLeave() {
+        assertFalse(shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = true))
+        assertTrue(shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = false))
+    }
+
+    @Test
+    fun relatedDetailDisablesInternalSharedTransition() {
+        assertFalse(
+            shouldEnableVideoDetailSharedTransition(
+                cardTransitionEnabled = true,
+                sourceRoute = "video/BV_PARENT",
+            )
+        )
+        assertTrue(
+            shouldEnableVideoDetailSharedTransition(
+                cardTransitionEnabled = true,
+                sourceRoute = ScreenRoutes.Home.route,
+            )
+        )
+        assertFalse(
+            shouldEnableVideoDetailSharedTransition(
+                cardTransitionEnabled = false,
+                sourceRoute = ScreenRoutes.Home.route,
+            )
+        )
+    }
+
+    @Test
     fun leavingVideoToHome_shouldStopPlaybackEagerly() {
         assertTrue(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
@@ -23,6 +70,16 @@ class AppNavigationPlaybackPolicyTest {
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
                 toRoute = ScreenRoutes.AudioMode.route
+            )
+        )
+    }
+
+    @Test
+    fun leavingVideoToUpSpace_shouldEnterMiniPlayerInsteadOfStoppingEagerly() {
+        assertFalse(
+            shouldStopPlaybackEagerlyOnVideoRouteExit(
+                fromRoute = VideoRoute.route,
+                toRoute = ScreenRoutes.Space.createRoute(123L)
             )
         )
     }
@@ -45,6 +102,29 @@ class AppNavigationPlaybackPolicyTest {
                 toRoute = null
             )
         )
+    }
+
+    @Test
+    fun allVideoCardRoutes_supportSharedElementReturn() {
+        listOf(
+            "main_host",
+            ScreenRoutes.Home.route,
+            ScreenRoutes.ListenVideo.route,
+            ScreenRoutes.History.route,
+            ScreenRoutes.Favorite.route,
+            ScreenRoutes.WatchLater.route,
+            ScreenRoutes.Search.route,
+            ScreenRoutes.Dynamic.route,
+            "dynamic_detail/123",
+            ScreenRoutes.Partition.route,
+            "category/1",
+            "season_series_detail/series/1/2/title/owner",
+            "space/123"
+        ).forEach { route ->
+            assertTrue(isVideoCardReturnTargetRoute(route), "共享元素返回应支持来源路由：$route")
+        }
+        assertTrue(isVideoCardReturnTargetRoute("video/BV1?cid=11"))
+        assertFalse(isVideoCardReturnTargetRoute(ScreenRoutes.Settings.route))
     }
 
     @Test
@@ -170,41 +250,4 @@ class AppNavigationPlaybackPolicyTest {
         )
     }
 
-    @Test
-    fun bottomBarPrimesHiddenBeforeVideoNavigationFromVisibleBottomTab() {
-        val visibleRoutes = setOf(
-            ScreenRoutes.Home.route,
-            ScreenRoutes.Dynamic.route,
-            ScreenRoutes.History.route
-        )
-
-        assertTrue(
-            shouldPrimeBottomBarHiddenBeforeVideoNavigation(
-                sourceRoute = ScreenRoutes.Dynamic.route,
-                visibleBottomBarRoutes = visibleRoutes,
-                useSideNavigation = false
-            )
-        )
-        assertTrue(
-            shouldPrimeBottomBarHiddenBeforeVideoNavigation(
-                sourceRoute = "${ScreenRoutes.Home.route}?from=feed",
-                visibleBottomBarRoutes = visibleRoutes,
-                useSideNavigation = false
-            )
-        )
-        assertFalse(
-            shouldPrimeBottomBarHiddenBeforeVideoNavigation(
-                sourceRoute = ScreenRoutes.Search.route,
-                visibleBottomBarRoutes = visibleRoutes,
-                useSideNavigation = false
-            )
-        )
-        assertFalse(
-            shouldPrimeBottomBarHiddenBeforeVideoNavigation(
-                sourceRoute = ScreenRoutes.Dynamic.route,
-                visibleBottomBarRoutes = visibleRoutes,
-                useSideNavigation = true
-            )
-        )
-    }
 }

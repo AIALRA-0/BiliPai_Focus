@@ -6,8 +6,28 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class MiniPlayerMediaControlPolicyTest {
+
+    @Test
+    fun `mini player entry preserves active playback intent`() {
+        assertTrue(
+            shouldResumePlaybackOnMiniPlayerEntry(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+        assertFalse(
+            shouldResumePlaybackOnMiniPlayerEntry(
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
 
     @Test
     fun `pip action remains pause when playback intent is active but isPlaying is stale`() {
@@ -68,5 +88,31 @@ class MiniPlayerMediaControlPolicyTest {
         verify(exactly = 1) { player.playWhenReady = true }
         verify(exactly = 1) { player.play() }
         verify(exactly = 0) { player.pause() }
+    }
+
+    @Test
+    fun `mini player entry resumes active playback intent`() {
+        assertTrue(
+            shouldResumePlaybackOnMiniPlayerEntry(
+                isPlaying = true,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertTrue(
+            shouldResumePlaybackOnMiniPlayerEntry(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
+    fun `pip media control immediately syncs observable playing state`() {
+        assertTrue(resolvePlayingStateAfterMediaControl(MediaControlType.PLAY, playerIsPlaying = false))
+        assertFalse(resolvePlayingStateAfterMediaControl(MediaControlType.PAUSE, playerIsPlaying = true))
+        assertFalse(resolvePlayingStateAfterMediaControl(MediaControlType.PLAY_PAUSE, playerIsPlaying = true))
+        assertTrue(resolvePlayingStateAfterMediaControl(MediaControlType.PLAY_PAUSE, playerIsPlaying = false))
     }
 }

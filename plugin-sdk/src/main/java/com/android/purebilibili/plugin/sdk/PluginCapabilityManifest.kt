@@ -13,7 +13,9 @@ enum class PluginCapability {
     LOCAL_HISTORY_READ,
     LOCAL_FEEDBACK_READ,
     NETWORK,
-    PLUGIN_STORAGE
+    PLUGIN_STORAGE,
+    EXTERNAL_MEDIA_PLAYBACK,
+    FEED_SOURCE
 }
 
 @Serializable

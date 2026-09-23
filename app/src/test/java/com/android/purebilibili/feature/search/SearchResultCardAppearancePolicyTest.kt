@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.search
 
-import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -33,7 +32,7 @@ class SearchResultCardAppearancePolicyTest {
     @Test
     fun videoSearchAppearance_usesFlatCoverStatsForDenseGrid() {
         val appearance = resolveSearchVideoCardAppearance(
-            liquidGlassEnabled = false,
+            effectiveLiquidGlassEnabled = false,
             blurEnabled = true,
             showHomeCoverGlassBadges = true,
             showHomeInfoGlassBadges = true
@@ -48,12 +47,14 @@ class SearchResultCardAppearancePolicyTest {
     @Test
     fun genericSearchResultCard_switchesBetweenGlassAndPlainStyles() {
         val glass = resolveSearchResultCardAppearance(
-            liquidGlassEnabled = true,
-            uiPreset = UiPreset.IOS
+            effectiveLiquidGlassEnabled = true,
+            supportsIndependentLiquidGlass = true,
+            tonalElevationDp = 0,
         )
         val plain = resolveSearchResultCardAppearance(
-            liquidGlassEnabled = false,
-            uiPreset = UiPreset.IOS
+            effectiveLiquidGlassEnabled = false,
+            supportsIndependentLiquidGlass = true,
+            tonalElevationDp = 0,
         )
 
         assertEquals(SearchResultCardSurfaceStyle.GLASS, glass.surfaceStyle)
@@ -68,30 +69,65 @@ class SearchResultCardAppearancePolicyTest {
     }
 
     @Test
-    fun md3SearchResultCard_usesMoreMaterialSurfaceTuningEvenWhenGlassIsEnabled() {
+    fun md3SearchResultCard_staysPlainUnlessAndroidNativeLiquidGlassIsEnabled() {
+        val md3RequestedGlass = resolveSearchResultCardAppearance(
+            effectiveLiquidGlassEnabled = false,
+            supportsIndependentLiquidGlass = false,
+            tonalElevationDp = 3,
+        )
+
+        assertEquals(SearchResultCardSurfaceStyle.PLAIN, md3RequestedGlass.surfaceStyle)
+        assertEquals(1f, md3RequestedGlass.containerAlpha)
+        assertEquals(0f, md3RequestedGlass.borderAlpha)
+        assertEquals(3, md3RequestedGlass.tonalElevationDp)
+    }
+
+    @Test
+    fun md3SearchResultCard_usesMoreMaterialSurfaceTuningWhenNativeLiquidGlassIsEnabled() {
         val md3Glass = resolveSearchResultCardAppearance(
-            liquidGlassEnabled = true,
-            uiPreset = UiPreset.MD3
+            effectiveLiquidGlassEnabled = true,
+            supportsIndependentLiquidGlass = false,
+            tonalElevationDp = 3,
         )
 
         assertEquals(SearchResultCardSurfaceStyle.GLASS, md3Glass.surfaceStyle)
         assertEquals(0.96f, md3Glass.containerAlpha)
         assertEquals(0f, md3Glass.borderAlpha)
-        assertEquals(1, md3Glass.tonalElevationDp)
+        assertEquals(3, md3Glass.tonalElevationDp)
         assertEquals(0, md3Glass.shadowElevationDp)
+    }
+
+    @Test
+    fun md3VideoSearchAppearance_respectsEffectiveLiquidGlassGate() {
+        val gatedOff = resolveSearchVideoCardAppearance(
+            effectiveLiquidGlassEnabled = false,
+            blurEnabled = true,
+            showHomeCoverGlassBadges = true,
+            showHomeInfoGlassBadges = true,
+        )
+        val gatedOn = resolveSearchVideoCardAppearance(
+            effectiveLiquidGlassEnabled = true,
+            blurEnabled = true,
+            showHomeCoverGlassBadges = true,
+            showHomeInfoGlassBadges = true,
+        )
+
+        assertFalse(gatedOff.glassEnabled)
+        assertTrue(gatedOn.glassEnabled)
     }
 
     @Test
     fun md3PlainSearchResultCard_staysFlatAndMaterialWhenGlassIsDisabled() {
         val md3Plain = resolveSearchResultCardAppearance(
-            liquidGlassEnabled = false,
-            uiPreset = UiPreset.MD3
+            effectiveLiquidGlassEnabled = false,
+            supportsIndependentLiquidGlass = false,
+            tonalElevationDp = 3,
         )
 
         assertEquals(SearchResultCardSurfaceStyle.PLAIN, md3Plain.surfaceStyle)
         assertEquals(1f, md3Plain.containerAlpha)
         assertEquals(0f, md3Plain.borderAlpha)
-        assertEquals(1, md3Plain.tonalElevationDp)
+        assertEquals(3, md3Plain.tonalElevationDp)
         assertEquals(0, md3Plain.shadowElevationDp)
     }
 }

@@ -5,17 +5,25 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.UgcSeason
 
 internal const val VIDEO_NAV_TARGET_CID_KEY = "video_nav_target_cid"
+internal const val VIDEO_NAV_COVER_URL_KEY = "video_nav_cover_url"
 
 internal fun buildVideoNavigationOptions(
     base: Bundle? = null,
-    targetCid: Long
+    targetCid: Long = 0L,
+    coverUrl: String? = null
 ): Bundle? {
-    if (targetCid <= 0L) return base
+    val normalizedCover = coverUrl?.trim().orEmpty()
+    if (targetCid <= 0L && normalizedCover.isEmpty()) return base
     return Bundle().apply {
         if (base != null) {
             putAll(base)
         }
-        putLong(VIDEO_NAV_TARGET_CID_KEY, targetCid)
+        if (targetCid > 0L) {
+            putLong(VIDEO_NAV_TARGET_CID_KEY, targetCid)
+        }
+        if (normalizedCover.isNotEmpty()) {
+            putString(VIDEO_NAV_COVER_URL_KEY, normalizedCover)
+        }
     }
 }
 

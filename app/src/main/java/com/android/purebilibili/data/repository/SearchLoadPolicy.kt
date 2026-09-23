@@ -3,11 +3,30 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.data.model.response.VideoItem
 
-internal fun shouldFallbackEmptyFirstPageVideoSearch(
-    page: Int,
-    primaryResultCount: Int
-): Boolean {
-    return page == 1 && primaryResultCount == 0
+internal fun resolveVideoSearchPageInfo(
+    requestedPage: Int,
+    responsePage: Int,
+    totalPages: Int,
+    totalResults: Int,
+    pageSize: Int,
+    resultCount: Int
+): SearchRepository.SearchPageInfo {
+    val currentPage = resolveSearchLoadedPage(requestedPage, responsePage)
+    val size = pageSize.takeIf { it > 0 } ?: 20
+    val resolvedTotalPages = when {
+        totalPages > 0 -> totalPages
+        totalResults > 0 -> ((totalResults.toLong() + size - 1) / size).toInt()
+        resultCount >= size -> currentPage + 1
+        else -> currentPage
+    }
+    return SearchRepository.SearchPageInfo(
+        currentPage = currentPage,
+        totalPages = resolvedTotalPages,
+        totalResults = totalResults.takeIf { it > 0 } ?: resultCount,
+        // Match PiliPlus CommonListController: totals are informational; only an
+        // empty server page ends pagination, even after a short nonempty page.
+        hasMore = resultCount > 0
+    )
 }
 
 internal fun resolveSearchLoadedPage(

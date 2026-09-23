@@ -68,4 +68,34 @@ class LocalDashManifestBuilderTest {
         assertTrue(manifest.contains("<Initialization range=\"0-999\"/>"))
         assertTrue(manifest.contains("indexRange=\"1000-1999\""))
     }
+
+    @Test
+    fun `build manifest uses valid backup url for dash segment base requests`() {
+        val manifest = buildLocalDashManifest(
+            durationMs = 60_000L,
+            minBufferTimeMs = 1_500L,
+            videoTracks = listOf(
+                DashVideo(
+                    id = 80,
+                    baseUrl = "",
+                    backupUrl = listOf("https://backup.example.com/video-1080.m4s"),
+                    bandwidth = 8_000_000,
+                    mimeType = "video/mp4",
+                    codecs = "hev1",
+                    width = 1920,
+                    height = 1080,
+                    frameRate = "60",
+                    segmentBase = SegmentBase(
+                        initialization = "0-999",
+                        indexRange = "1000-1999"
+                    )
+                )
+            ),
+            audioTracks = emptyList()
+        )
+
+        assertTrue(manifest.contains("<BaseURL>https://backup.example.com/video-1080.m4s</BaseURL>"))
+        assertTrue(manifest.contains("<SegmentBase indexRange=\"1000-1999\">"))
+        assertTrue(manifest.contains("<Initialization range=\"0-999\"/>"))
+    }
 }

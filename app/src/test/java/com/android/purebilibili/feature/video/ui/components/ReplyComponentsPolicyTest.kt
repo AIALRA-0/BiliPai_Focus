@@ -14,6 +14,7 @@ import com.android.purebilibili.data.model.response.ReplyRichTextOpus
 import com.android.purebilibili.data.model.response.ReplyVote
 import com.android.purebilibili.data.model.response.ReplySailingCardBg
 import com.android.purebilibili.data.model.response.ReplySailingFan
+import com.android.purebilibili.data.model.response.ReplySailingPendant
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.model.response.ReplyUpAction
 import com.android.purebilibili.data.model.response.ReplyUserSailing
@@ -28,6 +29,27 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ReplyComponentsPolicyTest {
+    @Test
+    fun `author history action is present only when the host can navigate to a valid author`() {
+        val withoutEntry = buildReplyActionSheetActions(
+            canDelete = false, canReport = false, canShare = false, canBlockUser = false,
+        )
+        val withEntry = buildReplyActionSheetActions(
+            canDelete = false, canReport = false, canShare = false, canBlockUser = false,
+            canQueryAuthorHistory = true,
+        )
+        assertFalse(withoutEntry.contains(ReplyActionSheetAction.QUERY_AUTHOR_HISTORY))
+        assertTrue(withEntry.contains(ReplyActionSheetAction.QUERY_AUTHOR_HISTORY))
+        assertEquals(withoutEntry, withEntry.filterNot { it == ReplyActionSheetAction.QUERY_AUTHOR_HISTORY })
+    }
+
+
+    @Test
+    fun `sub reply preview opens its own floor while root opens thread top`() {
+        assertEquals(22L, resolveSubReplyOpenTargetId(rootReplyId = 11L, clickedReplyId = 22L))
+        assertEquals(0L, resolveSubReplyOpenTargetId(rootReplyId = 11L, clickedReplyId = 11L))
+        assertEquals(0L, resolveSubReplyOpenTargetId(rootReplyId = 11L, clickedReplyId = 0L))
+    }
 
     @Test
     fun `resolveReplyLevelBadgeAsset keeps pili plus mapping for normal levels`() {
@@ -321,6 +343,7 @@ class ReplyComponentsPolicyTest {
             listOf(
                 ReplyActionSheetAction.COPY_ALL,
                 ReplyActionSheetAction.FREE_COPY,
+                ReplyActionSheetAction.COPY_USERNAME,
                 ReplyActionSheetAction.SAVE,
                 ReplyActionSheetAction.SHARE,
                 ReplyActionSheetAction.REPLY,
@@ -336,6 +359,19 @@ class ReplyComponentsPolicyTest {
                 canBlockUser = true,
                 topActionLabel = "置顶"
             )
+        )
+    }
+
+    @Test
+    fun `reply action sheet can omit username copy when disabled`() {
+        assertFalse(
+            buildReplyActionSheetActions(
+                canDelete = false,
+                canReport = false,
+                canShare = false,
+                canBlockUser = false,
+                canCopyUsername = false,
+            ).contains(ReplyActionSheetAction.COPY_USERNAME)
         )
     }
 
@@ -585,20 +621,20 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `shouldEnableRichCommentSelection disables expensive mixed mode`() {
-        assertFalse(
+    fun `shouldEnableRichCommentSelection enables in-place selection mode`() {
+        assertTrue(
             shouldEnableRichCommentSelection(
                 hasRenderableEmotes = true,
                 hasInteractiveAnnotations = true
             )
         )
-        assertFalse(
+        assertTrue(
             shouldEnableRichCommentSelection(
                 hasRenderableEmotes = true,
                 hasInteractiveAnnotations = false
             )
         )
-        assertFalse(
+        assertTrue(
             shouldEnableRichCommentSelection(
                 hasRenderableEmotes = false,
                 hasInteractiveAnnotations = true
@@ -613,9 +649,17 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `lightweight reply mode preserves independent identity toggle and sub previews while hiding ancillary labels`() {
-        assertFalse(shouldShowReplyAncillaryDecorations(lightweightMode = true))
-        assertTrue(shouldShowReplyAncillaryDecorations(lightweightMode = false))
+    fun `lightweight reply mode keeps special labels visible while preserving identity and sub preview toggles`() {
+        assertTrue(shouldShowReplySpecialLabel(lightweightMode = true))
+        assertTrue(shouldShowReplySpecialLabel(lightweightMode = false))
+        assertEquals(
+            "UP主觉得很赞",
+            resolveReplySpecialLabelText(
+                cardLabels = emptyList(),
+                showUpFlag = true,
+                upAction = ReplyUpAction(like = true, reply = false)
+            ).takeIf { shouldShowReplySpecialLabel(lightweightMode = true) }
+        )
         assertFalse(shouldShowReplyIdentityDecorations(enabled = false))
         assertTrue(shouldShowReplyIdentityDecorations(enabled = true))
         assertTrue(
@@ -646,7 +690,7 @@ class ReplyComponentsPolicyTest {
         assertEquals(36, policy.avatarSizeDp)
         assertEquals(8, policy.avatarContentSpacingDp)
         assertEquals(40, policy.actionButtonSizeDp)
-        assertEquals(78, policy.decorationWidthReserveDp)
+        assertEquals(64, policy.decorationWidthReserveDp)
         assertEquals(56, policy.dividerStartPaddingDp)
         assertEquals(
             292,
@@ -654,11 +698,11 @@ class ReplyComponentsPolicyTest {
         )
         assertEquals(
             40,
-            resolveReplyItemHeaderEndPaddingDp(hasPiliPlusDecoration = false, policy = policy)
+            resolveReplyItemHeaderEndPaddingDp(hasBiliPaiDecoration = false, policy = policy)
         )
         assertEquals(
-            118,
-            resolveReplyItemHeaderEndPaddingDp(hasPiliPlusDecoration = true, policy = policy)
+            104,
+            resolveReplyItemHeaderEndPaddingDp(hasBiliPaiDecoration = true, policy = policy)
         )
         assertEquals(
             12,
@@ -717,6 +761,13 @@ class ReplyComponentsPolicyTest {
         assertEquals("CO.008502", resolveFanGroupLabelText("008502"))
         assertEquals("CO.008502", resolveFanGroupLabelText("8502"))
         assertEquals("", resolveFanGroupLabelText("abc"))
+    }
+
+    @Test
+    fun `fan group number keeps the API visible number for official no label`() {
+        assertEquals("008502", resolveFanGroupNumberText("8502"))
+        assertEquals("008502", resolveFanGroupNumberText("008502"))
+        assertEquals("", resolveFanGroupNumberText("abc"))
     }
 
     @Test
@@ -855,6 +906,57 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `reply pendant prefers v2 enhanced frame before older pendant fields`() {
+        val image = resolveReplyMemberPendantImage(
+            ReplyMember(
+                pendant = ReplySailingPendant(image = "https://example.com/member.png"),
+                userSailing = ReplyUserSailing(
+                    pendant = ReplySailingPendant(imageEnhance = "https://example.com/legacy.webp")
+                ),
+                userSailingV2 = ReplyUserSailing(
+                    pendant = ReplySailingPendant(imageEnhanceFrame = "https://example.com/v2-frame.png")
+                )
+            )
+        )
+
+        assertEquals("https://example.com/v2-frame.png", image)
+    }
+
+    @Test
+    fun `reply avatar face shrinks under pendant so frame ring sits outside face`() {
+        assertEquals(1f, resolveReplyAvatarFaceFraction(hasPendant = false))
+        assertEquals(
+            REPLY_AVATAR_FACE_FRACTION_WITH_PENDANT,
+            resolveReplyAvatarFaceFraction(hasPendant = true)
+        )
+        assertTrue(REPLY_AVATAR_FACE_FRACTION_WITH_PENDANT < 1f)
+        assertTrue(REPLY_AVATAR_FACE_FRACTION_WITH_PENDANT >= 0.65f)
+    }
+
+    @Test
+    fun `reply member avatar draws face under pendant frame`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/components/ReplyComponents.kt"
+        ).readText()
+            .replace("\r\n", "\n")
+        val avatarSource = source
+            .substringAfter("@Composable\ninternal fun ReplyMemberAvatar(")
+            .substringBefore("@Composable\ninternal fun FanGroupDecorationBadge(")
+        assertTrue(avatarSource.contains("fillMaxSize(faceFraction)"))
+        assertTrue(avatarSource.contains("resolveReplyAvatarFaceFraction(hasPendant)"))
+        // Pendant is composed after face so it paints on top.
+        assertTrue(
+            avatarSource.indexOf("fillMaxSize(faceFraction)") <
+                avatarSource.indexOf("contentDescription = \"Avatar pendant\"")
+        )
+        assertTrue(avatarSource.contains("UserAvatarCornerMarkBadge("))
+        assertTrue(
+            avatarSource.indexOf("contentDescription = \"Avatar pendant\"") <
+                avatarSource.indexOf("UserAvatarCornerMarkBadge(")
+        )
+    }
+
+    @Test
     fun `normalizeHttpImageUrl upgrades protocol relative and bare host urls`() {
         assertEquals(
             "https://i0.hdslb.com/bfs/garb/item.png",
@@ -887,14 +989,19 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `fan group decoration image uses large cropped presentation for transparent garb assets`() {
+    fun `fan group decoration image fits complete official transparent asset`() {
         val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/ReplyComponents.kt")
             .readText()
+            .replace("\r\n", "\n")
         val decorationSource = source
             .substringAfter("@Composable\ninternal fun FanGroupDecorationBadge(")
-            .substringBefore("@Composable\nprivate fun PiliPlusGarbCardDecoration(")
+            .substringBefore("@Composable\nprivate fun BiliPaiGarbCardDecoration(")
 
-        assertTrue(decorationSource.contains("contentScale = ContentScale.Crop"))
+        assertTrue(decorationSource.contains("contentScale = ContentScale.Fit"))
+        assertFalse(decorationSource.contains("contentScale = ContentScale.Crop"))
+        assertTrue(decorationSource.contains(".size(Size.ORIGINAL)"))
+        assertTrue(decorationSource.contains(".transformations(TransparentBoundsCropTransformation)"))
+        assertTrue(decorationSource.contains("text = \"NO.\""))
         assertTrue(decorationSource.contains("layoutPolicy.decorationImageWidthDp.dp"))
         assertTrue(decorationSource.contains("layoutPolicy.decorationImageHeightDp.dp"))
     }
@@ -1006,8 +1113,8 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `sub reply preview expands by default when replies are already returned`() {
-        assertTrue(resolveInitialSubReplyPreviewExpanded(previewReplyCount = 2))
+    fun `sub reply preview starts collapsed so the configured preview limit applies`() {
+        assertFalse(resolveInitialSubReplyPreviewExpanded(previewReplyCount = 2))
         assertFalse(resolveInitialSubReplyPreviewExpanded(previewReplyCount = 0))
     }
 

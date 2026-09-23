@@ -26,7 +26,9 @@ private val SENSITIVE_PLUGIN_CAPABILITIES = setOf(
     PluginCapability.LOCAL_HISTORY_READ,
     PluginCapability.LOCAL_FEEDBACK_READ,
     PluginCapability.NETWORK,
-    PluginCapability.PLUGIN_STORAGE
+    PluginCapability.PLUGIN_STORAGE,
+    PluginCapability.EXTERNAL_MEDIA_PLAYBACK,
+    PluginCapability.FEED_SOURCE
 )
 
 fun evaluateExternalPluginInstall(

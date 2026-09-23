@@ -8,9 +8,11 @@ internal fun shouldStopPlaybackEagerlyOnVideoRouteExit(
     toRoute: String?
 ): Boolean {
     if (toRoute.isNullOrBlank()) return false
+    val toRouteBase = toRoute.substringBefore("?")
     return isVideoDetailRoute(fromRoute) &&
-        !isVideoDetailRoute(toRoute) &&
-        toRoute != ScreenRoutes.AudioMode.route
+        !isVideoDetailRoute(toRouteBase) &&
+        toRouteBase != ScreenRoutes.AudioMode.route &&
+        !toRouteBase.startsWith("space/")
 }
 
 internal fun shouldDeferBottomBarRevealOnVideoReturn(
@@ -39,15 +41,6 @@ internal fun resolveVideoReturnBottomBarRevealDelayMs(
     return if (isQuickReturnFromDetail) 120L else 160L
 }
 
-internal fun shouldPrimeBottomBarHiddenBeforeVideoNavigation(
-    sourceRoute: String?,
-    visibleBottomBarRoutes: Set<String>,
-    useSideNavigation: Boolean
-): Boolean {
-    val sourceRouteBase = sourceRoute?.substringBefore("?") ?: return false
-    return !useSideNavigation && sourceRouteBase in visibleBottomBarRoutes
-}
-
 internal fun shouldClearReturningStateWhenDisposingVideoDestination(
     stillInVideoRoute: Boolean
 ): Boolean {
@@ -56,10 +49,13 @@ internal fun shouldClearReturningStateWhenDisposingVideoDestination(
 
 internal fun isVideoCardReturnTargetRoute(route: String?): Boolean {
     val routeBase = route?.substringBefore("?") ?: return false
-    return routeBase == "main_host" ||
+    return isVideoDetailRoute(routeBase) ||
+        routeBase == "main_host" ||
         routeBase == ScreenRoutes.Home.route ||
+        routeBase == ScreenRoutes.ListenVideo.route ||
         routeBase == ScreenRoutes.History.route ||
         routeBase == ScreenRoutes.Favorite.route ||
+        routeBase == ScreenRoutes.LikedVideos.route ||
         routeBase == ScreenRoutes.WatchLater.route ||
         routeBase == ScreenRoutes.Search.route ||
         routeBase == ScreenRoutes.Dynamic.route ||
@@ -70,14 +66,30 @@ internal fun isVideoCardReturnTargetRoute(route: String?): Boolean {
         routeBase.startsWith("space/")
 }
 
+internal fun shouldMarkNavigationLeaveBeforeVideoExit(
+    isMiniMode: Boolean
+): Boolean = !isMiniMode
+
 internal fun isVideoDetailRoute(route: String?): Boolean {
     return route?.startsWith("${VideoRoute.base}/") == true
 }
 
+internal fun resolveAudioNowPlayingBarExpandRoute(
+    opensAudioMode: Boolean,
+    bvid: String,
+    cid: Long,
+    coverUrl: String,
+): String = if (opensAudioMode) {
+    ScreenRoutes.AudioMode.createRoute(bvid = bvid, cid = cid)
+} else {
+    VideoRoute.createRoute(bvid = bvid, cid = cid, coverUrl = coverUrl)
+}
+
 internal fun shouldEnableVideoDetailSharedTransition(
-    cardTransitionEnabled: Boolean
+    cardTransitionEnabled: Boolean,
+    sourceRoute: String?,
 ): Boolean {
-    return cardTransitionEnabled
+    return cardTransitionEnabled && !isVideoDetailRoute(sourceRoute?.substringBefore("?"))
 }
 
 internal fun shouldShareAudioModeViewModelWithPreviousEntry(

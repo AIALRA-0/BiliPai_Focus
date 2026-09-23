@@ -15,7 +15,10 @@ data class SettingsShareUiState(
     val isBusy: Boolean = false,
     val statusMessage: String? = null,
     val pendingImportSession: SettingsShareImportSession? = null,
-    val pendingShareUri: Uri? = null
+    val pendingShareUri: Uri? = null,
+    /** 导出时附带设备/显示调试信息，默认开启供 UI 问题排查。 */
+    val includeDeviceDebug: Boolean = true,
+    val savedProfiles: List<SavedSettingsProfile> = emptyList(),
 )
 
 class SettingsShareViewModel(
@@ -36,16 +39,69 @@ class SettingsShareViewModel(
         _uiState.value = _uiState.value.copy(statusMessage = null)
     }
 
+    fun setIncludeDeviceDebug(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(includeDeviceDebug = enabled)
+    }
+
+    fun loadSavedProfiles() {
+        viewModelScope.launch {
+            service.listSavedProfiles().onSuccess { profiles ->
+                _uiState.value = _uiState.value.copy(savedProfiles = profiles)
+            }
+        }
+    }
+
+    fun saveCurrentProfile(name: String) {
+        runAction("正在保存配置...", "保存配置失败，请稍后重试") {
+            service.saveCurrentProfile(name).fold(
+                onSuccess = { profile ->
+                    _uiState.value = _uiState.value.copy(
+                        savedProfiles = listOf(profile) + _uiState.value.savedProfiles
+                            .filterNot { it.fileName == profile.fileName },
+                        statusMessage = "已保存配置：${profile.name}",
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = error.message ?: "保存配置失败，请稍后重试",
+                    )
+                },
+            )
+        }
+    }
+
+    fun restoreSavedProfile(profile: SavedSettingsProfile) {
+        runAction("正在恢复配置...", "恢复配置失败，请稍后重试") {
+            service.restoreSavedProfile(profile).fold(
+                onSuccess = { result ->
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = "已恢复 ${profile.name}（${result.appliedKeys.size} 项）",
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = error.message ?: "恢复配置失败，请稍后重试",
+                    )
+                },
+            )
+        }
+    }
+
     fun exportToUri(uri: Uri) {
+        val includeDeviceDebug = _uiState.value.includeDeviceDebug
         runAction(
             loadingMessage = "正在导出设置...",
             fallbackError = "导出失败，请稍后重试"
         ) {
-            service.exportToUri(uri)
+            service.exportToUri(uri = uri, includeDeviceDebug = includeDeviceDebug)
                 .fold(
                     onSuccess = {
                         _uiState.value = _uiState.value.copy(
-                            statusMessage = "已导出设置文件",
+                            statusMessage = if (includeDeviceDebug) {
+                                "已导出设置文件（含设备调试信息）"
+                            } else {
+                                "已导出设置文件"
+                            },
                             pendingShareUri = null
                         )
                     },
@@ -59,16 +115,21 @@ class SettingsShareViewModel(
     }
 
     fun prepareShare() {
+        val includeDeviceDebug = _uiState.value.includeDeviceDebug
         runAction(
             loadingMessage = "正在生成分享文件...",
             fallbackError = "分享文件生成失败，请稍后重试"
         ) {
-            service.createShareUri()
+            service.createShareUri(includeDeviceDebug = includeDeviceDebug)
                 .fold(
                     onSuccess = { uri ->
                         _uiState.value = _uiState.value.copy(
                             pendingShareUri = uri,
-                            statusMessage = "已生成分享文件"
+                            statusMessage = if (includeDeviceDebug) {
+                                "已生成分享文件（含设备调试信息）"
+                            } else {
+                                "已生成分享文件"
+                            }
                         )
                     },
                     onFailure = { error ->

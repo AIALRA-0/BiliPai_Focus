@@ -10,3 +10,8 @@ internal fun resolveAnimationSettingsCardMotionTier(
     baseTier = baseTier,
     animationEnabled = cardAnimationEnabled
 )
+
+internal fun shouldStartSettingsEntrance(
+    entranceEnabled: Boolean,
+    navigationTransitionRunning: Boolean,
+): Boolean = entranceEnabled && !navigationTransitionRunning

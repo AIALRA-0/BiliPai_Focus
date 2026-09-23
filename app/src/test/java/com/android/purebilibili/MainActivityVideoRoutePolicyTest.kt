@@ -32,4 +32,38 @@ class MainActivityVideoRoutePolicyTest {
             )
         )
     }
+
+    @Test
+    fun miniPlayerExpandRoute_requestsFullscreenPlayback() {
+        assertEquals(
+            "video/BVmini?cid=88&cover=&startAudio=false&autoPortrait=true&fullscreen=true&resumePositionMs=0&commentRootRpid=0&commentTargetRpid=0",
+            resolveMiniPlayerExpandVideoRoute(bvid = "BVmini", cid = 88L)
+        )
+    }
+
+    @Test
+    fun activePlaybackReturnRoute_keepsExactCidAndLivePosition() {
+        assertEquals(
+            "video/BVactive?cid=2468&cover=&startAudio=false&autoPortrait=true&fullscreen=false&resumePositionMs=38123&commentRootRpid=0&commentTargetRpid=0",
+            resolveActivePlaybackReturnRoute(
+                isActive = true,
+                bvid = "BVactive",
+                cid = 2468L,
+                currentPositionMs = 38123L,
+            )
+        )
+    }
+
+    @Test
+    fun activePlaybackReturnRoute_rejectsIncompleteSession() {
+        assertEquals(
+            null,
+            resolveActivePlaybackReturnRoute(
+                isActive = true,
+                bvid = "BVactive",
+                cid = 0L,
+                currentPositionMs = 38123L,
+            )
+        )
+    }
 }

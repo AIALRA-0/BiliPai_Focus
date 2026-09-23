@@ -17,10 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,11 +30,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.feature.video.ui.gesture.TwoFingerSpeedGestureMode
 import dev.chrisbanes.haze.HazeState
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowLeftArrowRight
-import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowUpArrowDown
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.SwapVert
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 @Composable
 fun BoxScope.TwoFingerSpeedFeedbackOverlay(
@@ -47,16 +49,16 @@ fun BoxScope.TwoFingerSpeedFeedbackOverlay(
 ) {
     if (mode == TwoFingerSpeedGestureMode.Off) return
 
-    val shape = RoundedCornerShape(26.dp)
+    val shape = AppShapes.container(ContainerLevel.Floating)
     val cueText = when (mode) {
         TwoFingerSpeedGestureMode.Vertical -> "双指上下调速"
         TwoFingerSpeedGestureMode.Horizontal -> "双指左右调速"
         TwoFingerSpeedGestureMode.Off -> ""
     }
     val cueIcon = when (mode) {
-        TwoFingerSpeedGestureMode.Vertical -> CupertinoIcons.Outlined.ArrowUpArrowDown
-        TwoFingerSpeedGestureMode.Horizontal -> CupertinoIcons.Outlined.ArrowLeftArrowRight
-        TwoFingerSpeedGestureMode.Off -> CupertinoIcons.Outlined.ArrowUpArrowDown
+        TwoFingerSpeedGestureMode.Vertical -> Icons.Outlined.SwapVert
+        TwoFingerSpeedGestureMode.Horizontal -> Icons.Outlined.SwapHoriz
+        TwoFingerSpeedGestureMode.Off -> Icons.Outlined.SwapVert
     }
     val gradientColors = listOf(
         MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
@@ -72,7 +74,7 @@ fun BoxScope.TwoFingerSpeedFeedbackOverlay(
             .align(Alignment.TopCenter)
             .padding(top = 18.dp)
     ) {
-        Surface(
+        AppSurface(
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.06f),
             contentColor = Color.White,
             tonalElevation = 0.dp,
@@ -101,24 +103,24 @@ fun BoxScope.TwoFingerSpeedFeedbackOverlay(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
+                        AppIcon(
                             imageVector = cueIcon,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.86f),
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.size(6.dp))
-                        Text(
+                        AppText(
                             text = cueText,
                             color = Color.White.copy(alpha = 0.76f),
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    Text(
+                    AppText(
                         text = PlaybackSpeed.formatSpeedFull(speed),
                         color = Color.White.copy(alpha = 0.98f),
-                        fontSize = 22.sp,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                 }

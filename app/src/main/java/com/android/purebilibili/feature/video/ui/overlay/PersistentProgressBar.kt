@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 
 internal fun resolvePersistentProgressFraction(current: Long, duration: Long): Float {
     return resolveProgressFraction(
@@ -33,7 +34,7 @@ internal fun PersistentBottomProgressBar(
             .height(2.dp)
             .background(
                 color = Color.White.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(0.dp)
+                shape = RectangleShape
             )
     ) {
         Box(

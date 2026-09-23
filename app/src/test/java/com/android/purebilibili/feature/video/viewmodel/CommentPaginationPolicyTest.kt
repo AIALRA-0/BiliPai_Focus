@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.viewmodel
 import com.android.purebilibili.data.model.response.ReplyCursor
 import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyItem
+import com.android.purebilibili.data.repository.CommentRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -122,13 +123,108 @@ class CommentPaginationPolicyTest {
     }
 
     @Test
+    fun `sub reply page should continue when rest page metadata has more pages`() {
+        assertFalse(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = true,
+                fetchedReplyCount = 20,
+                loadedReplyCount = 20,
+                remoteReplyCount = 20,
+                requestedPage = 1,
+                restPage = com.android.purebilibili.data.model.response.ReplyPage(
+                    num = 1,
+                    size = 20,
+                    count = 200
+                )
+            )
+        )
+        assertTrue(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = false,
+                fetchedReplyCount = 20,
+                loadedReplyCount = 200,
+                remoteReplyCount = 200,
+                requestedPage = 10,
+                restPage = com.android.purebilibili.data.model.response.ReplyPage(
+                    num = 10,
+                    size = 20,
+                    count = 200
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply page should end when loaded count reaches declared total`() {
+        assertTrue(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = false,
+                fetchedReplyCount = 10,
+                loadedReplyCount = 200,
+                remoteReplyCount = 200,
+                requestedPage = 10
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply loaded total count should not shrink across sparse pages`() {
+        assertEquals(
+            200,
+            resolveSubReplyLoadedTotalCount(
+                rootReply = ReplyItem(count = 200, rcount = 200),
+                loadedReplyCount = 80,
+                remoteReplyCount = 0,
+                previousTotalCount = 200
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply remote total count prefers reply detail page count`() {
+        val data = ReplyData(
+            page = com.android.purebilibili.data.model.response.ReplyPage(count = 230),
+            root = ReplyItem(count = 12, rcount = 12)
+        )
+
+        assertEquals(230, resolveSubReplyRemoteTotalCount(data))
+    }
+
+    @Test
+    fun `sub reply remote total count ignores a smaller page window`() {
+        val data = ReplyData(
+            page = com.android.purebilibili.data.model.response.ReplyPage(count = 20),
+            root = ReplyItem(count = 80, rcount = 80)
+        )
+
+        assertEquals(80, resolveSubReplyRemoteTotalCount(data))
+    }
+
+    @Test
+    fun `sub reply remote total count falls back to root reply declared count`() {
+        val data = ReplyData(
+            cursor = ReplyCursor(allCount = 0),
+            root = ReplyItem(count = 0, rcount = 0)
+        )
+
+        assertEquals(
+            180,
+            resolveSubReplyRemoteTotalCount(
+                data = data,
+                rootReply = ReplyItem(count = 180, rcount = 180)
+            )
+        )
+    }
+
+    @Test
     fun `sub reply page should keep pagination open when detail count exceeds loaded items`() {
         assertFalse(
             resolveSubReplyPageEnd(
                 cursorIsEnd = true,
                 fetchedReplyCount = 2,
                 loadedReplyCount = 2,
-                remoteReplyCount = 8
+                remoteReplyCount = 80,
+                requestedPage = 1
             )
         )
         assertTrue(
@@ -136,7 +232,48 @@ class CommentPaginationPolicyTest {
                 cursorIsEnd = true,
                 fetchedReplyCount = 8,
                 loadedReplyCount = 8,
-                remoteReplyCount = 8
+                remoteReplyCount = 8,
+                requestedPage = 1
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply page does not treat a smaller page count as the total`() {
+        assertFalse(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = true,
+                fetchedReplyCount = 20,
+                loadedReplyCount = 20,
+                remoteReplyCount = 80,
+                requestedPage = 1,
+                restPage = com.android.purebilibili.data.model.response.ReplyPage(
+                    num = 1,
+                    size = 20,
+                    count = 20
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply sparse pages continue until declared final page`() {
+        assertFalse(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = false,
+                fetchedReplyCount = 0,
+                loadedReplyCount = 4,
+                remoteReplyCount = 200,
+                requestedPage = 2
+            )
+        )
+        assertTrue(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = false,
+                fetchedReplyCount = 0,
+                loadedReplyCount = 4,
+                remoteReplyCount = 200,
+                requestedPage = 10
             )
         )
     }
@@ -200,6 +337,28 @@ class CommentPaginationPolicyTest {
             shouldStartRoutedSubReplyOpen(
                 rootReplyId = 11L,
                 currentAid = 100L
+            )
+        )
+    }
+
+    @Test
+    fun `grpc paged request continues only with first page or cursor offset`() {
+        assertTrue(
+            CommentRepository.shouldTryGrpcPagedRequest(
+                page = 1,
+                paginationOffset = null
+            )
+        )
+        assertTrue(
+            CommentRepository.shouldTryGrpcPagedRequest(
+                page = 2,
+                paginationOffset = "next-offset"
+            )
+        )
+        assertFalse(
+            CommentRepository.shouldTryGrpcPagedRequest(
+                page = 2,
+                paginationOffset = null
             )
         )
     }

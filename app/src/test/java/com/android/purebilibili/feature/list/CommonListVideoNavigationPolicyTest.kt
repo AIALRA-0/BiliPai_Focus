@@ -22,6 +22,22 @@ class CommonListVideoNavigationPolicyTest {
         assertEquals("BV1xx", request.lookupKey)
         assertEquals("BV1xx", request.bvid)
         assertEquals(123L, request.cid)
+        assertEquals(false, request.isVertical)
+    }
+
+    @Test
+    fun `video navigation preserves vertical metadata`() {
+        val request = resolveCommonListVideoNavigationRequest(
+            video = VideoItem(
+                bvid = "BV1vertical",
+                cid = 123L,
+                pic = "https://example.com/cover.jpg",
+                isVertical = true
+            )
+        )
+
+        assertNotNull(request)
+        assertEquals(true, request.isVertical)
     }
 
     @Test

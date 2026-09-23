@@ -1,40 +1,54 @@
 // 文件路径: feature/settings/PlaybackSettingsScreen.kt
 package com.android.purebilibili.feature.settings
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
+import com.android.purebilibili.core.ui.components.AppSegmentOption
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.Process
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.android.purebilibili.feature.settings.ui.LocalSettingsTopContentPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.android.purebilibili.R
+import com.android.purebilibili.core.store.DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED
 import com.android.purebilibili.core.store.DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
 import com.android.purebilibili.core.store.DEFAULT_QUALITY_SWITCH_FAILURE_DIALOG_ENABLED
 import com.android.purebilibili.core.store.DEFAULT_QUALITY_SWITCH_FAILURE_DIALOG_ONCE_ENABLED
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.LONG_PRESS_SPEED_HINT_ALPHA_MAX
+import com.android.purebilibili.core.store.LONG_PRESS_SPEED_HINT_ALPHA_MIN
+import com.android.purebilibili.core.store.LONG_PRESS_SPEED_HINT_SCALE_MAX
+import com.android.purebilibili.core.store.LONG_PRESS_SPEED_HINT_SCALE_MIN
+import com.android.purebilibili.core.store.LONG_PRESS_SPEED_HINT_STEP
+import com.android.purebilibili.core.store.player.DEFAULT_AUDIO_QUALITY_FOLLOW_LAST
+import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.store.BottomProgressBehavior
 import com.android.purebilibili.core.store.FullscreenAspectRatio
@@ -42,24 +56,28 @@ import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.store.PortraitPlayerCollapseMode
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.LocalSettingsLiquidGlassEnabled
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSSystemGray
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.feature.screenshot.AppScreenshotCaptureMode
 import com.android.purebilibili.feature.screenshot.AppScreenshotGestureMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
+import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.EntranceGroup
 import com.android.purebilibili.core.ui.animation.entrance
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  *  播放设置二级页面
@@ -74,28 +92,19 @@ fun PlaybackSettingsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val screenTitle = stringResource(R.string.playback_settings_title)
     val backLabel = stringResource(R.string.common_back)
-    AdaptiveScaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppSurfaceTokens.cardContainer(),
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        containerColor = AppSurfaceTokens.groupedListContainer(),
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
+    val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    SettingsPageScaffold(
+        title = screenTitle,
+        onBack = onBack,
+        backContentDescription = backLabel,
+        bottomContentPadding = bottomContentPadding,
+        scrollHost = SettingsPageScrollHost.External,
+        externalContentHandlesTopPadding = true,
+        topBarBlurEnabled = state.headerBlurEnabled,
+    ) {
         CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
-            Box(modifier = Modifier.padding(padding)) {
-                PlaybackSettingsContent(viewModel = viewModel, state = state)
-            }
+            PlaybackSettingsContent(viewModel = viewModel, state = state)
         }
     }
 }
@@ -115,7 +124,6 @@ fun PlaybackSettingsContent(
     val warningTint = rememberAdaptiveSemanticIconTint(iOSOrange)
     val windowSizeClass = LocalWindowSizeClass.current
     // val state by viewModel.state.collectAsStateWithLifecycle() // Moved to parameter
-    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
             widthSizeClass = windowSizeClass.widthSizeClass
@@ -123,21 +131,20 @@ fun PlaybackSettingsContent(
     }
     LaunchedEffect(focusRequest?.token) {
         val request = focusRequest ?: return@LaunchedEffect
-        if (request.target != SettingsSearchTarget.PLAYBACK) return@LaunchedEffect
-        val index = resolvePlaybackSettingsScrollIndex(request.focusId) ?: return@LaunchedEffect
+        val playbackFocusId = when (request.target) {
+            SettingsSearchTarget.PLAYBACK -> request.focusId
+            else -> resolveSettingsSceneDetailFocus(request.target)
+                ?.takeIf { it.target == SettingsSearchTarget.PLAYBACK }
+                ?.focusId
+        } ?: return@LaunchedEffect
+        val index = resolvePlaybackSettingsScrollIndex(playbackFocusId) ?: return@LaunchedEffect
         listState.animateScrollToItem(index)
         SettingsSearchFocusController.clear(request.token)
     }
 
 
-    var isStatsEnabled by remember { mutableStateOf(prefs.getBoolean("show_stats", false)) }
     var showPipPermissionDialog by remember { mutableStateOf(false) }
-
-    // 获取动态圆角用于统一风格
-    // 注意：这里需要导入 LocalCornerRadiusScale，如果该文件没有导入，可能需要添加。
-    // 假设 iOSCornerRadius 和 LocalCornerRadiusScale 未在此文件导入，先使用硬编码或尝试导入
-    // 为了稳妥，这里先检查导入。原文件没有导入这些。
-    // 但为了保持原样，我先不做动态圆角修改，或者之后再做。
+    val playbackInsightScope = rememberCoroutineScope()
 
     val miniPlayerMode by com.android.purebilibili.core.store.SettingsManager
         .getMiniPlayerMode(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF
@@ -150,9 +157,20 @@ fun PlaybackSettingsContent(
         .getAudioFocusEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val audioModeAutoPipEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAudioModeAutoPipEnabled(context).collectAsStateWithLifecycle(initialValue = false)
+    val audioNowPlayingBarEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getAudioNowPlayingBarEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val audioNowPlayingBarOpensAudioMode by SettingsManager
+        .getAudioNowPlayingBarOpensAudioMode(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val playerDiagnosticLoggingEnabled by com.android.purebilibili.core.store.SettingsManager
         .getPlayerDiagnosticLoggingEnabled(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED)
+    val playerInsightMode by SettingsManager
+        .getPlayerInsightMode(context)
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.getPlayerInsightModeSync(context))
+    val dashSegmentRequestsEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getDashSegmentRequestsEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED)
     val qualitySwitchFailureDialogEnabled by SettingsManager
         .getQualitySwitchFailureDialogEnabled(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_QUALITY_SWITCH_FAILURE_DIALOG_ENABLED)
@@ -163,10 +181,38 @@ fun PlaybackSettingsContent(
         .getDefaultPlaybackSpeed(context).collectAsStateWithLifecycle(initialValue = 1.0f)
     val rememberLastPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
         .getRememberLastPlaybackSpeed(context).collectAsStateWithLifecycle(initialValue = false)
+    val nativeMiuixPlayerPopups by PlayerSettingsStore
+        .getNativeMiuixPlayerPopups(context).collectAsStateWithLifecycle(initialValue = true)
+    val longPressSpeedHintHidden by SettingsManager
+        .getLongPressSpeedHintHidden(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.getLongPressSpeedHintHiddenSync(context)
+        )
+    val longPressSpeedHintScale by SettingsManager
+        .getLongPressSpeedHintScale(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.getLongPressSpeedHintScaleSync(context)
+        )
+    val longPressSpeedHintAlpha by SettingsManager
+        .getLongPressSpeedHintAlpha(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.getLongPressSpeedHintAlphaSync(context)
+        )
     val videoCodecPreference by com.android.purebilibili.core.store.SettingsManager
         .getVideoCodec(context).collectAsStateWithLifecycle(initialValue = "hev1")
     val videoSecondCodecPreference by com.android.purebilibili.core.store.SettingsManager
         .getVideoSecondCodec(context).collectAsStateWithLifecycle(initialValue = "avc1")
+    val playbackCdnPreferenceValue by SettingsManager
+        .getPlaybackCdnPreference(context)
+        .collectAsStateWithLifecycle(initialValue = PlaybackCdnPreference.BASE_URL.storageValue)
+    val playbackCdnPreference = remember(playbackCdnPreferenceValue) {
+        PlaybackCdnPreference.fromStorageValue(playbackCdnPreferenceValue)
+    }
+    val playbackCdnOptions = remember {
+        PlaybackCdnPreference.entries.map { preference ->
+            AppSegmentOption(preference, preference.displayName)
+        }
+    }
 
     // ... [保留原有逻辑: checkPipPermission, gotoPipSettings] ...
 
@@ -174,20 +220,11 @@ fun PlaybackSettingsContent(
     fun checkPipPermission(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                appOps.unsafeCheckOpNoThrow(
-                    AppOpsManager.OPSTR_PICTURE_IN_PICTURE,
-                    Process.myUid(),
-                    context.packageName
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(
-                    AppOpsManager.OPSTR_PICTURE_IN_PICTURE,
-                    Process.myUid(),
-                    context.packageName
-                )
-            }
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_PICTURE_IN_PICTURE,
+                context.applicationInfo.uid,
+                context.packageName
+            )
             return mode == AppOpsManager.MODE_ALLOWED
         }
         return false
@@ -212,21 +249,21 @@ fun PlaybackSettingsContent(
 
     // 权限弹窗逻辑
     if (showPipPermissionDialog) {
-        com.android.purebilibili.core.ui.IOSAlertDialog(
+        com.android.purebilibili.core.ui.AppAlertDialog(
             onDismissRequest = { showPipPermissionDialog = false },
-            title = { Text("权限申请", color = MaterialTheme.colorScheme.onSurface) },
-            text = { Text("检测到未开启「画中画」权限。请在设置中开启该权限，否则无法使用小窗播放。", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            title = { AppText("权限申请", color = MaterialTheme.colorScheme.onSurface) },
+            text = { AppText("检测到未开启「画中画」权限。请在设置中开启该权限，否则无法使用小窗播放。", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(
+                com.android.purebilibili.core.ui.AppDialogAction(
                     onClick = {
                         gotoPipSettings()
                         showPipPermissionDialog = false
                     }
-                ) { Text("去设置") }
+                ) { AppText("去设置") }
             },
             dismissButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = { showPipPermissionDialog = false }) {
-                    Text("暂不开启", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = { showPipPermissionDialog = false }) {
+                    AppText("暂不开启", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -236,35 +273,51 @@ fun PlaybackSettingsContent(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = WindowInsets.navigationBars.asPaddingValues()
+        contentPadding = PaddingValues(
+            top = LocalSettingsTopContentPadding.current,
+            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        )
     ) {
 
             //  解码设置
             //  解码设置
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("解码")
+                    AppPreferenceSectionTitle("视频解码")
                 }
             }
             item {
                 Box(modifier = Modifier.entrance()) {
                     val scope = rememberCoroutineScope()
                     val codecOptions = listOf(
-                        PlaybackSegmentOption("avc1", "AVC"),
-                        PlaybackSegmentOption("hev1", "HEVC"),
-                        PlaybackSegmentOption("av01", "AV1")
+                        AppSegmentOption("avc1", "AVC"),
+                        AppSegmentOption("hev1", "HEVC"),
+                        AppSegmentOption("av01", "AV1")
                     )
                     fun codecDescription(codec: String): String = when (codec) {
-                        "avc1" -> "兼容性最佳"
-                        "hev1" -> "推荐，画质与体积更平衡"
-                        "av01" -> "高压缩，设备要求更高"
+                        "avc1" -> "兼容设备最多，其他编码无法播放时优先尝试"
+                        "hev1" -> "画质与流量更平衡，多数新设备推荐"
+                        "av01" -> "更节省流量，但需要较新的设备支持"
                         else -> "未知"
                     }
-                    IOSGroup {
-                        IOSSwitchItem(
+                    AppPreferenceGroup {
+		                        AppSwitchPreference(
+	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.NATIVE_MIUIX_DIALOG),
+                            title = "使用原生 Miuix 弹窗",
+                            subtitle = "用于播放器、动态、用户空间等页面；关闭后使用 Material 3 弹窗",
+                            checked = nativeMiuixPlayerPopups,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    PlayerSettingsStore.setNativeMiuixPlayerPopups(context, enabled)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue,
+                        )
+                        AppPreferenceDivider()
+		                        AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.HARDWARE_DECODER),
                             title = "启用硬件解码",
-                            subtitle = "关闭后可尝试规避模拟器或特定设备绿屏，但可能更耗电/更卡顿",
+                            subtitle = "推荐保持开启；只有遇到绿屏或无法播放时再尝试关闭，关闭后更耗电",
                             checked = state.hwDecode,
                             onCheckedChange = {
                                 viewModel.toggleHwDecode(it)
@@ -273,9 +326,9 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSGreen
                         )
-                        IOSDivider()
-                        IOSSlidingSegmentedSetting(
-                            title = "首选编码：${resolveSelectionLabel(codecOptions, videoCodecPreference, fallbackLabel = "AVC")}",
+                        AppPreferenceDivider()
+                        SettingsSingleChoicePreference(
+                            title = "优先使用：${resolveSelectionLabel(codecOptions, videoCodecPreference, fallbackLabel = "AVC")}",
                             subtitle = codecDescription(videoCodecPreference),
                             options = codecOptions,
                             selectedValue = videoCodecPreference,
@@ -286,9 +339,9 @@ fun PlaybackSettingsContent(
                                 }
                             }
                         )
-                        IOSDivider()
-                        IOSSlidingSegmentedSetting(
-                            title = "次选编码：${resolveSelectionLabel(codecOptions, videoSecondCodecPreference, fallbackLabel = "HEVC")}",
+                        AppPreferenceDivider()
+                        SettingsSingleChoicePreference(
+                            title = "无法播放时改用：${resolveSelectionLabel(codecOptions, videoSecondCodecPreference, fallbackLabel = "HEVC")}",
                             subtitle = codecDescription(videoSecondCodecPreference),
                             options = codecOptions,
                             selectedValue = videoSecondCodecPreference,
@@ -305,15 +358,15 @@ fun PlaybackSettingsContent(
 
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("播放速度")
+                    AppPreferenceSectionTitle("播放速度")
                 }
             }
             item {
                 Box(modifier = Modifier.entrance()) {
                     val scope = rememberCoroutineScope()
-                    IOSGroup {
-	                        IOSSwitchItem(
-	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYBACK_SPEED),
+                    AppPreferenceGroup {
+		                        AppSwitchPreference(
+	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.REMEMBER_PLAYBACK_SPEED),
                             title = "记忆上次播放速度",
                             subtitle = if (rememberLastPlaybackSpeed) {
                                 "新视频将优先使用你最后一次手动设置的速度"
@@ -329,7 +382,123 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
-                        IOSDivider()
+                        AppPreferenceDivider()
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.LONG_PRESS_SPEED_HINT),
+                            title = "隐藏长按倍速提示",
+                            subtitle = if (longPressSpeedHintHidden) {
+                                "长按临时加速仍会生效，但不再显示倍速浮层"
+                            } else {
+                                "长按临时加速时显示当前倍速"
+                            },
+                            checked = longPressSpeedHintHidden,
+                            onCheckedChange = { hidden ->
+                                scope.launch {
+                                    SettingsManager.setLongPressSpeedHintHidden(context, hidden)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue,
+                        )
+                        AppPreferenceDivider()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val hintScaleSteps = (
+                                (LONG_PRESS_SPEED_HINT_SCALE_MAX - LONG_PRESS_SPEED_HINT_SCALE_MIN) /
+                                    LONG_PRESS_SPEED_HINT_STEP
+                                ).roundToInt() - 1
+                            var hintScale by remember { mutableFloatStateOf(longPressSpeedHintScale) }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "倍速提示大小",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "长按倍速浮层与提示文字的整体缩放",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Surface(
+                                    shape = AppShapes.container(ContainerLevel.Pill),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = "${(hintScale * 100f).roundToInt()}%",
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                            AppSlider(
+                                value = hintScale,
+                                onValueChange = { hintScale = it },
+                                onValueChangeFinished = {
+                                    scope.launch {
+                                        SettingsManager.setLongPressSpeedHintScale(context, hintScale)
+                                    }
+                                },
+                                valueRange = LONG_PRESS_SPEED_HINT_SCALE_MIN..LONG_PRESS_SPEED_HINT_SCALE_MAX,
+                                steps = hintScaleSteps
+                            )
+
+                            val hintAlphaSteps = (
+                                (LONG_PRESS_SPEED_HINT_ALPHA_MAX - LONG_PRESS_SPEED_HINT_ALPHA_MIN) /
+                                    LONG_PRESS_SPEED_HINT_STEP
+                                ).roundToInt() - 1
+                            var hintAlpha by remember { mutableFloatStateOf(longPressSpeedHintAlpha) }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "倍速提示透明度",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "长按倍速浮层与全局提示的背景不透明度",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Surface(
+                                    shape = AppShapes.container(ContainerLevel.Pill),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = "${(hintAlpha * 100f).roundToInt()}%",
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                            AppSlider(
+                                value = hintAlpha,
+                                onValueChange = { hintAlpha = it },
+                                onValueChangeFinished = {
+                                    scope.launch {
+                                        SettingsManager.setLongPressSpeedHintAlpha(context, hintAlpha)
+                                    }
+                                },
+                                valueRange = LONG_PRESS_SPEED_HINT_ALPHA_MIN..LONG_PRESS_SPEED_HINT_ALPHA_MAX,
+                                steps = hintAlphaSteps
+                            )
+                        }
+                        AppPreferenceDivider()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -345,7 +514,7 @@ fun PlaybackSettingsContent(
                                     }
                                 },
                                 title = "默认播放速度",
-                                subtitle = "拖动滑杆自定义，常用档位可一键选择",
+                                subtitle = "新视频默认使用此速度；开启“记忆上次速度”后以后者为准",
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -356,7 +525,7 @@ fun PlaybackSettingsContent(
             //  小窗播放
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("小窗播放")
+                    AppPreferenceSectionTitle("小窗与后台")
                 }
             }
             item {
@@ -377,17 +546,17 @@ fun PlaybackSettingsContent(
                             miniPlayerMode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF
                     }
                     val miniPlayerOptions = listOf(
-                        PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF, "默认"),
-                        PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY, "小窗"),
-                        PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP, "画中画"),
-                        PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP, "小窗+PiP")
+                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF, "默认"),
+                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY, "小窗"),
+                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP, "画中画"),
+                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP, "小窗+PiP")
                     )
 
-                    IOSGroup {
-	                        IOSSwitchItem(
+                    AppPreferenceGroup {
+	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.STOP_ON_EXIT),
                             title = "离开播放页后停止",
-                            subtitle = "不进入小窗/画中画，也不保留后台播放",
+                            subtitle = "开启后，返回其他页面时立即停止，也不会进入小窗或后台播放",
                             checked = stopPlaybackOnExit,
                             onCheckedChange = {
                                 scope.launch {
@@ -397,8 +566,8 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSOrange
                         )
-                        IOSDivider()
-	                        IOSSwitchItem(
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.BACKGROUND_PLAYBACK),
                             title = "后台播放",
                             subtitle = if (backgroundPlaybackEnabled) {
@@ -415,14 +584,14 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSGreen
                         )
-                        IOSDivider()
-	                        IOSSwitchItem(
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_FOCUS),
-                            title = "占用音频焦点",
+                            title = "播放时暂停其他应用的声音",
                             subtitle = if (audioFocusEnabled) {
-                                "已开启：会优先接管系统媒体音频焦点"
+                                "播放视频时会请求其他音乐或视频应用暂停"
                             } else {
-                                "关闭后可以与其它 APP 同时播放"
+                                "关闭后可能与其他应用同时发声"
                             },
                             checked = audioFocusEnabled,
                             onCheckedChange = {
@@ -433,13 +602,13 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal
                         )
-                        IOSDivider()
-                        IOSSlidingSegmentedSetting(
-                            title = "后台播放模式：${if (modeControlsEnabled) miniPlayerMode.label else "已覆盖"}",
+                        AppPreferenceDivider()
+                        SettingsSingleChoicePreference(
+                            title = "离开播放页后的方式：${if (modeControlsEnabled) miniPlayerMode.label else "暂不生效"}",
                             subtitle = if (stopPlaybackOnExit) {
-                                "已由“离开播放页后停止”覆盖，后台模式暂不生效"
+                                "请先关闭“离开播放页后停止”"
                             } else if (!backgroundPlaybackEnabled) {
-                                "已关闭“后台播放”，后台模式暂不生效"
+                                "请先开启“后台播放”"
                             } else {
                                 miniPlayerMode.description
                             },
@@ -458,12 +627,47 @@ fun PlaybackSettingsContent(
                                 }
                             }
                         )
+                        AppPreferenceDivider()
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYLIST_AUTO_CONTINUE),
+                            title = "视频小横条",
+                            subtitle = if (audioNowPlayingBarEnabled) {
+                                "进入视频详情后返回首页等页面时显示，即使未播放也保留当前视频入口"
+                            } else {
+                                "关闭后返回首页等页面时不显示视频小横条"
+                            },
+                            checked = audioNowPlayingBarEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setAudioNowPlayingBarEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+                        AppPreferenceDivider()
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYLIST_AUTO_CONTINUE),
+                            title = "点击小横条进入听视频",
+                            subtitle = if (audioNowPlayingBarOpensAudioMode) {
+                                "点击视频小横条时跳转到听视频"
+                            } else {
+                                "关闭后点击视频小横条时跳转到视频详情页（默认）"
+                            },
+                            checked = audioNowPlayingBarOpensAudioMode,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setAudioNowPlayingBarOpensAudioMode(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
 
                         //  权限提示（仅当选择支持系统 PiP 的模式且无权限时显示）
                         if (modeControlsEnabled &&
                             miniPlayerMode.supportsSystemPip
                             && !checkPipPermission()) {
-                            IOSDivider()
+                            AppPreferenceDivider()
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -471,35 +675,35 @@ fun PlaybackSettingsContent(
                                     .padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    CupertinoIcons.Default.ExclamationmarkTriangle,
+                                AppIcon(
+                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_warning_24),
                                     contentDescription = null,
                                     tint = warningTint,
                                     modifier = Modifier.size(22.dp)
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
+                                    AppText(
                                         "画中画权限未开启",
-                                        fontSize = 14.sp,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = warningTint
                                     )
-                                    Text(
+                                    AppText(
                                         "点击前往系统设置开启",
-                                        fontSize = 12.sp,
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                     )
                                 }
-                                Icon(
-                                    CupertinoIcons.Default.ChevronForward,
+                                AppIcon(
+                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
-                        IOSDivider()
-	                        IOSSwitchItem(
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PIP_DANMAKU),
                             title = "小窗/画中画不加载弹幕",
                             subtitle = if (!backgroundPlaybackEnabled) {
@@ -512,7 +716,7 @@ fun PlaybackSettingsContent(
                             checked = pipNoDanmakuEnabled,
                             onCheckedChange = {
                                 if (!pipDanmakuToggleEnabled) {
-                                    return@IOSSwitchItem
+                                    return@AppSwitchPreference
                                 }
                                 scope.launch {
                                     com.android.purebilibili.core.store.SettingsManager
@@ -521,8 +725,8 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
-                        IOSDivider()
-	                        IOSSwitchItem(
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_MODE_PIP),
                             title = "听视频离开时自动进入画中画",
                             subtitle = if (audioModeAutoPipToggleEnabled) {
@@ -537,7 +741,7 @@ fun PlaybackSettingsContent(
                             checked = audioModeAutoPipEnabled,
                             onCheckedChange = {
                                 if (!audioModeAutoPipToggleEnabled) {
-                                    return@IOSSwitchItem
+                                    return@AppSwitchPreference
                                 }
                                 scope.launch {
                                     com.android.purebilibili.core.store.SettingsManager
@@ -553,66 +757,23 @@ fun PlaybackSettingsContent(
             //  手势设置
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("手势控制")
+                    AppPreferenceSectionTitle("手势控制")
                 }
             }
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSGroup {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    CupertinoIcons.Default.HandTap,
-                                    contentDescription = null,
-                                    tint = warningTint,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "手势灵敏度",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "调整快进/音量/亮度手势响应速度",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    text = "${(state.gestureSensitivity * 100).toInt()}%",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    "较慢",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                //  iOS 风格滑块
-                                io.github.alexzhirkevich.cupertino.CupertinoSlider(
-                                    value = state.gestureSensitivity,
-                                    onValueChange = { viewModel.setGestureSensitivity(it) },
-                                    valueRange = 0.5f..2.0f,
-                                    steps = 5,
-                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                                )
-                                Text(
-                                    "较快",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    AppPreferenceGroup {
+                        AppSliderDialogPreference(
+                            title = "手势灵敏度",
+                            subtitle = "调整快进、音量和亮度手势的响应速度",
+                            value = state.gestureSensitivity,
+                            onValueChange = viewModel::setGestureSensitivity,
+                            valueRange = 0.5f..2.0f,
+                            steps = 5,
+                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_gesture_24),
+                            iconTint = warningTint,
+                            valueFormatter = { value -> "${(value * 100).toInt()}%" },
+                        )
                     }
                 }
             }
@@ -620,29 +781,39 @@ fun PlaybackSettingsContent(
             //  调试选项
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("调试")
+                    AppPreferenceSectionTitle("诊断")
                 }
             }
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSGroup {
-	                        IOSSwitchItem(
-	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_STATS),
-                            title = "详细统计信息",
-                            subtitle = "显示编解码、码率等极客信息",
-                            checked = isStatsEnabled,
-                            onCheckedChange = {
-                                isStatsEnabled = it
-                                prefs.edit().putBoolean("show_stats", it).apply()
+                    val scope = rememberCoroutineScope()
+                    AppPreferenceGroup {
+	                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_STATS),
+                            title = "屏幕显示播放状态",
+                            subtitle = when (playerInsightMode) {
+                                PlayerSettingsStore.PlayerInsightMode.OFF -> "不显示播放状态信息"
+                                PlayerSettingsStore.PlayerInsightMode.SMART -> "打开控制栏时显示；发生掉帧或软件解码时保持可见"
+                                PlayerSettingsStore.PlayerInsightMode.ALWAYS -> "始终显示编码、码率、掉帧等播放信息"
                             },
-                            iconTint = iOSSystemGray
+                            options = listOf(
+                                AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.OFF, "关闭"),
+                                AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.SMART, "智能显示"),
+                                AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.ALWAYS, "始终显示"),
+                            ),
+                            selectedValue = playerInsightMode,
+                            onSelectionChange = { mode ->
+                                playbackInsightScope.launch {
+                                    SettingsManager.setPlayerInsightMode(context, mode)
+                                }
+                            },
+                            iconTint = iOSSystemGray,
                         )
-                        IOSDivider()
-                        val scope = rememberCoroutineScope()
-	                        IOSSwitchItem(
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_DIAGNOSTIC_LOGS),
                             title = "播放器诊断日志",
-                            subtitle = "记录黑屏、卡顿、点击无响应等播放器诊断信息",
+                            subtitle = "遇到黑屏、卡顿或无响应时记录排查信息；反馈问题后可关闭",
                             checked = playerDiagnosticLoggingEnabled,
                             onCheckedChange = {
                                 scope.launch {
@@ -651,11 +822,28 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSOrange
                         )
-                        IOSDivider()
-	                        IOSSwitchItem(
-	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.QUALITY_WARNING_ONCE),
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
+	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.SEGMENT_LOADING_COMPATIBILITY),
+                            title = "分段加载兼容模式（实验性）",
+                            subtitle = if (dashSegmentRequestsEnabled) {
+                                "用于部分视频的分段加载；若出现无法播放或卡住，请关闭此项"
+                            } else {
+                                "默认关闭，使用兼容性更好的常规加载方式"
+                            },
+                            checked = dashSegmentRequestsEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setDashSegmentRequestsEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
+                        )
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
+	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.QUALITY_WARNING),
                             title = "画质降档诊断弹窗",
-                            subtitle = "仅在明确切换失败、权限或接口异常时提示；视频本身无更高档不打断播放",
+                            subtitle = "只在画质切换失败或权限异常时提示，不会因视频没有更高画质而打断播放",
                             checked = qualitySwitchFailureDialogEnabled,
                             onCheckedChange = { enabled ->
                                 scope.launch {
@@ -664,9 +852,9 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSOrange
                         )
-                        IOSDivider()
-	                        IOSSwitchItem(
-	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.QUALITY_WARNING),
+                        AppPreferenceDivider()
+	                        AppSwitchPreference(
+	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.QUALITY_WARNING_ONCE),
                             title = "降档弹窗仅提示一次",
                             subtitle = if (qualitySwitchFailureDialogEnabled) {
                                 "首次弹出后不再重复打断播放；关闭本项会重置提示记录"
@@ -685,36 +873,10 @@ fun PlaybackSettingsContent(
                 }
             }
 
-            //  交互设置
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("互动与评论")
-                }
-            }
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    PlaybackInteractionSettingsSection(
-                        context = context,
-                        state = state,
-                        viewModel = viewModel
-                    )
-                }
-            }
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("全屏与手势")
-                }
-            }
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    PlaybackFullscreenGestureSettingsSection(context = context)
-                }
-            }
-
             //  网络与画质
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("网络与画质")
+                    AppPreferenceSectionTitle("网络与画质")
                 }
             }
             item {
@@ -724,15 +886,22 @@ fun PlaybackSettingsContent(
                         .getWifiQuality(context).collectAsStateWithLifecycle(initialValue = 80)
                     val mobileQuality by com.android.purebilibili.core.store.SettingsManager
                         .getMobileQuality(context).collectAsStateWithLifecycle(initialValue = 64)
+                    val defaultAudioQuality by PlayerSettingsStore
+                        .getDefaultAudioQuality(context)
+                        .collectAsStateWithLifecycle(
+                            initialValue = DEFAULT_AUDIO_QUALITY_FOLLOW_LAST
+                        )
                     val autoHighestQualityEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getAutoHighestQuality(context).collectAsStateWithLifecycle(initialValue = false)
                     val directedTrafficEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getBiliDirectedTrafficEnabled(context).collectAsStateWithLifecycle(initialValue = false)
-                    val isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty() ||
-                        !TokenManager.accessTokenCache.isNullOrEmpty()
-                    val isVip = TokenManager.isVipCache
+                    val isLoggedIn = com.android.purebilibili.data.repository.VideoRepository.isPlaybackLoggedIn()
+                    val isVip = com.android.purebilibili.data.repository.VideoRepository.isPlaybackVip()
 
                     val qualityOptions = resolveDefaultPlaybackQualityOptions()
+                    val audioQualityOptions = resolveDefaultAudioQualityOptions()
+                    val normalizedDefaultAudioQuality =
+                        normalizeDefaultAudioQualityOption(defaultAudioQuality)
 
                     fun getQualityLabel(id: Int): String = resolveSelectionLabel(
                         options = qualityOptions,
@@ -740,9 +909,34 @@ fun PlaybackSettingsContent(
                         fallbackLabel = "720P"
                     )
 
-                    IOSGroup {
-	                        IOSSwitchItem(
-	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.DIRECTED_TRAFFIC),
+                    fun getAudioQualityLabel(id: Int): String = resolveSelectionLabel(
+                        options = audioQualityOptions,
+                        selectedValue = id,
+                        fallbackLabel = "跟随上次"
+                    )
+
+                    AppPreferenceGroup {
+                        SettingsSingleChoicePreference(
+                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_router_24),
+                            title = "CDN 设置：${playbackCdnPreference.displayName}",
+                            subtitle = "新视频优先使用此线路；不可用时自动回退主/备用 URL",
+                            options = playbackCdnOptions,
+                            selectedValue = playbackCdnPreference,
+                            onSelectionChange = { preference ->
+                                scope.launch {
+                                    SettingsManager.setPlaybackCdnPreference(
+                                        context,
+                                        preference.storageValue,
+                                    )
+                                }
+                            },
+                            iconTint = iOSTeal,
+                        )
+
+                        AppPreferenceDivider()
+
+		                        AppSwitchPreference(
+		                            icon = rememberSettingsSemanticIcon(SettingsIconRole.DIRECTED_TRAFFIC),
                             title = "B站定向流量支持",
                             subtitle = if (directedTrafficEnabled) {
                                 "移动数据下优先使用应用内播放链路（实验性）"
@@ -759,15 +953,15 @@ fun PlaybackSettingsContent(
                             iconTint = iOSTeal
                         )
 
-                        IOSDivider()
+                        AppPreferenceDivider()
 
-	                        IOSSwitchItem(
+	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_HIGHEST_QUALITY),
                             title = "自动最高画质",
                             subtitle = if (autoHighestQualityEnabled) {
-                                "已开启，按每个视频实际最高可播档自动选择；没有 4K/HDR 时不会当作异常"
+                                "每个视频都会自动选择当前账号和设备可播放的最高画质"
                             } else {
-                                "全局开关，开启后覆盖下方默认画质；默认画质会作为关闭后的偏好保留"
+                                "关闭后按下方的无线网络和移动网络默认画质播放"
                             },
                             checked = autoHighestQualityEnabled,
                             onCheckedChange = {
@@ -779,9 +973,9 @@ fun PlaybackSettingsContent(
                             iconTint = iOSOrange
                         )
 
-                        IOSDivider()
+                        AppPreferenceDivider()
 
-                        IOSSlidingSegmentedSetting(
+                        SettingsSingleChoicePreference(
                             title = "无线网络默认画质：${getQualityLabel(wifiQuality)}",
                             subtitle = if (autoHighestQualityEnabled) {
                                 "已被自动最高画质覆盖；仅作为关闭自动最高后的无线网络偏好保留"
@@ -804,7 +998,7 @@ fun PlaybackSettingsContent(
                             }
                         )
 
-                        IOSDivider()
+                        AppPreferenceDivider()
 
                         // 📉 读取省流量模式，用于显示提示
                         val dataSaverModeForHint by com.android.purebilibili.core.store.SettingsManager
@@ -817,8 +1011,8 @@ fun PlaybackSettingsContent(
                         )
                         val effectiveQualityLabel = getQualityLabel(effectiveQuality)
 
-                        IOSSlidingSegmentedSetting(
-                            title = "流量默认画质：${getQualityLabel(mobileQuality)}",
+                        SettingsSingleChoicePreference(
+                            title = "移动网络默认画质：${getQualityLabel(mobileQuality)}",
                             subtitle = when {
                                 autoHighestQualityEnabled ->
                                     "已被自动最高画质覆盖；仅作为关闭自动最高后的流量偏好保留"
@@ -842,6 +1036,28 @@ fun PlaybackSettingsContent(
                             }
                         )
 
+                        AppPreferenceDivider()
+
+                        SettingsSingleChoicePreference(
+                            title = "默认音质：${getAudioQualityLabel(normalizedDefaultAudioQuality)}",
+                            subtitle = if (
+                                normalizedDefaultAudioQuality ==
+                                DEFAULT_AUDIO_QUALITY_FOLLOW_LAST
+                            ) {
+                                "新视频跟随播放器上次手动选择"
+                            } else {
+                                "具体默认音质优先于上次手动选择；当前视频仍可临时切换"
+                            },
+                            options = audioQualityOptions,
+                            selectedValue = normalizedDefaultAudioQuality,
+                            onSelectionChange = { audioQuality ->
+                                scope.launch {
+                                    PlayerSettingsStore
+                                        .setDefaultAudioQuality(context, audioQuality)
+                                }
+                            }
+                        )
+
                         if (isDataSaverActive && mobileQuality > effectiveQuality) {
                             Row(
                                 modifier = Modifier
@@ -849,9 +1065,9 @@ fun PlaybackSettingsContent(
                                     .padding(horizontal = 16.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
+                                AppText(
                                     text = "省流量模式已限制为最高480P",
-                                    fontSize = 11.sp,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = iOSGreen.copy(alpha = 0.8f)
                                 )
                             }
@@ -863,7 +1079,7 @@ fun PlaybackSettingsContent(
             // 📉 省流量模式
             item {
                 Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("省流量")
+                    AppPreferenceSectionTitle("省流量")
                 }
             }
             item {
@@ -876,13 +1092,13 @@ fun PlaybackSettingsContent(
                         .getHomeSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings()
                         )
                     val dataSaverModeOptions = listOf(
-                        PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.OFF, "关闭"),
-                        PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY, "仅移动数据"),
-                        PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.ALWAYS, "始终开启")
+                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.OFF, "关闭"),
+                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY, "仅移动数据"),
+                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.ALWAYS, "始终开启")
                     )
 
-                    IOSGroup {
-                        IOSSlidingSegmentedSetting(
+                    AppPreferenceGroup {
+                        SettingsSingleChoicePreference(
                             title = "省流量模式：${dataSaverMode.label}",
                             subtitle = dataSaverMode.description,
                             options = dataSaverModeOptions,
@@ -895,10 +1111,10 @@ fun PlaybackSettingsContent(
                             }
                         )
 
-                        IOSDivider()
+                        AppPreferenceDivider()
 
-	                        IOSSwitchItem(
-	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_COVER_GLASS),
+	                        AppSwitchPreference(
+	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.DATA_SAVER_COVER_QUALITY),
                             title = "省流量时降低首页封面清晰度",
                             subtitle = if (homeSettings.lowQualityHomeCoverInDataSaver) {
                                 "开启后仅在省流量模式生效时加载低清晰度首页封面"
@@ -914,30 +1130,70 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
-
-                        //  功能说明
-                        IOSDivider()
+                    }
+                }
+            }
+            item {
+                Box(modifier = Modifier.entrance()) {
+                    AppCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = AppCardShape.Semantic(ContainerLevel.Dialog),
+                        colors = AppCardDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        )
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            verticalAlignment = Alignment.Top
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                CupertinoIcons.Default.InfoCircle,
+                            AppIcon(
+                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_info_24),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(
+                            AppText(
                                 "省流量模式会禁用预加载、限制视频最高480P；首页封面是否降清晰度由上方开关决定。",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                lineHeight = 16.sp
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         }
                     }
+                }
+            }
+
+            //  交互设置
+            item {
+                Box(modifier = Modifier.entrance()) {
+                    AppPreferenceSectionTitle("互动与评论")
+                }
+            }
+            item {
+                Box(modifier = Modifier.entrance()) {
+                    PlaybackInteractionSettingsSection(
+                        context = context,
+                        state = state,
+                        viewModel = viewModel
+                    )
+                }
+            }
+            item {
+                Box(modifier = Modifier.entrance()) {
+                    AppPreferenceSectionTitle("全屏与手势")
+                }
+            }
+            item {
+                Box(modifier = Modifier.entrance()) {
+                    PlaybackFullscreenGestureSettingsSection(
+                        context = context,
+                        state = state,
+                        viewModel = viewModel,
+                    )
                 }
             }
 
@@ -953,6 +1209,12 @@ private fun PlaybackInteractionSettingsSection(
     viewModel: SettingsViewModel
 ) {
     val scope = rememberCoroutineScope()
+    val hideInteractiveCommandDanmaku by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuHideInteractiveCommands(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val danmakuCloudSyncEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuCloudSyncEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = true)
     //  [新增] 自动播放下一个
     val autoPlayEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoPlay(context).collectAsStateWithLifecycle(initialValue = true)
@@ -960,6 +1222,8 @@ private fun PlaybackInteractionSettingsSection(
         .getExternalPlaylistAutoContinue(context).collectAsStateWithLifecycle(initialValue = true)
     val resumePlaybackPromptEnabled by com.android.purebilibili.core.store.SettingsManager
         .getResumePlaybackPromptEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val spacePlayedVideoLocatePromptEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getSpacePlayedVideoLocatePromptEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val playbackCompletionBehavior by com.android.purebilibili.core.store.SettingsManager
         .getPlaybackCompletionBehavior(context)
         .collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
@@ -975,19 +1239,25 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = true)
     val videoNoteDefaultCollapsed by com.android.purebilibili.core.store.SettingsManager
         .getVideoNoteDefaultCollapsed(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+        .collectAsStateWithLifecycle(initialValue = true)
     val videoInfoDefaultExpanded by com.android.purebilibili.core.store.SettingsManager
         .getVideoInfoDefaultExpanded(context)
-        .collectAsStateWithLifecycle(initialValue = true)
+        .collectAsStateWithLifecycle(initialValue = false)
     val commentFraudDetectionEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCommentFraudDetectionEnabled(context)
         .collectAsStateWithLifecycle(initialValue = true)
     val commentMemberDecorationsEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCommentMemberDecorationsEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false)
+    val subReplyLoadedCountEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getSubReplyLoadedCountEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val imagePreviewLongPressSaveEnabled by com.android.purebilibili.core.store.SettingsManager
         .getImagePreviewLongPressSaveEnabled(context)
         .collectAsStateWithLifecycle(initialValue = true)
+    val imagePreview3dPageEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getImagePreview3dPageEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val commentCollapsedReplyPreviewLimit by com.android.purebilibili.core.store.SettingsManager
         .getCommentCollapsedReplyPreviewLimit(context)
         .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.SettingsManager
@@ -1000,12 +1270,12 @@ private fun PlaybackInteractionSettingsSection(
         SubtitleAutoPreference.AUTO -> "静音时可自动启用 AI 字幕"
     }
 
-    IOSGroup {
+    AppPreferenceGroup {
         // --- Click to Play ---
         val clickToPlayEnabled by com.android.purebilibili.core.store.SettingsManager
             .getClickToPlay(context).collectAsStateWithLifecycle(initialValue = true)
 
-	        IOSSwitchItem(
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_PLAY_ON_OPEN),
             title = "进入视频自动播放",
             subtitle = if (clickToPlayEnabled) {
@@ -1022,9 +1292,9 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYBACK_SPEED),
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+	            icon = rememberSettingsSemanticIcon(SettingsIconRole.RESUME_PLAYBACK_PROMPT),
             title = "续播弹窗提示",
             subtitle = if (resumePlaybackPromptEnabled) {
                 "检测到历史进度时仅提醒一次"
@@ -1040,12 +1310,30 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = iOSTeal
         )
-        IOSDivider()
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.SPACE_PLAYED_VIDEO_LOCATE),
+            title = "UP 主页看过视频定位提示",
+            subtitle = if (spacePlayedVideoLocatePromptEnabled) {
+                "每次从视频进入该 UP 主页时显示，可一键定位到对应投稿"
+            } else {
+                "关闭后不再显示“刚刚看过”的定位提示"
+            },
+            checked = spacePlayedVideoLocatePromptEnabled,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setSpacePlayedVideoLocatePromptEnabled(context, it)
+                }
+            },
+            iconTint = iOSTeal
+        )
+        AppPreferenceDivider()
         //  [新增] 自动播放下一个视频
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_PLAY_NEXT),
+	        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_PLAY_NEXT),
             title = "自动播放下一个",
-            subtitle = "普通视频结束后自动播放推荐视频",
+            subtitle = "分P/合集自动播放下一集，普通单视频播完暂停",
             checked = autoPlayEnabled,
             onCheckedChange = {
                 scope.launch {
@@ -1055,9 +1343,9 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSPurple
         )
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYBACK),
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+	            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYLIST_AUTO_CONTINUE),
             title = "列表/收藏夹连续播放",
             subtitle = "控制收藏夹、稍后再看、合集等列表播放完后是否继续下一条",
             checked = externalPlaylistAutoContinueEnabled,
@@ -1069,41 +1357,29 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = iOSTeal
         )
-        IOSDivider()
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            val playbackOrderOptions = listOf(
-                PlaybackSegmentOption(PlaybackCompletionBehavior.STOP_AFTER_CURRENT, "暂停"),
-                PlaybackSegmentOption(PlaybackCompletionBehavior.PLAY_IN_ORDER, "顺序"),
-                PlaybackSegmentOption(PlaybackCompletionBehavior.REPEAT_ONE, "单循"),
-                PlaybackSegmentOption(PlaybackCompletionBehavior.LOOP_PLAYLIST, "列表循"),
-                PlaybackSegmentOption(PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC, "自动")
-            )
-            IOSSlidingSegmentedSetting(
-                title = "选择播放顺序：${playbackCompletionBehavior.label}",
-                subtitle = "稍后再看推荐选择“顺序播放”",
-                options = playbackOrderOptions,
-                selectedValue = playbackCompletionBehavior,
-                onSelectionChange = { behavior ->
-                    scope.launch {
-                        com.android.purebilibili.core.store.SettingsManager
-                            .setPlaybackCompletionBehavior(context, behavior)
-                    }
+        AppPreferenceDivider()
+        val playbackOrderOptions = listOf(
+            AppSegmentOption(PlaybackCompletionBehavior.STOP_AFTER_CURRENT, "暂停"),
+            AppSegmentOption(PlaybackCompletionBehavior.PLAY_IN_ORDER, "顺序"),
+            AppSegmentOption(PlaybackCompletionBehavior.REPEAT_ONE, "单循"),
+            AppSegmentOption(PlaybackCompletionBehavior.LOOP_PLAYLIST, "列表循"),
+            AppSegmentOption(PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC, "自动")
+        )
+        SettingsSingleChoicePreference(
+            title = "视频播完后：${playbackCompletionBehavior.label}",
+            subtitle = "“自动”会在单个视频结束后暂停，在分P或合集内继续下一集",
+            options = playbackOrderOptions,
+            selectedValue = playbackCompletionBehavior,
+            onSelectionChange = { behavior ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setPlaybackCompletionBehavior(context, behavior)
                 }
-            )
-            Text(
-                text = "稍后再看推荐选择“顺序播放”即可连续播放下一条，不需要退出重选。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+            }
+        )
         if (subtitleFeatureEnabled) {
-            IOSDivider()
-            IOSSlidingSegmentedSetting(
+            AppPreferenceDivider()
+            SettingsSingleChoicePreference(
                 title = "自动启用字幕：${
                     when (subtitleAutoPreference) {
                         SubtitleAutoPreference.OFF -> "关闭"
@@ -1114,10 +1390,10 @@ private fun PlaybackInteractionSettingsSection(
                 }",
                 subtitle = subtitlePreferenceDescription,
                 options = listOf(
-                    PlaybackSegmentOption(SubtitleAutoPreference.OFF, "关闭"),
-                    PlaybackSegmentOption(SubtitleAutoPreference.ON, "开启"),
-                    PlaybackSegmentOption(SubtitleAutoPreference.WITHOUT_AI, "无 AI"),
-                    PlaybackSegmentOption(SubtitleAutoPreference.AUTO, "自动")
+                    AppSegmentOption(SubtitleAutoPreference.OFF, "关闭"),
+                    AppSegmentOption(SubtitleAutoPreference.ON, "开启"),
+                    AppSegmentOption(SubtitleAutoPreference.WITHOUT_AI, "无 AI"),
+                    AppSegmentOption(SubtitleAutoPreference.AUTO, "自动")
                 ),
                 selectedValue = subtitleAutoPreference,
                 onSelectionChange = { preference ->
@@ -1127,9 +1403,42 @@ private fun PlaybackInteractionSettingsSection(
                     }
                 }
             )
-            IOSDivider()
+            AppPreferenceDivider()
         }
-	        IOSSwitchItem(
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.INTERACTIVE_COMMANDS),
+            title = "隐藏视频内互动提示",
+            subtitle = if (hideInteractiveCommandDanmaku) {
+                "已开启：不显示关注、一键三连、UP 提示和投票等视频内互动提示"
+            } else {
+                "关闭后：播放时仍显示关注、一键三连、UP 提示和投票等视频内互动提示"
+            },
+            checked = hideInteractiveCommandDanmaku,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setDanmakuHideInteractiveCommands(context, it)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSPink
+        )
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.DANMAKU_CLOUD_SYNC),
+            title = "同步弹幕设置到账号",
+            subtitle = com.android.purebilibili.feature.video.danmaku
+                .resolveDanmakuCloudSyncToggleSubtitle(danmakuCloudSyncEnabled),
+            checked = danmakuCloudSyncEnabled,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setDanmakuCloudSyncEnabled(context, it)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSPurple
+        )
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_DESCRIPTION),
             title = "默认展开视频简介",
             subtitle = if (videoInfoDefaultExpanded) {
@@ -1146,8 +1455,8 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
-        IOSDivider()
-        IOSSwitchItem(
+        AppPreferenceDivider()
+        AppSwitchPreference(
             icon = rememberSettingsSemanticIcon(SettingsIconRole.AI_SUMMARY),
             title = "显示 AI 总结入口",
             subtitle = if (videoAiSummaryEntryEnabled) {
@@ -1164,8 +1473,8 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSPurple
         )
-        IOSDivider()
-        IOSSwitchItem(
+        AppPreferenceDivider()
+        AppSwitchPreference(
             icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_NOTE),
             title = "显示视频笔记",
             subtitle = if (videoNoteEnabled) {
@@ -1183,8 +1492,8 @@ private fun PlaybackInteractionSettingsSection(
             iconTint = iOSTeal
         )
         if (videoNoteEnabled) {
-            IOSDivider()
-            IOSSwitchItem(
+            AppPreferenceDivider()
+            AppSwitchPreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_NOTE_COLLAPSE),
                 title = "默认折叠视频笔记",
                 subtitle = if (videoNoteDefaultCollapsed) {
@@ -1202,9 +1511,9 @@ private fun PlaybackInteractionSettingsSection(
                 iconTint = com.android.purebilibili.core.theme.iOSBlue
             )
         }
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.LIKE_INTERACTION),
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.LIKE_INTERACTION),
             title = "双击点赞",
             subtitle = "双击视频画面快捷点赞",
             checked = state.doubleTapLike,
@@ -1215,15 +1524,34 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSPink
         )
-        IOSDivider()
-        IOSSlidingSegmentedSetting(
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_SKIP_OP_ED),
+            title = "自动跳过片头片尾",
+            subtitle = if (state.autoSkipOpEd) {
+                "番剧提供跳过区间时，播放中自动跳过片头和片尾"
+            } else {
+                "保留完整片头片尾播放"
+            },
+            checked = state.autoSkipOpEd,
+            onCheckedChange = {
+                viewModel.toggleAutoSkipOpEd(it)
+                com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange(
+                    "auto_skip_op_ed",
+                    it.toString()
+                )
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSOrange
+        )
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
             title = "评论回复预览：${commentCollapsedReplyPreviewLimit}条",
             subtitle = "收起楼中楼时保留的回复数量",
             options = listOf(
-                PlaybackSegmentOption(3, "3条"),
-                PlaybackSegmentOption(5, "5条"),
-                PlaybackSegmentOption(8, "8条"),
-                PlaybackSegmentOption(10, "10条")
+                AppSegmentOption(3, "3条"),
+                AppSegmentOption(5, "5条"),
+                AppSegmentOption(8, "8条"),
+                AppSegmentOption(10, "10条")
             ),
             selectedValue = commentCollapsedReplyPreviewLimit,
             onSelectionChange = { limit ->
@@ -1233,9 +1561,23 @@ private fun PlaybackInteractionSettingsSection(
                 }
             }
         )
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.INTERACTION_COMMENT),
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.SUB_REPLY_LOADED_COUNT),
+            title = "楼中楼已加载数量",
+            subtitle = "在回复总数后显示当前已加载的条数",
+            checked = subReplyLoadedCountEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setSubReplyLoadedCountEnabled(context, enabled)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSBlue
+        )
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+	            icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_VISIBILITY_CHECK),
             title = "评论发送检测",
             subtitle = "发送成功后自动检查评论是否正常显示",
             checked = commentFraudDetectionEnabled,
@@ -1247,8 +1589,8 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_DECORATION),
             title = "评论区个性装扮",
             subtitle = "显示粉丝牌、铭牌和装扮卡片；关闭后评论区更清爽",
@@ -1261,14 +1603,14 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = iOSOrange
         )
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.DOWNLOAD_PATH),
-            title = "图片长按保存",
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+	            icon = rememberSettingsSemanticIcon(SettingsIconRole.IMAGE_LONG_PRESS_ACTION),
+            title = "图片长按操作",
             subtitle = if (imagePreviewLongPressSaveEnabled) {
-                "查看图片时长按会直接保存到相册"
+                "查看图片时长按可分享、复制链接或保存"
             } else {
-                "关闭后长按图片不再自动保存，仍可点右上角下载"
+                "关闭后不响应图片长按操作"
             },
             checked = imagePreviewLongPressSaveEnabled,
             onCheckedChange = { enabled ->
@@ -1279,26 +1621,112 @@ private fun PlaybackInteractionSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSGreen
         )
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+	            icon = rememberSettingsSemanticIcon(SettingsIconRole.IMAGE_3D_PAGE),
+            title = "图片 3D 翻页",
+            subtitle = if (imagePreview3dPageEnabled) {
+                "普通图片浏览使用轻量透视翻页"
+            } else {
+                "普通图片浏览使用平面横滑"
+            },
+            checked = imagePreview3dPageEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setImagePreview3dPageEnabled(context, enabled)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSBlue
+        )
     }
 
 }
 
 @Composable
 private fun PlaybackFullscreenGestureSettingsSection(
-    context: Context
+    context: Context,
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
 ) {
     val scope = rememberCoroutineScope()
     val portraitPlayerCollapseMode by com.android.purebilibili.core.store.SettingsManager
         .getPortraitPlayerCollapseMode(context)
         .collectAsStateWithLifecycle(initialValue = PortraitPlayerCollapseMode.INTRO_ONLY)
+    val videoDetailChromeScrollHideEnabled by SettingsManager
+        .getVideoDetailChromeScrollHideEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val portraitSwipeToFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
         .getPortraitSwipeToFullscreenEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val directPortraitStoryEntry by com.android.purebilibili.core.store.SettingsManager
+        .getAutoPortraitFullscreen(context).collectAsStateWithLifecycle(initialValue = false)
+    val portraitOnlyVerticalRecommendations by com.android.purebilibili.core.store.SettingsManager
+        .getPortraitOnlyVerticalRecommendations(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val launchToPortraitFeedOnStartup by com.android.purebilibili.core.store.SettingsManager
+        .getLaunchToPortraitFeedOnStartup(context).collectAsStateWithLifecycle(initialValue = false)
     val centerSwipeToFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCenterSwipeToFullscreenEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val slideVolumeBrightnessEnabled by com.android.purebilibili.core.store.SettingsManager
         .getSlideVolumeBrightnessEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val setSystemBrightnessEnabled by com.android.purebilibili.core.store.SettingsManager
         .getSetSystemBrightnessEnabled(context).collectAsStateWithLifecycle(initialValue = false)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var canWriteSystemSettings by remember(context) {
+        mutableStateOf(Settings.System.canWrite(context))
+    }
+    var showSystemBrightnessPermissionDialog by rememberSaveable { mutableStateOf(false) }
+    var awaitingSystemBrightnessPermission by rememberSaveable { mutableStateOf(false) }
+    fun persistSystemBrightnessSetting(enabled: Boolean) {
+        scope.launch {
+            com.android.purebilibili.core.store.SettingsManager
+                .setSetSystemBrightnessEnabled(context, enabled)
+        }
+    }
+    fun refreshSystemBrightnessPermission(resolvePendingRequest: Boolean) {
+        val granted = Settings.System.canWrite(context)
+        canWriteSystemSettings = granted
+        when {
+            resolvePendingRequest -> persistSystemBrightnessSetting(granted)
+            setSystemBrightnessEnabled && !granted -> persistSystemBrightnessSetting(false)
+        }
+    }
+    val systemBrightnessPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshSystemBrightnessPermission(resolvePendingRequest = awaitingSystemBrightnessPermission)
+        awaitingSystemBrightnessPermission = false
+    }
+    LaunchedEffect(setSystemBrightnessEnabled, canWriteSystemSettings) {
+        val normalizedSetting = normalizeSystemBrightnessSetting(
+            storedEnabled = setSystemBrightnessEnabled,
+            canWriteSystemSettings = canWriteSystemSettings
+        )
+        if (normalizedSetting != setSystemBrightnessEnabled) {
+            com.android.purebilibili.core.store.SettingsManager
+                .setSetSystemBrightnessEnabled(context, normalizedSetting)
+        }
+    }
+    DisposableEffect(
+        lifecycleOwner,
+        context,
+        setSystemBrightnessEnabled,
+        awaitingSystemBrightnessPermission
+    ) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val resolvePendingRequest = awaitingSystemBrightnessPermission
+                refreshSystemBrightnessPermission(resolvePendingRequest)
+                if (resolvePendingRequest) {
+                    awaitingSystemBrightnessPermission = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
     val inlineSwipeSeekSeconds by com.android.purebilibili.core.store.SettingsManager
         .getInlineSwipeSeekSeconds(context).collectAsStateWithLifecycle(initialValue = 30)
     val fullscreenSwipeSeekEnabled by com.android.purebilibili.core.store.SettingsManager
@@ -1311,10 +1739,64 @@ private fun PlaybackFullscreenGestureSettingsSection(
         .getSeekForwardSeconds(context).collectAsStateWithLifecycle(initialValue = 10)
     val seekBackwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekBackwardSeconds(context).collectAsStateWithLifecycle(initialValue = 10)
-    val hideInteractiveCommandDanmaku by com.android.purebilibili.core.store.SettingsManager
-        .getDanmakuHideInteractiveCommands(context)
-        .collectAsStateWithLifecycle(initialValue = false)
-    IOSGroup {
+    if (showSystemBrightnessPermissionDialog) {
+        com.android.purebilibili.core.ui.AppAlertDialog(
+            onDismissRequest = { showSystemBrightnessPermissionDialog = false },
+            title = {
+                AppText(
+                    "允许调节系统亮度",
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                AppText(
+                    "开启后，播放器亮度手势会先调节当前窗口亮度，并同步系统亮度。Android 需要你在系统设置中单独允许 BiliPai 修改系统设置。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                com.android.purebilibili.core.ui.AppDialogAction(
+                    onClick = {
+                        showSystemBrightnessPermissionDialog = false
+                        awaitingSystemBrightnessPermission = true
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                        runCatching {
+                            systemBrightnessPermissionLauncher.launch(intent)
+                        }.onFailure {
+                            awaitingSystemBrightnessPermission = false
+                            persistSystemBrightnessSetting(false)
+                        }
+                    }
+                ) { AppText("去授权") }
+            },
+            dismissButton = {
+                com.android.purebilibili.core.ui.AppDialogAction(
+                    onClick = { showSystemBrightnessPermissionDialog = false }
+                ) {
+                    AppText(
+                        "取消",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        )
+    }
+    AppPreferenceGroup {
+        AppSliderDialogPreference(
+            title = "手势灵敏度",
+            subtitle = "调整快进、音量和亮度手势的响应速度",
+            value = state.gestureSensitivity,
+            onValueChange = viewModel::setGestureSensitivity,
+            valueRange = 0.5f..2.0f,
+            steps = 5,
+            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_gesture_24),
+            iconTint = rememberAdaptiveSemanticIconTint(com.android.purebilibili.core.theme.iOSOrange),
+            valueFormatter = { value -> "${(value * 100).toInt()}%" },
+        )
+        AppPreferenceDivider()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1327,12 +1809,12 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    AppText(
                         text = "双击跳转",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
+                    AppText(
                         text = if (doubleTapSeekEnabled) {
                             "双击右侧快进 ${seekForwardSeconds} 秒，双击左侧后退 ${seekBackwardSeconds} 秒"
                         } else {
@@ -1354,13 +1836,14 @@ private fun PlaybackFullscreenGestureSettingsSection(
             }
             if (doubleTapSeekEnabled) {
                 val doubleTapSeekOptions = listOf(
-                    PlaybackSegmentOption(5, "5秒"),
-                    PlaybackSegmentOption(10, "10秒"),
-                    PlaybackSegmentOption(15, "15秒"),
-                    PlaybackSegmentOption(30, "30秒"),
-                    PlaybackSegmentOption(60, "60秒")
+                    AppSegmentOption(5, "5秒"),
+                    AppSegmentOption(10, "10秒"),
+                    AppSegmentOption(15, "15秒"),
+                    AppSegmentOption(30, "30秒"),
+                    AppSegmentOption(60, "60秒")
                 )
-                IOSSlidingSegmentedSetting(
+                AppPreferenceDivider()
+                SettingsSingleChoicePreference(
                     title = "快进秒数（双击右侧）：${seekForwardSeconds} 秒",
                     subtitle = "调整右侧双击快进幅度",
                     options = doubleTapSeekOptions,
@@ -1372,7 +1855,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
                         }
                     }
                 )
-                IOSSlidingSegmentedSetting(
+                AppPreferenceDivider()
+                SettingsSingleChoicePreference(
                     title = "后退秒数（双击左侧）：${seekBackwardSeconds} 秒",
                     subtitle = "调整左侧双击后退幅度",
                     options = doubleTapSeekOptions,
@@ -1386,47 +1870,62 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 )
             }
         }
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.INTERACTIVE_COMMANDS),
-            title = "隐藏视频内互动提示",
-            subtitle = if (hideInteractiveCommandDanmaku) {
-                "已开启：不显示关注、一键三连、UP 提示和投票等视频内互动提示"
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
+            title = "评论上滑缩小播放器：${portraitPlayerCollapseMode.label}",
+            subtitle = portraitPlayerCollapseMode.description,
+            options = resolvePortraitPlayerCollapseModeSegmentOptions(),
+            selectedValue = portraitPlayerCollapseMode,
+            onSelectionChange = { mode ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setPortraitPlayerCollapseMode(context, mode)
+                }
+            }
+        )
+
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_HEADER_COLLAPSE),
+            title = "详情页控件随滚动隐藏",
+            subtitle = if (videoDetailChromeScrollHideEnabled) {
+                "评论页下滑时隐藏顶部标签，最热/最新排序跟随移动，回顶后恢复标题"
             } else {
-                "关闭后：播放时仍显示关注、一键三连、UP 提示和投票等视频内互动提示"
+                "关闭后详情页顶部控件与最热/最新保持显示，保留渐进模糊"
             },
-            checked = hideInteractiveCommandDanmaku,
+            checked = videoDetailChromeScrollHideEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    SettingsManager.setVideoDetailChromeScrollHideEnabled(context, enabled)
+                }
+            },
+            iconTint = iOSTeal,
+        )
+
+        val pauseOnPlayerCollapseEnabled by com.android.purebilibili.core.store.SettingsManager
+            .getPauseOnPlayerCollapseEnabled(context)
+            .collectAsStateWithLifecycle(initialValue = true)
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_COLLAPSE_PAUSE),
+            title = "缩小后自动暂停",
+            subtitle = if (pauseOnPlayerCollapseEnabled) {
+                "上滑缩小播放器浏览相关推荐时自动暂停，展开后若为自动暂停则恢复播放"
+            } else {
+                "关闭后缩小播放器时仍继续播放"
+            },
+            checked = pauseOnPlayerCollapseEnabled,
             onCheckedChange = {
                 scope.launch {
                     com.android.purebilibili.core.store.SettingsManager
-                        .setDanmakuHideInteractiveCommands(context, it)
+                        .setPauseOnPlayerCollapseEnabled(context, it)
                 }
             },
-            iconTint = com.android.purebilibili.core.theme.iOSPink
+            iconTint = iOSTeal
         )
-        IOSDivider()
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            IOSSlidingSegmentedSetting(
-                title = "评论上滑缩小播放器：${portraitPlayerCollapseMode.label}",
-                subtitle = portraitPlayerCollapseMode.description,
-                options = resolvePortraitPlayerCollapseModeSegmentOptions(),
-                selectedValue = portraitPlayerCollapseMode,
-                onSelectionChange = { mode ->
-                    scope.launch {
-                        com.android.purebilibili.core.store.SettingsManager
-                            .setPortraitPlayerCollapseMode(context, mode)
-                    }
-                }
-            )
-        }
 
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_SWIPE_FULLSCREEN),
             title = "竖屏上滑进入全屏",
             subtitle = if (portraitSwipeToFullscreenEnabled) {
@@ -1444,8 +1943,65 @@ private fun PlaybackFullscreenGestureSettingsSection(
             iconTint = iOSTeal
         )
 
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_STORY_ENTRY),
+            title = "竖屏视频直达刷视频模式",
+            subtitle = if (directPortraitStoryEntry) {
+                "开启：任意入口点竖屏视频直接进竖滑全屏（可经卡片放大动画）；默认关闭时先进详情内联竖屏"
+            } else {
+                "关闭（默认）：竖屏视频先进详情页内联播放，可再点「竖屏」进刷视频"
+            },
+            checked = directPortraitStoryEntry,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setAutoPortraitFullscreen(context, it)
+                }
+            },
+            iconTint = iOSTeal
+        )
+
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_STORY_ENTRY),
+            title = "竖屏刷视频仅推荐真竖屏（Beta）",
+            subtitle = if (portraitOnlyVerticalRecommendations) {
+                "开启后过滤横屏视频，仅保留实际画面为竖屏的推荐"
+            } else {
+                "关闭后竖屏刷视频允许横竖屏混合推荐"
+            },
+            checked = portraitOnlyVerticalRecommendations,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setPortraitOnlyVerticalRecommendations(context, it)
+                }
+            },
+            iconTint = iOSTeal
+        )
+
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.STARTUP_PORTRAIT_FEED),
+            title = "启动时进入竖屏视频流",
+            subtitle = if (launchToPortraitFeedOnStartup) {
+                "打开应用后直接进入竖屏刷视频流（独立于「直达」开关）"
+            } else {
+                "关闭后仍从首页进入应用"
+            },
+            checked = launchToPortraitFeedOnStartup,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setLaunchToPortraitFeedOnStartup(context, it)
+                }
+            },
+            iconTint = iOSTeal
+        )
+
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.CENTER_SWIPE_FULLSCREEN),
             title = "中部滑动切换全屏",
             subtitle = if (centerSwipeToFullscreenEnabled) {
@@ -1463,9 +2019,9 @@ private fun PlaybackFullscreenGestureSettingsSection(
             iconTint = com.android.purebilibili.core.theme.iOSPurple
         )
 
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_FOCUS),
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+	            icon = rememberSettingsSemanticIcon(SettingsIconRole.SLIDE_VOLUME_BRIGHTNESS),
             title = "左右侧滑动调节亮度/音量",
             subtitle = if (slideVolumeBrightnessEnabled) {
                 "左侧上下滑调亮度，右侧上下滑调音量"
@@ -1481,118 +2037,100 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = iOSTeal
         )
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.SYSTEM_BRIGHTNESS),
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.SYSTEM_BRIGHTNESS),
             title = "调节系统亮度",
-            subtitle = if (slideVolumeBrightnessEnabled) {
-                "开启后亮度手势会尝试同步系统亮度（需系统允许）"
-            } else {
-                "依赖“左右侧滑动调节亮度/音量”开关"
+            subtitle = when {
+                !slideVolumeBrightnessEnabled -> "依赖“左右侧滑动调节亮度/音量”开关"
+                setSystemBrightnessEnabled && canWriteSystemSettings ->
+                    "亮度手势会同时修改当前画面和设备系统亮度"
+                else -> "关闭时只临时调整当前播放画面；开启需要系统授权"
             },
-            checked = setSystemBrightnessEnabled,
-            onCheckedChange = {
-                if (!slideVolumeBrightnessEnabled) return@IOSSwitchItem
-                scope.launch {
-                    com.android.purebilibili.core.store.SettingsManager
-                        .setSetSystemBrightnessEnabled(context, it)
+            checked = setSystemBrightnessEnabled && canWriteSystemSettings,
+            enabled = slideVolumeBrightnessEnabled,
+            onCheckedChange = { requestedEnabled ->
+                if (!slideVolumeBrightnessEnabled) return@AppSwitchPreference
+                when (
+                    resolveSystemBrightnessToggleAction(
+                        requestedEnabled = requestedEnabled,
+                        canWriteSystemSettings = Settings.System.canWrite(context)
+                    )
+                ) {
+                    SystemBrightnessToggleAction.ENABLE -> {
+                        canWriteSystemSettings = true
+                        persistSystemBrightnessSetting(true)
+                    }
+                    SystemBrightnessToggleAction.DISABLE -> {
+                        persistSystemBrightnessSetting(false)
+                    }
+                    SystemBrightnessToggleAction.REQUEST_PERMISSION -> {
+                        canWriteSystemSettings = false
+                        showSystemBrightnessPermissionDialog = true
+                    }
                 }
             },
             iconTint = iOSOrange
         )
 
-        IOSDivider()
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "非全屏滑动调进度范围",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "左右拖动一屏最多调整 ${inlineSwipeSeekSeconds} 秒，数值越小越精确",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            val inlineSeekOptions = listOf(
-                PlaybackSegmentOption(5, "5秒"),
-                PlaybackSegmentOption(10, "10秒"),
-                PlaybackSegmentOption(15, "15秒"),
-                PlaybackSegmentOption(30, "30秒"),
-                PlaybackSegmentOption(60, "60秒")
-            )
-            IOSSlidingSegmentedControl(
-                options = inlineSeekOptions,
-                selectedValue = inlineSwipeSeekSeconds,
-                onSelectionChange = { seconds ->
-                    scope.launch {
-                        com.android.purebilibili.core.store.SettingsManager
-                            .setInlineSwipeSeekSeconds(context, seconds)
-                    }
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
+            title = "非全屏滑动调进度范围",
+            subtitle = "左右拖动约半屏达到 ${inlineSwipeSeekSeconds} 秒上限，数值越小越精确",
+            options = listOf(
+                AppSegmentOption(5, "5秒"),
+                AppSegmentOption(10, "10秒"),
+                AppSegmentOption(15, "15秒"),
+                AppSegmentOption(30, "30秒"),
+                AppSegmentOption(60, "60秒"),
+            ),
+            selectedValue = inlineSwipeSeekSeconds,
+            onSelectionChange = { seconds ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setInlineSwipeSeekSeconds(context, seconds)
                 }
-            )
-        }
+            },
+        )
 
-        IOSDivider()
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "横屏滑动调进度范围",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                AppAdaptiveSwitch(
-                    checked = fullscreenSwipeSeekEnabled,
-                    onCheckedChange = {
-                        scope.launch {
-                            com.android.purebilibili.core.store.SettingsManager
-                                .setFullscreenSwipeSeekEnabled(context, it)
-                        }
-                    }
-                )
-            }
-            Text(
-                text = if (fullscreenSwipeSeekEnabled) {
-                    "左右拖动一屏最多调整 ${fullscreenSwipeSeekSeconds} 秒，数值越小越精确"
-                } else {
-                    "已关闭横屏精细调进度（当前范围 ${fullscreenSwipeSeekSeconds} 秒，重新开启后生效）"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            val seekStepOptions = listOf(
-                PlaybackSegmentOption(10, "10秒"),
-                PlaybackSegmentOption(15, "15秒"),
-                PlaybackSegmentOption(20, "20秒"),
-                PlaybackSegmentOption(30, "30秒")
-            )
-            IOSSlidingSegmentedControl(
-                options = seekStepOptions,
-                selectedValue = fullscreenSwipeSeekSeconds,
-                enabled = fullscreenSwipeSeekEnabled,
-                onSelectionChange = { seconds ->
-                    if (!fullscreenSwipeSeekEnabled) return@IOSSlidingSegmentedControl
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            title = "横屏滑动调进度",
+            subtitle = if (fullscreenSwipeSeekEnabled) {
+                "已开启，当前范围 ${fullscreenSwipeSeekSeconds} 秒"
+            } else {
+                "已关闭，重新开启后继续使用 ${fullscreenSwipeSeekSeconds} 秒范围"
+            },
+            checked = fullscreenSwipeSeekEnabled,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setFullscreenSwipeSeekEnabled(context, it)
+                }
+            },
+        )
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
+            title = "横屏滑动调进度范围",
+            subtitle = "左右拖动约半屏达到的秒数上限，数值越小越精确",
+            options = listOf(
+                AppSegmentOption(10, "10秒"),
+                AppSegmentOption(15, "15秒"),
+                AppSegmentOption(20, "20秒"),
+                AppSegmentOption(30, "30秒"),
+            ),
+            selectedValue = fullscreenSwipeSeekSeconds,
+            enabled = fullscreenSwipeSeekEnabled,
+            onSelectionChange = { seconds ->
+                if (fullscreenSwipeSeekEnabled) {
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager
                             .setFullscreenSwipeSeekSeconds(context, seconds)
                     }
                 }
-            )
-        }
-        IOSDivider()
+            },
+        )
+        AppPreferenceDivider()
         val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
             .getAutoRotateEnabled(context).collectAsStateWithLifecycle(initialValue = false)
         val fullscreenGestureReverse by com.android.purebilibili.core.store.SettingsManager
@@ -1623,27 +2161,53 @@ private fun PlaybackFullscreenGestureSettingsSection(
             .getShowOnlineCount(context).collectAsStateWithLifecycle(initialValue = false)
         val bottomProgressBehavior by com.android.purebilibili.core.store.SettingsManager
             .getBottomProgressBehavior(context)
-            .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_SHOW)
-        val isLargeScreenDevice = context.resources.configuration.smallestScreenWidthDp >= 600
+            .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_HIDE)
+        val progressPeakDanmakuEnabled by SettingsManager
+            .getProgressPeakDanmakuEnabled(context)
+            .collectAsStateWithLifecycle(initialValue = false)
+        val playerControlVisibility by SettingsManager
+            .getPlayerControlVisibilitySettings(context)
+            .collectAsStateWithLifecycle(
+                initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
+            )
+        val playerProgressPlacement by SettingsManager
+            .getPlayerProgressPlacement(context)
+            .collectAsStateWithLifecycle(
+                initialValue = com.android.purebilibili.core.store.PlayerProgressPlacement.ABOVE_CONTROLS
+            )
+        val windowSizeClass = LocalWindowSizeClass.current
+        val displayContext = LocalAppWindowAdaptiveInfo.current.displayContext
+        val isLargeScreenDevice = windowSizeClass.isTabletDevice ||
+            displayContext.isKnownFoldableDevice
         val horizontalAdaptationEnabled by com.android.purebilibili.core.store.SettingsManager
             .getHorizontalAdaptationEnabled(context)
             .collectAsStateWithLifecycle(initialValue = isLargeScreenDevice)
-        val hideVideoPageStatusBar by com.android.purebilibili.core.store.SettingsManager
+        val immersiveVideoPageStatusBar by com.android.purebilibili.core.store.SettingsManager
             .getHideVideoPageStatusBar(context)
             .collectAsStateWithLifecycle(initialValue = false)
         val tabletCommentPanelWidthPreset by com.android.purebilibili.core.store.SettingsManager
             .getTabletCommentPanelWidthPreset(context)
             .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.TabletCommentPanelWidthPreset.STANDARD)
+        val tabletSecondaryDefaultTab by com.android.purebilibili.core.store.SettingsManager
+            .getTabletSecondaryDefaultTab(context)
+            .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED)
         val fullscreenMode by com.android.purebilibili.core.store.SettingsManager
             .getFullscreenMode(context)
             .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.FullscreenMode.AUTO)
         val fullscreenAspectRatio by com.android.purebilibili.core.store.SettingsManager
             .getFullscreenAspectRatio(context)
             .collectAsStateWithLifecycle(initialValue = FullscreenAspectRatio.FIT)
-        val fullscreenModeSubtitle = if (autoRotateEnabled) {
-            "${fullscreenMode.description}；已开启自动横竖屏，日常会跟随设备方向自动进退全屏"
+        val fullscreenModeSubtitle = when {
+            !autoRotateEnabled -> fullscreenMode.description
+            isLargeScreenDevice ->
+                "${fullscreenMode.description}；自动横竖屏仅旋转播放页，手动全屏时使用此方向"
+            else ->
+                "${fullscreenMode.description}；已开启自动横竖屏，将跟随设备方向自动进退全屏"
+        }
+        val autoRotateSubtitle = if (isLargeScreenDevice) {
+            "跟随设备方向旋转播放页，并保留平板/展开态折叠屏分栏布局"
         } else {
-            fullscreenMode.description
+            "跟随设备方向自动进入/退出全屏，不受系统旋转锁影响"
         }
         val horizontalAdaptationSubtitle = if (isLargeScreenDevice) {
             "启用横屏布局和横屏逻辑（平板/折叠屏建议开启）"
@@ -1651,10 +2215,10 @@ private fun PlaybackFullscreenGestureSettingsSection(
             "主要用于平板/折叠屏，当前设备触发场景可能较少"
         }
 
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_ORIENTATION),
+	        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_ORIENTATION),
             title = "自动横竖屏切换",
-            subtitle = "跟随手机方向自动进入/退出全屏",
+            subtitle = autoRotateSubtitle,
             checked = autoRotateEnabled,
             onCheckedChange = {
                 scope.launch {
@@ -1664,8 +2228,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = iOSTeal
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.HORIZONTAL_ADAPTATION),
             title = "横屏适配",
             subtitle = horizontalAdaptationSubtitle,
@@ -1678,8 +2242,34 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
-        IOSDivider()
-        IOSSlidingSegmentedSetting(
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.CAST_BUTTON),
+            title = "显示投屏按钮",
+            subtitle = "同时控制半屏、横屏全屏和竖屏全屏的投屏入口",
+            checked = playerControlVisibility.showCastButton,
+            onCheckedChange = {
+                scope.launch {
+                    SettingsManager.setShowPlayerCastButton(context, it)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSBlue
+        )
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.FOLLOW_BUTTON),
+            title = "显示关注按钮",
+            subtitle = "关闭后保留 UP 主头像、名称和主页入口",
+            checked = playerControlVisibility.showFollowButton,
+            onCheckedChange = {
+                scope.launch {
+                    SettingsManager.setShowVideoFollowButton(context, it)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSPink
+        )
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
             title = "平板评论区宽度：${tabletCommentPanelWidthPreset.label}",
             subtitle = if (horizontalAdaptationEnabled) {
                 "调整横屏适配下右侧评论/推荐栏宽度"
@@ -1695,8 +2285,21 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 }
             }
         )
-        IOSDivider()
-        IOSSlidingSegmentedSetting(
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
+            title = "大屏右侧默认显示：${tabletSecondaryDefaultTab.label}",
+            subtitle = "控制大屏视频详情右侧首次打开时显示推荐还是评论",
+            options = resolveTabletSecondaryDefaultTabOptions(),
+            selectedValue = tabletSecondaryDefaultTab,
+            onSelectionChange = { tab ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setTabletSecondaryDefaultTab(context, tab)
+                }
+            }
+        )
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
             title = "默认全屏方向：${fullscreenMode.label}",
             subtitle = fullscreenModeSubtitle,
             options = resolveFullscreenModeSegmentOptions(),
@@ -1708,8 +2311,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 }
             }
         )
-        IOSDivider()
-        IOSSlidingSegmentedSetting(
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
             title = "固定全屏比例：${fullscreenAspectRatio.label}",
             subtitle = fullscreenAspectRatio.description,
             options = resolveFullscreenAspectRatioSegmentOptions(),
@@ -1721,8 +2324,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 }
             }
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_GESTURE_REVERSE),
             title = "全屏手势反向",
             subtitle = "默认上滑进全屏、下滑退全屏；开启后方向反转",
@@ -1735,16 +2338,16 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSPurple
         )
-        IOSDivider()
-	        IOSSwitchItem(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.HIDE_STATUS_BAR),
-            title = "播放页隐藏状态栏",
-            subtitle = if (hideVideoPageStatusBar) {
-                "普通播放页隐藏顶部系统状态栏，底部手势条保持显示"
+        AppPreferenceDivider()
+	        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.IMMERSIVE_STATUS_BAR),
+            title = "播放页沉浸状态栏",
+            subtitle = if (immersiveVideoPageStatusBar) {
+                "状态栏保留；播放器顶部使用实时模糊背景，系统图标清晰可见，底部手势条保持显示"
             } else {
-                "关闭后播放页跟随系统状态栏显示"
+                "状态栏保留；播放器顶部使用纯黑背景，系统图标清晰可见，底部手势条保持显示"
             },
-            checked = hideVideoPageStatusBar,
+            checked = immersiveVideoPageStatusBar,
             onCheckedChange = {
                 scope.launch {
                     com.android.purebilibili.core.store.SettingsManager
@@ -1753,8 +2356,29 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSTeal
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+        val portraitLetterboxAmbientHaze by com.android.purebilibili.core.store.SettingsManager
+            .getPortraitLetterboxAmbientHaze(context)
+            .collectAsStateWithLifecycle(initialValue = true)
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_AMBIENT_HAZE),
+            title = "竖屏黑边动态模糊",
+            subtitle = if (portraitLetterboxAmbientHaze) {
+                "竖屏播放横屏视频时，上下黑边实时采样画面做毛玻璃模糊（默认开启）"
+            } else {
+                "竖屏播放横屏视频时，上下黑边保持纯黑"
+            },
+            checked = portraitLetterboxAmbientHaze,
+            onCheckedChange = {
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setPortraitLetterboxAmbientHaze(context, it)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSTeal
+        )
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_ENTER_FULLSCREEN),
             title = "自动进入全屏",
             subtitle = "视频开始播放后自动切到全屏",
@@ -1767,22 +2391,61 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSGreen
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+        val autoExitFullscreenMode by com.android.purebilibili.core.store.SettingsManager
+            .getAutoExitFullscreenMode(context)
+            .collectAsStateWithLifecycle(
+                initialValue = com.android.purebilibili.core.store.AutoExitFullscreenMode.ALL_PARTS
+            )
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_EXIT_FULLSCREEN),
             title = "自动退出全屏",
-            subtitle = "视频结束播放后自动退出全屏",
-            checked = autoExitFullscreen,
-            onCheckedChange = {
+            subtitle = autoExitFullscreenMode.subtitle,
+            checked = autoExitFullscreenMode !=
+                com.android.purebilibili.core.store.AutoExitFullscreenMode.OFF,
+            onCheckedChange = { enabled ->
                 scope.launch {
-                    com.android.purebilibili.core.store.SettingsManager
-                        .setAutoExitFullscreen(context, it)
+                    com.android.purebilibili.core.store.SettingsManager.setAutoExitFullscreenMode(
+                        context,
+                        if (enabled) {
+                            com.android.purebilibili.core.store.AutoExitFullscreenMode.ALL_PARTS
+                        } else {
+                            com.android.purebilibili.core.store.AutoExitFullscreenMode.OFF
+                        },
+                    )
                 }
             },
             iconTint = iOSOrange
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        if (
+            autoExitFullscreenMode !=
+            com.android.purebilibili.core.store.AutoExitFullscreenMode.OFF
+        ) {
+            AppPreferenceDivider()
+            SettingsSingleChoicePreference(
+                title = "退出时机：${autoExitFullscreenMode.label}",
+                subtitle = autoExitFullscreenMode.subtitle,
+                options = listOf(
+                    AppSegmentOption(
+                        com.android.purebilibili.core.store.AutoExitFullscreenMode.CURRENT_PART,
+                        "当前P",
+                    ),
+                    AppSegmentOption(
+                        com.android.purebilibili.core.store.AutoExitFullscreenMode.ALL_PARTS,
+                        "全部完",
+                    ),
+                ),
+                selectedValue = autoExitFullscreenMode,
+                onSelectionChange = { mode ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager
+                            .setAutoExitFullscreenMode(context, mode)
+                    }
+                },
+            )
+        }
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_LOCK),
             title = "全屏显示锁定按钮",
             subtitle = "控制层中显示防误触锁定按钮",
@@ -1795,8 +2458,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = iOSTeal
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_SCREENSHOT),
             title = "全屏显示截图按钮",
             subtitle = "控制层中显示快速截图入口",
@@ -1809,8 +2472,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.CLEAN_SCREENSHOT),
             title = "应用内干净截图",
             subtitle = "在 BiliPai 前台通过应用内手势导出当前窗口 PNG",
@@ -1822,8 +2485,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSPurple
         )
-        IOSDivider()
-        IOSSlidingSegmentedSetting(
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
             title = "截图触发方式：${appScreenshotGestureMode.label}",
             subtitle = appScreenshotGestureMode.description,
             options = resolveAppScreenshotGestureModeSegmentOptions(),
@@ -1834,8 +2497,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 }
             }
         )
-        IOSDivider()
-        IOSSlidingSegmentedSetting(
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
             title = "截图范围：${appScreenshotCaptureMode.label}",
             subtitle = appScreenshotCaptureMode.description,
             options = resolveAppScreenshotCaptureModeSegmentOptions(),
@@ -1846,8 +2509,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 }
             }
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.BATTERY_STATUS),
             title = "全屏显示电量",
             subtitle = "在横屏左上角展示电池图标和电量百分比",
@@ -1860,8 +2523,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = iOSGreen
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.TIME_STATUS),
             title = "全屏显示时间",
             subtitle = "在横屏左上角单独展示当前时间",
@@ -1874,8 +2537,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = iOSTeal
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_ACTIONS),
             title = "全屏显示互动按钮",
             subtitle = if (showFullscreenActionItems) {
@@ -1892,8 +2555,8 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSPink
         )
-        IOSDivider()
-	        IOSSwitchItem(
+        AppPreferenceDivider()
+	        AppSwitchPreference(
 	            icon = rememberSettingsSemanticIcon(SettingsIconRole.ONLINE_COUNT),
             title = "卡片与视频页观看人数",
             subtitle = if (showOnlineCount) {
@@ -1910,21 +2573,59 @@ private fun PlaybackFullscreenGestureSettingsSection(
             },
             iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
-        IOSDivider()
-        IOSSlidingSegmentedSetting(
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
             title = "底部进度条展示：${bottomProgressBehavior.label}",
             subtitle = bottomProgressBehavior.description,
             options = listOf(
-                PlaybackSegmentOption(BottomProgressBehavior.ALWAYS_SHOW, "始终展示"),
-                PlaybackSegmentOption(BottomProgressBehavior.ALWAYS_HIDE, "始终隐藏"),
-                PlaybackSegmentOption(BottomProgressBehavior.ONLY_SHOW_FULLSCREEN, "仅全屏展示"),
-                PlaybackSegmentOption(BottomProgressBehavior.ONLY_HIDE_FULLSCREEN, "仅全屏隐藏")
+                AppSegmentOption(BottomProgressBehavior.ALWAYS_SHOW, "始终展示"),
+                AppSegmentOption(BottomProgressBehavior.ALWAYS_HIDE, "始终隐藏"),
+                AppSegmentOption(BottomProgressBehavior.ONLY_SHOW_FULLSCREEN, "仅全屏展示"),
+                AppSegmentOption(BottomProgressBehavior.ONLY_HIDE_FULLSCREEN, "仅全屏隐藏")
             ),
             selectedValue = bottomProgressBehavior,
             onSelectionChange = { behavior ->
                 scope.launch {
                     com.android.purebilibili.core.store.SettingsManager
                         .setBottomProgressBehavior(context, behavior)
+                }
+            }
+        )
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PROGRESS_PEAK_DANMAKU),
+            title = "进度条峰值弹幕",
+            subtitle = if (progressPeakDanmakuEnabled) {
+                "在进度条上显示弹幕热度峰值曲线"
+            } else {
+                "关闭后不显示弹幕热度峰值曲线"
+            },
+            checked = progressPeakDanmakuEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    SettingsManager.setProgressPeakDanmakuEnabled(context, enabled)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSPurple,
+        )
+        AppPreferenceDivider()
+        SettingsSingleChoicePreference(
+            title = "控制栏进度条位置：${playerProgressPlacement.label}",
+            subtitle = "可将可拖动进度条放到控制按钮下方的视频最底部",
+            options = listOf(
+                AppSegmentOption(
+                    com.android.purebilibili.core.store.PlayerProgressPlacement.ABOVE_CONTROLS,
+                    "控制栏上方"
+                ),
+                AppSegmentOption(
+                    com.android.purebilibili.core.store.PlayerProgressPlacement.BOTTOM_EDGE,
+                    "视频最底部"
+                )
+            ),
+            selectedValue = playerProgressPlacement,
+            onSelectionChange = { placement ->
+                scope.launch {
+                    SettingsManager.setPlayerProgressPlacement(context, placement)
                 }
             }
         )

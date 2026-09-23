@@ -88,8 +88,8 @@ object StoryRepository {
         return try {
             Logger.d(TAG, " 获取播放 URL: aid=$aid, cid=$cid")
             
-            // 使用 Legacy API 通过 aid 获取播放地址
-            val response = NetworkModule.api.getPlayUrlByAid(aid = aid, cid = cid)
+            // 使用 Legacy API 通过 aid 获取播放地址（跟随播放账号，确保大会员权益生效）
+            val response = NetworkModule.playbackApi().getPlayUrlByAid(aid = aid, cid = cid)
             
             if (response.code == 0 && response.data != null) {
                 val urls = extractPlayUrls(response.data)

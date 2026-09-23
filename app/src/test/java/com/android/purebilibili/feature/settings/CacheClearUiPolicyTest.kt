@@ -127,6 +127,130 @@ class CacheClearUiPolicyTest {
         )
     }
 
+    @Test
+    fun cacheClearAnimationDialog_usesNativeCircularProgressInsteadOfCustomParticles() {
+        val source = loadCacheClearAnimationSource()
+
+        assertTrue(source.contains("AppCircularProgressIndicator"))
+        assertTrue(source.contains("AdaptiveLoadingIndicator"))
+        assertFalse(source.contains("DataDissolveParticles"))
+        assertFalse(source.contains("CenterCleaningIcon"))
+        assertFalse(source.contains("CircularProgressRing"))
+    }
+
+    @Test
+    fun donutSegments_fillRingFromSelectedBytesAndUpdatePercents() {
+        val breakdown = CacheUtils.CacheBreakdown(
+            imageDiskCache = 50L,
+            httpCache = 30L,
+            otherCache = 20L
+        )
+        val segments = resolveCacheClearDonutSegments(
+            breakdown = breakdown,
+            selectedTargets = setOf(CacheClearTarget.IMAGE_PREVIEW, CacheClearTarget.NETWORK)
+        )
+        val image = segments.first { it.target == CacheClearTarget.IMAGE_PREVIEW }
+        val network = segments.first { it.target == CacheClearTarget.NETWORK }
+        val temp = segments.first { it.target == CacheClearTarget.TEMP_FILES_AND_LOGS }
+
+        assertEquals(-90f, network.startAngle)
+        assertEquals(135f, network.sweepAngle, absoluteTolerance = 0.01f)
+        assertEquals(225f, image.sweepAngle, absoluteTolerance = 0.01f)
+        assertEquals(0f, temp.sweepAngle)
+        assertEquals("62%", image.percentLabel)
+        assertEquals("37%", network.percentLabel)
+        assertEquals("0%", temp.percentLabel)
+        assertTrue(image.selected)
+        assertFalse(segments.first { it.target == CacheClearTarget.PLAYBACK_QUALITY }.selected)
+    }
+
+    @Test
+    fun donutPercents_redistributeWhenASliceIsUnchecked() {
+        val breakdown = CacheUtils.CacheBreakdown(
+            imageDiskCache = 50L,
+            httpCache = 50L
+        )
+        val afterUncheck = resolveCacheClearDonutSegments(
+            breakdown = breakdown,
+            selectedTargets = setOf(CacheClearTarget.IMAGE_PREVIEW)
+        )
+        val image = afterUncheck.first { it.target == CacheClearTarget.IMAGE_PREVIEW }
+        val network = afterUncheck.first { it.target == CacheClearTarget.NETWORK }
+
+        assertEquals(360f, image.sweepAngle, absoluteTolerance = 0.01f)
+        assertEquals("100%", image.percentLabel)
+        assertEquals(0f, network.sweepAngle)
+        assertEquals("0%", network.percentLabel)
+        assertEquals(
+            formatCacheClearBytes(50L),
+            resolveCacheClearDonutCenterSize(
+                breakdown = breakdown,
+                selectedTargets = setOf(CacheClearTarget.IMAGE_PREVIEW)
+            )
+        )
+    }
+
+    @Test
+    fun donutHitTarget_ignoresHoleAndSelectsClockwiseSlice() {
+        val segments = resolveCacheClearDonutSegments(
+            breakdown = CacheUtils.CacheBreakdown(
+                imageDiskCache = 50L,
+                httpCache = 50L
+            ),
+            selectedTargets = setOf(CacheClearTarget.IMAGE_PREVIEW, CacheClearTarget.NETWORK)
+        )
+
+        assertEquals(
+            CacheClearTarget.NETWORK,
+            resolveCacheClearDonutHitTarget(
+                segments = segments,
+                dx = 0f,
+                dy = -40f,
+                innerRadius = 20f,
+                outerRadius = 50f
+            )
+        )
+        assertEquals(
+            CacheClearTarget.IMAGE_PREVIEW,
+            resolveCacheClearDonutHitTarget(
+                segments = segments,
+                dx = 0f,
+                dy = 40f,
+                innerRadius = 20f,
+                outerRadius = 50f
+            )
+        )
+        assertEquals(
+            null,
+            resolveCacheClearDonutHitTarget(
+                segments = segments,
+                dx = 0f,
+                dy = -8f,
+                innerRadius = 20f,
+                outerRadius = 50f
+            )
+        )
+    }
+
+    @Test
+    fun clearButtonLabel_usesSelectedBytes() {
+        val breakdown = CacheUtils.CacheBreakdown(imageDiskCache = 2L * 1024 * 1024)
+        assertEquals(
+            "清理缓存 2.0 MB",
+            resolveCacheClearButtonLabel(
+                breakdown = breakdown,
+                selectedTargets = setOf(CacheClearTarget.IMAGE_PREVIEW)
+            )
+        )
+        assertEquals(
+            "清理缓存",
+            resolveCacheClearButtonLabel(
+                breakdown = breakdown,
+                selectedTargets = emptySet()
+            )
+        )
+    }
+
     private fun loadCacheClearAnimationSource(): String {
         val candidates = listOf(
             File("app/src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt"),

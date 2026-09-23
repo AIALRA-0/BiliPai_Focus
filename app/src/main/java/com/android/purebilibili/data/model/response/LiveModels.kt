@@ -100,10 +100,13 @@ data class LiveRoom(
     val parentName: String = "",
     val keyframe: String = ""
 ) {
-    fun displayCover(): String {
-        return listOf(cover, userCover, showCover, systemCover, keyframe, face)
-            .firstOrNull { it.isNotBlank() }
-            .orEmpty()
+    fun displayCover(preferFirstFrame: Boolean = false): String {
+        val ordered = if (preferFirstFrame) {
+            listOf(systemCover, keyframe, cover, userCover, showCover, face)
+        } else {
+            listOf(cover, userCover, showCover, systemCover, keyframe, face)
+        }
+        return ordered.firstOrNull { it.isNotBlank() }.orEmpty()
     }
 
     fun viewerCount(): Int {
@@ -352,7 +355,8 @@ data class LiveSecondAreaResponse(
 data class LiveSecondAreaData(
     val list: List<LiveRoom>? = null,
     @SerialName("has_more") val hasMore: Int = 0,
-    val count: Int = 0
+    val count: Int = 0,
+    @SerialName("new_tags") val newTags: List<LiveSecondSortTag>? = null,
 )
 
 @Serializable

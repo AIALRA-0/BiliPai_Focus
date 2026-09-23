@@ -17,6 +17,14 @@ data class SpaceInfoResponse(
 )
 
 @Serializable
+data class SpaceTopImageItem(
+    val header: String = "",
+    val fullCover: String = "",
+    val dy: Float = 0f,
+    val title: SpaceCollectionTopTitle? = null
+)
+
+@Serializable
 data class SpaceUserInfo(
     val mid: Long = 0,
     val name: String = "",
@@ -24,6 +32,7 @@ data class SpaceUserInfo(
     val face: String = "",
     val sign: String = "",
     val level: Int = 0,
+    val silence: Int = 0,
     @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("fans_badge")
     val fansBadge: Boolean = false,
@@ -32,8 +41,18 @@ data class SpaceUserInfo(
     @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_followed")
     val isFollowed: Boolean = false,
+    @SerialName("relation_status")
+    val relationStatus: Int = 0,
     @SerialName("top_photo")
     val topPhoto: String = "",
+    @SerialName("night_top_photo")
+    val nightTopPhoto: String = "",
+    @SerialName("top_images")
+    val topImages: List<SpaceTopImageItem> = emptyList(),
+    @SerialName("followings_followed")
+    val followingsFollowed: SpaceFollowingsFollowedUpper? = null,
+    @SerialName("space_tags")
+    val spaceTags: List<SpaceTagItem> = emptyList(),
     @SerialName("live_room")
     val liveRoom: SpaceLiveRoom? = null,
     @SerialName("live_place")
@@ -46,6 +65,8 @@ data class SpaceUserInfo(
 data class SpaceOfficial(
     val role: Int = 0,
     val title: String = "",
+    @SerialName("splice_title")
+    val spliceTitle: String = "",
     val desc: String = "",
     val type: Int = -1  // -1无认证 0个人认证 1机构认证
 )
@@ -85,6 +106,9 @@ data class SpaceAggregateResponse(
 data class SpaceAggregateData(
     @SerialName("default_tab")
     val defaultTab: String = "",
+    val relation: Int? = null,
+    @SerialName("rel_special")
+    val relSpecial: Int? = null,
     val card: SpaceAggregateCard? = null,
     val images: SpaceAggregateImages? = null,
     val live: SpaceLiveRoom? = null,
@@ -105,6 +129,36 @@ data class SpaceAggregateData(
 )
 
 @Serializable
+data class SpaceFollowingsFollowedUpper(
+    val items: List<SpaceFollowingsFollowedItem> = emptyList(),
+    @SerialName("jump_url")
+    val jumpUrl: String = ""
+)
+
+@Serializable
+data class SpaceFollowingsFollowedItem(
+    val mid: Long = 0L,
+    val name: String = "",
+    val face: String = ""
+)
+
+@Serializable
+data class SpaceTagItem(
+    val title: String = "",
+    val uri: String = "",
+    val type: String = "",
+    @SerialName("text_color")
+    val textColor: String = "",
+    @SerialName("night_text_color")
+    val nightTextColor: String = "",
+    @SerialName("background_color")
+    val backgroundColor: String = "",
+    @SerialName("night_background_color")
+    val nightBackgroundColor: String = "",
+    val icon: String = ""
+)
+
+@Serializable
 data class SpaceAggregateCard(
     val mid: String = "",
     val name: String = "",
@@ -113,13 +167,20 @@ data class SpaceAggregateCard(
     val sex: String = "",
     val attention: Int = 0,
     val fans: Int = 0,
+    val silence: Int = 0,
     @SerialName("official_verify")
     val officialVerify: SpaceOfficial = SpaceOfficial(),
     val vip: SpaceVip = SpaceVip(),
     @SerialName("level_info")
     val levelInfo: SpaceAggregateLevelInfo = SpaceAggregateLevelInfo(),
     val likes: SpaceAggregateLikes = SpaceAggregateLikes(),
-    val relation: SpaceAggregateRelation = SpaceAggregateRelation()
+    val relation: SpaceAggregateRelation = SpaceAggregateRelation(),
+    @SerialName("followings_followed_upper")
+    val followingsFollowedUpper: SpaceFollowingsFollowedUpper? = null,
+    @SerialName("space_tag")
+    val spaceTag: List<SpaceTagItem> = emptyList(),
+    @SerialName("ip_location")
+    val ipLocation: String? = null
 )
 
 @Serializable
@@ -138,7 +199,9 @@ data class SpaceAggregateLikes(
 data class SpaceAggregateRelation(
     val status: Int = 0,
     @SerialName("is_follow")
-    val isFollow: Int = 0
+    val isFollow: Int = 0,
+    @SerialName("is_followed")
+    val isFollowed: Int = 0
 )
 
 @Serializable
@@ -146,7 +209,55 @@ data class SpaceAggregateImages(
     @JsonNames("imgUrl", "img_url")
     val imgUrl: String = "",
     @JsonNames("night_imgurl", "night_img_url", "nightImgurl")
-    val nightImgUrl: String = ""
+    val nightImgUrl: String = "",
+    @SerialName("collection_top_simple")
+    val collectionTopSimple: SpaceCollectionTopSimple? = null
+)
+
+@Serializable
+data class SpaceCollectionTopSimple(
+    val top: SpaceCollectionTop? = null
+)
+
+@Serializable
+data class SpaceCollectionTop(
+    @JsonNames("result", "imgUrls", "img_urls")
+    val result: List<SpaceCollectionTopItem> = emptyList()
+)
+
+@Serializable
+data class SpaceCollectionTopItem(
+    val item: SpaceCollectionTopItemDetail? = null,
+    val cover: String = "",
+    val title: SpaceCollectionTopTitle? = null
+)
+
+@Serializable
+data class SpaceCollectionTopItemDetail(
+    val image: SpaceCollectionTopImage? = null,
+    val animation: SpaceCollectionTopImage? = null
+)
+
+@Serializable
+data class SpaceCollectionTopImage(
+    @SerialName("default_image")
+    val defaultImage: String = "",
+    val location: String = "",
+    val height: Double = 0.0
+)
+
+@Serializable
+data class SpaceSubTitleColorFormat(
+    val colors: List<String> = emptyList()
+)
+
+@Serializable
+data class SpaceCollectionTopTitle(
+    val title: String = "",
+    @SerialName("sub_title")
+    val subTitle: String = "",
+    @SerialName("sub_title_color_format")
+    val subTitleColorFormat: SpaceSubTitleColorFormat? = null
 )
 
 @Serializable
@@ -219,6 +330,7 @@ data class SpaceAggregateFavoriteItem(
     val fid: Long = 0,
     val mid: Long = 0,
     val title: String = "",
+    @JsonNames("pic", "cover_url", "coverUrl")
     val cover: String = "",
     val count: Int = 0,
     @SerialName("media_id")
@@ -574,17 +686,20 @@ data class SpaceDynamicModules(
 
 @kotlinx.serialization.Serializable
 data class SpaceDynamicAuthor(
+    @Serializable(with = FlexibleLongSerializer::class)
     val mid: Long = 0,
     val name: String = "",
     val face: String = "",
     val pub_time: String = "",
-    val pub_ts: Long = 0
+    val pub_ts: Long = 0,
+    val pub_location_text: String = ""
 )
 
 @kotlinx.serialization.Serializable
 data class SpaceDynamicContent(
     val desc: SpaceDynamicDesc? = null,
-    val major: SpaceDynamicMajor? = null
+    val major: SpaceDynamicMajor? = null,
+    val topic: DynamicTopic? = null,
 )
 
 @kotlinx.serialization.Serializable
@@ -598,12 +713,20 @@ data class SpaceDynamicRichText(
     val type: String = "",  // RICH_TEXT_NODE_TYPE_TEXT, RICH_TEXT_NODE_TYPE_EMOJI 等
     val text: String = "",
     val orig_text: String = "",
-    val emoji: SpaceDynamicEmoji? = null
+    val emoji: SpaceDynamicEmoji? = null,
+    val jump_url: String? = null,
+    /** AT 节点对应用户 mid；API 偶发 number，用 flexible string 避免整段 desc 解析失败 */
+    @Serializable(with = FlexibleStringSerializer::class)
+    val rid: String? = null
 )
 
 @kotlinx.serialization.Serializable
 data class SpaceDynamicEmoji(
+    @JsonNames("url")
     val icon_url: String = "",
+    val webp_url: String = "",
+    val gif_url: String = "",
+    @Serializable(with = FlexibleIntSerializer::class)
     val size: Int = 1,
     val text: String = ""
 )
@@ -619,6 +742,7 @@ data class SpaceDynamicMajor(
 
 @kotlinx.serialization.Serializable
 data class SpaceDynamicArchive(
+    @Serializable(with = FlexibleStringSerializer::class)
     val aid: String = "",
     val bvid: String = "",
     val title: String = "",
@@ -658,7 +782,9 @@ data class SpaceDynamicDrawItem(
     @JsonNames("src", "url")
     val src: String = "",
     val width: Int = 0,
-    val height: Int = 0
+    val height: Int = 0,
+    @JsonNames("live_url", "liveUrl")
+    val live_url: String? = null
 )
 
 @kotlinx.serialization.Serializable
@@ -840,4 +966,35 @@ data class SpaceArticleStats(
     @Serializable(with = FlexibleIntSerializer::class)
     val coin: Int = 0,
     val dynamic: Int = 0
+)
+
+// ==================== UP主空间课堂 (Cheese / PUGV) ====================
+
+@Serializable
+data class SpaceCheeseResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SpaceCheeseData? = null
+)
+
+@Serializable
+data class SpaceCheeseData(
+    val items: List<SpaceCheeseItem> = emptyList(),
+    val page: SpaceCheesePage? = null
+)
+
+@Serializable
+data class SpaceCheesePage(
+    val next: Boolean = false
+)
+
+@Serializable
+data class SpaceCheeseItem(
+    val cover: String = "",
+    val marks: List<String> = emptyList(),
+    @SerialName("season_id")
+    val seasonId: Long = 0L,
+    val status: String = "",
+    val title: String = "",
+    val ctime: String = ""
 )

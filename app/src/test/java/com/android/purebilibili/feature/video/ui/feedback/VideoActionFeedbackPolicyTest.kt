@@ -117,4 +117,12 @@ class VideoActionFeedbackPolicyTest {
         assertEquals(VideoFeedbackAnchor.CenterOverlay, placement.anchor)
         assertEquals(VideoFeedbackEmphasis.Emphasized, placement.emphasis)
     }
+
+    @Test
+    fun `like burst placement uses centered emphasized overlay`() {
+        val placement = resolveLikeBurstPlacement()
+
+        assertEquals(VideoFeedbackAnchor.CenterOverlay, placement.anchor)
+        assertEquals(VideoFeedbackEmphasis.Emphasized, placement.emphasis)
+    }
 }

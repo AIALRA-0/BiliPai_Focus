@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.space
 
+import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.data.model.response.VideoSortOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,9 +24,10 @@ class SpaceTabChromePolicyTest {
 
         assertEquals(1, spec.selectedIndex)
         assertFalse(spec.scrollable)
-        assertEquals(44, spec.heightDp)
+        assertEquals(40, spec.heightDp)
         assertTrue(spec.indicatorHeightDp < spec.heightDp)
-        assertTrue(spec.liquidGlassEffectsEnabled)
+        assertFalse(spec.liquidGlassEffectsEnabled)
+        assertTrue(spec.dragSelectionEnabled)
     }
 
     @Test
@@ -82,8 +84,6 @@ class SpaceTabChromePolicyTest {
         assertEquals(2, spec.selectedIndex)
         assertTrue(spec.scrollable)
         assertTrue((spec.itemWidthDp ?: 0) > 104)
-        assertEquals(mainSpec.heightDp, spec.heightDp)
-        assertEquals(mainSpec.indicatorHeightDp, spec.indicatorHeightDp)
         assertTrue(spec.indicatorHeightDp < spec.heightDp)
         assertEquals(mainSpec.horizontalPaddingDp, spec.horizontalPaddingDp)
         assertTrue(spec.liquidGlassEffectsEnabled)
@@ -107,7 +107,7 @@ class SpaceTabChromePolicyTest {
 
         assertFalse(spec.scrollable)
         assertEquals(104, spec.itemWidthDp)
-        assertTrue(spec.dragSelectionEnabled)
+        assertFalse(spec.dragSelectionEnabled)
     }
 
     @Test
@@ -159,22 +159,68 @@ class SpaceTabChromePolicyTest {
     }
 
     @Test
-    fun `contribution tab scroll offset centers selected item like main tab indicator`() {
-        assertEquals(
-            0,
-            resolveSpaceContributionTabCenteredScrollOffsetPx(
-                selectedIndex = 0,
-                itemWidthPx = 160f,
-                viewportWidthPx = 360f
+    fun `secondary switch caps longest title to three visible slots`() {
+        val items = listOf(
+            SpaceSecondarySwitchItem("video", "视频", SpaceMainTab.CONTRIBUTION),
+            SpaceSecondarySwitchItem(
+                "season",
+                "合集 · 这是一个非常非常长的合集标题",
+                SpaceMainTab.CONTRIBUTION
             )
         )
+
+        val spec = resolveSpaceSecondarySwitchChromeSpec(items, selectedId = "season")
+
+        assertEquals(1, spec.selectedIndex)
+        assertEquals(48, spec.heightDp)
+        assertEquals(30, spec.indicatorHeightDp)
+        assertEquals(315, spec.itemWidthDp)
+        // A single outlier title must not propagate its estimated width to every
+        // item in the rail. The viewport cap keeps three compact slots visible.
         assertEquals(
-            220,
-            resolveSpaceContributionTabCenteredScrollOffsetPx(
-                selectedIndex = 2,
-                itemWidthPx = 160f,
-                viewportWidthPx = 360f
+            122,
+            resolveSpaceSecondarySwitchAdaptiveItemWidthDp(
+                preferredItemWidthDp = spec.itemWidthDp ?: 0,
+                itemCount = 5,
+                viewportWidthDp = 375,
+                containerHorizontalPaddingDp = 4
             )
+        )
+        assertTrue(spec.liquidGlassEffectsEnabled)
+        assertFalse(shouldScrollSpaceSecondarySwitch(2, 104, 360, 4))
+        assertTrue(shouldScrollSpaceSecondarySwitch(3, 176, 328, 4))
+        assertTrue(shouldScrollSpaceSecondarySwitch(4, 104, 360, 4))
+        assertEquals(48, resolveSpaceSecondarySwitchNonGlassMinTabWidthDp())
+        assertTrue(shouldScrollSpaceSecondarySwitchForNonGlass(itemCount = 1))
+        assertTrue(shouldScrollSpaceSecondarySwitchForNonGlass(itemCount = 2))
+        assertTrue(shouldScrollSpaceSecondarySwitchForNonGlass(itemCount = 6))
+    }
+
+    @Test
+    fun `secondary contribution switch in Material 3 removes container horizontal padding for edge alignment`() {
+        val items = listOf(
+            SpaceSecondarySwitchItem("video", "视频", SpaceMainTab.CONTRIBUTION),
+            SpaceSecondarySwitchItem("article", "图文", SpaceMainTab.CONTRIBUTION),
+        )
+        val m3Spec = resolveSpaceSecondarySwitchChromeSpec(items, "video", uiStyle = AppUiStyle.MATERIAL3)
+        assertEquals(0, m3Spec.horizontalPaddingDp)
+        val miuixSpec = resolveSpaceSecondarySwitchChromeSpec(items, "video", uiStyle = AppUiStyle.MIUIX)
+        assertEquals(16, miuixSpec.horizontalPaddingDp)
+    }
+
+    @Test
+    fun `dragged secondary indicator asks rail to follow only near viewport edges`() {
+        assertEquals(
+            0f,
+            resolveSpaceSecondarySwitchDragScrollDeltaPx(1f, 104f, 360f, 0f, 4f, 12f)
+        )
+        assertEquals(
+            72f,
+            resolveSpaceSecondarySwitchDragScrollDeltaPx(3f, 104f, 360f, 0f, 4f, 12f)
+        )
+        assertEquals(
+            -8f,
+            resolveSpaceSecondarySwitchDragScrollDeltaPx(0f, 104f, 360f, 0f, 4f, 12f)
         )
     }
 
@@ -195,7 +241,8 @@ class SpaceTabChromePolicyTest {
         assertFalse(spec.showTotalText)
         assertFalse(spec.showPlayAllText)
         assertFalse(spec.showSortText)
-        assertTrue(spec.collapseAfterTabSelection)
+        // Keep categories expanded so 视频/图文/音频 stay discoverable (BiliPai-like).
+        assertFalse(spec.collapseAfterTabSelection)
     }
 
     @Test

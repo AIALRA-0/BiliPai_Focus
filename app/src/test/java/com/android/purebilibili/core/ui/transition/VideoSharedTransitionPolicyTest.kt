@@ -1,13 +1,164 @@
 package com.android.purebilibili.core.ui.transition
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.TweenSpec
+import androidx.compose.ui.geometry.Rect
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class VideoSharedTransitionPolicyTest {
+    @Test
+    fun heroGeometryUsesDpNotPixelsAndKeepsMissingBoundsFallback() {
+        val card = Rect(0f, 0f, 100f, 60f)
+        val target = Rect(0f, 0f, 200f, 220f)
+        val small = resolveVideoHeroMotionSpec(360, card, card)
+        val large = resolveVideoHeroMotionSpec(360, card, target)
+        val dense = resolveVideoHeroMotionSpec(360, Rect(0f, 0f, 300f, 180f),
+            Rect(0f, 0f, 600f, 660f), density = 3f)
+        assertTrue(large.enterDurationMillis > small.enterDurationMillis)
+        assertEquals(large, dense)
+        assertEquals(360, resolveVideoHeroMotionSpec(360, null, target).enterDurationMillis)
+        assertEquals(360, resolveVideoHeroMotionSpec(360, Rect.Zero, target).enterDurationMillis)
+        assertEquals(360, resolveVideoHeroMotionSpec(360, card, target, Float.NaN).enterDurationMillis)
+    }
+
+    @Test
+    fun heroKeepsSpeedPreferencesAndNoAnimationZeroDuration() {
+        for (base in listOf(280, 360, 480, 240, 900)) {
+            val spec = resolveVideoHeroMotionSpec(base)
+            assertEquals(base, spec.enterDurationMillis)
+            assertTrue(spec.returnDurationMillis >= 220)
+            assertTrue(spec.returnDurationMillis <= spec.enterDurationMillis)
+            assertEquals(spec.returnDurationMillis / 2f,
+                spec.remainingDuration(.5f, 0f).toFloat(), .5f)
+        }
+        assertEquals(0, resolveVideoHeroMotionSpec(0).returnDurationMillis)
+        assertEquals(299, resolveVideoHeroMotionSpec(360).returnDurationMillis)
+        assertEquals(140, resolveVideoHeroMotionSpec(900, reducedMotion = true).enterDurationMillis)
+    }
+
+    @Test
+    fun heroEffectsAndSeekAreMonotonicAndSpatialPulseIsBounded() {
+        val spec = resolveVideoHeroMotionSpec(360)
+        for (i in 0..1000) {
+            val p = i / 1000f
+            assertEquals(p, spec.predictiveSeekSpec.transform(p))
+            assertTrue(spec.effectsEasing.transform(p) in 0f..1f)
+            assertEquals(1f, resolveVideoHeroLandingScale(p, true))
+            assertEquals(1f, resolveVideoHeroLandingScale(p, false))
+        }
+        assertEquals(1f, resolveVideoHeroLandingScale(0f, true))
+        assertEquals(1f, resolveVideoHeroLandingScale(1f, true))
+        assertEquals(0f, VideoHeroMotionTokens.LANDING_COMPRESSION)
+    }
+
+    @Test
+    fun legacySharedBoundsSeekAndProgrammaticSpecsAreExplicit() {
+        val motion = resolveVideoCardSharedTransitionMotionSpec("home", true)
+        val detail = Rect(0f, 0f, 360f, 800f)
+        val card = Rect(0f, 0f, 120f, 80f)
+        val seek = videoSharedElementBoundsTransformSpec(motion, detail, card) as TweenSpec<*>
+        val auto = videoSharedElementBoundsTransformSpec(motion, detail, card,
+            interactive = false) as TweenSpec<*>
+        assertSame(LinearEasing, seek.easing)
+        assertEquals(resolveVideoHeroMotionSpec(motion.durationMillis).returnDurationMillis, auto.durationMillis)
+        assertSame(AppMotionEasing.Continuity, auto.easing)
+    }
+
+    @Test
+    fun videoSharedTransitionUsesContinuityCurveForEnterAndReturnAlpha() {
+        val motion = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true
+        )
+        val enter = motion.enterAlphaEasing
+        val returning = motion.returnAlphaEasing
+
+        assertSame(enter, returning)
+        assertEquals(
+            AppMotionEasing.Continuity.transform(0.5f),
+            enter.transform(0.5f),
+            0.001f,
+        )
+        assertTrue(enter.transform(0.5f) > 0.7f)
+    }
+
+    @Test
+    fun videoSharedTransitionSpatialEasing_isContinuityEaseOut() {
+        val easing = resolveVideoCardSharedTransitionSpatialEasing()
+        assertEquals(
+            AppMotionEasing.Continuity.transform(0.5f),
+            easing.transform(0.5f),
+            0.001f,
+        )
+        // 先快后慢：半程进度应明显超过线性 0.5
+        assertTrue(easing.transform(0.5f) > 0.7f)
+    }
+
+    @Test
+    fun videoSharedBoundsUseContinuityEnterAndLinearSeekableReturn() {
+        val motion = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true
+        )
+        val cardBounds = Rect(0f, 0f, 160f, 100f)
+        val detailBounds = Rect(0f, 0f, 360f, 800f)
+
+        val enter = videoSharedElementBoundsTransformSpec(motion, cardBounds, detailBounds)
+        val returning = videoSharedElementBoundsTransformSpec(motion, detailBounds, cardBounds)
+
+        assertTrue(enter is TweenSpec<*>)
+        assertTrue(returning is TweenSpec<*>)
+        assertEquals(motion.durationMillis, (enter as TweenSpec<*>).durationMillis)
+        assertEquals(motion.durationMillis, (returning as TweenSpec<*>).durationMillis)
+        // 进场：Continuity 先快后慢、无过冲
+        assertEquals(
+            AppMotionEasing.Continuity.transform(0.4f),
+            enter.easing.transform(0.4f),
+            0.001f,
+        )
+        // 返回：Linear 固定时长，预测返回 seek/松手 remainingDuration 可算，避免一闪落位
+        assertSame(LinearEasing, returning.easing)
+        assertEquals(
+            LinearEasing,
+            resolveVideoSharedElementSpatialEasing(detailBounds, cardBounds),
+        )
+        assertEquals(
+            AppMotionEasing.Continuity,
+            resolveVideoSharedElementSpatialEasing(cardBounds, detailBounds),
+        )
+        // settle buffer 仅覆盖主时长后的短收尾，不再为 spring 过冲预留长窗口
+        assertEquals(48L, resolveVideoCardReturnSpringSettleBufferMs())
+    }
+
+    @Test
+    fun videoSharedCoverCacheKeyMatchesTheHomeCardIdentity() {
+        assertEquals("cover_BV1ab411_n", resolveVideoSharedCoverCacheKey(" BV1ab411 "))
+        assertEquals("cover_BV1ab411_s", resolveVideoSharedCoverCacheKey("BV1ab411", true))
+    }
+
+    @Test
+    fun videoSharedTransitionDirection_followsBoundsArea() {
+        val cardBounds = Rect(0f, 0f, 160f, 100f)
+        val detailBounds = Rect(0f, 0f, 360f, 800f)
+
+        assertEquals(
+            VideoSharedTransitionDirection.ENTER,
+            resolveVideoSharedTransitionDirection(cardBounds, detailBounds)
+        )
+        assertEquals(
+            VideoSharedTransitionDirection.RETURN,
+            resolveVideoSharedTransitionDirection(detailBounds, cardBounds)
+        )
+    }
 
     @Test
     fun coverSharedTransition_enabled_whenTransitionAndScopesAreReady() {
@@ -60,7 +211,7 @@ class VideoSharedTransitionPolicyTest {
     }
 
     @Test
-    fun homeVideoTransition_usesCoverAsPrimaryAnchor() {
+    fun homeVideoTransition_usesCoverAndCardShellWithoutMetadataBounds() {
         val policy = resolveVideoSharedTransitionOwnership(
             sourceRoute = "home",
             coverSharedEnabled = true,
@@ -68,8 +219,29 @@ class VideoSharedTransitionPolicyTest {
         )
 
         assertTrue(policy.useCoverSharedBounds)
-        // Home 源也启用 metadata sharedBounds，标题、UP主等独立过渡
-        assertTrue(policy.useMetadataSharedBounds)
+        assertTrue(policy.useCardContainerSharedBounds)
+        assertFalse(policy.useMetadataSharedBounds)
+    }
+
+    @Test
+    fun transparentShellAnchor_ownsHorizontalRelatedAndPartitionCards() {
+        val related = resolveVideoSharedTransitionOwnership(
+            sourceRoute = "video/BV_A",
+            coverSharedEnabled = true,
+            isQuickReturnLimited = false
+        )
+        assertTrue(related.useCoverSharedBounds)
+        assertTrue(related.useCardContainerSharedBounds)
+        assertFalse(related.useMetadataSharedBounds)
+
+        val partition = resolveVideoSharedTransitionOwnership(
+            sourceRoute = "partition",
+            coverSharedEnabled = true,
+            isQuickReturnLimited = false
+        )
+        assertTrue(partition.useCoverSharedBounds)
+        assertTrue(partition.useCardContainerSharedBounds)
+        assertFalse(partition.useMetadataSharedBounds)
     }
 
     @Test
@@ -89,7 +261,36 @@ class VideoSharedTransitionPolicyTest {
     }
 
     @Test
-    fun nonHomeVideoTransition_keepsMetadataSharedBoundsWhenAvailable() {
+    fun videoCardShellKey_stripsSeasonSeriesQueryForStableMatch() {
+        val shellKey = videoCardShellSharedElementKey(
+            bvid = "BV1",
+            sourceRoute = "season_series_detail/favorite_season/123?mid=1&title=%E6%B5%8B%E8%AF%95"
+        )
+        assertEquals("season_series_detail/favorite_season/123", shellKey.sourceRoute)
+    }
+
+    @Test
+    fun homeCategoryVideoCardSourceKeyKeepsCategoryRoute() {
+        val homeCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt"
+        ).readText()
+        val sharedKeySource = File(
+            "src/main/java/com/android/purebilibili/core/ui/transition/BiliPaiSharedElementKey.kt"
+        ).readText()
+
+        assertTrue(homeCardSource.contains("isVideoCardSharedReturnTarget("))
+        assertTrue(sharedKeySource.contains("home?category="))
+        assertTrue(homeCardSource.contains("videoCardShellReturnChromeAlpha("))
+
+        val shellKey = videoCardShellSharedElementKey(
+            bvid = "BV1",
+            sourceRoute = "home?category=动画"
+        )
+        assertEquals("home?category=动画", shellKey.sourceRoute)
+    }
+
+    @Test
+    fun nonHomeVideoTransition_usesWholeCardShellWithoutMetadataBounds() {
         val policy = resolveVideoSharedTransitionOwnership(
             sourceRoute = "search",
             coverSharedEnabled = true,
@@ -97,11 +298,325 @@ class VideoSharedTransitionPolicyTest {
         )
 
         assertTrue(policy.useCoverSharedBounds)
-        assertTrue(policy.useMetadataSharedBounds)
+        assertTrue(policy.useCardContainerSharedBounds)
+        assertFalse(policy.useMetadataSharedBounds)
     }
 
     @Test
-    fun videoCardSharedTransitionMotion_usesShortCoverPrimaryTimeline() {
+    fun videoCoverRelay_isDisabledToPreserveRealPreviousScreen() {
+        assertFalse(shouldUseVideoCoverRelayTransition("partition"))
+        assertFalse(shouldUseVideoCoverRelayTransition("partition?tab=1"))
+        assertFalse(shouldUseVideoCoverRelayTransition("video/BV_A"))
+        assertFalse(shouldUseVideoCoverRelayTransition("home"))
+        assertFalse(shouldUseVideoCoverRelayTransition("video"))
+        assertFalse(shouldUseVideoCoverRelayTransition(null))
+    }
+
+    @Test
+    fun videoCardShellSharedBounds_includesHorizontalAnchorSources() {
+        assertTrue(shouldUseVideoCardShellSharedBounds("home", transitionEnabled = true))
+        assertTrue(shouldUseVideoCardShellSharedBounds("dynamic", transitionEnabled = true))
+        assertTrue(shouldUseVideoCardShellSharedBounds("watch_later", transitionEnabled = true))
+        assertTrue(shouldUseVideoCardShellSharedBounds("space", transitionEnabled = true))
+        assertTrue(shouldUseVideoCardShellSharedBounds("partition", transitionEnabled = true))
+        assertTrue(shouldUseVideoCardShellSharedBounds("video/BV_A", transitionEnabled = true))
+        assertTrue(shouldUseVideoCardShellSharedBounds("video", transitionEnabled = true))
+        assertFalse(shouldUseVideoCardShellSharedBounds("home", transitionEnabled = false))
+        assertFalse(shouldUseVideoCardShellSharedBounds(null, transitionEnabled = true))
+        assertFalse(shouldSkipVideoCardSharedBoundsMorph("video/BV_A"))
+        assertFalse(shouldSkipVideoCardSharedBoundsMorph("partition"))
+        assertFalse(shouldSkipVideoCardSharedBoundsMorph("home"))
+    }
+
+    @Test
+    fun videoCardShellContainerTransform_includesCardSources() {
+        assertTrue(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "home",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertTrue(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "video/BV_A",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertTrue(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "partition",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertTrue(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "home?tab=recommend",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertTrue(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "search",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertTrue(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "dynamic_detail/123",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertTrue(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "space/42",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertFalse(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "settings",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertFalse(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "video",
+                transitionEnabled = true,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertFalse(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "home",
+                transitionEnabled = false,
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertFalse(
+            shouldUseVideoCardShellContainerTransform(
+                sourceRoute = "home",
+                transitionEnabled = true,
+                hasSharedTransitionScope = false,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+    }
+
+    @Test
+    fun cardShellSharedBoundsHelperUsesCardShellKeyNotCoverKey() {
+        val helperSource = File(
+            "src/main/java/com/android/purebilibili/core/ui/transition/VideoCardShellSharedBounds.kt"
+        ).readText()
+
+        assertTrue(helperSource.contains("videoCardShellSharedElementKey("))
+        assertFalse(helperSource.contains("videoCoverSharedElementKey("))
+    }
+
+    @Test
+    fun cardShellSharedBoundsScalesTowardTopNotCenter() {
+        val helperSource = File(
+            "src/main/java/com/android/purebilibili/core/ui/transition/VideoCardShellSharedBounds.kt"
+        ).readText()
+
+        // 统一走 resolveVideoCardSharedBoundsResizeMode，避免各 call-site 默认 Center
+        assertTrue(helperSource.contains("fun resolveVideoCardSharedBoundsResizeMode("))
+        // 默认详情壳：FillWidth + TopCenter，对齐顶部播放器落点
+        assertTrue(helperSource.contains("scaleToBounds(ContentScale.FillWidth, Alignment.TopCenter)"))
+        // 竖屏全屏壳：FillBounds/Crop + Center（整卡展开）
+        assertTrue(helperSource.contains("scaleToBounds(ContentScale.Crop, Alignment.Center)"))
+        // shell 生效时详情侧不得再挂 cover sharedBounds（默认 Center 会往中间飞）
+        assertTrue(helperSource.contains("fun shouldAttachVideoDetailCoverSharedBounds("))
+        assertFalse(
+            shouldAttachVideoDetailCoverSharedBounds(
+                coverSharedBoundsEnabled = true,
+                detailShellSharedBoundsEnabled = true,
+                immediatePlayback = true,
+                forceCoverOnlyForReturn = false,
+            )
+        )
+        assertTrue(
+            shouldAttachVideoDetailCoverSharedBounds(
+                coverSharedBoundsEnabled = true,
+                detailShellSharedBoundsEnabled = false,
+                immediatePlayback = true,
+                forceCoverOnlyForReturn = false,
+            )
+        )
+    }
+
+    @Test
+    fun cardShellSharedBoundsKeepsLiveReturnVisibleBeforeSourceCoverFadesIn() {
+        assertEquals(
+            EnterTransition.None,
+            resolveVideoCardShellSharedBoundsEnter(
+                role = VideoCardShellSharedBoundsRole.DetailShell,
+                transitionDurationMillis = 360,
+            )
+        )
+        // 整壳 Enter 永不延后：封面列表位待命，文字只靠 chrome alpha，消除卸层闪烁。
+        assertFalse(shouldDelaySourceCardEnterForLiveReturnMorph("home"))
+        assertFalse(shouldDelaySourceCardEnterForLiveReturnMorph("dynamic"))
+        assertFalse(shouldDelaySourceCardEnterForLiveReturnMorph("partition"))
+        assertFalse(shouldDelaySourceCardEnterForLiveReturnMorph("video/BV_A"))
+        assertFalse(
+            shouldDelaySourceCardEnterForLiveReturnMorph(
+                sourceRoute = "home",
+                isQuickReturnFromDetail = true,
+            )
+        )
+        assertEquals(
+            EnterTransition.None,
+            resolveVideoCardShellSharedBoundsEnter(
+                role = VideoCardShellSharedBoundsRole.SourceCard,
+                transitionDurationMillis = 360,
+                delaySourceCardEnterForLiveReturn = false,
+            ),
+        )
+        // delay 标志为 true 时仍可算出 fadeIn（API 保留）；默认接线 delay=false → None。
+        assertTrue(
+            resolveVideoCardShellSharedBoundsEnter(
+                role = VideoCardShellSharedBoundsRole.SourceCard,
+                transitionDurationMillis = 360,
+                delaySourceCardEnterForLiveReturn = true,
+            ) != EnterTransition.None
+        )
+        // 旧的飞行 facade 模式仍可请求末段交叉淡入。
+        assertEquals(260, resolveVideoCardShellCrossfadeSourceEnterDelayMillis(360))
+        assertTrue(
+            resolveVideoCardShellSharedBoundsEnter(
+                role = VideoCardShellSharedBoundsRole.SourceCard,
+                transitionDurationMillis = 360,
+                crossfadeSourceContent = true,
+            ) != EnterTransition.None
+        )
+        // 全局整卡反向还原时，真实来源卡片从返回第一帧保持可见。
+        assertFalse(
+            shouldCrossfadeVideoCardSourceContentOnReturn(
+                requested = true,
+                isQuickReturnFromDetail = false,
+                preferWholeCardReturn = true,
+            )
+        )
+        // ratio 已为 0 → delay ms 为 0
+        assertEquals(0, resolveVideoCardShellSourceEnterFadeDelayMillis(360))
+        assertTrue(canCoexistLiveSurfaceStableCoverAndChromeOnReturn())
+        assertEquals(
+            ExitTransition.None,
+            resolveVideoCardShellSharedBoundsExit(
+                role = VideoCardShellSharedBoundsRole.DetailShell,
+            )
+        )
+        // shell 竖卡进场：源卡不淡出。
+        assertEquals(
+            ExitTransition.None,
+            resolveVideoCardShellSharedBoundsExit(
+                role = VideoCardShellSharedBoundsRole.SourceCard,
+                fadeOutSourceCardOnOpen = false,
+            )
+        )
+        assertFalse(shouldFadeOutShellSourceCardOnOpen("partition"))
+        assertFalse(shouldFadeOutShellSourceCardOnOpen("video/BV_A"))
+        assertFalse(shouldFadeOutShellSourceCardOnOpen("home"))
+        assertTrue(
+            resolveVideoCardShellSharedBoundsExit(
+                role = VideoCardShellSharedBoundsRole.SourceCard,
+                fadeOutSourceCardOnOpen = true,
+                transitionDurationMillis = 360,
+            ) != ExitTransition.None
+        )
+        assertEquals(100, resolveVideoCardShellSourceExitFadeDurationMillis(360))
+        val detailSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt"
+        ).readText()
+        assertTrue(detailSource.contains("VideoCardShellSharedBoundsRole.DetailShell"))
+        val homeCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt"
+        ).readText()
+        // 整卡 alpha=0 会落位黑闪；只对 info 区接 chrome alpha。
+        assertTrue(homeCardSource.contains("infoContainerModifier.videoCardShellReturnChromeAlpha"))
+        assertTrue(homeCardSource.contains("recordNativeVideoCardLayer("))
+        assertTrue(homeCardSource.contains("bvid = video.bvid"))
+        assertTrue(homeCardSource.contains("captureNativeVideoCardImage(nativeCardLayer)"))
+        assertTrue(homeCardSource.contains("captureNativeCoverOverlayLayer(nativeCoverOverlayLayer)"))
+        assertTrue(homeCardSource.contains("nativeCoverOverlayLayer"))
+        assertFalse(
+            Regex(
+                """videoCardShellSharedBoundsOrEmpty\([\s\S]{0,400}?\)\s*\.graphicsLayer"""
+            ).containsMatchIn(homeCardSource)
+        )
+        val chromeHelper = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCardShellReturnChrome.kt"
+        ).readText()
+        assertTrue(chromeHelper.contains("resolveHomeCardChromeAlphaDuringShellReturnMorph("))
+        assertTrue(chromeHelper.contains("resolveSourceOwnershipAtDraw: Boolean = false"))
+        val shellHelper = File(
+            "src/main/java/com/android/purebilibili/core/ui/transition/VideoCardShellSharedBounds.kt"
+        ).readText()
+        assertTrue(shellHelper.contains("shouldDelaySourceCardEnterForLiveReturnMorph("))
+        assertTrue(shellHelper.contains("isQuickReturnFromDetail"))
+    }
+
+    @Test
+    fun nonHomeVideoCardsFreezeNativePixelsForReturnMorph() {
+        val cardSources = listOf(
+            "src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt",
+            "src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt",
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/HomeStyleSingleColumnVideoCard.kt",
+            "src/main/java/com/android/purebilibili/feature/list/FavoritePersonalCard.kt",
+            "src/main/java/com/android/purebilibili/feature/list/HistoryPersonalCard.kt",
+            "src/main/java/com/android/purebilibili/feature/watchlater/WatchLaterScreen.kt",
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/VideoCards.kt",
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/GlassVideoCard.kt",
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/CinematicVideoCard.kt",
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/StoryVideoCard.kt",
+        )
+        cardSources.forEach { path ->
+            val source = File(path).readText()
+            assertTrue(
+                source.contains("rememberNativeVideoCardSnapshotController("),
+                "$path is missing native snapshot capture",
+            )
+            assertTrue(
+                source.contains("nativeCardSnapshot.capture()"),
+                "$path does not freeze native pixels after recording position",
+            )
+        }
+    }
+
+    @Test
+    fun videoDetailRootProvidesGlobalCardShellSharedBoundsTarget() {
+        val detailSource = listOf(
+            "VideoDetailTransitionHost.kt",
+            "VideoDetailScreenStateHolder.kt"
+        ).joinToString("\n") { name ->
+            File("src/main/java/com/android/purebilibili/feature/video/screen/$name").readText()
+        }
+
+        assertTrue(detailSource.contains("shouldUseVideoCardShellContainerTransform("))
+        assertTrue(detailSource.contains("detailShellSharedBoundsEnabled"))
+        assertTrue(detailSource.contains("videoCardShellSharedBoundsOrEmpty("))
+    }
+
+    @Test
+    fun videoCardSharedTransitionMotion_usesStandardCoverPrimaryTimelineByDefault() {
         val motion = resolveVideoCardSharedTransitionMotionSpec(
             sourceRoute = "home",
             transitionEnabled = true
@@ -109,13 +624,107 @@ class VideoSharedTransitionPolicyTest {
 
         assertTrue(motion.enabled)
         assertEquals(360, motion.durationMillis)
-        assertEquals(40, motion.contentDelayMillis)
-        assertEquals(220, motion.contentDurationMillis)
-        assertEquals(14, motion.contentSlideOffsetDp)
-        assertEquals(0.985f, motion.contentInitialScale, 0.0001f)
-        assertTrue(motion.easing.transform(0.35f) > 0.7f)
-        assertTrue(motion.easing.transform(0.35f) < 0.9f)
-        assertTrue(motion.easing.transform(0.75f) > 0.96f)
+        assertEquals(360, motion.fullscreenDurationMillis)
+        assertEquals(86, motion.contentDelayMillis)
+        assertEquals(209, motion.contentDurationMillis)
+        assertEquals(8, motion.contentSlideOffsetDp)
+        assertEquals(1f, motion.contentInitialScale, 0.0001f)
+        assertSame(motion.enterAlphaEasing, motion.returnAlphaEasing)
+        assertEquals(
+            AppMotionEasing.Continuity.transform(0.35f),
+            motion.enterAlphaEasing.transform(0.35f),
+            0.001f,
+        )
+        assertEquals(
+            AppMotionEasing.Continuity.transform(0.5f),
+            resolveVideoCardSharedTransitionEnterEasing().transform(0.5f),
+            0.001f,
+        )
+        assertEquals(
+            AppMotionEasing.Continuity.transform(0.5f),
+            resolveVideoCardSharedTransitionReturnEasing().transform(0.5f),
+            0.001f,
+        )
+        // 景深返回清晰与 morph 同用 Linear，中段 fraction 与时间线性对齐。
+        assertEquals(
+            0.5f,
+            resolveVideoCardTransitionBackgroundReturnClearEasing().transform(0.5f),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun videoCardSharedTransitionMotion_preservesFastTimelineOption() {
+        val motion = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true,
+            speedSettings = VideoSharedTransitionSpeedSettings(VideoSharedTransitionSpeed.FAST)
+        )
+
+        assertEquals(280, motion.durationMillis)
+        assertEquals(280, motion.fullscreenDurationMillis)
+        assertEquals(162, motion.contentDurationMillis)
+    }
+
+    @Test
+    fun videoCardSharedTransitionMotion_keepsMasterTimelineForQuickReturn() {
+        val motion = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true,
+            isQuickReturn = true,
+        )
+
+        assertEquals(360, motion.durationMillis)
+        assertEquals(0, motion.contentDelayMillis)
+        assertEquals(209, motion.contentDurationMillis)
+        assertEquals(360, motion.fullscreenDurationMillis)
+    }
+
+    @Test
+    fun videoCardSharedTransitionMotion_supportsSlowTimelineOption() {
+        val motion = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true,
+            speedSettings = VideoSharedTransitionSpeedSettings(VideoSharedTransitionSpeed.SLOW)
+        )
+
+        assertEquals(480, motion.durationMillis)
+        assertEquals(480, motion.fullscreenDurationMillis)
+        assertEquals(278, motion.contentDurationMillis)
+    }
+
+    @Test
+    fun videoCardSharedTransitionMotion_supportsClampedCustomTimeline() {
+        val low = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true,
+            speedSettings = VideoSharedTransitionSpeedSettings(
+                speed = VideoSharedTransitionSpeed.CUSTOM,
+                customDurationMillis = 120
+            )
+        )
+        val custom = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true,
+            speedSettings = VideoSharedTransitionSpeedSettings(
+                speed = VideoSharedTransitionSpeed.CUSTOM,
+                customDurationMillis = 620
+            )
+        )
+        val high = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true,
+            speedSettings = VideoSharedTransitionSpeedSettings(
+                speed = VideoSharedTransitionSpeed.CUSTOM,
+                customDurationMillis = 1200
+            )
+        )
+
+        assertEquals(240, low.durationMillis)
+        assertEquals(620, custom.durationMillis)
+        assertEquals(620, custom.fullscreenDurationMillis)
+        assertEquals(360, custom.contentDurationMillis)
+        assertEquals(900, high.durationMillis)
     }
 
     @Test
@@ -130,24 +739,96 @@ class VideoSharedTransitionPolicyTest {
 
         assertTrue(metadataMotion.enabled)
         assertEquals(coverMotion.durationMillis, metadataMotion.durationMillis)
+        assertEquals(coverMotion.fullscreenDurationMillis, metadataMotion.fullscreenDurationMillis)
         assertEquals(0, metadataMotion.contentDelayMillis)
-        assertSame(coverMotion.easing, metadataMotion.easing)
+        assertSame(coverMotion.enterAlphaEasing, metadataMotion.enterAlphaEasing)
+        assertSame(coverMotion.returnAlphaEasing, metadataMotion.returnAlphaEasing)
+        assertEquals(
+            coverMotion.durationMillis,
+            resolveVideoMetadataSharedBoundsDurationMillis(metadataMotion),
+        )
     }
 
     @Test
-    fun videoMetadataSharedBounds_avoidGenericSpatialOrSpringSpecs() {
+    fun videoCardSources_useShellSharedBoundsWithoutMetadataKeys() {
         val homeCardSource = File(
             "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt"
         ).readText()
         val detailInfoSource = File(
             "src/main/java/com/android/purebilibili/feature/video/ui/section/VideoInfoSection.kt"
         ).readText()
+        val partitionSource = File(
+            "src/main/java/com/android/purebilibili/feature/partition/PartitionScreen.kt"
+        ).readText()
+        val singleColumnCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/HomeStyleSingleColumnVideoCard.kt"
+        ).readText()
+        val relatedCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt"
+        ).readText()
+        val cinematicCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/CinematicVideoCard.kt"
+        ).readText()
+        val glassCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/GlassVideoCard.kt"
+        ).readText()
+        val dynamicCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/VideoCards.kt"
+        ).readText()
+        val watchLaterSource = File(
+            "src/main/java/com/android/purebilibili/feature/watchlater/WatchLaterScreen.kt"
+        ).readText()
+        val spaceSource = File(
+            "src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt"
+        ).readText()
+        val navHostSource = File(
+            "src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt"
+        ).readText()
 
-        assertTrue(homeCardSource.contains("videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)"))
-        assertFalse(homeCardSource.contains("AppMotionTokens.spatialSpec()"))
-        assertTrue(detailInfoSource.contains("resolveVideoMetadataSharedTransitionMotionSpec("))
-        assertTrue(detailInfoSource.contains("videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)"))
-        assertFalse(detailInfoSource.contains("spring(dampingRatio = 0.8f, stiffness = 200f)"))
+        assertTrue(homeCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertFalse(homeCardSource.contains("videoTitleSharedElementKey("))
+        assertTrue(detailInfoSource.contains("useCardContainerSharedBounds = useCardContainerSharedBounds"))
+        // 分区横卡与相关推荐都由整卡承载 shared bounds，标题/UP/数据与封面一起移动。
+        assertTrue(partitionSource.contains("HomeStyleSingleColumnVideoCard("))
+        assertTrue(partitionSource.contains("items = state.videos"))
+        assertTrue(partitionSource.contains("coverAspectRatio = cardLayout.coverAspectRatio"))
+        assertFalse(partitionSource.contains("state.videos.chunked(2)"))
+        assertTrue(singleColumnCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertFalse(singleColumnCardSource.contains("videoCoverSharedBoundsOrEmpty("))
+        assertFalse(singleColumnCardSource.contains("videoCardShellReturnChromeAlpha("))
+        assertTrue(
+            singleColumnCardSource.indexOf(".onGloballyPositioned") <
+                singleColumnCardSource.indexOf(".videoCardShellSharedBoundsOrEmpty(")
+        )
+        assertTrue(
+            singleColumnCardSource.indexOf(".videoCardShellSharedBoundsOrEmpty(") <
+                singleColumnCardSource.indexOf(".padding(AppSpacingTokens.Small)")
+        )
+        assertTrue(singleColumnCardSource.contains("clipShape = cardShape"))
+        assertTrue(singleColumnCardSource.contains("crossfadeSourceContent = true"))
+        assertFalse(singleColumnCardSource.contains("followShellMotion = true"))
+        assertTrue(singleColumnCardSource.contains("HorizontalVideoCardFrame("))
+        assertFalse(singleColumnCardSource.contains("coverAspectRatio = coverAspectRatio"))
+        assertFalse(singleColumnCardSource.contains(".height(coverHeight)"))
+        assertTrue(relatedCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertTrue(relatedCardSource.contains("crossfadeSourceContent = true"))
+        assertTrue(relatedCardSource.contains("sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE"))
+        assertTrue(relatedCardSource.contains("sourceChromeSnapshot = VideoCardSourceChromeSnapshot("))
+        assertFalse(relatedCardSource.contains("videoCardShellReturnChromeAlpha("))
+        assertFalse(relatedCardSource.contains("videoCardShellReturnCoverAlpha("))
+        assertFalse(relatedCardSource.contains("followShellMotion = true"))
+        assertFalse(partitionSource.contains("videoTitleSharedElementKey("))
+        assertTrue(cinematicCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertFalse(cinematicCardSource.contains("videoTitleSharedElementKey("))
+        assertTrue(glassCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertFalse(glassCardSource.contains("videoTitleSharedElementKey("))
+        assertTrue(dynamicCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertFalse(dynamicCardSource.contains("videoTitleSharedElementKey("))
+        assertTrue(watchLaterSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertFalse(watchLaterSource.contains("videoTitleSharedElementKey("))
+        assertTrue(spaceSource.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertFalse(spaceSource.contains("videoTitleSharedElementKey("))
+        assertFalse(navHostSource.contains("VideoSharedTransitionBackdropHost("))
     }
 
     @Test
@@ -175,7 +856,7 @@ class VideoSharedTransitionPolicyTest {
 
     @Test
     fun sharedCoverAspectRatio_defaultsToHomeCardSixteenByTen() {
-        assertEquals(1.6f, VIDEO_SHARED_COVER_ASPECT_RATIO, 0.0001f)
+        assertEquals(16f / 10f, VIDEO_SHARED_COVER_ASPECT_RATIO, 0.0001f)
     }
 
     @Test
@@ -256,7 +937,7 @@ class VideoSharedTransitionPolicyTest {
     }
 
     @Test
-    fun sharedTransitionVisualSpec_returnConvergesToRecordedCardCorner() {
+    fun sharedTransitionVisualSpec_returnKeepsPlayerCornerNotListCardCorner() {
         val spec = resolveVideoSharedTransitionVisualSpec(
             sourceRoute = "watch_later",
             sourceCornerDp = 8,
@@ -269,9 +950,89 @@ class VideoSharedTransitionPolicyTest {
         )
 
         assertEquals(VideoSharedTransitionTargetMode.InlineCover, spec.targetMode)
-        assertEquals(8, spec.targetCornerDp)
+        // 返回期共享层保持来源卡 8dp，避免落位时再从直角切回圆角。
+        assertEquals(12, spec.targetCornerDp)
         assertFalse(spec.fillTargetViewport)
         assertTrue(spec.suppressCoverFade)
+        assertEquals(
+            8,
+            resolveVideoDetailShellOverlayCornerDp(
+                visualSpec = spec,
+                liveReturnMorph = true,
+                isReturningVisualState = true,
+            ),
+        )
+    }
+
+    @Test
+    fun sharedTransitionPlaybackIntent_mapsClickToPlaySetting() {
+        assertEquals(
+            VideoSharedTransitionPlaybackIntent.ImmediatePlayback,
+            resolveVideoSharedTransitionPlaybackIntent(clickToPlayEnabled = true)
+        )
+        assertEquals(
+            VideoSharedTransitionPlaybackIntent.CoverFirst,
+            resolveVideoSharedTransitionPlaybackIntent(clickToPlayEnabled = false)
+        )
+        assertEquals(
+            VideoSharedTransitionPlaybackIntent.ImmediatePlayback,
+            resolveVideoSharedTransitionPlaybackIntent(
+                clickToPlayEnabled = false,
+                forceImmediatePlayback = true
+            )
+        )
+    }
+
+    @Test
+    fun detailReturnFade_immediateKeepsLiveSurface_coverFirstStillUsesCover() {
+        assertFalse(
+            shouldFadePlayerSurfaceOnDetailReturn(
+                isLeaving = true,
+                playbackIntent = VideoSharedTransitionPlaybackIntent.ImmediatePlayback
+            )
+        )
+        assertFalse(
+            shouldFadePlayerSurfaceOnDetailReturn(
+                isLeaving = true,
+                playbackIntent = VideoSharedTransitionPlaybackIntent.CoverFirst
+            )
+        )
+        assertFalse(
+            shouldFadePlayerSurfaceOnDetailReturn(
+                isLeaving = false,
+                playbackIntent = VideoSharedTransitionPlaybackIntent.ImmediatePlayback
+            )
+        )
+        // ImmediatePlayback 一镜到底不叠封面；CoverFirst 仍叠封面
+        assertFalse(
+            shouldUseDetailReturnCoverCrossfade(
+                isLeaving = true,
+                playbackIntent = VideoSharedTransitionPlaybackIntent.ImmediatePlayback
+            )
+        )
+        assertTrue(
+            shouldUseDetailReturnCoverCrossfade(
+                isLeaving = true,
+                playbackIntent = VideoSharedTransitionPlaybackIntent.CoverFirst
+            )
+        )
+        assertFalse(
+            shouldUseDetailReturnCoverCrossfade(
+                isLeaving = false,
+                playbackIntent = VideoSharedTransitionPlaybackIntent.ImmediatePlayback
+            )
+        )
+    }
+
+    @Test
+    fun homeVideoCardPropagatesClickToPlayPlaybackIntent() {
+        val cardSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt"
+        ).readText()
+
+        assertTrue(cardSource.contains("resolveVideoSharedTransitionPlaybackIntent("))
+        assertTrue(cardSource.contains("SettingsManager.getClickToPlaySync(context)"))
+        assertTrue(cardSource.contains("playbackIntent = videoSharedPlaybackIntent"))
     }
 
     @Test
@@ -280,5 +1041,31 @@ class VideoSharedTransitionPolicyTest {
         assertEquals(8, resolveVideoSharedTransitionSourceCornerDp("watch_later", fallbackCornerDp = 12))
         assertEquals(12, resolveVideoSharedTransitionSourceCornerDp("history", fallbackCornerDp = 12))
         assertEquals(12, resolveVideoSharedTransitionSourceCornerDp("partition?from=tab", fallbackCornerDp = 12))
+    }
+
+    @Test
+    fun livePlayerAndExpandedLayoutSharedBoundsDoNotUseUnsynchronizedSpatialSpring() {
+        val playerSource = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt")
+        ).first { it.exists() }.readText()
+        val tabletSource = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/screen/TabletVideoLayout.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/screen/TabletVideoLayout.kt")
+        ).first { it.exists() }.readText()
+        val largeScreenSource = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt")
+        ).first { it.exists() }.readText()
+
+        assertTrue(playerSource.contains("livePlayerSharedTransitionMotionSpec"))
+        assertTrue(playerSource.contains("videoSharedElementBoundsTransformSpec("))
+        assertFalse(
+            playerSource.contains("com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()"),
+            "VideoPlayerSection should not use spatialSpec() for shared bounds"
+        )
+
+        assertTrue(tabletSource.contains("videoSharedElementBoundsTransformSpec("))
+        assertTrue(largeScreenSource.contains("videoSharedElementBoundsTransformSpec("))
     }
 }

@@ -43,8 +43,40 @@ internal fun resolveBangumiAutoResumeTarget(
     )
 }
 
+/**
+ * PiliPlus chooses an explicitly supplied video aid before the ep id and finally the
+ * remembered progress. Keeping this decision in one policy makes course entry points
+ * behave identically whether they came from search, history or a share link.
+ */
+internal fun resolveBangumiInitialEpisode(
+    detail: BangumiDetail,
+    preferredAid: Long,
+    routeEpId: Long,
+    autoResumeEnabled: Boolean
+): BangumiResumeTarget? {
+    val episodes = detail.episodes.orEmpty()
+    if (episodes.isEmpty()) return null
+    preferredAid.takeIf { it > 0L }
+        ?.let { aid -> episodes.firstOrNull { it.aid == aid }?.let { return BangumiResumeTarget(it.id, 0L) } }
+    routeEpId.takeIf { it > 0L }
+        ?.let { epId -> episodes.firstOrNull { it.id == epId }?.let { return BangumiResumeTarget(it.id, 0L) } }
+    return resolveBangumiAutoResumeTarget(
+        detail = detail,
+        routeEpId = routeEpId,
+        autoResumeEnabled = autoResumeEnabled
+    ) ?: episodes.firstOrNull()?.let { BangumiResumeTarget(it.id, 0L) }
+}
+
 internal fun resolveBangumiResumePositionMs(lastTimeSec: Long): Long {
     return lastTimeSec.coerceAtLeast(0L) * 1000L
+}
+
+internal fun resolveBangumiPlaybackStartPositionMs(
+    routeResumePositionMs: Long,
+    savedEpisodePositionMs: Long
+): Long {
+    return routeResumePositionMs.takeIf { it > 0L }
+        ?: savedEpisodePositionMs.coerceAtLeast(0L)
 }
 
 internal fun shouldSendBangumiPlaybackHeartbeat(

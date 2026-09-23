@@ -23,9 +23,11 @@ fun PortraitCommentSheet(
     onReplyClick: (ReplyItem) -> Unit = {},
     onUserClick: (Long) -> Unit
 ) {
+    if (!active) return
+
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
     val effectiveVisibility = resolvePortraitCommentSheetVisibility(
-        active = active,
+        active = true,
         commentSheetVisible = visible,
         subReplyVisible = subReplyState.visible
     )

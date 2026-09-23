@@ -36,6 +36,22 @@ class HomePreloadPolicyTest {
     }
 
     @Test
+    fun videoRepositoryInitSkipsSpiWarmupForWebAndUsesSharedWbiManager() {
+        val source = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/data/repository/VideoRepository.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/data/repository/VideoRepository.kt")
+        ).first { it.exists() }.readText()
+        val initSource = source
+            .substringAfter("fun init(context: android.content.Context)")
+            .substringBefore("private suspend fun fetchPlayUrlWithAccessToken")
+
+        assertTrue(initSource.contains("shouldPrimeBuvidForHomePreload(feedApiType)"))
+        assertTrue(initSource.contains("WbiKeyManager.getWbiKeys()"))
+        assertFalse(initSource.contains("runCatching { getWbiKeys() }"))
+        assertFalse(initSource.contains("runCatching { ensureBuvid3FromSpi() }\n            runCatching { getWbiKeys() }"))
+    }
+
+    @Test
     fun reusesInFlightPreloadOnlyForInitialHomeRequest() {
         assertTrue(
             shouldReuseInFlightPreloadForHomeRequest(

@@ -4,12 +4,16 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
-import kotlin.math.pow
+import kotlin.math.roundToInt
 
-private const val LAYOUT_PROGRESS_MIN = -0.08f
-private const val LAYOUT_PROGRESS_MAX = 1.02f
+private const val LAYOUT_PROGRESS_MIN = 0f
+private const val LAYOUT_PROGRESS_MAX = 1f
 private const val FALLBACK_START_SCALE = 0.96f
-private const val DISMISS_OVERSHOOT_FACTOR = 0.03f
+/** 一镜到底：进出场共用 Continuity 曲线与相近时长，避免 overshoot 二次弹。 */
+private const val IMAGE_PREVIEW_OPEN_DURATION_MS = 320
+private const val IMAGE_PREVIEW_DISMISS_DURATION_MS = 300
+private const val IMAGE_PREVIEW_CANCEL_RECOVER_DURATION_MS = 180
+private const val IMAGE_PREVIEW_BLUR_QUANTUM_PX = 2f
 
 internal data class ImagePreviewTransitionFrame(
     val layoutProgress: Float,
@@ -25,8 +29,15 @@ internal data class ImagePreviewVisualFrame(
 )
 
 internal data class ImagePreviewDismissMotion(
+    /** 关闭落点：一镜到底直落到 0，不再 overshoot。 */
     val overshootTarget: Float,
-    val settleTarget: Float
+    val settleTarget: Float,
+    /** 主收缩时长：与进场接近，Continuity 先快后慢贴回缩略图。 */
+    val collapseDurationMillis: Int,
+    /** 预测返回取消后的回弹时长。 */
+    val cancelRecoverDurationMillis: Int,
+    /** 打开时长：与关闭同系，进出一镜对称。 */
+    val openDurationMillis: Int
 )
 
 internal data class ImagePreviewDismissTransform(
@@ -97,6 +108,14 @@ internal data class CommentImagePreviewPageTransform(
     val alpha: Float
 )
 
+internal data class ImagePreviewGalleryPageTransform(
+    val rotationY: Float,
+    val pivotFractionX: Float,
+    val translationXPx: Float,
+    val scale: Float,
+    val alpha: Float
+)
+
 internal data class ImagePreviewOverlayPadding(
     val start: Dp,
     val top: Dp,
@@ -111,11 +130,12 @@ internal fun resolveImagePreviewTransitionFrame(
 ): ImagePreviewTransitionFrame {
     val layoutProgress = rawProgress.coerceIn(LAYOUT_PROGRESS_MIN, LAYOUT_PROGRESS_MAX)
     val visualProgress = rawProgress.coerceIn(0f, 1f)
-    val cornerRadiusDp = if (hasSourceRect) {
-        sourceCornerRadiusDp.coerceAtLeast(0f)
-    } else {
-        0f
-    }
+    val cornerRadiusDp = resolveImagePreviewPresentedCornerRadiusDp(
+        visualProgress = visualProgress,
+        verticalDragProgress = 0f,
+        hasSourceRect = hasSourceRect,
+        sourceCornerRadiusDp = sourceCornerRadiusDp
+    )
     val fallbackScale = lerpFloat(FALLBACK_START_SCALE, 1f, visualProgress)
     return ImagePreviewTransitionFrame(
         layoutProgress = layoutProgress,
@@ -125,10 +145,29 @@ internal fun resolveImagePreviewTransitionFrame(
     )
 }
 
+/**
+ * 全屏打开时圆角为 0；返回/竖滑退出时插值到缩略图圆角，贴回格子更自然。
+ */
+internal fun resolveImagePreviewPresentedCornerRadiusDp(
+    visualProgress: Float,
+    verticalDragProgress: Float,
+    hasSourceRect: Boolean,
+    sourceCornerRadiusDp: Float,
+    openCornerRadiusDp: Float = 0f
+): Float {
+    if (!hasSourceRect) return openCornerRadiusDp.coerceAtLeast(0f)
+    val source = sourceCornerRadiusDp.coerceAtLeast(0f)
+    val open = openCornerRadiusDp.coerceAtLeast(0f)
+    val morphCorner = lerpFloat(source, open, visualProgress.coerceIn(0f, 1f))
+    val dragCorner = lerpFloat(open, source, verticalDragProgress.coerceIn(0f, 1f))
+    return maxOf(morphCorner, dragCorner)
+}
+
 internal fun resolveImagePreviewVisualFrame(
     visualProgress: Float,
     transitionEnabled: Boolean,
-    maxBlurRadiusPx: Float
+    maxBlurRadiusPx: Float,
+    blurEnabled: Boolean = true,
 ): ImagePreviewVisualFrame {
     val progress = visualProgress.coerceIn(0f, 1f)
     if (!transitionEnabled) {
@@ -142,14 +181,36 @@ internal fun resolveImagePreviewVisualFrame(
     return ImagePreviewVisualFrame(
         contentAlpha = lerpFloat(0.9f, 1f, progress),
         backdropAlpha = progress,
-        blurRadiusPx = maxBlurRadiusPx.coerceAtLeast(0f) * (1f - progress)
+        blurRadiusPx = if (blurEnabled) {
+            resolveImagePreviewBlurRadiusPx(
+                visualProgress = progress,
+                maxBlurRadiusPx = maxBlurRadiusPx,
+            )
+        } else {
+            0f
+        }
     )
+}
+
+internal fun resolveImagePreviewBlurRadiusPx(
+    visualProgress: Float,
+    maxBlurRadiusPx: Float,
+): Float {
+    val returnProgress = 1f - visualProgress.coerceIn(0f, 1f)
+    val maxRadius = maxBlurRadiusPx.coerceAtLeast(0f)
+    val easedRadius = maxRadius * returnProgress * returnProgress
+    return ((easedRadius / IMAGE_PREVIEW_BLUR_QUANTUM_PX).roundToInt() *
+        IMAGE_PREVIEW_BLUR_QUANTUM_PX).coerceIn(0f, maxRadius)
 }
 
 internal fun imagePreviewDismissMotion(): ImagePreviewDismissMotion {
     return ImagePreviewDismissMotion(
+        // 一镜到底：单段连续 morph 到缩略图，不做 overshoot + spring 二次落点。
         overshootTarget = 0f,
-        settleTarget = 0f
+        settleTarget = 0f,
+        collapseDurationMillis = IMAGE_PREVIEW_DISMISS_DURATION_MS,
+        cancelRecoverDurationMillis = IMAGE_PREVIEW_CANCEL_RECOVER_DURATION_MS,
+        openDurationMillis = IMAGE_PREVIEW_OPEN_DURATION_MS
     )
 }
 
@@ -166,14 +227,8 @@ internal fun resolveImagePreviewDismissTransform(
         )
     }
 
-    val clampedProgress = transitionProgress.coerceIn(LAYOUT_PROGRESS_MIN, 1f)
-    val baseDismiss = (1f - clampedProgress.coerceIn(0f, 1f)).pow(1.6f)
-    val overshoot = if (clampedProgress < 0f) {
-        ((-clampedProgress) / (-LAYOUT_PROGRESS_MIN)) * DISMISS_OVERSHOOT_FACTOR
-    } else {
-        0f
-    }
-    val dismissFraction = baseDismiss + overshoot
+    // 几何插值保持线性；速度曲线只交给 Animatable 的 Continuity easing。
+    val dismissFraction = resolveImagePreviewDismissFraction(transitionProgress)
     val targetScale = min(
         sourceRect.width / displayedImageRect.width,
         sourceRect.height / displayedImageRect.height
@@ -301,7 +356,21 @@ internal fun resolveImagePreviewVerticalDismissDecision(
 internal fun resolveImagePreviewDismissBackdropAlpha(
     visualProgress: Float
 ): Float {
-    return visualProgress.coerceIn(0f, 1f).pow(0.45f)
+    // 一镜到底：遮罩与 morph 进度线性同步，落点时立刻露底，减少「关完还黑一下」。
+    return visualProgress.coerceIn(0f, 1f)
+}
+
+/**
+ * Chrome（顶栏/评论条）比图片 morph 更早淡出，避免控件跟着缩变形。
+ */
+internal fun resolveImagePreviewChromeAlpha(
+    visualProgress: Float,
+    isDismissing: Boolean
+): Float {
+    val progress = visualProgress.coerceIn(0f, 1f)
+    if (!isDismissing) return progress
+    // 前半段基本清掉 chrome，后半段只剩干净的图片飞回。
+    return ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
 }
 
 internal fun resolveImagePreviewText(
@@ -378,6 +447,29 @@ internal fun resolveCommentImagePreviewPageTransform(
     )
 }
 
+/**
+ * 普通画廊的可选 3D 翻页。角度和位移比评论面板更轻，减少边缘拉伸与切页时的黑缝。
+ */
+internal fun resolveImagePreviewGalleryPageTransform(
+    pageOffsetFraction: Float,
+    containerWidthPx: Float
+): ImagePreviewGalleryPageTransform {
+    val clampedOffset = pageOffsetFraction.coerceIn(-1f, 1f)
+    val absOffset = kotlin.math.abs(clampedOffset)
+    val pivot = when {
+        clampedOffset > 0.001f -> 1f
+        clampedOffset < -0.001f -> 0f
+        else -> 0.5f
+    }
+    return ImagePreviewGalleryPageTransform(
+        rotationY = -clampedOffset * 48f,
+        pivotFractionX = pivot,
+        translationXPx = -clampedOffset * containerWidthPx.coerceAtLeast(1f) * 0.08f,
+        scale = lerpFloat(1f, 0.94f, absOffset),
+        alpha = lerpFloat(1f, 0.84f, absOffset)
+    )
+}
+
 internal fun resolveCommentImageOriginalSizeLabel(sizeKb: Float?): String {
     val safeSize = sizeKb?.takeIf { it > 0f } ?: return "查看原图"
     return if (safeSize >= 1024f) {
@@ -399,13 +491,10 @@ private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction
 }
 
+/**
+ * 进度 1 = 全屏打开，0 = 落回缩略图。
+ * 几何插值线性，避免与 Animatable easing 叠加重映射导致末段发黏。
+ */
 private fun resolveImagePreviewDismissFraction(transitionProgress: Float): Float {
-    val clampedProgress = transitionProgress.coerceIn(LAYOUT_PROGRESS_MIN, 1f)
-    val baseDismiss = (1f - clampedProgress.coerceIn(0f, 1f)).pow(1.6f)
-    val overshoot = if (clampedProgress < 0f) {
-        ((-clampedProgress) / (-LAYOUT_PROGRESS_MIN)) * DISMISS_OVERSHOOT_FACTOR
-    } else {
-        0f
-    }
-    return baseDismiss + overshoot
+    return (1f - transitionProgress.coerceIn(0f, 1f)).coerceIn(0f, 1f)
 }

@@ -8,6 +8,19 @@ import kotlin.test.assertTrue
 class PortraitFullscreenOverlayPolicyTest {
 
     @Test
+    fun danmakuToggle_isWiredIntoBottomInputBarOnly() {
+        val source = java.io.File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/overlay/PortraitFullscreenOverlay.kt"
+        ).readText()
+
+        val bottomCall = source.substringAfter("PortraitBottomInputBar(").substringBefore(")")
+        val topCall = source.substringAfter("PortraitTopControlBar(").substringBefore(")")
+        assertTrue(bottomCall.contains("danmakuEnabled = danmakuEnabled"))
+        assertTrue(bottomCall.contains("onDanmakuToggle = onDanmakuToggle"))
+        assertFalse(topCall.contains("danmakuEnabled"))
+    }
+
+    @Test
     fun useCompactTopBarOnNarrowScreen() {
         assertTrue(
             resolvePortraitFullscreenOverlayLayoutPolicy(

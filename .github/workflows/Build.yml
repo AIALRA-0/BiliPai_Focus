@@ -8,9 +8,9 @@ on:
         type: choice
         description: '选择编译类型'
         required: true
-        default: 'debug'
+        default: 'dev'
         options:
-          - 'debug'
+          - 'dev'
           - 'release'
 
 permissions:
@@ -19,32 +19,125 @@ permissions:
   attestations: write
   id-token: write
 
+# Focus clients discover installable APKs from this repository's GitHub Releases.
+env:
+  GITHUB_APK_DISTRIBUTION_ENABLED: "true"
+
 jobs:
-  check-fcm:
+  quality-guards:
     runs-on: ubuntu-latest
-    outputs:
-      has_fcm: ${{ steps.check.outputs.has_fcm }}
     steps:
-      - name: Check FCM configuration
-        id: check
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned Miuix source
+        uses: actions/checkout@v4
+        with:
+          repository: compose-miuix-ui/miuix
+          ref: 5157b503e86e2bfc2db61db00fff5df41326394a
+          path: .ci/miuix
+          persist-credentials: false
+
+      - name: Align pinned Miuix AGP with the app build
         run: |
-          if [ -n "${{ secrets.FCM }}" ]; then
-            echo "FCM secret is configured"
-            echo "has_fcm=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ FCM secret is not configured. Workflow will not run."
-            echo "has_fcm=false" >> $GITHUB_OUTPUT
-          fi
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          source = Path(".ci/miuix")
+          expected_revision = "5157b503e86e2bfc2db61db00fff5df41326394a"
+          actual_revision = subprocess.check_output(
+              ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+          ).strip()
+          if actual_revision != expected_revision:
+              raise SystemExit(f"Unexpected Miuix source revision: {actual_revision}")
+
+          catalog = source / "gradle/libs.versions.toml"
+          lines = catalog.read_text(encoding="utf-8").splitlines()
+          target = 'agp = "9.4.0"'
+          matches = [index for index, line in enumerate(lines) if line.strip() == target]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one {target!r} entry in {catalog}")
+          index = matches[0]
+          indentation = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
+          lines[index] = indentation + 'agp = "9.3.2"'
+          catalog.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Run source and policy guards
+        run: |
+          chmod +x gradlew
+          ./gradlew "-Pbili.miuix.source=${GITHUB_WORKSPACE}/.ci/miuix" \
+            :app:testDebugUnitTest \
+            --tests 'com.android.purebilibili.feature.settings.AppUpdateCheckerTest' \
+            --tests 'com.android.purebilibili.feature.settings.AppVersionPolicyTest' \
+            --tests 'com.android.purebilibili.feature.settings.ApkArtifactNamingPolicyTest' \
+            --tests 'com.android.purebilibili.core.store.PreferenceKeyUniquenessTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.HardcodedColorLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.HardcodedSpacingLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.HardcodedTypographyLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.MigratedFeatureStyleLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.StyleLintAllowlistRatchetTest' \
+            --tests 'com.android.purebilibili.core.ui.perf.FrameBudgetLintTest' \
+            --no-daemon \
+            --console=plain
 
   build:
     runs-on: ubuntu-latest
-    needs: check-fcm
-    if: needs.check-fcm.outputs.has_fcm == 'true'
+    needs: quality-guards
     env:
       NATIVE_TARGET: "arm64-v8a"
     steps:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Checkout pinned Miuix source
+        uses: actions/checkout@v4
+        with:
+          repository: compose-miuix-ui/miuix
+          ref: 5157b503e86e2bfc2db61db00fff5df41326394a
+          path: .ci/miuix
+          persist-credentials: false
+
+      - name: Align pinned Miuix AGP with the app build
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          source = Path(".ci/miuix")
+          expected_revision = "5157b503e86e2bfc2db61db00fff5df41326394a"
+          actual_revision = subprocess.check_output(
+              ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+          ).strip()
+          if actual_revision != expected_revision:
+              raise SystemExit(f"Unexpected Miuix source revision: {actual_revision}")
+
+          catalog = source / "gradle/libs.versions.toml"
+          lines = catalog.read_text(encoding="utf-8").splitlines()
+          target = 'agp = "9.4.0"'
+          matches = [index for index, line in enumerate(lines) if line.strip() == target]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one {target!r} entry in {catalog}")
+          index = matches[0]
+          indentation = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
+          lines[index] = indentation + 'agp = "9.3.2"'
+          catalog.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
 
       - name: Set Build Type
         id: set_build_type
@@ -54,7 +147,7 @@ jobs:
           elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "build_type=release" >> $GITHUB_OUTPUT
           else
-            echo "build_type=debug" >> $GITHUB_OUTPUT
+            echo "build_type=dev" >> $GITHUB_OUTPUT
           fi
           echo "构建类型已设置"
 
@@ -63,7 +156,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Set up Android SDK and NDK
         uses: android-actions/setup-android@v3
@@ -71,10 +168,64 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
 
-      - name: Set Up FCM Config
+      - name: Configure optional Firebase services
+        env:
+          FCM_CONFIG_BASE64: ${{ secrets.FCM }}
         run: |
-          cd ./app
-          echo "${{ secrets.FCM }}" | base64 -d > google-services.json
+          if [ -n "$FCM_CONFIG_BASE64" ]; then
+            printf '%s' "$FCM_CONFIG_BASE64" | base64 --decode > app/google-services.json
+          else
+            echo "Firebase config is absent; continuing with Firebase disabled."
+          fi
+
+      - name: Prepare Focus release signing key
+        if: steps.set_build_type.outputs.build_type == 'release'
+        env:
+          FOCUS_RELEASE_KEYSTORE_B64: ${{ secrets.FOCUS_RELEASE_KEYSTORE_B64 }}
+          FOCUS_RELEASE_STORE_PASSWORD: ${{ secrets.FOCUS_RELEASE_STORE_PASSWORD }}
+          FOCUS_RELEASE_KEY_ALIAS: ${{ secrets.FOCUS_RELEASE_KEY_ALIAS }}
+          FOCUS_RELEASE_KEY_PASSWORD: ${{ secrets.FOCUS_RELEASE_KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          required = (
+              "FOCUS_RELEASE_KEYSTORE_B64",
+              "FOCUS_RELEASE_STORE_PASSWORD",
+              "FOCUS_RELEASE_KEY_ALIAS",
+              "FOCUS_RELEASE_KEY_PASSWORD",
+          )
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit("Missing required Focus release signing secrets: " + ", ".join(missing))
+
+          keystore = Path(os.environ["RUNNER_TEMP"]) / "focus-release.jks"
+          try:
+              keystore.write_bytes(base64.b64decode(os.environ[required[0]], validate=True))
+          except Exception as error:
+              raise SystemExit("Focus release keystore secret is not valid base64") from error
+          if not keystore.is_file() or keystore.stat().st_size == 0:
+              raise SystemExit("Focus release keystore secret decoded to an empty file")
+
+          def escape_property(value: str) -> str:
+              return (value.replace("\\", "\\\\").replace("\n", "\\n")
+                      .replace("\r", "\\r").replace(":", "\\:")
+                      .replace("=", "\\=").replace("#", "\\#")
+                      .replace("!", "\\!").replace(" ", "\\ "))
+
+          properties = {
+              "storeFile": str(keystore),
+              "storePassword": os.environ["FOCUS_RELEASE_STORE_PASSWORD"],
+              "keyAlias": os.environ["FOCUS_RELEASE_KEY_ALIAS"],
+              "keyPassword": os.environ["FOCUS_RELEASE_KEY_PASSWORD"],
+          }
+          Path("keystore.properties").write_text(
+              "".join(f"{key}={escape_property(value)}\n" for key, value in properties.items()),
+              encoding="utf-8",
+          )
+          PY
 
       - name: Build APK
         env:
@@ -85,6 +236,7 @@ jobs:
           BILI_BUILD_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
         run: |
           COMMON_ARGS=(
+            "-Pbili.miuix.source=${GITHUB_WORKSPACE}/.ci/miuix"
             "-Pbili.build.commitSha=${BILI_BUILD_COMMIT_SHA}"
             "-Pbili.build.gitRef=${BILI_BUILD_GIT_REF}"
             "-Pbili.build.workflowRunId=${BILI_BUILD_WORKFLOW_RUN_ID}"
@@ -94,13 +246,60 @@ jobs:
           if [ "${{ steps.set_build_type.outputs.build_type }}" = "release" ]; then
             ./gradlew "${COMMON_ARGS[@]}" assembleRelease
           else
-            ./gradlew "${COMMON_ARGS[@]}" assembleDebug
+            ./gradlew "${COMMON_ARGS[@]}" assembleDev
           fi
+
+      - name: Verify upgrade signing certificate continuity
+        if: steps.set_build_type.outputs.build_type == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          BASELINE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" | python3 -c '
+          import json, os, sys
+          releases = json.load(sys.stdin)
+          current = os.environ.get("CURRENT_RELEASE_TAG", "")
+          for release in releases:
+              if release.get("draft") or release.get("tag_name") == current:
+                  continue
+              if any(asset.get("name", "").lower().endswith(".apk") for asset in release.get("assets", [])):
+                  print(release.get("tag_name", ""))
+                  break
+          ')
+          if [ -z "$BASELINE_TAG" ]; then
+            echo "No published Focus APK is available to verify upgrade signing continuity."
+            exit 1
+          fi
+
+          BASELINE_DIR="$RUNNER_TEMP/focus-signing-baseline"
+          mkdir -p "$BASELINE_DIR"
+          gh release download "$BASELINE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --dir "$BASELINE_DIR"
+          BASELINE_APK="$(find "$BASELINE_DIR" -maxdepth 1 -type f -name '*.apk' | sort | head -n 1)"
+          NEW_APK="$(find "${{ github.workspace }}/app/build/outputs/bilipai/release" -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          if [ -z "$BASELINE_APK" ] || [ -z "$NEW_APK" ] || [ -z "$APKSIGNER" ]; then
+            echo "Could not locate both APKs and apksigner for certificate continuity verification."
+            exit 1
+          fi
+
+          cert_digest() {
+            "$APKSIGNER" verify --print-certs "$1" 2>&1 \
+              | awk -F ': ' '/certificate SHA-256 digest/ { print tolower($2); exit }'
+          }
+          OLD_CERT="$(cert_digest "$BASELINE_APK")"
+          NEW_CERT="$(cert_digest "$NEW_APK")"
+          if [ -z "$OLD_CERT" ] || [ "$OLD_CERT" != "$NEW_CERT" ]; then
+            echo "Release signing certificate does not match the latest published Focus APK."
+            exit 1
+          fi
+          echo "Release APK uses the existing Focus signing certificate."
 
       - name: Collect release evidence
         id: collect_release_assets
         run: |
-          APK_FILES=$(find ${{ github.workspace }}/app/build/outputs/apk/ -name "*.apk" -type f)
+          APK_DIR="${{ github.workspace }}/app/build/outputs/bilipai/${{ steps.set_build_type.outputs.build_type }}"
+          APK_FILES=$(find "$APK_DIR" -maxdepth 1 -name "BiliPai-*.apk" -type f)
           if [ -z "$APK_FILES" ]; then
             echo "No APK files found"
             exit 1
@@ -129,7 +328,7 @@ jobs:
           apk_files = sorted(dist_dir.glob("*.apk"))
           payload = {
               "schemaVersion": 1,
-              "appId": "com.android.purebilibili",
+              "appId": "com.android.purebilibili.focus",
               "versionName": os.environ["VERSION_NAME"],
               "versionCode": int(os.environ["VERSION_CODE"]),
               "gitCommitSha": os.environ["GITHUB_SHA"],
@@ -166,14 +365,14 @@ jobs:
 
       - name: Generate artifact attestation
         id: attest_release
-        if: startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
+        if: env.GITHUB_APK_DISTRIBUTION_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
         uses: actions/attest-build-provenance@v3
         with:
           subject-checksums: ${{ github.workspace }}/build/release-evidence/checksums.txt
           show-summary: true
 
       - name: Collect attestation evidence
-        if: startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
+        if: env.GITHUB_APK_DISTRIBUTION_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
         env:
           DIST_DIR: ${{ github.workspace }}/build/release-evidence
           ATTESTATION_URL: ${{ steps.attest_release.outputs.attestation-url }}
@@ -204,6 +403,7 @@ jobs:
           PY
 
       - name: Upload Build Artifacts
+        if: env.GITHUB_APK_DISTRIBUTION_ENABLED == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: BiliPai
@@ -212,7 +412,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release Assets
-        if: startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
+        if: env.GITHUB_APK_DISTRIBUTION_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
@@ -226,13 +426,3 @@ jobs:
 
           gh release upload "$RELEASE_TAG" "$DIST_DIR"/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false
-
-  skipped-due-to-no-fcm:
-    runs-on: ubuntu-latest
-    needs: check-fcm
-    if: needs.check-fcm.outputs.has_fcm == 'false'
-    steps:
-      - name: Workflow Skipped
-        run: |
-          echo "❌ Workflow skipped because FCM secret is not configured."
-          echo "Please configure the FCM secret in the repository settings."

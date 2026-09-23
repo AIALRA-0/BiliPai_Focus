@@ -8,29 +8,76 @@ import kotlin.test.assertTrue
 class VideoDetailRouteSheetPolicyTest {
 
     @Test
-    fun homeSourceEnablesRouteSheetMotion() {
-        val motion = resolveVideoDetailRouteSheetMotion(
-            sourceRoute = "home",
-            transitionEnabled = true
+    fun cardSecondaryContent_usesLayeredTimingWithinGeometryTimeline() {
+        val timing = resolveVideoDetailSecondaryContentTiming(
+            fullDurationMillis = 320,
+            contentDelayMillis = 40,
+            contentDurationMillis = 220,
         )
 
-        assertTrue(motion.enabled)
-        assertEquals(416, motion.durationMillis)
-        assertEquals(320, motion.mainDurationMillis)
-        assertEquals(96, motion.settleDurationMillis)
-        assertEquals(0.965f, motion.initialScale)
-        assertEquals(28f, motion.initialCornerDp)
-        assertTrue(motion.settleScaleDelta in 0f..0.002f)
-        assertTrue(motion.settleTranslationDp in 0f..2f)
-        assertTrue(motion.easing.transform(0.35f) > 0.7f)
-        assertTrue(motion.easing.transform(0.75f) > 0.96f)
+        assertEquals(40, timing.enterDelayMillis)
+        assertEquals(220, timing.enterDurationMillis)
+        assertEquals(0, timing.returnDelayMillis)
+        assertEquals(220, timing.returnDurationMillis)
     }
 
     @Test
-    fun nonHomeSourceDoesNotUseRouteSheetMotion() {
+    fun cardSecondaryContent_clampsToShortCustomTimeline() {
+        val timing = resolveVideoDetailSecondaryContentTiming(
+            fullDurationMillis = 240,
+            contentDelayMillis = 40,
+            contentDurationMillis = 220,
+        )
+
+        assertEquals(40, timing.enterDelayMillis)
+        assertEquals(200, timing.enterDurationMillis)
+        assertEquals(220, timing.returnDurationMillis)
+    }
+
+    @Test
+    fun cardReturnTargetSourcesEnableRouteSheetMotion() {
+        listOf(
+            "home",
+            "dynamic",
+            "search",
+            "watch_later",
+            "dynamic_detail/123",
+            "space/42",
+            "category/1",
+            "season_series_detail/favorite_season/1324105"
+        ).forEach { route ->
+            val motion = resolveVideoDetailRouteSheetMotion(
+                sourceRoute = route,
+                transitionEnabled = true
+            )
+
+            assertTrue(motion.enabled, "expected route sheet motion for $route")
+            assertEquals(416, motion.durationMillis)
+            assertEquals(320, motion.mainDurationMillis)
+            assertEquals(96, motion.settleDurationMillis)
+            assertEquals(0.965f, motion.initialScale)
+            assertEquals(28f, motion.initialCornerDp)
+            assertTrue(motion.settleScaleDelta in 0f..0.002f)
+            assertTrue(motion.settleTranslationDp in 0f..2f)
+            assertTrue(motion.enterEasing.transform(0.35f) in 0.85f..0.95f)
+            assertTrue(motion.enterEasing.transform(0.75f) in 0.98f..1.0f)
+            assertTrue(motion.enterEasing === motion.returnEasing)
+            // Continuity：半程已明显超过线性，体现先快后慢
+            assertTrue(motion.enterEasing.transform(0.5f) > 0.7f)
+        }
+    }
+
+    @Test
+    fun nonCardSourceDoesNotUseRouteSheetMotion() {
         assertFalse(
             resolveVideoDetailRouteSheetMotion(
-                sourceRoute = "search",
+                sourceRoute = "settings",
+                transitionEnabled = true
+            ).enabled
+        )
+        assertFalse(
+            resolveVideoDetailRouteSheetMotion(
+                sourceRoute = "video",
                 transitionEnabled = true
             ).enabled
         )

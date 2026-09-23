@@ -10,9 +10,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -33,7 +32,10 @@ import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.ui.rememberAppShareIcon
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  *  横屏右侧操作栏
@@ -164,15 +166,15 @@ private fun SidebarTextButton(
     isHighlighted: Boolean = false,
     onClick: () -> Unit
 ) {
-    Surface(
+    AppSurface(
         onClick = onClick,
         color = Color.Black.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(6.dp)
+        shape = AppShapes.container(ContainerLevel.Chip)
     ) {
-        Text(
+        AppText(
             text = text,
             color = if (isHighlighted) MaterialTheme.colorScheme.primary else Color.White,
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         )
@@ -203,7 +205,7 @@ private fun SidebarActionButton(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .scale(scale)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(AppShapes.container(ContainerLevel.Chip))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -212,13 +214,13 @@ private fun SidebarActionButton(
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         // 图标背景
-        Surface(
+        AppSurface(
             shape = CircleShape,
             color = Color.Black.copy(alpha = 0.4f),
             modifier = Modifier.size(40.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(
+                AppIcon(
                     imageVector = icon,
                     contentDescription = label,
                     tint = if (isActive) (if (activeColor == Color.Unspecified) MaterialTheme.colorScheme.primary else activeColor) else Color.White,
@@ -230,10 +232,10 @@ private fun SidebarActionButton(
         Spacer(modifier = Modifier.height(4.dp))
         
         // 标签文字
-        Text(
+        AppText(
             text = label,
             color = if (isActive) (if (activeColor == Color.Unspecified) MaterialTheme.colorScheme.primary else activeColor) else Color.White.copy(alpha = 0.9f),
-            fontSize = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1
         )

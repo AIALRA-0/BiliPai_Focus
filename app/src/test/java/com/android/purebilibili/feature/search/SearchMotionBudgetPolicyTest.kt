@@ -71,6 +71,28 @@ class SearchMotionBudgetPolicyTest {
     }
 
     @Test
+    fun activeResultRequest_keepsChromeBackdropSourceMounted() {
+        assertTrue(
+            shouldKeepSearchChromeBackdropSource(
+                progressiveTopBlurEnabled = false,
+                liquidGlassEnabled = true,
+            )
+        )
+        assertTrue(
+            shouldKeepSearchChromeBackdropSource(
+                progressiveTopBlurEnabled = true,
+                liquidGlassEnabled = false,
+            )
+        )
+        assertFalse(
+            shouldKeepSearchChromeBackdropSource(
+                progressiveTopBlurEnabled = false,
+                liquidGlassEnabled = false,
+            )
+        )
+    }
+
+    @Test
     fun startupPending_forcesReducedMotionAndDisablesHaze() {
         assertEquals(
             SearchMotionBudget.REDUCED,
@@ -120,7 +142,7 @@ class SearchMotionBudgetPolicyTest {
     }
 
     @Test
-    fun autoFocus_waitsUntilStartupSettles() {
+    fun autoFocus_isDisabledForSearchDestinationEntry() {
         assertFalse(
             shouldAutoFocusSearchField(
                 startupSettled = false,
@@ -133,10 +155,86 @@ class SearchMotionBudgetPolicyTest {
                 query = "abc"
             )
         )
-        assertTrue(
+        assertFalse(
             shouldAutoFocusSearchField(
                 startupSettled = true,
                 query = ""
+            )
+        )
+    }
+
+    @Test
+    fun autoFocus_remainsDisabledForResultsAndConsumedState() {
+        assertFalse(
+            shouldAutoFocusSearchField(
+                startupSettled = true,
+                query = "",
+                showResults = true
+            )
+        )
+        assertFalse(
+            shouldAutoFocusSearchField(
+                startupSettled = true,
+                query = "",
+                autoFocusConsumed = true
+            )
+        )
+    }
+
+    @Test
+    fun searchBackAction_alwaysLeavesSearchDestination() {
+        assertEquals(
+            SearchBackAction.LEAVE_SEARCH,
+            resolveSearchBackAction(
+                showResults = true,
+                suggestionsVisible = true,
+                searchFieldFocused = false
+            )
+        )
+        assertEquals(
+            SearchBackAction.LEAVE_SEARCH,
+            resolveSearchBackAction(
+                showResults = true,
+                suggestionsVisible = false,
+                searchFieldFocused = true
+            )
+        )
+        assertEquals(
+            SearchBackAction.LEAVE_SEARCH,
+            resolveSearchBackAction(
+                showResults = true,
+                suggestionsVisible = false,
+                searchFieldFocused = false
+            )
+        )
+        assertEquals(
+            SearchBackAction.LEAVE_SEARCH,
+            resolveSearchBackAction(
+                showResults = false,
+                suggestionsVisible = false,
+                searchFieldFocused = false
+            )
+        )
+    }
+
+    @Test
+    fun clearFocus_onlyWhenEnteringResults() {
+        assertTrue(
+            shouldClearSearchFocusWhenShowingResults(
+                showResults = true,
+                previousShowResults = false
+            )
+        )
+        assertFalse(
+            shouldClearSearchFocusWhenShowingResults(
+                showResults = true,
+                previousShowResults = true
+            )
+        )
+        assertFalse(
+            shouldClearSearchFocusWhenShowingResults(
+                showResults = false,
+                previousShowResults = true
             )
         )
     }
@@ -157,6 +255,38 @@ class SearchMotionBudgetPolicyTest {
             shouldForceLowBudgetSearchHeaderBlur(
                 isSearching = true,
                 isScrollingResults = false
+            )
+        )
+    }
+
+    @Test
+    fun searchCardTransition_followsGlobalSettingRegardlessOfBudget() {
+        assertTrue(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = true,
+                motionBudget = SearchMotionBudget.FULL,
+                isReturningFromVideoDetail = false
+            )
+        )
+        assertTrue(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = true,
+                motionBudget = SearchMotionBudget.REDUCED,
+                isReturningFromVideoDetail = false
+            )
+        )
+        assertTrue(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = true,
+                motionBudget = SearchMotionBudget.REDUCED,
+                isReturningFromVideoDetail = true
+            )
+        )
+        assertFalse(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = false,
+                motionBudget = SearchMotionBudget.FULL,
+                isReturningFromVideoDetail = false
             )
         )
     }

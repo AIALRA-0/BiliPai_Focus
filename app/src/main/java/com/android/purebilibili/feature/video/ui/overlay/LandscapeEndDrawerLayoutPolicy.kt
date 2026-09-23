@@ -109,3 +109,12 @@ fun resolveLandscapeEndDrawerLayoutPolicy(
         metaIconSizeDp = 12
     )
 }
+
+fun resolveLandscapeEndDrawerReservedWidthDp(
+    drawerVisible: Boolean,
+    isFullscreen: Boolean,
+    screenWidthDp: Int
+): Int {
+    if (!drawerVisible || !isFullscreen) return 0
+    return resolveLandscapeEndDrawerLayoutPolicy(screenWidthDp).drawerWidthDp
+}

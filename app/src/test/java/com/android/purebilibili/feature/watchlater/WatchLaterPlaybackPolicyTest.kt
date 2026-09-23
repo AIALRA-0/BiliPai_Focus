@@ -42,6 +42,25 @@ class WatchLaterPlaybackPolicyTest {
     }
 
     @Test
+    fun `watch later reverse order preserves items and reverses the playback queue`() {
+        val watchLaterItems = listOf(
+            item("BV1", "first"),
+            item("BV2", "second"),
+            item("BV3", "third")
+        )
+
+        val forward = sortWatchLaterItems(watchLaterItems, WatchLaterSortOrder.FORWARD)
+        val reverse = sortWatchLaterItems(watchLaterItems, WatchLaterSortOrder.REVERSE)
+
+        assertEquals(listOf("BV1", "BV2", "BV3"), forward.map { it.bvid })
+        assertEquals(listOf("BV3", "BV2", "BV1"), reverse.map { it.bvid })
+        assertEquals(
+            listOf("BV3", "BV2", "BV1"),
+            buildExternalPlaylistFromWatchLater(reverse)?.playlistItems?.map { it.bvid }
+        )
+    }
+
+    @Test
     fun `buildExternalPlaylist should fallback to first when clicked item missing`() {
         val watchLaterItems = listOf(
             item("BV1", "first"),

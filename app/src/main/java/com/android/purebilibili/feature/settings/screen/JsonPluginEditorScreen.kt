@@ -1,13 +1,11 @@
 // 文件路径: feature/settings/JsonPluginEditorScreen.kt
 package com.android.purebilibili.feature.settings
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,12 +17,20 @@ import com.android.purebilibili.core.plugin.json.JsonPluginManager
 import com.android.purebilibili.core.plugin.json.JsonRulePlugin
 import com.android.purebilibili.core.plugin.json.Rule
 import com.android.purebilibili.core.theme.iOSBlue
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
+import com.android.purebilibili.feature.settings.ui.settingsScrollContentPadding
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardDefaults
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppTextField
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.rememberAppBackIcon
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
@@ -40,44 +46,36 @@ fun JsonPluginEditorScreen(
     var name by remember { mutableStateOf(plugin.name) }
     var description by remember { mutableStateOf(plugin.description) }
     var rules by remember { mutableStateOf(plugin.rules.toMutableList()) }
-    
-    AdaptiveScaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = "编辑 JSON 插件",
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), null)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        val updated = plugin.copy(
-                            name = name,
-                            description = description,
-                            rules = rules
-                        )
-                        onSave(updated)
-                    }) {
-                        Icon(CupertinoIcons.Default.Checkmark, null)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppSurfaceTokens.cardContainer()
+    val screenTitle = "编辑 JSON 插件"
+    val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    SettingsPageScaffold(
+        title = screenTitle,
+        onBack = onBack,
+        backContentDescription = "返回",
+        bottomContentPadding = bottomContentPadding,
+        scrollHost = SettingsPageScrollHost.External,
+        actions = {
+            AppIconButton(onClick = {
+                val updated = plugin.copy(
+                    name = name,
+                    description = description,
+                    rules = rules,
                 )
-            )
+                onSave(updated)
+            }) {
+                AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_24), contentDescription = "保存")
+            }
         },
-        containerColor = AppSurfaceTokens.groupedListContainer()
-    ) { padding ->
+    ) {
         JsonPluginEditorContent(
-            modifier = Modifier.padding(padding),
             name = name,
             onNameChange = { name = it },
             description = description,
             onDescriptionChange = { description = it },
             rules = rules,
             onRulesChange = { rules = it.toMutableList() },
-            pluginType = plugin.type
+            pluginType = plugin.type,
         )
     }
 }
@@ -96,39 +94,38 @@ fun JsonPluginEditorContent(
 ) {
     if (pluginType != "json_rule") {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("内置插件无法编辑规则", style = MaterialTheme.typography.bodyLarge)
+            AppText("内置插件无法编辑规则", style = MaterialTheme.typography.bodyLarge)
         }
         return
     }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = settingsScrollContentPadding(extraHorizontal = 16.dp, extraVertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 基本信息
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            AppCard(
+                colors = AppCardDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("基本信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    AppText("基本信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    OutlinedTextField(
+                    AppTextField(
                         value = name,
                         onValueChange = onNameChange,
-                        label = { Text("插件名称") },
-                        modifier = Modifier.fillMaxWidth()
+                        label = "插件名称"
                     )
                     
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    OutlinedTextField(
+                    AppTextField(
                         value = description,
                         onValueChange = onDescriptionChange,
-                        label = { Text("插件描述") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "插件描述",
+                        singleLine = false,
                         minLines = 2
                     )
                 }
@@ -142,14 +139,14 @@ fun JsonPluginEditorContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("过滤规则", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                AppText("过滤规则", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 
-                TextButton(onClick = {
+                AppTextButton(onClick = {
                     onRulesChange(rules + Rule(field = "title", op = "contains", value = JsonPrimitive(""), action = "hide"))
                 }) {
-                    Icon(CupertinoIcons.Default.Plus, null, modifier = Modifier.size(16.dp))
+                    AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_add_24), null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("添加规则")
+                    AppText("添加规则")
                 }
             }
         }
@@ -173,7 +170,7 @@ fun JsonPluginEditorContent(
 
         if (rules.isEmpty()) {
             item {
-                Text(
+                AppText(
                     text = "点击 + 添加规则",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -219,7 +216,7 @@ private fun RuleEditor(
     ) }
     var action by remember { mutableStateOf(rule.action) }
     
-    Surface(
+    AppSurface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(AppShapes.container(ContainerLevel.Card)),
@@ -235,14 +232,14 @@ private fun RuleEditor(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
+                AppText(
                     text = "规则",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
-                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                    Icon(
-                        CupertinoIcons.Default.Trash,
+                AppIconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    AppIcon(
+                        com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_delete_24),
                         contentDescription = "删除",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(18.dp)
@@ -273,15 +270,14 @@ private fun RuleEditor(
             )
             
             // 值输入
-            OutlinedTextField(
+            AppTextField(
                 value = value,
                 onValueChange = { 
                     value = it
                     onUpdate(rule.copy(value = JsonPrimitive(it)))
                 },
-                label = { Text("值") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = "值",
+                singleLine = true
             )
             
             // 动作选择
@@ -308,25 +304,25 @@ private fun DropdownSelector(
     var expanded by remember { mutableStateOf(false) }
     
     Column {
-        Text(
+        AppText(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Box {
-            OutlinedButton(
+            AppOutlinedButton(
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(value.ifEmpty { "选择..." })
+                AppText(value.ifEmpty { "选择..." })
             }
-            DropdownMenu(
+            AppDropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false }
             ) {
                 options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
+                    AppDropdownMenuItem(
+                        text = { AppText(option) },
                         onClick = {
                             onSelect(option)
                             expanded = false

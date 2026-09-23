@@ -15,25 +15,29 @@ class SettingsSearchFocusPolicyTest {
                 isTablet = true
             )
         )
-        assertEquals(8, resolveAppearanceSettingsScrollIndex(SettingsSearchFocusIds.APPEARANCE_HOME, isTablet = true))
-        assertEquals(8, resolveAppearanceSettingsScrollIndex(SettingsSearchFocusIds.APPEARANCE_HOME, isTablet = false))
+        assertNull(resolveAppearanceSettingsScrollIndex(SettingsSearchFocusIds.HOME_OVERVIEW, isTablet = true))
+        assertEquals(0, resolveHomeSettingsScrollIndex(SettingsSearchFocusIds.HOME_OVERVIEW))
     }
 
     @Test
-    fun playbackFocusIndex_mapsNetworkAndFullscreenSections() {
-        assertEquals(10, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_INTERACTION))
-        assertEquals(12, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_FULLSCREEN))
-        assertEquals(14, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_NETWORK))
+    fun playbackFocusIndex_mapsSectionsByActualLazyColumnOrder() {
+        assertEquals(10, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_NETWORK))
+        assertEquals(12, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_DATA_SAVER))
+        assertEquals(14, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_INTERACTION))
+        assertEquals(16, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_FULLSCREEN))
     }
 
     @Test
     fun bottomBarFocusIndex_mapsAvailableItemsSection() {
-        assertEquals(9, resolveBottomBarSettingsScrollIndex(SettingsSearchFocusIds.BOTTOM_BAR_AVAILABLE))
-        assertEquals(5, resolveBottomBarSettingsScrollIndex(SettingsSearchFocusIds.BOTTOM_BAR_TABLET))
+        assertEquals(0, resolveBottomBarSettingsScrollIndex(SettingsSearchFocusIds.BOTTOM_BAR_START))
+        assertEquals(1, resolveBottomBarSettingsScrollIndex(SettingsSearchFocusIds.BOTTOM_BAR_BEHAVIOR))
+        assertEquals(11, resolveBottomBarSettingsScrollIndex(SettingsSearchFocusIds.BOTTOM_BAR_AVAILABLE))
+        assertEquals(7, resolveBottomBarSettingsScrollIndex(SettingsSearchFocusIds.BOTTOM_BAR_TABLET))
     }
 
     @Test
     fun animationFocusIndex_mapsVisualEffectsSection() {
+        assertEquals(0, resolveAnimationSettingsScrollIndex(SettingsSearchFocusIds.ANIMATION_START))
         assertEquals(
             4,
             resolveAnimationSettingsScrollIndex(SettingsSearchFocusIds.ANIMATION_VISUAL_EFFECTS)
@@ -56,8 +60,8 @@ class SettingsSearchFocusPolicyTest {
     fun sceneSearchTargetsResolveToExistingDetailFocus() {
         assertEquals(
             SettingsSceneDetailFocus(
-                target = SettingsSearchTarget.APPEARANCE,
-                focusId = SettingsSearchFocusIds.APPEARANCE_HOME
+                target = SettingsSearchTarget.HOME_FEED,
+                focusId = SettingsSearchFocusIds.HOME_OVERVIEW
             ),
             resolveSettingsSceneDetailFocus(SettingsSearchTarget.HOME_FEED)
         )

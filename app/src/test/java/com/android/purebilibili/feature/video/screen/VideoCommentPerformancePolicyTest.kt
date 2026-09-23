@@ -8,9 +8,13 @@ import kotlin.test.assertTrue
 class VideoCommentPerformancePolicyTest {
 
     @Test
-    fun `video detail should avoid preloading adjacent page while video is playing`() {
-        assertEquals(0, resolveVideoDetailBeyondViewportPageCount(isVideoPlaying = true))
-        assertEquals(1, resolveVideoDetailBeyondViewportPageCount(isVideoPlaying = false))
+    fun `video detail preloads comments while intro is visible`() {
+        assertEquals(1, resolveVideoDetailBeyondViewportPageCount(selectedTabIndex = 0))
+    }
+
+    @Test
+    fun `video detail should avoid preloading intro tab while comment tab is visible`() {
+        assertEquals(0, resolveVideoDetailBeyondViewportPageCount(selectedTabIndex = 1))
     }
 
     @Test
@@ -71,6 +75,24 @@ class VideoCommentPerformancePolicyTest {
             shouldUseLightweightCommentRendering(
                 selectedTabIndex = 1,
                 isVideoPlaying = false
+            )
+        )
+    }
+
+    @Test
+    fun `lightweight comment rendering also applies while comment list is scrolling`() {
+        assertTrue(
+            shouldUseLightweightCommentRendering(
+                selectedTabIndex = 1,
+                isVideoPlaying = false,
+                isCommentListScrolling = true
+            )
+        )
+        assertFalse(
+            shouldUseLightweightCommentRendering(
+                selectedTabIndex = 1,
+                isVideoPlaying = false,
+                isCommentListScrolling = false
             )
         )
     }

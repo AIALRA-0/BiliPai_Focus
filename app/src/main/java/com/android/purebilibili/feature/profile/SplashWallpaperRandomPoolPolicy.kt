@@ -21,7 +21,7 @@ internal fun normalizeSplashWallpaperUrl(url: String?): String {
 internal fun isUserSelectedSplashWallpaperUri(uri: String?): Boolean {
     if (uri.isNullOrBlank()) return false
     val normalized = uri.trim()
-    return normalized.startsWith("content://")
+    return normalized.startsWith("content://") || normalized.startsWith("file://")
 }
 
 internal fun resolveVisibleSplashWallpaperPool(items: List<SplashItem>): List<String> {

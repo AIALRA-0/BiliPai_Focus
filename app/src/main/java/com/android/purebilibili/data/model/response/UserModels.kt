@@ -38,6 +38,7 @@ data class UserCardBase(
     val level_info: LevelInfo? = null,
     val Official:  UserOfficial? = null,
     val vip: VipInfo? = null,
+    val pendant: UserCardPendant? = null,
     @SerialName("ip_location")
     val ipLocation: String? = null
 )
@@ -46,6 +47,12 @@ data class UserCardBase(
 data class UserSpaceBase(
     val s_img: String = "",
     val l_img: String = ""
+)
+
+@Serializable
+data class UserCardPendant(
+    val name: String = "",
+    val image: String = "",
 )
 
 @Serializable

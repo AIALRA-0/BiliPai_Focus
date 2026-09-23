@@ -1,8 +1,11 @@
 package com.android.purebilibili.feature.video.viewmodel
 
 import com.android.purebilibili.data.model.response.DashAudio
+import com.android.purebilibili.data.model.response.DashVideo
 import com.android.purebilibili.feature.plugin.CdnCandidateHealth
 import com.android.purebilibili.feature.plugin.CdnHealthEvent
+import com.android.purebilibili.feature.plugin.PlaybackCdnCandidate
+import com.android.purebilibili.feature.plugin.PlaybackCdnCandidateSource
 import com.android.purebilibili.feature.plugin.recordCdnHealthEvent
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,6 +13,95 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlaybackCdnFallbackPolicyTest {
+
+    @Test
+    fun `video candidates keep backups on selected HEVC track when AVC is listed first`() {
+        val candidates = buildPlaybackVideoUrlCandidates(
+            videoUrl = "https://hevc.example.com/1080-base.m4s",
+            quality = 80,
+            cachedDashVideos = listOf(
+                DashVideo(
+                    id = 80,
+                    baseUrl = "https://avc.example.com/1080-base.m4s",
+                    backupUrl = listOf("https://avc.example.com/1080-backup.m4s"),
+                    codecs = "avc1.640028"
+                ),
+                DashVideo(
+                    id = 80,
+                    baseUrl = "https://hevc.example.com/1080-base.m4s",
+                    backupUrl = listOf(
+                        "https://hevc-backup-a.example.com/1080.m4s",
+                        "https://hevc-backup-b.example.com/1080.m4s"
+                    ),
+                    codecs = "hvc1.1.6.L120.90"
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "https://hevc.example.com/1080-base.m4s",
+                "https://hevc-backup-a.example.com/1080.m4s",
+                "https://hevc-backup-b.example.com/1080.m4s"
+            ),
+            candidates
+        )
+    }
+
+    @Test
+    fun `video candidates do not guess another codec when selected track is unknown`() {
+        val candidates = buildPlaybackVideoUrlCandidates(
+            videoUrl = "https://selected.example.com/video.m4s",
+            quality = 80,
+            cachedDashVideos = listOf(
+                DashVideo(
+                    id = 80,
+                    baseUrl = "https://avc.example.com/1080-base.m4s",
+                    backupUrl = listOf("https://avc.example.com/1080-backup.m4s"),
+                    codecs = "avc1.640028"
+                )
+            )
+        )
+
+        assertEquals(listOf("https://selected.example.com/video.m4s"), candidates)
+    }
+
+    @Test
+    fun `custom candidate falls back through each original pair once`() {
+        val state = buildPlaybackCdnFallbackState(
+            selectedVideoUrl = "https://cn-hk-eq-01-03.bilivideo.com/video.m4s",
+            selectedAudioUrl = "https://cn-hk-eq-01-03.bilivideo.com/audio.m4s",
+            originalVideoUrl = "https://upos-a.bilivideo.com/video.m4s",
+            originalAudioUrl = "https://upos-a.bilivideo.com/audio.m4s",
+            regionLabel = null,
+            usesCustomRule = true,
+            fallbackCandidates = listOf(
+                PlaybackCdnCandidate(
+                    "https://upos-a.bilivideo.com/video.m4s",
+                    "https://upos-a.bilivideo.com/audio.m4s",
+                    PlaybackCdnCandidateSource.ORIGINAL
+                ),
+                PlaybackCdnCandidate(
+                    "https://upos-b.bilivideo.com/video.m4s",
+                    "https://upos-b.bilivideo.com/audio.m4s",
+                    PlaybackCdnCandidateSource.ORIGINAL
+                )
+            )
+        )
+
+        assertEquals("https://upos-a.bilivideo.com/video.m4s", state.fallbackVideoUrl)
+        val afterFirstFallback = state.advanceFallback(
+            currentFallbackVideoUrl = state.fallbackVideoUrl.orEmpty(),
+            currentFallbackAudioUrl = state.fallbackAudioUrl
+        )
+        assertEquals("https://upos-b.bilivideo.com/video.m4s", afterFirstFallback.fallbackVideoUrl)
+        assertFalse(afterFirstFallback.usesCustomRule)
+        val exhausted = afterFirstFallback.advanceFallback(
+            currentFallbackVideoUrl = afterFirstFallback.fallbackVideoUrl.orEmpty(),
+            currentFallbackAudioUrl = afterFirstFallback.fallbackAudioUrl
+        )
+        assertTrue(exhausted.fallbackConsumed)
+    }
 
     @Test
     fun `cdn rewrite keeps original playback pair as fallback`() {

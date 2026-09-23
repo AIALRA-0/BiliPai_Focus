@@ -1,56 +1,9 @@
 package com.android.purebilibili.feature.home
 
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.ui.AppPullRefreshIndicatorStyle
+import com.android.purebilibili.core.ui.AppPullRefreshMotionStyle
 import kotlin.math.max
 import kotlin.math.min
-
-internal fun resolvePullRefreshThresholdDp(): Float = 56f
-
-enum class HomePullRefreshMotionStyle {
-    IOS,
-    MD3
-}
-
-enum class HomePullRefreshIndicatorStyle {
-    IOS,
-    MATERIAL_DEFAULT,
-    MD3_SCREENSHOT_HANDLE
-}
-
-internal fun resolveHomePullRefreshMotionStyle(uiPreset: UiPreset): HomePullRefreshMotionStyle {
-    return resolveHomePullRefreshMotionStyle(
-        uiPreset = uiPreset,
-        androidNativeVariant = AndroidNativeVariant.MATERIAL3
-    )
-}
-
-internal fun resolveHomePullRefreshMotionStyle(
-    uiPreset: UiPreset,
-    androidNativeVariant: AndroidNativeVariant
-): HomePullRefreshMotionStyle {
-    return when {
-        uiPreset == UiPreset.MD3 -> HomePullRefreshMotionStyle.MD3
-        else -> HomePullRefreshMotionStyle.IOS
-    }
-}
-
-internal fun resolveHomePullRefreshIndicatorStyle(
-    uiPreset: UiPreset,
-    androidNativeVariant: AndroidNativeVariant
-): HomePullRefreshIndicatorStyle {
-    return when {
-        uiPreset == UiPreset.MD3 &&
-            androidNativeVariant == AndroidNativeVariant.MATERIAL3 -> {
-            HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
-        }
-        uiPreset == UiPreset.MD3 &&
-            androidNativeVariant == AndroidNativeVariant.MIUIX -> {
-            HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT
-        }
-        else -> HomePullRefreshIndicatorStyle.IOS
-    }
-}
 
 internal fun resolveRequiredPullDistanceDp(
     thresholdDp: Float,
@@ -74,9 +27,13 @@ internal fun shouldResetToTopAfterIncrementalRefresh(
     firstVisibleItemIndex: Int,
     firstVisibleItemScrollOffset: Int
 ): Boolean {
-    if (currentCategory != HomeCategory.RECOMMEND) return false
+    if (currentCategory != HomeCategory.RECOMMEND && currentCategory != HomeCategory.FOLLOW) {
+        return false
+    }
     if ((newItemsCount ?: 0) <= 0) return false
     if (isRefreshing) return false
+    // 关注流新内容是 prepend：LazyGrid 会按 key 锚住旧卡片，即使 index=0 也必须强制回顶。
+    if (currentCategory == HomeCategory.FOLLOW) return true
     return shouldResetToTopOnRefreshStart(
         firstVisibleItemIndex = firstVisibleItemIndex,
         firstVisibleItemScrollOffset = firstVisibleItemScrollOffset
@@ -124,24 +81,29 @@ internal fun resolvePullIndicatorTranslationY(
 }
 
 internal fun resolvePullContentMaxOffsetDp(
-    indicatorStyle: HomePullRefreshIndicatorStyle
+    indicatorStyle: AppPullRefreshIndicatorStyle
 ): Float {
     return when (indicatorStyle) {
-        HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE -> 196f
+        AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE -> 172f
         else -> 140f
     }
+}
+
+internal fun resolveMd3ScreenshotPullOffsetFraction(distanceFraction: Float): Float {
+    val clamped = distanceFraction.coerceIn(0f, 1.12f)
+    val resistance = 1f + 0.35f * clamped
+    return clamped / resistance
 }
 
 internal fun resolvePullContentOffsetFraction(
     distanceFraction: Float,
     isRefreshing: Boolean,
-    motionStyle: HomePullRefreshMotionStyle = HomePullRefreshMotionStyle.IOS,
-    indicatorStyle: HomePullRefreshIndicatorStyle = HomePullRefreshIndicatorStyle.IOS
+    motionStyle: AppPullRefreshMotionStyle = AppPullRefreshMotionStyle.CUPERTINO,
+    indicatorStyle: AppPullRefreshIndicatorStyle = AppPullRefreshIndicatorStyle.CUPERTINO
 ): Float {
     if (isRefreshing) return 0f
-    if (indicatorStyle == HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE) {
-        val clampedDistance = distanceFraction.coerceIn(0f, 1.12f)
-        return clampedDistance
+    if (indicatorStyle == AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE) {
+        return resolveMd3ScreenshotPullOffsetFraction(distanceFraction)
     }
     val clampedDistance = distanceFraction.coerceAtMost(2f).coerceAtLeast(0f)
     return clampedDistance * 0.5f
@@ -152,8 +114,8 @@ internal fun resolveStablePullContentOffsetFraction(
     isRefreshing: Boolean,
     isStateAnimating: Boolean,
     previousOffsetFraction: Float,
-    motionStyle: HomePullRefreshMotionStyle = HomePullRefreshMotionStyle.IOS,
-    indicatorStyle: HomePullRefreshIndicatorStyle = HomePullRefreshIndicatorStyle.IOS
+    motionStyle: AppPullRefreshMotionStyle = AppPullRefreshMotionStyle.CUPERTINO,
+    indicatorStyle: AppPullRefreshIndicatorStyle = AppPullRefreshIndicatorStyle.CUPERTINO
 ): Float {
     val currentOffset = resolvePullContentOffsetFraction(
         distanceFraction = distanceFraction,
@@ -169,10 +131,10 @@ internal fun shouldSnapPullOffsetToFinger(
     distanceFraction: Float,
     isRefreshing: Boolean,
     isStateAnimating: Boolean,
-    indicatorStyle: HomePullRefreshIndicatorStyle = HomePullRefreshIndicatorStyle.IOS
+    indicatorStyle: AppPullRefreshIndicatorStyle = AppPullRefreshIndicatorStyle.CUPERTINO
 ): Boolean {
     if (isRefreshing) return false
-    if (indicatorStyle == HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE) {
+    if (indicatorStyle == AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE) {
         return distanceFraction > 0f
     }
     if (isStateAnimating) return false
@@ -185,7 +147,7 @@ internal fun resolveMd3ScreenshotRefreshIndicatorHeightDp(
 ): Float {
     if (isRefreshing) return 42f
     val clampedProgress = progress.coerceIn(0f, 1.35f)
-    return 44f + (clampedProgress * 42f)
+    return 44f + (clampedProgress * 26f)
 }
 
 internal fun resolveMd3ScreenshotRefreshIndicatorTotalHeightDp(

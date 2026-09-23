@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.live
 
+import android.content.res.Configuration
+import android.view.Surface
+import com.android.purebilibili.core.util.AppDisplayContextInput
+import com.android.purebilibili.core.util.resolveAppDisplayContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -8,7 +12,106 @@ import kotlin.test.assertTrue
 class LiveRoomLayoutPolicyTest {
 
     @Test
-    fun `portrait vertical live uses overlay layout like PiliPlus portrait room`() {
+    fun `only landscape video overlay uses media chat colors`() {
+        assertTrue(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.LandscapeOverlay))
+        assertTrue(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.PortraitVerticalOverlay))
+        assertFalse(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.PortraitPanel))
+        assertFalse(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.LandscapeSplit))
+    }
+
+    @Test
+    fun `phone fullscreen requests sensor landscape instead of following window tablet width`() {
+        assertEquals(
+            LiveRequestedOrientationMode.SensorLandscape,
+            resolveLiveRequestedOrientationMode(
+                isTabletDevice = false,
+                isFullscreen = true,
+            )
+        )
+        assertEquals(
+            LiveRequestedOrientationMode.Portrait,
+            resolveLiveRequestedOrientationMode(
+                isTabletDevice = false,
+                isFullscreen = false,
+            )
+        )
+        assertEquals(
+            LiveRequestedOrientationMode.Unspecified,
+            resolveLiveRequestedOrientationMode(
+                isTabletDevice = true,
+                isFullscreen = true,
+            )
+        )
+        assertEquals(
+            LiveRequestedOrientationMode.Unspecified,
+            resolveLiveRequestedOrientationMode(
+                isTabletDevice = true,
+                isFullscreen = false,
+            )
+        )
+    }
+
+    @Test
+    fun `landscape natural cover keeps live fullscreen inside the current window`() {
+        assertEquals(
+            LiveRequestedOrientationMode.Unspecified,
+            resolveLiveRequestedOrientationMode(
+                isTabletDevice = true,
+                isFullscreen = true,
+                isFoldableCoverWindow = true,
+                usesInWindowFullscreen = true,
+            )
+        )
+        assertEquals(
+            LiveRequestedOrientationMode.Unspecified,
+            resolveLiveRequestedOrientationMode(
+                isTabletDevice = true,
+                isFullscreen = false,
+                isFoldableCoverWindow = true,
+                usesInWindowFullscreen = true,
+            )
+        )
+    }
+
+    @Test
+    fun `display context cover uses in-window live orientation`() {
+        val cover = resolveAppDisplayContext(
+            AppDisplayContextInput(
+                currentWindowWidthDp = 616,
+                currentWindowHeightDp = 421,
+                maximumWindowWidthDp = 861,
+                maximumWindowHeightDp = 609,
+                configurationOrientation = Configuration.ORIENTATION_LANDSCAPE,
+                displayRotation = Surface.ROTATION_0,
+                displayModeWidthPx = 1848,
+                displayModeHeightPx = 1264,
+                hasHingeAngleSensor = true,
+            )
+        )
+        assertEquals(
+            LiveRequestedOrientationMode.Unspecified,
+            resolveLiveRequestedOrientationMode(
+                displayContext = cover,
+                isFullscreen = true,
+            )
+        )
+    }
+
+    @Test
+    fun `portrait natural cover retains phone-style live orientation requests`() {
+        assertEquals(
+            LiveRequestedOrientationMode.SensorLandscape,
+            resolveLiveRequestedOrientationMode(
+                isTabletDevice = true,
+                isFullscreen = true,
+                isFoldableCoverWindow = true,
+                usesInWindowFullscreen = false,
+            )
+        )
+    }
+
+    @Test
+    fun `portrait vertical live uses overlay layout like BiliPai portrait room`() {
         val mode = resolveLiveRoomLayoutMode(
             isLandscape = false,
             isTablet = false,
@@ -46,7 +149,7 @@ class LiveRoomLayoutPolicyTest {
     @Test
     fun `overlaying live layouts expose chat toggle`() {
         assertTrue(shouldShowLiveChatToggle(LiveRoomLayoutMode.PortraitVerticalOverlay))
-        assertTrue(shouldShowLiveChatToggle(LiveRoomLayoutMode.LandscapeSplit))
+        assertFalse(shouldShowLiveChatToggle(LiveRoomLayoutMode.LandscapeSplit))
         assertTrue(shouldShowLiveChatToggle(LiveRoomLayoutMode.LandscapeOverlay))
         assertFalse(shouldShowLiveChatToggle(LiveRoomLayoutMode.PortraitPanel))
     }
@@ -64,7 +167,7 @@ class LiveRoomLayoutPolicyTest {
                 isInteractionPanelVisible = true
             )
         )
-        assertFalse(
+        assertTrue(
             shouldShowLiveSplitChatPanel(
                 layoutMode = LiveRoomLayoutMode.LandscapeSplit,
                 isInteractionPanelVisible = false
@@ -159,8 +262,8 @@ class LiveRoomLayoutPolicyTest {
             metrics = metrics
         )
 
-        assertEquals(0.38f, metrics.panelHeightFraction)
-        assertTrue(panelHeight <= (844 * 0.40f).toInt())
+        assertEquals(0.26f, metrics.panelHeightFraction)
+        assertTrue(panelHeight <= (844 * 0.30f).toInt())
         assertTrue(844 - panelHeight >= metrics.minPlayerClearanceDp)
         assertTrue(metrics.playerControlsGapDp >= 8)
     }
@@ -267,5 +370,15 @@ class LiveRoomLayoutPolicyTest {
         assertTrue(overlayHeight <= 390 - metrics.topControlReserveDp - metrics.bottomControlReserveDp)
         assertTrue(overlayWidth <= metrics.maxWidthDp)
         assertTrue(overlayWidth >= metrics.minWidthDp)
+    }
+
+    @Test
+    fun `split chat column matches desktop live room width bounds`() {
+        val tablet = resolveLiveSplitChatPanelWidthDp(screenWidthDp = 1200)
+        assertEquals(LIVE_SPLIT_CHAT_MAX_WIDTH_DP, tablet)
+
+        val compact = resolveLiveSplitChatPanelWidthDp(screenWidthDp = 800)
+        assertTrue(compact in 260..LIVE_SPLIT_CHAT_MAX_WIDTH_DP)
+        assertTrue(compact < 800 - 24)
     }
 }

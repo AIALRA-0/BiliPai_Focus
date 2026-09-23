@@ -9,9 +9,9 @@ import kotlin.test.assertTrue
 class DanmakuSyncPolicyTest {
 
     @Test
-    fun isPlayingChange_resumesWithHardResyncWhenDataReady() {
+    fun isPlayingChange_resumesWithoutClearingLoadedTimeline() {
         assertEquals(
-            DanmakuSyncAction.HardResync,
+            DanmakuSyncAction.SoftResync,
             resolveDanmakuActionForIsPlayingChange(
                 isPlayerPlaying = true,
                 danmakuEnabled = true,
@@ -52,19 +52,6 @@ class DanmakuSyncPolicyTest {
             DanmakuSyncAction.HardResync,
             resolveDanmakuActionForPositionDiscontinuity(
                 reason = Player.DISCONTINUITY_REASON_SEEK,
-                hasData = true
-            )
-        )
-    }
-
-    @Test
-    fun speedChange_forcesHardResyncWhenPlaybackRateActuallyChanges() {
-        assertEquals(
-            DanmakuSyncAction.HardResync,
-            resolveDanmakuActionForPlaybackSpeedChange(
-                previousSpeed = 1.0f,
-                newSpeed = 1.5f,
-                isPlayerPlaying = true,
                 hasData = true
             )
         )
@@ -113,7 +100,7 @@ class DanmakuSyncPolicyTest {
     }
 
     @Test
-    fun driftGuard_staysIdleOnNormalTickButCorrectsPeriodicHealthChecks() {
+    fun driftGuard_staysIdleOnNormalTickAndUsesNonClearingPeriodicCorrection() {
         assertEquals(
             DanmakuSyncAction.None,
             resolveDanmakuGuardAction(
@@ -126,7 +113,7 @@ class DanmakuSyncPolicyTest {
         )
 
         assertEquals(
-            DanmakuSyncAction.HardResync,
+            DanmakuSyncAction.SoftResync,
             resolveDanmakuGuardAction(
                 videoSpeed = 1.0f,
                 tickCount = 6,

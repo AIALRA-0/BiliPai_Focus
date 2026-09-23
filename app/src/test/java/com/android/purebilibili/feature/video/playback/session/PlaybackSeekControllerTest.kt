@@ -230,6 +230,29 @@ class PlaybackSeekControllerTest {
     }
 
     @Test
+    fun sameOriginPendingSeek_doesNotFreezeSliderAfterPlaybackMoves() {
+        val commitResult = finishPlaybackSeekInteraction(
+            updatePlaybackSeekInteraction(
+                state = startPlaybackSeekInteraction(
+                    state = syncPlaybackSeekSession(
+                        state = PlaybackSeekSessionState(),
+                        playbackPositionMs = 25_000L
+                    )
+                ),
+                positionMs = 25_000L
+            )
+        )
+
+        val synced = syncPlaybackSeekSession(
+            state = commitResult.state,
+            playbackPositionMs = 26_000L
+        )
+
+        assertEquals(26_000L, synced.sliderPositionMs)
+        assertNull(synced.pendingSeekPositionMs)
+    }
+
+    @Test
     fun cancelSeek_restoresLastPlaybackPosition() {
         val draggingState = updatePlaybackSeekInteraction(
             state = startPlaybackSeekInteraction(
@@ -357,6 +380,24 @@ class PlaybackSeekControllerTest {
     }
 
     @Test
+    fun expiredPendingSeek_releasesFrozenSliderPosition() {
+        val expired = expirePendingPlaybackSeek(
+            state = PlaybackSeekSessionState(
+                playbackPositionMs = 10_000L,
+                sliderPositionMs = 24_000L,
+                pendingSeekPositionMs = 24_000L,
+                pendingSeekOriginPositionMs = 10_000L,
+                shouldResumePlayback = true,
+            ),
+            playbackPositionMs = 11_000L,
+        )
+
+        assertEquals(11_000L, expired.sliderPositionMs)
+        assertNull(expired.pendingSeekPositionMs)
+        assertNull(expired.shouldResumePlayback)
+    }
+
+    @Test
     fun pendingSeekRecovery_clearsOncePlaybackActuallyRuns() {
         val state = PlaybackSeekSessionState(
             playbackPositionMs = 10_000L,
@@ -438,5 +479,32 @@ class PlaybackSeekControllerTest {
                 playbackState = Player.STATE_READY
             )
         )
+    }
+
+    @Test
+    fun resetForActivePlayback_clearsStaleSeekInteractionAndAlignsSlider() {
+        val draggingState = updatePlaybackSeekInteraction(
+            state = startPlaybackSeekInteraction(
+                state = syncPlaybackSeekSession(
+                    state = PlaybackSeekSessionState(),
+                    playbackPositionMs = 8_000L
+                ),
+                positionMs = 8_000L
+            ),
+            positionMs = 12_000L
+        )
+
+        val reset = resetPlaybackSeekSessionForActivePlayback(
+            state = draggingState,
+            playbackPositionMs = 26_000L
+        )
+
+        assertFalse(reset.isSliderMoving)
+        assertEquals(26_000L, reset.playbackPositionMs)
+        assertEquals(26_000L, reset.sliderPositionMs)
+        assertNull(reset.pendingSeekPositionMs)
+        assertNull(reset.pendingSeekOriginPositionMs)
+        assertNull(reset.shouldResumePlayback)
+        assertEquals(0L, reset.sliderInteractionUpdatedAtMs)
     }
 }

@@ -17,9 +17,14 @@ class HomeHeroFlyoutStructureTest {
         assertFalse(source.contains("pendingHeroFlyoutRequest"))
         assertFalse(source.contains("shouldRunHomeHeroFlyoutBeforeNavigation(request)"))
         assertFalse(source.contains("resolveHomeHeroFlyoutNavigationDelayMillis()"))
-        assertTrue(clickWrapperSource.contains("hideTopTabsForForwardDetailNav = true"))
-        assertTrue(clickWrapperSource.contains("setBottomBarVisible(false)"))
+        assertTrue(clickWrapperSource.contains("hideTopTabsForForwardDetailNav = false"))
+        assertFalse(clickWrapperSource.contains("setBottomBarVisible(false)"))
         assertTrue(clickWrapperSource.contains("isVideoNavigating = true"))
+        assertTrue(source.contains("BottomBarMatchedDockVisibility("))
+        assertTrue(source.contains("edge = BottomBarMatchedDockEdge.TOP"))
+        assertTrue(source.contains("shouldShowHomeOverlayChromeDuringVideoCardTransition("))
+        assertTrue(source.contains("shouldHomeFeedOwnVideoCardTransitionSnapshot("))
+        assertTrue(source.contains("videoCardTransitionBackgroundEffect("))
         assertTrue(clickWrapperSource.contains("onVideoClick(request)"))
     }
 
@@ -57,10 +62,74 @@ class HomeHeroFlyoutStructureTest {
 
         assertTrue(cardSource.contains("resolveVideoCardSharedTransitionMotionSpec("))
         assertTrue(cardSource.contains("resolveVideoSharedTransitionVisualSpec("))
-        assertTrue(cardSource.contains("durationMillis = homeSharedTransitionMotionSpec.durationMillis"))
-        assertTrue(cardSource.contains("videoCoverSharedElementKey("))
+        assertTrue(cardSource.contains("videoCardShellSharedBoundsOrEmpty("))
         assertTrue(cardSource.contains("sharedElementSourceRoute"))
         assertFalse(cardSource.contains("使用 renderInSharedTransitionScopeOverlayOption 控制可见性"))
+    }
+
+    @Test
+    fun homeHeroCarouselUsesWholeCardShellSharedTransition() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeroCarousel.kt")
+
+        assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
+        assertTrue(source.contains("resolveVideoCardSharedTransitionMotionSpec("))
+        assertTrue(source.contains("HomeCoverReturnPrefetchRegistry.onCardVisible"))
+        assertTrue(source.contains("memoryCacheKey(normalizedCoverUrl)"))
+        assertTrue(source.contains("LocalSharedTransitionEnabled.current"))
+        assertTrue(source.contains("sourceCornerDp = cardCornerDp.value.roundToInt()"))
+        assertFalse(source.contains("videoCoverSharedElementKey("))
+        assertFalse(source.contains("videoViewsSharedElementKey("))
+        assertFalse(source.contains("videoDanmakuSharedElementKey("))
+        assertFalse(source.contains("videoDurationSharedElementKey("))
+    }
+
+    @Test
+    fun homeHeroCarouselStatsTextUsesValidChineseUnits() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeroCarousel.kt")
+        // 可见统计文案：分隔符 · + 单位「播放」「弹幕」，禁止损坏字面量。
+        assertTrue(source.contains("\" · \""))
+        assertTrue(source.contains("formatStat(video.stat.view.toLong()) + \"播放\""))
+        assertTrue(source.contains("formatStat(video.stat.danmaku.toLong()) + \"弹幕\""))
+        assertFalse(source.contains("formatStat(video.stat.view.toLong()) + \"??\""))
+        assertFalse(source.contains("formatStat(video.stat.danmaku.toLong()) + \"??\""))
+        assertFalse(source.contains("\" \uFFFD \""))
+    }
+
+    @Test
+    fun homeHeroCarouselOwnsItsGestureBeforeOuterCategoryPager() {
+        val carouselSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeroCarousel.kt"
+        )
+        val homeSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"
+        )
+        val gestureSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/core/ui/common/VerticalPriorityPagerGesture.kt"
+        )
+
+        assertTrue(carouselSource.contains("pointerInput(Unit)"))
+        assertTrue(carouselSource.contains("onGestureActiveChangeLatest.value(true)"))
+        assertTrue(carouselSource.contains("onGestureActiveChangeLatest.value(false)"))
+        assertTrue(carouselSource.contains("userScrollEnabled = false"))
+        assertTrue(carouselSource.contains(".verticalPriorityHorizontalPagerSwipe("))
+        assertFalse(carouselSource.contains("pointerInput(onGestureActiveChange)"))
+        assertFalse(carouselSource.contains("PageSize.Fixed("))
+        assertFalse(carouselSource.contains("contentPadding = PaddingValues(horizontal = sidePeek)"))
+        assertTrue(homeSource.contains("shouldYield = shouldYieldHomePagerToHeroCarousel"))
+        assertTrue(homeSource.contains("onHeroCarouselGestureActiveChange = onHeroCarouselGestureActiveChange"))
+        assertFalse(homeSource.contains("!isHeroCarouselGestureActive"))
+        assertTrue(gestureSource.contains("shouldYield: () -> Boolean = { false }"))
+        assertTrue(gestureSource.contains("if (latestShouldYield.value()) return@gesture"))
+    }
+
+    @Test
+    fun homeHeroCarouselUsesPageDotsInsteadOfNumericBadge() {
+        val source = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeroCarousel.kt"
+        )
+        assertTrue(source.contains("repeat(videos.size)"))
+        assertTrue(source.contains("index == pagerState.currentPage"))
+        assertFalse(source.contains("\${pagerState.currentPage + 1} / \${videos.size}"))
     }
 
     @Test
@@ -74,6 +143,18 @@ class HomeHeroFlyoutStructureTest {
         assertTrue(partitionPageSource.contains("LocalVideoCardSharedElementSourceRoute provides partitionVideoSourceRoute"))
         assertTrue(partitionPageSource.contains("onVideoClick = onPartitionVideoClick"))
         assertFalse(partitionPageSource.contains("wrappedOnVideoClick("))
+    }
+
+    @Test
+    fun homeCategoryPageProvidesMatchingSourceRouteForSharedElementsAndNavigation() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt")
+        val categoryPageSource = source
+            .substringAfter("val sourceRoute = remember(category)")
+            .substringBefore("// Loading Indicator at bottom")
+
+        assertTrue(categoryPageSource.contains("LocalVideoCardSharedElementSourceRoute provides sourceRoute"))
+        assertTrue(categoryPageSource.contains("sourceRoute = sourceRoute"))
+        assertTrue(categoryPageSource.contains("HomeHeroCarousel("))
     }
 
     private fun loadSource(path: String): String {

@@ -1,49 +1,101 @@
 // 文件路径: feature/dynamic/components/DynamicTopBar.kt
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.*
+import com.android.purebilibili.core.ui.components.AppIcon
+import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppWindowAction
+import com.android.purebilibili.core.ui.components.AppWindowActionMenu
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
-import com.android.purebilibili.core.ui.blur.unifiedBlur
-import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarHorizontalPadding
-import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarLiquidTabSpec
-import com.android.purebilibili.core.ui.blur.BlurStyles
-import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+//  Material Icons
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.ui.rememberAppGridLayoutIcon
+import com.android.purebilibili.core.ui.rememberAppListLayoutIcon
+import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
+import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
+import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarHorizontalPadding
+import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarLiquidTabSpec
+import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarTabItemWidthDp
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
-import com.android.purebilibili.feature.home.components.SegmentedControlChromeStyle
-import com.android.purebilibili.feature.home.components.resolveSegmentedControlChromeStyle
-import com.android.purebilibili.feature.home.components.resolveSegmentedControlLiquidGlassEnabled
-import com.kyant.backdrop.Backdrop
+import com.android.purebilibili.feature.home.components.DynamicPublishSkinDecoration
+import coil3.compose.AsyncImage
+import java.io.File
+import com.android.purebilibili.feature.home.components.biliPaiFloatingDockShell
+import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
+import com.android.purebilibili.feature.home.components.resolveLiquidGlassTuning
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.Backdrop
+import com.android.purebilibili.core.ui.blur.BlurSurfaceType
+import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
 import dev.chrisbanes.haze.HazeState
 
 //  动态页面布局模式
 enum class DynamicDisplayMode {
-    SIDEBAR,     // 侧边栏模式（默认，UP主列表在左侧）
-    HORIZONTAL   // 横向模式（UP主列表在顶部，类似 Telegram）
+    SIDEBAR,
+    SIDEBAR_RIGHT,
+    HORIZONTAL,
+    DRAWER_LEFT,
+    DRAWER_RIGHT
+}
+
+internal fun DynamicDisplayMode.isHorizontalUserList(): Boolean = this == DynamicDisplayMode.HORIZONTAL
+
+internal fun DynamicDisplayMode.isFixedSidebar(): Boolean =
+    this == DynamicDisplayMode.SIDEBAR || this == DynamicDisplayMode.SIDEBAR_RIGHT
+
+internal fun DynamicDisplayMode.isRightAligned(): Boolean =
+    this == DynamicDisplayMode.SIDEBAR_RIGHT || this == DynamicDisplayMode.DRAWER_RIGHT
+
+internal fun DynamicDisplayMode.isDrawer(): Boolean =
+    this == DynamicDisplayMode.DRAWER_LEFT || this == DynamicDisplayMode.DRAWER_RIGHT
+
+internal fun resolveDynamicDisplayModeLabel(mode: DynamicDisplayMode): String = when (mode) {
+    DynamicDisplayMode.SIDEBAR -> "左侧竖条"
+    DynamicDisplayMode.SIDEBAR_RIGHT -> "右侧竖条"
+    DynamicDisplayMode.HORIZONTAL -> "顶部横条"
+    DynamicDisplayMode.DRAWER_LEFT -> "左侧抽屉"
+    DynamicDisplayMode.DRAWER_RIGHT -> "右侧抽屉"
 }
 
 /**
@@ -58,181 +110,277 @@ fun DynamicTopBarWithTabs(
     displayMode: DynamicDisplayMode = DynamicDisplayMode.SIDEBAR,
     onDisplayModeChange: (DynamicDisplayMode) -> Unit = {},
     onFocusFollowGroupClick: (() -> Unit)? = null,
+    onPublishClick: (() -> Unit)? = null,
+    actionDockCollapsed: Boolean = false,
+    onActionDockCollapsedChange: (Boolean) -> Unit = {},
+    publishSkinDecoration: DynamicPublishSkinDecoration? = null,
+    dockBackdrop: Backdrop? = null,
     hazeState: HazeState? = null,
-    backdrop: Backdrop? = null
+    indicatorPositionProvider: (() -> Float)? = null,
+    isScrollInProgressProvider: () -> Boolean = { false },
+    /** True when the horizontal UP user list is visible directly below the bar. */
+    shouldShowHorizontalUserList: Boolean = false,
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
-    val uiPreset = LocalUiPreset.current
-    val homeSettings by SettingsManager
-        .getHomeSettings(context)
-        .collectAsStateWithLifecycle(initialValue = HomeSettings(),
-            context = kotlin.coroutines.EmptyCoroutineContext
-        )
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
     val liquidTabSpec = resolveDynamicTopBarLiquidTabSpec()
-    val reusesLiquidGlassDock = shouldReuseDynamicTopBarLiquidGlassDock(
-        hasBackdrop = backdrop != null,
-        storedLiquidGlassEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
-        uiPreset = uiPreset,
-        androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
-    )
-    
-    //  读取当前模糊强度以确定背景透明度
-    val blurIntensity = currentUnifiedBlurIntensity()
-    val backgroundAlpha = BlurStyles.getBackgroundAlpha(blurIntensity)
-    val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
-    val shouldUseHeaderBlur = shouldUseDynamicTopBarHeaderBlur(
-        hasHazeState = hazeState != null,
-        globalWallpaperVisible = globalWallpaperVisible,
-        reusesLiquidGlassDock = reusesLiquidGlassDock
-    )
-    
-    //  使用 blurIntensity 对应的背景透明度实现毛玻璃质感
-    val headerColor = resolveDynamicTopBarHeaderColor(
-        surfaceColor = MaterialTheme.colorScheme.surface,
-        backgroundAlpha = if (shouldUseHeaderBlur) backgroundAlpha else 0f,
-        globalWallpaperVisible = globalWallpaperVisible
-    )
-
-    //  [关键修复] 使用透明背景，让主界面的渐变透出来
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            // 应用模糊效果
-            .then(if (shouldUseHeaderBlur && hazeState != null) Modifier.unifiedBlur(hazeState) else Modifier)
-            .background(headerColor)
+    val homeSettings by SettingsManager
+        .getHomeSettings(context)
+        .collectAsStateWithLifecycle(initialValue = HomeSettings())
+    val liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
+    val liquidGlassTuning = remember(
+        homeSettings.liquidGlassProgress,
+        homeSettings.liquidGlassAdvancedSettings,
+        homeSettings.liquidGlassReadabilityMode,
     ) {
-        Column {
-            Spacer(modifier = Modifier.height(statusBarHeight))
-            
-            //  紧凑标签行：宽屏动态页优先展示内容密度
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(liquidTabSpec.heightDp.dp)
-                    .padding(horizontal = resolveDynamicTopBarHorizontalPadding()),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                DynamicCompactTabRow(
-                    selectedTab = selectedTab,
-                    tabs = tabs,
-                    onTabSelected = onTabSelected,
-                    modifier = Modifier.weight(1f),
-                    backdrop = backdrop
-                )
+        resolveLiquidGlassTuning(
+            progress = homeSettings.liquidGlassProgress,
+            advancedSettings = homeSettings.liquidGlassAdvancedSettings,
+            readabilityMode = homeSettings.liquidGlassReadabilityMode,
+        )
+    }
+    val dockShape = if (!liquidGlassEnabled && LocalAppUiStyle.current == AppUiStyle.MIUIX) {
+        AppShapes.container(ContainerLevel.Card)
+    } else {
+        AppShapes.container(ContainerLevel.Pill)
+    }
+    val dockColor = AppSurfaceTokens.surfaceContainerHigh()
 
-                if (onFocusFollowGroupClick != null) {
-                    IconButton(
-                        onClick = onFocusFollowGroupClick,
-                        modifier = Modifier.size(40.dp)
+    val appThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    val headerBlurEnabled = appThemeConfig.headerBlurEnabled
+    val progressiveTopBlurEnabled = appThemeConfig.progressiveTopBlurEnabled
+    val isProgressiveBlurActive = progressiveTopBlurEnabled && !headerBlurEnabled
+    val isProgressiveFadeActive = appThemeConfig.progressiveTopFadeEnabled && !headerBlurEnabled
+
+    BiliPaiImmersiveTopBar(
+        backdrop = dockBackdrop,
+        enabled = isProgressiveBlurActive,
+        headerBlurActive = headerBlurEnabled &&
+            hazeState?.let { recoverableBlurEnabled(it) } == true &&
+            !isProgressiveBlurActive,
+        fadeEnabled = isProgressiveFadeActive,
+        surfaceColor = globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.background),
+        // 不让顶栏的渐进模糊向下越界盖住 UP 头像或动态卡片。
+        // 顶栏自身渐进模糊效果保持不变，仅收敛其向下延伸。
+        extendBelowBounds = false,
+        modifier = modifier.then(
+            if (!isProgressiveBlurActive && headerBlurEnabled && hazeState != null) {
+                Modifier
+                    .unifiedBlur(hazeState = hazeState, surfaceType = BlurSurfaceType.HEADER)
+                    .background(AppSurfaceTokens.cardContainer().copy(alpha = AppSurfaceTokens.FrostedScrimAlpha))
+            } else Modifier
+        ),
+    ) {
+    Column {
+        Spacer(modifier = Modifier.height(statusBarHeight))
+
+        // Dock 保留各自材质；关闭顶部模糊时由外层容器提供连续的不透明背景。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (liquidGlassEnabled) {
+                        Modifier.height(liquidTabSpec.heightDp.dp)
+                    } else {
+                        // Native tabs may grow above 48dp with the user's font scale.
+                        Modifier.heightIn(min = liquidTabSpec.heightDp.dp)
+                    }
+                )
+                .padding(horizontal = resolveDynamicTopBarHorizontalPadding()),
+            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                val tabCount = tabs.size.coerceAtLeast(1)
+                val tabItemWidth = (
+                    (maxWidth - AppSpacingTokens.ExtraSmall * 2) / tabCount
+                ).coerceIn(
+                    AppChromeSizeTokens.MinimumTouchTarget,
+                    resolveDynamicTopBarTabItemWidthDp().dp,
+                )
+                BottomBarLiquidSegmentedControl(
+                    items = tabs,
+                    selectedIndex = selectedTab,
+                    onSelected = onTabSelected,
+                    itemWidth = tabItemWidth,
+                    height = liquidTabSpec.heightDp.dp,
+                    geometryMode = com.android.purebilibili.feature.home.components.FloatingBottomBarGeometryMode.TopNavigation,
+                    indicatorHeight = liquidTabSpec.indicatorHeightDp.dp,
+                    labelFontSize = liquidTabSpec.labelFontSizeSp.sp,
+                    allowNativeLabelOverflow = true,
+                    indicatorPositionProvider = indicatorPositionProvider,
+                    isScrollInProgressProvider = isScrollInProgressProvider,
+                    liquidGlassEffectsEnabled = liquidGlassEnabled,
+                    dragSelectionEnabled = tabs.size > 1,
+                    tapPressRefractionEnabled = true,
+                    externalPagerMotionEffectsEnabled = true,
+                    miuixBackdrop = dockBackdrop.takeIf { liquidGlassEnabled },
+                    containerColorOverride = dockColor,
+                    liquidGlassTuningOverride = liquidGlassTuning,
+                    drawMiuixNonGlassTrack = liquidGlassEnabled ||
+                        LocalAppUiStyle.current != AppUiStyle.MIUIX ||
+                        isProgressiveBlurActive ||
+                        headerBlurEnabled,
+                )
+            }
+
+            val localActionDockBackdrop = if (liquidGlassEnabled && dockBackdrop == null) {
+                rememberLayerBackdrop()
+            } else {
+                null
+            }
+            val actionDockBackdrop = dockBackdrop ?: localActionDockBackdrop
+            Box {
+                if (liquidGlassEnabled && dockBackdrop == null && localActionDockBackdrop != null) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .alpha(0f)
+                            .layerBackdrop(localActionDockBackdrop)
+                            .background(AppSurfaceTokens.background())
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .then(
+                            if (liquidGlassEnabled) {
+                                Modifier.biliPaiFloatingDockShell(
+                                    backdrop = requireNotNull(actionDockBackdrop),
+                                    containerColor = dockColor,
+                                    pressProgress = 0f,
+                                    shape = dockShape,
+                                    liquidGlassTuning = liquidGlassTuning,
+                                )
+                            } else {
+                                Modifier.background(dockColor, dockShape)
+                            }
+                        )
+                        .clip(dockShape),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AnimatedVisibility(
+                        visible = !actionDockCollapsed,
+                        enter = expandHorizontally(
+                            expandFrom = Alignment.End,
+                            animationSpec = AppMotionTokens.standardSpec(),
+                        ) + fadeIn(animationSpec = AppMotionTokens.standardSpec()),
+                        exit = shrinkHorizontally(
+                            shrinkTowards = Alignment.End,
+                            animationSpec = AppMotionTokens.standardSpec(),
+                        ) + fadeOut(animationSpec = AppMotionTokens.standardSpec()),
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Tune,
-                            contentDescription = "关注分组过滤设置",
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppWindowActionMenu(
+                                groups = listOf(
+                                    DynamicDisplayMode.entries.map { mode ->
+                                        AppWindowAction(
+                                            label = resolveDynamicDisplayModeLabel(mode),
+                                            selected = displayMode == mode,
+                                            onClick = { onDisplayModeChange(mode) },
+                                        )
+                                    },
+                                ),
+                            ) {
+                                AppIcon(
+                                    imageVector = if (displayMode.isHorizontalUserList())
+                                        rememberAppGridLayoutIcon() else rememberAppListLayoutIcon(),
+                                    contentDescription = "关注列表位置",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
+                                )
+                            }
+
+                            // 发布动态入口（对齐 BiliPai AppBar actions 的发布按钮）。
+                            if (onPublishClick != null) {
+                                val publishInteractionSource = remember { MutableInteractionSource() }
+                                val publishPressed by publishInteractionSource.collectIsPressedAsState()
+                                val publishIconPaths = publishSkinDecoration?.iconPaths
+                                AppIconButton(
+                                    onClick = onPublishClick,
+                                    interactionSource = publishInteractionSource,
+                                ) {
+                                    if (publishIconPaths != null) {
+                                        AsyncImage(
+                                            model = File(publishIconPaths.pathFor(publishPressed)),
+                                            contentDescription = "发布动态",
+                                            contentScale = ContentScale.Fit,
+                                            modifier = Modifier.size(AppSpacingTokens.DoubleExtraLarge),
+                                        )
+                                    } else {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .size(AppSpacingTokens.DoubleExtraLarge)
+                                                .then(
+                                                    if (publishSkinDecoration?.hasShade == true) {
+                                                        Modifier.background(
+                                                            brush = Brush.verticalGradient(
+                                                                listOf(
+                                                                    publishSkinDecoration.shadeTop,
+                                                                    publishSkinDecoration.shadeBottom,
+                                                                )
+                                                            ),
+                                                            shape = CircleShape,
+                                                        )
+                                                    } else {
+                                                        Modifier
+                                                    }
+                                                ),
+                                        ) {
+                                            AppIcon(
+                                                imageVector = Icons.Outlined.Edit,
+                                                contentDescription = "发布动态",
+                                                tint = publishSkinDecoration?.iconTint
+                                                    ?.takeUnless { it == Color.Unspecified }
+                                                    ?: MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (onFocusFollowGroupClick != null) {
+                        AppIconButton(onClick = onFocusFollowGroupClick) {
+                            AppIcon(
+                                imageVector = Icons.Outlined.Tune,
+                                contentDescription = "关注分组过滤设置",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro),
+                            )
+                        }
+                    }
+
+                    AppIconButton(
+                        onClick = { onActionDockCollapsedChange(!actionDockCollapsed) },
+                    ) {
+                        AppIcon(
+                            imageVector = if (actionDockCollapsed) {
+                                rememberAppChevronDownIcon()
+                            } else {
+                                rememberAppChevronUpIcon()
+                            },
+                            contentDescription = if (actionDockCollapsed) {
+                                "展开顶部操作"
+                            } else {
+                                "折叠顶部操作"
+                            },
                             tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro),
                         )
                     }
-                }
-                
-                //  布局模式切换按钮
-                IconButton(
-                    onClick = {
-                        val newMode = if (displayMode == DynamicDisplayMode.SIDEBAR) 
-                            DynamicDisplayMode.HORIZONTAL else DynamicDisplayMode.SIDEBAR
-                        onDisplayModeChange(newMode)
-                    },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = if (displayMode == DynamicDisplayMode.SIDEBAR)
-                            CupertinoIcons.Default.ListBullet else CupertinoIcons.Default.RectangleStack,
-                        contentDescription = "切换布局模式",
-                        tint = MaterialTheme.colorScheme.onSurface, // 自适应颜色
-                        modifier = Modifier.size(22.dp)
-                    )
                 }
             }
         }
     }
 }
 
-@Composable
-private fun DynamicCompactTabRow(
-    selectedTab: Int,
-    tabs: List<String>,
-    onTabSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    backdrop: Backdrop? = null
-) {
-    BottomBarLiquidSegmentedControl(
-        items = tabs,
-        selectedIndex = selectedTab,
-        onSelected = onTabSelected,
-        modifier = modifier,
-        height = 44.dp,
-        indicatorHeight = 36.dp,
-        labelFontSize = 14.sp,
-        preferInlineContentStyle = true,
-        backdrop = backdrop
-    )
 }
-
-@Composable
-private fun rememberDynamicTabSelectedColor(): Color = resolveDynamicTabSelectedColor(MaterialTheme.colorScheme.primary)
 
 internal fun resolveDynamicTabSelectedColor(primaryColor: Color): Color = primaryColor
-
-internal fun resolveDynamicTopBarHeaderColor(
-    surfaceColor: Color,
-    backgroundAlpha: Float,
-    globalWallpaperVisible: Boolean
-): Color {
-    return if (globalWallpaperVisible) {
-        Color.Transparent
-    } else {
-        surfaceColor.copy(alpha = backgroundAlpha)
-    }
-}
-
-internal fun shouldUseDynamicTopBarHeaderBlur(
-    hasHazeState: Boolean,
-    globalWallpaperVisible: Boolean,
-    reusesLiquidGlassDock: Boolean = false
-): Boolean = hasHazeState && !globalWallpaperVisible && !reusesLiquidGlassDock
-
-internal fun shouldReuseDynamicTopBarLiquidGlassDock(
-    hasBackdrop: Boolean,
-    storedLiquidGlassEnabled: Boolean,
-    uiPreset: com.android.purebilibili.core.theme.UiPreset,
-    androidNativeLiquidGlassEnabled: Boolean
-): Boolean {
-    if (!hasBackdrop) return false
-    val chromeStyle = resolveSegmentedControlChromeStyle(
-        uiPreset = uiPreset,
-        androidNativeLiquidGlassEnabled = androidNativeLiquidGlassEnabled,
-        preferInlineContentStyle = true
-    )
-    if (chromeStyle != SegmentedControlChromeStyle.LIQUID_PILL) return false
-    return resolveSegmentedControlLiquidGlassEnabled(
-        storedLiquidGlassEnabled = storedLiquidGlassEnabled,
-        liquidGlassEffectsEnabled = true,
-        uiPreset = uiPreset,
-        androidNativeLiquidGlassEnabled = androidNativeLiquidGlassEnabled
-    )
-}
-
-@Composable
-private fun rememberDynamicTabUnselectedColor(): Color {
-    return if (isDynamicTopBarDarkSurface(MaterialTheme.colorScheme.surface)) {
-        Color.White.copy(alpha = 0.9f)
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-}
-
-private fun isDynamicTopBarDarkSurface(color: Color): Boolean {
-    val perceivedBrightness = (color.red * 0.299f) + (color.green * 0.587f) + (color.blue * 0.114f)
-    return perceivedBrightness < 0.45f
-}

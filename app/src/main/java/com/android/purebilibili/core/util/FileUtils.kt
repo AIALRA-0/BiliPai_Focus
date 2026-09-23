@@ -2,6 +2,7 @@ package com.android.purebilibili.core.util
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
 import java.io.File
@@ -23,7 +24,7 @@ object FileUtils {
                     
                     if ("primary".equals(type, ignoreCase = true)) {
                         return Environment.getExternalStorageDirectory().toString() + "/" + path
-                    } else {
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         // 尝试处理 SD 卡或其他卷
                         // 这部分比较复杂，简单实现可能无法覆盖所有情况
                         // 这里只是一个简单的回退

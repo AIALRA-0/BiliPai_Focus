@@ -5,9 +5,21 @@ import kotlinx.coroutines.withContext
 import org.brotli.dec.BrotliInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.zip.InflaterOutputStream
+import java.util.zip.InflaterInputStream
+
+internal const val MAX_LIVE_DANMAKU_FRAME_BYTES = 2 * 1024 * 1024
+internal const val MAX_LIVE_DANMAKU_DECOMPRESSED_BYTES = 8 * 1024 * 1024
+internal const val MAX_LIVE_DANMAKU_PACKET_BODY_BYTES = 256 * 1024
+internal const val MAX_LIVE_DANMAKU_PACKETS_PER_FRAME = 4096
+private const val MAX_LIVE_DANMAKU_COMPRESSION_DEPTH = 2
+
+internal fun shouldAcceptLiveDanmakuFrame(sizeBytes: Int): Boolean {
+    return sizeBytes in 1..MAX_LIVE_DANMAKU_FRAME_BYTES
+}
 
 /**
  * Bilibili 直播弹幕协议解析器
@@ -91,12 +103,28 @@ object DanmakuProtocol {
      * 支持递归解压 (Brotli/Zlib)
      */
     suspend fun decode(data: ByteArray): List<Packet> = withContext(Dispatchers.Default) {
-        if (data.size < HEAD_LENGTH) return@withContext emptyList()
-        
-        val packets = mutableListOf<Packet>()
+        if (!shouldAcceptLiveDanmakuFrame(data.size) || data.size < HEAD_LENGTH) {
+            return@withContext emptyList()
+        }
+
+        buildList {
+            decodeInto(data = data, compressionDepth = 0, packets = this)
+        }
+    }
+
+    private fun decodeInto(
+        data: ByteArray,
+        compressionDepth: Int,
+        packets: MutableList<Packet>
+    ) {
+        if (compressionDepth > MAX_LIVE_DANMAKU_COMPRESSION_DEPTH) return
+        if (data.size > MAX_LIVE_DANMAKU_DECOMPRESSED_BYTES) return
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
         
-        while (buffer.remaining() >= HEAD_LENGTH) {
+        while (
+            buffer.remaining() >= HEAD_LENGTH &&
+            packets.size < MAX_LIVE_DANMAKU_PACKETS_PER_FRAME
+        ) {
             val position = buffer.position()
             val totalLength = buffer.int
             
@@ -116,8 +144,24 @@ object DanmakuProtocol {
             }
             
             val bodyLength = totalLength - headLength
-            if (bodyLength < 0 || bodyLength > buffer.remaining()) {
+            val extendedHeaderLength = headLength - HEAD_LENGTH
+            if (
+                bodyLength < 0 ||
+                extendedHeaderLength < 0 ||
+                extendedHeaderLength + bodyLength > buffer.remaining()
+            ) {
                 break
+            }
+            buffer.position(buffer.position() + extendedHeaderLength)
+
+            val maxBodyBytes = if (version == PROTO_VER_ZLIB || version == PROTO_VER_BROTLI) {
+                MAX_LIVE_DANMAKU_FRAME_BYTES
+            } else {
+                MAX_LIVE_DANMAKU_PACKET_BODY_BYTES
+            }
+            if (bodyLength > maxBodyBytes) {
+                buffer.position(buffer.position() + bodyLength)
+                continue
             }
             val body = ByteArray(bodyLength)
             buffer.get(body)
@@ -131,7 +175,7 @@ object DanmakuProtocol {
                     // Zlib 解压后递归解析
                     try {
                         val decompressed = decompressZlib(body)
-                        packets.addAll(decode(decompressed))
+                        decodeInto(decompressed, compressionDepth + 1, packets)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -140,7 +184,7 @@ object DanmakuProtocol {
                     // Brotli 解压后递归解析
                     try {
                         val decompressed = decompressBrotli(body)
-                        packets.addAll(decode(decompressed))
+                        decodeInto(decompressed, compressionDepth + 1, packets)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -151,36 +195,37 @@ object DanmakuProtocol {
                 }
             }
         }
-        
-        packets
     }
     
     /**
      * Zlib 解压
      */
     private fun decompressZlib(data: ByteArray): ByteArray {
-        val outputStream = ByteArrayOutputStream()
-        val inflaterOutputStream = InflaterOutputStream(outputStream)
-        inflaterOutputStream.write(data)
-        inflaterOutputStream.close()
-        return outputStream.toByteArray()
+        return InflaterInputStream(ByteArrayInputStream(data)).use(::readLimitedDecompressedBytes)
     }
     
     /**
      * Brotli 解压
      */
     private fun decompressBrotli(data: ByteArray): ByteArray {
-        val inputStream = ByteArrayInputStream(data)
-        val brotliInputStream = BrotliInputStream(inputStream)
-        val outputStream = ByteArrayOutputStream()
-        
-        val buffer = ByteArray(4096)
-        var len: Int
-        while (brotliInputStream.read(buffer).also { len = it } != -1) {
-            outputStream.write(buffer, 0, len)
+        return BrotliInputStream(ByteArrayInputStream(data)).use(::readLimitedDecompressedBytes)
+    }
+
+    private fun readLimitedDecompressedBytes(input: InputStream): ByteArray {
+        val output = ByteArrayOutputStream(16 * 1024)
+        val chunk = ByteArray(8 * 1024)
+        var totalBytes = 0
+        while (true) {
+            val readBytes = input.read(chunk)
+            if (readBytes < 0) break
+            totalBytes += readBytes
+            if (totalBytes > MAX_LIVE_DANMAKU_DECOMPRESSED_BYTES) {
+                throw IOException(
+                    "Live danmaku payload exceeds $MAX_LIVE_DANMAKU_DECOMPRESSED_BYTES bytes"
+                )
+            }
+            output.write(chunk, 0, readBytes)
         }
-        
-        brotliInputStream.close()
-        return outputStream.toByteArray()
+        return output.toByteArray()
     }
 }

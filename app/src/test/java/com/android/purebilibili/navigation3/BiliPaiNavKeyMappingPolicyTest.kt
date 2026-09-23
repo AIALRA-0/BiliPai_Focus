@@ -4,8 +4,79 @@ import com.android.purebilibili.navigation.ScreenRoutes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 
 class BiliPaiNavKeyMappingPolicyTest {
+    @Test
+    fun personalListSearchKeysRoundTripThroughLegacyRoutes() {
+        val keys = listOf(
+            BiliPaiNavKey.HistorySearch("猫 咪"),
+            BiliPaiNavKey.FavoriteSubscribed,
+            BiliPaiNavKey.FavoriteSearch(
+                "Compose",
+                com.android.purebilibili.data.model.response.FavoriteSearchScope.ALL_VIDEO_FOLDERS,
+            ),
+            BiliPaiNavKey.WatchLaterSearch("稍后"),
+        )
+
+        keys.forEach { key -> assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute())) }
+    }
+
+    @Test
+    fun `navigation state keys distinguish detail sessions for the same video`() {
+        val first = BiliPaiNavKey.VideoDetail(
+            bvid = "BV1",
+            cid = 1L,
+            coverUrl = "",
+            sourceRoute = "home",
+            openId = 101L,
+        )
+        val second = first.copy(openId = 102L)
+
+        assertEquals(resolveNavigation3SaveableStateKey(first), resolveNavigation3SaveableStateKey(first))
+        assertNotEquals(resolveNavigation3SaveableStateKey(first), resolveNavigation3SaveableStateKey(second))
+    }
+
+    @Test
+    fun `removed navigation state keys evict popped detail sessions only`() {
+        val first = BiliPaiNavKey.VideoDetail(
+            bvid = "BV1first",
+            cid = 1L,
+            coverUrl = "",
+            openId = 101L,
+        )
+        val second = BiliPaiNavKey.VideoDetail(
+            bvid = "BV1second",
+            cid = 2L,
+            coverUrl = "",
+            openId = 102L,
+        )
+
+        assertEquals(
+            setOf(resolveNavigation3SaveableStateKey(second)),
+            resolveRemovedNavigation3SaveableStateKeys(
+                currentStack = listOf(BiliPaiNavKey.MainHost, first, second),
+                replacementStack = listOf(BiliPaiNavKey.MainHost, first),
+            ),
+        )
+    }
+
+    @Test
+    fun `navigation state eviction keeps a key retained elsewhere in replacement stack`() {
+        val duplicateSearchStack = listOf(
+            BiliPaiNavKey.MainHost,
+            BiliPaiNavKey.Search,
+            BiliPaiNavKey.Search,
+        )
+
+        assertEquals(
+            emptySet(),
+            resolveRemovedNavigation3SaveableStateKeys(
+                currentStack = duplicateSearchStack,
+                replacementStack = duplicateSearchStack.dropLast(1),
+            ),
+        )
+    }
 
     @Test
     fun topLevelRoutes_mapToNavigation3Keys() {
@@ -70,13 +141,31 @@ class BiliPaiNavKeyMappingPolicyTest {
     }
 
     @Test
+    fun bangumiMediaRoute_roundTripsMediaId() {
+        val key = BiliPaiNavKey.BangumiDetail(seasonId = 0L, mediaId = 28237119L)
+
+        assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+    }
+
+    @Test
+    fun spaceRoute_preservesVideoLocateTarget() {
+        val key = BiliPaiNavKey.Space(mid = 42L, targetBvid = "BV1abc?x")
+
+        assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+    }
+
+    @Test
     fun settingsSecondaryRoutes_mapToNavigation3Keys() {
         assertEquals(BiliPaiNavKey.OpenSourceLicenses, legacyRouteToBiliPaiNavKey(ScreenRoutes.OpenSourceLicenses.route))
         assertEquals(BiliPaiNavKey.AppearanceSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.AppearanceSettings.route))
+        assertEquals(BiliPaiNavKey.HomeSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.HomeSettings.route))
         assertEquals(BiliPaiNavKey.IconSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.IconSettings.route))
         assertEquals(BiliPaiNavKey.AnimationSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.AnimationSettings.route))
         assertEquals(BiliPaiNavKey.PlaybackSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.PlaybackSettings.route))
         assertEquals(BiliPaiNavKey.PermissionSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.PermissionSettings.route))
+        val messageNotificationKey = BiliPaiNavKey.MessageNotificationSettings
+        assertEquals(ScreenRoutes.MessageNotificationSettings.route, messageNotificationKey.toLegacyRoute())
+        assertEquals(messageNotificationKey, legacyRouteToBiliPaiNavKey(messageNotificationKey.toLegacyRoute()))
         assertEquals(BiliPaiNavKey.PluginsSettings(), legacyRouteToBiliPaiNavKey(ScreenRoutes.PluginsSettings.createRoute()))
         val pluginImportRoute = "plugins_settings?importUrl=https%3A%2F%2Fexample.com%2Fa.bpplugin"
         assertEquals(
@@ -87,6 +176,17 @@ class BiliPaiNavKeyMappingPolicyTest {
         assertEquals(BiliPaiNavKey.SettingsShare, legacyRouteToBiliPaiNavKey(ScreenRoutes.SettingsShare.route))
         assertEquals(BiliPaiNavKey.WebDavBackup, legacyRouteToBiliPaiNavKey(ScreenRoutes.WebDavBackup.route))
         assertEquals(BiliPaiNavKey.TipsSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.TipsSettings.route))
+    }
+
+    @Test
+    fun jsPluginRoutes_roundTripWithCompactIdentifiersOnly() {
+        val contentKey = BiliPaiNavKey.JsPluginContent(pluginId = "live.tv")
+        val mediaKey = BiliPaiNavKey.ExternalMedia(launchId = "launch-123")
+
+        assertEquals("js_plugin/live.tv", contentKey.toLegacyRoute())
+        assertEquals(contentKey, legacyRouteToBiliPaiNavKey(contentKey.toLegacyRoute()))
+        assertEquals("external_media/launch-123", mediaKey.toLegacyRoute())
+        assertEquals(mediaKey, legacyRouteToBiliPaiNavKey(mediaKey.toLegacyRoute()))
     }
 
     @Test
@@ -113,6 +213,10 @@ class BiliPaiNavKeyMappingPolicyTest {
             BiliPaiNavKey.Chat(talkerId = 42L, sessionType = 1, userName = "测试用户"),
             legacyRouteToBiliPaiNavKey("chat/42/1?name=%E6%B5%8B%E8%AF%95%E7%94%A8%E6%88%B7")
         )
+        assertEquals(
+            BiliPaiNavKey.Chat(talkerId = 42L, sessionType = 1, userName = "测试 用户+号"),
+            legacyRouteToBiliPaiNavKey(ScreenRoutes.Chat.createRoute(42L, 1, "测试 用户+号"))
+        )
     }
 
     @Test
@@ -136,6 +240,10 @@ class BiliPaiNavKeyMappingPolicyTest {
         )
         assertEquals(BiliPaiNavKey.Bangumi(initialType = 2), legacyRouteToBiliPaiNavKey(ScreenRoutes.Bangumi.createRoute(2)))
         assertEquals(
+            BiliPaiNavKey.BangumiReview(mediaId = 88L, title = "点评"),
+            legacyRouteToBiliPaiNavKey(ScreenRoutes.BangumiReview.createRoute(88L, "点评"))
+        )
+        assertEquals(
             BiliPaiNavKey.BangumiPlayer(seasonId = 1L, epId = 2L, resumePositionMs = 3000L),
             legacyRouteToBiliPaiNavKey(ScreenRoutes.BangumiPlayer.createRoute(1L, 2L, 3000L))
         )
@@ -147,11 +255,48 @@ class BiliPaiNavKeyMappingPolicyTest {
     }
 
     @Test
+    fun notificationDynamicVideoRoute_reachesVideoDetailDestination() {
+        val route = ScreenRoutes.VideoPlayer.createRoute(
+            bvid = "BV1xx411c7mD",
+            cid = 7L,
+            commentRootRpid = 11L,
+            commentTargetRpid = 22L
+        )
+
+        val key = assertIs<BiliPaiNavKey.VideoDetail>(legacyRouteToBiliPaiNavKey(route))
+
+        assertEquals("BV1xx411c7mD", key.bvid)
+        assertEquals(7L, key.cid)
+        assertEquals(11L, key.commentRootRpid)
+        assertEquals(22L, key.commentTargetRpid)
+    }
+
+    @Test
+    fun commentDetailRoute_roundTripsThroughLegacyRoute() {
+        val key = BiliPaiNavKey.CommentDetail(
+            oid = 12345L,
+            rootId = 67890L,
+            targetId = 11111L,
+            type = 1,
+            enterUri = "bilibili://video/12345"
+        )
+        val route = key.toLegacyRoute()
+        assertEquals(key, legacyRouteToBiliPaiNavKey(route))
+    }
+
+    @Test
     fun cardReturnTargets_matchExistingSharedElementDestinations() {
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.MainHost))
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Home))
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Search))
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Space(42L)))
+        assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.LikedVideos))
+        assertEquals(
+            true,
+            isCardReturnTargetNavKey(
+                BiliPaiNavKey.SeasonSeriesDetail(type = "series", id = 1L, mid = 2L)
+            )
+        )
         assertEquals(false, isCardReturnTargetNavKey(BiliPaiNavKey.VideoDetail("BV1")))
         assertEquals(false, isCardReturnTargetNavKey(BiliPaiNavKey.Settings))
     }

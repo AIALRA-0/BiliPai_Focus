@@ -4,6 +4,7 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -98,6 +99,7 @@ object MessageRepository {
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "sendMessage exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -306,6 +308,7 @@ object MessageRepository {
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "getSessions exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -547,6 +550,17 @@ object MessageRepository {
             Result.failure(e)
         }
     }
+
+    suspend fun sendShareMessage(
+        receiverId: Long,
+        receiverType: Int,
+        content: String,
+    ): Result<SendMessageData> = sendMessage(
+        receiverId = receiverId,
+        receiverType = receiverType,
+        msgType = 7,
+        content = content,
+    )
 
     suspend fun withdrawMessage(
         receiverId: Long,

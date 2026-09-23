@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.settings
 import com.android.purebilibili.core.store.SettingsManager
 import java.io.File
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,12 +35,13 @@ class FeedSettingsSelectionPolicyTest {
     }
 
     @Test
-    fun `settings cards stay opaque over wallpaper text`() {
-        val source = locate("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt")
+    fun `non glass Miuix settings use grouped cards while legacy paths remain flat`() {
+        val source = locate("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsPageScaffold.kt")
             .readText()
 
-        assertTrue(source.contains("darkTintBase.compositeOver(baseCardContainer)"))
-        assertFalse(source.contains("copy(alpha = 0.96f)"))
+        assertTrue(source.contains("LocalAppPreferenceGroupPresentation provides if (nonGlassMiuix)"))
+        assertTrue(source.contains("AppPreferenceGroupPresentation.CARD"))
+        assertTrue(source.contains("AppPreferenceGroupPresentation.FLAT"))
     }
 
     private fun locate(path: String): File {

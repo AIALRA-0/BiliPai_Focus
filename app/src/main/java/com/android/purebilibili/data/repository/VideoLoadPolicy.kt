@@ -1,5 +1,6 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.data.model.response.DashVideo
 import com.android.purebilibili.data.model.response.Page
 
 internal enum class PlayUrlSource {
@@ -12,7 +13,15 @@ internal enum class PlayUrlSource {
 
 internal enum class PlayUrlRequestKind {
     INITIAL,
+    PLAYBACK_TRANSITION,
     EXPLICIT
+}
+
+internal fun isStrictPremiumQualityRequest(
+    requestKind: PlayUrlRequestKind,
+    targetQn: Int
+): Boolean {
+    return requestKind == PlayUrlRequestKind.EXPLICIT && (targetQn == 100 || targetQn >= 112)
 }
 
 internal data class VideoInfoLookupInput(
@@ -36,6 +45,10 @@ internal fun resolveVideoInfoLookupInput(rawBvid: String, aid: Long): VideoInfoL
         if (parsedAid != null && parsedAid > 0L) {
             return VideoInfoLookupInput(bvid = "", aid = parsedAid)
         }
+    }
+
+    normalizedBvid.toLongOrNull()?.takeIf { it > 0L }?.let { parsedAid ->
+        return VideoInfoLookupInput(bvid = "", aid = parsedAid)
     }
 
     return null
@@ -66,7 +79,9 @@ internal fun resolveInitialStartQuality(
     auto1080pEnabled: Boolean
 ): Int {
     return when {
-        isAutoHighestQuality && isVip -> 120
+        // The API documents 127 as the highest qn and 126/125 as separate Dolby/HDR
+        // tiers. Requesting 125 here can omit the Dolby track until a manual switch.
+        isAutoHighestQuality && isVip -> 127
         isAutoHighestQuality && isLogin -> 80
         isAutoHighestQuality -> 64
         targetQuality != null -> targetQuality
@@ -89,22 +104,56 @@ internal fun shouldSkipPlayUrlCache(
     isVip: Boolean,
     audioLang: String?
 ): Boolean {
-    return audioLang != null || (isAutoHighestQuality && isVip)
+    // Language-specific streams must not reuse the default-language cache entry.
+    // VIP auto-highest used to always skip cache and hurt re-open TTFF; accept cache
+    // when [shouldAcceptCachedPlayUrlForAutoHighest] says the payload is good enough.
+    return audioLang != null
 }
 
+/**
+ * VIP auto-highest can reuse a cached playurl when it already contains a premium track.
+ * Thin/low-quality cache entries are ignored so we still re-negotiate high quality.
+ */
+internal fun shouldAcceptCachedPlayUrlForAutoHighest(
+    isAutoHighestQuality: Boolean,
+    isVip: Boolean,
+    cachedDashVideoIds: List<Int>,
+    minPremiumQuality: Int = 112
+): Boolean {
+    if (!isAutoHighestQuality || !isVip) return true
+    return cachedDashVideoIds.any { it >= minPremiumQuality }
+}
+
+/**
+ * Build the DASH playurl attempt chain for a target quality.
+ *
+ * The requested quality itself must lead the list. Premium tiers such as 8K (127),
+ * Dolby Vision (126), and HDR (125) are not always bundled into a lower-qn response
+ * (e.g. qn=120), so omitting the target causes QUALITY_SWITCH_FAILURE / no HDR tracks.
+ */
 internal fun buildDashAttemptQualities(targetQn: Int): List<Int> {
     if (targetQn <= 80) return listOf(targetQn)
 
-    val premiumFallbacks = listOf(120, 116, 112)
-        .filter { quality -> quality <= targetQn }
+    val premiumQualities = listOf(129, 127, 126, 125, 120, 116, 112, 100)
+    val lowerFallbacks = premiumQualities.filter { quality -> quality < targetQn }
 
-    return (premiumFallbacks + 80).distinct()
+    return (listOf(targetQn) + lowerFallbacks + 80).distinct()
 }
 
-internal fun resolveDashRetryDelays(targetQn: Int): List<Long> {
-    // 标准画质（80/64 等）偶发返回空流时，给一次短重试窗口，避免误降级到游客 720。
-    return if (targetQn <= 80) listOf(0L, 450L) else listOf(0L)
+internal fun resolveDashRetryDelays(
+    targetQn: Int,
+    isPrimaryAttempt: Boolean = false
+): List<Long> {
+    // 播放接口偶发以 code=0 返回空流。首次目标画质应先原档重试，避免自动最高模式
+    // 立即逐档降级，最终只保留 Legacy/Guest 返回的 720P、360P 轨道。
+    // 后续高级画质 fallback 不重复重试，防止短时间内放大请求并触发接口风控。
+    return if (isPrimaryAttempt || targetQn <= 80) listOf(0L, 450L) else listOf(0L)
 }
+
+internal fun shouldRetryOnlyTransientEmptyDashResponse(
+    targetQn: Int,
+    isPrimaryAttempt: Boolean,
+): Boolean = isPrimaryAttempt && targetQn > 80
 
 internal fun shouldRetryDashTrackRecovery(
     targetQn: Int,
@@ -167,7 +216,7 @@ internal fun shouldTryAppApiForTargetQuality(
     hasSessionCookie: Boolean = true,
     directedTrafficMode: Boolean = false
 ): Boolean {
-    // PiliPlus parity: playback stays on the Web/WBI playurl path instead of
+    // BiliPai parity: playback stays on the Web/WBI playurl path instead of
     // prioritizing the APP access_token endpoint for 1080P and premium tiers.
     return false
 }
@@ -251,18 +300,24 @@ internal fun shouldAcceptAppApiResultForTargetQuality(
     returnedQuality: Int,
     dashVideoIds: List<Int>
 ): Boolean {
-    if (requestKind == PlayUrlRequestKind.INITIAL) {
-        // Startup should keep any playable payload to avoid a hard failure page
-        // when the service temporarily downgrades or omits the requested track.
+    if (requestKind != PlayUrlRequestKind.EXPLICIT) {
+        // Startup and media transitions should keep any playable payload to avoid a hard
+        // failure when the service downgrades or the next part lacks the previous part's tier.
         return returnedQuality > 0 || dashVideoIds.isNotEmpty()
+    }
+
+    if (isStrictPremiumQualityRequest(requestKind, targetQn)) {
+        return targetQn in dashVideoIds
     }
 
     // Explicit quality selection must respect the requested target for both VIP
     // and non-VIP users; otherwise the UI reports a successful switch while the
     // backend silently returns a lower tier.
     if (targetQn < 80) return true
-    if (dashVideoIds.distinct().contains(targetQn)) return true
-    return returnedQuality >= targetQn && returnedQuality > 0
+    // In DASH responses `quality` is response metadata, not proof that the
+    // requested representation is playable. Only an exact playable track may
+    // finish an explicit high-quality request; otherwise continue to APP fallback.
+    return targetQn in dashVideoIds
 }
 
 internal fun buildGuestFallbackQualities(): List<Int> {
@@ -295,8 +350,61 @@ internal fun isRequestedQualitySatisfied(
     dashVideoIds: List<Int>
 ): Boolean {
     if (requestedQuality < 80) return true
-    if (requestedQuality in dashVideoIds) return true
-    return returnedQuality >= requestedQuality && returnedQuality > 0
+    return requestedQuality in dashVideoIds
+}
+
+/**
+ * Returns true when the DASH manifest contains a playable exact track the user requested.
+ *
+ * Premium qualities (125 HDR, 126 Dolby Vision, 127 8K) must not be considered
+ * satisfied by a lower-tier response or by an exact-ID track without a URL.
+ */
+internal fun hasExactPlayableRequestedTrack(
+    requestedTargetQn: Int,
+    dashVideos: List<DashVideo>
+): Boolean {
+    return dashVideos.any { video ->
+        video.id == requestedTargetQn && video.getValidUrl().isNotEmpty()
+    }
+}
+
+internal fun isExactRequestedQualitySelected(
+    requestedTargetQn: Int,
+    actualQuality: Int
+): Boolean = actualQuality == requestedTargetQn
+
+/**
+ * Determines whether a non-blocking HDR auto-upgrade should be scheduled after
+ * an INITIAL SDR fast-start playback.
+ *
+ * All conditions must be met:
+ * 1. This is an INITIAL (first-load) request
+ * 2. User has auto-highest quality enabled
+ * 3. User is VIP (premium account)
+ * 4. Not on mobile data (Wi-Fi only)
+ * 5. Valid access_token available
+ * 6. Current DASH does not already include HDR track 125
+ * 7. User hasn't made an explicit quality selection
+ * 8. Upgrade hasn't already been attempted for this playback session
+ */
+internal fun shouldScheduleHdrAutoUpgrade(
+    isInitialRequest: Boolean,
+    isAutoHighestQuality: Boolean,
+    isVip: Boolean,
+    isMobileData: Boolean,
+    hasAccessToken: Boolean,
+    currentPlayableDashVideoIds: List<Int>,
+    userHasExplicitQualitySelection: Boolean,
+    upgradeAlreadyAttempted: Boolean
+): Boolean {
+    return isInitialRequest &&
+        isAutoHighestQuality &&
+        isVip &&
+        !isMobileData &&
+        hasAccessToken &&
+        125 !in currentPlayableDashVideoIds &&
+        !userHasExplicitQualitySelection &&
+        !upgradeAlreadyAttempted
 }
 
 internal fun shouldFetchCommentEmoteMapOnVideoLoad(): Boolean {

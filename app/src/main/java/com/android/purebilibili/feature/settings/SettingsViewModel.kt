@@ -6,21 +6,32 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.store.DEFAULT_APP_ICON_KEY
+import com.android.purebilibili.core.store.AppIconAppearance
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.BottomBarSearchAutoExpandMode
+import com.android.purebilibili.core.store.BottomBarSearchLayoutMode
 import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
 import com.android.purebilibili.core.store.LiquidGlassMode
+import com.android.purebilibili.core.store.LiquidGlassAdvancedSettings
+import com.android.purebilibili.core.store.LiquidGlassReadabilityMode
+import com.android.purebilibili.core.store.home.LiquidGlassSettingsStore
 import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
 import com.android.purebilibili.core.store.resolveDefaultLiquidGlassStrength
 import com.android.purebilibili.core.store.resolveLegacyLiquidGlassProgress
 import com.android.purebilibili.core.store.resolveLegacyLiquidGlassMode
 import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
+import com.android.purebilibili.core.store.supportsAppIconAppearance
 import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.syncThemeRoleControlAccent
+import com.android.purebilibili.core.ui.AppIconStyle
+import com.android.purebilibili.core.ui.AppListItemStyle
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_TRANSITION_CUSTOM_DEFAULT_MILLIS
+import com.android.purebilibili.core.ui.transition.VideoSharedTransitionSpeed
 import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.util.CacheUtils
 import com.materialkolor.PaletteStyle
@@ -31,12 +42,28 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+enum class SettingsDiagnosticsLoadState {
+    NOT_LOADED,
+    LOADING,
+    LOADED,
+}
+
+internal fun shouldStartSettingsDiagnostics(
+    loadState: SettingsDiagnosticsLoadState,
+    jobActive: Boolean,
+): Boolean = loadState != SettingsDiagnosticsLoadState.LOADED && !jobActive
+
 data class SettingsUiState(
-    val uiPreset: UiPreset = UiPreset.IOS,
-    val androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
+    val themeSelection: AppUiStyle = AppUiStyle.MATERIAL3,
     val hwDecode: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     val darkThemeStyle: DarkThemeStyle = DarkThemeStyle.DEFAULT,
@@ -54,19 +81,29 @@ data class SettingsUiState(
     val bgPlay: Boolean = false,
     val gestureSensitivity: Float = 1.0f,
     val themeColorIndex: Int = 0,
-    val appIcon: String = "icon_3d",
+    val appIcon: String = DEFAULT_APP_ICON_KEY,
+    val appIconStyle: AppIconStyle = AppIconStyle.AUTO,
+    val appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     val isBottomBarFloating: Boolean = true,
     val bottomBarLabelMode: Int = 1,  // 0=图标+文字, 1=仅图标, 2=仅文字
     val headerBlurEnabled: Boolean = true,
+    val progressiveTopBlurEnabled: Boolean = true,
+    val progressiveTopFadeEnabled: Boolean = true,
     val bottomBarBlurEnabled: Boolean = true,
     val blurIntensity: BlurIntensity = BlurIntensity.THIN,  //  模糊强度
     val displayMode: Int = 0,
     val cardAnimationEnabled: Boolean = false,     //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,    //  卡片过渡动画（默认关闭）
-    val videoTransitionRealtimeBlurEnabled: Boolean = true,
+    val videoSharedTransitionSpeed: VideoSharedTransitionSpeed = VideoSharedTransitionSpeed.STANDARD,
+    val videoSharedTransitionCustomDurationMillis: Int =
+        VIDEO_SHARED_TRANSITION_CUSTOM_DEFAULT_MILLIS,
     val smartVisualGuardEnabled: Boolean = false, // [Retired] 智能流畅优先已下线
     val cacheSize: String = "计算中...",
     val cacheBreakdown: CacheUtils.CacheBreakdown? = null,  //  详细缓存统计
+    val installedApkSha256: String? = null,
+    val currentReleaseEvidence: AppUpdateCheckResult? = null,
+    val diagnosticsLoadState: SettingsDiagnosticsLoadState =
+        SettingsDiagnosticsLoadState.NOT_LOADED,
     //  实验性功能
     val auto1080p: Boolean = true,
     val autoSkipOpEd: Boolean = false,
@@ -84,7 +121,9 @@ data class SettingsUiState(
     val bottomBarSearchEnabled: Boolean = false,
     val bottomBarSearchAutoExpandMode: BottomBarSearchAutoExpandMode =
         BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP,
-    val androidNativeLiquidGlassEnabled: Boolean = false,
+    val bottomBarSearchLayoutMode: BottomBarSearchLayoutMode =
+        BottomBarSearchLayoutMode.FULL_DOCK,
+    val androidNativeLiquidGlassEnabled: Boolean = true,
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle = com.android.purebilibili.core.store.LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
@@ -96,13 +135,12 @@ data class SettingsUiState(
     val homeFeedCardWidthPreset: HomeFeedCardWidthPreset = HomeFeedCardWidthPreset.AUTO
 ) {
     val isLiquidGlassEnabled: Boolean
-        get() = bottomBarLiquidGlassEnabled
+        get() = androidNativeLiquidGlassEnabled
 }
 
 // 内部数据类，用于分批合并流
 private data class CoreSettings(
-    val uiPreset: UiPreset,
-    val androidNativeVariant: AndroidNativeVariant,
+    val themeSelection: AppUiStyle,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
     val darkThemeStyle: DarkThemeStyle,
@@ -119,6 +157,8 @@ data class ExtraSettings(
     val gestureSensitivity: Float,
     val themeColorIndex: Int,
     val appIcon: String,
+    val appIconStyle: AppIconStyle,
+    val appListItemStyle: AppListItemStyle,
     val appFontSizePreset: AppFontSizePreset,
     val appFontFileName: String,
     val appFontDisplayName: String,
@@ -127,12 +167,15 @@ data class ExtraSettings(
     val isBottomBarFloating: Boolean,
     val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
+    val progressiveTopBlurEnabled: Boolean,
+    val progressiveTopFadeEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
     val blurIntensity: BlurIntensity,  //  添加模糊强度
     val displayMode: Int,
     val cardAnimationEnabled: Boolean,
     val cardTransitionEnabled: Boolean,
-    val videoTransitionRealtimeBlurEnabled: Boolean,
+    val videoSharedTransitionSpeed: VideoSharedTransitionSpeed,
+    val videoSharedTransitionCustomDurationMillis: Int,
     val smartVisualGuardEnabled: Boolean,
     val hapticFeedbackEnabled: Boolean, // [Restored]
     val topBarLiquidGlassEnabled: Boolean = false,
@@ -141,7 +184,9 @@ data class ExtraSettings(
     val bottomBarSearchEnabled: Boolean = false,
     val bottomBarSearchAutoExpandMode: BottomBarSearchAutoExpandMode =
         BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP,
-    val androidNativeLiquidGlassEnabled: Boolean = false,
+    val bottomBarSearchLayoutMode: BottomBarSearchLayoutMode =
+        BottomBarSearchLayoutMode.FULL_DOCK,
+    val androidNativeLiquidGlassEnabled: Boolean = true,
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle, // [New]
     val liquidGlassMode: LiquidGlassMode, // [New]
     val liquidGlassStrength: Float, // [New]
@@ -150,6 +195,14 @@ data class ExtraSettings(
     val isHeaderCollapseEnabled: Boolean,
     val gridColumnCount: Int, // [New]
     val homeFeedCardWidthPreset: HomeFeedCardWidthPreset
+)
+
+private data class BlurSettings(
+    val headerBlur: Boolean,
+    val progressiveTopBlur: Boolean,
+    val progressiveTopFade: Boolean,
+    val bottomBarBlur: Boolean,
+    val blurIntensity: BlurIntensity
 )
 
 
@@ -165,8 +218,7 @@ data class ExperimentalSettings(
 )
 
 private data class BaseSettings(
-    val uiPreset: UiPreset,
-    val androidNativeVariant: AndroidNativeVariant,
+    val themeSelection: AppUiStyle,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
     val darkThemeStyle: DarkThemeStyle,
@@ -185,15 +237,20 @@ private data class BaseSettings(
     val gestureSensitivity: Float,
     val themeColorIndex: Int,
     val appIcon: String,
+    val appIconStyle: AppIconStyle,
+    val appListItemStyle: AppListItemStyle,
     val isBottomBarFloating: Boolean,
     val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
+    val progressiveTopBlurEnabled: Boolean,
+    val progressiveTopFadeEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
     val blurIntensity: BlurIntensity,  //  模糊强度
     val displayMode: Int, //  新增
     val cardAnimationEnabled: Boolean, //  卡片进场动画
     val cardTransitionEnabled: Boolean, //  卡片过渡动画
-    val videoTransitionRealtimeBlurEnabled: Boolean,
+    val videoSharedTransitionSpeed: VideoSharedTransitionSpeed,
+    val videoSharedTransitionCustomDurationMillis: Int,
     val smartVisualGuardEnabled: Boolean, // [New]
     val hapticFeedbackEnabled: Boolean, // [新增]
     val topBarLiquidGlassEnabled: Boolean,
@@ -201,6 +258,7 @@ private data class BaseSettings(
     val bottomBarLiquidGlassEnabled: Boolean,
     val bottomBarSearchEnabled: Boolean,
     val bottomBarSearchAutoExpandMode: BottomBarSearchAutoExpandMode,
+    val bottomBarSearchLayoutMode: BottomBarSearchLayoutMode,
     val androidNativeLiquidGlassEnabled: Boolean,
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle, // [New]
     val liquidGlassMode: LiquidGlassMode, // [New]
@@ -216,12 +274,42 @@ private fun <T> Flow<T>.asAnyFlow(): Flow<Any?> = map { it }
 
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+    val searchHistory = com.android.purebilibili.core.store.SettingsSearchHistoryStore.observe(application)
+
+    fun recordSearchQuery(query: String) {
+        viewModelScope.launch {
+            if (!SettingsManager.getPrivacyModeEnabled(getApplication()).first()) {
+                com.android.purebilibili.core.store.SettingsSearchHistoryStore.record(getApplication(), query)
+            }
+        }
+    }
+
+    fun deleteSearchHistory(query: String) {
+        viewModelScope.launch {
+            com.android.purebilibili.core.store.SettingsSearchHistoryStore.delete(getApplication(), query)
+        }
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch {
+            com.android.purebilibili.core.store.SettingsSearchHistoryStore.clear(getApplication())
+        }
+    }
+
     private val context = application.applicationContext
+
+    private data class DiagnosticsState(
+        val installedApkSha256: String? = null,
+        val currentReleaseEvidence: AppUpdateCheckResult? = null,
+        val loadState: SettingsDiagnosticsLoadState = SettingsDiagnosticsLoadState.NOT_LOADED,
+    )
 
     private data class UiSettingsGroup1(
         val gestureSensitivity: Float,
         val themeColorIndex: Int,
         val appIcon: String,
+        val appIconStyle: AppIconStyle,
+        val appListItemStyle: AppListItemStyle,
         val appFontSizePreset: AppFontSizePreset,
         val appFontFileName: String,
         val appFontDisplayName: String,
@@ -232,12 +320,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // 本地状态流：缓存大小
     private val _cacheSize = MutableStateFlow("计算中...")
     private val _cacheBreakdown = MutableStateFlow<CacheUtils.CacheBreakdown?>(null)
+    private val _diagnosticsState = MutableStateFlow(DiagnosticsState())
+    private var diagnosticsLoadJob: Job? = null
 
     //  [核心修复] 分步合并，解决 combine 参数限制报错
     // 第 1 步：合并前 4 个设置
     private val coreSettingsFlow = combine(
-        SettingsManager.getUiPreset(context).asAnyFlow(),
-        SettingsManager.getAndroidNativeVariant(context).asAnyFlow(),
+        SettingsManager.getUiStyle(context).asAnyFlow(),
         SettingsManager.getHwDecode(context).asAnyFlow(),
         SettingsManager.getThemeMode(context).asAnyFlow(),
         SettingsManager.getDarkThemeStyle(context).asAnyFlow(),
@@ -252,18 +341,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             .asAnyFlow()
     ) { values ->
         CoreSettings(
-            uiPreset = values[0] as UiPreset,
-            androidNativeVariant = values[1] as AndroidNativeVariant,
-            hwDecode = values[2] as Boolean,
-            themeMode = values[3] as AppThemeMode,
-            darkThemeStyle = values[4] as DarkThemeStyle,
-            appLanguage = values[5] as AppLanguage,
-            dynamicColor = values[6] as Boolean,
-            md3ColorSource = values[7] as Md3ColorSource,
-            md3CustomColorHex = values[8] as String,
-            colorStyle = values[9] as PaletteStyle,
-            colorSpec = values[10] as ColorSpec.SpecVersion,
-            bgPlay = values[11] as Boolean
+            themeSelection = values[0] as AppUiStyle,
+            hwDecode = values[1] as Boolean,
+            themeMode = values[2] as AppThemeMode,
+            darkThemeStyle = values[3] as DarkThemeStyle,
+            appLanguage = values[4] as AppLanguage,
+            dynamicColor = values[5] as Boolean,
+            md3ColorSource = values[6] as Md3ColorSource,
+            md3CustomColorHex = values[7] as String,
+            colorStyle = values[8] as PaletteStyle,
+            colorSpec = values[9] as ColorSpec.SpecVersion,
+            bgPlay = values[10] as Boolean
         )
     }
     
@@ -272,6 +360,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getGestureSensitivity(context).asAnyFlow(),
         SettingsManager.getThemeColorIndex(context).asAnyFlow(),
         SettingsManager.getAppIcon(context).asAnyFlow(),
+        SettingsManager.getAppIconStyle(context).asAnyFlow(),
+        SettingsManager.getAppListItemStyle(context).asAnyFlow(),
         SettingsManager.getAppFontSizePreset(context).asAnyFlow(),
         SettingsManager.getAppFontFileName(context).asAnyFlow(),
         SettingsManager.getAppFontDisplayName(context).asAnyFlow(),
@@ -282,11 +372,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             gestureSensitivity = values[0] as Float,
             themeColorIndex = values[1] as Int,
             appIcon = values[2] as String,
-            appFontSizePreset = values[3] as AppFontSizePreset,
-            appFontFileName = values[4] as String,
-            appFontDisplayName = values[5] as String,
-            appUiScalePreset = values[6] as AppUiScalePreset,
-            appDpiOverridePercent = values[7] as Int
+            appIconStyle = values[3] as AppIconStyle,
+            appListItemStyle = values[4] as AppListItemStyle,
+            appFontSizePreset = values[5] as AppFontSizePreset,
+            appFontFileName = values[6] as String,
+            appFontDisplayName = values[7] as String,
+            appUiScalePreset = values[8] as AppUiScalePreset,
+            appDpiOverridePercent = values[9] as Int
         )
     }
     
@@ -296,7 +388,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getDisplayMode(context).asAnyFlow(),
         SettingsManager.getCardAnimationEnabled(context).asAnyFlow(), // [Restored]
         SettingsManager.getCardTransitionEnabled(context).asAnyFlow(),
-        SettingsManager.getVideoTransitionRealtimeBlurEnabled(context).asAnyFlow(),
+        SettingsManager.getVideoSharedTransitionSpeed(context).asAnyFlow(),
+        SettingsManager.getVideoSharedTransitionCustomDurationMillis(context).asAnyFlow(),
         SettingsManager.getSmartVisualGuardEnabled(context).asAnyFlow(), // [New]
         SettingsManager.getHapticFeedbackEnabled(context).asAnyFlow(), // [新增]
         SettingsManager.getTopBarLiquidGlassEnabled(context).asAnyFlow(),
@@ -304,6 +397,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getBottomBarLiquidGlassEnabled(context).asAnyFlow(),
         SettingsManager.getBottomBarSearchEnabled(context).asAnyFlow(),
         SettingsManager.getBottomBarSearchAutoExpandMode(context).asAnyFlow(),
+        SettingsManager.getBottomBarSearchLayoutMode(context).asAnyFlow(),
         SettingsManager.getAndroidNativeLiquidGlassEnabled(context).asAnyFlow(),
         SettingsManager.getLiquidGlassStyle(context).asAnyFlow(), // [New]
         SettingsManager.getLiquidGlassMode(context).asAnyFlow(), // [New]
@@ -319,23 +413,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val displayMode = values[2] as Int
         val cardAnimation = values[3] as Boolean
         val cardTransition = values[4] as Boolean
-        val videoTransitionRealtimeBlur = values[5] as Boolean
-        val smartVisualGuard = values[6] as Boolean
-        val hapticFeedback = values[7] as Boolean
-        val topBarLiquidGlass = values[8] as Boolean
-        val homeSearchLiquidGlass = values[9] as Boolean
-        val bottomBarLiquidGlass = values[10] as Boolean
-        val bottomBarSearch = values[11] as Boolean
-        val bottomBarSearchAutoExpandMode = values[12] as BottomBarSearchAutoExpandMode
-        val androidNativeLiquidGlass = values[13] as Boolean
-        val liquidGlassStyle = values[14] as com.android.purebilibili.core.store.LiquidGlassStyle
-        val liquidGlassMode = values[15] as LiquidGlassMode
-        val liquidGlassStrength = values[16] as Float
-        val liquidGlassProgress = values[17] as Float
-        val tabletUseSidebar = values[18] as Boolean
-        val headerCollapse = values[19] as Boolean
-        val gridColumnCount = values[20] as Int
-        val homeFeedCardWidthPreset = values[21] as HomeFeedCardWidthPreset
+        val videoSharedTransitionSpeed = values[5] as VideoSharedTransitionSpeed
+        val videoSharedTransitionCustomDurationMillis = values[6] as Int
+        val smartVisualGuard = values[7] as Boolean
+        val hapticFeedback = values[8] as Boolean
+        val topBarLiquidGlass = values[9] as Boolean
+        val homeSearchLiquidGlass = values[10] as Boolean
+        val bottomBarLiquidGlass = values[11] as Boolean
+        val bottomBarSearch = values[12] as Boolean
+        val bottomBarSearchAutoExpandMode = values[13] as BottomBarSearchAutoExpandMode
+        val bottomBarSearchLayoutMode = values[14] as BottomBarSearchLayoutMode
+        val androidNativeLiquidGlass = values[15] as Boolean
+        val liquidGlassStyle = values[16] as com.android.purebilibili.core.store.LiquidGlassStyle
+        val liquidGlassMode = values[17] as LiquidGlassMode
+        val liquidGlassStrength = values[18] as Float
+        val liquidGlassProgress = values[19] as Float
+        val tabletUseSidebar = values[20] as Boolean
+        val headerCollapse = values[21] as Boolean
+        val gridColumnCount = values[22] as Int
+        val homeFeedCardWidthPreset = values[23] as HomeFeedCardWidthPreset
         
         data class Ui2(
             val f: Boolean,
@@ -343,7 +439,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val d: Int,
             val ca: Boolean,
             val ct: Boolean,
-            val vtrb: Boolean,
+            val vsts: VideoSharedTransitionSpeed,
+            val vstcdm: Int,
             val svg: Boolean,
             val h: Boolean,
             val tlg: Boolean,
@@ -351,6 +448,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val blg: Boolean,
             val bbs: Boolean,
             val bbsam: BottomBarSearchAutoExpandMode,
+            val bbslm: BottomBarSearchLayoutMode,
             val anlg: Boolean,
             val lgs: com.android.purebilibili.core.store.LiquidGlassStyle,
             val lgm: LiquidGlassMode,
@@ -367,7 +465,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             displayMode,
             cardAnimation,
             cardTransition,
-            videoTransitionRealtimeBlur,
+            videoSharedTransitionSpeed,
+            videoSharedTransitionCustomDurationMillis,
             smartVisualGuard,
             hapticFeedback,
             topBarLiquidGlass,
@@ -375,6 +474,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLiquidGlass,
             bottomBarSearch,
             bottomBarSearchAutoExpandMode,
+            bottomBarSearchLayoutMode,
             androidNativeLiquidGlass,
             liquidGlassStyle,
             liquidGlassMode,
@@ -394,6 +494,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             gestureSensitivity = ui1.gestureSensitivity,
             themeColorIndex = ui1.themeColorIndex,
             appIcon = ui1.appIcon,
+            appIconStyle = ui1.appIconStyle,
+            appListItemStyle = ui1.appListItemStyle,
             appFontSizePreset = ui1.appFontSizePreset,
             appFontFileName = ui1.appFontFileName,
             appFontDisplayName = ui1.appFontDisplayName,
@@ -404,7 +506,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             displayMode = ui2.d,
             cardAnimationEnabled = ui2.ca,
             cardTransitionEnabled = ui2.ct,
-            videoTransitionRealtimeBlurEnabled = ui2.vtrb,
+            videoSharedTransitionSpeed = ui2.vsts,
+            videoSharedTransitionCustomDurationMillis = ui2.vstcdm,
             smartVisualGuardEnabled = ui2.svg,
             hapticFeedbackEnabled = ui2.h, // [新增]
             topBarLiquidGlassEnabled = ui2.tlg,
@@ -412,6 +515,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLiquidGlassEnabled = ui2.blg,
             bottomBarSearchEnabled = ui2.bbs,
             bottomBarSearchAutoExpandMode = ui2.bbsam,
+            bottomBarSearchLayoutMode = ui2.bbslm,
             androidNativeLiquidGlassEnabled = ui2.anlg,
             liquidGlassStyle = ui2.lgs, // [New]
             liquidGlassMode = ui2.lgm, // [New]
@@ -422,26 +526,32 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             gridColumnCount = ui2.gcc, // [New]
             homeFeedCardWidthPreset = ui2.hfcwp,
             headerBlurEnabled = false, // 暂存，将在下一步合并
+            progressiveTopBlurEnabled = true, // 暂存
+            progressiveTopFadeEnabled = true, // 暂存
             bottomBarBlurEnabled = false, // 暂存
             blurIntensity = BlurIntensity.THIN // 暂存
         )
     }
     
-    // 第 3 步：合并模糊设置 (3个)
+    // 第 3 步：合并模糊设置 (5个)
     private val blurSettingsFlow = combine(
         SettingsManager.getHeaderBlurEnabled(context),
+        SettingsManager.getProgressiveTopBlurEnabled(context),
+        SettingsManager.getProgressiveTopFadeEnabled(context),
         SettingsManager.getBottomBarBlurEnabled(context),
         SettingsManager.getBlurIntensity(context)  //  添加模糊强度
-    ) { headerBlur, bottomBarBlur, blurIntensity ->
-        Triple(headerBlur, bottomBarBlur, blurIntensity)
+    ) { headerBlur, progressiveTopBlur, progressiveTopFade, bottomBarBlur, blurIntensity ->
+        BlurSettings(headerBlur, progressiveTopBlur, progressiveTopFade, bottomBarBlur, blurIntensity)
     }
     
     // 第 4 步：合并 UI 和 模糊设置
     private val extraSettingsFlow = combine(uiSettingsFlow, blurSettingsFlow) { uiSettings, blur ->
         uiSettings.copy(
-            headerBlurEnabled = blur.first,
-            bottomBarBlurEnabled = blur.second,
-            blurIntensity = blur.third
+            headerBlurEnabled = blur.headerBlur,
+            progressiveTopBlurEnabled = blur.progressiveTopBlur,
+            progressiveTopFadeEnabled = blur.progressiveTopFade,
+            bottomBarBlurEnabled = blur.bottomBarBlur,
+            blurIntensity = blur.blurIntensity
         )
     }
     
@@ -467,8 +577,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // 第 5 步：合并两组设置
     private val baseSettingsFlow = combine(coreSettingsFlow, extraSettingsFlow) { core, extra ->
         BaseSettings(
-            uiPreset = core.uiPreset,
-            androidNativeVariant = core.androidNativeVariant,
+            themeSelection = core.themeSelection,
             hwDecode = core.hwDecode,
             themeMode = core.themeMode,
             darkThemeStyle = core.darkThemeStyle,
@@ -487,15 +596,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             gestureSensitivity = extra.gestureSensitivity,
             themeColorIndex = extra.themeColorIndex,
             appIcon = extra.appIcon,
+            appIconStyle = extra.appIconStyle,
+            appListItemStyle = extra.appListItemStyle,
             isBottomBarFloating = extra.isBottomBarFloating,
             bottomBarLabelMode = extra.bottomBarLabelMode,
             headerBlurEnabled = extra.headerBlurEnabled,
+            progressiveTopBlurEnabled = extra.progressiveTopBlurEnabled,
+            progressiveTopFadeEnabled = extra.progressiveTopFadeEnabled,
             bottomBarBlurEnabled = extra.bottomBarBlurEnabled,
             blurIntensity = extra.blurIntensity,  //  模糊强度
             displayMode = extra.displayMode,
             cardAnimationEnabled = extra.cardAnimationEnabled,
             cardTransitionEnabled = extra.cardTransitionEnabled,
-            videoTransitionRealtimeBlurEnabled = extra.videoTransitionRealtimeBlurEnabled,
+            videoSharedTransitionSpeed = extra.videoSharedTransitionSpeed,
+            videoSharedTransitionCustomDurationMillis =
+                extra.videoSharedTransitionCustomDurationMillis,
             smartVisualGuardEnabled = extra.smartVisualGuardEnabled,
             hapticFeedbackEnabled = extra.hapticFeedbackEnabled, // [新增]
             topBarLiquidGlassEnabled = extra.topBarLiquidGlassEnabled,
@@ -503,6 +618,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLiquidGlassEnabled = extra.bottomBarLiquidGlassEnabled,
             bottomBarSearchEnabled = extra.bottomBarSearchEnabled,
             bottomBarSearchAutoExpandMode = extra.bottomBarSearchAutoExpandMode,
+            bottomBarSearchLayoutMode = extra.bottomBarSearchLayoutMode,
             androidNativeLiquidGlassEnabled = extra.androidNativeLiquidGlassEnabled,
             liquidGlassStyle = extra.liquidGlassStyle, // [New]
             liquidGlassMode = extra.liquidGlassMode, // [New]
@@ -524,11 +640,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val state: StateFlow<SettingsUiState> = combine(
         baseSettingsFlow,
         cacheFlow,
-        experimentalSettingsFlow
-    ) { settings, cache, experimental ->
+        experimentalSettingsFlow,
+        _diagnosticsState,
+    ) { settings, cache, experimental, diagnostics ->
         SettingsUiState(
-            uiPreset = settings.uiPreset,
-            androidNativeVariant = settings.androidNativeVariant,
+            themeSelection = settings.themeSelection,
             hwDecode = settings.hwDecode,
             themeMode = settings.themeMode,
             darkThemeStyle = settings.darkThemeStyle,
@@ -547,15 +663,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             gestureSensitivity = settings.gestureSensitivity,
             themeColorIndex = settings.themeColorIndex,
             appIcon = settings.appIcon,
+            appIconStyle = settings.appIconStyle,
+            appListItemStyle = settings.appListItemStyle,
             isBottomBarFloating = settings.isBottomBarFloating,
             bottomBarLabelMode = settings.bottomBarLabelMode,
             headerBlurEnabled = settings.headerBlurEnabled,
+            progressiveTopBlurEnabled = settings.progressiveTopBlurEnabled,
+            progressiveTopFadeEnabled = settings.progressiveTopFadeEnabled,
             bottomBarBlurEnabled = settings.bottomBarBlurEnabled,
             blurIntensity = settings.blurIntensity,  //  模糊强度
             displayMode = settings.displayMode,
             cardAnimationEnabled = settings.cardAnimationEnabled,
             cardTransitionEnabled = settings.cardTransitionEnabled,
-            videoTransitionRealtimeBlurEnabled = settings.videoTransitionRealtimeBlurEnabled,
+            videoSharedTransitionSpeed = settings.videoSharedTransitionSpeed,
+            videoSharedTransitionCustomDurationMillis =
+                settings.videoSharedTransitionCustomDurationMillis,
             smartVisualGuardEnabled = settings.smartVisualGuardEnabled,
             hapticFeedbackEnabled = settings.hapticFeedbackEnabled, // [新增]
             topBarLiquidGlassEnabled = settings.topBarLiquidGlassEnabled,
@@ -563,6 +685,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLiquidGlassEnabled = settings.bottomBarLiquidGlassEnabled,
             bottomBarSearchEnabled = settings.bottomBarSearchEnabled,
             bottomBarSearchAutoExpandMode = settings.bottomBarSearchAutoExpandMode,
+            bottomBarSearchLayoutMode = settings.bottomBarSearchLayoutMode,
             androidNativeLiquidGlassEnabled = settings.androidNativeLiquidGlassEnabled,
             liquidGlassStyle = settings.liquidGlassStyle, // [New]
             liquidGlassMode = settings.liquidGlassMode, // [New]
@@ -575,6 +698,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
             cacheSize = cache.first,
             cacheBreakdown = cache.second,  //  详细缓存统计
+            installedApkSha256 = diagnostics.installedApkSha256,
+            currentReleaseEvidence = diagnostics.currentReleaseEvidence,
+            diagnosticsLoadState = diagnostics.loadState,
             //  实验性功能
             auto1080p = experimental.auto1080p,
             autoSkipOpEd = experimental.autoSkipOpEd,
@@ -605,6 +731,49 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun ensureDiagnosticsLoaded() {
+        if (!shouldStartSettingsDiagnostics(
+                loadState = _diagnosticsState.value.loadState,
+                jobActive = diagnosticsLoadJob?.isActive == true,
+            )
+        ) {
+            return
+        }
+        diagnosticsLoadJob = viewModelScope.launch {
+            _diagnosticsState.update {
+                it.copy(loadState = SettingsDiagnosticsLoadState.LOADING)
+            }
+            try {
+                val (installedApkSha256, releaseEvidence) = coroutineScope {
+                    val digest = async { calculateInstalledApkSha256(context) }
+                    val release = async {
+                        AppUpdateChecker
+                            .check(
+                                currentVersion = com.android.purebilibili.BuildConfig.VERSION_NAME,
+                                currentVersionCode = com.android.purebilibili.BuildConfig.VERSION_CODE
+                            )
+                            .getOrNull()
+                    }
+                    digest.await() to release.await()
+                }
+                _diagnosticsState.value = DiagnosticsState(
+                    installedApkSha256 = installedApkSha256,
+                    currentReleaseEvidence = releaseEvidence,
+                    loadState = SettingsDiagnosticsLoadState.LOADED,
+                )
+            } catch (error: CancellationException) {
+                _diagnosticsState.update {
+                    it.copy(loadState = SettingsDiagnosticsLoadState.NOT_LOADED)
+                }
+                throw error
+            }
+        }
+    }
+
+    fun recordReleaseEvidence(evidence: AppUpdateCheckResult) {
+        _diagnosticsState.update { it.copy(currentReleaseEvidence = evidence) }
+    }
+
     suspend fun clearCache(
         targets: Set<CacheClearTarget> = CacheClearTarget.entries.toSet()
     ): Result<CacheUtils.CacheBreakdown> {
@@ -618,14 +787,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleHwDecode(value: Boolean) { viewModelScope.launch { SettingsManager.setHwDecode(context, value) } }
-    fun setUiPreset(preset: UiPreset) {
+    fun setThemeSelection(selection: AppUiStyle) {
         viewModelScope.launch {
-            SettingsManager.setUiPreset(context, preset)
-        }
-    }
-    fun setAndroidNativeVariant(variant: AndroidNativeVariant) {
-        viewModelScope.launch {
-            SettingsManager.setAndroidNativeVariant(context, variant)
+            SettingsManager.setUiStyle(context, selection)
         }
     }
     fun setThemeMode(mode: AppThemeMode) { 
@@ -643,12 +807,41 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             SettingsManager.setAppLanguage(context, appLanguage)
         }
     }
+    fun setAppIconStyle(iconStyle: AppIconStyle) {
+        viewModelScope.launch {
+            SettingsManager.setAppIconStyle(context, iconStyle)
+        }
+    }
+    fun setAppListItemStyle(style: AppListItemStyle) {
+        viewModelScope.launch {
+            SettingsManager.setAppListItemStyle(context, style)
+        }
+    }
     fun toggleDynamicColor(value: Boolean) { viewModelScope.launch { SettingsManager.setDynamicColor(context, value) } }
     fun setMd3ColorSource(source: Md3ColorSource) {
         viewModelScope.launch { SettingsManager.setMd3ColorSource(context, source) }
     }
     fun setMd3CustomColorHex(hex: String) {
-        viewModelScope.launch { SettingsManager.setMd3CustomColorHex(context, hex) }
+        viewModelScope.launch {
+            val normalizedHex = normalizeMd3CustomColorHex(hex)
+            SettingsManager.setMd3CustomColorHex(context, normalizedHex)
+            val overrides = SettingsManager.getThemeRoleOverrides(context).first()
+            val syncedOverrides = syncThemeRoleControlAccent(overrides, normalizedHex)
+            if (syncedOverrides != overrides) {
+                SettingsManager.setThemeRoleOverrides(context, syncedOverrides)
+            }
+        }
+    }
+    fun applyMd3CustomColor(hex: String) {
+        viewModelScope.launch {
+            val normalizedHex = normalizeMd3CustomColorHex(hex)
+            SettingsManager.applyMd3CustomColor(context, normalizedHex)
+            val overrides = SettingsManager.getThemeRoleOverrides(context).first()
+            val syncedOverrides = syncThemeRoleControlAccent(overrides, normalizedHex)
+            if (syncedOverrides != overrides) {
+                SettingsManager.setThemeRoleOverrides(context, syncedOverrides)
+            }
+        }
     }
     fun setThemeColorStyle(style: PaletteStyle) {
         viewModelScope.launch { SettingsManager.setThemeColorStyle(context, style) }
@@ -697,7 +890,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private suspend fun applyLauncherAliasForCurrentSplashIconSetting(iconKey: String) {
+    fun setAppIconAppearance(appearance: AppIconAppearance) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            SettingsManager.setAppIconAppearance(context, appearance)
+            val currentIcon = SettingsManager.getAppIconSync(context)
+            if (!supportsAppIconAppearance(currentIcon)) return@launch
+            applyLauncherAliasForCurrentSplashIconSetting(
+                iconKey = currentIcon,
+                appearance = appearance
+            )
+        }
+    }
+
+    private suspend fun applyLauncherAliasForCurrentSplashIconSetting(
+        iconKey: String,
+        appearance: AppIconAppearance = SettingsManager.getAppIconAppearanceSync(context)
+    ) {
         val normalizedIconKey = normalizeAppIconKey(iconKey)
         // 2. 应用 Alias
         val pm = context.packageManager
@@ -707,7 +915,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val targetAlias = resolveAppIconLauncherAlias(
             packageName = packageName,
             rawKey = normalizedIconKey,
-            splashIconVisible = splashIconVisible
+            splashIconVisible = splashIconVisible,
+            appearance = appearance
         )
         val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
 
@@ -756,9 +965,32 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleHeaderBlur(value: Boolean) {
         viewModelScope.launch {
             val resolved = resolveTopBarBlurToggleState(
-                enableHeaderBlur = value
+                enableHeaderBlur = value,
+                currentProgressiveTopBlurEnabled = state.value.progressiveTopBlurEnabled
             )
-            SettingsManager.setHeaderBlurEnabled(context, resolved.headerBlurEnabled)
+            SettingsManager.setTopBarVisualEffects(
+                context = context,
+                headerBlurEnabled = resolved.headerBlurEnabled,
+                progressiveTopBlurEnabled = resolved.progressiveTopBlurEnabled
+            )
+        }
+    }
+    fun toggleProgressiveTopBlur(value: Boolean) {
+        viewModelScope.launch {
+            val resolved = resolveProgressiveTopBlurToggleState(
+                enableProgressiveTopBlur = value,
+                currentHeaderBlurEnabled = state.value.headerBlurEnabled
+            )
+            SettingsManager.setTopBarVisualEffects(
+                context = context,
+                headerBlurEnabled = resolved.headerBlurEnabled,
+                progressiveTopBlurEnabled = resolved.progressiveTopBlurEnabled
+            )
+        }
+    }
+    fun toggleProgressiveTopFade(value: Boolean) {
+        viewModelScope.launch {
+            SettingsManager.setProgressiveTopFadeEnabled(context, value)
         }
     }
     fun toggleHeaderCollapse(value: Boolean) { viewModelScope.launch { SettingsManager.setHeaderCollapseEnabled(context, value) } }
@@ -768,8 +1000,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 enableBottomBarBlur = value,
                 currentLiquidGlassEnabled = state.value.bottomBarLiquidGlassEnabled
             )
-            SettingsManager.setBottomBarBlurEnabled(context, resolved.bottomBarBlurEnabled)
-            SettingsManager.setBottomBarLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
+            SettingsManager.setBottomBarVisualEffects(
+                context = context,
+                blurEnabled = resolved.bottomBarBlurEnabled,
+                liquidGlassEnabled = resolved.liquidGlassEnabled
+            )
         }
     }
     fun setBlurIntensity(intensity: BlurIntensity) { viewModelScope.launch { SettingsManager.setBlurIntensity(context, intensity) } }  //  模糊强度设置
@@ -780,9 +1015,27 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     //  [新增] 卡片过渡动画开关
     fun toggleCardTransition(value: Boolean) { viewModelScope.launch { SettingsManager.setCardTransitionEnabled(context, value) } }
 
+    fun toggleLiveSurfaceCardTransition(value: Boolean) {
+        viewModelScope.launch {
+            SettingsManager.setLiveSurfaceCardTransitionEnabled(context, value)
+        }
+    }
+
     fun toggleVideoTransitionRealtimeBlur(value: Boolean) {
         viewModelScope.launch {
             SettingsManager.setVideoTransitionRealtimeBlurEnabled(context, value)
+        }
+    }
+
+    fun setVideoSharedTransitionSpeed(speed: VideoSharedTransitionSpeed) {
+        viewModelScope.launch {
+            SettingsManager.setVideoSharedTransitionSpeed(context, speed)
+        }
+    }
+
+    fun setVideoSharedTransitionCustomDurationMillis(durationMillis: Int) {
+        viewModelScope.launch {
+            SettingsManager.setVideoSharedTransitionCustomDurationMillis(context, durationMillis)
         }
     }
 
@@ -835,30 +1088,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // [New] 触感反馈
     fun toggleHapticFeedback(value: Boolean) { viewModelScope.launch { SettingsManager.setHapticFeedbackEnabled(context, value) } }
     
-    // [New] Liquid Glass
-    fun toggleTopBarLiquidGlass(enabled: Boolean) {
-        viewModelScope.launch {
-            SettingsManager.setTopBarLiquidGlassEnabled(context, enabled)
-        }
-    }
-
-    fun toggleHomeSearchLiquidGlass(enabled: Boolean) {
-        viewModelScope.launch {
-            SettingsManager.setHomeSearchLiquidGlassEnabled(context, enabled)
-        }
-    }
-
-    fun toggleBottomBarLiquidGlass(enabled: Boolean) {
-        viewModelScope.launch {
-            val resolved = resolveLiquidGlassToggleState(
-                enableLiquidGlass = enabled,
-                currentBottomBarBlurEnabled = state.value.bottomBarBlurEnabled
-            )
-            SettingsManager.setBottomBarLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
-            SettingsManager.setBottomBarBlurEnabled(context, resolved.bottomBarBlurEnabled)
-        }
-    }
-
     fun toggleBottomBarSearch(enabled: Boolean) {
         viewModelScope.launch {
             SettingsManager.setBottomBarSearchEnabled(context, enabled)
@@ -871,26 +1100,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun setBottomBarSearchLayoutMode(mode: BottomBarSearchLayoutMode) {
+        viewModelScope.launch {
+            SettingsManager.setBottomBarSearchLayoutMode(context, mode)
+        }
+    }
+
     fun toggleAndroidNativeLiquidGlass(enabled: Boolean) {
         viewModelScope.launch {
             SettingsManager.setAndroidNativeLiquidGlassEnabled(context, enabled)
             if (enabled) {
-                val bottomBarResolved = resolveLiquidGlassToggleState(
-                    enableLiquidGlass = true,
-                    currentBottomBarBlurEnabled = state.value.bottomBarBlurEnabled
-                )
-                SettingsManager.setBottomBarLiquidGlassEnabled(context, bottomBarResolved.liquidGlassEnabled)
-                SettingsManager.setBottomBarBlurEnabled(context, bottomBarResolved.bottomBarBlurEnabled)
+                SettingsManager.setBottomBarBlurEnabled(context, false)
+                SettingsManager.setHeaderBlurEnabled(context, false)
             }
         }
     }
 
-    fun toggleLiquidGlass(enabled: Boolean) {
-        viewModelScope.launch {
-            SettingsManager.setLiquidGlassEnabled(context, enabled)
-        }
-    }
-    
     fun setLiquidGlassStyle(style: com.android.purebilibili.core.store.LiquidGlassStyle) {
         viewModelScope.launch {
             SettingsManager.setLiquidGlassStyle(context, style)
@@ -920,6 +1145,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setLiquidGlassProgress(progress: Float) {
         viewModelScope.launch {
             SettingsManager.setLiquidGlassProgress(context, progress)
+        }
+    }
+
+    fun setLiquidGlassPreviewImageUri(uri: String?) {
+        viewModelScope.launch {
+            SettingsManager.setLiquidGlassPreviewImageUri(context, uri)
+        }
+    }
+
+    fun setLiquidGlassAdvancedSettings(settings: LiquidGlassAdvancedSettings) {
+        viewModelScope.launch {
+            SettingsManager.setLiquidGlassAdvancedSettings(context, settings)
+        }
+    }
+
+    fun setLiquidGlassReadabilityMode(mode: LiquidGlassReadabilityMode) {
+        viewModelScope.launch {
+            LiquidGlassSettingsStore.setReadabilityMode(context, mode)
         }
     }
 

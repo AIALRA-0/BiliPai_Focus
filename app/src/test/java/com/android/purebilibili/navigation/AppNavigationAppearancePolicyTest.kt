@@ -1,8 +1,6 @@
 package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.store.HomeSettings
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -17,13 +15,11 @@ class AppNavigationAppearancePolicyTest {
                 isBottomBarFloating = false,
                 bottomBarLabelMode = 2,
                 isBottomBarBlurEnabled = false,
-                cardTransitionEnabled = false,
-                videoTransitionRealtimeBlurEnabled = false
+                cardTransitionEnabled = false
             )
         )
 
         assertFalse(appearance.cardTransitionEnabled)
-        assertFalse(appearance.videoTransitionRealtimeBlurEnabled)
         assertFalse(appearance.bottomBarBlurEnabled)
         kotlin.test.assertEquals(2, appearance.bottomBarLabelMode)
         assertFalse(appearance.bottomBarFloating)
@@ -34,33 +30,49 @@ class AppNavigationAppearancePolicyTest {
         val appearance = resolveAppNavigationAppearance(HomeSettings())
 
         assertTrue(appearance.cardTransitionEnabled)
-        assertTrue(appearance.videoTransitionRealtimeBlurEnabled)
-        assertTrue(appearance.bottomBarBlurEnabled)
+        assertFalse(appearance.bottomBarBlurEnabled)
         kotlin.test.assertEquals(0, appearance.bottomBarLabelMode)
         assertTrue(appearance.bottomBarFloating)
     }
 
     @Test
-    fun md3Preset_keepsFloatingBottomBarWhenShellSettingsAreStillDefault() {
+    fun defaultSettings_keepFloatingBottomBar() {
+        val appearance = resolveAppNavigationAppearance(HomeSettings())
+
+        assertTrue(appearance.bottomBarFloating)
+        assertFalse(appearance.bottomBarBlurEnabled)
+        kotlin.test.assertEquals(0, appearance.bottomBarLabelMode)
+    }
+
+    @Test
+    fun explicitSettings_keepDockedBottomBarBlur() {
         val appearance = resolveAppNavigationAppearance(
-            homeSettings = HomeSettings(),
-            uiPreset = UiPreset.MD3
+            homeSettings = HomeSettings(
+                isBottomBarFloating = false,
+                isBottomBarBlurEnabled = true,
+                androidNativeLiquidGlassEnabled = false,
+            ),
         )
 
-        assertTrue(appearance.bottomBarFloating)
+        assertFalse(appearance.bottomBarFloating)
         assertTrue(appearance.bottomBarBlurEnabled)
-        kotlin.test.assertEquals(0, appearance.bottomBarLabelMode)
     }
 
     @Test
-    fun md3Preset_preservesExplicitBottomBarShellCustomization() {
+    fun defaultSettings_disableBottomBarBlur() {
+        val appearance = resolveAppNavigationAppearance(HomeSettings())
+
+        assertFalse(appearance.bottomBarBlurEnabled)
+    }
+
+    @Test
+    fun preservesExplicitBottomBarShellCustomization() {
         val appearance = resolveAppNavigationAppearance(
             homeSettings = HomeSettings(
                 isBottomBarFloating = true,
                 bottomBarLabelMode = 1,
                 isBottomBarBlurEnabled = false
             ),
-            uiPreset = UiPreset.MD3
         )
 
         assertTrue(appearance.bottomBarFloating)
@@ -69,15 +81,11 @@ class AppNavigationAppearancePolicyTest {
     }
 
     @Test
-    fun md3MiuixPreset_keepsFloatingBottomBarWhenShellSettingsAreDefault() {
-        val appearance = resolveAppNavigationAppearance(
-            homeSettings = HomeSettings(),
-            uiPreset = UiPreset.MD3,
-            androidNativeVariant = AndroidNativeVariant.MIUIX
-        )
+    fun shellDefaults_keepFloatingBottomBar() {
+        val appearance = resolveAppNavigationAppearance(HomeSettings())
 
         assertTrue(appearance.bottomBarFloating)
-        assertTrue(appearance.bottomBarBlurEnabled)
+        assertFalse(appearance.bottomBarBlurEnabled)
         kotlin.test.assertEquals(0, appearance.bottomBarLabelMode)
     }
 
@@ -88,12 +96,21 @@ class AppNavigationAppearancePolicyTest {
             .substringAfter(".layerBackdrop(bottomBarBackdrop)")
             .substringBefore("// ===== 全局底栏")
 
-        val wallpaperIndex = capturedLayerSource.indexOf("HomeWallpaperBackdrop(")
+        val wallpaperIndex = capturedLayerSource.indexOf("DepthSyncedGlobalHomeWallpaperBackdrop(")
         val navDisplayIndex = capturedLayerSource.indexOf("BiliPaiNavDisplayHost(")
 
         assertTrue(wallpaperIndex >= 0)
         assertTrue(navDisplayIndex > wallpaperIndex)
-        assertTrue(capturedLayerSource.contains(".then(if (mainHazeState != null) Modifier.hazeSourceCompat(mainHazeState) else Modifier)"))
+        assertTrue(capturedLayerSource.contains("depthProgressProvider"))
+        assertTrue(capturedLayerSource.contains("videoCardTransitionClock.depthProgress()"))
+        assertTrue(capturedLayerSource.contains("sourceBoundsProvider"))
+        assertTrue(capturedLayerSource.contains("navigation3SourceMetadata.sourceBounds"))
+        assertFalse(capturedLayerSource.contains("onVideoCardDepthFrame"))
+        assertTrue(capturedLayerSource.contains("if (isBottomBarBlurEnabled && mainHazeState != null)"))
+        assertTrue(capturedLayerSource.contains("Modifier.hazeSourceCompat(mainHazeState)"))
+        assertTrue(source.contains("mainHostTabRoute = currentBottomNavItem.route"))
+        assertTrue(source.contains("LocalWallpaperPalette provides"))
+        assertTrue(source.contains("WallpaperPaletteStore.loadWallpaperPalette("))
     }
 
     @Test
@@ -109,12 +126,98 @@ class AppNavigationAppearancePolicyTest {
     }
 
     @Test
-    fun appNavigationRemovesVideoTransitionRealtimeBlurRuntimePath() {
+    fun appNavigationUsesNeutralBottomBarPolicyWithoutReadingStyleLocals() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
 
-        assertFalse(source.contains("videoTransitionRealtimeBlurEnabled"))
+        assertTrue(source.contains("rememberAppBottomBarContentPadding("))
+        assertFalse(source.contains("LocalUiPreset"))
+        assertFalse(source.contains("LocalAndroidNativeVariant"))
+        assertFalse(source.contains("UiPreset"))
+        assertFalse(source.contains("AndroidNativeVariant"))
+    }
+
+    @Test
+    fun appNavigationProvidesGlobalSharedTransitionSwitch() {
+        val navigationSource = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
+        val providerSource = loadSource("app/src/main/java/com/android/purebilibili/core/ui/SharedTransitionProvider.kt")
+        val activitySource = loadSource("app/src/main/java/com/android/purebilibili/MainActivity.kt")
+
+        assertTrue(
+            navigationSource.contains(
+                "SharedTransitionProvider(enabled = sharedVideoCardTransitionEnabled)"
+            )
+        )
+        assertTrue(navigationSource.contains("cardTransitionEnabled && !systemReduceMotion"))
+        assertTrue(
+            navigationSource.contains(
+                "VideoCardTransitionVisualTimeline.REDUCED_MOTION_DURATION_MILLIS"
+            )
+        )
+        assertTrue(providerSource.contains("val sharedTransitionScope = if (enabled) this else null"))
+        assertTrue(providerSource.contains("LocalSharedTransitionScope provides sharedTransitionScope"))
+        assertTrue(providerSource.contains("LocalSharedTransitionEnabled provides enabled"))
+        assertFalse(activitySource.contains("SharedTransitionProvider"))
+    }
+
+    @Test
+    fun appNavigationReadsVideoTransitionRealtimeBlurSetting() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
+
+        assertTrue(source.contains("videoTransitionRealtimeBlurEnabled"))
+        assertTrue(source.contains("realtimeBlurEnabledProvider"))
         assertFalse(source.contains("video_source_background_blur"))
         assertFalse(source.contains("RenderEffect.createBlurEffect"))
+    }
+
+    @Test
+    fun tabletSidebarReservesSpaceWithoutCoveringVideoCards() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
+        val navigationRow = source
+            .substringAfter("Box(modifier = Modifier.fillMaxSize()) {\n            Row(modifier = Modifier.fillMaxSize()) {")
+            .substringBefore("// End of navigation content row")
+
+        assertTrue(navigationRow.contains("AnimatedVisibility("))
+        assertTrue(navigationRow.contains("FrostedSideBar("))
+        assertFalse(navigationRow.contains(".align(Alignment.CenterStart)"))
+        assertFalse(navigationRow.contains(".zIndex(2f)"))
+    }
+
+    @Test
+    fun appNavigationKeepsFlyingEntryAsTheOnlyTransitionPixelOwner() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
+        val navHostSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt"
+        )
+        val navHostCall = source
+            .substringAfter("BiliPaiNavDisplayHost(")
+            .substringBefore(") { key ->")
+
+        assertFalse(source.contains("getVideoTransitionLiveReturnPreviewEnabled"))
+        assertFalse(source.contains("videoTransitionLiveReturnPreviewEnabled"))
+        assertTrue(navHostCall.contains("preferWholeCardReturn = false"))
+        assertTrue(navHostSource.contains("preferWholeCardReturnProvider"))
+        assertTrue(navHostSource.contains("preferWholeCardReturn: Boolean = false"))
+    }
+
+    @Test
+    fun transitionRealtimeBlurDoesNotDependOnRemovedBackgroundScaleSetting() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
+        val navHostSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt"
+        )
+        val navHostCall = source
+            .substringAfter("BiliPaiNavDisplayHost(")
+            .substringBefore(") { key ->")
+
+        assertTrue(
+            navHostCall.contains(
+                "videoCardDepthEffectEnabled = sharedVideoCardTransitionEnabled"
+            )
+        )
+        assertFalse(navHostCall.contains("videoCardBackgroundSinkEnabled"))
+        assertFalse(navHostSource.contains("isBackgroundSinkEnabledProvider ="))
+        assertFalse(navHostSource.contains("videoCardBackgroundSinkEnabled"))
+        assertTrue(navHostSource.contains("videoCardDepthEffectEnabled"))
     }
 
     @Test

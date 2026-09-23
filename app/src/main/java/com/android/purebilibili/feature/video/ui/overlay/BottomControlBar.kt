@@ -1,10 +1,16 @@
 // File: feature/video/ui/overlay/BottomControlBar.kt
 package com.android.purebilibili.feature.video.ui.overlay
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -23,13 +29,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-//  Cupertino Icons
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material3.*
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,12 +43,19 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSlider
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSwitch
+import com.android.purebilibili.core.ui.components.AppWindowAction
+import com.android.purebilibili.core.ui.components.AppWindowActionMenu
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.feature.video.progress.PbpRidgeDensity
@@ -52,13 +64,28 @@ import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble
 import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubblePlacement
 import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubbleSimple
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
-import androidx.compose.animation.AnimatedVisibility
+import com.android.purebilibili.feature.video.ui.components.DolbyBadge
+import com.android.purebilibili.feature.video.ui.components.HiResBadge
+import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
 import androidx.compose.ui.draw.clip
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleTrackOption
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayOptions
 import com.android.purebilibili.feature.video.playback.policy.resolveDisplayedPlaybackTransitionPosition
+import com.android.purebilibili.core.store.PlayerProgressPlacement
+import com.android.purebilibili.feature.anime4k.Anime4KPreset
+import com.android.purebilibili.feature.anime4k.DEFAULT_FSR_SHARPNESS
+import com.android.purebilibili.feature.anime4k.FSR_SHARPNESS_SLIDER_STEPS
+import com.android.purebilibili.feature.anime4k.VideoEnhancementAlgorithm
+import com.android.purebilibili.feature.anime4k.resolveAnime4KPresetLabel
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
+import com.android.purebilibili.core.plugin.skin.UiSkinAnimatedAsset
+import com.android.purebilibili.core.plugin.skin.UiSkinSurface
+import com.android.purebilibili.core.plugin.skin.assetPath
+import com.android.purebilibili.core.plugin.skin.parseUiSkinColor
 
 /**
  * Bottom Control Bar Component
@@ -171,6 +198,22 @@ internal fun shouldCancelSeekDragOnPointerInputCompletion(
     dragInProgress: Boolean
 ): Boolean = dragInProgress
 
+/**
+ * Seek tap/drag must live on a shared outer container that wraps both the chapter label and the
+ * track. Placing gestures on a track sibling loses pointer DOWN to the chapter [clickable].
+ */
+enum class VideoProgressBarSeekGestureHost {
+    SharedOuterContainer
+}
+
+internal fun resolveVideoProgressBarSeekGestureHost(
+    @Suppress("UNUSED_PARAMETER") hasChapterLabel: Boolean
+): VideoProgressBarSeekGestureHost {
+    // Always use a shared outer host. Chapter videos previously broke scrubbing when seek
+    // gestures lived on a track sibling under the chapter label's clickable hit target.
+    return VideoProgressBarSeekGestureHost.SharedOuterContainer
+}
+
 data class LandscapeDanmakuPlaceholderPolicy(
     val maxLines: Int,
     val ellipsis: Boolean,
@@ -198,6 +241,36 @@ internal fun shouldShowPortraitSwitchButtonInControlBar(
     isFullscreen: Boolean
 ): Boolean = isFullscreen
 
+internal fun shouldShowPortraitSwitchButtonInline(
+    isFullscreen: Boolean,
+    isVerticalVideo: Boolean,
+    widthDp: Int
+): Boolean {
+    if (isFullscreen) return false
+    // On tablets and large screens (widthDp >= 600), only show the portrait fullscreen button
+    // if the video is actually vertical. Standard horizontal 16:9 videos should never
+    // show "竖屏", which crowds out the regular fullscreen button.
+    // On compact phones (widthDp < 600), preserve existing behavior.
+    return if (widthDp >= 600) {
+        isVerticalVideo
+    } else {
+        true
+    }
+}
+
+internal fun shouldShowAudioQualityButtonInline(
+    isFullscreen: Boolean,
+    widthDp: Int,
+    isSpecialAudio: Boolean
+): Boolean {
+    if (isFullscreen) return false
+    // Special audio formats (Hi-Res / Dolby) always display their badge inline
+    if (isSpecialAudio) return true
+    // In inline non-fullscreen mode, standard audio (AAC) can be collapsed when space
+    // is constrained (< 680dp on tablet split panes) to prioritize primary controls
+    return widthDp >= 680 || widthDp < 480
+}
+
 internal fun shouldShowNextEpisodeButtonInControlBar(
     isFullscreen: Boolean,
     hasNextEpisode: Boolean
@@ -218,7 +291,16 @@ internal fun shouldShowEpisodeInMoreActions(
 internal fun shouldShowDanmakuInputInControlBar(
     isFullscreen: Boolean,
     widthDp: Int
-): Boolean = isFullscreen && widthDp >= 600
+): Boolean = com.android.purebilibili.feature.video.ui.components.shouldShowDanmakuInputInControlBar(
+    isFullscreen = isFullscreen,
+    widthDp = widthDp
+)
+
+/** Fullscreen always; tablet inline cinema (≥600dp) also needs a visible close toggle. */
+internal fun shouldShowDanmakuToggleInControlBar(
+    isFullscreen: Boolean,
+    widthDp: Int
+): Boolean = isFullscreen || widthDp >= 600
 
 internal fun shouldShowPlaybackOrderLabelInControlBar(
     isFullscreen: Boolean,
@@ -234,15 +316,17 @@ internal fun shouldShowMoreActionsButtonInControlBar(
     showEpisodeInMoreActions: Boolean = false,
     showNextEpisodeButton: Boolean,
     showPlaybackOrderLabel: Boolean,
-    showAspectRatioButton: Boolean,
-    showPortraitSwitchButton: Boolean
+    showAudioQualityButton: Boolean,
+    showPortraitSwitchButton: Boolean,
+    showAnime4KToggle: Boolean = false
 ): Boolean {
     return isFullscreen && (
         showEpisodeInMoreActions ||
             showNextEpisodeButton ||
             showPlaybackOrderLabel ||
-            showAspectRatioButton ||
-            showPortraitSwitchButton
+            showAudioQualityButton ||
+            showPortraitSwitchButton ||
+            showAnime4KToggle
         )
 }
 
@@ -252,9 +336,9 @@ internal fun shouldApplyNavigationBarPaddingToBottomControlBar(
 
 internal fun resolveFloatingControlPanelMinWidthDp(widthDp: Int): Int {
     return when {
-        widthDp >= 840 -> 216
-        widthDp >= 600 -> 196
-        else -> 176
+        widthDp >= 840 -> 184
+        widthDp >= 600 -> 176
+        else -> 168
     }
 }
 
@@ -325,6 +409,7 @@ private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BottomControlBar(
     isPlaying: Boolean,
@@ -347,16 +432,31 @@ fun BottomControlBar(
     onEpisodeClick: () -> Unit = {},
     hasEpisodeEntry: Boolean = false,
     onToggleFullscreen: () -> Unit,
+    viewportWidthDpOverride: Int? = null,
     
     // Danmaku
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {},
-    onDanmakuInputClick: () -> Unit = {},
     onDanmakuSettingsClick: () -> Unit = {},
+    onDanmakuInputClick: () -> Unit = {},
+    isLoggedIn: Boolean = true,
     subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
+    anime4kEnabled: Boolean = false,
+    anime4kAvailable: Boolean = false,
+    videoEnhancementAlgorithm: VideoEnhancementAlgorithm = VideoEnhancementAlgorithm.ANIME4K,
+    anime4kPreset: Anime4KPreset = Anime4KPreset.FAST,
+    fsrSharpness: Float = DEFAULT_FSR_SHARPNESS,
+    onAnime4kToggle: (Boolean) -> Unit = {},
+    onVideoEnhancementAlgorithmChange: (VideoEnhancementAlgorithm) -> Unit = {},
+    onAnime4kPresetChange: (Anime4KPreset) -> Unit = {},
+    onFsrSharpnessChange: (Float) -> Unit = {},
     
     // Quality
+    currentAudioQualityLabel: String = "音质",
+    isHiResAudioSelected: Boolean = false,
+    isDolbyAudioSelected: Boolean = false,
+    onAudioQualityClick: () -> Unit = {},
     currentQualityLabel: String = "",
     onQualityClick: () -> Unit = {},
     
@@ -375,7 +475,9 @@ fun BottomControlBar(
     onPlayModeClick: () -> Unit = {},
     playbackOrderLabel: String = "",
     onPlaybackOrderClick: () -> Unit = {},
+    progressPlacement: PlayerProgressPlacement = PlayerProgressPlacement.ABOVE_CONTROLS,
     onPipClick: () -> Unit = {},
+    onFloatingPanelVisibilityChange: (Boolean) -> Unit = {},
     
     modifier: Modifier = Modifier
 ) {
@@ -388,24 +490,32 @@ fun BottomControlBar(
     val subtitleSecondaryLabel = subtitleControlState.secondaryLabel
     val subtitleTrackOptions = subtitleControlState.trackOptions
     val subtitleLargeTextEnabled = subtitleControlState.largeTextEnabled
+    val subtitlePositionLocked = subtitleControlState.positionLocked
     val onSubtitleDisplayModeChange = subtitleControlCallbacks.onDisplayModeChange
     val onSubtitleTrackSelected = subtitleControlCallbacks.onTrackSelected
     val onSubtitleLargeTextChange = subtitleControlCallbacks.onLargeTextChange
+    val onSubtitlePositionLockedChange = subtitleControlCallbacks.onPositionLockedChange
 
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp) {
+    val uiLayoutWidthDp = remember(configuration.screenWidthDp, viewportWidthDpOverride) {
+        (viewportWidthDpOverride ?: configuration.screenWidthDp).coerceAtLeast(1)
+    }
+    val layoutPolicy = remember(uiLayoutWidthDp) {
         resolveBottomControlBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = uiLayoutWidthDp
         )
     }
-    val floatingPanelMinWidthDp = remember(configuration.screenWidthDp) {
-        resolveFloatingControlPanelMinWidthDp(widthDp = configuration.screenWidthDp)
+    val floatingPanelMinWidthDp = remember(uiLayoutWidthDp) {
+        resolveFloatingControlPanelMinWidthDp(widthDp = uiLayoutWidthDp)
     }
-    val moreActionItemMinWidthDp = remember(configuration.screenWidthDp) {
-        resolveMoreActionItemMinWidthDp(widthDp = configuration.screenWidthDp)
+    val moreActionItemMinWidthDp = remember(uiLayoutWidthDp) {
+        resolveMoreActionItemMinWidthDp(widthDp = uiLayoutWidthDp)
     }
-    val moreButtonAnchorOffsetDp = remember(configuration.screenWidthDp) {
-        resolveMoreActionsButtonAnchorOffsetDp(widthDp = configuration.screenWidthDp)
+    val moreActionsPanelWidthDp = remember(moreActionItemMinWidthDp) {
+        moreActionItemMinWidthDp * 2 + 32
+    }
+    val moreButtonAnchorOffsetDp = remember(uiLayoutWidthDp) {
+        resolveMoreActionsButtonAnchorOffsetDp(widthDp = uiLayoutWidthDp)
     }
     val moreActionsPanelEndPaddingDp = remember(
         layoutPolicy.horizontalPaddingDp,
@@ -431,28 +541,31 @@ fun BottomControlBar(
             gapDp = 20
         )
     }
-    val progressLayoutPolicy = remember(configuration.screenWidthDp) {
+    val videoEnhancementPanelMaxHeightDp = remember(
+        configuration.screenHeightDp,
+        floatingPanelBottomOffsetDp
+    ) {
+        (configuration.screenHeightDp - floatingPanelBottomOffsetDp - 48).coerceAtLeast(120)
+    }
+    val progressLayoutPolicy = remember(uiLayoutWidthDp) {
         resolveVideoProgressBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = uiLayoutWidthDp
         )
     }
-    val danmakuPlaceholderPolicy = remember(
-        layoutPolicy.danmakuSettingButtonSizeDp,
-        layoutPolicy.danmakuSettingEndPaddingDp
-    ) {
+    val danmakuPlaceholderPolicy = remember {
         resolveLandscapeDanmakuPlaceholderPolicy(
-            settingButtonSizeDp = layoutPolicy.danmakuSettingButtonSizeDp,
-            settingEndPaddingDp = layoutPolicy.danmakuSettingEndPaddingDp
+            settingButtonSizeDp = 0,
+            settingEndPaddingDp = 0,
         )
     }
     val fullscreenToggleTouchTargetDp = remember(layoutPolicy.fullscreenIconSizeDp) {
         resolveFullscreenToggleTouchTargetDp(iconSizeDp = layoutPolicy.fullscreenIconSizeDp)
     }
-    val showEpisodeButton = remember(isFullscreen, hasEpisodeEntry, configuration.screenWidthDp) {
+    val showEpisodeButton = remember(isFullscreen, hasEpisodeEntry, uiLayoutWidthDp) {
         shouldShowEpisodeButtonInControlBar(
             isFullscreen = isFullscreen,
             hasEpisodeEntry = hasEpisodeEntry,
-            widthDp = configuration.screenWidthDp
+            widthDp = uiLayoutWidthDp
         )
     }
     val showEpisodeInMoreActions = remember(isFullscreen, hasEpisodeEntry, showEpisodeButton) {
@@ -462,18 +575,39 @@ fun BottomControlBar(
             showInlineEpisodeButton = showEpisodeButton
         )
     }
-    val showDanmakuInput = remember(isFullscreen, configuration.screenWidthDp) {
+    val showDanmakuInput = remember(isFullscreen, uiLayoutWidthDp) {
         shouldShowDanmakuInputInControlBar(
             isFullscreen = isFullscreen,
-            widthDp = configuration.screenWidthDp
+            widthDp = uiLayoutWidthDp
         )
+    }
+    val showCompactDanmakuSend = remember(isFullscreen, uiLayoutWidthDp) {
+        com.android.purebilibili.feature.video.ui.components.shouldShowCompactDanmakuSendAction(
+            isFullscreen = isFullscreen,
+            widthDp = uiLayoutWidthDp
+        )
+    }
+    val danmakuInputPlaceholder = remember(isLoggedIn) {
+        com.android.purebilibili.feature.video.ui.components.resolveDanmakuInputPlaceholder(isLoggedIn)
     }
     var showMoreActionsPanel by remember { mutableStateOf(false) }
     var showSubtitlePanel by remember { mutableStateOf(false) }
+    var showVideoEnhancementPanel by remember { mutableStateOf(false) }
+    val floatingPanelVisible = showMoreActionsPanel || showSubtitlePanel || showVideoEnhancementPanel
+    val currentFloatingPanelVisibilityCallback = rememberUpdatedState(onFloatingPanelVisibilityChange)
+    LaunchedEffect(floatingPanelVisible) {
+        currentFloatingPanelVisibilityCallback.value(floatingPanelVisible)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            currentFloatingPanelVisibilityCallback.value(false)
+        }
+    }
     LaunchedEffect(isFullscreen) {
         if (!isFullscreen) {
             showMoreActionsPanel = false
             showSubtitlePanel = false
+            showVideoEnhancementPanel = false
         }
     }
     val showPlaybackOrderLabel = remember(isFullscreen, playbackOrderLabel) {
@@ -504,21 +638,37 @@ fun BottomControlBar(
             isFullscreen = isFullscreen
         )
     }
+    val isSpecialAudioSelected = isHiResAudioSelected || isDolbyAudioSelected
+    val showAudioQualityButtonInline = remember(isFullscreen, uiLayoutWidthDp, isSpecialAudioSelected) {
+        shouldShowAudioQualityButtonInline(
+            isFullscreen = isFullscreen,
+            widthDp = uiLayoutWidthDp,
+            isSpecialAudio = isSpecialAudioSelected
+        )
+    }
+    val showPortraitSwitchButtonInline = remember(isFullscreen, isVerticalVideo, uiLayoutWidthDp) {
+        shouldShowPortraitSwitchButtonInline(
+            isFullscreen = isFullscreen,
+            isVerticalVideo = isVerticalVideo,
+            widthDp = uiLayoutWidthDp
+        )
+    }
     val showMoreActionsButton = remember(
         isFullscreen,
         showEpisodeInMoreActions,
         showNextEpisodeButton,
         showPlaybackOrderLabel,
-        showAspectRatioButton,
-        showPortraitSwitchButton
+        showPortraitSwitchButton,
+        anime4kAvailable
     ) {
         shouldShowMoreActionsButtonInControlBar(
             isFullscreen = isFullscreen,
             showEpisodeInMoreActions = showEpisodeInMoreActions,
             showNextEpisodeButton = showNextEpisodeButton,
             showPlaybackOrderLabel = showPlaybackOrderLabel,
-            showAspectRatioButton = showAspectRatioButton,
-            showPortraitSwitchButton = showPortraitSwitchButton
+            showAudioQualityButton = isFullscreen,
+            showPortraitSwitchButton = showPortraitSwitchButton,
+            showAnime4KToggle = anime4kAvailable
         )
     }
     val shouldConsumeFloatingPanelBackground = remember(showSubtitlePanel, showMoreActionsPanel) {
@@ -545,20 +695,13 @@ fun BottomControlBar(
     }
 
     val displayedPositionMs = seekPositionMs.coerceAtLeast(0L)
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(bottom = layoutPolicy.bottomPaddingDp.dp)
-            .then(
-                if (shouldApplyNavigationBarPaddingToBottomControlBar(isFullscreen = isFullscreen)) {
-                    Modifier.navigationBarsPadding()
-                } else {
-                    Modifier
-                }
-            )
-    ) {
-        // 1. Progress Bar (Top of controls)
+    val resolvedBottomPaddingDp = remember(layoutPolicy.bottomPaddingDp, progressPlacement) {
+        resolveBottomControlBarBottomPaddingDp(
+            defaultBottomPaddingDp = layoutPolicy.bottomPaddingDp,
+            progressPlacement = progressPlacement
+        )
+    }
+    val progressBarContent: @Composable () -> Unit = {
         VideoProgressBar(
             currentPosition = progress.current,
             displayPositionMs = displayedPositionMs,
@@ -576,15 +719,35 @@ fun BottomControlBar(
             sponsorMarkers = sponsorMarkers,
             pbpRidgeSamples = pbpRidgeSamples,
             currentChapter = currentChapter,
-            onChapterClick = onChapterClick
+            onChapterClick = onChapterClick,
+            modifier = Modifier
+                .padding(horizontal = if (isFullscreen) 48.dp else 0.dp)
+                .testTag("player_progress")
         )
+    }
 
-        Spacer(modifier = Modifier.height(layoutPolicy.progressSpacingDp.dp))
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = resolvedBottomPaddingDp.dp)
+            .then(
+                if (shouldApplyNavigationBarPaddingToBottomControlBar(isFullscreen = isFullscreen)) {
+                    Modifier.navigationBarsPadding()
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        if (progressPlacement == PlayerProgressPlacement.ABOVE_CONTROLS) {
+            progressBarContent()
+            Spacer(modifier = Modifier.height(layoutPolicy.progressSpacingDp.dp))
+        }
 
         // 2. Control Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .testTag("player_control_row")
                 .padding(horizontal = layoutPolicy.horizontalPaddingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -600,7 +763,7 @@ fun BottomControlBar(
             Spacer(modifier = Modifier.width(layoutPolicy.afterPlaySpacingDp.dp))
 
             // Time
-            Text(
+            AppText(
                 text = "${FormatUtils.formatDuration((displayedPositionMs / 1000).toInt())} / ${FormatUtils.formatDuration((progress.duration / 1000).toInt())}",
                 color = Color.White.copy(alpha = 0.9f),
                 fontSize = layoutPolicy.timeFontSp.sp,
@@ -609,89 +772,105 @@ fun BottomControlBar(
 
             Spacer(modifier = Modifier.width(layoutPolicy.afterTimeSpacingDp.dp))
 
-            // Center area: Danmaku Controls (Switch + Input) - Only visible in Fullscreen/Landscape
-            if (isFullscreen) {
-                val danmakuActiveColor = MaterialTheme.colorScheme.primary
+            // Danmaku toggle: fullscreen always; tablet inline player (wide) also needs it
+            // while overlay chrome is visible. Always-visible send/toggle live on the
+            // tablet side pane next to 评论.
+            val showDanmakuToggle = shouldShowDanmakuToggleInControlBar(
+                isFullscreen = isFullscreen,
+                widthDp = uiLayoutWidthDp
+            )
+            if (showDanmakuToggle) {
+                val danmakuActiveColor = Color.White.copy(alpha = 0.96f)
                 val danmakuInactiveColor = Color.White.copy(alpha = 0.74f)
-                // Danmaku Switch
-                Row(
-                    modifier = Modifier
-                        .heightIn(min = 40.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(
-                            if (danmakuEnabled) {
-                                danmakuActiveColor.copy(alpha = 0.22f)
-                            } else {
-                                danmakuInactiveColor.copy(alpha = 0.16f)
-                            }
-                        )
-                        .consumeTap(onDanmakuToggle)
-                        .padding(
-                            horizontal = layoutPolicy.danmakuSwitchHorizontalPaddingDp.dp,
-                            vertical = layoutPolicy.danmakuSwitchVerticalPaddingDp.dp
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
-                        contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                        tint = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
-                        modifier = Modifier.size(layoutPolicy.danmakuIconSizeDp.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (danmakuEnabled) "开" else "关",
-                        color = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
+                NativeDanmakuToggleButton(
+                    enabled = danmakuEnabled,
+                    onToggle = onDanmakuToggle,
+                    activeTint = danmakuActiveColor,
+                    inactiveTint = danmakuInactiveColor,
+                    iconSize = layoutPolicy.danmakuIconSizeDp.dp,
+                )
+
+                AppIconButton(onClick = onDanmakuSettingsClick) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "弹幕设置",
+                        tint = Color.White.copy(alpha = 0.9f),
                     )
                 }
                 
                 if (showDanmakuInput) {
                     Spacer(modifier = Modifier.width(layoutPolicy.danmakuSwitchToInputSpacingDp.dp))
 
-                    // Danmaku Input Box
-                    Box(
+                    BoxWithConstraints(
                         modifier = Modifier
                             .weight(1f)
-                            .height(layoutPolicy.danmakuInputHeightDp.dp)
-                            .clip(RoundedCornerShape((layoutPolicy.danmakuInputHeightDp / 2).dp))
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .consumeTap(onDanmakuInputClick),
-                        contentAlignment = Alignment.CenterStart
+                            .height(layoutPolicy.danmakuInputHeightDp.dp),
                     ) {
-                        Text(
-                            text = "发个友善的弹幕见证当下...",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = layoutPolicy.danmakuInputFontSp.sp,
-                            maxLines = danmakuPlaceholderPolicy.maxLines,
-                            overflow = if (danmakuPlaceholderPolicy.ellipsis) TextOverflow.Ellipsis else TextOverflow.Clip,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(
-                                    start = layoutPolicy.danmakuInputStartPaddingDp.dp,
-                                    end = danmakuPlaceholderPolicy.trailingTextPaddingDp.dp
-                                )
-                        )
-
-                        // Settings Icon inside input bar (right)
-                        IconButton(
-                            onClick = onDanmakuSettingsClick,
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = layoutPolicy.danmakuSettingEndPaddingDp.dp)
-                                .size(layoutPolicy.danmakuSettingButtonSizeDp.dp)
+                        val availableWidthDp = maxWidth.value.toInt()
+                        if (
+                            com.android.purebilibili.feature.video.ui.components
+                                .shouldDrawDanmakuInputCapsule(availableWidthDp)
                         ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Default.Gearshape,
-                                contentDescription = "Settings",
-                                tint = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.size(layoutPolicy.danmakuSettingIconSizeDp.dp)
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(
+                                        RoundedCornerShape(
+                                            (layoutPolicy.danmakuInputHeightDp / 2).dp,
+                                        ),
+                                    )
+                                    .background(
+                                        Color.White.copy(
+                                            alpha = if (isLoggedIn) 0.2f else 0.12f,
+                                        ),
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .consumeTap(onDanmakuInputClick),
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    AppText(
+                                        text = danmakuInputPlaceholder,
+                                        color = Color.White.copy(
+                                            alpha = if (isLoggedIn) 0.7f else 0.5f,
+                                        ),
+                                        fontSize = layoutPolicy.danmakuInputFontSp.sp,
+                                        maxLines = danmakuPlaceholderPolicy.maxLines,
+                                        overflow = if (danmakuPlaceholderPolicy.ellipsis) {
+                                            TextOverflow.Ellipsis
+                                        } else {
+                                            TextOverflow.Clip
+                                        },
+                                        modifier = Modifier.padding(
+                                            start = layoutPolicy.danmakuInputStartPaddingDp.dp,
+                                            end = 8.dp,
+                                        ),
+                                    )
+                                }
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.width(layoutPolicy.afterInputSpacingDp.dp))
+                } else if (showCompactDanmakuSend) {
+                    Spacer(modifier = Modifier.width(layoutPolicy.danmakuSwitchToInputSpacingDp.dp))
+                    AppText(
+                        text = if (isLoggedIn) "发弹幕" else "登录发弹幕",
+                        color = Color.White.copy(alpha = if (isLoggedIn) 0.92f else 0.62f),
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .clip(AppShapes.container(ContainerLevel.Card))
+                            .background(Color.White.copy(alpha = 0.16f))
+                            .clickable(onClick = onDanmakuInputClick)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.width(layoutPolicy.afterInputSpacingDp.dp))
+                    Spacer(modifier = Modifier.weight(1f))
                 } else {
                     Spacer(modifier = Modifier.weight(1f))
                 }
@@ -704,44 +883,92 @@ fun BottomControlBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(layoutPolicy.rightActionSpacingDp.dp)
             ) {
+                if (showAspectRatioButton) {
+                    Box(
+                        modifier = Modifier
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            .clickable(onClick = onRatioClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppText(
+                            text = currentRatio.displayName,
+                            color = Color.White,
+                            fontSize = layoutPolicy.actionTextFontSp.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                } else if (showAudioQualityButtonInline) {
+                    Row(
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .clickable(onClick = onAudioQualityClick),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        AppText(
+                            text = currentAudioQualityLabel.ifBlank { "音质" },
+                            color = Color.White,
+                            fontSize = layoutPolicy.actionTextFontSp.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        if (isHiResAudioSelected) {
+                            HiResBadge()
+                        }
+                        if (isDolbyAudioSelected) {
+                            DolbyBadge()
+                        }
+                    }
+                }
+
                 // Quality
                 if (currentQualityLabel.isNotEmpty()) {
-                    Text(
+                    AppText(
                         text = currentQualityLabel,
                         color = Color.White,
                         fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clickable(onClick = onQualityClick)
                     )
                 }
 
                 if (showEpisodeButton) {
-                    Text(
+                    AppText(
                         text = "分集",
                         color = Color.White,
                         fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.clickable(onClick = onEpisodeClick)
                     )
                 }
                 
                 // Speed
-                Text(
+                AppText(
                     text = if (currentSpeed == 1.0f) "倍速" else "${currentSpeed}x",
                     color = if (currentSpeed == 1.0f) Color.White else MaterialTheme.colorScheme.primary,
                     fontSize = layoutPolicy.actionTextFontSp.sp,
                     fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
                     modifier = Modifier.clickable(onClick = onSpeedClick)
                 )
 
                 if (showSubtitleButton) {
-                    Surface(
+                    AppSurface(
                         color = if (subtitleEnabled) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                         } else {
                             Color.White.copy(alpha = 0.18f)
                         },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = AppShapes.container(ContainerLevel.Field),
                         onClick = {
                             val nextShowSubtitlePanel = !showSubtitlePanel
                             com.android.purebilibili.core.util.Logger.d(
@@ -751,14 +978,17 @@ fun BottomControlBar(
                             showSubtitlePanel = nextShowSubtitlePanel
                             if (nextShowSubtitlePanel) {
                                 showMoreActionsPanel = false
+                                showVideoEnhancementPanel = false
                             }
                         }
                     ) {
-                        Text(
+                        AppText(
                             text = "字幕",
                             color = if (subtitleEnabled) MaterialTheme.colorScheme.primary else Color.White,
                             fontSize = layoutPolicy.actionTextFontSp.sp,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(
                                 horizontal = layoutPolicy.actionChipHorizontalPaddingDp.dp,
                                 vertical = layoutPolicy.actionChipVerticalPaddingDp.dp
@@ -768,33 +998,92 @@ fun BottomControlBar(
                 }
 
                 if (showMoreActionsButton) {
-                    Text(
-                        text = "更多",
-                        color = if (showMoreActionsPanel) MaterialTheme.colorScheme.primary else Color.White,
-                        fontSize = layoutPolicy.actionTextFontSp.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable {
-                                showMoreActionsPanel = !showMoreActionsPanel
-                                if (showMoreActionsPanel) {
-                                    showSubtitlePanel = false
-                                }
-                            }
-                            .padding(
-                                horizontal = layoutPolicy.actionChipHorizontalPaddingDp.dp,
-                                vertical = layoutPolicy.actionChipVerticalPaddingDp.dp
+                    AppWindowActionMenu(
+                        groups = listOf(
+                            listOfNotNull(
+                                if (showEpisodeInMoreActions) {
+                                    AppWindowAction(label = "分集", onClick = {
+                                            showMoreActionsPanel = false
+                                            onEpisodeClick()
+                                        })
+                                } else null,
+                                if (showNextEpisodeButton) {
+                                    AppWindowAction(label = "下集", onClick = {
+                                            showMoreActionsPanel = false
+                                            onNextEpisodeClick()
+                                        })
+                                } else null,
+                                if (showPlaybackOrderLabel) {
+                                    AppWindowAction(label = playbackOrderLabel, selected = playbackOrderLabel != "自动连播", onClick = {
+                                            showMoreActionsPanel = false
+                                            onPlaybackOrderClick()
+                                        })
+                                } else null,
+                                AppWindowAction(
+                                    label = if (currentAudioQualityLabel.isBlank() || currentAudioQualityLabel == "音质") {
+                                        "音质"
+                                    } else {
+                                        "音质 · $currentAudioQualityLabel"
+                                    },
+                                    selected = isHiResAudioSelected || isDolbyAudioSelected,
+                                    onClick = {
+                                        showMoreActionsPanel = false
+                                        onAudioQualityClick()
+                                    }
+                                ),
+                                if (showPortraitSwitchButton) {
+                                    AppWindowAction(label = "竖屏", onClick = {
+                                            showMoreActionsPanel = false
+                                            onPortraitFullscreen()
+                                        })
+                                } else null,
+                                if (anime4kAvailable) {
+                                    AppWindowAction(label = "画质增强", selected = anime4kEnabled, onClick = {
+                                            showMoreActionsPanel = false
+                                            showVideoEnhancementPanel = true
+                                        })
+                                } else null,
+                                if (
+                                    com.android.purebilibili.feature.video.ui.components.shouldShowDanmakuSendInMoreActions(
+                                        isFullscreen = isFullscreen,
+                                        showInlineDanmakuInput = showDanmakuInput
+                                    )
+                                ) {
+                                    AppWindowAction(label = if (isLoggedIn) "发弹幕" else "登录发弹幕", onClick = {
+                                            showMoreActionsPanel = false
+                                            onDanmakuInputClick()
+                                        })
+                                } else null
                             )
+                        ),
+                        onExpandedChange = { expanded -> showMoreActionsPanel = expanded },
+                        content = {
+                            AppText(
+                                text = "更多",
+                                color = if (showMoreActionsPanel) MaterialTheme.colorScheme.primary else Color.White,
+                                fontSize = layoutPolicy.actionTextFontSp.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                // AppIconButton supplies a compact 48dp target. Keep the label
+                                // on one line so the final overflow action is never split as
+                                // “更”/“多” in landscape.
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
+                                modifier = Modifier.padding(vertical = layoutPolicy.actionChipVerticalPaddingDp.dp)
+                            )
+                        }
                     )
                 }
 
-                // 📱 [修复] 竖屏全屏按钮 - 仅在非全屏模式下显示
-                if (!isFullscreen) {
-                    Text(
+                // 📱 [修复] 竖屏全屏按钮 - 仅在非全屏且有需要时显示，避免挤压平板控制栏
+                if (showPortraitSwitchButtonInline) {
+                    AppText(
                         text = "竖屏",
                         color = Color.White,
                         fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.clickable(onClick = onPortraitFullscreen)
                     )
                 }
@@ -806,14 +1095,18 @@ fun BottomControlBar(
                         .consumeTap(onToggleFullscreen),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = if (isFullscreen) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft else CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
+                    AppIcon(
+                        imageVector = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
                         contentDescription = if (isFullscreen) "退出横屏" else "横屏",
                         tint = Color.White,
                         modifier = Modifier.size(layoutPolicy.fullscreenIconSizeDp.dp)
                     )
                 }
             }
+        }
+        if (progressPlacement == PlayerProgressPlacement.BOTTOM_EDGE) {
+            Spacer(modifier = Modifier.height(layoutPolicy.progressSpacingDp.dp))
+            progressBarContent()
         }
     }
 
@@ -826,9 +1119,9 @@ fun BottomControlBar(
                     bottom = floatingPanelBottomOffsetDp.dp
                 )
         ) {
-            Surface(
+            AppSurface(
                 color = Color.Black.copy(alpha = 0.76f),
-                shape = RoundedCornerShape(12.dp),
+                shape = AppShapes.container(ContainerLevel.Card),
                 border = androidx.compose.foundation.BorderStroke(
                     width = 0.5.dp,
                     color = Color.White.copy(alpha = 0.12f)
@@ -840,10 +1133,10 @@ fun BottomControlBar(
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
+                    AppText(
                         text = "字幕显示",
                         color = Color.White.copy(alpha = 0.88f),
-                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
                     )
@@ -865,11 +1158,11 @@ fun BottomControlBar(
                         )
                     }
                     if (subtitlePanelTrackOptions.isNotEmpty()) {
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
-                        Text(
+                        AppHorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                        AppText(
                             text = "字幕轨道",
                             color = Color.White.copy(alpha = 0.72f),
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)
                         )
@@ -888,7 +1181,7 @@ fun BottomControlBar(
                         }
                     }
                     if (subtitleOptions.size > 1) {
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                        AppHorizontalDivider(color = Color.White.copy(alpha = 0.10f))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -896,101 +1189,65 @@ fun BottomControlBar(
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp)
                         ) {
-                            Text(
+                            AppText(
                                 text = "大字号",
                                 color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 13.sp,
+                                style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium
                             )
-                            Switch(
+                            AppSwitch(
                                 checked = subtitleLargeTextEnabled,
                                 onCheckedChange = onSubtitleLargeTextChange,
                                 modifier = Modifier.height(28.dp)
                             )
                         }
                     }
+                    AppHorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp)
+                    ) {
+                        AppText(
+                            text = "锁定位置",
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        AppSwitch(
+                            checked = subtitlePositionLocked,
+                            onCheckedChange = onSubtitlePositionLockedChange,
+                            modifier = Modifier.height(28.dp)
+                        )
+                    }
                 }
             }
         }
     }
 
-    if (showMoreActionsPanel && showMoreActionsButton && shouldConsumeFloatingPanelBackground) {
+    if (showVideoEnhancementPanel && anime4kAvailable) {
         FloatingControlPanelDialog(
-            onDismissRequest = { showMoreActionsPanel = false },
+            onDismissRequest = { showVideoEnhancementPanel = false },
             panelModifier = Modifier
                 .padding(
                     end = moreActionsPanelEndPaddingDp.dp,
                     bottom = floatingPanelBottomOffsetDp.dp
                 )
         ) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.78f),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.2f)
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(min = floatingPanelMinWidthDp.dp)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (showEpisodeInMoreActions) {
-                        MoreActionTextButton(
-                            label = "分集",
-                            minWidthDp = moreActionItemMinWidthDp,
-                            onClick = {
-                                showMoreActionsPanel = false
-                                onEpisodeClick()
-                            }
-                        )
-                    }
-                    if (showNextEpisodeButton) {
-                        MoreActionTextButton(
-                            label = "下集",
-                            minWidthDp = moreActionItemMinWidthDp,
-                            onClick = {
-                                showMoreActionsPanel = false
-                                onNextEpisodeClick()
-                            }
-                        )
-                    }
-                    if (showPlaybackOrderLabel) {
-                        MoreActionTextButton(
-                            label = playbackOrderLabel,
-                            minWidthDp = moreActionItemMinWidthDp,
-                            onClick = {
-                                showMoreActionsPanel = false
-                                onPlaybackOrderClick()
-                            }
-                        )
-                    }
-                    if (showAspectRatioButton) {
-                        MoreActionTextButton(
-                            label = currentRatio.displayName,
-                            highlighted = currentRatio != VideoAspectRatio.FIT,
-                            minWidthDp = moreActionItemMinWidthDp,
-                            onClick = {
-                                showMoreActionsPanel = false
-                                onRatioClick()
-                            }
-                        )
-                    }
-                    if (showPortraitSwitchButton) {
-                        MoreActionTextButton(
-                            label = "竖屏",
-                            minWidthDp = moreActionItemMinWidthDp,
-                            onClick = {
-                                showMoreActionsPanel = false
-                                onPortraitFullscreen()
-                            }
-                        )
-                    }
-                }
-            }
+            VideoEnhancementSettingsPanel(
+                enabled = anime4kEnabled,
+                algorithm = videoEnhancementAlgorithm,
+                preset = anime4kPreset,
+                fsrSharpness = fsrSharpness,
+                minWidthDp = maxOf(220, floatingPanelMinWidthDp),
+                maxHeightDp = videoEnhancementPanelMaxHeightDp,
+                onCheckedChange = onAnime4kToggle,
+                onAlgorithmChange = onVideoEnhancementAlgorithmChange,
+                onPresetChange = onAnime4kPresetChange,
+                onFsrSharpnessChange = onFsrSharpnessChange
+            )
         }
     }
 }
@@ -1014,6 +1271,7 @@ private fun FloatingControlPanelDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -1043,7 +1301,7 @@ private fun SubtitlePanelOption(
     minWidthDp: Int,
     onClick: () -> Unit
 ) {
-    Text(
+    AppText(
         text = label,
         color = when {
             !enabled -> Color.White.copy(alpha = 0.42f)
@@ -1051,11 +1309,11 @@ private fun SubtitlePanelOption(
             else -> Color.White
         },
         textAlign = TextAlign.Center,
-        fontSize = 13.sp,
+        style = MaterialTheme.typography.bodySmall,
         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         modifier = Modifier
             .widthIn(min = minWidthDp.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(AppShapes.container(ContainerLevel.Chip))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 4.dp)
     )
@@ -1068,18 +1326,195 @@ private fun MoreActionTextButton(
     minWidthDp: Int,
     onClick: () -> Unit
 ) {
-    Text(
+    AppText(
         text = label,
         color = if (highlighted) MaterialTheme.colorScheme.primary else Color.White,
         textAlign = TextAlign.Center,
-        fontSize = 14.sp,
+        style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .widthIn(min = minWidthDp.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(AppShapes.container(ContainerLevel.Field))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp)
     )
+}
+
+@Composable
+private fun VideoEnhancementSettingsPanel(
+    enabled: Boolean,
+    algorithm: VideoEnhancementAlgorithm,
+    preset: Anime4KPreset,
+    fsrSharpness: Float,
+    minWidthDp: Int,
+    maxHeightDp: Int,
+    onCheckedChange: (Boolean) -> Unit,
+    onAlgorithmChange: (VideoEnhancementAlgorithm) -> Unit,
+    onPresetChange: (Anime4KPreset) -> Unit,
+    onFsrSharpnessChange: (Float) -> Unit
+) {
+    AppSurface(
+        color = Color.Black.copy(alpha = 0.82f),
+        shape = AppShapes.container(ContainerLevel.Card),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = Color.White.copy(alpha = 0.2f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .width(minWidthDp.dp)
+                .heightIn(max = maxHeightDp.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(
+                        text = "画质增强",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    AppText(
+                        text = if (enabled) "当前视频已开启" else "当前视频已关闭",
+                        color = Color.White.copy(alpha = 0.68f),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+                AppSwitch(
+                    checked = enabled,
+                    onCheckedChange = onCheckedChange
+                )
+            }
+
+            AppHorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+            AppText(
+                text = "增强算法",
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                VideoEnhancementAlgorithm.entries.forEach { option ->
+                    VideoEnhancementChoice(
+                        label = when (option) {
+                            VideoEnhancementAlgorithm.ANIME4K -> "Anime4K\n动漫"
+                            VideoEnhancementAlgorithm.FSR_1_0 -> "FSR 1.0\n通用"
+                        },
+                        selected = algorithm == option,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAlgorithmChange(option) }
+                    )
+                }
+            }
+
+            if (algorithm == VideoEnhancementAlgorithm.ANIME4K) {
+                AppHorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                AppText(
+                    text = "Anime4K 模型",
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(Anime4KPreset.FAST, Anime4KPreset.QUALITY).forEach { option ->
+                        VideoEnhancementChoice(
+                            label = resolveAnime4KPresetLabel(option),
+                            selected = preset == option,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onPresetChange(option) }
+                        )
+                    }
+                }
+            } else {
+                AppHorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppText(
+                        text = "FSR 锐化",
+                        color = Color.White.copy(alpha = 0.72f),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    AppText(
+                        text = "${(fsrSharpness.coerceIn(0f, 1f) * 100).roundToInt()}%",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                AppSlider(
+                    value = fsrSharpness.coerceIn(0f, 1f),
+                    onValueChange = onFsrSharpnessChange,
+                    valueRange = 0f..1f,
+                    steps = FSR_SHARPNESS_SLIDER_STEPS,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            AppText(
+                text = "算法与模型会沿用上次选择",
+                color = Color.White.copy(alpha = 0.56f),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoEnhancementChoice(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clip(AppShapes.container(ContainerLevel.Field))
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                } else {
+                    Color.White.copy(alpha = 0.06f)
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        AppText(
+            text = label,
+            color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 /**
@@ -1103,7 +1538,8 @@ fun VideoProgressBar(
     sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     pbpRidgeSamples: List<PbpRidgeSample> = emptyList(),
     currentChapter: String? = null,
-    onChapterClick: () -> Unit = {}
+    onChapterClick: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var dragTargetPositionMs by remember { mutableLongStateOf(displayPositionMs.coerceAtLeast(0L)) }
@@ -1118,7 +1554,30 @@ fun VideoProgressBar(
         }
     }
 
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val uiSkinState = LocalUiSkinState.current
+    val progressSkin = uiSkinState.activeSkin?.takeIf {
+        uiSkinState.enabled && UiSkinSurface.PLAYER_PROGRESS in it.manifest.surfaces
+    }
+    val progressColors = progressSkin?.manifest?.colors
+    val primaryColor = parseUiSkinColor(
+        progressColors?.playerProgressActiveTint,
+        MaterialTheme.colorScheme.primary,
+    )
+    val bufferedTrackColor = parseUiSkinColor(
+        progressColors?.playerProgressBufferedTint,
+        Color.White.copy(alpha = 0.42f),
+    )
+    val inactiveTrackColor = parseUiSkinColor(
+        progressColors?.playerProgressTrackTint,
+        Color.White.copy(alpha = 0.24f),
+    )
+    val progressThumbPath = uiSkinState.assetPath(UiSkinSurface.PLAYER_PROGRESS) { assets ->
+        if (isSeekScrubbing) {
+            assets.playerProgressDraggingIcon ?: assets.playerProgressIcon ?: assets.playerProgressStaticIcon
+        } else {
+            assets.playerProgressIcon ?: assets.playerProgressStaticIcon
+        }
+    }
     val activePositionMs = resolveSeekPreviewTargetPositionMs(
         displayPositionMs = displayPositionMs,
         dragTargetPositionMs = dragTargetPositionMs,
@@ -1158,8 +1617,13 @@ fun VideoProgressBar(
     val thumbSizePx = with(LocalDensity.current) { thumbSizeDp.toPx() }
     val trackHeightPx = with(LocalDensity.current) { layoutPolicy.trackHeightDp.dp.toPx() }
 
+    // Seek gestures must wrap chapter + track. A track-sibling pointerInput loses DOWN to the
+    // chapter clickable (full-width + 48dp min touch), which is why chapter videos cannot scrub.
+    val seekGestureHost = resolveVideoProgressBarSeekGestureHost(
+        hasChapterLabel = currentChapter != null
+    )
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(baseHeightDp + previewAreaHeightDp)
     ) {
@@ -1193,104 +1657,129 @@ fun VideoProgressBar(
             }
         }
 
-        if (currentChapter != null) {
-            Row(
-                modifier = Modifier
-                    .clickable(onClick = onChapterClick)
-                    .padding(
-                        bottom = layoutPolicy.chapterBottomPaddingDp.dp,
-                        start = layoutPolicy.chapterStartPaddingDp.dp
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    CupertinoIcons.Default.ListBullet,
-                    contentDescription = "Chapter",
-                    tint = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier.size(layoutPolicy.chapterIconSizeDp.dp)
-                )
-                Spacer(modifier = Modifier.width(layoutPolicy.chapterSpacingDp.dp))
-                Text(
-                    text = currentChapter,
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = layoutPolicy.chapterFontSp.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(layoutPolicy.touchContainerHeightDp.dp)
+                .height(baseHeightDp)
                 .onSizeChanged { containerWidthPx = it.width.toFloat() }
-                .pointerInput(duration) {
-                    detectTapGestures { offset ->
-                        val targetPositionMs = resolveSeekPositionFromTouch(
-                            touchX = offset.x,
-                            containerWidthPx = size.width.toFloat(),
-                            durationMs = duration
-                        )
-                        dragTargetPositionMs = targetPositionMs
-                        currentOnSeekStart()
-                        currentOnSeekDragStart(targetPositionMs)
-                        currentOnSeekDragUpdate(targetPositionMs)
-                        currentOnSeek(targetPositionMs)
-                    }
-                }
-                .pointerInput(duration) {
-                    var dragInProgress = false
-                    try {
-                        var dragStartPositionMs = displayPositionMs.coerceAtLeast(0L)
-                        var latestDragPositionMs = dragStartPositionMs
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                val targetPositionMs = resolveSeekPositionFromTouch(
-                                    touchX = offset.x,
-                                    containerWidthPx = size.width.toFloat(),
-                                    durationMs = duration
-                                )
-                                dragInProgress = true
-                                dragStartPositionMs = targetPositionMs
-                                latestDragPositionMs = targetPositionMs
-                                dragTargetPositionMs = targetPositionMs
-                                currentOnSeekStart()
-                                currentOnSeekDragStart(targetPositionMs)
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                val targetPositionMs = resolveSeekPositionFromTouch(
-                                    touchX = change.position.x,
-                                    containerWidthPx = size.width.toFloat(),
-                                    durationMs = duration
-                                )
-                                latestDragPositionMs = targetPositionMs
-                                dragTargetPositionMs = targetPositionMs
-                                currentOnSeekDragUpdate(targetPositionMs)
-                            },
-                            onDragEnd = {
-                                val commitPositionMs = resolveSeekDragCommitPositionMs(
-                                    dragStartPositionMs = dragStartPositionMs,
-                                    latestDragPositionMs = latestDragPositionMs
-                                )
-                                dragInProgress = false
-                                currentOnSeek(commitPositionMs)
-                            },
-                            onDragCancel = {
-                                dragInProgress = false
-                                currentOnSeekDragCancel()
+                .then(
+                    if (seekGestureHost == VideoProgressBarSeekGestureHost.SharedOuterContainer) {
+                        Modifier
+                            .pointerInput(duration) {
+                                detectTapGestures { offset ->
+                                    val targetPositionMs = resolveSeekPositionFromTouch(
+                                        touchX = offset.x,
+                                        containerWidthPx = size.width.toFloat(),
+                                        durationMs = duration
+                                    )
+                                    dragTargetPositionMs = targetPositionMs
+                                    currentOnSeekStart()
+                                    currentOnSeekDragStart(targetPositionMs)
+                                    currentOnSeekDragUpdate(targetPositionMs)
+                                    currentOnSeek(targetPositionMs)
+                                }
                             }
-                        )
-                    } finally {
-                        if (shouldCancelSeekDragOnPointerInputCompletion(dragInProgress)) {
-                            currentOnSeekDragCancel()
+                            .pointerInput(duration) {
+                                var dragInProgress = false
+                                try {
+                                    var dragStartPositionMs = displayPositionMs.coerceAtLeast(0L)
+                                    var latestDragPositionMs = dragStartPositionMs
+                                    detectDragGestures(
+                                        onDragStart = { offset ->
+                                            val targetPositionMs = resolveSeekPositionFromTouch(
+                                                touchX = offset.x,
+                                                containerWidthPx = size.width.toFloat(),
+                                                durationMs = duration
+                                            )
+                                            dragInProgress = true
+                                            dragStartPositionMs = targetPositionMs
+                                            latestDragPositionMs = targetPositionMs
+                                            dragTargetPositionMs = targetPositionMs
+                                            currentOnSeekStart()
+                                            currentOnSeekDragStart(targetPositionMs)
+                                        },
+                                        onDrag = { change, _ ->
+                                            change.consume()
+                                            val targetPositionMs = resolveSeekPositionFromTouch(
+                                                touchX = change.position.x,
+                                                containerWidthPx = size.width.toFloat(),
+                                                durationMs = duration
+                                            )
+                                            latestDragPositionMs = targetPositionMs
+                                            dragTargetPositionMs = targetPositionMs
+                                            currentOnSeekDragUpdate(targetPositionMs)
+                                        },
+                                        onDragEnd = {
+                                            val commitPositionMs = resolveSeekDragCommitPositionMs(
+                                                dragStartPositionMs = dragStartPositionMs,
+                                                latestDragPositionMs = latestDragPositionMs
+                                            )
+                                            dragInProgress = false
+                                            currentOnSeek(commitPositionMs)
+                                        },
+                                        onDragCancel = {
+                                            dragInProgress = false
+                                            currentOnSeekDragCancel()
+                                        }
+                                    )
+                                } finally {
+                                    if (shouldCancelSeekDragOnPointerInputCompletion(dragInProgress)) {
+                                        currentOnSeekDragCancel()
+                                    }
+                                }
+                            }
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+            ) {
+                if (currentChapter != null) {
+                    CompositionLocalProvider(
+                        LocalMinimumInteractiveComponentSize provides 0.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .wrapContentWidth()
+                                .pointerInput(currentChapter) {
+                                    detectTapGestures { onChapterClick() }
+                                }
+                                .padding(
+                                    bottom = layoutPolicy.chapterBottomPaddingDp.dp,
+                                    start = layoutPolicy.chapterStartPaddingDp.dp
+                                ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(
+                                Icons.Outlined.ViewList,
+                                contentDescription = "Chapter",
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(layoutPolicy.chapterIconSizeDp.dp)
+                            )
+                            Spacer(modifier = Modifier.width(layoutPolicy.chapterSpacingDp.dp))
+                            AppText(
+                                text = currentChapter,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = layoutPolicy.chapterFontSp.sp,
+                                lineHeight = layoutPolicy.chapterFontSp.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
-                },
-            contentAlignment = Alignment.CenterStart
-        ) {
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(layoutPolicy.touchContainerHeightDp.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1383,8 +1872,8 @@ fun VideoProgressBar(
                     }
                 }
 
-                drawTrack(size.width, Color.White.copy(alpha = 0.24f))
-                drawTrack(size.width * bufferedProgress, Color.White.copy(alpha = 0.42f))
+                drawTrack(size.width, inactiveTrackColor)
+                drawTrack(size.width * bufferedProgress, bufferedTrackColor)
                 drawTrack(size.width * displayProgress, primaryColor)
 
                 resolvedSponsorMarkers.forEach { marker ->
@@ -1418,19 +1907,33 @@ fun VideoProgressBar(
                 }
             }
 
-            if (duration > 0L && containerWidthPx > 0f) {
-                val thumbOffsetPx = remember(containerWidthPx, displayProgress, thumbSizePx) {
-                    (containerWidthPx * displayProgress - thumbSizePx / 2f)
-                        .coerceIn(0f, (containerWidthPx - thumbSizePx).coerceAtLeast(0f))
-                        .roundToInt()
+                    if (duration > 0L && containerWidthPx > 0f) {
+                        val thumbOffsetPx = remember(containerWidthPx, displayProgress, thumbSizePx) {
+                            (containerWidthPx * displayProgress - thumbSizePx / 2f)
+                                .coerceIn(0f, (containerWidthPx - thumbSizePx).coerceAtLeast(0f))
+                                .roundToInt()
+                        }
+                        if (progressThumbPath != null) {
+                            UiSkinAnimatedAsset(
+                                path = progressThumbPath,
+                                size = thumbSizeDp,
+                                iterations = if (isSeekScrubbing) Int.MAX_VALUE else 1,
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .offset { IntOffset(thumbOffsetPx, 0) },
+                                contentDescription = null,
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .offset { IntOffset(thumbOffsetPx, 0) }
+                                    .size(thumbSizeDp)
+                                    .background(primaryColor, CircleShape)
+                            )
+                        }
+                    }
                 }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .offset { IntOffset(thumbOffsetPx, 0) }
-                        .size(thumbSizeDp)
-                        .background(primaryColor, CircleShape)
-                )
             }
         }
     }

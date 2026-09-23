@@ -8,278 +8,271 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
-import com.android.purebilibili.feature.live.LiveDanmakuItem
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import com.bytedance.danmaku.render.engine.control.DanmakuController
-import com.bytedance.danmaku.render.engine.data.DanmakuData
-import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_BOTTOM_CENTER
-import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
-import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_TOP_CENTER
-import com.bytedance.danmaku.render.engine.DanmakuView
-import com.bytedance.danmaku.render.engine.render.draw.bitmap.BitmapData
-import kotlinx.coroutines.flow.SharedFlow
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import com.android.purebilibili.core.store.DanmakuSettings
+import com.android.purebilibili.danmaku.engine.DanmakuEngine
+import com.android.purebilibili.danmaku.engine.DanmakuItem
+import com.android.purebilibili.danmaku.engine.DanmakuRenderConfig
+import com.android.purebilibili.danmaku.engine.DanmakuRenderView
+import com.android.purebilibili.feature.live.LiveDanmakuItem
+import com.android.purebilibili.feature.video.danmaku.DanmakuTypeFilterSettings
+import com.android.purebilibili.feature.video.danmaku.DEFAULT_DANMAKU_TEXT_SIZE_PX
+import com.android.purebilibili.feature.video.danmaku.createBitmapDanmaku
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuRenderLayerType
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuPinnedDurationMillis
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuScrollDurationMillis
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuTypeface
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuVisibleLineCount
+import com.android.purebilibili.feature.video.danmaku.shouldBlockDanmakuByRules
+import com.android.purebilibili.feature.video.danmaku.shouldDisplayStandardDanmaku
+import java.util.ArrayDeque
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.isActive
 
-/**
- * 直播弹幕图层
- * 使用 ByteDance DanmakuRenderEngine 渲染
- * 
- * 修复记录:
- * - 使用 mutableStateOf 替代 object 管理状态
- * - 添加 isActive 检查防止协程泄漏
- * - 添加 try-catch 防止崩溃
- */
+private const val LIVE_BATCH_INTERVAL_MS = 100L
+private const val LIVE_HISTORY_MS = 20_000L
+private const val MAX_ACTIVE_LIVE_DANMAKU = 160
+private const val MAX_PENDING_LIVE_DANMAKU = 80
+private const val MAX_PENDING_ITEMS_BEFORE_START = 48
+
+/** Live danmaku renderer backed by an append-only, bounded session timeline. */
 @Composable
 fun LiveDanmakuOverlay(
     danmakuFlow: SharedFlow<LiveDanmakuItem>,
     displayArea: Float = 1f,
+    danmakuSettings: DanmakuSettings = DanmakuSettings(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val safeDisplayArea = displayArea
-        .takeIf { it.isFinite() }
-        ?.coerceIn(0.25f, 1f)
-        ?: 1f
-    
-    // 使用稳定的状态管理
-    var controller by remember { mutableStateOf<DanmakuController?>(null) }
+    val safeDisplayArea = displayArea.takeIf(Float::isFinite)?.coerceIn(0.25f, 1f) ?: 1f
+    val latestDanmakuSettings by rememberUpdatedState(danmakuSettings)
+    var renderView by remember { mutableStateOf<DanmakuRenderView?>(null) }
+    var engine by remember { mutableStateOf<DanmakuEngine?>(null) }
     var startTime by remember { mutableLongStateOf(0L) }
     var isStarted by remember { mutableStateOf(false) }
-    val danmakuList = remember { mutableListOf<DanmakuData>() }
-    val pendingDanmaku = remember { mutableListOf<DanmakuData>() }
-    val pendingItemsBeforeStart = remember { mutableListOf<LiveDanmakuItem>() }
-    val maxActiveDanmaku = 160
-    val maxPendingDanmaku = 80
-    val maxPendingItemsBeforeStart = 48
+    val activeItems = remember { ArrayDeque<DanmakuItem>() }
+    val pendingItems = remember { ArrayDeque<DanmakuItem>() }
+    val pendingItemsBeforeStart = remember { ArrayDeque<LiveDanmakuItem>() }
 
     AndroidView(
-        factory = { ctx ->
-            DanmakuView(ctx).apply {
-                try {
-                    // 设置透明背景
-                    setBackgroundColor(AndroidColor.TRANSPARENT)
-                    
-                    // 设置布局参数
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    
-                    // 保存引用
-                    controller = this.controller
-                    startTime = SystemClock.elapsedRealtime()
-                    
-                    android.util.Log.d("LiveDanmakuOverlay", "DanmakuView created")
-                    
-                    // 启动渲染引擎
-                    this.controller.start(0)
-                    isStarted = true
-                } catch (e: Exception) {
-                    android.util.Log.e("LiveDanmakuOverlay", "DanmakuView init failed: ${e.message}")
-                }
+        factory = { viewContext ->
+            DanmakuRenderView(viewContext).apply {
+                setBackgroundColor(AndroidColor.TRANSPARENT)
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                renderView = this
+                engine = this.engine
+                startTime = SystemClock.elapsedRealtime()
+                this.engine.start(0L)
+                isStarted = true
             }
         },
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight(safeDisplayArea),
-        update = {
-            try {
-                // 确保控制器正在运行
-                val ctrl = controller
-                if (ctrl != null && !isStarted) {
-                    val currentTime = SystemClock.elapsedRealtime() - startTime
-                    ctrl.start(currentTime)
-                    isStarted = true
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "Update failed: ${e.message}")
-            }
+        update = { view ->
+            val textSize = DEFAULT_DANMAKU_TEXT_SIZE_PX *
+                danmakuSettings.fontScale.coerceIn(0.3f, 2f)
+            val strokeWidth = danmakuSettings.strokeWidth.coerceAtLeast(0f)
+            view.engine.updateConfig(
+                DanmakuRenderConfig(
+                    alpha = (danmakuSettings.opacity.coerceIn(0f, 1f) * 255).toInt(),
+                    textSizePx = textSize,
+                    typeface = resolveDanmakuTypeface(danmakuSettings.fontWeight),
+                    strokeWidthPx = strokeWidth,
+                    scrollDurationMs = resolveDanmakuScrollDurationMillis(
+                        scrollDurationSeconds = danmakuSettings.scrollDurationSeconds,
+                        speedFactor = danmakuSettings.speed,
+                        scrollFixedVelocity = danmakuSettings.scrollFixedVelocity,
+                        viewportWidthPx = view.width
+                    ),
+                    lineHeightPx = textSize * danmakuSettings.lineHeight.coerceIn(0.8f, 2.2f),
+                    lineCount = resolveDanmakuVisibleLineCount(
+                        visibleHeightPx = view.height.toFloat(),
+                        areaRatioHint = safeDisplayArea,
+                        fontSize = textSize,
+                        strokeWidth = strokeWidth,
+                        strokeEnabled = strokeWidth > 0f,
+                        lineHeight = danmakuSettings.lineHeight,
+                        massiveMode = danmakuSettings.massiveMode
+                    ),
+                    pinnedDurationMs = resolveDanmakuPinnedDurationMillis(
+                        danmakuSettings.staticDurationSeconds
+                    )
+                )
+            )
         }
     )
 
-    // 批量合并弹幕更新，避免每条弹幕都全量 setData 导致卡顿
-    LaunchedEffect(controller, isStarted) {
-        var tick = 0
+    LaunchedEffect(engine, isStarted) {
         while (isActive) {
-            try {
-                val ctrl = controller
-                if (ctrl != null && isStarted) {
-                    val currentTime = SystemClock.elapsedRealtime() - startTime
-                    var dataChanged = false
+            val currentEngine = engine
+            if (currentEngine != null && isStarted) {
+                val currentTime = SystemClock.elapsedRealtime() - startTime
+                val settings = latestDanmakuSettings
+                val textSize = DEFAULT_DANMAKU_TEXT_SIZE_PX *
+                    settings.fontScale.coerceIn(0.3f, 2f)
 
-                    if (pendingDanmaku.isNotEmpty()) {
-                        danmakuList.addAll(pendingDanmaku)
-                        pendingDanmaku.clear()
-                        dataChanged = true
-                    }
-
-                    if (pendingItemsBeforeStart.isNotEmpty()) {
-                        pendingItemsBeforeStart.forEach { item ->
-                            val danmakuData = createDanmakuData(item, currentTime, context, controller)
-                            pendingDanmaku.add(danmakuData)
-                        }
-                        pendingItemsBeforeStart.clear()
-                        dataChanged = true
-                    }
-
-                    if (dataChanged || tick % 10 == 0) {
-                        val expireBefore = currentTime - 20_000
-                        val iterator = danmakuList.iterator()
-                        var removedAny = false
-                        while (iterator.hasNext()) {
-                            val item = iterator.next()
-                            if (item.showAtTime < expireBefore) {
-                                iterator.remove()
-                                releaseLiveDanmakuData(
-                                    data = item,
-                                    ownership = LiveDanmakuBitmapOwnership.CONTROLLER_ATTACHED
-                                )
-                                removedAny = true
-                            }
-                        }
-                        if (removedAny) {
-                            dataChanged = true
-                        }
-                    }
-
-                    if (dataChanged) {
-                        danmakuList.sortBy { it.showAtTime }
-                        while (danmakuList.size > maxActiveDanmaku) {
-                            val removed = danmakuList.removeAt(0)
-                            releaseLiveDanmakuData(
-                                data = removed,
-                                ownership = LiveDanmakuBitmapOwnership.CONTROLLER_ATTACHED
-                            )
-                        }
-                        val snapshot = danmakuList.toList()
-                        executeLiveDanmakuDataRefresh(
-                            pause = { ctrl.pause() },
-                            setData = { ctrl.setData(snapshot, 0) },
-                            start = { ctrl.start(currentTime) },
-                            invalidateView = { ctrl.invalidateView() }
+                while (pendingItemsBeforeStart.isNotEmpty()) {
+                    pendingItems.addLast(
+                        createLiveDanmakuItem(
+                            item = pendingItemsBeforeStart.removeFirst(),
+                            currentTime = currentTime,
+                            context = context,
+                            engine = currentEngine,
+                            textSize = textSize,
+                            fontWeight = settings.fontWeight,
+                            staticDanmakuToScroll = settings.staticDanmakuToScroll
                         )
-                    }
-                    tick++
+                    )
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "Render loop error: ${e.message}")
+
+                if (pendingItems.isNotEmpty()) {
+                    val batch = ArrayList<DanmakuItem>(pendingItems.size)
+                    while (pendingItems.isNotEmpty()) {
+                        pendingItems.removeFirst().also {
+                            batch += it
+                            activeItems.addLast(it)
+                        }
+                    }
+                    appendLiveDanmakuBatch(batch, currentEngine::append)
+                }
+
+                var trimBefore = currentTime - LIVE_HISTORY_MS
+                while (activeItems.isNotEmpty() &&
+                    (activeItems.first.showAtTime < trimBefore || activeItems.size > MAX_ACTIVE_LIVE_DANMAKU)
+                ) {
+                    val removed = activeItems.removeFirst()
+                    trimBefore = maxOf(trimBefore, removed.showAtTime + 1L)
+                }
+                currentEngine.trimBefore(trimBefore)
             }
-            delay(100)
+            delay(LIVE_BATCH_INTERVAL_MS)
         }
     }
-    
-    // 监听弹幕流
+
     LaunchedEffect(danmakuFlow) {
         danmakuFlow.collect { item ->
-            try {
-                if (!isStarted || controller == null || startTime == 0L) {
-                    if (pendingItemsBeforeStart.size >= maxPendingItemsBeforeStart) {
-                        pendingItemsBeforeStart.removeAt(0)
-                    }
-                    pendingItemsBeforeStart.add(item)
-                    return@collect
-                }
-
-                // 计算当前相对时间（使用单调时钟，避免系统时间调整导致漂移）
-                val currentTime = SystemClock.elapsedRealtime() - startTime
-                val danmakuData = createDanmakuData(item, currentTime, context, controller)
-                if (pendingDanmaku.size >= maxPendingDanmaku) {
-                    val dropped = pendingDanmaku.removeAt(0)
-                    releaseLiveDanmakuData(
-                        data = dropped,
-                        ownership = LiveDanmakuBitmapOwnership.APP_QUEUE_ONLY
-                    )
-                }
-                pendingDanmaku.add(danmakuData)
-            } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "Danmaku collect error: ${e.message}")
+            val settings = latestDanmakuSettings
+            val typeFilter = DanmakuTypeFilterSettings(
+                allowScroll = settings.allowScroll,
+                allowTop = settings.allowTop,
+                allowBottom = settings.allowBottom,
+                allowColorful = settings.allowColorful,
+                allowSpecial = settings.allowSpecial
+            )
+            if (item.isSuperChat && !settings.allowSpecial) {
+                return@collect
             }
+            if (!item.isSuperChat && !shouldDisplayStandardDanmaku(item.mode, item.color, typeFilter)) {
+                return@collect
+            }
+            val userHash = item.uid.takeIf { it > 0L }?.toString().orEmpty()
+            if (shouldBlockDanmakuByRules(item.text, settings.blockRules, userHash)) {
+                return@collect
+            }
+            val currentEngine = engine
+            if (!isStarted || currentEngine == null || startTime == 0L) {
+                if (pendingItemsBeforeStart.size >= MAX_PENDING_ITEMS_BEFORE_START) {
+                    pendingItemsBeforeStart.removeFirst()
+                }
+                pendingItemsBeforeStart.addLast(item)
+                return@collect
+            }
+
+            val currentTime = SystemClock.elapsedRealtime() - startTime
+            val textSize = DEFAULT_DANMAKU_TEXT_SIZE_PX * settings.fontScale.coerceIn(0.3f, 2f)
+            val renderItem = createLiveDanmakuItem(
+                item = item,
+                currentTime = currentTime,
+                context = context,
+                engine = currentEngine,
+                textSize = textSize,
+                fontWeight = settings.fontWeight,
+                staticDanmakuToScroll = settings.staticDanmakuToScroll
+            )
+            if (pendingItems.size >= MAX_PENDING_LIVE_DANMAKU) {
+                releaseLiveDanmakuItem(
+                    pendingItems.removeFirst(),
+                    LiveDanmakuBitmapOwnership.APP_QUEUE_ONLY
+                )
+            }
+            pendingItems.addLast(renderItem)
         }
     }
-    
-    // 清理
+
     DisposableEffect(Unit) {
         onDispose {
-            android.util.Log.d("LiveDanmakuOverlay", "Disposing DanmakuView")
-            try {
-                controller?.setData(emptyList(), 0)
-                controller?.invalidateView()
-                controller?.stop()
-                danmakuList.forEach { data ->
-                    releaseLiveDanmakuData(
-                        data = data,
-                        ownership = LiveDanmakuBitmapOwnership.CONTROLLER_ATTACHED
-                    )
-                }
-                pendingDanmaku.forEach { data ->
-                    releaseLiveDanmakuData(
-                        data = data,
-                        ownership = LiveDanmakuBitmapOwnership.APP_QUEUE_ONLY
-                    )
-                }
-                danmakuList.clear()
-                pendingDanmaku.clear()
-                isStarted = false
-                controller = null
-            } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "Dispose error: ${e.message}")
+            engine?.close()
+            renderView?.releaseRenderer()
+            activeItems.forEach { item ->
+                releaseLiveDanmakuItem(item, LiveDanmakuBitmapOwnership.TIMELINE_DISCARDED)
             }
+            pendingItems.forEach { item ->
+                releaseLiveDanmakuItem(item, LiveDanmakuBitmapOwnership.APP_QUEUE_ONLY)
+            }
+            activeItems.clear()
+            pendingItems.clear()
+            pendingItemsBeforeStart.clear()
+            isStarted = false
+            engine = null
+            renderView = null
         }
     }
 }
 
-
-private fun createDanmakuData(
-    item: LiveDanmakuItem, 
-    currentTime: Long, 
+private fun createLiveDanmakuItem(
+    item: LiveDanmakuItem,
+    currentTime: Long,
     context: android.content.Context,
-    controller: DanmakuController?
-): DanmakuData {
-    val textSize = 34f
-    val layerType = when (item.mode) {
-        4 -> LAYER_TYPE_BOTTOM_CENTER
-        5 -> LAYER_TYPE_TOP_CENTER
-        else -> LAYER_TYPE_SCROLL
-    }
-    
-    val textColor = if (item.color == 0) {
-        AndroidColor.WHITE
-    } else {
-        (0xFF000000 or item.color.toLong()).toInt()
+    engine: DanmakuEngine,
+    textSize: Float,
+    fontWeight: Int,
+    staticDanmakuToScroll: Boolean
+): DanmakuItem {
+    val layerType = resolveDanmakuRenderLayerType(item.mode, staticDanmakuToScroll)
+    val textColor = if (item.color == 0) AndroidColor.WHITE else (0xFF000000 or item.color.toLong()).toInt()
+    val showAtTime = currentTime + 50L
+
+    if (!shouldRenderLiveDanmakuAsBitmap(item.isSuperChat, item.emoticonUrl)) {
+        return DanmakuItem().apply {
+            text = item.text
+            this.textColor = textColor
+            this.layerType = layerType
+            this.showAtTime = showAtTime
+            isSelf = item.isSelf
+        }
     }
 
-    return com.android.purebilibili.feature.video.danmaku.createBitmapDanmaku(
+    return createBitmapDanmaku(
         context = context,
         text = item.text,
         textColor = textColor,
         textSize = textSize,
         layerType = layerType,
-        showAtTime = currentTime + 50L,
-        enableEmoticon = false,
-        onUpdate = {
-            // 当图片加载完成后刷新视图
-            controller?.invalidateView()
-        }
-    )
+        showAtTime = showAtTime,
+        enableEmoticon = !item.emoticonUrl.isNullOrBlank(),
+        typeface = resolveDanmakuTypeface(fontWeight),
+        onUpdate = engine::invalidate
+    ).apply { isSelf = item.isSelf }
 }
 
-private fun releaseLiveDanmakuData(
-    data: DanmakuData,
+private fun releaseLiveDanmakuItem(
+    item: DanmakuItem,
     ownership: LiveDanmakuBitmapOwnership
 ) {
-    if (!shouldManuallyRecycleLiveDanmakuBitmap(ownership)) {
-        return
-    }
-    val bitmap = (data as? BitmapData)?.bitmap ?: return
-    if (!bitmap.isRecycled) {
-        bitmap.recycle()
-    }
+    if (!shouldManuallyRecycleLiveDanmakuBitmap(ownership)) return
+    item.bitmap?.takeUnless { it.isRecycled }?.recycle()
+    item.bitmap = null
 }

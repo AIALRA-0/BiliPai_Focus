@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.store
 
-import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.theme.AppUiStyle
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -8,37 +8,27 @@ import kotlin.test.assertTrue
 class HomeSettingsUiPresetPolicyTest {
 
     @Test
-    fun androidNativeLiquidGlass_isGlobalOptInForMd3Preset() {
-        assertFalse(
-            resolveEffectiveLiquidGlassEnabled(
-                requestedEnabled = true,
-                uiPreset = UiPreset.MD3,
-                androidNativeLiquidGlassEnabled = false
-            )
+    fun bottomBarLiquidGlass_respectsUserChoiceForMd3Preset() {
+        val settings = HomeSettings(
+            isBottomBarLiquidGlassEnabled = true,
+            androidNativeLiquidGlassEnabled = false
         )
 
-        assertTrue(
-            resolveEffectiveLiquidGlassEnabled(
-                requestedEnabled = true,
-                uiPreset = UiPreset.MD3,
-                androidNativeLiquidGlassEnabled = true
-            )
-        )
+        assertTrue(resolveEffectiveHomeSettings(settings).isBottomBarLiquidGlassEnabled)
     }
 
     @Test
-    fun androidNativeLiquidGlassOptIn_appliesOnlyToBottomHomeSettingsAndKeepsTopDockIndependent() {
+    fun bottomBarLiquidGlass_keepsTopDockIndependent() {
         val disabled = resolveEffectiveHomeSettings(
             homeSettings = HomeSettings(
                 isTopBarLiquidGlassEnabled = true,
                 isBottomBarLiquidGlassEnabled = true,
                 androidNativeLiquidGlassEnabled = false
             ),
-            uiPreset = UiPreset.MD3
         )
 
         assertTrue(disabled.isTopBarLiquidGlassEnabled)
-        assertFalse(disabled.isBottomBarLiquidGlassEnabled)
+        assertTrue(disabled.isBottomBarLiquidGlassEnabled)
 
         val enabled = resolveEffectiveHomeSettings(
             homeSettings = HomeSettings(
@@ -46,10 +36,86 @@ class HomeSettingsUiPresetPolicyTest {
                 isBottomBarLiquidGlassEnabled = true,
                 androidNativeLiquidGlassEnabled = true
             ),
-            uiPreset = UiPreset.MD3
         )
 
         assertTrue(enabled.isTopBarLiquidGlassEnabled)
         assertTrue(enabled.isBottomBarLiquidGlassEnabled)
+    }
+
+    @Test
+    fun sharedLiquidGlass_globalMasterEnablesReusableChrome() {
+        assertTrue(
+            resolveSharedLiquidGlassChromeEnabled(
+                individualEnabled = false,
+                uiStyle = AppUiStyle.MATERIAL3,
+                androidNativeLiquidGlassEnabled = true
+            )
+        )
+        assertTrue(
+            resolveSharedLiquidGlassChromeEnabled(
+                individualEnabled = false,
+                uiStyle = AppUiStyle.MIUIX,
+                androidNativeLiquidGlassEnabled = true
+            )
+        )
+        assertTrue(
+            resolveLiquidGlassReuseParticipates(
+                surface = LiquidGlassReuseSurface.HOME_BOTTOM_BAR,
+                androidNativeLiquidGlassEnabled = true,
+            )
+        )
+        assertTrue(
+            resolveLiquidGlassReuseParticipates(
+                surface = LiquidGlassReuseSurface.COMMENT_BOTTOM_BAR,
+                androidNativeLiquidGlassEnabled = true,
+            )
+        )
+        assertTrue(
+            resolveLiquidGlassReuseParticipates(
+                surface = LiquidGlassReuseSurface.HOME_TOP_DOCK,
+                androidNativeLiquidGlassEnabled = true,
+            )
+        )
+        assertTrue(
+            resolveLiquidGlassReuseParticipates(
+                surface = LiquidGlassReuseSurface.HOME_SEARCH,
+                androidNativeLiquidGlassEnabled = true,
+            )
+        )
+        assertFalse(
+            resolveLiquidGlassReuseParticipates(
+                surface = LiquidGlassReuseSurface.HOME_BOTTOM_BAR,
+                androidNativeLiquidGlassEnabled = false,
+            )
+        )
+    }
+
+    @Test
+    fun sharedLiquidGlass_material3WithoutGlobalKeepsIndividualOff() {
+        assertFalse(
+            resolveSharedLiquidGlassChromeEnabled(
+                individualEnabled = true,
+                uiStyle = AppUiStyle.MATERIAL3,
+                androidNativeLiquidGlassEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun sharedLiquidGlass_miuixAlsoRequiresGlobalEntry() {
+        assertFalse(
+            resolveSharedLiquidGlassChromeEnabled(
+                individualEnabled = true,
+                uiStyle = AppUiStyle.MIUIX,
+                androidNativeLiquidGlassEnabled = false
+            )
+        )
+        assertFalse(
+            resolveSharedLiquidGlassChromeEnabled(
+                individualEnabled = false,
+                uiStyle = AppUiStyle.MIUIX,
+                androidNativeLiquidGlassEnabled = false
+            )
+        )
     }
 }

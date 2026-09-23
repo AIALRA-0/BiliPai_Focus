@@ -14,6 +14,167 @@ import kotlin.test.assertSame
 class VideoLoadRequestPolicyTest {
 
     @Test
+    fun `page switch commits target ui identity before replacing player source`() {
+        val source = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt"),
+        ).first { it.exists() }.readText()
+        val switchBlock = source
+            .substringAfter("fun switchPage(")
+            .substringBefore("fun dismissResumePlaybackSuggestion()")
+        val uiCommitIndex = switchBlock.indexOf("_uiState.value = switchedState")
+        val playerReplaceIndex = switchBlock.indexOf("playResolvedPlayback(")
+        val identityCallbackIndex = switchBlock.indexOf("onPageIdentityCommitted?.invoke(targetBvid, page.cid)")
+
+        assertTrue(uiCommitIndex >= 0)
+        assertTrue(playerReplaceIndex > uiCommitIndex)
+        assertTrue(identityCallbackIndex in 0 until uiCommitIndex)
+        assertTrue(switchBlock.contains("val targetBvid = current.info.bvid"))
+        assertTrue(
+            switchBlock.contains(
+                "VideoRepository.getPlayUrlDataForPlaybackTransition("
+            )
+        )
+        assertTrue(switchBlock.contains("currentQuality = selection.actualQuality"))
+        assertTrue(switchBlock.contains("info = current.info.copy(cid = page.cid)"))
+        assertTrue(switchBlock.contains("currentCid = previousCid"))
+    }
+
+    @Test
+    fun `page identity synchronization is registered for automatic switches as well as clicks`() {
+        val sourceRoot = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/feature/video"),
+            java.io.File("src/main/java/com/android/purebilibili/feature/video"),
+        ).first { it.exists() }
+        val viewModelSource = sourceRoot.resolve("viewmodel/VideoPlaybackViewModel.kt").readText()
+        val screenSource = sourceRoot.resolve("screen/VideoDetailScreenStateHolder.kt").readText()
+        val switchParameters = viewModelSource.substringAfter("fun switchPage(").substringBefore(") {")
+        val registration = screenSource
+            .substringAfter("DisposableEffect(viewModel, presentationState) {")
+            .substringBefore("val playbackActions")
+
+        // End-of-playback calls do not supply a per-click callback. The listener must belong
+        // to the mounted screen, and be removed when that screen leaves composition.
+        assertFalse(switchParameters.contains("onIdentityCommitted"))
+        assertContains(registration, "setPageIdentityCommitListener(presentationState::syncPlaybackIdentity)")
+        assertContains(registration.substringAfter("onDispose {"), "setPageIdentityCommitListener(null)")
+    }
+
+    @Test
+    fun `restores an empty reattached player from matching loaded ui without reloading detail`() {
+        assertTrue(
+            shouldRestoreAttachedPlayerFromLoadedUi(
+                force = false,
+                requestBvid = "BV-parent",
+                requestCid = 0L,
+                requestAudioLang = null,
+                ignoreSavedProgress = false,
+                videoCodecOverride = null,
+                loadedBvid = "BV-parent",
+                loadedCid = 123L,
+                loadedAudioLang = null,
+                loadedDirectPlayUrlAvailable = true,
+                loadedAdaptiveDashSourceAvailable = false,
+                attachedPlayerMediaItemCount = 0,
+            )
+        )
+    }
+
+    @Test
+    fun `return restore keeps the loaded audio language without showing skeleton`() {
+        assertTrue(
+            shouldRestoreAttachedPlayerFromLoadedUi(
+                force = false,
+                requestBvid = "BV-parent",
+                requestCid = 0L,
+                requestAudioLang = null,
+                ignoreSavedProgress = false,
+                videoCodecOverride = null,
+                loadedBvid = "BV-parent",
+                loadedCid = 123L,
+                loadedAudioLang = "japanese",
+                loadedDirectPlayUrlAvailable = true,
+                loadedAdaptiveDashSourceAvailable = false,
+                attachedPlayerMediaItemCount = 0,
+            )
+        )
+    }
+
+    @Test
+    fun `return restore accepts an adaptive dash source without a direct play url`() {
+        assertTrue(
+            shouldRestoreAttachedPlayerFromLoadedUi(
+                force = false,
+                requestBvid = "BV-parent",
+                requestCid = 0L,
+                requestAudioLang = null,
+                ignoreSavedProgress = false,
+                videoCodecOverride = null,
+                loadedBvid = "BV-parent",
+                loadedCid = 123L,
+                loadedAudioLang = null,
+                loadedDirectPlayUrlAvailable = false,
+                loadedAdaptiveDashSourceAvailable = true,
+                attachedPlayerMediaItemCount = 0,
+            )
+        )
+    }
+
+    @Test
+    fun `return keeps loaded detail ui when the player must be rebound`() {
+        assertTrue(
+            shouldKeepLoadedVideoDetailUiWithoutSkeletonReload(
+                force = false,
+                requestBvid = "BV-parent",
+                requestCid = 0L,
+                requestAudioLang = null,
+                ignoreSavedProgress = false,
+                videoCodecOverride = null,
+                loadedBvid = "BV-parent",
+                loadedCid = 123L,
+                loadedAudioLang = null,
+                loadedDirectPlayUrlAvailable = true,
+                loadedAdaptiveDashSourceAvailable = false,
+            )
+        )
+        assertFalse(
+            shouldRestoreAttachedPlayerFromLoadedUi(
+                force = false,
+                requestBvid = "BV-parent",
+                requestCid = 0L,
+                requestAudioLang = null,
+                ignoreSavedProgress = false,
+                videoCodecOverride = null,
+                loadedBvid = "BV-parent",
+                loadedCid = 123L,
+                loadedAudioLang = null,
+                loadedDirectPlayUrlAvailable = true,
+                loadedAdaptiveDashSourceAvailable = false,
+                attachedPlayerMediaItemCount = 1,
+            )
+        )
+    }
+
+    @Test
+    fun `forced reload does not preserve the existing detail ui`() {
+        assertFalse(
+            shouldKeepLoadedVideoDetailUiWithoutSkeletonReload(
+                force = true,
+                requestBvid = "BV-parent",
+                requestCid = 0L,
+                requestAudioLang = null,
+                ignoreSavedProgress = false,
+                videoCodecOverride = null,
+                loadedBvid = "BV-parent",
+                loadedCid = 123L,
+                loadedAudioLang = null,
+                loadedDirectPlayUrlAvailable = true,
+                loadedAdaptiveDashSourceAvailable = false,
+            )
+        )
+    }
+
+    @Test
     fun `accepts result when request token and bvid both match current`() {
         assertTrue(
             shouldApplyVideoLoadResult(
@@ -45,6 +206,70 @@ class VideoLoadRequestPolicyTest {
                 resultRequestToken = 7L,
                 expectedBvid = "BV1old",
                 currentBvid = "BV1new"
+            )
+        )
+    }
+
+    @Test
+    fun `halts playback when loading a different bvid`() {
+        assertTrue(
+            shouldHaltPlaybackForPendingMediaSwitch(
+                force = false,
+                skipPlayerPrepare = false,
+                requestBvid = "BV_NEXT",
+                requestCid = 200L,
+                currentBvid = "BV_CUR",
+                currentCid = 100L,
+                uiBvid = "BV_CUR",
+                uiCid = 100L
+            )
+        )
+    }
+
+    @Test
+    fun `does not halt playback when reusing same media identity`() {
+        assertFalse(
+            shouldHaltPlaybackForPendingMediaSwitch(
+                force = false,
+                skipPlayerPrepare = false,
+                requestBvid = "BV_CUR",
+                requestCid = 100L,
+                currentBvid = "BV_CUR",
+                currentCid = 100L,
+                uiBvid = "BV_CUR",
+                uiCid = 100L
+            )
+        )
+    }
+
+    @Test
+    fun `does not halt playback when skip player prepare is active`() {
+        assertFalse(
+            shouldHaltPlaybackForPendingMediaSwitch(
+                force = false,
+                skipPlayerPrepare = true,
+                requestBvid = "BV_CUR",
+                requestCid = 100L,
+                currentBvid = "BV_CUR",
+                currentCid = 100L,
+                uiBvid = "BV_CUR",
+                uiCid = 100L
+            )
+        )
+    }
+
+    @Test
+    fun `halts playback on forced cid switch for same bvid`() {
+        assertTrue(
+            shouldHaltPlaybackForPendingMediaSwitch(
+                force = true,
+                skipPlayerPrepare = false,
+                requestBvid = "BV_CUR",
+                requestCid = 200L,
+                currentBvid = "BV_CUR",
+                currentCid = 100L,
+                uiBvid = "BV_CUR",
+                uiCid = 100L
             )
         )
     }
@@ -182,6 +407,42 @@ class VideoLoadRequestPolicyTest {
             resolvePlaybackIntentForSourceReplacement(
                 playWhenReady = false,
                 isPlaying = false
+            )
+        )
+    }
+
+    @Test
+    fun `explicit premium selection only blocks the matching playback`() {
+        val firstPlayback = buildPremiumAutoUpgradePlaybackKey("BV1FIRST", 1L, null)
+        val secondPlayback = buildPremiumAutoUpgradePlaybackKey("BV1SECOND", 2L, null)
+        val explicitSelectionKeys = setOf(firstPlayback)
+
+        assertTrue(
+            hasExplicitQualitySelectionForPlayback(firstPlayback, explicitSelectionKeys)
+        )
+        assertFalse(
+            hasExplicitQualitySelectionForPlayback(secondPlayback, explicitSelectionKeys)
+        )
+    }
+
+    @Test
+    fun `automatic premium upgrade always replaces the playback source`() {
+        assertTrue(
+            shouldReplacePlaybackSourceForQualityChange(
+                reason = QualityChangeReason.INITIAL_AUTO_UPGRADE,
+                cdnSelectionChangedUrl = false
+            )
+        )
+        assertFalse(
+            shouldReplacePlaybackSourceForQualityChange(
+                reason = QualityChangeReason.USER_EXPLICIT,
+                cdnSelectionChangedUrl = false
+            )
+        )
+        assertTrue(
+            shouldReplacePlaybackSourceForQualityChange(
+                reason = QualityChangeReason.USER_EXPLICIT,
+                cdnSelectionChangedUrl = true
             )
         )
     }
@@ -328,6 +589,22 @@ class VideoLoadRequestPolicyTest {
                 isLoggedIn = true,
                 isVip = true,
                 dataSaverLimited = false
+            )
+        )
+    }
+
+    @Test
+    fun `initial premium downgrade dialog waits for scheduled exact track upgrade`() {
+        assertFalse(
+            shouldShowInitialQualityUnavailableDialog(
+                unavailableReason = InitialQualityUnavailableReason.SERVER_DOWNGRADED,
+                premiumAutoUpgradeScheduled = true
+            )
+        )
+        assertTrue(
+            shouldShowInitialQualityUnavailableDialog(
+                unavailableReason = InitialQualityUnavailableReason.SERVER_DOWNGRADED,
+                premiumAutoUpgradeScheduled = false
             )
         )
     }
@@ -729,7 +1006,7 @@ class VideoLoadRequestPolicyTest {
 
     @Test
     fun `clearSubtitleFields removes all subtitle data from success state`() {
-        val state = PlayerUiState.Success(
+        val state = VideoPlaybackUiState.Success(
             info = com.android.purebilibili.data.model.response.ViewInfo(
                 bvid = "BV1test",
                 cid = 2233L
@@ -774,7 +1051,7 @@ class VideoLoadRequestPolicyTest {
 
     @Test
     fun `clearTransientPlaybackPreviewData removes stale videoshot data when switching playback target`() {
-        val state = PlayerUiState.Success(
+        val state = VideoPlaybackUiState.Success(
             info = com.android.purebilibili.data.model.response.ViewInfo(
                 bvid = "BV1test",
                 cid = 2233L
@@ -793,7 +1070,7 @@ class VideoLoadRequestPolicyTest {
 
     @Test
     fun `shouldApplyVideoshotResult only accepts videoshot matching current playback target`() {
-        val current = PlayerUiState.Success(
+        val current = VideoPlaybackUiState.Success(
             info = com.android.purebilibili.data.model.response.ViewInfo(
                 bvid = "BV1test",
                 cid = 4455L
@@ -826,7 +1103,7 @@ class VideoLoadRequestPolicyTest {
 
     @Test
     fun `clearTransientPlaybackPreviewData keeps same instance when no videoshot exists`() {
-        val state = PlayerUiState.Success(
+        val state = VideoPlaybackUiState.Success(
             info = com.android.purebilibili.data.model.response.ViewInfo(
                 bvid = "BV1test",
                 cid = 2233L

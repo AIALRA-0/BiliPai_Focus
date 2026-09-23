@@ -15,16 +15,16 @@ class WallpaperPresentationPolicyTest {
     }
 
     @Test
-    fun splash_compactWidth_usesPosterCardForExtremeAspectMismatch() {
+    fun splash_compactWidth_keepsFullCropForTallAndSquareWallpapers() {
         assertEquals(
-            SplashWallpaperLayout.POSTER_CARD_BLUR_BG,
+            SplashWallpaperLayout.FULL_CROP,
             resolveSplashWallpaperLayout(
                 widthSizeClass = WindowWidthSizeClass.Compact,
                 imageAspectRatio = 0.42f
             )
         )
         assertEquals(
-            SplashWallpaperLayout.POSTER_CARD_BLUR_BG,
+            SplashWallpaperLayout.FULL_CROP,
             resolveSplashWallpaperLayout(
                 widthSizeClass = WindowWidthSizeClass.Compact,
                 imageAspectRatio = 1.0f

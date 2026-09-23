@@ -15,9 +15,9 @@ class AndroidNativeVariantSettingsPolicyTest {
     }
 
     @Test
-    fun invalidPreferenceValue_fallsBackToMaterial3Variant() {
+    fun invalidPreferenceValue_fallsBackToMiuixVariant() {
         assertEquals(
-            AndroidNativeVariant.MATERIAL3,
+            AndroidNativeVariant.MIUIX,
             resolveAndroidNativeVariantPreferenceValue(99)
         )
     }

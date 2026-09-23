@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.danmaku
 
-import com.bytedance.danmaku.render.engine.render.draw.text.TextData
+import com.android.purebilibili.danmaku.engine.DANMAKU_LAYER_SCROLL
+import com.android.purebilibili.danmaku.engine.DanmakuItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -10,11 +11,11 @@ class DanmakuMergerPolicyTest {
     @Test
     fun merge_repeatedDanmakuStaysStandardAndDoesNotCreateYellowAdvancedDanmaku() {
         val items = List(5) { index ->
-            TextData().apply {
+            DanmakuItem().apply {
                 text = "重复弹幕"
                 showAtTime = index * 100L
                 textColor = 0xFFFFFFFF.toInt()
-                layerType = com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
+                layerType = DANMAKU_LAYER_SCROLL
             }
         }
 
@@ -22,17 +23,17 @@ class DanmakuMergerPolicyTest {
 
         assertEquals(1, standard.size)
         assertTrue(advanced.isEmpty())
-        assertEquals("重复弹幕 x5", (standard.first() as TextData).text)
+        assertEquals("重复弹幕 x5", standard.first().text)
     }
 
     @Test
     fun merge_onlyAppendsCountWhenDuplicateThresholdIsReached() {
         val items = List(2) { index ->
-            TextData().apply {
+            DanmakuItem().apply {
                 text = "重复弹幕"
                 showAtTime = index * 100L
                 textColor = 0xFFFFFFFF.toInt()
-                layerType = com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
+                layerType = DANMAKU_LAYER_SCROLL
             }
         }
 
@@ -44,17 +45,17 @@ class DanmakuMergerPolicyTest {
 
         assertEquals(1, standard.size)
         assertTrue(advanced.isEmpty())
-        assertEquals("重复弹幕", (standard.first() as TextData).text)
+        assertEquals("重复弹幕", standard.first().text)
     }
 
     @Test
     fun merge_respectsCustomMergeWindow() {
         val items = List(2) { index ->
-            TextData().apply {
+            DanmakuItem().apply {
                 text = "重复弹幕"
                 showAtTime = index * 600L
                 textColor = 0xFFFFFFFF.toInt()
-                layerType = com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
+                layerType = DANMAKU_LAYER_SCROLL
             }
         }
 

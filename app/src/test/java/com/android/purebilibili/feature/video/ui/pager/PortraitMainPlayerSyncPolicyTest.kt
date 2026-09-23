@@ -158,6 +158,22 @@ class PortraitMainPlayerSyncPolicyTest {
     }
 
     @Test
+    fun portraitExit_shouldReplaceDetailRoute_whenPagerMovedToAnotherVideo() {
+        assertTrue(
+            shouldReplaceVideoDetailRouteAfterPortraitExit(
+                routeBvid = "BV_FIRST",
+                portraitBvid = "BV_SECOND",
+            )
+        )
+        assertFalse(
+            shouldReplaceVideoDetailRouteAfterPortraitExit(
+                routeBvid = "BV_SECOND",
+                portraitBvid = "BV_SECOND",
+            )
+        )
+    }
+
+    @Test
     fun portraitExitRestoreTarget_prefersPendingReloadAndKeepsSnapshotCidForSameVideo() {
         assertEquals(
             PortraitExitRestoreTarget(
@@ -169,24 +185,38 @@ class PortraitMainPlayerSyncPolicyTest {
                 portraitPendingSelectionBvid = "BV_OTHER",
                 portraitSyncSnapshotBvid = "BV_TARGET",
                 portraitSyncSnapshotCid = 202L,
-                currentBvidCid = 303L
             )
         )
     }
 
     @Test
-    fun portraitExitRestoreTarget_fallsBackToSelectionAndUsesCurrentCidForNewVideo() {
+    fun portraitExitRestoreTarget_systemBackKeepsSettledPortraitVideoIdentity() {
+        assertEquals(
+            PortraitExitRestoreTarget(
+                bvid = "BV_SECOND",
+                cid = 302L
+            ),
+            resolvePortraitExitRestoreTarget(
+                pendingMainReloadBvidAfterPortrait = null,
+                portraitPendingSelectionBvid = "BV_SECOND",
+                portraitSyncSnapshotBvid = "BV_SECOND",
+                portraitSyncSnapshotCid = 302L,
+            )
+        )
+    }
+
+    @Test
+    fun portraitExitRestoreTarget_fallsBackToSelectionWithoutReusingOldDetailCid() {
         assertEquals(
             PortraitExitRestoreTarget(
                 bvid = "BV_OTHER",
-                cid = 303L
+                cid = 0L
             ),
             resolvePortraitExitRestoreTarget(
                 pendingMainReloadBvidAfterPortrait = null,
                 portraitPendingSelectionBvid = "BV_OTHER",
                 portraitSyncSnapshotBvid = "BV_TARGET",
                 portraitSyncSnapshotCid = 202L,
-                currentBvidCid = 303L
             )
         )
     }
@@ -200,7 +230,6 @@ class PortraitMainPlayerSyncPolicyTest {
                 portraitPendingSelectionBvid = null,
                 portraitSyncSnapshotBvid = null,
                 portraitSyncSnapshotCid = 202L,
-                currentBvidCid = 303L
             )
         )
     }
@@ -249,6 +278,68 @@ class PortraitMainPlayerSyncPolicyTest {
                 expectedBvid = "BV17x411w7KC",
                 currentPlayingBvid = "BV17x411w7KC",
                 currentPlayerMediaId = ""
+            )
+        )
+    }
+
+    @Test
+    fun portraitProgressCommit_commitsOnIdentityChange() {
+        assertTrue(
+            shouldCommitPortraitProgressToDetailState(
+                previousBvid = "BV1",
+                previousCid = 1L,
+                previousPositionMs = 1_000L,
+                nextBvid = "BV2",
+                nextCid = 1L,
+                nextPositionMs = 1_000L,
+            )
+        )
+        assertTrue(
+            shouldCommitPortraitProgressToDetailState(
+                previousBvid = "BV1",
+                previousCid = 1L,
+                previousPositionMs = 1_000L,
+                nextBvid = "BV1",
+                nextCid = 2L,
+                nextPositionMs = 1_000L,
+            )
+        )
+    }
+
+    @Test
+    fun portraitProgressCommit_throttlesSameIdentitySmallPositionDeltas() {
+        assertFalse(
+            shouldCommitPortraitProgressToDetailState(
+                previousBvid = "BV1",
+                previousCid = 11L,
+                previousPositionMs = 10_000L,
+                nextBvid = "BV1",
+                nextCid = 11L,
+                nextPositionMs = 10_400L,
+            )
+        )
+        assertTrue(
+            shouldCommitPortraitProgressToDetailState(
+                previousBvid = "BV1",
+                previousCid = 11L,
+                previousPositionMs = 10_000L,
+                nextBvid = "BV1",
+                nextCid = 11L,
+                nextPositionMs = 11_200L,
+            )
+        )
+    }
+
+    @Test
+    fun portraitProgressCommit_alwaysCommitsFirstObservation() {
+        assertTrue(
+            shouldCommitPortraitProgressToDetailState(
+                previousBvid = null,
+                previousCid = 0L,
+                previousPositionMs = -1L,
+                nextBvid = "BV1",
+                nextCid = 11L,
+                nextPositionMs = 0L,
             )
         )
     }

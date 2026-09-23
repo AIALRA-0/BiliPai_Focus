@@ -3,6 +3,8 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.android.purebilibili.core.util.IdUtils
+
 
 // ========== 番剧/影视响应模型 ==========
 
@@ -45,8 +47,17 @@ data class TimelineEpisode(
     @SerialName("pub_ts")
     val pubTs: Long = 0,              // 发布时间戳
     val delay: Int = 0,               // 是否延迟
+    @SerialName("delay_id")
+    val delayId: Long = 0,
+    @SerialName("delay_index")
+    val delayIndex: String = "",
     @SerialName("delay_reason")
     val delayReason: String = "",     // 延迟原因
+    @SerialName("ep_cover")
+    val episodeCover: String = "",
+    val published: Int? = null,
+    val follows: String = "",
+    val plays: String = "",
     val follow: Int = 0               // 是否追番
 )
 
@@ -68,6 +79,39 @@ data class BangumiIndexData(
     val num: Int = 0,                  // 当前页数量
     val size: Int = 0,                 // 每页数量
     val total: Int = 0                 // 总数
+)
+
+@Serializable
+data class BangumiIndexConditionResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: BangumiIndexConditionData? = null,
+)
+
+@Serializable
+data class BangumiIndexConditionData(
+    val filter: List<BangumiIndexConditionFilter>? = null,
+    val order: List<BangumiIndexConditionOrder>? = null,
+)
+
+@Serializable
+data class BangumiIndexConditionFilter(
+    val field: String? = null,
+    val name: String? = null,
+    val values: List<BangumiIndexConditionValue>? = null,
+)
+
+@Serializable
+data class BangumiIndexConditionOrder(
+    val field: String? = null,
+    val name: String? = null,
+    val sort: String? = null,
+)
+
+@Serializable
+data class BangumiIndexConditionValue(
+    val keyword: String? = null,
+    val name: String? = null,
 )
 
 @Serializable
@@ -129,6 +173,75 @@ data class BangumiDetailResponse(
     val result: BangumiDetail? = null
 )
 
+/**
+ * 通过 media_id 查询剧集基础信息。
+ * 对应 /pgc/review/user，主要用于 md 链接解析和仅持有 media_id 的入口。
+ */
+@Serializable
+data class BangumiMediaInfoResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val result: BangumiMediaInfoResult? = null
+)
+
+@Serializable
+data class BangumiMediaInfoResult(
+    val media: BangumiMediaInfo? = null,
+    val review: BangumiMediaReviewStatus? = null
+)
+
+@Serializable
+data class BangumiMediaInfo(
+    val areas: List<AreaInfo>? = null,
+    val cover: String = "",
+    @SerialName("horizontal_picture")
+    val horizontalPicture: String = "",
+    @SerialName("media_id")
+    val mediaId: Long = 0,
+    @SerialName("new_ep")
+    val newEpisode: BangumiMediaNewEpisode? = null,
+    val rating: BangumiRating? = null,
+    @SerialName("season_id")
+    val seasonId: Long = 0,
+    @SerialName("share_url")
+    val shareUrl: String = "",
+    val title: String = "",
+    val type: Int = 0,
+    @SerialName("type_name")
+    val typeName: String = ""
+)
+
+@Serializable
+data class BangumiMediaNewEpisode(
+    val id: Long = 0,
+    val index: String = "",
+    @SerialName("index_show")
+    val indexShow: String = ""
+)
+
+@Serializable
+data class BangumiMediaReviewStatus(
+    @SerialName("is_coin")
+    val isCoin: Int = 0,
+    @SerialName("is_open")
+    val isOpen: Int = 0
+)
+
+/** 独立分集接口响应，用于详情响应未携带完整分区时补全。 */
+@Serializable
+data class BangumiSectionResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val result: BangumiSectionResult? = null
+)
+
+@Serializable
+data class BangumiSectionResult(
+    @SerialName("main_section")
+    val mainSection: BangumiSection? = null,
+    val section: List<BangumiSection>? = null
+)
+
 @Serializable
 data class BangumiDetail(
     @SerialName("season_id")
@@ -165,7 +278,14 @@ data class BangumiDetail(
     val section: List<BangumiSection>? = null,
     @SerialName("season_title")
     val seasonTitle: String = "",
-    val subtitle: String = ""
+    val subtitle: String = "",
+    @SerialName("up_info")
+    val upInfo: PugvUpInfo? = null,
+    val briefImgs: List<PugvBriefImg>? = null,
+    /** PUGV may expose several instructors/cooperators instead of one up_info. */
+    val cooperators: List<PugvCooperator> = emptyList(),
+    /** True when the current account has paid for this course. */
+    val hasPaid: Boolean = false
 )
 
 @Serializable
@@ -209,6 +329,12 @@ data class BangumiEpisode(
     @SerialName("badge_type")
     val badgeType: Int = 0,
     val status: Int = 0,              // 状态
+    /** PUGV access flags are kept on the episode so the UI does not infer access from text. */
+    val playable: Boolean = false,
+    @SerialName("episode_can_view")
+    val episodeCanView: Boolean = false,
+    val playCount: Long = 0L,
+    val from: String = "",
     @SerialName("pub_time")
     val pubTime: Long = 0,
     val skip: EpisodeSkip? = null     // 跳过片头片尾信息
@@ -254,9 +380,9 @@ data class StyleInfo(
 @Serializable
 data class BangumiRights(
     @SerialName("allow_download")
-    val allowDownload: Int = 0,
+    val allowDownload: Int? = null,
     @SerialName("allow_review")
-    val allowReview: Int = 0,
+    val allowReview: Int? = null,
     @SerialName("is_preview")
     val isPreview: Int = 0,           // 是否预告/预览
     @SerialName("watch_platform")
@@ -266,7 +392,7 @@ data class BangumiRights(
     @SerialName("area_limit")
     val areaLimit: Int = 0,
     @SerialName("allow_dm")
-    val allowDanmaku: Int = 1
+    val allowDanmaku: Int? = null
 )
 
 @Serializable
@@ -342,14 +468,37 @@ data class BangumiPlayUrlResponse(
 )
 
 /**
- * 番剧播放视频信息（包含 DASH 等）
- * 注意：移除了类型不稳定的字段（has_paid, is_preview 等），它们有时返回 Int 有时返回 Boolean
+ * 番剧播放视频信息（包含 DASH 等）。
+ * 部分权限字段会在 Boolean、0/1 和字符串之间切换，统一使用宽容序列化器解析。
  */
 @Serializable
 data class BangumiVideoInfo(
+    val fnver: Int = 0,
+    val fnval: Int = 0,
+    val type: String = "",
+    val bp: Int = 0,
+    @SerialName("vip_type")
+    val vipType: Int = 0,
+    @SerialName("vip_status")
+    val vipStatus: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    @SerialName("is_drm")
+    val isDrm: Boolean = false,
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    @SerialName("has_paid")
+    val hasPaid: Boolean = false,
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    @SerialName("is_preview")
+    val isPreview: Boolean = false,
+    @Serializable(with = FlexibleFlagIntSerializer::class)
+    val status: Int = 0,
+    @SerialName("no_rexcode")
+    val noRexcode: Int = 0,
     val quality: Int = 0,
     val format: String = "",
     val timelength: Long = 0,
+    @SerialName("time_length")
+    val timeLengthAlt: Long = 0L,
     @SerialName("accept_format")
     val acceptFormat: String = "",
     @SerialName("accept_quality")
@@ -358,14 +507,25 @@ data class BangumiVideoInfo(
     val acceptDescription: List<String>? = null,
     @SerialName("video_codecid")
     val videoCodecid: Int = 0,
+    @SerialName("seek_param")
+    val seekParam: String = "",
+    @SerialName("seek_type")
+    val seekType: String = "",
     //  关键：durl 和 dash 字段
     val durl: List<Durl>? = null,
     val durls: List<Durl>? = null,  // 某些情况下叫 durls
     val dash: Dash? = null,
     @SerialName("support_formats")
-    val supportFormats: List<FormatItem>? = null
-    //  [修复] 移除类型不稳定的字段：has_paid, is_preview, status 等
-    // 这些字段有时返回 Int (0/1)，有时返回 Boolean (true/false)，导致解析失败
+    val supportFormats: List<FormatItem>? = null,
+    @SerialName("record_info")
+    val recordInfo: BangumiRecordInfo? = null
+)
+
+@Serializable
+data class BangumiRecordInfo(
+    @SerialName("record_icon")
+    val recordIcon: String = "",
+    val record: String = ""
 )
 
 /**
@@ -627,4 +787,181 @@ data class BangumiFilter(
             "[,1980)" to "更早"
         )
     }
+}
+
+// ========== 课堂 (PUGV) 响应与映射模型 ==========
+
+@Serializable
+data class PugvSeasonResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: PugvSeasonData? = null
+)
+
+@Serializable
+data class PugvSeasonData(
+    @SerialName("season_id")
+    val seasonId: Long = 0L,
+    val title: String = "",
+    val subtitle: String? = null,
+    val cover: String = "",
+    val evaluate: String? = null,
+    val brief: PugvBrief? = null,
+    @SerialName("ep_count")
+    val epCount: Int = 0,
+    val stat: PugvStat? = null,
+    val episodes: List<PugvEpisode>? = null,
+    @SerialName("up_info")
+    val upInfo: PugvUpInfo? = null,
+    @SerialName("user_status")
+    val userStatus: PugvUserStatus? = null,
+    val cooperators: List<PugvCooperator>? = null
+)
+
+@Serializable
+data class PugvBrief(
+    val title: String? = null,
+    val content: String? = null,
+    val img: List<PugvBriefImg>? = null,
+    val type: Int = 0
+)
+
+@Serializable
+data class PugvBriefImg(
+    val url: String = "",
+    @SerialName("aspect_ratio")
+    val aspectRatio: Float = 1.0f
+)
+
+@Serializable
+data class PugvStat(
+    val play: Long = 0L,
+    @SerialName("play_desc")
+    val playDesc: String = "",
+    val views: Long = 0L,
+    val reply: Long = 0L,
+    @SerialName("favored_count")
+    val favoredCount: Long = 0L,
+    val share: Long = 0L
+)
+
+@Serializable
+data class PugvUpInfo(
+    val mid: Long = 0L,
+    val uname: String = "",
+    val avatar: String = "",
+    val brief: String? = null,
+    val follower: Long = 0L,
+    @SerialName("is_follow")
+    val isFollow: Int = 0
+)
+
+@Serializable
+data class PugvCooperator(
+    val mid: Long = 0L,
+    val uname: String = "",
+    val avatar: String = "",
+    val role: String? = null
+)
+
+@Serializable
+data class PugvUserStatus(
+    val payed: Int = 0,
+    val favored: Int = 0,
+    @SerialName("favored_count")
+    val favoredCount: Long = 0L,
+    val progress: PugvProgress? = null
+)
+
+@Serializable
+data class PugvProgress(
+    @SerialName("last_ep_id")
+    val lastEpId: Long = 0L
+)
+
+@Serializable
+data class PugvEpisode(
+    val id: Long = 0L,
+    @SerialName("ep_id")
+    val epId: Long = 0L,
+    val aid: Long = 0L,
+    val cid: Long = 0L,
+    val title: String = "",
+    val subtitle: String? = null,
+    val cover: String = "",
+    val duration: Long = 0L,
+    val from: String = "pugv",
+    val playable: Boolean = false,
+    val status: Int = 0,
+    val label: String? = null,
+    @SerialName("episode_can_view")
+    val episodeCanView: Boolean = false,
+    val play: Long = 0L
+)
+
+fun PugvSeasonData.toBangumiDetail(): BangumiDetail {
+    val episodesList = episodes.orEmpty().mapIndexed { index, ep ->
+        val resolvedTitle = ep.title.ifBlank { "第${index + 1}讲" }
+        val resolvedBadge = ep.label?.takeIf { it.isNotBlank() } ?: when {
+            ep.playable || ep.episodeCanView -> "试看"
+            else -> "付费"
+        }
+        // PUGV episode duration is expressed in seconds (matching PiliPlus' EpisodeItem).
+        // Keep the conversion explicit so a short episode is not accidentally treated as ms.
+        val durationMs = ep.duration.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 1000L) * 1000L
+        val effectiveEpId = if (ep.id > 0L) ep.id else ep.epId
+        BangumiEpisode(
+            id = effectiveEpId,
+            aid = ep.aid,
+            bvid = if (ep.aid > 0L) IdUtils.av2bv(ep.aid) else "",
+            cid = ep.cid,
+            title = resolvedTitle,
+            longTitle = ep.subtitle.orEmpty(),
+            cover = ep.cover.ifBlank { cover },
+            duration = durationMs,
+            badge = resolvedBadge,
+            status = ep.status,
+            playable = ep.playable,
+            episodeCanView = ep.episodeCanView,
+            playCount = ep.play,
+            from = ep.from
+        )
+    }
+    val desc = evaluate?.takeIf { it.isNotBlank() }
+        ?: brief?.content?.takeIf { it.isNotBlank() }
+        ?: subtitle.orEmpty()
+        
+    val playCount = stat?.play?.takeIf { it > 0L } ?: stat?.views ?: 0L
+    val favCount = userStatus?.favoredCount?.takeIf { it > 0L } ?: stat?.favoredCount ?: 0L
+
+    return BangumiDetail(
+        seasonId = seasonId,
+        mediaId = 0L,
+        title = title,
+        cover = cover,
+        squareCover = cover,
+        evaluate = desc,
+        stat = BangumiStat(
+            views = playCount,
+            favorites = favCount,
+            reply = stat?.reply ?: 0L,
+            share = stat?.share ?: 0L
+        ),
+        episodes = episodesList,
+        seasonType = 10,
+        seasonTypeName = "课堂",
+        total = epCount.takeIf { it > 0 } ?: episodesList.size,
+        userStatus = UserStatus(
+            follow = if (userStatus?.favored == 1) 1 else 0,
+            progress = userStatus?.progress?.lastEpId?.takeIf { epId -> epId > 0L }?.let { lastEpId ->
+                WatchProgress(lastEpId = lastEpId)
+            }
+        ),
+        seasonTitle = title,
+        subtitle = subtitle.orEmpty(),
+        upInfo = upInfo,
+        briefImgs = brief?.img,
+        cooperators = cooperators.orEmpty(),
+        hasPaid = userStatus?.payed == 1
+    )
 }

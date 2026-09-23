@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class AdaptiveScaffoldWallpaperPolicyTest {
 
     @Test
-    fun globalWallpaperMakesDefaultBackgroundTransparent() {
+    fun globalWallpaperMakesDefaultBackgroundProtectedButTranslucent() {
         val background = Color(0xFFF9F9F9)
 
         val resolved = resolveAdaptiveScaffoldContainerColor(
@@ -19,7 +19,7 @@ class AdaptiveScaffoldWallpaperPolicyTest {
             globalWallpaperVisible = true
         )
 
-        assertEquals(Color.Transparent, resolved)
+        assertEquals(background.copy(alpha = 0.66f), resolved)
     }
 
     @Test
@@ -37,12 +37,27 @@ class AdaptiveScaffoldWallpaperPolicyTest {
     }
 
     @Test
-    fun globalWallpaperMakesDefaultChromeSurfaceTransparent() {
+    fun globalWallpaperMakesDefaultChromeSurfaceProtectedButTranslucent() {
         val background = Color(0xFFF9F9F9)
         val surface = Color(0xFFFFFFFF)
 
         val resolved = resolveGlobalWallpaperChromeColor(
             requestedColor = surface.copy(alpha = 0.85f),
+            defaultBackgroundColor = background,
+            defaultSurfaceColor = surface,
+            globalWallpaperVisible = true
+        )
+
+        assertEquals(surface.copy(alpha = 0.74f), resolved)
+    }
+
+    @Test
+    fun explicitTransparentChromeStaysTransparentAboveGlobalWallpaper() {
+        val background = Color(0xFFF9F9F9)
+        val surface = Color(0xFFFFFFFF)
+
+        val resolved = resolveGlobalWallpaperChromeColor(
+            requestedColor = Color.Transparent,
             defaultBackgroundColor = background,
             defaultSurfaceColor = surface,
             globalWallpaperVisible = true

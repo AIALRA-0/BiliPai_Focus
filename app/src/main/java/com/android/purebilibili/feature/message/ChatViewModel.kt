@@ -30,6 +30,7 @@ data class VideoPreviewInfo(
     val cover: String,
     val ownerName: String,
     val viewCount: Long,
+    val danmakuCount: Long,
     val duration: Long = 0
 )
 
@@ -162,6 +163,7 @@ class ChatViewModel(
                         cover = viewInfo.pic,
                         ownerName = viewInfo.owner.name,
                         viewCount = viewInfo.stat.view.toLong(),
+                        danmakuCount = viewInfo.stat.danmaku.toLong(),
                         duration = viewInfo.pages.firstOrNull()?.duration ?: 0
                     )
                     videoPreviewCache[bvid] = preview

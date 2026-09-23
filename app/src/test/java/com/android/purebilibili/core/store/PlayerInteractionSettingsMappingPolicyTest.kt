@@ -30,9 +30,13 @@ class PlayerInteractionSettingsMappingPolicyTest {
         assertFalse(result.longPressSpeedLockEnabled)
         assertFalse(result.longPressSpeedLockHintShown)
         assertEquals(0.0f, result.subtitleVerticalOffsetFraction)
+        assertTrue(result.subtitlePositionLocked)
+        assertEquals(0.0f, result.subtitlePortraitVerticalOffsetFraction)
         assertFalse(result.hideVideoPageStatusBar)
         assertEquals(TabletCommentPanelWidthPreset.STANDARD, result.tabletCommentPanelWidthPreset)
         assertFalse(result.hiResLongPressCompatHintShown)
+        assertFalse(result.directPortraitStoryEntry)
+        assertFalse(result.launchToPortraitFeedOnStartup)
     }
 
     @Test
@@ -51,6 +55,7 @@ class PlayerInteractionSettingsMappingPolicyTest {
             booleanPreferencesKey("long_press_speed_lock_enabled") to true,
             booleanPreferencesKey("long_press_speed_lock_hint_shown") to true,
             floatPreferencesKey("subtitle_vertical_offset_fraction") to -0.42f,
+            booleanPreferencesKey("subtitle_position_locked") to false,
             booleanPreferencesKey("two_finger_vertical_speed_enabled") to true,
             booleanPreferencesKey("hi_res_long_press_compat_hint_shown") to true
         )
@@ -70,6 +75,7 @@ class PlayerInteractionSettingsMappingPolicyTest {
         assertTrue(result.longPressSpeedLockEnabled)
         assertTrue(result.longPressSpeedLockHintShown)
         assertEquals(-0.30f, result.subtitleVerticalOffsetFraction)
+        assertFalse(result.subtitlePositionLocked)
         assertTrue(result.twoFingerVerticalSpeedEnabled)
         assertTrue(result.hiResLongPressCompatHintShown)
     }

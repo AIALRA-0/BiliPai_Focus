@@ -76,6 +76,7 @@ suspend fun captureAndSaveVideoScreenshot(
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 suspend fun captureVideoScreenshot(
     playerView: PlayerView,
     videoWidth: Int,
@@ -127,6 +128,46 @@ suspend fun captureVideoScreenshot(
                 )
             }
         }
+    }
+}
+
+/**
+ * Captures a deliberately small current-frame sample for ambient player chrome.
+ * The caller renders the top edge of this sample into the status bar. SurfaceView PixelCopy
+ * writes directly into the small destination so frequent live Haze refreshes do not allocate
+ * a full-resolution screenshot.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+suspend fun captureVideoAmbientFrame(
+    playerView: PlayerView,
+    targetWidth: Int = 160,
+    targetHeight: Int = 90,
+): Bitmap? = withContext(Dispatchers.Main.immediate) {
+    val safeWidth = targetWidth.coerceAtLeast(1)
+    val safeHeight = targetHeight.coerceAtLeast(1)
+    when (val videoSurface = playerView.videoSurfaceView) {
+        is TextureView -> runCatching {
+            videoSurface.getBitmap(safeWidth, safeHeight)
+        }.getOrNull()
+
+        is SurfaceView -> captureSurfaceViewAmbientBitmap(
+            surfaceView = videoSurface,
+            targetWidth = safeWidth,
+            targetHeight = safeHeight,
+        )
+
+        else -> runCatching {
+            Bitmap.createBitmap(safeWidth, safeHeight, Bitmap.Config.ARGB_8888).also { bitmap ->
+                val canvas = Canvas(bitmap)
+                val sourceWidth = playerView.width.coerceAtLeast(1)
+                val sourceHeight = playerView.height.coerceAtLeast(1)
+                canvas.scale(
+                    safeWidth.toFloat() / sourceWidth,
+                    safeHeight.toFloat() / sourceHeight,
+                )
+                playerView.draw(canvas)
+            }
+        }.getOrNull()
     }
 }
 
@@ -216,6 +257,45 @@ private suspend fun captureSurfaceViewBitmap(
 
     continuation.invokeOnCancellation {
         sourceBitmap.recycle()
+    }
+}
+
+private suspend fun captureSurfaceViewAmbientBitmap(
+    surfaceView: SurfaceView,
+    targetWidth: Int,
+    targetHeight: Int,
+): Bitmap? = suspendCancellableCoroutine { continuation ->
+    val bitmap = Bitmap.createBitmap(
+        targetWidth.coerceAtLeast(1),
+        targetHeight.coerceAtLeast(1),
+        Bitmap.Config.ARGB_8888,
+    )
+    try {
+        PixelCopy.request(
+            surfaceView,
+            bitmap,
+            { result ->
+                if (!continuation.isActive) {
+                    bitmap.recycle()
+                    return@request
+                }
+                if (result == PixelCopy.SUCCESS) {
+                    continuation.resume(bitmap)
+                } else {
+                    bitmap.recycle()
+                    continuation.resume(null)
+                }
+            },
+            Handler(Looper.getMainLooper()),
+        )
+    } catch (error: Exception) {
+        Logger.w("VideoAmbientFrame", "PixelCopy failed: ${error.message}")
+        bitmap.recycle()
+        if (continuation.isActive) continuation.resume(null)
+    }
+
+    continuation.invokeOnCancellation {
+        if (!bitmap.isRecycled) bitmap.recycle()
     }
 }
 

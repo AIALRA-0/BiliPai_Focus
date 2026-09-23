@@ -28,6 +28,25 @@ class CommonListHistoryUpNavigationStructureTest {
         assertTrue(source.contains("onUpClick = { mid -> pushNavigation3Route(ScreenRoutes.Space.createRoute(mid)) }"))
     }
 
+    @Test
+    fun `favorite and season series routes connect up click to space screen`() {
+        val navigationSource = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
+        val listSource = loadSource("app/src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt")
+
+        val favoriteBranch = navigationSource
+            .substringAfter("BiliPaiNavEntryContentRole.FAVORITE")
+            .substringBefore("BiliPaiNavEntryContentRole.LIKED_VIDEOS")
+        val seasonBranch = navigationSource
+            .substringAfter("BiliPaiNavEntryContentRole.SEASON_SERIES_DETAIL")
+            .substringBefore("BiliPaiNavEntryContentRole.BANGUMI")
+
+        assertTrue(favoriteBranch.contains("onUpClick = { mid ->"))
+        assertTrue(favoriteBranch.contains("ScreenRoutes.Space.createRoute(mid)"))
+        assertTrue(seasonBranch.contains("onUpClick = { mid ->"))
+        assertTrue(seasonBranch.contains("ScreenRoutes.Space.createRoute(mid)"))
+        assertTrue(listSource.contains("onUpClick = if (!isHistoryBatchMode)"))
+    }
+
     private fun loadSource(path: String): String {
         val candidates = listOf(
             File(path),

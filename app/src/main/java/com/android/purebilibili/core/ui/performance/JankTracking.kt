@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalView
 import androidx.metrics.performance.PerformanceMetricsState
@@ -55,7 +56,7 @@ fun TrackJankStateValue(
     stateValue: String?
 ) {
     val metrics = rememberMetricsStateHolder()
-    LaunchedEffect(metrics, stateName, stateValue) {
+    SideEffect {
         metrics.state?.apply {
             if (stateValue.isNullOrBlank()) {
                 removeState(stateName)

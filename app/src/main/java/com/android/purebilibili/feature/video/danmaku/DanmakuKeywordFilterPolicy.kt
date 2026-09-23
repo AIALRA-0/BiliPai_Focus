@@ -6,13 +6,17 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.StringReader
+import java.util.concurrent.ConcurrentHashMap
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
 
 private const val REGEX_RULE_PREFIX = "regex:"
 private const val SHORT_REGEX_RULE_PREFIX = "re:"
 private const val USER_HASH_RULE_PREFIX = "uid:"
 private const val USER_RULE_PREFIX = "user:"
 private const val HASH_RULE_PREFIX = "hash:"
-private val DANMAKU_RULE_SPLITTER = Regex("[\\n,，]+")
 private val DANMAKU_BLOCK_RULE_JSON = Json { ignoreUnknownKeys = true }
 
 enum class DanmakuBlockRuleGroup {
@@ -26,6 +30,19 @@ data class DanmakuBlockRuleSections(
     val regexRules: List<String> = emptyList(),
     val userHashRules: List<String> = emptyList()
 )
+
+data class DanmakuBlockRuleImportResult(
+    val rules: List<String> = emptyList(),
+    val invalidEntries: List<String> = emptyList(),
+    val skippedDisabledCount: Int = 0,
+    val errorMessage: String? = null
+) {
+    val sections: DanmakuBlockRuleSections
+        get() = partitionDanmakuBlockRules(rules)
+
+    val canImport: Boolean
+        get() = errorMessage == null && rules.isNotEmpty()
+}
 
 internal sealed interface DanmakuBlockRuleMatcher {
     fun matches(content: String, userHash: String = ""): Boolean
@@ -58,10 +75,200 @@ internal data class DanmakuUserHashMatcher(
 
 fun parseDanmakuBlockRules(raw: String): List<String> {
     parseDanmakuBlockRulesJson(raw)?.let { return it }
-    return raw.split(DANMAKU_RULE_SPLITTER)
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
+    return raw.lineSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .flatMap(::splitDanmakuBlockRuleLine)
+        .map(String::trim)
+        .filter(String::isNotEmpty)
         .distinct()
+        .toList()
+}
+
+internal fun splitDanmakuBlockRuleLine(line: String): List<String> {
+    val trimmed = line.trim()
+    if (trimmed.isEmpty()) return emptyList()
+
+    if (isDanmakuRegexRuleCandidate(trimmed) || isDanmakuUserRuleCandidate(trimmed)) {
+        return listOf(trimmed)
+    }
+
+    if (!trimmed.contains(',') && !trimmed.contains('，')) {
+        return listOf(trimmed)
+    }
+
+    return splitLineByCommasRespectingRegex(trimmed)
+}
+
+internal fun splitLineByCommasRespectingRegex(line: String): List<String> {
+    val tokens = mutableListOf<String>()
+    val current = StringBuilder()
+    var braceDepth = 0
+    var bracketDepth = 0
+    var parenDepth = 0
+    var inSlashRegex = false
+    var isEscaped = false
+
+    for (i in line.indices) {
+        val char = line[i]
+        if (isEscaped) {
+            current.append(char)
+            isEscaped = false
+            continue
+        }
+        when (char) {
+            '\\' -> {
+                isEscaped = true
+                current.append(char)
+            }
+            '{' -> {
+                braceDepth++
+                current.append(char)
+            }
+            '}' -> {
+                if (braceDepth > 0) braceDepth--
+                current.append(char)
+            }
+            '[' -> {
+                bracketDepth++
+                current.append(char)
+            }
+            ']' -> {
+                if (bracketDepth > 0) bracketDepth--
+                current.append(char)
+            }
+            '(' -> {
+                parenDepth++
+                current.append(char)
+            }
+            ')' -> {
+                if (parenDepth > 0) parenDepth--
+                current.append(char)
+            }
+            '/' -> {
+                val tokenSoFar = current.trim()
+                if (tokenSoFar.isEmpty()) {
+                    inSlashRegex = true
+                } else if (inSlashRegex) {
+                    inSlashRegex = false
+                }
+                current.append(char)
+            }
+            ',', '，' -> {
+                if (braceDepth > 0 || bracketDepth > 0 || parenDepth > 0 || inSlashRegex) {
+                    current.append(char)
+                } else {
+                    val token = current.toString().trim()
+                    if (token.isNotEmpty()) {
+                        tokens.add(token)
+                    }
+                    current.clear()
+                }
+            }
+            else -> {
+                current.append(char)
+            }
+        }
+    }
+    val lastToken = current.toString().trim()
+    if (lastToken.isNotEmpty()) {
+        tokens.add(lastToken)
+    }
+    return tokens
+}
+
+fun parseDanmakuBlockRuleImport(raw: String): DanmakuBlockRuleImportResult {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) {
+        return DanmakuBlockRuleImportResult(errorMessage = "文件内容为空")
+    }
+    return when {
+        trimmed.startsWith("<") -> parseDanmakuBlockRuleXmlImport(trimmed)
+        trimmed.startsWith("{") || trimmed.startsWith("[") -> {
+            val rules = parseDanmakuBlockRulesJson(trimmed)
+                ?: return DanmakuBlockRuleImportResult(errorMessage = "JSON 屏蔽规则格式无效")
+            buildDanmakuBlockRuleImportResult(rules)
+        }
+        else -> buildDanmakuBlockRuleImportResult(
+            parseDanmakuBlockRules(trimmed)
+        )
+    }
+}
+
+private fun parseDanmakuBlockRuleXmlImport(raw: String): DanmakuBlockRuleImportResult {
+    if (raw.contains("<!DOCTYPE", ignoreCase = true)) {
+        return DanmakuBlockRuleImportResult(errorMessage = "XML 屏蔽规则不支持 DOCTYPE")
+    }
+    val candidates = mutableListOf<String>()
+    var skippedDisabledCount = 0
+    return try {
+        val document = DocumentBuilderFactory.newInstance().apply {
+            isNamespaceAware = false
+            isExpandEntityReferences = false
+            isXIncludeAware = false
+        }.newDocumentBuilder().parse(InputSource(StringReader(raw)))
+        val nodes = document.getElementsByTagName("*")
+        for (index in 0 until nodes.length) {
+            val element = nodes.item(index) as? Element ?: continue
+            if (!element.tagName.equals("item", ignoreCase = true) &&
+                !element.tagName.equals("filter", ignoreCase = true)
+            ) {
+                continue
+            }
+            val enabled = element.getAttribute("enabled")
+                .trim()
+                .lowercase()
+            val value = element.textContent.orEmpty().trim()
+            if (enabled == "false" || enabled == "0") {
+                skippedDisabledCount++
+            } else if (value.isNotEmpty()) {
+                candidates += value
+            }
+        }
+        buildDanmakuBlockRuleImportResult(
+            candidates = candidates,
+            skippedDisabledCount = skippedDisabledCount
+        )
+    } catch (error: Exception) {
+        DanmakuBlockRuleImportResult(
+            skippedDisabledCount = skippedDisabledCount,
+            errorMessage = "XML 屏蔽规则格式无效：${error.message.orEmpty()}".trimEnd('：')
+        )
+    }
+}
+
+private fun buildDanmakuBlockRuleImportResult(
+    candidates: List<String>,
+    skippedDisabledCount: Int = 0
+): DanmakuBlockRuleImportResult {
+    val valid = mutableListOf<String>()
+    val invalid = mutableListOf<String>()
+    candidates.forEach { candidate ->
+        val normalized = normalizeDanmakuImportedRule(candidate)
+        if (normalized == null || resolveDanmakuBlockRuleMatcher(normalized) == null) {
+            candidate.trim().takeIf { it.isNotEmpty() }?.let(invalid::add)
+        } else {
+            valid += normalized
+        }
+    }
+    return DanmakuBlockRuleImportResult(
+        rules = valid.distinct(),
+        invalidEntries = invalid.distinct(),
+        skippedDisabledCount = skippedDisabledCount
+    )
+}
+
+private fun normalizeDanmakuImportedRule(rule: String): String? {
+    val normalized = rule.trim()
+    if (normalized.isEmpty()) return null
+    val prefix = normalized.take(2).lowercase()
+    val body = normalized.drop(2).trim()
+    return when (prefix) {
+        "t=" -> body.takeIf(String::isNotEmpty)
+        "r=" -> body.takeIf(String::isNotEmpty)?.let { "$REGEX_RULE_PREFIX$it" }
+        "u=" -> body.takeIf(String::isNotEmpty)?.let { "$USER_HASH_RULE_PREFIX$it" }
+        else -> normalizeDanmakuBlockRuleForAppend(normalized)
+    }
 }
 
 private fun parseDanmakuBlockRulesJson(raw: String): List<String>? {
@@ -110,9 +317,7 @@ private fun JsonArray.toRuleStrings(): List<String> {
 }
 
 private fun normalizeDanmakuRegexImportRule(rule: String): String? {
-    val normalized = rule.trim()
-    if (normalized.isEmpty()) return null
-    return if (isDanmakuRegexRule(normalized)) normalized else "$REGEX_RULE_PREFIX$normalized"
+    return normalizeDanmakuRegexManagerInput(rule)
 }
 
 fun matchesDanmakuBlockRule(content: String, rule: String, userHash: String = ""): Boolean {
@@ -161,7 +366,7 @@ fun mergeDanmakuBlockRuleSections(
     userHashRules: List<String>
 ): List<String> {
     val normalizedKeywords = keywordRules.map(String::trim).filter(String::isNotEmpty)
-    val normalizedRegexRules = regexRules.map(String::trim).filter(String::isNotEmpty)
+    val normalizedRegexRules = regexRules.mapNotNull(::normalizeDanmakuRegexManagerInput)
     val normalizedUserHashRules = userHashRules.mapNotNull(::normalizeDanmakuUserHashManagerInput)
     return (normalizedKeywords + normalizedRegexRules + normalizedUserHashRules).distinct()
 }
@@ -191,8 +396,28 @@ fun appendDanmakuUserHashBlockRule(
     return appendDanmakuBlockRule(rawRules = rawRules, rule = normalizedUserHash)
 }
 
+/**
+ * Block-rule matching is a hot path (live overlay + full-list rebuild). Cache compiled
+ * matchers so repeated `Matcher.find` does not re-enter regex compilation on the main thread.
+ * [computeIfAbsent] cannot store null, so wrap "invalid rule" in a non-null holder.
+ */
+private class CachedDanmakuBlockRuleMatcher(
+    val matcher: DanmakuBlockRuleMatcher?
+)
+
+private val DANMAKU_BLOCK_RULE_MATCHER_CACHE =
+    ConcurrentHashMap<String, CachedDanmakuBlockRuleMatcher>()
+
 private fun resolveDanmakuBlockRuleMatcher(rule: String): DanmakuBlockRuleMatcher? {
     val normalized = rule.trim()
+    if (normalized.isEmpty()) return null
+    return DANMAKU_BLOCK_RULE_MATCHER_CACHE
+        .computeIfAbsent(normalized) { CachedDanmakuBlockRuleMatcher(compileDanmakuBlockRuleMatcher(it)) }
+        .matcher
+}
+
+private fun compileDanmakuBlockRuleMatcher(normalizedRule: String): DanmakuBlockRuleMatcher? {
+    val normalized = normalizedRule.trim()
     if (normalized.isEmpty()) return null
 
     val normalizedUserHashRule = normalizeDanmakuUserHashRule(normalized)
@@ -208,6 +433,9 @@ private fun resolveDanmakuBlockRuleMatcher(rule: String): DanmakuBlockRuleMatche
         }
         normalized.startsWith(SHORT_REGEX_RULE_PREFIX, ignoreCase = true) -> {
             normalized.substring(SHORT_REGEX_RULE_PREFIX.length).trim()
+        }
+        normalized.startsWith("r=", ignoreCase = true) -> {
+            normalized.substring(2).trim()
         }
         normalized.length >= 2 && normalized.startsWith("/") && normalized.endsWith("/") -> {
             normalized.substring(1, normalized.length - 1).trim()
@@ -240,10 +468,39 @@ private fun normalizeDanmakuBlockRuleForAppend(rule: String): String? {
     return normalizeDanmakuUserHashRule(normalized) ?: normalized
 }
 
-private fun isDanmakuRegexRule(rule: String): Boolean {
-    return rule.startsWith(REGEX_RULE_PREFIX, ignoreCase = true) ||
-        rule.startsWith(SHORT_REGEX_RULE_PREFIX, ignoreCase = true) ||
-        (rule.length >= 2 && rule.startsWith("/") && rule.endsWith("/"))
+internal fun isDanmakuRegexRule(rule: String): Boolean {
+    val trimmed = rule.trim()
+    return trimmed.startsWith(REGEX_RULE_PREFIX, ignoreCase = true) ||
+        trimmed.startsWith(SHORT_REGEX_RULE_PREFIX, ignoreCase = true) ||
+        trimmed.startsWith("r=", ignoreCase = true) ||
+        (trimmed.length >= 2 && trimmed.startsWith("/") && trimmed.endsWith("/"))
+}
+
+internal fun isDanmakuRegexRuleCandidate(rule: String): Boolean {
+    val trimmed = rule.trim()
+    return trimmed.startsWith(REGEX_RULE_PREFIX, ignoreCase = true) ||
+        trimmed.startsWith(SHORT_REGEX_RULE_PREFIX, ignoreCase = true) ||
+        trimmed.startsWith("r=", ignoreCase = true) ||
+        trimmed.startsWith("/")
+}
+
+internal fun isDanmakuUserRuleCandidate(rule: String): Boolean {
+    val trimmed = rule.trim()
+    return trimmed.startsWith(USER_HASH_RULE_PREFIX, ignoreCase = true) ||
+        trimmed.startsWith(USER_RULE_PREFIX, ignoreCase = true) ||
+        trimmed.startsWith(HASH_RULE_PREFIX, ignoreCase = true) ||
+        trimmed.startsWith("u=", ignoreCase = true) ||
+        trimmed.startsWith("@")
+}
+
+internal fun normalizeDanmakuRegexManagerInput(rule: String): String? {
+    val normalized = rule.trim()
+    if (normalized.isEmpty()) return null
+    return if (isDanmakuRegexRule(normalized) || isDanmakuRegexRuleCandidate(normalized)) {
+        normalized
+    } else {
+        "$REGEX_RULE_PREFIX$normalized"
+    }
 }
 
 private fun normalizeDanmakuUserHashRule(rule: String): String? {
@@ -260,7 +517,7 @@ private fun normalizeDanmakuUserHashRule(rule: String): String? {
     return "$USER_HASH_RULE_PREFIX$body"
 }
 
-private fun normalizeDanmakuUserHashManagerInput(rule: String): String? {
+internal fun normalizeDanmakuUserHashManagerInput(rule: String): String? {
     val normalized = rule.trim()
     if (normalized.isEmpty()) return null
     return normalizeDanmakuUserHashRule(normalized) ?: "$USER_HASH_RULE_PREFIX$normalized"

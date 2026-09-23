@@ -62,6 +62,12 @@ internal fun shouldShowInlineOwnerIdentity(showOwnerAvatar: Boolean): Boolean {
     return !showOwnerAvatar
 }
 
+internal const val UP_INFO_COMPACT_WIDTH_THRESHOLD_DP = 320
+
+internal fun shouldUseCompactUpInfoLayout(widthDp: Int): Boolean {
+    return widthDp in 1 until UP_INFO_COMPACT_WIDTH_THRESHOLD_DP
+}
+
 internal fun resolveVideoDetailOnlineCountText(
     showOnlineCount: Boolean,
     onlineCount: String
@@ -121,6 +127,18 @@ internal fun resolvePublishTimeRowText(
     } else {
         "发布于 $relativeText"
     }
+}
+
+internal fun resolveCompactPublishTimeRowText(
+    pubdate: Long,
+    nowMs: Long = System.currentTimeMillis()
+): String {
+    if (pubdate <= 0L) return ""
+    val relativeText = FormatUtils.formatPublishTime(
+        timestampSeconds = pubdate,
+        nowMs = nowMs
+    )
+    return relativeText.takeIf { it.isNotBlank() }?.let { "发布于 $it" }.orEmpty()
 }
 
 internal fun resolveDynamicPublishTimeRowText(

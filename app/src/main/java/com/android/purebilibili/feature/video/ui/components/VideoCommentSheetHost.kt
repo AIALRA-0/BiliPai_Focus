@@ -1,20 +1,19 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.Shader
+import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -34,19 +33,25 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.skeleton.CommentListSkeleton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.surfaceColorAtElevation
+import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.SettingsManager
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -65,15 +70,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.onSizeChanged
-import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
-import com.android.purebilibili.core.ui.bottomSheetContentEnterTransition
-import com.android.purebilibili.core.ui.bottomSheetContentExitTransition
-import com.android.purebilibili.core.ui.bottomSheetScrimEnterTransition
-import com.android.purebilibili.core.ui.bottomSheetScrimExitTransition
+import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
+import com.android.purebilibili.core.ui.rememberAppBottomSheetMotion
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.NavigationEventTransitionState
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import com.android.purebilibili.core.ui.InteractiveOverlayProgressVisual
 import com.android.purebilibili.core.ui.InteractiveOverlaySurfaceType
-import com.android.purebilibili.core.ui.resolveAdaptiveBottomSheetMotionSpec
 import com.android.purebilibili.core.ui.resolveInteractiveOverlayProgressVisual
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.model.response.ReplyItem
@@ -94,6 +99,8 @@ import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 private const val MAIN_COMMENT_SHEET_HEIGHT_FRACTION = 0.60f
 private const val MAIN_COMMENT_SHEET_SCRIM_ALPHA = 0.5f
@@ -144,9 +151,13 @@ internal fun resolveVideoCommentSheetHostHeightPx(
                 .coerceIn(0, hostHeightPx)
 
         VideoCommentSheetHostContent.THREAD_DETAIL -> {
-            val reservedTopPx = topReservedPx.coerceIn(0, hostHeightPx)
-            val availableHeightPx = hostHeightPx - reservedTopPx
-            if (availableHeightPx > 0) availableHeightPx else hostHeightPx
+            val heightFraction = resolveVideoSubReplySheetMaxHeightFraction(
+                screenHeightPx = hostHeightPx,
+                topReservedPx = topReservedPx
+            )
+            (hostHeightPx * heightFraction)
+                .roundToInt()
+                .coerceIn(0, hostHeightPx)
         }
 
         VideoCommentSheetHostContent.HIDDEN -> 0
@@ -170,6 +181,41 @@ internal fun shouldApplyVideoCommentThreadStatusBarPadding(
     return !mainSheetVisible && topReservedPx <= 0
 }
 
+internal enum class VideoCommentPredictiveBackTarget {
+    CLOSE_CONVERSATION,
+    CLOSE_THREAD,
+    DISMISS_SHEET
+}
+
+internal fun resolveVideoCommentPredictiveBackTarget(
+    subReplyVisible: Boolean,
+    conversationActive: Boolean
+): VideoCommentPredictiveBackTarget {
+    return when {
+        subReplyVisible && conversationActive -> VideoCommentPredictiveBackTarget.CLOSE_CONVERSATION
+        subReplyVisible -> VideoCommentPredictiveBackTarget.CLOSE_THREAD
+        else -> VideoCommentPredictiveBackTarget.DISMISS_SHEET
+    }
+}
+
+internal fun resolveVideoCommentPredictiveBackProgress(
+    inProgress: Boolean,
+    progress: Float
+): Float {
+    if (!inProgress) return 0f
+    return progress.coerceIn(0f, 1f)
+}
+
+internal fun resolveCommentThreadPredictiveBackOffsetY(
+    progress: Float,
+    heightPx: Float,
+): Float = progress.coerceIn(0f, 1f) * heightPx
+
+internal fun resolveCommentThreadCoveredBlurProgress(threadBackProgress: Float): Float {
+    val coveredDepth = (1f - threadBackProgress.coerceIn(0f, 1f))
+    return coveredDepth * coveredDepth
+}
+
 internal fun shouldInitializeVideoCommentSheetHost(
     mainSheetVisible: Boolean,
     forceInitialize: Boolean
@@ -182,6 +228,10 @@ internal fun shouldDismissVideoCommentSheetHostOnBackdropTap(
 ): Boolean {
     return mainSheetVisible
 }
+
+internal fun shouldInterceptVideoCommentSheetHostBackdropTap(
+    mainSheetVisible: Boolean
+): Boolean = mainSheetVisible
 
 internal fun shouldHandleVideoCommentSheetVerticalDrag(
     dragAmountPx: Float,
@@ -204,23 +254,73 @@ internal fun resolveVideoCommentSheetDragStartOffset(
     return max(renderedOffsetPx, targetOffsetPx).coerceAtLeast(0f)
 }
 
+internal fun resolvePortraitCommentDismissDragTargetOffset(sheetHeightPx: Float): Float {
+    return sheetHeightPx.coerceAtLeast(0f)
+}
+
+internal fun shouldCompletePortraitCommentDismissDragSettling(
+    sheetOffsetPx: Float,
+    sheetHeightPx: Float
+): Boolean {
+    if (sheetHeightPx <= 0f) return true
+    return sheetOffsetPx >= sheetHeightPx * 0.98f
+}
+
+internal fun resolveVideoCommentSheetDragVisibilityProgress(
+    hostContent: VideoCommentSheetHostContent,
+    mainSheetVisible: Boolean,
+    isDismissDragSettling: Boolean,
+    sheetOffsetPx: Float,
+    sheetHeightPx: Float,
+    hostVisibilityProgress: Float,
+    isDragDismissExitPending: Boolean = false
+): Float {
+    return when {
+        (hostContent != VideoCommentSheetHostContent.HIDDEN && mainSheetVisible) ||
+            isDismissDragSettling ->
+            resolvePortraitCommentVisibilityProgress(
+                sheetOffsetPx = sheetOffsetPx,
+                sheetHeightPx = sheetHeightPx
+            )
+        hostContent == VideoCommentSheetHostContent.THREAD_DETAIL &&
+            !mainSheetVisible -> 1f
+        hostContent == VideoCommentSheetHostContent.HIDDEN && hostVisibilityProgress > 0f ->
+            if (isDragDismissExitPending) {
+                0f
+            } else {
+                hostVisibilityProgress.coerceIn(0f, 1f)
+            }
+        else -> 0f
+    }
+}
+
 internal fun resolveVideoCommentSheetPresentationProgress(
     hostVisibilityProgress: Float,
-    dragVisibilityProgress: Float
+    dragVisibilityProgress: Float,
+    preferDragProgress: Boolean = false
 ): Float {
-    return hostVisibilityProgress.coerceIn(0f, 1f) *
-        dragVisibilityProgress.coerceIn(0f, 1f)
+    val hostProgress = hostVisibilityProgress.coerceIn(0f, 1f)
+    val dragProgress = dragVisibilityProgress.coerceIn(0f, 1f)
+    return when {
+        preferDragProgress -> dragProgress
+        dragProgress <= 0.001f -> 0f
+        // 关闭评论区时 drag 会跟随 host 淡出；避免 host * host 造成视频缩放回弹。
+        dragProgress + 0.001f >= hostProgress -> hostProgress
+        else -> (hostProgress * dragProgress).coerceIn(0f, 1f)
+    }
 }
 
 internal fun resolveVideoCommentSheetHostOverlayVisual(
     mainSheetVisible: Boolean,
-    presentationProgress: Float
+    presentationProgress: Float,
+    maxScrimAlphaOverride: Float? = null
 ): InteractiveOverlayProgressVisual {
     return resolveInteractiveOverlayProgressVisual(
         presentationProgress = presentationProgress,
         surfaceType = InteractiveOverlaySurfaceType.BOTTOM_SHEET,
         blurActive = mainSheetVisible,
-        maxScrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible)
+        maxScrimAlpha = maxScrimAlphaOverride
+            ?: resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible)
     )
 }
 
@@ -229,6 +329,13 @@ internal fun resolveVideoCommentSheetHostOverlayVisual(
 fun VideoCommentSheetHost(
     mainSheetVisible: Boolean,
     onDismiss: () -> Unit,
+    /**
+     * 覆盖全屏 scrim 的峰值透明度。
+     *
+     * 详情页楼中楼（嵌入呈现）场景传入 0f：打开子评论时不再盖住播放器上方的阴影，
+     * 但 backdrop 点击拦截仍由 [mainSheetVisible] 控制，点背景关闭行为不受影响。
+     */
+    maxScrimAlphaOverride: Float? = null,
     onMainSheetVisibilityProgressChange: (Float) -> Unit = {},
     commentViewModel: VideoCommentViewModel,
     aid: Long,
@@ -241,13 +348,15 @@ fun VideoCommentSheetHost(
     onVideoClick: ((String) -> Unit)? = null,
     onSearchKeywordClick: ((String) -> Unit)? = null,
     onOpenBilibiliLink: ((String) -> Unit)? = null,
+    onBackToTop: () -> Unit = {},
     screenHeightPx: Int = 0,
     topReservedPx: Int = 0,
     onTimestampClick: ((Long) -> Unit)? = null,
     maxTimestampMs: Long? = null,
     onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null,
     forceInitialize: Boolean = false,
-    handleFraudEvents: Boolean = true
+    handleFraudEvents: Boolean = true,
+    onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -269,8 +378,15 @@ fun VideoCommentSheetHost(
         mainSheetVisible = mainSheetVisible,
         subReplyVisible = subReplyState.visible
     )
+    val mainCommentListState = rememberLazyListState()
+    LaunchedEffect(aid) {
+        if (mainCommentListState.firstVisibleItemIndex != 0 || mainCommentListState.firstVisibleItemScrollOffset != 0) {
+            mainCommentListState.scrollToItem(0)
+        }
+    }
     val hostVisible = hostContent != VideoCommentSheetHostContent.HIDDEN
-    val scrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = mainSheetVisible)
+    val scrimAlpha = maxScrimAlphaOverride
+        ?: resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = mainSheetVisible)
     val dismissOnBackdropTap = shouldDismissVideoCommentSheetHostOnBackdropTap(
         mainSheetVisible = mainSheetVisible
     )
@@ -278,12 +394,13 @@ fun VideoCommentSheetHost(
         mainSheetVisible = mainSheetVisible,
         topReservedPx = topReservedPx
     )
-    val uiPreset = LocalUiPreset.current
-    val motionSpec = remember(uiPreset) { resolveAdaptiveBottomSheetMotionSpec(uiPreset) }
+    val motionSpec = rememberAppBottomSheetMotion()
     val appearance = rememberVideoCommentAppearance()
     var isDraggingSheet by remember { mutableStateOf(false) }
-    var sheetDragTargetOffsetPx by remember { mutableStateOf(0f) }
-    var mainSheetMeasuredHeightPx by remember { mutableStateOf(0f) }
+    var isDismissDragSettling by remember { mutableStateOf(false) }
+    var isDragDismissExitPending by remember { mutableStateOf(false) }
+    var sheetDragTargetOffsetPx by remember { mutableFloatStateOf(0f) }
+    var mainSheetMeasuredHeightPx by remember { mutableFloatStateOf(0f) }
     val hostVisibilityProgress by animateFloatAsState(
         targetValue = if (hostVisible) 1f else 0f,
         animationSpec = tween(
@@ -297,51 +414,64 @@ fun VideoCommentSheetHost(
     )
     val sheetDragOffsetPx by animateFloatAsState(
         targetValue = sheetDragTargetOffsetPx,
-        animationSpec = tween(durationMillis = if (isDraggingSheet) 0 else 180),
+        animationSpec = tween(
+            durationMillis = when {
+                isDraggingSheet -> 0
+                isDismissDragSettling -> motionSpec.contentExitFadeDurationMillis.coerceAtLeast(180)
+                else -> 180
+            }
+        ),
         label = "video_comment_main_sheet_offset"
     )
     val latestSheetDragOffsetPx = rememberUpdatedState(sheetDragOffsetPx)
-    val sheetDragVisibilityProgress = remember(
-        hostContent,
-        mainSheetVisible,
-        sheetDragOffsetPx,
-        hostVisibilityProgress,
-        mainSheetMeasuredHeightPx
-    ) {
-        when {
-            hostContent != VideoCommentSheetHostContent.HIDDEN && mainSheetVisible ->
-                resolvePortraitCommentVisibilityProgress(
-                    sheetOffsetPx = sheetDragOffsetPx,
-                    sheetHeightPx = mainSheetMeasuredHeightPx
-                )
-            hostContent == VideoCommentSheetHostContent.THREAD_DETAIL -> 1f
-            hostContent == VideoCommentSheetHostContent.HIDDEN && hostVisibilityProgress > 0f -> 1f
-            else -> 0f
-        }
-    }
-    val mainSheetVisibilityProgress = remember(
-        hostVisibilityProgress,
-        sheetDragVisibilityProgress
-    ) {
-        resolveVideoCommentSheetPresentationProgress(
-            hostVisibilityProgress = hostVisibilityProgress,
-            dragVisibilityProgress = sheetDragVisibilityProgress
-        )
-    }
+    val sheetDragVisibilityProgress = resolveVideoCommentSheetDragVisibilityProgress(
+        hostContent = hostContent,
+        mainSheetVisible = mainSheetVisible,
+        isDismissDragSettling = isDismissDragSettling,
+        sheetOffsetPx = sheetDragOffsetPx,
+        sheetHeightPx = mainSheetMeasuredHeightPx,
+        hostVisibilityProgress = hostVisibilityProgress,
+        isDragDismissExitPending = isDragDismissExitPending
+    )
+    val mainSheetVisibilityProgress = resolveVideoCommentSheetPresentationProgress(
+        hostVisibilityProgress = hostVisibilityProgress,
+        dragVisibilityProgress = sheetDragVisibilityProgress,
+        preferDragProgress = isDraggingSheet || isDismissDragSettling
+    )
 
-    LaunchedEffect(mainSheetVisible, hostContent, mainSheetVisibilityProgress) {
+    SideEffect {
         onMainSheetVisibilityProgressChange(mainSheetVisibilityProgress)
     }
-    val overlayVisual = remember(mainSheetVisible, mainSheetVisibilityProgress) {
+
+    LaunchedEffect(isDismissDragSettling, sheetDragOffsetPx, mainSheetMeasuredHeightPx, hostContent) {
+        if (!isDismissDragSettling) return@LaunchedEffect
+        if (
+            shouldCompletePortraitCommentDismissDragSettling(
+                sheetOffsetPx = sheetDragOffsetPx,
+                sheetHeightPx = mainSheetMeasuredHeightPx
+            )
+        ) {
+            isDismissDragSettling = false
+            if (hostContent == VideoCommentSheetHostContent.THREAD_DETAIL) {
+                commentViewModel.closeSubReply()
+            } else {
+                onDismiss()
+            }
+        }
+    }
+    val overlayVisual = remember(mainSheetVisible, mainSheetVisibilityProgress, maxScrimAlphaOverride) {
         resolveVideoCommentSheetHostOverlayVisual(
             mainSheetVisible = mainSheetVisible,
-            presentationProgress = mainSheetVisibilityProgress
+            presentationProgress = mainSheetVisibilityProgress,
+            maxScrimAlphaOverride = maxScrimAlphaOverride
         )
     }
 
-    LaunchedEffect(hostVisible) {
-        if (!hostVisible) {
+    LaunchedEffect(hostVisible, hostVisibilityProgress) {
+        if (!hostVisible && hostVisibilityProgress <= 0f) {
             isDraggingSheet = false
+            isDismissDragSettling = false
+            isDragDismissExitPending = false
             sheetDragTargetOffsetPx = 0f
         }
     }
@@ -374,11 +504,67 @@ fun VideoCommentSheetHost(
         )
     }
 
-    BackHandler(enabled = hostVisible) {
-        if (subReplyState.visible) {
-            commentViewModel.closeSubReply()
+    val commentBackState = rememberNavigationEventState(NavigationEventInfo.None)
+    var threadBackCompleted by remember { mutableStateOf(false) }
+    val rawThreadBackProgress = resolveVideoCommentPredictiveBackProgress(
+        inProgress = commentBackState.transitionState is NavigationEventTransitionState.InProgress &&
+            hostContent == VideoCommentSheetHostContent.THREAD_DETAIL,
+        progress = (commentBackState.transitionState as? NavigationEventTransitionState.InProgress)
+            ?.latestEvent
+            ?.progress
+            ?: 0f
+    )
+
+    val threadBackProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = rawThreadBackProgress,
+        animationSpec = if (commentBackState.transitionState is NavigationEventTransitionState.InProgress) {
+            androidx.compose.animation.core.snap()
         } else {
-            onDismiss()
+            tween(180)
+        },
+        label = "comment_thread_predictive_back",
+    )
+    LaunchedEffect(subReplyState.visible) {
+        if (subReplyState.visible) threadBackCompleted = false
+    }
+    NavigationBackHandler(
+        state = commentBackState,
+        isBackEnabled = hostVisible,
+        onBackCompleted = {
+            when (
+                resolveVideoCommentPredictiveBackTarget(
+                    subReplyVisible = subReplyState.visible,
+                    conversationActive = subReplyState.conversationAnchor != null
+                )
+            ) {
+                VideoCommentPredictiveBackTarget.CLOSE_CONVERSATION ->
+                    commentViewModel.closeSubReplyConversation()
+                VideoCommentPredictiveBackTarget.CLOSE_THREAD -> {
+                    threadBackCompleted = rawThreadBackProgress > 0f
+                    commentViewModel.closeSubReply()
+                }
+                VideoCommentPredictiveBackTarget.DISMISS_SHEET -> onDismiss()
+            }
+        },
+    )
+    val threadDrag = rememberCommentThreadDrag(
+        visible = subReplyState.visible,
+        rootReplyId = subReplyState.rootReply?.rpid,
+        onDismiss = commentViewModel::closeSubReply,
+    )
+    val threadCoveredBlurProgress = if (
+        hostContent == VideoCommentSheetHostContent.THREAD_DETAIL
+    ) {
+        resolveCommentThreadCoveredBlurProgress(maxOf(threadBackProgress, threadDrag.revealProgress))
+    } else {
+        0f
+    }
+    SideEffect {
+        onCoveredBlurProgressChange?.invoke(threadCoveredBlurProgress)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            onCoveredBlurProgressChange?.invoke(0f)
         }
     }
 
@@ -460,20 +646,29 @@ fun VideoCommentSheetHost(
 
     AnimatedVisibility(
         visible = hostVisible,
-        enter = bottomSheetScrimEnterTransition(motionSpec),
-        exit = bottomSheetScrimExitTransition(motionSpec)
+        enter = motionSpec.scrimEnter,
+        exit = motionSpec.scrimExit
     ) {
+        val interceptBackdropTap = shouldInterceptVideoCommentSheetHostBackdropTap(
+            mainSheetVisible = mainSheetVisible
+        )
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = overlayVisual.scrimAlpha))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        if (dismissOnBackdropTap) {
-                            onDismiss()
-                        }
+                .then(
+                    if (interceptBackdropTap) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                if (dismissOnBackdropTap) {
+                                    onDismiss()
+                                }
+                            }
+                        )
+                    } else {
+                        Modifier
                     }
                 )
         ) {
@@ -489,11 +684,11 @@ fun VideoCommentSheetHost(
             val sheetHeight = with(density) { sheetHeightPx.toDp() }
             AnimatedVisibility(
                 visible = hostVisible,
-                enter = bottomSheetContentEnterTransition(motionSpec),
-                exit = bottomSheetContentExitTransition(motionSpec),
+                enter = motionSpec.contentEnter,
+                exit = motionSpec.contentExit,
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                Surface(
+                AppSurface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(sheetHeight)
@@ -502,7 +697,7 @@ fun VideoCommentSheetHost(
                         }
                         .offset { IntOffset(x = 0, y = sheetDragOffsetPx.roundToInt()) }
                         .pointerInput(mainSheetVisible, hostContent, mainSheetMeasuredHeightPx) {
-                            if (hostContent == VideoCommentSheetHostContent.HIDDEN) {
+                            if (hostContent != VideoCommentSheetHostContent.MAIN_LIST) {
                                 return@pointerInput
                             }
                             detectVerticalDragGestures(
@@ -535,13 +730,15 @@ fun VideoCommentSheetHost(
                                             sheetHeightPx = mainSheetMeasuredHeightPx
                                         )
                                     ) {
-                                        if (hostContent == VideoCommentSheetHostContent.THREAD_DETAIL) {
-                                            commentViewModel.closeSubReply()
-                                        } else {
-                                            onDismiss()
-                                        }
+                                        isDismissDragSettling = true
+                                        isDragDismissExitPending = true
+                                        sheetDragTargetOffsetPx =
+                                            resolvePortraitCommentDismissDragTargetOffset(
+                                                sheetHeightPx = mainSheetMeasuredHeightPx
+                                            )
+                                    } else {
+                                        sheetDragTargetOffsetPx = 0f
                                     }
-                                    sheetDragTargetOffsetPx = 0f
                                 },
                                 onDragCancel = {
                                     isDraggingSheet = false
@@ -554,47 +751,40 @@ fun VideoCommentSheetHost(
                             indication = null,
                             onClick = {}
                         ),
-                    color = appearance.panelColor.copy(
-                        alpha = appearance.panelColor.alpha * overlayVisual.surfaceAlphaMultiplier
-                    )
+                    color = if (mainSheetVisible) {
+                        appearance.panelColor.copy(
+                            alpha = appearance.panelColor.alpha * overlayVisual.surfaceAlphaMultiplier
+                        )
+                    } else {
+                        Color.Transparent
+                    }
                 ) {
-                    AnimatedContent(
-                        targetState = hostContent,
-                        transitionSpec = {
-                            val opensThreadDetail =
-                                initialState == VideoCommentSheetHostContent.MAIN_LIST &&
-                                    targetState == VideoCommentSheetHostContent.THREAD_DETAIL
-                            val closesThreadDetail =
-                                initialState == VideoCommentSheetHostContent.THREAD_DETAIL &&
-                                    targetState == VideoCommentSheetHostContent.MAIN_LIST
-                            val direction = when {
-                                opensThreadDetail -> 1
-                                closesThreadDetail -> -1
-                                else -> 0
-                            }
-                            val enter = fadeIn(animationSpec = tween(220)) +
-                                slideInHorizontally(animationSpec = tween(260)) { width ->
-                                    when {
-                                        direction > 0 -> width / 2
-                                        direction < 0 -> -width / 2
-                                        else -> 0
-                                    }
-                                }
-                            val exit = fadeOut(animationSpec = tween(200)) +
-                                slideOutHorizontally(animationSpec = tween(240)) { width ->
-                                    when {
-                                        direction > 0 -> -width / 3
-                                        direction < 0 -> width / 3
-                                        else -> 0
-                                    }
-                                }
-                            enter togetherWith exit using SizeTransform(clip = false)
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        label = "video_comment_host_content"
-                    ) { targetContent ->
-                        when (targetContent) {
-                            VideoCommentSheetHostContent.MAIN_LIST -> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (mainSheetVisible && hostContent != VideoCommentSheetHostContent.HIDDEN) {
+                            val coveredBlurProgress = threadCoveredBlurProgress
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        renderEffect = null
+                                        if (coveredBlurProgress > 0f &&
+                                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                                        ) {
+                                            val blurFrame = resolvePredictiveBackBlurFrame(
+                                                progress = coveredBlurProgress,
+                                            )
+                                            renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
+                                                AndroidRenderEffect.createBlurEffect(
+                                                    blurFrame.blurRadiusPx,
+                                                    blurFrame.blurRadiusPx,
+                                                    Shader.TileMode.CLAMP,
+                                                ).asComposeRenderEffect()
+                                            } else {
+                                                null
+                                            }
+                                        }
+                                    },
+                            ) {
                                 VideoCommentMainList(
                                     viewModel = commentViewModel,
                                     showIdentityDecorations = commentMemberDecorationsEnabled,
@@ -604,16 +794,41 @@ fun VideoCommentSheetHost(
                                     onCommentUrlClick = openCommentUrl,
                                     onTimestampClick = onTimestampClick,
                                     maxTimestampMs = maxTimestampMs,
-                                    onImagePreview = previewCallback
+                                    onImagePreview = previewCallback,
+                                    onBackToTop = onBackToTop,
+                                    listState = mainCommentListState,
                                 )
                             }
-
-                            VideoCommentSheetHostContent.THREAD_DETAIL -> {
-                                val rootReply = subReplyState.rootReply
-                                if (rootReply != null) {
+                        }
+                        AnimatedVisibility(
+                            visible = hostContent == VideoCommentSheetHostContent.THREAD_DETAIL &&
+                                subReplyState.rootReply != null,
+                            enter = fadeIn(animationSpec = tween(220)) +
+                                slideInVertically(animationSpec = tween(260)) { height -> height },
+                            exit = if (threadBackCompleted) androidx.compose.animation.ExitTransition.None else fadeOut(animationSpec = tween(200)) +
+                                slideOutVertically(animationSpec = tween(240)) { height -> height },
+                        ) {
+                            val rootReply = subReplyState.rootReply
+                            if (rootReply != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(threadDrag.containerModifier)
+                                        .graphicsLayer {
+                                            translationY = threadDrag.offsetPx.value + resolveCommentThreadPredictiveBackOffsetY(
+                                                progress = threadBackProgress,
+                                                heightPx = size.height,
+                                            )
+                                        }
+                                        .background(appearance.panelColor),
+                                ) {
                                     SubReplyDetailContent(
+                                        headerDragModifier = threadDrag.headerModifier,
                                         rootReply = rootReply,
                                         subReplies = subReplyState.items,
+                                        sortMode = subReplyState.sortMode,
+                                        error = subReplyState.error,
+                                        onSortModeChange = commentViewModel::setSubReplySortMode,
                                         remoteReplyCount = subReplyState.totalCount,
                                         isLoading = subReplyState.isLoading,
                                         isEnd = subReplyState.isEnd,
@@ -635,9 +850,12 @@ fun VideoCommentSheetHost(
                                         currentMid = commentState.currentMid,
                                         onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
                                         onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
+                                        onCheckCommentFraud = commentViewModel::checkCommentFraud,
                                         onCommentLike = commentViewModel::likeComment,
+                                        onCommentHate = commentViewModel::hateComment,
                                         onReportComment = commentViewModel::reportComment,
                                         likedComments = commentState.likedComments,
+                                        hatedComments = commentState.hatedComments,
                                         onUrlClick = openCommentUrl,
                                         onAvatarClick = { mid ->
                                             mid.toLongOrNull()?.let(onUserClick)
@@ -647,8 +865,6 @@ fun VideoCommentSheetHost(
                                     )
                                 }
                             }
-
-                            VideoCommentSheetHostContent.HIDDEN -> Unit
                         }
                     }
                 }
@@ -667,13 +883,18 @@ internal fun VideoCommentMainList(
     onCommentUrlClick: (String) -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
     maxTimestampMs: Long?,
-    onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit
+    onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit,
+    onBackToTop: () -> Unit = {},
+    scrollToTopRequest: Int = 0,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
     val state by viewModel.commentState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val appearance = rememberVideoCommentAppearance()
-    val listState = rememberLazyListState()
+    val commentChromeBackdrop = rememberLayerBackdrop()
+    var showCommentSearchSheet by remember { mutableStateOf(false) }
+    val latestOnBackToTop by rememberUpdatedState(onBackToTop)
     val shouldShowBackToTop by remember(listState) {
         androidx.compose.runtime.derivedStateOf {
             shouldShowVideoCommentBackToTop(
@@ -683,47 +904,59 @@ internal fun VideoCommentMainList(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        CommentSortFilterBar(
-            count = state.replyCount,
-            sortMode = state.sortMode,
-            onSortModeChange = { mode ->
-                viewModel.setSortMode(mode)
-                scope.launch {
-                    com.android.purebilibili.core.store.SettingsManager
-                        .setCommentDefaultSortMode(context, mode.apiMode)
-                }
-            },
-            upOnly = state.upOnlyFilter,
-            onUpOnlyToggle = { viewModel.toggleUpOnly() }
-        )
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest <= 0) return@LaunchedEffect
+        listState.scrollToItem(0)
+        latestOnBackToTop()
+    }
 
+    Column(modifier = Modifier.fillMaxSize()) {
         CommentFraudDetectingBanner(isDetecting = state.isDetectingFraud)
 
         if (state.isRepliesLoading && state.replies.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            CommentListSkeleton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = WindowInsets.navigationBars.asPaddingValues(),
+            )
         } else {
-            Box(modifier = Modifier.fillMaxSize()) {
+            CommentSortHeader(
+                count = state.replyCount,
+                sortMode = state.sortMode,
+                onSortModeChange = { mode ->
+                    viewModel.setSortMode(mode)
+                    scope.launch { SettingsManager.setCommentDefaultSortMode(context, mode.apiMode) }
+                },
+                onSearchClick = { showCommentSearchSheet = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            ) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(commentChromeBackdrop),
                     contentPadding = WindowInsets.navigationBars.asPaddingValues()
                 ) {
                     item {
-                        Surface(
+                        AppSurface(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             color = appearance.composerHintBackgroundColor,
-                            shape = RoundedCornerShape(16.dp),
+                            shape = AppShapes.container(ContainerLevel.Card),
                             onClick = onRootCommentClick
                         ) {
-                            Text(
+                            AppText(
                                 text = "说点什么，直接评论 UP 主和大家",
                                 color = appearance.secondaryTextColor,
-                                fontSize = 13.sp,
+                                style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                             )
                         }
@@ -741,15 +974,17 @@ internal fun VideoCommentMainList(
                             showIdentityDecorations = showIdentityDecorations,
                             isPinned = reply.rpid in state.pinnedReplyIds,
                             onClick = {},
-                            onSubClick = { parentReply ->
+                            onSubClick = { parentReply, targetReplyId ->
                                 if (shouldOpenPortraitCommentThreadDetail(useEmbeddedPresentation = true)) {
-                                    viewModel.openSubReply(parentReply)
+                                    viewModel.openSubReply(parentReply, targetReplyId)
                                 }
                             },
                             onTimestampClick = onTimestampClick,
                             maxTimestampMs = maxTimestampMs,
                             onImagePreview = onImagePreview,
                             onLikeClick = { viewModel.likeComment(reply.rpid) },
+                            onHateClick = { viewModel.hateComment(reply.rpid) },
+                            isHated = reply.action == 2 || reply.rpid in state.hatedComments,
                             onReplyClick = {
                                 if (shouldOpenPortraitCommentReplyComposer()) {
                                     onReplyClick(reply)
@@ -779,12 +1014,15 @@ internal fun VideoCommentMainList(
                     }
                 }
 
-                VideoCommentBackToTopButton(
-                    visible = shouldShowBackToTop,
+                AppLiquidGlassBackToTopButton(
+                    visible = rememberBackToTopButtonEnabled() && shouldShowBackToTop,
+                    backdrop = commentChromeBackdrop,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 20.dp, bottom = 20.dp),
                     onClick = {
+                        // 回顶时通知父级(竖屏详情)恢复被评论区压缩的播放器。
+                        onBackToTop()
                         scope.launch {
                             listState.animateScrollToItem(0)
                         }
@@ -793,30 +1031,20 @@ internal fun VideoCommentMainList(
             }
         }
     }
-}
 
-@Composable
-private fun VideoCommentBackToTopButton(
-    visible: Boolean,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
-    AnimatedVisibility(
-        visible = visible,
-        modifier = modifier,
-        enter = fadeIn(animationSpec = tween(180)) + scaleIn(initialScale = 0.92f),
-        exit = fadeOut(animationSpec = tween(140)) + scaleOut(targetScale = 0.92f)
-    ) {
-        SmallFloatingActionButton(
-            onClick = onClick,
-            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
-            contentColor = MaterialTheme.colorScheme.primary
-        ) {
-            Icon(
-                imageVector = rememberAppChevronUpIcon(),
-                contentDescription = "回到顶部"
-            )
-        }
+    if (showCommentSearchSheet) {
+        CommentSearchSheet(
+            replies = state.replies,
+            upMid = state.upMid,
+            onCommentClick = { reply ->
+                onReplyClick(reply)
+            },
+            onSubReplyClick = { rootReply ->
+                viewModel.openSubReply(rootReply)
+            },
+            onDismiss = { showCommentSearchSheet = false },
+            miuixBackdrop = commentChromeBackdrop,
+        )
     }
 }
 
@@ -828,7 +1056,7 @@ private fun LoadingFooter() {
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(strokeWidth = 2.dp)
+        AdaptiveLoadingIndicator(strokeWidth = 2.dp)
     }
 }
 
@@ -841,7 +1069,7 @@ private fun NoMoreFooter() {
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
+        AppText(
             text = "没有更多了",
             color = appearance.secondaryTextColor,
             fontWeight = FontWeight.Normal

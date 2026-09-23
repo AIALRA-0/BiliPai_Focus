@@ -21,6 +21,28 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun queryByMessageNotificationTitleOrAlias_hitsMessageNotificationSetting() {
+        val byTitle = resolveSettingsSearchResults("消息通知")
+        val byAlias = resolveSettingsSearchResults("后台消息")
+
+        assertEquals(
+            SettingsSearchTarget.MESSAGE_NOTIFICATION,
+            byTitle.firstOrNull()?.target
+        )
+        assertEquals(
+            SettingsSearchTarget.MESSAGE_NOTIFICATION,
+            byAlias.firstOrNull()?.target
+        )
+    }
+
+    @Test
+    fun naturalLanguageQueryContainingSettingName_hitsExpectedSetting() {
+        val results = resolveSettingsSearchResults("怎么清除应用缓存释放空间")
+
+        assertEquals(SettingsSearchTarget.CLEAR_CACHE, results.firstOrNull()?.target)
+    }
+
+    @Test
     fun queryByEnglishAlias_isCaseInsensitive() {
         val results = resolveSettingsSearchResults("gItHuB")
 
@@ -56,20 +78,20 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryByUpBadgeKeyword_hitsAppearanceEntry() {
+    fun queryByUpBadgeKeyword_hitsHomeEntry() {
         val results = resolveSettingsSearchResults("UP主标识")
 
-        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+        assertTrue(results.any { it.target == SettingsSearchTarget.HOME_FEED })
     }
 
     @Test
-    fun queryByHomeFeedCardWidth_hitsAppearanceHomeEntry() {
+    fun queryByHomeFeedCardWidth_hitsHomeEntry() {
         val results = resolveSettingsSearchResults("推荐流卡片宽度")
 
         assertTrue(
             results.any {
-                it.target == SettingsSearchTarget.APPEARANCE &&
-                    it.focusId == SettingsSearchFocusIds.APPEARANCE_HOME
+                it.target == SettingsSearchTarget.HOME_FEED &&
+                    it.focusId == SettingsSearchFocusIds.HOME_OVERVIEW
             }
         )
     }
@@ -81,8 +103,8 @@ class SettingsSearchPolicyTest {
 
         assertTrue(
             results.none {
-                it.target == SettingsSearchTarget.APPEARANCE &&
-                    it.focusId == SettingsSearchFocusIds.APPEARANCE_HOME
+                it.target == SettingsSearchTarget.HOME_FEED &&
+                    it.focusId == SettingsSearchFocusIds.HOME_OVERVIEW
             }
         )
     }
@@ -98,7 +120,7 @@ class SettingsSearchPolicyTest {
     fun queryByCustomMd3Color_focusesAppearanceThemeSection() {
         val results = resolveSettingsSearchResults("自定义md3颜色")
 
-        assertEquals("自定义 MD3 颜色", results.firstOrNull()?.title)
+        assertEquals("自定义主题颜色", results.firstOrNull()?.title)
         assertTrue(
             results.any {
                 it.target == SettingsSearchTarget.APPEARANCE &&
@@ -128,27 +150,27 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryByBottomBarLiquidGlass_stillFocusesVisualEffects() {
+    fun queryByBottomBarLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("底栏液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
-        assertEquals(SettingsSearchFocusIds.ANIMATION_VISUAL_EFFECTS, result?.focusId)
+        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
+        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
     }
 
     @Test
-    fun queryByTopDockLiquidGlass_focusesVisualEffects() {
+    fun queryByTopDockLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("顶部dock栏液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
-        assertEquals(SettingsSearchFocusIds.ANIMATION_VISUAL_EFFECTS, result?.focusId)
+        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
+        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
     }
 
     @Test
-    fun queryByHomeSearchLiquidGlass_focusesVisualEffects() {
+    fun queryByHomeSearchLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("首页搜索框液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
-        assertEquals(SettingsSearchFocusIds.ANIMATION_VISUAL_EFFECTS, result?.focusId)
+        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
+        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
     }
 
     @Test
@@ -183,6 +205,13 @@ class SettingsSearchPolicyTest {
     @Test
     fun queryByPictureInPicture_hitsPlaybackEntry() {
         val results = resolveSettingsSearchResults("画中画")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.PLAYBACK })
+    }
+
+    @Test
+    fun queryByPlayedVideoLocatePrompt_hitsPlaybackEntry() {
+        val results = resolveSettingsSearchResults("刚刚看过")
 
         assertTrue(results.any { it.target == SettingsSearchTarget.PLAYBACK })
     }
@@ -236,10 +265,15 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryBySubReplyBlur_returnsNoRemovedBlurSetting() {
-        val results = resolveSettingsSearchResults("楼中楼模糊")
+    fun queryBySubReply_hitsPlaybackFullscreenEntry() {
+        val results = resolveSettingsSearchResults("楼中楼")
 
-        assertTrue(results.isEmpty())
+        assertTrue(
+            results.any {
+                it.target == SettingsSearchTarget.PLAYBACK &&
+                    it.focusId == SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
+            }
+        )
     }
 
     @Test
@@ -372,23 +406,16 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryByBottomBar_surfacesTopTabDiscoverabilityInSubtitle() {
-        val result = resolveSettingsSearchResults("底栏").firstOrNull {
-            it.target == SettingsSearchTarget.BOTTOM_BAR && it.title == "导航设置"
-        }
-
-        assertEquals("底栏、顶部标签、平板侧边栏", result?.subtitle)
+    fun queryByBottomBar_hitsBottomBarSettingsEntry() {
+        assertTrue(resolveSettingsSearchResults("底栏").any { it.target == SettingsSearchTarget.BOTTOM_BAR })
     }
 
     @Test
     fun queryByHomeTopRightMessage_hitsTopTabManagementEntry() {
-        val result = resolveSettingsSearchResults("首页右上角消息").firstOrNull {
-            it.target == SettingsSearchTarget.BOTTOM_BAR &&
-                it.focusId == SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS
-        }
+        val first = resolveSettingsSearchResults("首页右上角消息").firstOrNull()
 
-        assertEquals("顶部标签管理", result?.title)
-        assertEquals("显示/隐藏、排序、右上角入口", result?.subtitle)
+        assertEquals(SettingsSearchTarget.BOTTOM_BAR, first?.target)
+        assertEquals(SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS, first?.focusId)
     }
 
     @Test

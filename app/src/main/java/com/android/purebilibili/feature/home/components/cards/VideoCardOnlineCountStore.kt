@@ -113,27 +113,37 @@ internal fun rememberVideoCardOnlineCount(
     video: VideoItem,
     showOnlineCount: Boolean
 ): String {
-    val onlineCountFlow = remember(video.bvid, video.cid) {
+    if (!shouldLoadVideoCardOnlineCount(showOnlineCount, video.bvid, video.cid)) {
+        return ""
+    }
+    return rememberActiveVideoCardOnlineCount(
+        bvid = video.bvid,
+        cid = video.cid
+    )
+}
+
+@Composable
+private fun rememberActiveVideoCardOnlineCount(
+    bvid: String,
+    cid: Long
+): String {
+    val onlineCountFlow = remember(bvid, cid) {
         defaultVideoCardOnlineCountStore.observe(
-            bvid = video.bvid,
-            cid = video.cid
+            bvid = bvid,
+            cid = cid
         )
     }
     val onlineCount by onlineCountFlow.collectAsStateWithLifecycle()
 
-    LaunchedEffect(showOnlineCount, video.bvid, video.cid) {
-        if (shouldLoadVideoCardOnlineCount(showOnlineCount, video.bvid, video.cid)) {
-            defaultVideoCardOnlineCountStore.refreshIfNeeded(
-                bvid = video.bvid,
-                cid = video.cid
-            )
-        }
-    }
-
-    return remember(showOnlineCount, onlineCount) {
-        resolveVideoCardOnlineCountText(
-            showOnlineCount = showOnlineCount,
-            onlineCount = onlineCount
+    LaunchedEffect(bvid, cid) {
+        defaultVideoCardOnlineCountStore.refreshIfNeeded(
+            bvid = bvid,
+            cid = cid
         )
     }
+
+    return resolveVideoCardOnlineCountText(
+        showOnlineCount = true,
+        onlineCount = onlineCount
+    )
 }

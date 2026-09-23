@@ -23,4 +23,13 @@ class LiveDanmakuBitmapLifecyclePolicyTest {
             )
         )
     }
+
+    @Test
+    fun `timeline discarded live danmaku bitmaps remain renderer owned`() {
+        assertFalse(
+            shouldManuallyRecycleLiveDanmakuBitmap(
+                ownership = LiveDanmakuBitmapOwnership.TIMELINE_DISCARDED
+            )
+        )
+    }
 }

@@ -87,8 +87,10 @@ dependencies {
 | `PLUGIN_STORAGE` | 读写插件自己的本地设置或缓存 |
 | `PLAYER_STATE` | 读取播放器当前状态 |
 | `PLAYER_CONTROL` | 控制跳转、跳过片段或调整播放行为 |
+| `PLAYBACK_CDN` | 读取和调整播放地址候选线路（属地优选与回退） |
 | `DANMAKU_STREAM` | 读取弹幕流 |
 | `DANMAKU_MUTATION` | 过滤、高亮或改写弹幕 |
+| `EXTERNAL_MEDIA_PLAYBACK` | 播放插件返回的外部媒体链接 |
 
 敏感能力即使来自可信签名，也仍需要用户显式批准。开发时应只申请当前版本实际使用的能力，不要一次性申请全部能力。
 

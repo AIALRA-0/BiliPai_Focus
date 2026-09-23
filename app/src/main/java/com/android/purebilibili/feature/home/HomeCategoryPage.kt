@@ -1,65 +1,68 @@
 package com.android.purebilibili.feature.home
+import com.android.purebilibili.core.ui.components.videoListItemModifier
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+import com.android.purebilibili.core.ui.components.FeedVerticalStaggeredGrid
+
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.animation.*
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardDefaults
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.HomeDurationStyle
+import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
-import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
+import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.performance.TrackScrollJank
 import com.android.purebilibili.core.ui.components.UpBadgeName
+import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.util.responsiveContentWidth
+import kotlinx.collections.immutable.ImmutableSet
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
-import com.android.purebilibili.feature.home.components.HomeUiSkinDecoration
+import com.android.purebilibili.feature.home.components.HomeHeroCarousel
+import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
+import com.android.purebilibili.feature.home.components.cards.LocalHomeScrollTickProvider
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
 
-import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import androidx.compose.ui.Alignment
-import coil.compose.AsyncImage
-import java.io.File
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.yield
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 internal fun resolveHomeCategoryVideoGridKey(
     video: VideoItem,
-    index: Int
+    duplicateOrdinal: Int
 ): String {
     val primaryId = when {
         video.bvid.isNotBlank() -> video.bvid
@@ -68,7 +71,56 @@ internal fun resolveHomeCategoryVideoGridKey(
         video.cid > 0L -> "cid_${video.cid}"
         else -> "${video.owner.mid}_${video.title.hashCode()}_${video.pubdate}"
     }
-    return "home_video_${primaryId}_$index"
+    return "home_video_${primaryId}_$duplicateOrdinal"
+}
+
+/**
+ * Keeps a video's lazy-grid identity stable when unrelated items are inserted or removed before it.
+ * Duplicate API entries still receive distinct keys through their occurrence ordinal.
+ */
+internal fun resolveHomeCategoryVideoGridKeys(videos: List<VideoItem>): List<String> {
+    val occurrences = mutableMapOf<String, Int>()
+    return videos.map { video ->
+        val identity = resolveHomeHeroCarouselDedupKey(video)
+        val duplicateOrdinal = occurrences.getOrDefault(identity, 0)
+        occurrences[identity] = duplicateOrdinal + 1
+        resolveHomeCategoryVideoGridKey(video, duplicateOrdinal)
+    }
+}
+
+/**
+ * Rows used by the truncated-card feed. A divider starts a fresh row so content below it
+ * remains aligned; full-card mode bypasses this grouping and keeps the waterfall layout.
+ */
+internal fun resolveHomeFeedAlignedRows(
+    itemCount: Int,
+    columns: Int,
+    dividerIndex: Int? = null,
+): List<IntRange> {
+    if (itemCount <= 0) return emptyList()
+    val safeColumns = columns.coerceAtLeast(1)
+    val safeDividerIndex = dividerIndex?.takeIf { it in 1 until itemCount }
+    return buildList {
+        var rowStart = 0
+        while (rowStart < itemCount) {
+            val naturalEndExclusive = (rowStart + safeColumns).coerceAtMost(itemCount)
+            val rowEndExclusive = safeDividerIndex
+                ?.takeIf { it > rowStart && it < naturalEndExclusive }
+                ?: naturalEndExclusive
+            add(rowStart until rowEndExclusive)
+            rowStart = rowEndExclusive
+        }
+    }
+}
+
+internal fun resolveHomeHeroCarouselDedupKey(video: VideoItem): String {
+    return when {
+        video.bvid.isNotBlank() -> "bvid_${video.bvid}"
+        video.id > 0L -> "id_${video.id}"
+        video.aid > 0L -> "aid_${video.aid}"
+        video.cid > 0L -> "cid_${video.cid}"
+        else -> "fallback_${video.owner.mid}_${video.title.hashCode()}_${video.pubdate}"
+    }
 }
 
 internal fun shouldRequestHomeCategoryLoadMore(
@@ -85,31 +137,27 @@ internal fun shouldRequestHomeCategoryLoadMore(
         hasMore
 }
 
-internal fun resolveHomeFeedSkinAtmosphereImagePath(
-    decoration: HomeUiSkinDecoration?
-): String? {
-    return decoration?.sideBackgroundImagePath
-        ?: decoration?.profileSquaredBackgroundImagePath
-        ?: decoration?.profileBackgroundImagePath
-}
-
 @Composable
 internal fun HomeCategoryPageContent(
     category: HomeCategory,
     categoryState: CategoryContent,
-    gridState: LazyGridState,
+    gridState: LazyStaggeredGridState,
     gridColumns: Int,
     contentPadding: PaddingValues,
-    dissolvingVideos: Set<String>,
-    followingMids: Set<Long>,
+    dissolvingVideos: ImmutableSet<String>,
+    followingMids: ImmutableSet<Long>,
+    showOnlineCount: Boolean,
+    coverRequestSpec: HomeCoverRequestSpec,
     onVideoClick: (HomeVideoClickRequest) -> Unit,
     onUpClick: (Long) -> Unit = {},
     onLiveClick: (Long, String, String) -> Unit,
+    /** 顶栏直播已统一到 LiveList；首页内嵌直播分类仅作跳转入口。 */
+    onOpenLiveHome: () -> Unit = {},
     onLoadMore: () -> Unit,
-    onDismissVideo: (String) -> Unit,
+    onDismissVideo: (VideoItem) -> Unit,
     onWatchLater: (String, Long) -> Unit,
     onDissolveComplete: (String) -> Unit,
-    longPressCallback: (VideoItem) -> Unit, // [Feature] Long Press
+    longPressCallback: ((VideoItem) -> Unit)? = null, // [Feature] Long Press
     displayMode: Int,
     cardAnimationEnabled: Boolean,
     cardMotionTier: MotionTier = MotionTier.Normal,
@@ -119,13 +167,25 @@ internal fun HomeCategoryPageContent(
     smartVisualGuardEnabled: Boolean = false,
     isDataSaverActive: Boolean,
     preferLowQualityCover: Boolean = false,
-    compactStatsOnCover: Boolean = true,
-    showCoverGlassBadges: Boolean = true,
-    showInfoGlassBadges: Boolean = true,
+    compactStatsOnCover: Boolean = false,
+    showCoverGlassBadges: Boolean = false,
+    showInfoGlassBadges: Boolean = false,
+    badgeEffectMode: com.android.purebilibili.core.store.HomeCardBadgeEffectMode =
+        com.android.purebilibili.core.store.HomeCardBadgeEffectMode.OFF,
+    infoGlassMode: com.android.purebilibili.core.store.HomeCardInfoGlassMode =
+        com.android.purebilibili.core.store.HomeCardInfoGlassMode.OFF,
     wallpaperTintEnabled: Boolean = false,
     wallpaperEffectMode: HomeWallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
     showUpBadges: Boolean = true,
-    showDurationBadges: Boolean = true,
+    showUpAvatars: Boolean = true,
+    showPublishTime: Boolean = true,
+    homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
+    homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
+    showFullVideoCardContent: Boolean = false,
+    homeHeroCarouselEnabled: Boolean = true,
+    homeHeroCarouselAutoplayEnabled: Boolean = false,
+    onHeroCarouselGestureActiveChange: (Boolean) -> Unit = {},
+    onGetPreviewUrl: suspend (String, Long) -> String? = { _, _ -> null },
     oldContentAnchorBvid: String? = null,
     oldContentStartIndex: Int? = null,
     todayWatchEnabled: Boolean = false,
@@ -148,33 +208,57 @@ internal fun HomeCategoryPageContent(
                 cid = video.cid,
                 coverUrl = video.pic,
                 isVerticalVideo = video.isVertical,
-                source = HomeVideoClickSource.TODAY_WATCH
+                source = HomeVideoClickSource.TODAY_WATCH,
+                sourceRoute = resolveHomeCategoryVideoSourceRoute(HomeCategory.RECOMMEND)
             )
         )
     },
     firstGridItemModifier: Modifier = Modifier,
-    uiSkinDecoration: HomeUiSkinDecoration? = null,
     modifier: Modifier = Modifier,
 ) {
-    val scrollLiteModeEnabled by remember(gridState) {
-        derivedStateOf { gridState.isScrollInProgress }
+    val sourceRoute = remember(category) {
+        resolveHomeCategoryVideoSourceRoute(category)
     }
-    val context = LocalContext.current
-    val showOnlineCount by SettingsManager
-        .getShowOnlineCount(context)
-        .collectAsStateWithLifecycle(initialValue = false
+    val widthSizeClass = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
+        .windowSizeClass.widthSizeClass
+    val cardLayout = remember(homeFeedCardStyle, gridColumns, widthSizeClass) {
+        resolveHomeFeedCardLayout(
+            style = homeFeedCardStyle,
+            gridColumns = gridColumns,
+            widthSizeClass = widthSizeClass,
         )
+    }
+    val adaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val hingeGridSpec = remember(adaptiveInfo, density.density) {
+        resolveHomeFeedBookHingeGridSpec(adaptiveInfo, density.density)
+    }
+    val horizontalArrangement = remember(gridColumns, cardLayout.itemSpacingDp, hingeGridSpec) {
+        resolveHomeFeedHorizontalArrangement(
+            columns = gridColumns,
+            baseSpacing = cardLayout.itemSpacingDp.dp,
+            hingeSpec = hingeGridSpec,
+        )
+    }
     TrackScrollJank(
         scrollableState = gridState,
         stateName = "home:feed:${category.name.lowercase()}"
     )
+    val configuration = LocalConfiguration.current
+    val estimatedCardWidthDp = remember(gridColumns, cardLayout.itemSpacingDp, configuration.screenWidthDp) {
+        val totalSpacing = cardLayout.itemSpacingDp * (gridColumns - 1)
+        val contentPaddingTotal = 16f
+        ((configuration.screenWidthDp - contentPaddingTotal - totalSpacing) / gridColumns).coerceAtLeast(100f)
+    }
 
     // Check for load more
     val shouldLoadMore by remember {
         derivedStateOf {
             val layoutInfo = gridState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
-            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            // Staggered lanes do not guarantee that the last visible entry has the greatest
+            // adapter index. Use the maximum across lanes so pagination cannot stall.
+            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: 0
             shouldRequestHomeCategoryLoadMore(
                 totalItems = totalItems,
                 lastVisibleItemIndex = lastVisibleItemIndex,
@@ -190,94 +274,222 @@ internal fun HomeCategoryPageContent(
         if (shouldLoadMore) onLoadMore()
     }
 
-    val feedAtmosphereImagePath = resolveHomeFeedSkinAtmosphereImagePath(uiSkinDecoration)
-    Box(modifier = modifier) {
-        if (!feedAtmosphereImagePath.isNullOrBlank()) {
-            AsyncImage(
-                model = File(feedAtmosphereImagePath),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .alpha(0.16f)
-                    .clearAndSetSemantics {}
-            )
+    val carouselVideos = remember(category, categoryState.videos) {
+        if (category == HomeCategory.RECOMMEND) {
+            selectHomeHeroCarouselItems(categoryState.videos)
+        } else {
+            emptyList()
         }
-        LazyVerticalGrid(
-            state = gridState,
-            columns = GridCells.Fixed(gridColumns),
-            contentPadding = contentPadding,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxSize()
+    }
+    val showHeroCarousel = shouldShowHomeHeroCarousel(
+        enabled = homeHeroCarouselEnabled,
+        category = category,
+        itemCount = carouselVideos.size
+    )
+    val visibleGridVideos = remember(categoryState.videos, carouselVideos, showHeroCarousel) {
+        if (showHeroCarousel) {
+            excludeHomeHeroCarouselItems(
+                items = categoryState.videos,
+                carouselItems = carouselVideos,
+                keySelector = ::resolveHomeHeroCarouselDedupKey
+            )
+        } else {
+            categoryState.videos
+        }
+    }
+    val videoGridKeys = remember(visibleGridVideos) {
+        resolveHomeCategoryVideoGridKeys(visibleGridVideos)
+    }
+
+    val renderVideoCard: @Composable (Int, VideoItem, Modifier) -> Unit = { index, video, itemModifier ->
+        val isDynamicDetailCard = video.dynamicId.isNotBlank() &&
+            !video.bvid.startsWith("BV", ignoreCase = true)
+        val isDissolving = video.bvid in dissolvingVideos
+
+        MaybeDissolvableVideoCard(
+            isDissolving = isDissolving,
+            onDissolveComplete = { onDissolveComplete(video.bvid) },
+            cardId = video.bvid,
+            preset = DissolveAnimationPreset.TELEGRAM_FAST,
+            preserveContentLayerWhenIdle = cardTransitionEnabled,
+            modifier = itemModifier
+                .jiggleOnDissolve(
+                    cardId = video.bvid,
+                    isCurrentCardDissolving = isDissolving
+                )
+                .then(if (index == 0) firstGridItemModifier else Modifier)
         ) {
-        if (category == HomeCategory.LIVE) {
-            // Live Category Content
-            
-            // 1. Followed Live Rooms
-            if (categoryState.followedLiveRooms.isNotEmpty()) {
-                item(span = { GridItemSpan(gridColumns) }) {
-                    Text(
-                        text = "关注",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
-                    )
-                }
-                
-                itemsIndexed(
-                    items = categoryState.followedLiveRooms,
-                    key = { _, room -> "followed_${room.roomid}" },
-                    contentType = { _, _ -> "live_room" }
-                ) { index, room ->
-                    LiveRoomCard(
-                        room = room,
-                        index = index,
-                        isDataSaverActive = isDataSaverActive,
-                        preferLowQualityCover = preferLowQualityCover,
-                        modifier = if (index == 0) firstGridItemModifier else Modifier,
-                        onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
-                    )
-                }
+            when (displayMode) {
+                1 -> StoryVideoCard(
+                    video = video,
+                    index = index,
+                    animationEnabled = cardAnimationEnabled,
+                    motionTier = cardMotionTier,
+                    transitionEnabled = cardTransitionEnabled,
+                    isReturningFromVideoDetail = isReturningFromVideoDetail,
+                    isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
+                    scrollLiteModeEnabled = false,
+                    isDataSaverActive = isDataSaverActive,
+                    preferLowQualityCover = preferLowQualityCover,
+                    coverRequestSpec = coverRequestSpec,
+                    showCoverGlassBadges = showCoverGlassBadges,
+                    showInfoGlassBadges = showInfoGlassBadges,
+                    showUpBadge = showUpBadges,
+                    showUpAvatar = showUpAvatars,
+                    homeDurationStyle = homeDurationStyle,
+                    coverAspectRatio = cardLayout.coverAspectRatio,
+                    cardHorizontalPadding = cardLayout.storyCardHorizontalPaddingDp.dp,
+                    compactMetadata = cardLayout.compactMetadata,
+                    titleMinLines = cardLayout.titleMinLines,
+                    titleMaxLines = cardLayout.titleMaxLines,
+                    showOnlineCount = showOnlineCount,
+                    onUpClick = onUpClick,
+                    showPublishTime = showPublishTime,
+                    onDismiss = { onDismissVideo(video) },
+                    onLongClick = if (isDynamicDetailCard) null else longPressCallback?.let { cb -> { cb(video) } },
+                    onClick = { bvid, cid ->
+                        onVideoClick(
+                            HomeVideoClickRequest(
+                                bvid = bvid,
+                                dynamicId = video.dynamicId,
+                                cid = cid,
+                                coverUrl = video.pic,
+                                isVerticalVideo = video.isVertical,
+                                source = HomeVideoClickSource.GRID,
+                                sourceRoute = sourceRoute
+                            )
+                        )
+                    }
+                )
+
+                else -> ElegantVideoCard(
+                    video = video,
+                    index = index,
+                    isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
+                    animationEnabled = cardAnimationEnabled,
+                    motionTier = cardMotionTier,
+                    transitionEnabled = cardTransitionEnabled,
+                    isReturningFromVideoDetail = isReturningFromVideoDetail,
+                    isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
+                    scrollLiteModeEnabled = false,
+                    cardWidthDp = estimatedCardWidthDp,
+                    showPublishTime = showPublishTime,
+                    isDataSaverActive = isDataSaverActive,
+                    preferLowQualityCover = preferLowQualityCover,
+                    coverRequestSpec = coverRequestSpec,
+                    compactStatsOnCover = compactStatsOnCover || cardLayout.compactStatsOnCover,
+                    showCoverGlassBadges = showCoverGlassBadges,
+                    showInfoGlassBadges = showInfoGlassBadges,
+                    badgeEffectMode = badgeEffectMode,
+                    infoGlassMode = infoGlassMode,
+                    wallpaperTintEnabled = wallpaperTintEnabled,
+                    wallpaperEffectMode = wallpaperEffectMode,
+                    showUpBadge = showUpBadges,
+                    showUpAvatar = showUpAvatars,
+                    homeDurationStyle = homeDurationStyle,
+                    coverAspectRatio = cardLayout.coverAspectRatio,
+                    compactMetadata = cardLayout.compactMetadata,
+                    titleMinLines = cardLayout.titleMinLines,
+                    titleMaxLines = cardLayout.titleMaxLines,
+                    showOnlineCount = showOnlineCount,
+                    onUpClick = onUpClick,
+                    onDismiss = { onDismissVideo(video) },
+                    onWatchLater = if (isDynamicDetailCard) null else ({
+                        onWatchLater(video.bvid, resolveWatchLaterAid(video))
+                    }),
+                    onLongClick = if (isDynamicDetailCard) null else longPressCallback?.let { cb -> { cb(video) } },
+                    onClick = { bvid, cid ->
+                        onVideoClick(
+                            HomeVideoClickRequest(
+                                bvid = bvid,
+                                dynamicId = video.dynamicId,
+                                cid = cid,
+                                coverUrl = video.pic,
+                                isVerticalVideo = video.isVertical,
+                                source = HomeVideoClickSource.GRID,
+                                sourceRoute = sourceRoute
+                            )
+                        )
+                    }
+                )
             }
-            
-            // 2. Popular Live Rooms
-            if (categoryState.liveRooms.isNotEmpty()) {
-                item(span = { GridItemSpan(gridColumns) }) {
-                    Text(
-                        text = "推荐直播",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        }
+    }
+
+    val homeScrollTickProvider = remember(gridState) {
+        { (gridState.firstVisibleItemIndex shl 16) + gridState.firstVisibleItemScrollOffset }
+    }
+
+    Box(modifier = modifier) {
+        CompositionLocalProvider(
+            LocalVideoCardSharedElementSourceRoute provides sourceRoute,
+            LocalHomeScrollTickProvider provides homeScrollTickProvider
+        ) {
+            FeedVerticalStaggeredGrid(
+                state = gridState,
+                columns = StaggeredGridCells.Fixed(gridColumns),
+                contentPadding = contentPadding,
+                horizontalArrangement = horizontalArrangement,
+                verticalItemSpacing = cardLayout.verticalItemSpacingDp.dp,
+                modifier = Modifier.fillMaxSize()
+            ) {
+        if (category == HomeCategory.LIVE) {
+            // 顶栏/侧滑偶发进入内嵌直播页时，引导到与底栏一致的 LiveList 首页。
+            item(span = StaggeredGridItemSpan.FullLine) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.DoubleExtraLarge),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                ) {
+                    AppText(
+                        text = "直播首页已独立",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    AppText(
+                        text = "与底栏「直播」相同，支持分区、排序与下拉刷新",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
                     )
-                }
-                
-                itemsIndexed(
-                    items = categoryState.liveRooms,
-                    key = { _, room -> "popular_${room.roomid}" },
-                    contentType = { _, _ -> "live_room" }
-                ) { index, room ->
-                    LiveRoomCard(
-                        room = room,
-                        index = index,
-                        isDataSaverActive = isDataSaverActive,
-                        preferLowQualityCover = preferLowQualityCover,
-                        modifier = if (categoryState.followedLiveRooms.isEmpty() && index == 0) {
-                            firstGridItemModifier
-                        } else {
-                            Modifier
-                        },
-                        onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
-                    )
+                    AppTextButton(onClick = onOpenLiveHome) {
+                        AppText("打开直播首页")
+                    }
                 }
             }
         } else {
             // Video Category Content
             if (category == HomeCategory.RECOMMEND) {
+                if (showHeroCarousel) {
+                    item(
+                        key = "home_hero_carousel",
+                        contentType = "home_hero_carousel",
+                        span = StaggeredGridItemSpan.FullLine
+                    ) {
+                        HomeHeroCarousel(
+                            videos = carouselVideos,
+                            autoplayEnabled = homeHeroCarouselAutoplayEnabled,
+                            onGestureActiveChange = onHeroCarouselGestureActiveChange,
+                            onVideoClick = { video ->
+                                onVideoClick(
+                                    HomeVideoClickRequest(
+                                        bvid = video.bvid,
+                                        dynamicId = video.dynamicId,
+                                        cid = video.cid,
+                                        coverUrl = video.pic,
+                                        isVerticalVideo = video.isVertical,
+                                        source = HomeVideoClickSource.GRID,
+                                        sourceRoute = sourceRoute
+                                    )
+                                )
+                            },
+                            onGetPreviewUrl = onGetPreviewUrl
+                        )
+                    }
+                }
                 if (todayWatchEnabled) {
-                    item(span = { GridItemSpan(gridColumns) }) {
+                    item(span = StaggeredGridItemSpan.FullLine) {
                         TodayWatchPlanCard(
                             selectedMode = todayWatchMode,
                             plan = todayWatchPlan,
@@ -286,6 +498,7 @@ internal fun HomeCategoryPageContent(
                             collapsed = todayWatchCollapsed,
                             cardConfig = todayWatchCardConfig,
                             showUpBadges = showUpBadges,
+                            showUpAvatars = showUpAvatars,
                             onModeChange = onTodayWatchModeChange,
                             onCollapsedChange = onTodayWatchCollapsedChange,
                             onRefresh = onTodayWatchRefresh,
@@ -296,136 +509,101 @@ internal fun HomeCategoryPageContent(
                 }
             }
             if (category == HomeCategory.POPULAR) {
-                item(span = { GridItemSpan(gridColumns) }) {
+                item(span = StaggeredGridItemSpan.FullLine) {
                     PopularSubCategorySegmentedControl(
                         selectedSubCategory = popularSubCategory,
                         onSubCategoryChange = onPopularSubCategoryChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.None)
                     )
                 }
             }
 
-            if (categoryState.videos.isNotEmpty()) {
+            if (visibleGridVideos.isNotEmpty()) {
                 val shouldShowOldContentDivider = category == HomeCategory.RECOMMEND &&
                     (
-                        (oldContentAnchorBvid != null && categoryState.videos.any { it.bvid == oldContentAnchorBvid }) ||
-                            (oldContentStartIndex != null && oldContentStartIndex > 0 && oldContentStartIndex < categoryState.videos.size)
+                        (oldContentAnchorBvid != null && visibleGridVideos.any { it.bvid == oldContentAnchorBvid }) ||
+                            (oldContentStartIndex != null && oldContentStartIndex > 0 && oldContentStartIndex < visibleGridVideos.size)
                         )
 
-                categoryState.videos.forEachIndexed { index, video ->
-                    val shouldInsertDividerHere = shouldShowOldContentDivider && (
-                        (oldContentAnchorBvid != null && video.bvid == oldContentAnchorBvid && index > 0) ||
-                            (oldContentAnchorBvid == null && index == oldContentStartIndex)
-                        )
-                    if (shouldInsertDividerHere) {
-                        item(
-                            key = "old_content_divider_$index",
-                            contentType = "home_old_content_divider",
-                            span = { GridItemSpan(gridColumns) }
-                        ) {
-                            OldContentDivider()
+                val dividerIndex = if (shouldShowOldContentDivider) {
+                    if (oldContentAnchorBvid != null) {
+                        visibleGridVideos
+                            .indexOfFirst { it.bvid == oldContentAnchorBvid }
+                            .takeIf { it > 0 }
+                    } else {
+                        oldContentStartIndex
+                    }
+                } else {
+                    null
+                }
+
+                if (showFullVideoCardContent) {
+                    // Complete titles intentionally retain the independent-lane waterfall.
+                    visibleGridVideos.forEachIndexed { index, video ->
+                        if (index == dividerIndex) {
+                            item(
+                                key = "old_content_divider_$index",
+                                contentType = "home_old_content_divider",
+                                span = StaggeredGridItemSpan.FullLine
+                            ) {
+                                OldContentDivider()
+                            }
+                        }
+                        item(key = videoGridKeys[index], contentType = "home_video_card") {
+                            renderVideoCard(
+                                index,
+                                video,
+                                videoListItemModifier(enabled = cardAnimationEnabled),
+                            )
                         }
                     }
-
-                    item(
-                        key = resolveHomeCategoryVideoGridKey(video, index),
-                        contentType = "home_video_card"
-                    ) {
-                        val isDynamicDetailCard = video.dynamicId.isNotBlank() && !video.bvid.startsWith("BV", ignoreCase = true)
-                        val isDissolving = video.bvid in dissolvingVideos
-
-                        DissolvableVideoCard(
-                            isDissolving = isDissolving,
-                            onDissolveComplete = { onDissolveComplete(video.bvid) },
-                            cardId = video.bvid,
-                            preset = DissolveAnimationPreset.TELEGRAM_FAST,
-                            modifier = Modifier
-                                .jiggleOnDissolve(
-                                    cardId = video.bvid,
-                                    isCurrentCardDissolving = isDissolving
-                                )
-                                .then(if (index == 0) firstGridItemModifier else Modifier)
+                } else {
+                    // Truncated cards advance as complete rows. Metadata remains unabridged, but
+                    // a long timestamp can no longer pull only its own lane out of alignment.
+                    resolveHomeFeedAlignedRows(
+                        itemCount = visibleGridVideos.size,
+                        columns = gridColumns,
+                        dividerIndex = dividerIndex,
+                    ).forEach { rowIndices ->
+                        if (rowIndices.first == dividerIndex) {
+                            item(
+                                key = "old_content_divider_${rowIndices.first}",
+                                contentType = "home_old_content_divider",
+                                span = StaggeredGridItemSpan.FullLine
+                            ) {
+                                OldContentDivider()
+                            }
+                        }
+                        val rowKey = rowIndices.joinToString(
+                            prefix = "home_video_row_",
+                            separator = "_",
+                        ) { videoGridKeys[it] }
+                        item(
+                            key = rowKey,
+                            contentType = "home_video_row",
+                            span = StaggeredGridItemSpan.FullLine,
                         ) {
-                            when (displayMode) {
-                                1 -> {
-                                    StoryVideoCard(
-                                        video = video,
-                                        index = index,
-                                        animationEnabled = cardAnimationEnabled,
-                                        motionTier = cardMotionTier,
-                                        transitionEnabled = cardTransitionEnabled,
-                                        isReturningFromVideoDetail = isReturningFromVideoDetail,
-                                        isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
-                                        scrollLiteModeEnabled = scrollLiteModeEnabled,
-                                        isDataSaverActive = isDataSaverActive,
-                                        preferLowQualityCover = preferLowQualityCover,
-                                        showCoverGlassBadges = showCoverGlassBadges,
-                                        showInfoGlassBadges = showInfoGlassBadges,
-                                        showUpBadge = showUpBadges,
-                                        showDurationBadge = showDurationBadges,
-                                        showOnlineCount = showOnlineCount,
-                                        onUpClick = onUpClick,
-                                        showPublishTime = true,
-                                        onDismiss = { onDismissVideo(video.bvid) },
-                                        onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
-                                        onClick = { bvid, cid ->
-                                            onVideoClick(
-                                                HomeVideoClickRequest(
-                                                    bvid = bvid,
-                                                    dynamicId = video.dynamicId,
-                                                    cid = cid,
-                                                    coverUrl = video.pic,
-                                                    isVerticalVideo = video.isVertical,
-                                                    source = HomeVideoClickSource.GRID
-                                                )
+                            Row(
+                                modifier = videoListItemModifier(enabled = cardAnimationEnabled)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = horizontalArrangement,
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                rowIndices.forEach { index ->
+                                    key(videoGridKeys[index]) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            renderVideoCard(
+                                                index,
+                                                visibleGridVideos[index],
+                                                Modifier.fillMaxWidth(),
                                             )
                                         }
-                                    )
+                                    }
                                 }
-
-                                else -> {
-                                    ElegantVideoCard(
-                                        video = video,
-                                        index = index,
-                                        isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
-                                        animationEnabled = cardAnimationEnabled,
-                                        motionTier = cardMotionTier,
-                                        transitionEnabled = cardTransitionEnabled,
-                                        isReturningFromVideoDetail = isReturningFromVideoDetail,
-                                        isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
-                                        scrollLiteModeEnabled = scrollLiteModeEnabled,
-                                        showPublishTime = true,
-                                        isDataSaverActive = isDataSaverActive,
-                                        preferLowQualityCover = preferLowQualityCover,
-                                        compactStatsOnCover = compactStatsOnCover,
-                                        showCoverGlassBadges = showCoverGlassBadges,
-                                        showInfoGlassBadges = showInfoGlassBadges,
-                                        wallpaperTintEnabled = wallpaperTintEnabled,
-                                        wallpaperEffectMode = wallpaperEffectMode,
-                                        showUpBadge = showUpBadges,
-                                        showDurationBadge = showDurationBadges,
-                                        showOnlineCount = showOnlineCount,
-                                        onUpClick = onUpClick,
-                                        onDismiss = { onDismissVideo(video.bvid) },
-                                        onWatchLater = if (isDynamicDetailCard) null else ({
-                                            onWatchLater(video.bvid, resolveWatchLaterAid(video))
-                                        }),
-                                        onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
-                                        onClick = { bvid, cid ->
-                                            onVideoClick(
-                                                HomeVideoClickRequest(
-                                                    bvid = bvid,
-                                                    dynamicId = video.dynamicId,
-                                                    cid = cid,
-                                                    coverUrl = video.pic,
-                                                    isVerticalVideo = video.isVertical,
-                                                    source = HomeVideoClickSource.GRID
-                                                )
-                                            )
-                                        }
-                                    )
+                                repeat(gridColumns - rowIndices.count()) {
+                                    Spacer(modifier = Modifier.weight(1f))
                                 }
                             }
                         }
@@ -436,16 +614,16 @@ internal fun HomeCategoryPageContent(
 
         // Loading Indicator at bottom
         if (categoryState.isLoading || categoryState.hasMore) {
-             item(span = { GridItemSpan(gridColumns) }) {
+             item(span = StaggeredGridItemSpan.FullLine) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(AppSpacingTokens.Large),
                     contentAlignment = Alignment.Center
                 ) {
                     if (categoryState.isLoading) {
-                        CupertinoActivityIndicator(
-                            modifier = Modifier.size(24.dp),
+                        AdaptiveLoadingIndicator(
+                            size = AppSpacingTokens.ExtraLarge,
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
@@ -454,8 +632,9 @@ internal fun HomeCategoryPageContent(
         }
         
         // Spacer
-        item(span = { GridItemSpan(gridColumns) }) {
-            Box(modifier = Modifier.fillMaxWidth().height(20.dp))
+        item(span = StaggeredGridItemSpan.FullLine) {
+            Box(modifier = Modifier.fillMaxWidth().height(AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall))
+        }
         }
         }
     }
@@ -473,20 +652,34 @@ private fun PopularSubCategorySegmentedControl(
         stringResource(resolvePopularSubCategoryLabelRes(subCategory))
     }
 
-    BottomBarLiquidSegmentedControl(
-        items = labels,
-        selectedIndex = selectedIndex,
-        onSelected = { index ->
-            subCategories.getOrNull(index)?.let(onSubCategoryChange)
-        },
+    Box(
         modifier = modifier,
-        labelFontSize = 14.sp,
-        containerHorizontalPadding = 3.dp,
-        containerVerticalPadding = 3.dp,
-        liquidGlassEffectsEnabled = true,
-        dragSelectionEnabled = true,
-        preferInlineContentStyle = true
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        BottomBarLiquidSegmentedControl(
+            items = labels,
+            selectedIndex = selectedIndex,
+            onSelected = { index ->
+                subCategories.getOrNull(index)?.let(onSubCategoryChange)
+            },
+            modifier = Modifier
+                .widthIn(max = 400.dp)
+                .fillMaxWidth(),
+            height = AppSpacingTokens.TripleExtraLarge,
+            indicatorHeight = com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(
+                AppSpacingTokens.TripleExtraLarge.value
+            ).dp,
+            labelFontSize = MaterialTheme.typography.labelMedium.fontSize,
+            containerHorizontalPadding = AppSpacingTokens.ExtraSmall,
+            containerVerticalPadding = AppSpacingTokens.ExtraSmall,
+            miuixBackdrop = null,
+            liquidGlassEffectsEnabled = true,
+            tapPressRefractionEnabled = true,
+            dragSelectionEnabled = labels.size > 1,
+            preferInlineContentStyle = true,
+            contentSizedMiuixNonGlassItems = true,
+        )
+    }
 }
 
 @Composable
@@ -494,28 +687,31 @@ private fun TodayWatchModeSegmentedControl(
     selectedMode: TodayWatchMode,
     enabled: Boolean,
     onModeChange: (TodayWatchMode) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    miuixBackdrop: MiuixBackdrop? = null,
 ) {
     val modes = TodayWatchMode.entries
     val selectedIndex = modes.indexOf(selectedMode).coerceAtLeast(0)
     val labels = modes.map { mode ->
         stringResource(resolveTodayWatchModeLabelRes(mode))
     }
-
     BottomBarLiquidSegmentedControl(
         items = labels,
         selectedIndex = selectedIndex,
         onSelected = { index ->
             modes.getOrNull(index)?.takeIf { it != selectedMode }?.let(onModeChange)
         },
-        modifier = modifier,
+        modifier = modifier.wrapContentWidth(Alignment.CenterHorizontally),
+        itemWidth = 120.dp,
         enabled = enabled,
-        height = 42.dp,
-        indicatorHeight = 34.dp,
-        labelFontSize = 14.sp,
-        containerHorizontalPadding = 3.dp,
-        containerVerticalPadding = 3.dp,
+        height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
+        indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
+        labelFontSize = MaterialTheme.typography.labelMedium.fontSize,
+        containerHorizontalPadding = AppSpacingTokens.ExtraSmall,
+        containerVerticalPadding = AppSpacingTokens.ExtraSmall,
+        miuixBackdrop = miuixBackdrop,
         liquidGlassEffectsEnabled = true,
+        tapPressRefractionEnabled = true,
         dragSelectionEnabled = true,
         preferInlineContentStyle = false
     )
@@ -531,12 +727,14 @@ private fun TodayWatchPlanCard(
     collapsed: Boolean,
     cardConfig: TodayWatchCardUiConfig,
     showUpBadges: Boolean,
+    showUpAvatars: Boolean,
     onModeChange: (TodayWatchMode) -> Unit,
     onCollapsedChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     onUpClick: (Long) -> Unit,
     onVideoClick: (VideoItem) -> Unit
 ) {
+    val todayWatchBackdrop = rememberLayerBackdrop()
     var revealContent by remember(plan?.generatedAt, isLoading, cardConfig.enableWaterfallAnimation) {
         mutableStateOf(!cardConfig.enableWaterfallAnimation)
     }
@@ -554,79 +752,92 @@ private fun TodayWatchPlanCard(
         revealContent = true
     }
 
-    Card(
-        colors = CardDefaults.cardColors(
+    AppCard(
+        colors = AppCardDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.ExtraSmall)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+        Box(modifier = Modifier.padding(AppSpacingTokens.Medium)) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .layerBackdrop(todayWatchBackdrop)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small + AppSpacingTokens.Micro)
+            ) cardBody@ {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
+                AppText(
                     text = "今日推荐单",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    TextButton(
+                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)) {
+                    AppTextButton(
                         enabled = !isLoading,
                         onClick = onRefresh
                     ) {
-                        Icon(
+                        AppIcon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(AppSpacingTokens.Large)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("刷新")
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                        AppText("刷新")
                     }
-                    TextButton(
+                    AppTextButton(
                         onClick = { onCollapsedChange(!collapsed) }
                     ) {
-                        Icon(
+                        AppIcon(
                             imageVector = if (collapsed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(AppSpacingTokens.Large)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (collapsed) "展开" else "收起")
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                        AppText(if (collapsed) "展开" else "收起")
                     }
                 }
             }
 
             if (collapsed) {
-                Text(
+                AppText(
                     text = "已收起推荐单。展开后恢复自动更新；也可以直接点“刷新”换一批。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (!error.isNullOrBlank()) {
-                    Text(
+                    AppText(
                         text = error,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
-                return@Column
+                return@cardBody
             }
 
             TodayWatchModeSegmentedControl(
                 selectedMode = selectedMode,
                 enabled = !isLoading,
                 onModeChange = onModeChange,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                miuixBackdrop = todayWatchBackdrop,
             )
-            Text(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small + AppSpacingTokens.Micro)
+            ) {
+            AppText(
                 text = "点开后会自动从推荐单移除；想换一批可点右上角“刷新”。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -634,23 +845,26 @@ private fun TodayWatchPlanCard(
 
             if (isLoading) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.8.dp)
-                    Text("正在根据你的历史观看习惯生成推荐…", style = MaterialTheme.typography.bodySmall)
+                    AdaptiveLoadingIndicator(
+                        size = AppSpacingTokens.Medium + AppSpacingTokens.Micro,
+                        strokeWidth = AppSpacingTokens.Micro * 0.9f
+                    )
+                    AppText("正在根据你的历史观看习惯生成推荐…", style = MaterialTheme.typography.bodySmall)
                 }
             }
 
             if (!error.isNullOrBlank()) {
-                Text(
+                AppText(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
             }
 
-            val activePlan = plan ?: return@Column
+            val activePlan = plan ?: return@cardBody
             var revealIndex = 0
 
             if (cardConfig.showReasonHint) {
@@ -661,7 +875,7 @@ private fun TodayWatchPlanCard(
                     index = hintOrder,
                     exponent = cardConfig.waterfallExponent
                 ) {
-                    Text(
+                    AppText(
                         text = if (activePlan.nightSignalUsed) {
                             "已结合护眼状态：夜间优先短时长、低刺激内容"
                         } else {
@@ -681,7 +895,7 @@ private fun TodayWatchPlanCard(
                     index = titleOrder,
                     exponent = cardConfig.waterfallExponent
                 ) {
-                    Text("UP主榜", style = MaterialTheme.typography.labelLarge)
+                    AppText("UP主榜", style = MaterialTheme.typography.labelLarge)
                 }
                 val ranksOrder = revealIndex++
                 WaterfallReveal(
@@ -691,12 +905,12 @@ private fun TodayWatchPlanCard(
                     exponent = cardConfig.waterfallExponent
                 ) {
                     FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
                     ) {
                         activePlan.upRanks.forEachIndexed { index, up ->
                             val clickable = shouldEnableTodayWatchUpRankClick(up)
-                            Text(
+                            AppText(
                                 text = "${index + 1}. ${up.name}",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (clickable) {
@@ -706,7 +920,7 @@ private fun TodayWatchPlanCard(
                                 },
                                 modifier = Modifier
                                     .clickable(enabled = clickable) { onUpClick(up.mid) }
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .padding(horizontal = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro, vertical = AppSpacingTokens.Micro)
                             )
                         }
                     }
@@ -721,7 +935,7 @@ private fun TodayWatchPlanCard(
                     index = queueTitleOrder,
                     exponent = cardConfig.waterfallExponent
                 ) {
-                    Text("视频队列", style = MaterialTheme.typography.labelLarge)
+                    AppText("视频队列", style = MaterialTheme.typography.labelLarge)
                 }
                 activePlan.videoQueue
                     .take(cardConfig.queuePreviewLimit.coerceAtLeast(1))
@@ -737,33 +951,33 @@ private fun TodayWatchPlanCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { onVideoClick(video) }
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    .padding(vertical = AppSpacingTokens.ExtraSmall),
+                                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small + AppSpacingTokens.Micro),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
+                                AppText(
                                     text = "${index + 1}.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                if (video.owner.face.isNotBlank()) {
+                                if (showUpAvatars && video.owner.face.isNotBlank()) {
                                     AsyncImage(
                                         model = video.owner.face,
                                         contentDescription = video.owner.name,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
-                                            .size(24.dp)
+                                            .size(AppSpacingTokens.ExtraLarge)
                                             .clip(CircleShape)
                                     )
-                                } else {
+                                } else if (showUpAvatars) {
                                     Box(
                                         modifier = Modifier
-                                            .size(24.dp)
+                                            .size(AppSpacingTokens.ExtraLarge)
                                             .clip(CircleShape)
                                             .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.15f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
+                                        AppText(
                                             text = video.owner.name.take(1).ifBlank { "UP" },
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
@@ -772,9 +986,9 @@ private fun TodayWatchPlanCard(
                                 }
                                 Column(
                                     modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
                                 ) {
-                                    Text(
+                                    AppText(
                                         text = video.title,
                                         style = MaterialTheme.typography.bodySmall,
                                         maxLines = 1,
@@ -792,7 +1006,7 @@ private fun TodayWatchPlanCard(
                                     )
                                     val explanation = activePlan.explanationByBvid[video.bvid].orEmpty()
                                     if (explanation.isNotBlank()) {
-                                        Text(
+                                        AppText(
                                             text = explanation,
                                             style = MaterialTheme.typography.labelSmall,
                                             maxLines = 1,
@@ -804,6 +1018,8 @@ private fun TodayWatchPlanCard(
                             }
                         }
                     }
+            }
+            }
             }
         }
     }
@@ -823,27 +1039,17 @@ private fun WaterfallReveal(
     }
     val delay = nonLinearWaterfallDelayMillis(
         index = index,
-        baseDelayMs = 52,
         exponent = exponent,
-        maxDelayMs = 620
     )
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(
-            animationSpec = tween(
-                durationMillis = 280,
-                delayMillis = delay,
-                easing = LinearOutSlowInEasing
-            )
+            animationSpec = homeWaterfallFadeInSpec(delay)
         ) + expandVertically(
             expandFrom = Alignment.Top,
-            animationSpec = tween(
-                durationMillis = 420,
-                delayMillis = delay,
-                easing = FastOutSlowInEasing
-            )
+            animationSpec = homeWaterfallExpandSpec(delay)
         ),
-        exit = fadeOut(animationSpec = tween(durationMillis = 120))
+        exit = fadeOut(animationSpec = homeWaterfallFadeOutSpec())
     ) {
         content()
     }
@@ -854,23 +1060,23 @@ private fun OldContentDivider() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        HorizontalDivider(
+        AppHorizontalDivider(
             modifier = Modifier.weight(1f),
-            thickness = 0.5.dp,
+            thickness = AppSpacingTokens.Micro / 4,
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
         )
-        Text(
+        AppText(
             text = "以下是上次最新的视频",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 10.dp)
+            modifier = Modifier.padding(horizontal = AppSpacingTokens.Small + AppSpacingTokens.Micro)
         )
-        HorizontalDivider(
+        AppHorizontalDivider(
             modifier = Modifier.weight(1f),
-            thickness = 0.5.dp,
+            thickness = AppSpacingTokens.Micro / 4,
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
         )
     }

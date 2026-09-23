@@ -44,4 +44,12 @@ class CommonListPaginationPolicyTest {
         assertEquals(true, snapshot.hasMore)
         assertEquals(true, snapshot.isLoadingMore)
     }
+
+    @Test
+    fun `all-folder results receive unique stable render keys`() {
+        assertEquals(
+            listOf("BV1#0", "BV2", "BV1#1", "common-list-item-3"),
+            resolveCommonListRenderKeys(listOf("BV1", "BV2", "BV1", ""))
+        )
+    }
 }

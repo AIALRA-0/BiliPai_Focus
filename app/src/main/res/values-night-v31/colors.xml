@@ -2,4 +2,7 @@
 <resources>
     <color name="background">@android:color/system_neutral1_800</color>
     <color name="foreground">@android:color/system_accent1_100</color>
+    <!-- Match AOSP's dark themed-icon palette while keeping launcher tinting launcher-owned. -->
+    <color name="splash_bilipai_monet_background">@android:color/system_accent2_800</color>
+    <color name="splash_bilipai_monet_foreground">@android:color/system_accent1_200</color>
 </resources>

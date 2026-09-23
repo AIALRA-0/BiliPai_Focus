@@ -18,6 +18,7 @@ internal object BiliGrpcClient {
 
     fun request(path: String, message: ByteArray): ByteArray {
         val url = "$APP_BASE_URL$path"
+        val buvid = resolveBuvid()
         val request = Request.Builder()
             .url(url)
             .post(ProtoWire.frame(message).toRequestBody(grpcMediaType))
@@ -25,9 +26,15 @@ internal object BiliGrpcClient {
             .header("grpc-encoding", "gzip")
             .header("gzip-accept-encoding", "gzip,identity")
             .header("user-agent", USER_AGENT)
+            .header("bili-http-engine", "cronet")
             .header("x-bili-trace-id", TRACE_ID)
-            .header("buvid", resolveBuvid())
+            .header("buvid", buvid)
             .header("cookie", buildCookieHeader())
+            .header("x-bili-metadata-bin", buildMetadataHeader(buvid))
+            .header("x-bili-device-bin", buildDeviceHeader(buvid))
+            .header("x-bili-fawkes-req-bin", buildFawkesHeader())
+            .header("x-bili-network-bin", buildNetworkHeader())
+            .header("x-bili-locale-bin", buildLocaleHeader())
             .apply {
                 TokenManager.accessTokenCache
                     ?.takeIf { it.isNotBlank() }
@@ -37,16 +44,83 @@ internal object BiliGrpcClient {
 
         NetworkModule.okHttpClient.newCall(request).execute().use { response ->
             val body = response.body.bytes()
+            val trailers = runCatching { response.trailers() }.getOrNull()
             val grpcStatus = response.header("grpc-status")
-            if (!response.isSuccessful || grpcStatus != "0") {
+                ?: trailers?.get("grpc-status")
+            val grpcMessage = response.header("grpc-message")
+                ?: trailers?.get("grpc-message")
+
+            // HTTP 200 with standard gRPC status (0 or absent on HTTP success) is considered valid
+            val isStatusOk = grpcStatus == null || grpcStatus == "0"
+            if (!response.isSuccessful || !isStatusOk) {
                 Logger.w(
                     "BiliGrpc",
-                    "gRPC request failed: path=$path http=${response.code} grpc=$grpcStatus message=${response.header("grpc-message").orEmpty()}"
+                    "gRPC request failed: path=$path http=${response.code} grpc=$grpcStatus message=${grpcMessage.orEmpty()}"
                 )
                 error("gRPC request failed: http=${response.code}, grpc=$grpcStatus")
             }
             return ProtoWire.unframe(body)
         }
+    }
+
+    internal fun buildMetadataHeader(buvid: String = resolveBuvid()): String {
+        val accessKey = TokenManager.accessTokenCache?.takeIf { it.isNotBlank() }
+        val fields = mutableListOf<ByteArray>()
+        if (!accessKey.isNullOrBlank()) {
+            fields += ProtoWire.string(1, accessKey)
+        }
+        fields += ProtoWire.string(2, "android_hd")
+        fields += ProtoWire.string(3, "android")
+        fields += ProtoWire.int32(4, 2001100)
+        fields += ProtoWire.string(5, "master")
+        fields += ProtoWire.string(6, buvid)
+        fields += ProtoWire.string(7, "android")
+        return encodeBase64(ProtoWire.message(*fields.toTypedArray()))
+    }
+
+    internal fun buildDeviceHeader(buvid: String = resolveBuvid()): String {
+        val fields = arrayOf(
+            ProtoWire.int32(1, 5),
+            ProtoWire.int32(2, 2001100),
+            ProtoWire.string(3, buvid),
+            ProtoWire.string(4, "android_hd"),
+            ProtoWire.string(5, "android"),
+            ProtoWire.string(6, "android"),
+            ProtoWire.string(7, "master"),
+            ProtoWire.string(8, "android"),
+            ProtoWire.string(9, "android"),
+            ProtoWire.string(10, "15"),
+            ProtoWire.string(13, "2.0.1")
+        )
+        return encodeBase64(ProtoWire.message(*fields))
+    }
+
+    internal fun buildFawkesHeader(): String {
+        val sessionId = UUID.randomUUID().toString().replace("-", "").take(8)
+        val fields = arrayOf(
+            ProtoWire.string(1, "android_hd"),
+            ProtoWire.string(2, "prod"),
+            ProtoWire.string(3, sessionId)
+        )
+        return encodeBase64(ProtoWire.message(*fields))
+    }
+
+    internal fun buildNetworkHeader(): String {
+        return encodeBase64(ProtoWire.message(ProtoWire.int32(1, 1)))
+    }
+
+    internal fun buildLocaleHeader(): String {
+        val localeIds = ProtoWire.message(
+            ProtoWire.string(1, "zh"),
+            ProtoWire.string(2, "Hans"),
+            ProtoWire.string(3, "CN")
+        )
+        val locale = ProtoWire.message(
+            ProtoWire.bytes(1, localeIds),
+            ProtoWire.bytes(2, localeIds),
+            ProtoWire.string(3, "Asia/Shanghai")
+        )
+        return encodeBase64(locale)
     }
 
     internal fun buildCookieHeader(): String {

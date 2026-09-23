@@ -5,15 +5,25 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="file" path="logs/" />
+        <exclude domain="sharedpref" path="startup_recovery.xml" />
+        <exclude domain="file" path="android17_profiles/" />
+        <exclude domain="file" path="profiling/" />
+        <exclude domain="sharedpref" path="token_backup_sp.xml" />
+        <exclude domain="sharedpref" path="multi_account_sessions.xml" />
+        <exclude domain="file" path="datastore/user_prefs.preferences_pb" />
         <!-- TODO: Use <include> and <exclude> to control what is backed up.
         <include .../>
         <exclude .../>
         -->
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="logs/" />
+        <exclude domain="sharedpref" path="startup_recovery.xml" />
+        <exclude domain="file" path="android17_profiles/" />
+        <exclude domain="file" path="profiling/" />
+        <exclude domain="sharedpref" path="token_backup_sp.xml" />
+        <exclude domain="sharedpref" path="multi_account_sessions.xml" />
+        <exclude domain="file" path="datastore/user_prefs.preferences_pb" />
     </device-transfer>
-    -->
 </data-extraction-rules>

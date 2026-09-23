@@ -1,5 +1,7 @@
 // 文件路径: feature/bangumi/BangumiTimelineScreen.kt
 package com.android.purebilibili.feature.bangumi
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +14,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppFilterChip
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
+import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
+import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.TimelineDay
@@ -41,12 +49,7 @@ fun BangumiTimelineContent(
 ) {
     when (timelineState) {
         is TimelineState.Loading -> {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
-            }
+            BangumiTimelineScreenSkeleton(modifier = modifier)
         }
         is TimelineState.Error -> {
             Box(
@@ -54,13 +57,13 @@ fun BangumiTimelineContent(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
+                    AppText(
                         text = timelineState.message,
                         color = MaterialTheme.colorScheme.error
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onRetry) {
-                        Text("重试")
+                    AppButton(onClick = onRetry) {
+                        AppText("重试")
                     }
                 }
             }
@@ -71,6 +74,74 @@ fun BangumiTimelineContent(
                 onBangumiClick = onBangumiClick,
                 modifier = modifier
             )
+        }
+    }
+}
+
+@Composable
+private fun BangumiTimelineScreenSkeleton(modifier: Modifier = Modifier) {
+    val blockColor = rememberContentSkeletonBlockColor(rememberContentSkeletonPulse())
+    Column(modifier = modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(5) {
+                ContentSkeletonBlock(
+                    color = blockColor,
+                    shape = AppShapes.container(ContainerLevel.Pill),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                )
+            }
+        }
+        AppHorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        )
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            userScrollEnabled = false,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            items(7) {
+                AppSurface(
+                    shape = AppShapes.container(ContainerLevel.Card),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ContentSkeletonBlock(
+                            color = blockColor,
+                            shape = AppShapes.container(ContainerLevel.Field),
+                            modifier = Modifier.size(80.dp, 60.dp),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ContentSkeletonBlock(
+                                color = blockColor,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.82f)
+                                    .height(15.dp),
+                            )
+                            ContentSkeletonBlock(
+                                color = blockColor,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.56f)
+                                    .height(12.dp),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -109,7 +180,7 @@ private fun TimelineView(
             }
         }
         
-        HorizontalDivider(
+        AppHorizontalDivider(
             thickness = 0.5.dp,
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
@@ -137,7 +208,7 @@ private fun TimelineView(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
+                AppText(
                     "今日无更新",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -164,41 +235,51 @@ private fun DayChip(
         day.date
     }
     
-    Surface(
+    AppFilterChip(
+        selected = isSelected,
         onClick = onClick,
         shape = AppShapes.container(ContainerLevel.Card),
-        color = when {
-            isSelected -> MaterialTheme.colorScheme.primary
-            isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        }
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-        ) {
-            Text(
-                text = if (isToday) "今天" else weekDay,
-                fontSize = 14.sp,
-                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
-                color = when {
-                    isSelected -> Color.White
-                    isToday -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.onSurface
-                }
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = displayDate,
-                fontSize = 11.sp,
-                color = when {
-                    isSelected -> Color.White.copy(alpha = 0.8f)
-                    isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-        }
-    }
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = if (isToday) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            },
+            labelColor = if (isToday) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+        border = null,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        label = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                AppText(
+                    text = if (isToday) "今天" else weekDay,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.onPrimary
+                        isToday -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                AppText(
+                    text = displayDate,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                        isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -209,7 +290,7 @@ private fun TimelineEpisodeCard(
     val isFollowed = episode.follow == 1
     val isDelayed = episode.delay == 1
     
-    Surface(
+    AppSurface(
         onClick = onClick,
         shape = AppShapes.container(ContainerLevel.Card),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -223,10 +304,12 @@ private fun TimelineEpisodeCard(
             Box(
                 modifier = Modifier
                     .size(80.dp, 60.dp)
-                    .clip(AppShapes.container(ContainerLevel.Chip))
+                    .clip(AppShapes.container(ContainerLevel.Field))
             ) {
                 AsyncImage(
-                    model = FormatUtils.fixImageUrl(episode.cover.ifEmpty { episode.squareCover }),
+                    model = FormatUtils.fixImageUrl(
+                        resolveTimelineEpisodeCover(episode, preferEpisodeCover = true)
+                    ),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -241,9 +324,9 @@ private fun TimelineEpisodeCard(
                             .background(MaterialTheme.colorScheme.primary, AppShapes.container(ContainerLevel.Tag))
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
-                        Text(
+                        AppText(
                             "追番",
-                            fontSize = 9.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = Color.White
                         )
                     }
@@ -256,9 +339,9 @@ private fun TimelineEpisodeCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
+                AppText(
                     text = episode.title,
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -270,28 +353,29 @@ private fun TimelineEpisodeCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 更新集数
-                    Text(
-                        text = episode.pubIndex,
-                        fontSize = 13.sp,
+                    AppText(
+                        text = resolveTimelineEpisodeUpdateLabel(episode),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                     
                     Spacer(modifier = Modifier.width(8.dp))
                     
                     // 更新时间
-                    Text(
+                    AppText(
                         text = episode.pubTime,
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 
                 // 延迟信息
-                if (isDelayed && episode.delayReason.isNotEmpty()) {
+                val scheduleLabel = resolveTimelineEpisodeScheduleLabel(episode)
+                if (isDelayed && scheduleLabel.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = " ${episode.delayReason}",
-                        fontSize = 11.sp,
+                    AppText(
+                        text = scheduleLabel,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
                     )
                 }

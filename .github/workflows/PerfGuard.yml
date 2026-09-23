@@ -1,0 +1,74 @@
+name: PerfGuard
+
+# 性能守卫：只跑纯 JVM 断言，不需要设备、不需要任何 secret。
+#
+# 为什么单独开一个 workflow 而不是塞进 Build.yml：
+# Build.yml 以 `secrets.FCM` 是否存在作为前置条件，fork 上来的 PR 会整个跳过。
+# 性能守卫恰恰最需要在外部 PR 上生效，所以必须与 secret 解耦。
+#
+# 为什么不在这里跑 macrobenchmark：
+# Pixel 6 API 31 的 GMD 冷启 + 全部 benchmark 类大约 25–40 分钟，且在 hosted runner
+# 上 p99 抖动可达 ±40%。放进 PR 门禁的结果一定是所有人开始反复 rerun 直到变绿，
+# 门禁随即失去意义。设备侧数据走真机采集脚本，由维护者人工比较。
+
+on:
+  push:
+    branches-ignore:
+      - 'gh-pages'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: perfguard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvm-guards:
+    name: JVM 性能守卫
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      # 逐条列出当前可通过的测试类；shape/motion/surface 三条历史债继续由 allowlist
+      # 棘轮限制不能增长。颜色、间距、字号和已迁移模块检查在 PR 阶段直接执行。
+      - name: 帧预算与稳定性棘轮
+        env:
+          # GitHub Packages 的 Maven 仓库即使公开也要求认证。GITHUB_TOKEN 不会自动
+          # 暴露给 Gradle，必须显式传入，settings.gradle.kts 才能读取它。
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests 'com.android.purebilibili.core.ui.perf.FrameBudgetLintTest' \
+            --tests 'com.android.purebilibili.data.model.ModelImmutabilityGuardTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.HardcodedColorLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.HardcodedSpacingLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.HardcodedTypographyLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.MigratedFeatureStyleLintTest' \
+            --tests 'com.android.purebilibili.core.ui.lint.StyleLintAllowlistRatchetTest' \
+            --tests 'com.android.purebilibili.core.store.SettingsManagerSizeRatchetTest' \
+            --tests 'com.android.purebilibili.core.store.PreferenceKeyUniquenessTest' \
+            --tests 'com.android.purebilibili.core.ui.performance.*' \
+            --tests 'com.android.purebilibili.core.ui.adaptive.RuntimeVisualGuard*'
+
+      - name: 上传测试报告
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: perfguard-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          retention-days: 7

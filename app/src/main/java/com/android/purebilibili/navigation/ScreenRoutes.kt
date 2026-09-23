@@ -1,11 +1,17 @@
 package com.android.purebilibili.navigation
 
+import com.android.purebilibili.core.util.encodeUrlComponentCompat
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 sealed class ScreenRoutes(val route: String) {
     object Home : ScreenRoutes("home")
-    object Search : ScreenRoutes("search")
+    object ListenVideo : ScreenRoutes("listen_video")
+    object Search : ScreenRoutes("search") {
+        fun createRoute(keyword: String = ""): String {
+            return if (keyword.isBlank()) "search" else "search?keyword=${URLEncoder.encode(keyword, StandardCharsets.UTF_8.name())}"
+        }
+    }
     object SearchTrending : ScreenRoutes("search_trending")
     object TopicDetail : ScreenRoutes("topic/{topicId}") {
         fun createRoute(topicId: Long): String {
@@ -17,15 +23,28 @@ sealed class ScreenRoutes(val route: String) {
     object Profile : ScreenRoutes("profile")
 
     //  新增路由：历史记录和收藏
+    object AicuQuery : ScreenRoutes("aicu?uid={uid}&category={category}") {
+        fun createRoute(uid: Long? = null, category: String = "COMMENT"): String =
+            "aicu?uid=${uid?.takeIf { it > 0 } ?: 0}&category=${URLEncoder.encode(category, StandardCharsets.UTF_8.name())}"
+    }
     object History : ScreenRoutes("history")
     object Favorite : ScreenRoutes("favorite")
+    object LikedVideos : ScreenRoutes("liked_videos") {
+        fun createRoute(mid: Long = 0L, ownerName: String = ""): String {
+            return if (mid > 0L) {
+                "liked_videos?mid=$mid&ownerName=${encodeUrlComponentCompat(ownerName)}"
+            } else {
+                "liked_videos"
+            }
+        }
+    }
     object WatchLater : ScreenRoutes("watch_later")  //  [新增] 稍后再看
     object LiveList : ScreenRoutes("live_list")  //  [新增] 直播列表
     object LiveSearch : ScreenRoutes("live_search")
     object LiveArea : ScreenRoutes("live_area")
     object LiveAreaDetail : ScreenRoutes("live_area_detail/{parentAreaId}/{areaId}?title={title}") {
         fun createRoute(parentAreaId: Int, areaId: Int, title: String): String {
-            return "live_area_detail/$parentAreaId/$areaId?title=${android.net.Uri.encode(title)}"
+            return "live_area_detail/$parentAreaId/$areaId?title=${encodeUrlComponentCompat(title)}"
         }
     }
     object LiveFollowing : ScreenRoutes("live_following")
@@ -43,7 +62,7 @@ sealed class ScreenRoutes(val route: String) {
     // 🔧 [新增] 离线视频播放
     object OfflineVideoPlayer : ScreenRoutes("offline_video/{taskId}") {
         fun createRoute(taskId: String): String {
-            return "offline_video/${android.net.Uri.encode(taskId)}"
+            return "offline_video/${encodeUrlComponentCompat(taskId)}"
         }
     }
     
@@ -66,26 +85,51 @@ sealed class ScreenRoutes(val route: String) {
 
     object ArticleDetail : ScreenRoutes("article/{articleId}?title={title}") {
         fun createRoute(articleId: Long, title: String? = null): String {
-            val encodedTitle = title?.let(android.net.Uri::encode).orEmpty()
+            val encodedTitle = title?.let(::encodeUrlComponentCompat).orEmpty()
             return "article/$articleId?title=$encodedTitle"
         }
     }
     
     //  [新增] 竖屏短视频 (故事模式)
-    object Story : ScreenRoutes("story")
+    object Story : ScreenRoutes("story?bvid={bvid}&cid={cid}&cover={cover}&title={title}") {
+        const val baseRoute: String = "story"
+
+        fun createRoute(
+            bvid: String = "",
+            cid: Long = 0L,
+            cover: String = "",
+            title: String = ""
+        ): String {
+            val encodedCover = encodeUrlComponentCompat(cover)
+            val encodedTitle = encodeUrlComponentCompat(title)
+            return "story?bvid=${encodeUrlComponentCompat(bvid)}&cid=$cid&cover=$encodedCover&title=$encodedTitle"
+        }
+    }
 
     //  开源许可证页面
     object OpenSourceLicenses : ScreenRoutes("open_source_licenses")
     
     //  二级设置页面
     object AppearanceSettings : ScreenRoutes("appearance_settings")
+    object HomeSettings : ScreenRoutes("home_settings")
     object PlaybackSettings : ScreenRoutes("playback_settings")
     object FocusSettings : ScreenRoutes("focus_settings")
     object PermissionSettings : ScreenRoutes("permission_settings")  //  权限管理
+    object MessageNotificationSettings : ScreenRoutes("message_notification_settings")
     object PluginsSettings : ScreenRoutes("plugins_settings?importUrl={importUrl}") {  //  插件中心
         fun createRoute(importUrl: String? = null): String {
             if (importUrl.isNullOrBlank()) return "plugins_settings"
-            return "plugins_settings?importUrl=${android.net.Uri.encode(importUrl)}"
+            return "plugins_settings?importUrl=${encodeUrlComponentCompat(importUrl)}"
+        }
+    }
+    object JsPluginContent : ScreenRoutes("js_plugin/{pluginId}") {
+        fun createRoute(pluginId: String): String {
+            return "js_plugin/${encodeUrlComponentCompat(pluginId)}"
+        }
+    }
+    object ExternalMedia : ScreenRoutes("external_media/{launchId}") {
+        fun createRoute(launchId: String): String {
+            return "external_media/${encodeUrlComponentCompat(launchId)}"
         }
     }
     object BottomBarSettings : ScreenRoutes("bottom_bar_settings")  //  底栏管理
@@ -111,9 +155,13 @@ sealed class ScreenRoutes(val route: String) {
     }
     
     //  [新增] UP主空间页面
-    object Space : ScreenRoutes("space/{mid}") {
-        fun createRoute(mid: Long): String {
-            return "space/$mid"
+    object Space : ScreenRoutes("space/{mid}?targetBvid={targetBvid}") {
+        fun createRoute(mid: Long, targetBvid: String = ""): String {
+            return targetBvid.trim().takeIf { it.isNotEmpty() }
+                ?.let {
+                    "space/$mid?targetBvid=${java.net.URLEncoder.encode(it, Charsets.UTF_8.name())}"
+                }
+                ?: "space/$mid"
         }
     }
 
@@ -121,23 +169,28 @@ sealed class ScreenRoutes(val route: String) {
     object SeasonSeriesDetail : ScreenRoutes("season_series_detail/{type}/{id}?mid={mid}&title={title}&ownerName={ownerName}") {
         fun createRoute(type: String, id: Long, mid: Long, title: String, ownerName: String = ""): String {
             // Encode title to handle special characters
-            val encodedTitle = android.net.Uri.encode(title)
-            val encodedOwnerName = android.net.Uri.encode(ownerName)
+            val encodedTitle = encodeUrlComponentCompat(title)
+            val encodedOwnerName = encodeUrlComponentCompat(ownerName)
             return "season_series_detail/$type/$id?mid=$mid&title=$encodedTitle&ownerName=$encodedOwnerName"
         }
     }
     
     //  [新增] 直播播放页面
-    object Live : ScreenRoutes("live/{roomId}?title={title}&uname={uname}") {
-        fun createRoute(roomId: Long, title: String, uname: String): String {
-            val encodedTitle = android.net.Uri.encode(title).orEmpty()
-            val encodedUname = android.net.Uri.encode(uname).orEmpty()
-            return "live/$roomId?title=$encodedTitle&uname=$encodedUname"
+    object Live : ScreenRoutes("live/{roomId}?title={title}&uname={uname}&site={site}") {
+        fun createRoute(roomId: Any, title: String, uname: String, siteId: String = "bilibili"): String {
+            val encodedTitle = encodeUrlComponentCompat(title)
+            val encodedUname = encodeUrlComponentCompat(uname)
+            return "live/$roomId?title=$encodedTitle&uname=$encodedUname&site=$siteId"
         }
     }
     
     //  [新增] 音频模式页面
-    object AudioMode : ScreenRoutes("audio_mode")
+    object AudioMode : ScreenRoutes("audio_mode") {
+        fun createRoute(bvid: String = "", cid: Long = 0L): String {
+            if (bvid.isBlank()) return route
+            return "audio_mode?bvid=$bvid&cid=$cid"
+        }
+    }
     
     //  [新增] 番剧/影视页面 - 支持初始类型参数
     object Bangumi : ScreenRoutes("bangumi?type={type}") {
@@ -146,23 +199,32 @@ sealed class ScreenRoutes(val route: String) {
         }
     }
     
-    object BangumiDetail : ScreenRoutes("bangumi/{seasonId}?epId={epId}") {
-        fun createRoute(seasonId: Long, epId: Long = 0): String {
-            return "bangumi/$seasonId?epId=$epId"
+    object BangumiDetail : ScreenRoutes("bangumi/{seasonId}?epId={epId}&mediaId={mediaId}") {
+        fun createRoute(seasonId: Long, epId: Long = 0, mediaId: Long = 0): String {
+            return "bangumi/$seasonId?epId=$epId&mediaId=$mediaId"
+        }
+    }
+
+    object BangumiReview : ScreenRoutes("bangumi_review/{mediaId}?title={title}") {
+        fun createRoute(mediaId: Long, title: String = ""): String {
+            return "bangumi_review/$mediaId?title=${encodeUrlComponentCompat(title)}"
         }
     }
     
     //  [新增] 番剧播放页面
-    object BangumiPlayer : ScreenRoutes("bangumi/play/{seasonId}/{epId}?resumePositionMs={resumePositionMs}") {
+    object BangumiPlayer : ScreenRoutes("bangumi/play/{seasonId}/{epId}?resumePositionMs={resumePositionMs}&preferredAid={preferredAid}&isCourse={isCourse}") {
         fun createRoute(
             seasonId: Long,
             epId: Long,
-            resumePositionMs: Long = 0L
+            resumePositionMs: Long = 0L,
+            preferredAid: Long = 0L,
+            isCourse: Boolean = false
         ): String {
             val route = "bangumi/play/$seasonId/$epId"
             val resumePosition = resumePositionMs.coerceAtLeast(0L)
-            return if (resumePosition > 0L) {
-                "$route?resumePositionMs=$resumePosition"
+            val aid = preferredAid.coerceAtLeast(0L)
+            return if (resumePosition > 0L || aid > 0L || isCourse) {
+                "$route?resumePositionMs=$resumePosition&preferredAid=$aid&isCourse=$isCourse"
             } else {
                 route
             }
@@ -175,7 +237,7 @@ sealed class ScreenRoutes(val route: String) {
     //  分类详情页面
     object Category : ScreenRoutes("category/{tid}?name={name}") {
         fun createRoute(tid: Int, name: String): String {
-            return "category/$tid?name=${android.net.Uri.encode(name)}"
+            return "category/$tid?name=${encodeUrlComponentCompat(name)}"
         }
     }
 
@@ -190,15 +252,15 @@ sealed class ScreenRoutes(val route: String) {
     object SystemNotice : ScreenRoutes("message/system_notice")
     object Chat : ScreenRoutes("chat/{talkerId}/{sessionType}?name={name}") {
         fun createRoute(talkerId: Long, sessionType: Int, userName: String): String {
-            return "chat/$talkerId/$sessionType?name=${android.net.Uri.encode(userName)}"
+            return "chat/$talkerId/$sessionType?name=${encodeUrlComponentCompat(userName)}"
         }
     }
     
     // [新增] In-app Browser
     object Web : ScreenRoutes("web?url={url}&title={title}") {
         fun createRoute(url: String, title: String? = null): String {
-            val encodedUrl = android.net.Uri.encode(url)
-            val encodedTitle = title?.let { android.net.Uri.encode(it) } ?: ""
+            val encodedUrl = encodeUrlComponentCompat(url)
+            val encodedTitle = title?.let(::encodeUrlComponentCompat) ?: ""
             return "web?url=$encodedUrl&title=$encodedTitle"
         }
     }
@@ -213,7 +275,7 @@ sealed class ScreenRoutes(val route: String) {
     // [新增] Native Music - 用于 MA 格式的原生音乐播放 (从视频 DASH 流提取音频)
     object NativeMusic : ScreenRoutes("native_music?title={title}&bvid={bvid}&cid={cid}") {
         fun createRoute(title: String, bvid: String, cid: Long): String {
-            return "native_music?title=${android.net.Uri.encode(title)}&bvid=${android.net.Uri.encode(bvid)}&cid=$cid"
+            return "native_music?title=${encodeUrlComponentCompat(title)}&bvid=${encodeUrlComponentCompat(bvid)}&cid=$cid"
         }
     }
 }

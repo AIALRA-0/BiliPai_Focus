@@ -41,7 +41,14 @@ data class WbiImg(
 
 @Serializable
 data class LevelInfo(
-    val current_level: Int = 0
+    @Serializable(with = FlexibleIntSerializer::class)
+    val current_level: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class)
+    val current_min: Int? = null,
+    @Serializable(with = FlexibleIntSerializer::class)
+    val current_exp: Int? = null,
+    @Serializable(with = FlexibleIntSerializer::class)
+    val next_exp: Int? = null
 )
 
 @Serializable

@@ -79,10 +79,92 @@ class VideoPlaybackUseCaseAdaptiveSourceTest {
     }
 
     @Test
-    fun `adaptive dash playback stays disabled while local manifest seek is unstable`() {
+    fun `adaptive dash playback uses local manifest when segment base is complete`() {
         val source = AdaptiveDashPlaybackSource(
             manifest = "<MPD />",
-            videoTracks = emptyList(),
+            videoTracks = listOf(
+                DashVideo(
+                    id = 80,
+                    baseUrl = "https://example.com/video.m4s",
+                    segmentBase = SegmentBase("0-999", "1000-1999")
+                )
+            ),
+            audioTracks = listOf(
+                DashAudio(
+                    id = 30280,
+                    baseUrl = "https://example.com/audio.m4s",
+                    segmentBase = SegmentBase("0-555", "556-999")
+                )
+            ),
+            playbackQualityMode = PlaybackQualityMode.AUTO
+        )
+
+        assertTrue(
+            shouldUseAdaptiveDashPlayback(
+                adaptiveDashSource = source,
+                audioUrl = "https://example.com/audio.m4s"
+            )
+        )
+    }
+
+    @Test
+    fun `adaptive dash playback falls back when segment base is incomplete`() {
+        val source = AdaptiveDashPlaybackSource(
+            manifest = "<MPD />",
+            videoTracks = listOf(
+                DashVideo(
+                    id = 80,
+                    baseUrl = "https://example.com/video.m4s",
+                    segmentBase = SegmentBase(initialization = "0-999", indexRange = null)
+                )
+            ),
+            audioTracks = emptyList(),
+            playbackQualityMode = PlaybackQualityMode.AUTO
+        )
+
+        assertFalse(
+            shouldUseAdaptiveDashPlayback(
+                adaptiveDashSource = source,
+                audioUrl = null
+            )
+        )
+    }
+
+    @Test
+    fun `adaptive dash playback falls back when dash segment requests are disabled`() {
+        val source = AdaptiveDashPlaybackSource(
+            manifest = "<MPD />",
+            videoTracks = listOf(
+                DashVideo(
+                    id = 80,
+                    baseUrl = "https://example.com/video.m4s",
+                    segmentBase = SegmentBase("0-999", "1000-1999")
+                )
+            ),
+            audioTracks = emptyList(),
+            playbackQualityMode = PlaybackQualityMode.AUTO
+        )
+
+        assertFalse(
+            shouldUseAdaptiveDashPlayback(
+                adaptiveDashSource = source,
+                audioUrl = null,
+                dashSegmentRequestsEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun `adaptive dash playback falls back when selected audio is missing from manifest`() {
+        val source = AdaptiveDashPlaybackSource(
+            manifest = "<MPD />",
+            videoTracks = listOf(
+                DashVideo(
+                    id = 80,
+                    baseUrl = "https://example.com/video.m4s",
+                    segmentBase = SegmentBase("0-999", "1000-1999")
+                )
+            ),
             audioTracks = emptyList(),
             playbackQualityMode = PlaybackQualityMode.AUTO
         )

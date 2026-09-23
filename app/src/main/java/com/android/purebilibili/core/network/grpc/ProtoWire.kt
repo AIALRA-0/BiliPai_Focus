@@ -53,6 +53,14 @@ internal object ProtoWire {
     fun int32(fieldNumber: Int, value: Int): ByteArray = int64(fieldNumber, value.toLong())
 
     fun bool(fieldNumber: Int, value: Boolean): ByteArray = int64(fieldNumber, if (value) 1L else 0L)
+    /** Packed repeated int64 — wire type 2 (length-delimited), payload = concatenated varints. */
+    fun packedInt64(fieldNumber: Int, values: List<Long>): ByteArray {
+        if (values.isEmpty()) return ByteArray(0)
+        val payload = ByteArrayOutputStream(values.size)
+        values.forEach { payload.write(varint(it)) }
+        val data = payload.toByteArray()
+        return field(fieldNumber, WIRE_LENGTH_DELIMITED, varint(data.size.toLong()), data)
+    }
 
     fun string(fieldNumber: Int, value: String): ByteArray {
         if (value.isEmpty()) return ByteArray(0)

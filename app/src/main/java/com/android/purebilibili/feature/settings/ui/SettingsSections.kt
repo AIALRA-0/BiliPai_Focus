@@ -1,27 +1,45 @@
 package com.android.purebilibili.feature.settings
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.rememberAppCollectionIcon
 import com.android.purebilibili.core.ui.rememberAppDynamicIcon
 import com.android.purebilibili.core.ui.rememberAppInfoIcon
@@ -33,23 +51,40 @@ import com.android.purebilibili.core.ui.rememberAppSparklesIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppWarningIcon
 import com.android.purebilibili.core.ui.rememberAppAnalyticsIcon
+import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.adaptiveSquircleBackground
+import com.android.purebilibili.core.ui.AppSemanticAccentRole
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.util.EasterEggs
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
-import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
-import com.android.purebilibili.core.ui.components.resolveAdaptiveListComponentVisualSpec
-import com.android.purebilibili.core.ui.IOSAlertDialog
-import com.android.purebilibili.core.ui.IOSDialogAction
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardDefaults
+import com.android.purebilibili.core.ui.components.AppCardShape
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIconContentColor
+import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIconContainerColor
+import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIconTint
+import com.android.purebilibili.core.ui.components.rememberAdaptiveListVisualCapabilities
+import androidx.compose.ui.res.stringResource
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppDialogAction
+import com.android.purebilibili.core.ui.components.AppTextField
 import com.android.purebilibili.core.store.MAX_HOME_REFRESH_COUNT
 import com.android.purebilibili.core.store.MIN_HOME_REFRESH_COUNT
+import com.android.purebilibili.core.store.NetworkProxyStore
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.network.policy.AppHttpProxySettings
+import com.android.purebilibili.core.network.policy.formatAppHttpProxyEndpoint
+import com.android.purebilibili.core.network.policy.formatAppHttpProxySummary
+import com.android.purebilibili.core.network.policy.isAppHttpProxyConfigured
+import com.android.purebilibili.core.network.policy.sanitizeProxyHostInput
+import com.android.purebilibili.core.network.policy.sanitizeProxyPortInput
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.feature.dynamic.allDynamicTabSpecs
 import com.android.purebilibili.feature.dynamic.shouldAllowDynamicTabVisibilityToggleOff
 import kotlin.math.roundToInt
@@ -63,11 +98,16 @@ import kotlin.math.roundToInt
 // ═══════════════════════════════════════════════════
 
 // Delegated to core/ui/components/iOSListComponents.kt
-import com.android.purebilibili.core.ui.components.IOSSectionTitle as SettingsSectionTitle
-import com.android.purebilibili.core.ui.components.IOSGroup as SettingsGroup
-import com.android.purebilibili.core.ui.components.IOSSwitchItem as SettingSwitchItem
-import com.android.purebilibili.core.ui.components.IOSClickableItem as SettingClickableItem
-import com.android.purebilibili.core.ui.components.IOSDivider as SettingsDivider
+import com.android.purebilibili.core.ui.animation.entrance
+import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle as SettingsSectionTitle
+import com.android.purebilibili.core.ui.components.AppPreferenceGroup as SettingsGroup
+import com.android.purebilibili.core.ui.components.AppSwitchPreference as SettingSwitchItem
+import com.android.purebilibili.core.ui.components.AppPreference as SettingClickableItem
+import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
+import com.android.purebilibili.core.ui.components.AppPreferenceDivider as SettingsDivider
+import com.android.purebilibili.core.ui.components.AppSliderDialogPreference as SettingSliderItem
+import com.android.purebilibili.core.ui.components.AppPreferenceGroupPresentation
+import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 
 
 
@@ -76,73 +116,23 @@ import com.android.purebilibili.core.ui.components.IOSDivider as SettingsDivider
 // ═══════════════════════════════════════════════════
 
 @Composable
-private fun SettingsCardGroup(
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val isDark = AppSurfaceTokens.groupedListContainer().luminance() < 0.45f
-    val darkTintBase = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-    val baseCardContainer = AppSurfaceTokens.cardContainer()
-    val containerColor = if (isDark) {
-        darkTintBase.compositeOver(baseCardContainer)
-    } else {
-        baseCardContainer
-    }
-    val borderColor = if (isDark) {
-        Color.White.copy(alpha = 0.06f)
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)
-    }
-
-    SettingsGroup(
-        containerColor = containerColor,
-        shape = AppShapes.container(ContainerLevel.Dialog),
-        border = BorderStroke(0.6.dp, borderColor)
-    ) {
-        content()
-    }
+private fun SettingsAdaptiveDivider() {
+    val visualSpec = rememberAdaptiveListVisualCapabilities().componentSpec
+    SettingsDivider(startIndent = visualSpec.dividerStartIndentDp.dp)
 }
 
 @Composable
-fun FollowAuthorSection(
-    onTelegramClick: () -> Unit,
-    onTwitterClick: () -> Unit,
-    onDonateClick: () -> Unit
+internal fun SettingsCardGroup(
+    content: @Composable ColumnScope.() -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val telegramVisual = rememberSettingsEntryVisual(SettingsSearchTarget.TELEGRAM, uiPreset)
-    val twitterVisual = rememberSettingsEntryVisual(SettingsSearchTarget.TWITTER, uiPreset)
-    val donateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DONATE, uiPreset)
-
-    SettingsCardGroup {
-        SettingClickableItem(
-            icon = telegramVisual.icon,
-            iconPainter = telegramVisual.iconResId?.let { painterResource(id = it) },
-            title = "Telegram 频道",
-            value = "@BiliPai",
-            onClick = onTelegramClick,
-            iconTint = telegramVisual.iconTint,
-            enableCopy = true
-        )
-        SettingsDivider(startIndent = 66.dp)
-        SettingClickableItem(
-            icon = twitterVisual.icon,
-            iconPainter = twitterVisual.iconResId?.let { painterResource(id = it) },
-            title = "Twitter / X",
-            value = "@YangY_0x00",
-            onClick = onTwitterClick,
-            iconTint = twitterVisual.iconTint,
-            enableCopy = true
-        )
-        SettingsDivider(startIndent = 66.dp)
-        SettingClickableItem(
-            icon = donateVisual.icon,
-            iconPainter = donateVisual.iconResId?.let { painterResource(id = it) },
-            title = "打赏作者",
-            value = "支持开发",
-            onClick = onDonateClick,
-            iconTint = donateVisual.iconTint,
-            enableCopy = false
-        )
+    SettingsGroup(
+        presentation = if (isMiuixNonGlassEnabled()) {
+            AppPreferenceGroupPresentation.CARD
+        } else {
+            AppPreferenceGroupPresentation.FLAT
+        },
+    ) {
+        content()
     }
 }
 
@@ -152,56 +142,60 @@ fun GeneralSection(
     onPlaybackClick: () -> Unit,
     onBottomBarClick: () -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val appearanceVisual = rememberSettingsEntryVisual(SettingsSearchTarget.APPEARANCE, uiPreset)
-    val playbackVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLAYBACK, uiPreset)
-    val bottomBarVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BOTTOM_BAR, uiPreset)
+    val appearanceVisual = rememberSettingsEntryVisual(SettingsSearchTarget.APPEARANCE)
+    val playbackVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLAYBACK)
+    val bottomBarVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BOTTOM_BAR)
+    val siblingTints = remember { resolveSettingsSiblingIconTints(3) }
 
     SettingsCardGroup {
         SettingClickableItem(
             icon = appearanceVisual.icon,
             iconPainter = appearanceVisual.iconResId?.let { painterResource(id = it) },
             title = "外观设置",
-            value = "主题、图标、模糊效果",
+            value = "界面风格、颜色、字体和显示大小",
             onClick = onAppearanceClick,
-            iconTint = appearanceVisual.iconTint
+            iconTint = siblingTints[0]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = playbackVisual.icon,
             iconPainter = playbackVisual.iconResId?.let { painterResource(id = it) },
             title = "播放设置",
-            value = "解码、手势、后台播放",
+            value = "清晰度、倍速、小窗、后台播放和全屏操作",
             onClick = onPlaybackClick,
-            iconTint = playbackVisual.iconTint
+            iconTint = siblingTints[1]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = bottomBarVisual.icon,
             iconPainter = bottomBarVisual.iconResId?.let { painterResource(id = it) },
             title = "导航设置",
-            value = "底栏、顶部标签、平板侧边栏",
+            value = "底栏、顶部入口、图标文字和排列顺序",
             onClick = onBottomBarClick,
-            iconTint = bottomBarVisual.iconTint
+            iconTint = siblingTints[2]
         )
     }
 }
 
-internal data class SettingsSceneShortcut(
+internal data class SettingsDetailEntry(
     val target: SettingsSearchTarget,
     val title: String,
     val value: String,
+    val openFocus: SettingsSceneDetailFocus? = null,
     val onClick: () -> Unit
 )
 
 internal data class SettingsRootCategoryActions(
     val onAppearanceClick: () -> Unit,
+    val onHomeClick: () -> Unit,
     val onAnimationClick: () -> Unit,
     val onPlaybackClick: () -> Unit,
     val onFocusSettingsClick: () -> Unit,
     val onBottomBarClick: () -> Unit,
     val onPermissionClick: () -> Unit,
+    val onMessageNotificationClick: () -> Unit,
     val onBlockedListClick: () -> Unit,
+    val onCommentFraudHistoryClick: () -> Unit,
     val onPluginsClick: () -> Unit,
     val onExportLogsClick: () -> Unit,
     val onSettingsShareClick: () -> Unit,
@@ -209,8 +203,11 @@ internal data class SettingsRootCategoryActions(
     val onDownloadPathClick: () -> Unit,
     val onImageSavePathClick: () -> Unit,
     val onClearCacheClick: () -> Unit,
+    val onAutoCacheClearIntervalChange: (SettingsManager.AutoCacheClearInterval) -> Unit,
+    val onAutoCacheClearThresholdChange: (Int) -> Unit,
     val onGithubClick: () -> Unit,
     val onTelegramClick: () -> Unit,
+    val onTelegramGroupClick: () -> Unit = {},
     val onTwitterClick: () -> Unit,
     val onDonateClick: () -> Unit,
     val onDisclaimerClick: () -> Unit,
@@ -225,32 +222,44 @@ internal data class SettingsRootCategoryActions(
     val onTipsClick: () -> Unit,
     val onOpenLinksClick: () -> Unit,
     val onPrivacyModeChange: (Boolean) -> Unit,
+    val onSearchSuggestionsChange: (Boolean) -> Unit,
     val onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     val onCrashTrackingChange: (Boolean) -> Unit,
     val onAnalyticsChange: (Boolean) -> Unit,
+    val onEnhancedDiagnosticLoggingChange: (Boolean) -> Unit,
     val onEasterEggChange: (Boolean) -> Unit,
     val onAutoCheckUpdateChange: (Boolean) -> Unit,
+    val onAppUpdateChannelChange: (com.android.purebilibili.core.store.SettingsManager.AppUpdateChannel) -> Unit,
     val onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
     val onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
     val onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
+    val onDynamicAllTabHorizontalUserListVisibleChange: (Boolean) -> Unit,
+    val onDynamicTopBarCollapseOnScrollChange: (Boolean) -> Unit,
+    val onDynamicFeedLayoutModeChange: (com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode) -> Unit,
     val onDynamicTabVisibilityChange: (String) -> Unit,
     val onHomeRefreshCountChange: (Int) -> Unit
 )
 
 internal data class SettingsRootCategoryState(
     val privacyModeEnabled: Boolean,
+    val searchSuggestionsEnabled: Boolean,
     val privacyContentAuthenticationEnabled: Boolean,
     val crashTrackingEnabled: Boolean,
     val analyticsEnabled: Boolean,
+    val enhancedDiagnosticLoggingEnabled: Boolean,
     val pluginCount: Int,
     val customDownloadPath: String?,
     val customImageSavePath: String?,
     val cacheSize: String,
+    val autoCacheClearInterval: SettingsManager.AutoCacheClearInterval,
+    val autoCacheClearThresholdGb: Int,
     val versionName: String,
+    val appIcon: String,
     val easterEggEnabled: Boolean,
     val updateStatusText: String,
     val isCheckingUpdate: Boolean,
     val autoCheckUpdateEnabled: Boolean,
+    val appUpdateChannel: com.android.purebilibili.core.store.SettingsManager.AppUpdateChannel,
     val verificationLabel: String,
     val verificationSubtitle: String,
     val buildSourceValue: String,
@@ -263,35 +272,364 @@ internal data class SettingsRootCategoryState(
     val feedApiType: com.android.purebilibili.core.store.SettingsManager.FeedApiType,
     val incrementalTimelineRefreshEnabled: Boolean,
     val dynamicImagePreviewTextVisible: Boolean,
+    val dynamicAllTabHorizontalUserListVisible: Boolean,
+    val dynamicTopBarCollapseOnScroll: Boolean,
+    val dynamicFeedLayoutMode: com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode,
     val dynamicVisibleTabIds: Set<String>,
     val homeRefreshCount: Int
 )
 
 @Composable
-internal fun SettingsSceneShortcutSection(
-    shortcuts: List<SettingsSceneShortcut>
+internal fun SettingsRootCategoryNavigationSection(
+    category: SettingsRootCategory,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    actions: SettingsRootCategoryActions,
+    state: SettingsRootCategoryState
 ) {
-    val uiPreset = LocalUiPreset.current
+    val visual = rememberSettingsEntryVisual(category.searchTarget)
+    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(visual.iconTint)
+    val iconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 90f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "chevronRotation"
+    )
+
+    Column {
+        // Header row
+        SettingsCardGroup {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(AppShapes.container(ContainerLevel.Chip))
+                        .background(effectiveIconTint),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        visual.icon != null -> AppIcon(
+                            imageVector = visual.icon,
+                            contentDescription = null,
+                            tint = iconContentColor,
+                            modifier = Modifier.size(visual.iconSizeDp.dp)
+                        )
+                        visual.iconResId != null -> AppIcon(
+                            painter = painterResource(id = visual.iconResId),
+                            contentDescription = null,
+                            tint = iconContentColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(
+                        text = category.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    AppText(
+                        text = category.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                AppIcon(
+                    imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                    contentDescription = if (isExpanded) "收起${category.title}" else "展开${category.title}",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer { rotationZ = chevronRotation }
+                )
+            }
+        }
+
+        // Expandable content
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(clip = false) + fadeIn(),
+            exit = shrinkVertically(clip = false) + fadeOut()
+        ) {
+            Box(modifier = Modifier.padding(top = 12.dp)) {
+                SettingsRootCategoryContent(
+                    category = category,
+                    actions = actions,
+                    state = state
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SettingsRootCategoryListSection(
+    categories: List<SettingsRootCategory>,
+    onCategoryClick: (SettingsRootCategory) -> Unit,
+    onDonateClick: () -> Unit,
+) {
+    val siblingTints = remember(categories.size) {
+        resolveSettingsSiblingIconTints(categories.size + 1)
+    }
+    val donateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DONATE)
     SettingsCardGroup {
-        shortcuts.forEachIndexed { index, shortcut ->
-            val visual = rememberSettingsEntryVisual(shortcut.target, uiPreset)
+        categories.forEachIndexed { index, category ->
+            val visual = rememberSettingsEntryVisual(category.searchTarget)
+            SettingsRootCategoryRow(
+                title = category.title,
+                subtitle = category.subtitle,
+                icon = visual.icon,
+                iconPainter = visual.iconResId?.let { painterResource(id = it) },
+                iconTint = siblingTints[index],
+                iconSizeDp = visual.iconSizeDp,
+                onClick = { onCategoryClick(category) },
+            )
+            SettingsAdaptiveDivider()
+        }
+        SettingsRootCategoryRow(
+            title = "打赏作者",
+            subtitle = "支持项目后续持续开发和维护",
+            icon = donateVisual.icon,
+            iconPainter = donateVisual.iconResId?.let { painterResource(id = it) },
+            iconTint = siblingTints.last(),
+            iconSizeDp = donateVisual.iconSizeDp,
+            onClick = onDonateClick,
+        )
+    }
+}
+
+@Composable
+private fun SettingsRootCategoryRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector?,
+    iconPainter: androidx.compose.ui.graphics.painter.Painter?,
+    iconTint: Color,
+    iconSizeDp: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visualSpec = resolveSettingsVisualSpec()
+    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
+    val iconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = 16.dp,
+                vertical = visualSpec.categoryRowVerticalPadding,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(visualSpec.categoryIconBubbleSize)
+                .clip(AppShapes.container(ContainerLevel.Field))
+                .background(effectiveIconTint),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                iconPainter != null -> AppIcon(
+                    painter = iconPainter,
+                    contentDescription = null,
+                    tint = iconContentColor,
+                    modifier = Modifier.size(iconSizeDp.dp),
+                )
+                icon != null -> AppIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconContentColor,
+                    modifier = Modifier.size(iconSizeDp.dp),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            AppText(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            AppText(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        AppIcon(
+            imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
+@Composable
+internal fun SettingsAboutHomeSection(
+    onGithubClick: () -> Unit,
+    onTelegramClick: () -> Unit,
+    onTelegramGroupClick: () -> Unit = {},
+    onCheckUpdateClick: () -> Unit,
+    onDonateClick: () -> Unit
+) {
+    val githubVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME)
+    val telegramVisual = rememberSettingsEntryVisual(SettingsSearchTarget.TELEGRAM)
+    val updateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE)
+    val donateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DONATE)
+
+    SettingsDetailGroup(title = "关于") {
+        SettingsCardGroup {
+            SettingClickableItem(
+                icon = telegramVisual.icon,
+                iconPainter = telegramVisual.iconResId?.let { painterResource(id = it) },
+                title = "Telegram 频道",
+                value = "@bilipai666",
+                onClick = onTelegramClick,
+                iconTint = telegramVisual.iconTint
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = telegramVisual.icon,
+                iconPainter = telegramVisual.iconResId?.let { painterResource(id = it) },
+                title = "Telegram 交流群",
+                value = "@bilipai888",
+                onClick = onTelegramGroupClick,
+                iconTint = telegramVisual.iconTint
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = githubVisual.icon,
+                iconPainter = githubVisual.iconResId?.let { painterResource(id = it) },
+                title = "开源主页",
+                value = "GitHub",
+                onClick = onGithubClick,
+                iconTint = githubVisual.iconTint
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = updateVisual.icon,
+                iconPainter = updateVisual.iconResId?.let { painterResource(id = it) },
+                title = "检查更新",
+                value = "查看最新版本",
+                onClick = onCheckUpdateClick,
+                iconTint = updateVisual.iconTint
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = donateVisual.icon,
+                iconPainter = donateVisual.iconResId?.let { painterResource(id = it) },
+                title = "打赏作者",
+                value = "支持开发",
+                onClick = onDonateClick,
+                iconTint = donateVisual.iconTint,
+                enableCopy = false
+            )
+        }
+    }
+}
+
+@Composable
+internal fun SettingsBackupHomeSection(
+    onSettingsShareClick: () -> Unit,
+    onWebDavBackupClick: () -> Unit,
+    onClearCacheClick: () -> Unit,
+    cacheSize: String
+) {
+    val shareVisual = rememberSettingsEntryVisual(SettingsSearchTarget.SETTINGS_SHARE)
+    val webDavVisual = rememberSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP)
+    val cacheVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CLEAR_CACHE)
+
+    SettingsDetailGroup(title = "设置") {
+        SettingsCardGroup {
+            SettingClickableItem(
+                icon = shareVisual.icon,
+                iconPainter = shareVisual.iconResId?.let { painterResource(id = it) },
+                title = "设置分享",
+                value = "导入、导出与迁移",
+                onClick = onSettingsShareClick,
+                iconTint = shareVisual.iconTint
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = webDavVisual.icon,
+                iconPainter = webDavVisual.iconResId?.let { painterResource(id = it) },
+                title = "WebDAV 备份",
+                value = "云端同步",
+                onClick = onWebDavBackupClick,
+                iconTint = webDavVisual.iconTint
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = cacheVisual.icon,
+                iconPainter = cacheVisual.iconResId?.let { painterResource(id = it) },
+                title = "清理缓存",
+                value = cacheSize,
+                onClick = onClearCacheClick,
+                iconTint = cacheVisual.iconTint
+            )
+        }
+    }
+}
+
+@Composable
+internal fun SettingsDetailGroup(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column {
+        SettingsSectionTitle(title = title)
+        content()
+    }
+}
+
+@Composable
+internal fun SettingsDetailEntrySection(
+    entries: List<SettingsDetailEntry>
+) {
+    val siblingTints = remember(entries.size) {
+        resolveSettingsSiblingIconTints(entries.size)
+    }
+    SettingsCardGroup {
+        entries.forEachIndexed { index, entry ->
+            val visual = rememberSettingsEntryVisual(entry.target)
             SettingClickableItem(
                 icon = visual.icon,
                 iconPainter = visual.iconResId?.let { painterResource(id = it) },
-                title = shortcut.title,
-                subtitle = shortcut.value,
+                title = entry.title,
+                subtitle = entry.value,
                 onClick = {
-                    resolveSettingsSceneDetailFocus(shortcut.target)?.let { detailFocus ->
+                    entry.openFocus?.let { detailFocus ->
                         SettingsSearchFocusController.submit(detailFocus.target, detailFocus.focusId)
-                    }
-                    shortcut.onClick()
+                    } ?: SettingsSearchFocusController.clear()
+                    entry.onClick()
                 },
-                iconTint = visual.iconTint
+                iconTint = siblingTints[index]
             )
-            if (index != shortcuts.lastIndex) {
-                SettingsDivider(startIndent = 66.dp)
+            if (index != entries.lastIndex) {
+                SettingsAdaptiveDivider()
             }
         }
+    }
+}
+
+@Composable
+internal fun SettingsRootCategoryEntranceSection(
+    content: @Composable () -> Unit
+) {
+    Box(modifier = Modifier.entrance()) {
+        content()
     }
 }
 
@@ -301,179 +639,486 @@ internal fun SettingsRootCategoryContent(
     actions: SettingsRootCategoryActions,
     state: SettingsRootCategoryState
 ) {
+    val resolvedCategory = canonicalSettingsRootCategory(category)
     Column {
-        when (category) {
-            SettingsRootCategory.SOCIAL_SUPPORT -> FollowAuthorSection(
-                onTelegramClick = actions.onTelegramClick,
-                onTwitterClick = actions.onTwitterClick,
-                onDonateClick = actions.onDonateClick
-            )
-            SettingsRootCategory.INTERFACE_THEME -> SettingsSceneShortcutSection(
-                shortcuts = listOf(
-                    SettingsSceneShortcut(
-                        target = SettingsSearchTarget.INTERFACE_THEME,
-                        title = "界面与主题",
-                        value = "UI 预设、主题、字体、DPI、动态图标与开屏",
-                        onClick = actions.onAppearanceClick
-                    ),
-                    SettingsSceneShortcut(
-                        target = SettingsSearchTarget.ANIMATION,
-                        title = "动效与图标",
-                        value = "过渡动画、触感反馈、动态图标与底栏搜索入口",
-                        onClick = actions.onAnimationClick
-                    )
-                )
-            )
-            SettingsRootCategory.HOME_FEED -> {
-                SettingsSceneShortcutSection(
-                    shortcuts = listOf(
-                        SettingsSceneShortcut(
-                            target = SettingsSearchTarget.HOME_FEED,
-                            title = "首页展示与壁纸",
-                            value = "展示样式、首页壁纸效果、推荐流卡片宽度",
-                            onClick = actions.onAppearanceClick
-                        ),
-                        SettingsSceneShortcut(
-                            target = SettingsSearchTarget.HOME_FEED,
-                            title = "Focus 设置",
-                            value = "首页入口、关注过滤、搜索精简、相关推荐与历史清空",
-                            onClick = actions.onFocusSettingsClick
+        when (resolvedCategory) {
+            SettingsRootCategory.APPEARANCE_THEME -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "外观与主题") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.INTERFACE_THEME,
+                                    title = "外观设置",
+                                    value = "选择界面风格、颜色、字体、显示大小和启动画面",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.APPEARANCE,
+                                        SettingsSearchFocusIds.APPEARANCE_THEME,
+                                    ),
+                                    onClick = actions.onAppearanceClick,
+                                ),
+                            ),
                         )
-                    )
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                FeedApiSection(
-                    feedApiType = state.feedApiType,
-                    onFeedApiTypeChange = actions.onFeedApiTypeChange,
-                    incrementalTimelineRefreshEnabled = state.incrementalTimelineRefreshEnabled,
-                    onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
-                    dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
-                    onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
-                    dynamicVisibleTabIds = state.dynamicVisibleTabIds,
-                    onDynamicTabVisibilityChange = actions.onDynamicTabVisibilityChange,
-                    homeRefreshCount = state.homeRefreshCount,
-                    onHomeRefreshCountChange = actions.onHomeRefreshCountChange
-                )
+                    }
+                }
             }
-            SettingsRootCategory.NAVIGATION_LABELS -> SettingsSceneShortcutSection(
-                shortcuts = listOf(
-                    SettingsSceneShortcut(
-                        target = SettingsSearchTarget.NAVIGATION,
-                        title = "导航与标签",
-                        value = "底栏、顶部标签、平板侧边栏与底栏项目顺序",
-                        onClick = actions.onBottomBarClick
-                    )
-                )
-            )
-            SettingsRootCategory.PLAYBACK_QUALITY -> SettingsSceneShortcutSection(
-                shortcuts = listOf(
-                    SettingsSceneShortcut(
-                        target = SettingsSearchTarget.PLAYBACK_QUALITY,
-                        title = "播放与画质",
-                        value = "解码、默认画质、自动最高画质、网络、省流量、字幕、倍速与连播",
-                        onClick = actions.onPlaybackClick
-                    )
-                )
-            )
-            SettingsRootCategory.FULLSCREEN_GESTURE -> SettingsSceneShortcutSection(
-                shortcuts = listOf(
-                    SettingsSceneShortcut(
-                        target = SettingsSearchTarget.FULLSCREEN_GESTURE,
-                        title = "全屏与手势",
-                        value = "全屏方向、截图按钮、应用内截图、亮度/音量/进度手势",
-                        onClick = actions.onPlaybackClick
-                    )
-                )
-            )
-            SettingsRootCategory.INTERACTION_COMMENT -> SettingsSceneShortcutSection(
-                shortcuts = listOf(
-                    SettingsSceneShortcut(
-                        target = SettingsSearchTarget.INTERACTION_COMMENT,
-                        title = "互动与评论",
-                        value = "评论发送检测、评论装扮、AI 总结、双击点赞与视频简介",
-                        onClick = actions.onPlaybackClick
-                    )
-                )
-            )
-            SettingsRootCategory.DATA_BACKUP -> DataStorageSection(
-                customDownloadPath = state.customDownloadPath,
-                customImageSavePath = state.customImageSavePath,
-                cacheSize = state.cacheSize,
-                onSettingsShareClick = actions.onSettingsShareClick,
-                onWebDavBackupClick = actions.onWebDavBackupClick,
-                onDownloadPathClick = actions.onDownloadPathClick,
-                onImageSavePathClick = actions.onImageSavePathClick,
-                onClearCacheClick = actions.onClearCacheClick
-            )
-            SettingsRootCategory.PRIVACY_PERMISSION -> PrivacySection(
-                privacyModeEnabled = state.privacyModeEnabled,
-                privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
-                onPrivacyModeChange = actions.onPrivacyModeChange,
-                onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
-                onPermissionClick = actions.onPermissionClick,
-                onBlockedListClick = actions.onBlockedListClick
-            )
-            SettingsRootCategory.DIAGNOSTICS_DEVELOPER -> {
-                SettingsSceneShortcutSection(
-                    shortcuts = listOf(
-                        SettingsSceneShortcut(
-                            target = SettingsSearchTarget.DIAGNOSTICS,
-                            title = "播放器诊断",
-                            value = "诊断日志、详细统计信息、画质降档弹窗与仅提示一次",
-                            onClick = actions.onPlaybackClick
+            SettingsRootCategory.PLAYBACK_QUALITY -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "播放与画质") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.PLAYBACK_QUALITY,
+                                    title = "播放器设置",
+                                    value = "调整解码、清晰度、倍速、小窗和全屏操作",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.PLAYBACK,
+                                        SettingsSearchFocusIds.PLAYBACK_DECODER,
+                                    ),
+                                    onClick = actions.onPlaybackClick,
+                                ),
+                            ),
                         )
-                    )
-                )
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
-                DeveloperSection(
-                    crashTrackingEnabled = state.crashTrackingEnabled,
-                    analyticsEnabled = state.analyticsEnabled,
-                    pluginCount = state.pluginCount,
-                    onCrashTrackingChange = actions.onCrashTrackingChange,
-                    onAnalyticsChange = actions.onAnalyticsChange,
-                    onPluginsClick = actions.onPluginsClick,
-                    onExportLogsClick = actions.onExportLogsClick
-                )
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "互动与评论") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.INTERACTION_COMMENT,
+                                    title = "互动、评论与内容预览",
+                                    value = "调整评论显示、点赞操作、视频简介和内容入口",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.PLAYBACK,
+                                        SettingsSearchFocusIds.PLAYBACK_INTERACTION,
+                                    ),
+                                    onClick = actions.onPlaybackClick,
+                                ),
+                            ),
+                        )
+                    }
+                }
             }
-            SettingsRootCategory.ABOUT_SUPPORT -> {
-                AboutSection(
-                    versionName = state.versionName,
-                    easterEggEnabled = state.easterEggEnabled,
-                    onLicenseClick = actions.onLicenseClick,
-                    onGithubClick = actions.onGithubClick,
-                    onVerificationClick = actions.onVerificationClick,
-                    onBuildSourceClick = actions.onBuildSourceClick,
-                    onBuildFingerprintClick = actions.onBuildFingerprintClick,
-                    onCheckUpdateClick = actions.onCheckUpdateClick,
-                    onViewReleaseNotesClick = actions.onViewReleaseNotesClick,
-                    autoCheckUpdateEnabled = state.autoCheckUpdateEnabled,
-                    onAutoCheckUpdateChange = actions.onAutoCheckUpdateChange,
-                    onVersionClick = actions.onVersionClick,
-                    onReplayOnboardingClick = actions.onReplayOnboardingClick,
-                    onEasterEggChange = actions.onEasterEggChange,
-                    updateStatusText = state.updateStatusText,
-                    isCheckingUpdate = state.isCheckingUpdate,
-                    verificationLabel = state.verificationLabel,
-                    verificationSubtitle = state.verificationSubtitle,
-                    buildSourceValue = state.buildSourceValue,
-                    buildSourceSubtitle = state.buildSourceSubtitle,
-                    buildFingerprintValue = state.buildFingerprintValue,
-                    buildFingerprintCopyValue = state.buildFingerprintCopyValue,
-                    buildFingerprintSubtitle = state.buildFingerprintSubtitle,
-                    versionClickCount = state.versionClickCount,
-                    versionClickThreshold = state.versionClickThreshold
-                )
+            SettingsRootCategory.HOME_RECOMMENDATION -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "首页展示") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.HOME_FEED,
+                                    title = "首页样式与推荐卡片",
+                                    value = "调整卡片布局、壁纸、UP 信息和视频时长",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.HOME_FEED,
+                                        SettingsSearchFocusIds.HOME_OVERVIEW,
+                                    ),
+                                    onClick = actions.onHomeClick,
+                                ),
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.HOME_FEED,
+                                    title = "Focus 设置",
+                                    value = "首页入口、关注过滤、搜索精简、相关推荐与历史清空",
+                                    onClick = actions.onFocusSettingsClick,
+                                ),
+                            ),
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
-                ReleaseChannelPinnedCard(
-                    onGithubClick = actions.onGithubClick,
-                    onTelegramClick = actions.onTelegramClick,
-                    onDisclaimerClick = actions.onDisclaimerClick
-                )
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "推荐流与动态") {
+                        FeedApiSection(
+                            feedApiType = state.feedApiType,
+                            onFeedApiTypeChange = actions.onFeedApiTypeChange,
+                            incrementalTimelineRefreshEnabled = state.incrementalTimelineRefreshEnabled,
+                            onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
+                            dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
+                            onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
+                            dynamicAllTabHorizontalUserListVisible = state.dynamicAllTabHorizontalUserListVisible,
+                            onDynamicAllTabHorizontalUserListVisibleChange =
+                                actions.onDynamicAllTabHorizontalUserListVisibleChange,
+                            dynamicTopBarCollapseOnScroll = state.dynamicTopBarCollapseOnScroll,
+                            onDynamicTopBarCollapseOnScrollChange =
+                                actions.onDynamicTopBarCollapseOnScrollChange,
+                            dynamicFeedLayoutMode = state.dynamicFeedLayoutMode,
+                            onDynamicFeedLayoutModeChange = actions.onDynamicFeedLayoutModeChange,
+                            dynamicVisibleTabIds = state.dynamicVisibleTabIds,
+                            onDynamicTabVisibilityChange = actions.onDynamicTabVisibilityChange,
+                            homeRefreshCount = state.homeRefreshCount,
+                            onHomeRefreshCountChange = actions.onHomeRefreshCountChange,
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.NAVIGATION_INTERACTION -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "导航") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.NAVIGATION,
+                                    title = "导航与标签",
+                                    value = "选择底栏和顶部入口，并调整图标、文字和顺序",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.BOTTOM_BAR,
+                                        SettingsSearchFocusIds.BOTTOM_BAR_START,
+                                    ),
+                                    onClick = actions.onBottomBarClick,
+                                ),
+                            ),
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
-                SupportToolsSection(
-                    onTipsClick = actions.onTipsClick,
-                    onOpenLinksClick = actions.onOpenLinksClick
-                )
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "交互与动效") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.ANIMATION,
+                                    title = "动效与触感",
+                                    value = "控制页面动画、视频转场、振动反馈和玻璃效果",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.ANIMATION,
+                                        SettingsSearchFocusIds.ANIMATION_START,
+                                    ),
+                                    onClick = actions.onAnimationClick,
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.PRIVACY_PERMISSION -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "隐私与权限") {
+                        PrivacySection(
+                            privacyModeEnabled = state.privacyModeEnabled,
+                            searchSuggestionsEnabled = state.searchSuggestionsEnabled,
+                            privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
+                            onPrivacyModeChange = actions.onPrivacyModeChange,
+                            onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
+                            onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
+                            onPermissionClick = actions.onPermissionClick,
+                            onMessageNotificationClick = actions.onMessageNotificationClick,
+                            onBlockedListClick = actions.onBlockedListClick,
+                            onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.STORAGE_BACKUP -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "存储与备份") {
+                        DataStorageSection(
+                            customDownloadPath = state.customDownloadPath,
+                            customImageSavePath = state.customImageSavePath,
+                            cacheSize = state.cacheSize,
+                            onSettingsShareClick = actions.onSettingsShareClick,
+                            onWebDavBackupClick = actions.onWebDavBackupClick,
+                            onDownloadPathClick = actions.onDownloadPathClick,
+                            onImageSavePathClick = actions.onImageSavePathClick,
+                            onClearCacheClick = actions.onClearCacheClick,
+                            autoCacheClearInterval = state.autoCacheClearInterval,
+                            autoCacheClearThresholdGb = state.autoCacheClearThresholdGb,
+                            onAutoCacheClearIntervalChange = actions.onAutoCacheClearIntervalChange,
+                            onAutoCacheClearThresholdChange = actions.onAutoCacheClearThresholdChange,
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.PLUGINS_EXTENSIONS -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "插件与扩展") {
+                        PluginCenterSection(
+                            pluginCount = state.pluginCount,
+                            onPluginsClick = actions.onPluginsClick,
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.APPEARANCE_INTERACTION -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "显示与交互") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.INTERFACE_THEME,
+                                    title = "外观设置",
+                                    value = "选择界面风格、颜色、字体、显示大小和启动画面",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.APPEARANCE,
+                                        SettingsSearchFocusIds.APPEARANCE_THEME,
+                                    ),
+                                    onClick = actions.onAppearanceClick
+                                )
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "动效") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.ANIMATION,
+                                    title = "动效与图标",
+                                    value = "控制页面动画、视频转场、振动反馈和玻璃效果",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.ANIMATION,
+                                        SettingsSearchFocusIds.ANIMATION_START,
+                                    ),
+                                    onClick = actions.onAnimationClick
+                                )
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "导航") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.NAVIGATION,
+                                    title = "导航与标签",
+                                    value = "选择底栏和顶部入口，并调整图标、文字和顺序",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.BOTTOM_BAR,
+                                        SettingsSearchFocusIds.BOTTOM_BAR_START,
+                                    ),
+                                    onClick = actions.onBottomBarClick
+                                )
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "全屏与手势") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.FULLSCREEN_GESTURE,
+                                    title = "全屏与手势",
+                                    value = "设置自动横屏、亮度音量手势和全屏返回方式",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.PLAYBACK,
+                                        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN,
+                                    ),
+                                    onClick = actions.onPlaybackClick
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.CONTENT_PLAYBACK -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "首页展示") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.HOME_FEED,
+                                    title = "首页样式与壁纸",
+                                    value = "调整卡片布局、壁纸、UP 信息和视频时长",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.HOME_FEED,
+                                        SettingsSearchFocusIds.HOME_OVERVIEW,
+                                    ),
+                                    onClick = actions.onHomeClick
+                                )
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "推荐流与动态") {
+                        FeedApiSection(
+                            feedApiType = state.feedApiType,
+                            onFeedApiTypeChange = actions.onFeedApiTypeChange,
+                            incrementalTimelineRefreshEnabled = state.incrementalTimelineRefreshEnabled,
+                            onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
+                            dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
+                            onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
+                            dynamicAllTabHorizontalUserListVisible = state.dynamicAllTabHorizontalUserListVisible,
+                            onDynamicAllTabHorizontalUserListVisibleChange =
+                                actions.onDynamicAllTabHorizontalUserListVisibleChange,
+                            dynamicTopBarCollapseOnScroll = state.dynamicTopBarCollapseOnScroll,
+                            onDynamicTopBarCollapseOnScrollChange =
+                                actions.onDynamicTopBarCollapseOnScrollChange,
+                            dynamicFeedLayoutMode = state.dynamicFeedLayoutMode,
+                            onDynamicFeedLayoutModeChange = actions.onDynamicFeedLayoutModeChange,
+                            dynamicVisibleTabIds = state.dynamicVisibleTabIds,
+                            onDynamicTabVisibilityChange = actions.onDynamicTabVisibilityChange,
+                            homeRefreshCount = state.homeRefreshCount,
+                            onHomeRefreshCountChange = actions.onHomeRefreshCountChange
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "画质与播放") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.PLAYBACK_QUALITY,
+                                    title = "播放与画质",
+                                    value = "选择解码方式、默认清晰度、音质和播放速度",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.PLAYBACK,
+                                        SettingsSearchFocusIds.PLAYBACK_NETWORK,
+                                    ),
+                                    onClick = actions.onPlaybackClick
+                                )
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "互动") {
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.INTERACTION_COMMENT,
+                                    title = "互动与评论",
+                                    value = "调整评论显示、点赞操作、视频简介和内容入口",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.PLAYBACK,
+                                        SettingsSearchFocusIds.PLAYBACK_INTERACTION,
+                                    ),
+                                    onClick = actions.onPlaybackClick
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.PRIVACY_STORAGE -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "同步与存储") {
+                        DataStorageSection(
+                            customDownloadPath = state.customDownloadPath,
+                            customImageSavePath = state.customImageSavePath,
+                            cacheSize = state.cacheSize,
+                            onSettingsShareClick = actions.onSettingsShareClick,
+                            onWebDavBackupClick = actions.onWebDavBackupClick,
+                            onDownloadPathClick = actions.onDownloadPathClick,
+                            onImageSavePathClick = actions.onImageSavePathClick,
+                            onClearCacheClick = actions.onClearCacheClick,
+                            autoCacheClearInterval = state.autoCacheClearInterval,
+                            autoCacheClearThresholdGb = state.autoCacheClearThresholdGb,
+                            onAutoCacheClearIntervalChange = actions.onAutoCacheClearIntervalChange,
+                            onAutoCacheClearThresholdChange = actions.onAutoCacheClearThresholdChange,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "隐私与安全") {
+                        PrivacySection(
+                            privacyModeEnabled = state.privacyModeEnabled,
+                            searchSuggestionsEnabled = state.searchSuggestionsEnabled,
+                            privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
+                            onPrivacyModeChange = actions.onPrivacyModeChange,
+                            onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
+                            onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
+                            onPermissionClick = actions.onPermissionClick,
+                            onMessageNotificationClick = actions.onMessageNotificationClick,
+                            onBlockedListClick = actions.onBlockedListClick,
+                            onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
+                        )
+                    }
+                }
+            }
+            SettingsRootCategory.SYSTEM_ABOUT -> {
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "系统诊断") {
+                        DiagnosticsSection(
+                            crashTrackingEnabled = state.crashTrackingEnabled,
+                            analyticsEnabled = state.analyticsEnabled,
+                            enhancedDiagnosticLoggingEnabled = state.enhancedDiagnosticLoggingEnabled,
+                            onCrashTrackingChange = actions.onCrashTrackingChange,
+                            onAnalyticsChange = actions.onAnalyticsChange,
+                            onEnhancedDiagnosticLoggingChange =
+                                actions.onEnhancedDiagnosticLoggingChange,
+                            onExportLogsClick = actions.onExportLogsClick,
+                        )
+                        SettingsAdaptiveDivider()
+                        SettingsDetailEntrySection(
+                            entries = listOf(
+                                SettingsDetailEntry(
+                                    target = SettingsSearchTarget.DIAGNOSTICS,
+                                    title = "播放器诊断",
+                                    value = "出现黑屏、卡顿或画质切换失败时用于排查问题",
+                                    openFocus = SettingsSceneDetailFocus(
+                                        SettingsSearchTarget.PLAYBACK,
+                                        SettingsSearchFocusIds.PLAYBACK_DEBUG,
+                                    ),
+                                    onClick = actions.onPlaybackClick
+                                )
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "帮助与系统") {
+                        SupportToolsSection(
+                            onTipsClick = actions.onTipsClick,
+                            onOpenLinksClick = actions.onOpenLinksClick,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    SettingsDetailGroup(title = "关于与发布") {
+                        AboutSection(
+                            versionName = state.versionName,
+                            appIconKey = state.appIcon,
+                            easterEggEnabled = state.easterEggEnabled,
+                            onLicenseClick = actions.onLicenseClick,
+                            onGithubClick = actions.onGithubClick,
+                            onVerificationClick = actions.onVerificationClick,
+                            onBuildSourceClick = actions.onBuildSourceClick,
+                            onBuildFingerprintClick = actions.onBuildFingerprintClick,
+                            onCheckUpdateClick = actions.onCheckUpdateClick,
+                            onViewReleaseNotesClick = actions.onViewReleaseNotesClick,
+                            autoCheckUpdateEnabled = state.autoCheckUpdateEnabled,
+                            onAutoCheckUpdateChange = actions.onAutoCheckUpdateChange,
+                            appUpdateChannel = state.appUpdateChannel,
+                            onAppUpdateChannelChange = actions.onAppUpdateChannelChange,
+                            onVersionClick = actions.onVersionClick,
+                            onReplayOnboardingClick = actions.onReplayOnboardingClick,
+                            onEasterEggChange = actions.onEasterEggChange,
+                            updateStatusText = state.updateStatusText,
+                            isCheckingUpdate = state.isCheckingUpdate,
+                            verificationLabel = state.verificationLabel,
+                            verificationSubtitle = state.verificationSubtitle,
+                            buildSourceValue = state.buildSourceValue,
+                            buildSourceSubtitle = state.buildSourceSubtitle,
+                            buildFingerprintValue = state.buildFingerprintValue,
+                            buildFingerprintCopyValue = state.buildFingerprintCopyValue,
+                            buildFingerprintSubtitle = state.buildFingerprintSubtitle,
+                            versionClickCount = state.versionClickCount,
+                            versionClickThreshold = state.versionClickThreshold
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsRootCategoryEntranceSection {
+                    ReleaseChannelPinnedCard(
+                        onGithubClick = actions.onGithubClick,
+                        onTelegramClick = actions.onTelegramClick,
+                        onTelegramGroupClick = actions.onTelegramGroupClick,
+                        onDisclaimerClick = actions.onDisclaimerClick
+                    )
+                }
             }
         }
     }
@@ -484,9 +1129,9 @@ fun SupportToolsSection(
     onTipsClick: () -> Unit,
     onOpenLinksClick: () -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val tipsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.TIPS, uiPreset)
-    val openLinksVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_LINKS, uiPreset)
+    val tipsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.TIPS)
+    val openLinksVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_LINKS)
+    val siblingTints = remember { resolveSettingsSiblingIconTints(2, paletteOffset = 1) }
 
     SettingsCardGroup {
         SettingClickableItem(
@@ -495,16 +1140,16 @@ fun SupportToolsSection(
             title = "小贴士 & 隐藏操作",
             value = "探索更多功能",
             onClick = onTipsClick,
-            iconTint = tipsVisual.iconTint
+            iconTint = siblingTints[0]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = openLinksVisual.icon,
             iconPainter = openLinksVisual.iconResId?.let { painterResource(id = it) },
             title = "默认打开链接",
             value = "设置应用链接支持",
             onClick = onOpenLinksClick,
-            iconTint = openLinksVisual.iconTint
+            iconTint = siblingTints[1]
         )
     }
 }
@@ -513,22 +1158,23 @@ fun SupportToolsSection(
 fun ReleaseChannelPinnedCard(
     onGithubClick: () -> Unit,
     onTelegramClick: () -> Unit,
+    onTelegramGroupClick: () -> Unit = {},
     onDisclaimerClick: () -> Unit
 ) {
-    val disclaimerTint = rememberAdaptiveSemanticIconTint(iOSBlue)
+    val disclaimerTint = rememberAdaptivePreferenceIconTint(iOSBlue)
     val releaseChannelIcon = rememberAppShareIcon()
-    Card(
+    AppCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = AppShapes.container(ContainerLevel.Dialog),
-        colors = CardDefaults.cardColors(
+        shape = AppCardShape.Semantic(ContainerLevel.Dialog),
+        colors = AppCardDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         )
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
+                AppIcon(
                     imageVector = releaseChannelIcon,
                     contentDescription = null,
                     tint = disclaimerTint,
@@ -536,13 +1182,13 @@ fun ReleaseChannelPinnedCard(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "官方发布渠道仅限 GitHub / Telegram",
+                    AppText(
+                        text = "官方渠道：GitHub · 频道 · 群组",
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = "不存在其他官方发布渠道，请注意安装来源安全。",
+                    AppText(
+                        text = "请从官方渠道获取安装包，注意来源安全。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -553,36 +1199,48 @@ fun ReleaseChannelPinnedCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
+                AppOutlinedButton(
                     onClick = onGithubClick,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 10.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text(
+                    AppText(
                         text = "GitHub",
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip
                     )
                 }
-                OutlinedButton(
+                AppOutlinedButton(
                     onClick = onTelegramClick,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 10.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text(
-                        text = "Telegram",
+                    AppText(
+                        text = "频道",
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip
                     )
                 }
-                TextButton(
+                AppOutlinedButton(
+                    onClick = onTelegramGroupClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    AppText(
+                        text = "群组",
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+                AppTextButton(
                     onClick = onDisclaimerClick,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 10.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text(
+                    AppText(
                         text = "完整声明",
                         maxLines = 1,
                         softWrap = false,
@@ -601,47 +1259,43 @@ fun SettingsSubpageEntrySection(
     onExtensionsAndDebugClick: () -> Unit,
     onAboutAndSupportClick: () -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val storageTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSBlue, uiPreset)
-    val privacyTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSPurple, uiPreset)
-    val developerTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSTeal, uiPreset)
-    val aboutTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
-    val contentAndStorageIcon = rememberSettingsSemanticIcon(SettingsIconRole.DATA_BACKUP, uiPreset)
-    val privacyIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_PERMISSION, uiPreset)
-    val developerVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DIAGNOSTICS, uiPreset)
-    val aboutIcon = rememberSettingsSemanticIcon(SettingsIconRole.ABOUT_SUPPORT, uiPreset)
+    val siblingTints = remember { resolveSettingsSiblingIconTints(4, paletteOffset = 2) }
+    val contentAndStorageIcon = rememberSettingsSemanticIcon(SettingsIconRole.DATA_BACKUP)
+    val privacyIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_PERMISSION)
+    val developerVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DIAGNOSTICS)
+    val aboutIcon = rememberSettingsSemanticIcon(SettingsIconRole.ABOUT_SUPPORT)
     SettingsCardGroup {
         SettingClickableItem(
             icon = contentAndStorageIcon,
             title = "内容与存储",
             value = "推荐流、下载与缓存",
             onClick = onContentAndStorageClick,
-            iconTint = storageTint
+            iconTint = siblingTints[0]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = privacyIcon,
             title = "隐私与安全",
             value = "无痕模式、权限与黑名单",
             onClick = onPrivacyAndSecurityClick,
-            iconTint = privacyTint
+            iconTint = siblingTints[1]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = developerVisual.icon,
             iconPainter = developerVisual.iconResId?.let { painterResource(id = it) },
             title = "扩展与调试",
             value = "插件、日志与数据采集",
             onClick = onExtensionsAndDebugClick,
-            iconTint = developerTint
+            iconTint = siblingTints[2]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = aboutIcon,
             title = "关于与支持",
             value = "版本、开源、帮助与作者",
             onClick = onAboutAndSupportClick,
-            iconTint = aboutTint
+            iconTint = siblingTints[3]
         )
     }
 }
@@ -654,84 +1308,106 @@ fun FeedApiSection(
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
     dynamicImagePreviewTextVisible: Boolean,
     onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
+    dynamicAllTabHorizontalUserListVisible: Boolean,
+    onDynamicAllTabHorizontalUserListVisibleChange: (Boolean) -> Unit,
+    dynamicTopBarCollapseOnScroll: Boolean,
+    onDynamicTopBarCollapseOnScrollChange: (Boolean) -> Unit,
+    dynamicFeedLayoutMode: com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode,
+    onDynamicFeedLayoutModeChange: (com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode) -> Unit,
     dynamicVisibleTabIds: Set<String>,
     onDynamicTabVisibilityChange: (String) -> Unit,
     homeRefreshCount: Int,
     onHomeRefreshCountChange: (Int) -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val feedTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
-    val incrementalRefreshTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSGreen, uiPreset)
-    val feedIcon = rememberSettingsSemanticIcon(SettingsIconRole.FEED_API, uiPreset)
-    val refreshIcon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_COUNT, uiPreset)
-    val visibilityIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_TAB_VISIBILITY, uiPreset)
-    val previewTextIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_PREVIEW_TEXT, uiPreset)
+    val siblingTints = remember { resolveSettingsSiblingIconTints(8, paletteOffset = 1) }
+    val feedIcon = rememberSettingsSemanticIcon(SettingsIconRole.FEED_API)
+    val refreshIcon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_COUNT)
+    val visibilityIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_TAB_VISIBILITY)
+    val previewTextIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_PREVIEW_TEXT)
+    val topBarCollapseIcon = rememberSettingsSemanticIcon(SettingsIconRole.NAVIGATION)
     SettingsCardGroup {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = feedIcon,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = feedTint
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "推荐流类型",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = feedApiType.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-
-            IOSSlidingSegmentedControl(
-                options = resolveFeedApiSegmentOptions(),
-                selectedValue = feedApiType,
-                onSelectionChange = onFeedApiTypeChange
-            )
-        }
-        SettingsDivider(startIndent = 66.dp)
-        FeedSwitchItem(
+        SettingsSingleChoicePreference(
+            title = "首页推荐来源",
+            subtitle = feedApiType.description,
+            options = resolveFeedApiSegmentOptions(),
+            selectedValue = feedApiType,
+            icon = feedIcon,
+            iconTint = siblingTints[0],
+            onSelectionChange = onFeedApiTypeChange,
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
             icon = refreshIcon,
-            title = "动态增量刷新",
-            subtitle = "下拉刷新时不重置列表，仅在顶部插入新内容",
+            title = "刷新时保留当前列表",
+            subtitle = "下拉刷新只把新动态加到顶部，不重新排列已看到的内容",
             checked = incrementalTimelineRefreshEnabled,
             onCheckedChange = onIncrementalTimelineRefreshChange,
-            iconTint = incrementalRefreshTint
+            iconTint = siblingTints[1]
         )
-        SettingsDivider(startIndent = 66.dp)
-        FeedSwitchItem(
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
             icon = previewTextIcon,
             title = "动态图片默认显示文字",
             subtitle = "打开图文动态图片时默认显示下方文字，可用右上角眼睛临时切换",
             checked = dynamicImagePreviewTextVisible,
             onCheckedChange = onDynamicImagePreviewTextVisibleChange,
-            iconTint = feedTint
+            iconTint = siblingTints[2]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = visibilityIcon,
+            title = "“全部”页显示关注用户栏",
+            subtitle = "关闭后隐藏顶部横向用户列表，“UP主”页仍可选择关注用户",
+            checked = dynamicAllTabHorizontalUserListVisible,
+            onCheckedChange = onDynamicAllTabHorizontalUserListVisibleChange,
+            iconTint = siblingTints[3]
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = topBarCollapseIcon,
+            title = "浏览动态时收起顶部栏",
+            subtitle = if (dynamicTopBarCollapseOnScroll) {
+                "列表下滑时折叠 Tab 顶栏；横向 UP 主栏仍会单独收起"
+            } else {
+                "Tab 顶栏固定在顶部；横向 UP 主栏仍会单独收起"
+            },
+            checked = dynamicTopBarCollapseOnScroll,
+            onCheckedChange = onDynamicTopBarCollapseOnScrollChange,
+            iconTint = siblingTints[4]
+        )
+        SettingsAdaptiveDivider()
+        SettingsSingleChoicePreference(
+            title = "动态页面布局",
+            subtitle = "瀑布流会按屏幕宽度显示多列；列表模式固定为单列",
+            options = com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode.entries.map { mode ->
+                com.android.purebilibili.core.ui.components.AppSegmentOption(
+                    value = mode,
+                    label = mode.label
+                )
+            },
+            selectedValue = dynamicFeedLayoutMode,
+            icon = feedIcon,
+            iconTint = siblingTints[5],
+            onSelectionChange = onDynamicFeedLayoutModeChange,
+        )
+        SettingsAdaptiveDivider()
         FeedDynamicTabVisibilityItem(
             icon = visibilityIcon,
             visibleTabIds = dynamicVisibleTabIds,
             onTabVisibilityChange = onDynamicTabVisibilityChange,
-            iconTint = feedTint
+            iconTint = siblingTints[6]
         )
-        SettingsDivider(startIndent = 66.dp)
-        FeedRefreshCountItem(
+        SettingsAdaptiveDivider()
+        SettingSliderItem(
             icon = refreshIcon,
-            count = homeRefreshCount,
-            onCountChange = onHomeRefreshCountChange,
-            iconTint = incrementalRefreshTint
+            title = "首页刷新数量",
+            subtitle = resolveHomeRefreshCountSummary(homeRefreshCount),
+            value = homeRefreshCount.toFloat(),
+            onValueChange = { value -> onHomeRefreshCountChange(value.roundToInt()) },
+            valueRange = resolveHomeRefreshSliderRange(),
+            steps = resolveHomeRefreshSliderSteps(),
+            valueFormatter = { value -> value.roundToInt().toString() },
+            iconTint = siblingTints[7]
         )
     }
 }
@@ -743,192 +1419,68 @@ private fun FeedDynamicTabVisibilityItem(
     onTabVisibilityChange: (String) -> Unit,
     iconTint: Color
 ) {
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
-    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    val listCapabilities = rememberAdaptiveListVisualCapabilities()
+    val visualSpec = listCapabilities.componentSpec
+    val rowSpec = listCapabilities.rowSpec
+    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
+    val iconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(
+                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                vertical = rowSpec.insideVerticalPaddingDp.dp
+            )
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
                 modifier = Modifier
                     .size(visualSpec.iconContainerSizeDp.dp)
-                    .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
-                    .background(iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                    .adaptiveSquircleBackground(
+                        color = effectiveIconTint,
+                        cornerRadius = visualSpec.iconCornerRadiusDp.dp,
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
+                AppIcon(
                     icon,
                     contentDescription = null,
-                    tint = iconTint,
+                    tint = iconContentColor,
                     modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                 )
             }
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     text = "动态栏位显示",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
+                AppText(
                     text = "选择动态页显示哪些栏位，至少保留 1 个。隐藏 UP 后，点侧栏用户会直接打开主页。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         allDynamicTabSpecs.forEachIndexed { index, tab ->
             val checked = tab.id in visibleTabIds
             val enabled = shouldAllowDynamicTabVisibilityToggleOff(
                 currentVisibleTabIds = visibleTabIds,
                 targetTabId = tab.id
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(AppShapes.container(ContainerLevel.Card))
-                    .clickable(enabled = enabled) { onTabVisibilityChange(tab.id) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = tab.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                AppAdaptiveSwitch(
-                    checked = checked,
-                    onCheckedChange = { onTabVisibilityChange(tab.id) },
-                    enabled = enabled
-                )
-            }
+            SettingSwitchItem(
+                title = tab.title,
+                checked = checked,
+                onCheckedChange = { onTabVisibilityChange(tab.id) },
+                enabled = enabled
+            )
             if (index != allDynamicTabSpecs.lastIndex) {
-                Spacer(modifier = Modifier.height(4.dp))
+                SettingsAdaptiveDivider()
             }
         }
-    }
-}
-
-@Composable
-private fun FeedSwitchItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    iconTint: Color
-) {
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
-    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Box(
-            modifier = Modifier
-                .size(visualSpec.iconContainerSizeDp.dp)
-                .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
-                .background(iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                AppAdaptiveSwitch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange
-                )
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun FeedRefreshCountItem(
-    icon: ImageVector,
-    count: Int,
-    onCountChange: (Int) -> Unit,
-    iconTint: Color
-) {
-    val sliderRange = resolveHomeRefreshSliderRange()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = iconTint
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "首页刷新数量",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = resolveHomeRefreshCountSummary(count),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Slider(
-            value = count.toFloat(),
-            onValueChange = { value -> onCountChange(value.roundToInt()) },
-            valueRange = sliderRange,
-            steps = resolveHomeRefreshSliderSteps()
-        )
     }
 }
 
@@ -947,57 +1499,106 @@ internal fun resolveHomeRefreshSliderSteps(): Int {
 @Composable
 fun PrivacySection(
     privacyModeEnabled: Boolean,
+    searchSuggestionsEnabled: Boolean,
     privacyContentAuthenticationEnabled: Boolean,
     onPrivacyModeChange: (Boolean) -> Unit,
+    onSearchSuggestionsChange: (Boolean) -> Unit,
     onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     onPermissionClick: () -> Unit,
-    onBlockedListClick: () -> Unit // [New]
+    onMessageNotificationClick: () -> Unit,
+    onBlockedListClick: () -> Unit, // [New]
+    onCommentFraudHistoryClick: () -> Unit // [New]
 ) {
-    val uiPreset = LocalUiPreset.current
-    val privacyModeTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSPurple, uiPreset)
-    val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION, uiPreset)
-    val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST, uiPreset)
-    val visibilityOffIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_PERMISSION, uiPreset)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val searchHintEnabled by remember(context) {
+        com.android.purebilibili.core.store.SearchHintSettingsStore.isEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val siblingTints = remember { resolveSettingsSiblingIconTints(4, paletteOffset = 4) }
+    val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION)
+    val messageNotificationVisual =
+        rememberSettingsEntryVisual(SettingsSearchTarget.MESSAGE_NOTIFICATION)
+    val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST)
+    val visibilityOffIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_HISTORY)
     val contentAuthenticationIcon = rememberSettingsSemanticIcon(
         SettingsIconRole.PRIVACY_CONTENT_AUTHENTICATION,
-        uiPreset
     )
 
     SettingsCardGroup {
         SettingSwitchItem(
             icon = visibilityOffIcon,
+            title = "搜索框推荐词",
+            subtitle = "显示应用提供的默认搜索词；关闭后显示固定搜索提示",
+            checked = searchHintEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SearchHintSettingsStore.setEnabled(context, enabled)
+                }
+            },
+            iconTint = siblingTints[0],
+        )
+        SettingsAdaptiveDivider()
+
+        SettingSwitchItem(
+            icon = visibilityOffIcon,
+            title = "搜索推荐词",
+            subtitle = "在搜索页显示关注更新和推荐词（如关注 UP 主更新等），默认开启",
+            checked = searchSuggestionsEnabled,
+            onCheckedChange = onSearchSuggestionsChange,
+            iconTint = siblingTints[0],
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = visibilityOffIcon,
             title = "不记录历史",
-            subtitle = "启用后不记录播放历史和搜索历史",
+            subtitle = "开启后不再新增播放和搜索历史，已有记录不会被删除",
             checked = privacyModeEnabled,
             onCheckedChange = onPrivacyModeChange,
-            iconTint = privacyModeTint
+            iconTint = siblingTints[0]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = contentAuthenticationIcon,
             title = "进入隐私内容时验证",
-            subtitle = "进入收藏、历史等页面时使用指纹、人脸或锁屏密码",
+            subtitle = "进入收藏、历史等页面前使用指纹、人脸或锁屏密码确认身份",
             checked = privacyContentAuthenticationEnabled,
             onCheckedChange = onPrivacyContentAuthenticationChange,
-            iconTint = permissionVisual.iconTint
+            iconTint = siblingTints[1]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = permissionVisual.icon,
             iconPainter = permissionVisual.iconResId?.let { painterResource(id = it) },
             title = "权限管理",
             value = "查看应用权限",
             onClick = onPermissionClick,
-            iconTint = permissionVisual.iconTint
+            iconTint = siblingTints[2]
         )
-         SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
+            icon = messageNotificationVisual.icon,
+            iconPainter = messageNotificationVisual.iconResId?.let { painterResource(id = it) },
+            title = "消息通知",
+            value = "后台消息、关注更新与开播提醒",
+            onClick = onMessageNotificationClick,
+            iconTint = messageNotificationVisual.iconTint
+        )
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = blockedListVisual.icon,
             iconPainter = blockedListVisual.iconResId?.let { painterResource(id = it) },
             title = "黑名单管理",
             value = "管理已屏蔽的 UP 主",
             onClick = onBlockedListClick,
-            iconTint = blockedListVisual.iconTint
+            iconTint = siblingTints[3]
+        )
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
+            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_shield_24),
+            title = "发评反诈历史",
+            value = "查看历史发评与风控状态",
+            onClick = onCommentFraudHistoryClick,
+            iconTint = com.android.purebilibili.core.theme.iOSPink
         )
     }
 }
@@ -1007,18 +1608,24 @@ fun DataStorageSection(
     customDownloadPath: String?,
     customImageSavePath: String?,
     cacheSize: String,
+    autoCacheClearInterval: SettingsManager.AutoCacheClearInterval,
+    autoCacheClearThresholdGb: Int,
     onSettingsShareClick: () -> Unit,
     onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onImageSavePathClick: () -> Unit,
-    onClearCacheClick: () -> Unit
+    onClearCacheClick: () -> Unit,
+    onAutoCacheClearIntervalChange: (SettingsManager.AutoCacheClearInterval) -> Unit,
+    onAutoCacheClearThresholdChange: (Int) -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val settingsShareVisual = rememberSettingsEntryVisual(SettingsSearchTarget.SETTINGS_SHARE, uiPreset)
-    val webDavVisual = rememberSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP, uiPreset)
-    val downloadPathVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DOWNLOAD_PATH, uiPreset)
-    val imageSavePathVisual = rememberSettingsEntryVisual(SettingsSearchTarget.IMAGE_SAVE_PATH, uiPreset)
-    val clearCacheVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CLEAR_CACHE, uiPreset)
+    val settingsShareVisual = rememberSettingsEntryVisual(SettingsSearchTarget.SETTINGS_SHARE)
+    val webDavVisual = rememberSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP)
+    val downloadPathVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DOWNLOAD_PATH)
+    val imageSavePathVisual = rememberSettingsEntryVisual(SettingsSearchTarget.IMAGE_SAVE_PATH)
+    val clearCacheVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CLEAR_CACHE)
+    val siblingTints = remember { resolveSettingsSiblingIconTints(7, paletteOffset = 2) }
+    val showExplicitActionChevron =
+        rememberAdaptiveListVisualCapabilities().showExplicitActionChevron
 
     SettingsCardGroup {
         SettingClickableItem(
@@ -1027,9 +1634,9 @@ fun DataStorageSection(
             title = "设置分享",
             value = "导出并导入可分享设置",
             onClick = onSettingsShareClick,
-            iconTint = settingsShareVisual.iconTint
+            iconTint = siblingTints[0]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         // WebDAV 是“备份副本”场景，使用双文档图标比链路图标更贴合语义。
         SettingClickableItem(
             icon = webDavVisual.icon,
@@ -1037,98 +1644,362 @@ fun DataStorageSection(
             title = "WebDAV 云备份",
             value = "备份与恢复设置/插件",
             onClick = onWebDavBackupClick,
-            iconTint = webDavVisual.iconTint
+            iconTint = siblingTints[1]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = downloadPathVisual.icon,
             iconPainter = downloadPathVisual.iconResId?.let { painterResource(id = it) },
             title = "下载位置",
             value = if (customDownloadPath != null) "自定义" else "默认",
             onClick = onDownloadPathClick,
-            iconTint = downloadPathVisual.iconTint
+            iconTint = siblingTints[2],
+            showChevron = showExplicitActionChevron
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = imageSavePathVisual.icon,
             iconPainter = imageSavePathVisual.iconResId?.let { painterResource(id = it) },
             title = "图片保存位置",
             value = if (customImageSavePath != null) "已选择目录" else "默认",
             onClick = onImageSavePathClick,
-            iconTint = imageSavePathVisual.iconTint
+            iconTint = siblingTints[3],
+            showChevron = showExplicitActionChevron
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = clearCacheVisual.icon,
             iconPainter = clearCacheVisual.iconResId?.let { painterResource(id = it) },
             title = "清除缓存",
             value = cacheSize,
             onClick = onClearCacheClick,
-            iconTint = clearCacheVisual.iconTint
+            iconTint = siblingTints[4],
+            showChevron = showExplicitActionChevron
+        )
+        SettingsAdaptiveDivider()
+        SettingsSingleChoicePreference(
+            title = "自动清理缓存",
+            subtitle = "到达设定周期后，在应用启动时删除可重新下载的缓存",
+            options = SettingsManager.AutoCacheClearInterval.entries.map { interval ->
+                com.android.purebilibili.core.ui.components.AppSegmentOption(
+                    value = interval,
+                    label = interval.label
+                )
+            },
+            selectedValue = autoCacheClearInterval,
+            icon = clearCacheVisual.icon,
+            iconTint = siblingTints[5],
+            onSelectionChange = onAutoCacheClearIntervalChange
+        )
+        SettingsAdaptiveDivider()
+        SettingSliderItem(
+            icon = clearCacheVisual.icon,
+            title = "缓存容量上限",
+            subtitle = "缓存超过设定容量后，在应用启动时自动清理；默认 5 GB",
+            value = autoCacheClearThresholdGb.toFloat(),
+            onValueChange = { value -> onAutoCacheClearThresholdChange(value.roundToInt()) },
+            valueRange = 1f..20f,
+            steps = 18,
+            valueFormatter = { value -> "${value.roundToInt()} GB" },
+            iconTint = siblingTints[6]
         )
     }
 }
 
 @Composable
-fun DeveloperSection(
-    crashTrackingEnabled: Boolean,
-    analyticsEnabled: Boolean,
+private fun PluginCenterSection(
     pluginCount: Int,
-    onCrashTrackingChange: (Boolean) -> Unit,
-    onAnalyticsChange: (Boolean) -> Unit,
     onPluginsClick: () -> Unit,
-    onExportLogsClick: () -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val crashTrackingTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSTeal, uiPreset)
-    val analyticsTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
-    val pluginsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS, uiPreset)
-    val exportLogsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.EXPORT_LOGS, uiPreset)
-    val crashTrackingIcon = rememberSettingsSemanticIcon(SettingsIconRole.CRASH_TRACKING, uiPreset)
-    val analyticsIcon = rememberSettingsSemanticIcon(SettingsIconRole.ANALYTICS, uiPreset)
-
+    val pluginsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS)
     SettingsCardGroup {
-        SettingSwitchItem(
-            icon = crashTrackingIcon,
-            title = "崩溃追踪",
-            subtitle = "默认开启，仅用于定位崩溃与严重故障",
-            checked = crashTrackingEnabled,
-            onCheckedChange = onCrashTrackingChange,
-            iconTint = crashTrackingTint
-        )
-        SettingsDivider(startIndent = 66.dp)
-        SettingSwitchItem(
-            icon = analyticsIcon,
-            title = "使用情况统计",
-            subtitle = "默认开启，开启后用于匿名统计每日活跃与基础使用情况",
-            checked = analyticsEnabled,
-            onCheckedChange = onAnalyticsChange,
-            iconTint = analyticsTint
-        )
-        SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
             icon = pluginsVisual.icon,
             iconPainter = pluginsVisual.iconResId?.let { painterResource(id = it) },
             title = "插件中心",
             value = "$pluginCount 个已启用",
             onClick = onPluginsClick,
-            iconTint = pluginsVisual.iconTint
+            iconTint = pluginsVisual.iconTint,
         )
-        SettingsDivider(startIndent = 66.dp)
+    }
+}
+
+@Composable
+private fun DiagnosticsSection(
+    crashTrackingEnabled: Boolean,
+    analyticsEnabled: Boolean,
+    enhancedDiagnosticLoggingEnabled: Boolean,
+    onCrashTrackingChange: (Boolean) -> Unit,
+    onAnalyticsChange: (Boolean) -> Unit,
+    onEnhancedDiagnosticLoggingChange: (Boolean) -> Unit,
+    onExportLogsClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val siblingTints = remember { resolveSettingsSiblingIconTints(6, paletteOffset = 5) }
+    val exportLogsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.EXPORT_LOGS)
+    val useMd3ExportLogsDescription = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
+    val exportLogsDescription = "导出前统一脱敏，仅由你主动分享"
+    val proxySettings by NetworkProxyStore.settings.collectAsStateWithLifecycle(
+        initialValue = NetworkProxyStore.getSync(context)
+    )
+    var showProxyDialog by remember { mutableStateOf(false) }
+    var showEnhancedDiagnosticConsent by remember { mutableStateOf(false) }
+
+    SettingsCardGroup {
+        SettingSwitchItem(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.CRASH_TRACKING),
+            title = "崩溃追踪",
+            subtitle = "记录崩溃和严重故障信息，帮助定位问题；默认开启",
+            checked = crashTrackingEnabled,
+            onCheckedChange = onCrashTrackingChange,
+            iconTint = siblingTints[0],
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.ANALYTICS),
+            title = "使用情况统计",
+            subtitle = "匿名统计每日活跃和基础功能使用情况，不包含账号内容；默认开启",
+            checked = analyticsEnabled,
+            onCheckedChange = onAnalyticsChange,
+            iconTint = siblingTints[1],
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_pest_control_24),
+            title = "增强诊断日志",
+            subtitle = if (enhancedDiagnosticLoggingEnabled) {
+                "正在采集脱敏后的详细运行信息；关闭会清除详细日志，保留基础错误日志"
+            } else {
+                "基础错误日志默认保留；开启后记录更多排障信息，不含凭据与观看内容"
+            },
+            checked = enhancedDiagnosticLoggingEnabled,
+            onCheckedChange = { enabled ->
+                if (enabled) showEnhancedDiagnosticConsent = true
+                else onEnhancedDiagnosticLoggingChange(false)
+            },
+            iconTint = siblingTints[2],
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lan_24),
+            title = "HTTP 代理",
+            subtitle = formatAppHttpProxySummary(proxySettings) +
+                "（仅应用接口和登录请求，视频播放仍直接连接）",
+            checked = proxySettings.enabled,
+            onCheckedChange = { enabled ->
+                if (enabled && !isAppHttpProxyConfigured(proxySettings)) {
+                    showProxyDialog = true
+                } else {
+                    NetworkProxyStore.save(context, proxySettings.copy(enabled = enabled))
+                }
+            },
+            iconTint = siblingTints[3],
+        )
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
+            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_hub_24),
+            title = "代理地址",
+            value = formatAppHttpProxyEndpoint(proxySettings),
+            subtitle = "填写“主机:端口”，例如 127.0.0.1:7890",
+            onClick = { showProxyDialog = true },
+            iconTint = siblingTints[4],
+        )
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = exportLogsVisual.icon,
             iconPainter = exportLogsVisual.iconResId?.let { painterResource(id = it) },
             title = "导出日志",
-            value = "播放器诊断与问题反馈",
+            subtitle = exportLogsDescription.takeIf { useMd3ExportLogsDescription },
+            value = exportLogsDescription.takeUnless { useMd3ExportLogsDescription },
             onClick = onExportLogsClick,
-            iconTint = exportLogsVisual.iconTint
+            iconTint = siblingTints[5],
         )
+    }
+
+    if (showProxyDialog) {
+        NetworkProxyEditDialog(
+            initial = proxySettings,
+            onDismiss = { showProxyDialog = false },
+            onConfirm = { next ->
+                NetworkProxyStore.save(context, next)
+                showProxyDialog = false
+            },
+        )
+    }
+
+    if (showEnhancedDiagnosticConsent) {
+        AppAlertDialog(
+            onDismissRequest = { showEnhancedDiagnosticConsent = false },
+            title = { AppText("开启增强诊断日志？", fontWeight = FontWeight.Bold) },
+            text = {
+                AppText(
+                    text = "将记录应用版本、设备与系统环境、请求结果、播放器状态和错误堆栈。" +
+                        "账号凭据、用户标识、视频标识、搜索词和用户输入会在写入前脱敏。" +
+                        "详细日志仅保存在应用私有目录（最多 256KB），不会自动上传；关闭后会清除详细日志。" +
+                        "基础错误与启动诊断另行保留（最多 64KB），崩溃快照单独保存，可在诊断设置中清理。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            confirmButton = {
+                AppDialogAction(
+                    onClick = {
+                        showEnhancedDiagnosticConsent = false
+                        onEnhancedDiagnosticLoggingChange(true)
+                    }
+                ) { AppText("同意并开启") }
+            },
+            dismissButton = {
+                AppDialogAction(onClick = { showEnhancedDiagnosticConsent = false }) {
+                    AppText("取消")
+                }
+            },
+        )
+    }
+}
+
+/**
+ * Adaptive dialog for app HTTP proxy host/port (API traffic only).
+ * Uses design-system adaptive entry points so Material 3 style renders MD3
+ * primitives and Miuix style renders Miuix native components.
+ */
+@Composable
+private fun NetworkProxyEditDialog(
+    initial: AppHttpProxySettings,
+    onDismiss: () -> Unit,
+    onConfirm: (AppHttpProxySettings) -> Unit,
+) {
+    var host by remember(initial) { mutableStateOf(initial.host) }
+    var portText by remember(initial) { mutableStateOf(initial.portText) }
+    var enabled by remember(initial) { mutableStateOf(initial.enabled) }
+    val draft = AppHttpProxySettings(
+        enabled = enabled,
+        host = sanitizeProxyHostInput(host),
+        portText = sanitizeProxyPortInput(portText),
+    )
+    val canSave = !enabled || isAppHttpProxyConfigured(draft)
+
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            AppText(
+                text = "设置 HTTP 代理",
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppText(
+                    text = "仅作用于 API / 登录请求。播放媒体仍直连，避免本地代理端口不可用导致卡顿。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AppTextField(
+                    value = host,
+                    onValueChange = { host = it },
+                    label = "主机",
+                    placeholder = "127.0.0.1",
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                AppTextField(
+                    value = portText,
+                    onValueChange = { portText = sanitizeProxyPortInput(it) },
+                    label = "端口",
+                    placeholder = "7890",
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    AppText(
+                        text = "启用代理",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    AppAdaptiveSwitch(
+                        checked = enabled,
+                        onCheckedChange = { enabled = it },
+                    )
+                }
+                if (enabled && !isAppHttpProxyConfigured(draft)) {
+                    AppText(
+                        text = "请填写有效的主机与端口（1–65535）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            AppDialogAction(
+                onClick = {
+                    if (canSave) {
+                        onConfirm(draft)
+                    }
+                },
+            ) {
+                AppText(
+                    text = "保存",
+                    color = if (canSave) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    },
+                )
+            }
+        },
+        dismissButton = {
+            AppDialogAction(onClick = onDismiss) {
+                AppText("取消")
+            }
+        },
+    )
+}
+
+@Composable
+fun DeveloperSection(
+    crashTrackingEnabled: Boolean,
+    analyticsEnabled: Boolean,
+    enhancedDiagnosticLoggingEnabled: Boolean,
+    pluginCount: Int,
+    onCrashTrackingChange: (Boolean) -> Unit,
+    onAnalyticsChange: (Boolean) -> Unit,
+    onEnhancedDiagnosticLoggingChange: (Boolean) -> Unit,
+    onPluginsClick: () -> Unit,
+    onExportLogsClick: () -> Unit
+) {
+    // Keep public API for older call sites; diagnostics + proxy live in DiagnosticsSection.
+    val pluginsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        DiagnosticsSection(
+            crashTrackingEnabled = crashTrackingEnabled,
+            analyticsEnabled = analyticsEnabled,
+            enhancedDiagnosticLoggingEnabled = enhancedDiagnosticLoggingEnabled,
+            onCrashTrackingChange = onCrashTrackingChange,
+            onAnalyticsChange = onAnalyticsChange,
+            onEnhancedDiagnosticLoggingChange = onEnhancedDiagnosticLoggingChange,
+            onExportLogsClick = onExportLogsClick,
+        )
+        SettingsCardGroup {
+            SettingClickableItem(
+                icon = pluginsVisual.icon,
+                iconPainter = pluginsVisual.iconResId?.let { painterResource(id = it) },
+                title = "插件中心",
+                value = "$pluginCount 个已启用",
+                onClick = onPluginsClick,
+                iconTint = pluginsVisual.iconTint
+            )
+        }
     }
 }
 
 @Composable
 fun AboutSection(
     versionName: String,
+    appIconKey: String,
     easterEggEnabled: Boolean,
     onLicenseClick: () -> Unit,
     onGithubClick: () -> Unit,
@@ -1139,6 +2010,8 @@ fun AboutSection(
     onViewReleaseNotesClick: () -> Unit,
     autoCheckUpdateEnabled: Boolean,
     onAutoCheckUpdateChange: (Boolean) -> Unit,
+    appUpdateChannel: SettingsManager.AppUpdateChannel,
+    onAppUpdateChannelChange: (SettingsManager.AppUpdateChannel) -> Unit,
     onVersionClick: () -> Unit,
     onReplayOnboardingClick: () -> Unit,
     onEasterEggChange: (Boolean) -> Unit,
@@ -1154,21 +2027,28 @@ fun AboutSection(
     versionClickCount: Int = 0,
     versionClickThreshold: Int = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
 ) {
+    val context = LocalContext.current
+    val appIconAppearance by SettingsManager.getAppIconAppearance(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.getAppIconAppearanceSync(context)
+        )
+    val appIconRes = remember(appIconKey, appIconAppearance) {
+        resolveIconOptionPreviewRes(appIconKey, appIconAppearance)
+    }
     var detailDialogContent by remember { mutableStateOf<AppBuildInfoDialogContent?>(null) }
-    val uiPreset = LocalUiPreset.current
-    val autoCheckTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
-    val easterEggTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSYellow, uiPreset)
-    val licensesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_LICENSES, uiPreset)
-    val openSourceHomeVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME, uiPreset)
-    val checkUpdateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE, uiPreset)
-    val releaseNotesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.VIEW_RELEASE_NOTES, uiPreset)
-    val replayOnboardingVisual = rememberSettingsEntryVisual(SettingsSearchTarget.REPLAY_ONBOARDING, uiPreset)
-    val notificationIcon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_CHECK_UPDATE, uiPreset)
-    val infoIcon = rememberSettingsSemanticIcon(SettingsIconRole.ABOUT_SUPPORT, uiPreset)
-    val sparklesIcon = rememberSettingsSemanticIcon(SettingsIconRole.EASTER_EGG, uiPreset)
-    val verificationIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_VERIFICATION, uiPreset)
-    val buildSourceIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_SOURCE, uiPreset)
-    val buildFingerprintIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_FINGERPRINT, uiPreset)
+    val easterEggTint = rememberSettingsEntryTint(AppSemanticAccentRole.TERTIARY, iOSYellow)
+    val updateSiblingTints = remember { resolveSettingsSiblingIconTints(5, paletteOffset = 3) }
+    val licensesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_LICENSES)
+    val openSourceHomeVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME)
+    val checkUpdateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE)
+    val releaseNotesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.VIEW_RELEASE_NOTES)
+    val replayOnboardingVisual = rememberSettingsEntryVisual(SettingsSearchTarget.REPLAY_ONBOARDING)
+    val notificationIcon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_CHECK_UPDATE)
+    val infoIcon = rememberSettingsSemanticIcon(SettingsIconRole.APP_VERSION)
+    val sparklesIcon = rememberSettingsSemanticIcon(SettingsIconRole.EASTER_EGG)
+    val verificationIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_VERIFICATION)
+    val buildSourceIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_SOURCE)
+    val buildFingerprintIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_FINGERPRINT)
 
     val safeThreshold = versionClickThreshold.coerceAtLeast(1)
     val normalizedClickCount = versionClickCount.coerceAtLeast(0)
@@ -1198,9 +2078,9 @@ fun AboutSection(
 
     detailDialogContent?.let { dialogContent ->
         val dialogScrollState = rememberScrollState()
-        IOSAlertDialog(
+        AppAlertDialog(
             onDismissRequest = { detailDialogContent = null },
-            title = { Text(dialogContent.title) },
+            title = { AppText(dialogContent.title) },
             text = {
                 Column(
                     modifier = Modifier
@@ -1208,13 +2088,13 @@ fun AboutSection(
                         .heightIn(max = 320.dp)
                         .verticalScroll(dialogScrollState)
                 ) {
-                    Text(
+                    AppText(
                         text = dialogContent.value,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    AppText(
                         text = dialogContent.body,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1222,7 +2102,7 @@ fun AboutSection(
                 }
             },
             confirmButton = {
-                IOSDialogAction(
+                AppDialogAction(
                     onClick = {
                         when (dialogContent.action) {
                             AppBuildInfoDialogAction.VIEW_VERIFICATION -> onVerificationClick()
@@ -1232,18 +2112,36 @@ fun AboutSection(
                         detailDialogContent = null
                     }
                 ) {
-                    Text(dialogContent.actionLabel)
+                    AppText(dialogContent.actionLabel)
                 }
             },
             dismissButton = {
-                IOSDialogAction(onClick = { detailDialogContent = null }) {
-                    Text("关闭")
+                AppDialogAction(onClick = { detailDialogContent = null }) {
+                    AppText("关闭")
                 }
             }
         )
     }
 
+    AboutProjectOverviewCard(
+        versionName = versionName,
+        appIconRes = appIconRes,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+
+    SettingsSectionTitle(title = "源码与验证")
     SettingsCardGroup {
+        SettingClickableItem(
+            icon = openSourceHomeVisual.icon,
+            iconPainter = openSourceHomeVisual.iconResId?.let { painterResource(id = it) },
+            title = "开源主页",
+            value = "GitHub",
+            onClick = onGithubClick,
+            iconTint = openSourceHomeVisual.iconTint,
+            enableCopy = true,
+            onCopyRequest = rememberClipboardCopyHandler(),
+        )
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = licensesVisual.icon,
             iconPainter = licensesVisual.iconResId?.let { painterResource(id = it) },
@@ -1252,17 +2150,7 @@ fun AboutSection(
             onClick = onLicenseClick,
             iconTint = licensesVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
-        SettingClickableItem(
-            icon = openSourceHomeVisual.icon,
-            iconPainter = openSourceHomeVisual.iconResId?.let { painterResource(id = it) },
-            title = "开源主页",
-            value = "GitHub",
-            onClick = onGithubClick,
-            iconTint = openSourceHomeVisual.iconTint,
-            enableCopy = true
-        )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = verificationIcon,
             title = "源码一致性",
@@ -1280,7 +2168,7 @@ fun AboutSection(
                 else -> iOSOrange
             }
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = buildSourceIcon,
             title = "构建来源",
@@ -1293,9 +2181,10 @@ fun AboutSection(
                 )
             },
             iconTint = iOSOrange,
-            enableCopy = true
+            enableCopy = true,
+            onCopyRequest = rememberClipboardCopyHandler(),
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = buildFingerprintIcon,
             title = "SHA-256",
@@ -1310,54 +2199,79 @@ fun AboutSection(
                 )
             },
             iconTint = iOSPurple,
-            enableCopy = true
+            enableCopy = true,
+            onCopyRequest = rememberClipboardCopyHandler(),
         )
-        SettingsDivider(startIndent = 66.dp)
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    SettingsSectionTitle(title = "更新")
+    SettingsCardGroup {
         SettingClickableItem(
             icon = checkUpdateVisual.icon,
             iconPainter = checkUpdateVisual.iconResId?.let { painterResource(id = it) },
             title = "检查更新",
             value = if (isCheckingUpdate) "检查中..." else updateStatusText,
             onClick = onCheckUpdateClick,
-            iconTint = checkUpdateVisual.iconTint
+            iconTint = updateSiblingTints[1]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = releaseNotesVisual.icon,
             iconPainter = releaseNotesVisual.iconResId?.let { painterResource(id = it) },
             title = "查看更新日志",
             value = "最新版本说明",
             onClick = onViewReleaseNotesClick,
-            iconTint = releaseNotesVisual.iconTint
+            iconTint = updateSiblingTints[2]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = notificationIcon,
             title = "自动检查更新",
             subtitle = resolveAutoCheckUpdateSubtitle(autoCheckEnabled = autoCheckUpdateEnabled),
             checked = autoCheckUpdateEnabled,
             onCheckedChange = onAutoCheckUpdateChange,
-            iconTint = autoCheckTint
+            iconTint = updateSiblingTints[3]
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
+        SettingsSingleChoicePreference(
+            title = "检测渠道",
+            subtitle = appUpdateChannel.description,
+            options = SettingsManager.AppUpdateChannel.entries.map { channel ->
+                com.android.purebilibili.core.ui.components.AppSegmentOption(
+                    value = channel,
+                    label = channel.label
+                )
+            },
+            selectedValue = appUpdateChannel,
+            icon = checkUpdateVisual.icon,
+            iconTint = updateSiblingTints[4],
+            onSelectionChange = onAppUpdateChannelChange
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    SettingsSectionTitle(title = "辅助")
+    SettingsCardGroup {
         SettingClickableItem(
             icon = infoIcon,
             title = "版本",
             value = versionValue,
             onClick = onVersionClick,
             iconTint = versionIconTint,
-            enableCopy = true
+            enableCopy = true,
+            onCopyRequest = rememberClipboardCopyHandler(),
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = replayOnboardingVisual.icon,
             iconPainter = replayOnboardingVisual.iconResId?.let { painterResource(id = it) },
-            title = "重播新手引导",
-            value = "了解应用功能",
+            title = "重看使用须知",
+            value = "开源约定与官方渠道",
             onClick = onReplayOnboardingClick,
             iconTint = replayOnboardingVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = sparklesIcon,
             title = "趣味彩蛋",
@@ -1365,6 +2279,199 @@ fun AboutSection(
             checked = easterEggEnabled,
             onCheckedChange = onEasterEggChange,
             iconTint = easterEggTint
+        )
+    }
+}
+
+internal data class AboutContributor(
+    val name: String,
+    val githubLogin: String,
+    val avatarResId: Int? = null,
+    val avatarUrl: String? = null
+) {
+    val profileUrl: String get() = "https://github.com/$githubLogin"
+}
+
+// 默认使用本地头像以避免进入关于页时请求 GitHub；个别新贡献者可使用其公开头像链接。
+internal val AboutContributors = listOf(
+    AboutContributor("jay3-yy", "jay3-yy", R.drawable.avatar_jay3_yy),
+    AboutContributor(
+        name = "Piracola",
+        githubLogin = "Piracola",
+        avatarUrl = "https://avatars.githubusercontent.com/u/116626041?v=4"
+    ),
+    AboutContributor("Chenx Dust", "chenx-dust", R.drawable.avatar_chenx_dust),
+    AboutContributor("usontong", "usontong", R.drawable.avatar_usontong),
+    AboutContributor("Leko", "lekoOwO", R.drawable.avatar_lekoowo),
+    AboutContributor("TanakaLun", "TanakaLun", R.drawable.avatar_tanakalun),
+    AboutContributor("Matt Van Horn", "mvanhorn", R.drawable.avatar_mvanhorn),
+    AboutContributor("qyo123oyq", "qyo123oyq", R.drawable.avatar_qyo123oyq),
+    AboutContributor(
+        name = "maxzrb",
+        githubLogin = "maxzrb",
+        avatarUrl = "https://avatars.githubusercontent.com/u/114979598?v=4"
+    ),
+    AboutContributor(
+        name = "xiaoniao427",
+        githubLogin = "xiaoniao427",
+        avatarUrl = "https://avatars.githubusercontent.com/u/115906803?v=4"
+    ),
+    AboutContributor(
+        name = "zensu357",
+        githubLogin = "zensu357",
+        avatarUrl = "https://avatars.githubusercontent.com/u/109052061?v=4"
+    ),
+    AboutContributor(
+        name = "Kurarion",
+        githubLogin = "Kurarion",
+        avatarUrl = "https://avatars.githubusercontent.com/u/29721634?v=4"
+    )
+)
+
+private val AboutSlogans = listOf(
+    """
+    删繁留简见初心,
+    精雕细磨显匠心。
+    弹幕浓淡随手调,
+    原生丝滑不染尘。
+    """.trimIndent(),
+    """
+    广告退场方显净,
+    不扰清欢伴此心。
+    隐私自留不上传,
+    一屏干净任你行。
+    """.trimIndent(),
+    """
+    弱水三千凡君取,
+    繁简去留只凭心。
+    插件添之随所愿,
+    本体常净似初晨。
+    """.trimIndent()
+)
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun AboutProjectOverviewCard(
+    versionName: String,
+    appIconRes: Int,
+    contributors: List<AboutContributor> = AboutContributors
+) {
+    val slogan = remember { AboutSlogans.random() }
+    AppCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = AppCardShape.Semantic(ContainerLevel.Dialog),
+        colors = AppCardDefaults.colors(
+            containerColor = AppSurfaceTokens.cardContainer()
+        )
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(
+                    model = appIconRes,
+                    contentDescription = "BiliPai 图标",
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(
+                        text = "BiliPai",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    AppText(
+                        text = "v$versionName",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(18.dp))
+            Row {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .heightIn(min = 76.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                AppText(
+                    text = slogan,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 22.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(22.dp))
+            AppText(
+                text = "贡献者",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                contributors.forEach { contributor ->
+                    AboutContributorItem(contributor = contributor)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutContributorItem(
+    contributor: AboutContributor
+) {
+    val uriHandler = LocalUriHandler.current
+    Column(
+        modifier = Modifier
+            .width(76.dp)
+            .clip(AppShapes.container(ContainerLevel.Chip))
+            .clickable { uriHandler.openUri(contributor.profileUrl) }
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            contributor.avatarUrl?.let { avatarUrl ->
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = "${contributor.name} 头像",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+            } ?: contributor.avatarResId?.let { avatarResId ->
+                Image(
+                    painter = painterResource(id = avatarResId),
+                    contentDescription = "${contributor.name} 头像",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        AppText(
+            text = contributor.name,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

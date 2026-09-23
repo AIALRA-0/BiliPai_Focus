@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,12 +35,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
-import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 
 @Composable
 internal fun rememberHomeFeedSkeletonPulse(): Float {
+    if (com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()) {
+        return com.android.purebilibili.core.ui.skeleton.rememberGentleSkeletonPulse().value
+    }
     val transition = rememberInfiniteTransition(label = "homeFeedSkeletonPulse")
     val pulse by transition.animateFloat(
         initialValue = 0f,
@@ -61,11 +67,11 @@ internal fun HomeFeedSkeletonCard(
     wallpaperTintEnabled: Boolean,
     wallpaperEffectMode: HomeWallpaperEffectMode,
     isDataSaverActive: Boolean,
+    coverAspectRatio: Float = VIDEO_SHARED_COVER_ASPECT_RATIO,
     modifier: Modifier = Modifier
 ) {
-    val cornerRadiusScale = LocalCornerRadiusScale.current
-    val cardCornerRadius = 12.dp * cornerRadiusScale
-    val cardShape = remember(cardCornerRadius) { RoundedCornerShape(cardCornerRadius) }
+    val cardCornerRadius = AppShapes.containerCornerDp(ContainerLevel.Card)
+    val cardShape = AppShapes.container(ContainerLevel.Card)
     val isDarkCardTheme = AppSurfaceTokens.chromeBackground().luminance() < 0.5f
     val infoSurfaceAppearance = remember(
         wallpaperTintEnabled,
@@ -86,34 +92,23 @@ internal fun HomeFeedSkeletonCard(
     )
     val coverShape = remember(cardCornerRadius, infoSurfaceAppearance.useTintedSurface) {
         if (infoSurfaceAppearance.useTintedSurface) {
-            RoundedCornerShape(
-                topStart = cardCornerRadius,
-                topEnd = cardCornerRadius,
-                bottomStart = 0.dp,
-                bottomEnd = 0.dp
-            )
+            resolveHomeSkeletonCoverShape(cardCornerRadius)
         } else {
             cardShape
         }
     }
     val infoSurfaceShape = remember(cardCornerRadius) {
-        RoundedCornerShape(
-            topStart = 0.dp,
-            topEnd = 0.dp,
-            bottomStart = cardCornerRadius,
-            bottomEnd = cardCornerRadius
-        )
+        resolveHomeSkeletonInfoShape(cardCornerRadius)
     }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(VIDEO_SHARED_COVER_ASPECT_RATIO)
+                .aspectRatio(coverAspectRatio)
                 .clip(coverShape)
                 .background(blockColor)
         )
@@ -128,23 +123,23 @@ internal fun HomeFeedSkeletonCard(
                 )
                 .border(
                     border = BorderStroke(
-                        width = 0.8.dp,
+                        width = AppSpacingTokens.Micro * 0.4f,
                         color = MaterialTheme.colorScheme.onSurface
                             .copy(alpha = infoSurfaceAppearance.borderAlpha)
                     ),
                     shape = infoSurfaceShape
                 )
-                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .padding(horizontal = AppSpacingTokens.Small + AppSpacingTokens.Micro, vertical = AppSpacingTokens.Small)
         } else {
             Modifier.fillMaxWidth()
         }
 
         Column(modifier = infoModifier) {
             if (!infoSurfaceAppearance.useTintedSurface) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
             }
             HomeFeedSkeletonTitleRow(blockColor = blockColor)
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
             HomeFeedSkeletonMetaRow(blockColor = blockColor)
         }
     }
@@ -162,20 +157,20 @@ private fun HomeFeedSkeletonTitleRow(blockColor: Color) {
                 color = blockColor,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(16.dp)
+                    .height(AppSpacingTokens.Large)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
             HomeFeedSkeletonBlock(
                 color = blockColor,
                 modifier = Modifier
                     .fillMaxWidth(0.72f)
-                    .height(16.dp)
+                    .height(AppSpacingTokens.Large)
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
         HomeFeedSkeletonBlock(
             color = blockColor,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall),
             shape = CircleShape
         )
     }
@@ -185,19 +180,19 @@ private fun HomeFeedSkeletonTitleRow(blockColor: Color) {
 private fun HomeFeedSkeletonMetaRow(blockColor: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro)
     ) {
         HomeFeedSkeletonBlock(
             color = blockColor,
             modifier = Modifier
-                .width(28.dp)
-                .height(14.dp)
+                .width(AppSpacingTokens.ExtraLarge + AppSpacingTokens.ExtraSmall)
+                .height(AppSpacingTokens.Medium + AppSpacingTokens.Micro)
         )
         HomeFeedSkeletonBlock(
             color = blockColor,
             modifier = Modifier
-                .width(96.dp)
-                .height(14.dp)
+                .width(AppSpacingTokens.TripleExtraLarge * 2)
+                .height(AppSpacingTokens.Medium + AppSpacingTokens.Micro)
         )
     }
 }
@@ -206,13 +201,57 @@ private fun HomeFeedSkeletonMetaRow(blockColor: Color) {
 private fun HomeFeedSkeletonBlock(
     color: Color,
     modifier: Modifier,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(4.dp)
+    shape: androidx.compose.ui.graphics.Shape? = null
 ) {
+    val resolvedShape = shape ?: AppShapes.container(ContainerLevel.Tag)
     Box(
         modifier = modifier
-            .clip(shape)
+            .clip(resolvedShape)
             .background(color)
     )
+}
+
+/**
+ * 首页横幅（Hero Carousel）骨架占位。
+ * 与真实横幅 [HomeHeroCarousel] 对齐：垂直 padding、当前窗口限宽限高、卡片圆角。
+ */
+@Composable
+internal fun HomeFeedHeroCarouselSkeleton(
+    pulse: Float,
+    modifier: Modifier = Modifier
+) {
+    val cardShape = AppShapes.container(ContainerLevel.Card)
+    val isDarkCardTheme = AppSurfaceTokens.chromeBackground().luminance() < 0.5f
+    val blockColor = rememberHomeFeedSkeletonBlockColor(
+        pulse = pulse,
+        isDarkTheme = isDarkCardTheme
+    )
+    val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = AppSpacingTokens.ExtraSmall)
+    ) {
+        val layout = remember(
+            maxWidth,
+            windowSizeClass.widthDp,
+            windowSizeClass.heightDp,
+        ) {
+            resolveHomeHeroCarouselLayout(
+                containerWidthDp = maxWidth.value,
+                windowWidthDp = windowSizeClass.widthDp.value,
+                windowHeightDp = windowSizeClass.heightDp.value,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .width(layout.widthDp.dp)
+                .aspectRatio(layout.aspectRatio)
+                .clip(cardShape)
+                .background(blockColor)
+                .align(Alignment.Center)
+        )
+    }
 }
 
 @Composable

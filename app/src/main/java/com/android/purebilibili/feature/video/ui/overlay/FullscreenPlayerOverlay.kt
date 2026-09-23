@@ -1,5 +1,7 @@
 // 文件路径: feature/video/FullscreenPlayerOverlay.kt
 package com.android.purebilibili.feature.video.ui.overlay
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
@@ -9,32 +11,32 @@ import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDe
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
 import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
+import com.android.purebilibili.feature.video.ui.section.shouldEngageHorizontalPlayerSeek
+import com.android.purebilibili.feature.video.ui.section.shouldTriggerSeekStepHaptic
 import com.android.purebilibili.feature.video.usecase.applyPlaybackButtonUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
-import com.bytedance.danmaku.render.engine.DanmakuView
+import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.provider.Settings
-import android.view.View
 import android.view.WindowManager
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material3.*
 // 🌈 Material Icons Extended - 亮度图标
 import androidx.compose.material.icons.Icons
@@ -47,27 +49,59 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.core.store.DanmakuSettings
 import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
+import com.android.purebilibili.core.ui.AppWindowSystemUiController
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayContent
+import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayStyle
+import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelOverlaySpec
+import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelKind
+import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
+import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
 import com.android.purebilibili.feature.video.ui.gesture.GestureMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureIndicator
 import com.android.purebilibili.feature.video.ui.gesture.rememberPlayerGestureState
@@ -79,8 +113,11 @@ import kotlin.math.abs
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.feature.video.ui.components.AnimatedGesturePercentText
 import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
+import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
+import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuPlacement
+import com.android.purebilibili.feature.video.ui.components.resolveSafeVideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.toFullscreenAspectRatio
 import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
 import com.android.purebilibili.core.ui.common.copyOnLongPress
@@ -90,6 +127,12 @@ import java.util.Date
 import java.util.Locale
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.NavigationEventTransitionState
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 
 private const val AUTO_HIDE_DELAY = 4000L
 private const val VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 96
@@ -100,6 +143,17 @@ enum class FullscreenGestureMode { None, Brightness, Volume, Seek }
 
 internal fun resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp(): Int {
     return VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP
+}
+
+internal fun Key.toFullscreenShortcutKey(): FullscreenShortcutKey = when (this) {
+    Key.Spacebar, Key.K -> FullscreenShortcutKey.Space
+    Key.DirectionLeft -> FullscreenShortcutKey.Left
+    Key.DirectionRight -> FullscreenShortcutKey.Right
+    Key.Escape -> FullscreenShortcutKey.Escape
+    Key.F, Key.Enter, Key.NumPadEnter -> FullscreenShortcutKey.KeyF
+    Key.M -> FullscreenShortcutKey.KeyM
+    Key.D -> FullscreenShortcutKey.KeyD
+    else -> FullscreenShortcutKey.Other
 }
 
 internal fun resolveFullscreenPendingGestureSeekPosition(
@@ -188,11 +242,31 @@ fun FullscreenPlayerOverlay(
         .getFullscreenAspectRatio(context)
         .collectAsStateWithLifecycle(initialValue = FullscreenAspectRatio.FIT
         )
-    var aspectRatio by remember { mutableStateOf(fixedFullscreenAspectRatio.toVideoAspectRatio()) }
+    var isVerticalContent by remember(player) {
+        mutableStateOf(
+            player?.videoSize?.let { size ->
+                size.width > 0 && size.height > size.width
+            } ?: false
+        )
+    }
+    var aspectRatio by remember {
+        mutableStateOf(
+            resolveSafeVideoAspectRatio(
+                preferred = fixedFullscreenAspectRatio.toVideoAspectRatio(),
+                isVerticalVideo = isVerticalContent
+            )
+        )
+    }
     var showRatioMenu by remember { mutableStateOf(false) }
     
     //  画质选择菜单状态
     var showQualityMenu by remember { mutableStateOf(false) }
+    var showContextMenu by remember { mutableStateOf(false) }
+    var contextMenuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    val rootFocusRequester = remember { FocusRequester() }
+    val inputDevicePolicy = com.android.purebilibili.core.ui.adaptive.resolveInputDevicePolicy(
+        com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current,
+    )
     val scope = rememberCoroutineScope()
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var keepFullscreenPlaybackAwake by remember(player) {
@@ -207,7 +281,7 @@ fun FullscreenPlayerOverlay(
         )
     }
     //  共享弹幕管理器（横竖屏切换保持状态，同时可用于手势 seek 同步）
-    val danmakuManager = rememberDanmakuManager()
+    val danmakuManager = rememberDanmakuManager(miniPlayerManager.currentBvid ?: player ?: miniPlayerManager)
 
     DisposableEffect(player) {
         val exoPlayer = player
@@ -247,9 +321,13 @@ fun FullscreenPlayerOverlay(
     var gestureMode by remember { mutableStateOf(FullscreenGestureMode.None) }
     var gestureValue by remember { mutableFloatStateOf(0f) }
     var dragDelta by remember { mutableFloatStateOf(0f) }
+    var dragVerticalDelta by remember { mutableFloatStateOf(0f) }
     var seekPreviewPosition by remember { mutableLongStateOf(0L) }
     var gestureSeekStartPosition by remember { mutableLongStateOf(0L) }
-    val fullscreenSwipeSeekSeconds by produceState<Int?>(initialValue = null, context) {
+    var lastSeekHapticTargetMs by remember { mutableLongStateOf(0L) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // Default to 15s so seek UI/haptics work immediately before prefs load (null blocked delta).
+    val fullscreenSwipeSeekSeconds by produceState(initialValue = 15, context) {
         SettingsManager.getFullscreenSwipeSeekSeconds(context)
             .collectLatest { value = it }
     }
@@ -275,11 +353,25 @@ fun FullscreenPlayerOverlay(
         )
     }
 
-    // 播放器状态
+    // 播放器状态 — 用当前 player 位置 seed，避免全屏重建时先显示 00:00
     var isPlaying by remember { mutableStateOf(player?.isPlaying ?: false) }
-    var currentProgress by remember { mutableFloatStateOf(0f) }
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
+    var currentProgress by remember {
+        mutableFloatStateOf(
+            run {
+                val p = player ?: return@run 0f
+                val d = p.duration
+                if (d > 0L) (p.currentPosition.toFloat() / d.toFloat()).coerceIn(0f, 1f) else 0f
+            }
+        )
+    }
+    var currentPosition by remember {
+        mutableLongStateOf(player?.currentPosition?.coerceAtLeast(0L) ?: 0L)
+    }
+    var duration by remember {
+        mutableLongStateOf(
+            player?.duration?.takeIf { it > 0L } ?: 0L
+        )
+    }
     var pendingGestureSeekPositionMs by remember { mutableStateOf<Long?>(null) }
     val currentClockText by produceState(initialValue = formatCurrentClock(), hostLifecycleStarted) {
         if (!hostLifecycleStarted) {
@@ -312,8 +404,32 @@ fun FullscreenPlayerOverlay(
         }
     }
 
-    LaunchedEffect(fixedFullscreenAspectRatio) {
-        aspectRatio = fixedFullscreenAspectRatio.toVideoAspectRatio()
+    DisposableEffect(player) {
+        val exoPlayer = player
+        if (exoPlayer == null) {
+            isVerticalContent = false
+            onDispose { }
+        } else {
+            fun updateVerticalContent() {
+                val size = exoPlayer.videoSize
+                isVerticalContent = size.width > 0 && size.height > size.width
+            }
+            updateVerticalContent()
+            val listener = object : Player.Listener {
+                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                    isVerticalContent = videoSize.width > 0 && videoSize.height > videoSize.width
+                }
+            }
+            exoPlayer.addListener(listener)
+            onDispose { exoPlayer.removeListener(listener) }
+        }
+    }
+
+    LaunchedEffect(fixedFullscreenAspectRatio, isVerticalContent) {
+        aspectRatio = resolveSafeVideoAspectRatio(
+            preferred = fixedFullscreenAspectRatio.toVideoAspectRatio(),
+            isVerticalVideo = isVerticalContent
+        )
     }
     
     // 进入全屏时设置横屏和沉浸式
@@ -321,30 +437,20 @@ fun FullscreenPlayerOverlay(
         val activity = (context as? Activity) ?: return@DisposableEffect onDispose {}
         val window = activity.window
         val originalOrientation = activity.requestedOrientation
-
-        //  [重构] 定义设置沉浸式模式的函数（可复用）
-        val applyImmersiveMode = {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-            )
-        }
+        val originalSystemUi = AppWindowSystemUiController.capture(window)
+        val desktopFullscreenRequested =
+            AppWindowSystemUiController.requestDesktopFullscreen(activity, enter = true)
 
         // 设置横屏
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        activity.applyPlayerRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
         
         //  首次进入时应用沉浸式
-        applyImmersiveMode()
+        AppWindowSystemUiController.enterImmersive(window)
         
         //  [关键修复] 生命周期观察器：返回前台时重新应用沉浸式模式
         val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                applyImmersiveMode()
+                AppWindowSystemUiController.enterImmersive(window)
                 val view = playerViewRef
                 val exoPlayer = player
                 if (shouldRebindFullscreenSurfaceOnResume(
@@ -366,13 +472,16 @@ fun FullscreenPlayerOverlay(
             //  移除生命周期观察器
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
             
-            activity.requestedOrientation = resolveFullscreenOverlayExitRequestedOrientation(
-                originalRequestedOrientation = originalOrientation
+            activity.applyPlayerRequestedOrientation(
+                resolveFullscreenOverlayExitRequestedOrientation(
+                    originalRequestedOrientation = originalOrientation
+                )
             )
             
-            // 恢复系统栏
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+            AppWindowSystemUiController.restore(window, originalSystemUi)
+            if (desktopFullscreenRequested) {
+                AppWindowSystemUiController.requestDesktopFullscreen(activity, enter = false)
+            }
             
             // 取消屏幕常亮
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -443,11 +552,39 @@ fun FullscreenPlayerOverlay(
         }
     }
     
-    // 返回键处理
-    BackHandler { onNavigateToDetail() }
-    
     // [问题6修复] 弹幕设置面板打开时禁用手势
-    val gesturesEnabled = !showDanmakuSettings && !showSpeedMenu && !showRatioMenu && !showQualityMenu
+    val gesturesEnabled = !showDanmakuSettings && !showSpeedMenu && !showRatioMenu &&
+        !showQualityMenu && !showContextMenu
+
+    val closeTopLayerOrExit: () -> Unit = {
+        when {
+            showContextMenu -> showContextMenu = false
+            showQualityMenu -> showQualityMenu = false
+            showRatioMenu -> showRatioMenu = false
+            showSpeedMenu -> showSpeedMenu = false
+            showDanmakuSettings -> showDanmakuSettings = false
+            else -> onNavigateToDetail()
+        }
+    }
+    val backEventState = rememberNavigationEventState(NavigationEventInfo.None)
+    val backProgress =
+        (backEventState.transitionState as? NavigationEventTransitionState.InProgress)
+            ?.latestEvent
+            ?.progress
+            ?: 0f
+    NavigationBackHandler(
+        state = backEventState,
+        isBackEnabled = true,
+        onBackCancelled = {
+            lastInteractionTime = System.currentTimeMillis()
+        },
+        onBackCompleted = closeTopLayerOrExit,
+    )
+    LaunchedEffect(rootFocusRequester, inputDevicePolicy.enableKeyboardNavigation) {
+        if (inputDevicePolicy.enableKeyboardNavigation) {
+            runCatching { rootFocusRequester.requestFocus() }
+        }
+    }
     
     // [问题8修复] 状态栏排除区域高度（像素）
     val statusBarExclusionZonePx = with(density) { 40.dp.toPx() }
@@ -481,8 +618,92 @@ fun FullscreenPlayerOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer {
+                val progress = backProgress.coerceIn(0f, 1f)
+                scaleX = 1f - progress * 0.035f
+                scaleY = 1f - progress * 0.035f
+                alpha = 1f - progress * 0.12f
+            }
             .background(Color.Black)
             .hazeSourceCompat(overlayHazeState)
+            .focusRequester(rootFocusRequester)
+            .onPreviewKeyEvent { event ->
+                val action = resolveFullscreenKeyboardAction(
+                    key = event.key.toFullscreenShortcutKey(),
+                    isKeyDown = event.type == KeyEventType.KeyDown,
+                    hasCommandModifier = event.isCtrlPressed || event.isAltPressed ||
+                        event.isMetaPressed || event.isShiftPressed,
+                    shortcutsEnabled = inputDevicePolicy.enableKeyboardNavigation &&
+                        (gesturesEnabled || event.key == Key.Escape),
+                )
+                when (action) {
+                    FullscreenKeyboardAction.PlayPause -> {
+                        player?.let(::togglePlayerPlaybackFromUserAction)
+                        showControls = true
+                        lastInteractionTime = System.currentTimeMillis()
+                        true
+                    }
+                    FullscreenKeyboardAction.SeekBackward,
+                    FullscreenKeyboardAction.SeekForward -> {
+                        val targetPlayer = player ?: return@onPreviewKeyEvent false
+                        val deltaMs = if (action == FullscreenKeyboardAction.SeekBackward) {
+                            -seekBackwardSeconds * 1_000L
+                        } else {
+                            seekForwardSeconds * 1_000L
+                        }
+                        val upperBound = targetPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                        val targetPosition = (targetPlayer.currentPosition + deltaMs)
+                            .coerceIn(0L, upperBound)
+                        pendingGestureSeekPositionMs = targetPosition
+                        seekPlayerFromUserAction(targetPlayer, targetPosition)
+                        danmakuManager.seekTo(targetPosition)
+                        showControls = true
+                        lastInteractionTime = System.currentTimeMillis()
+                        true
+                    }
+                    FullscreenKeyboardAction.CloseTopLayer,
+                    FullscreenKeyboardAction.ToggleFullscreen -> {
+                        closeTopLayerOrExit()
+                        true
+                    }
+                    FullscreenKeyboardAction.ToggleMute -> {
+                        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        if (currentVolume > 0) {
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, AudioManager.FLAG_SHOW_UI)
+                        } else {
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume / 3, AudioManager.FLAG_SHOW_UI)
+                        }
+                        true
+                    }
+                    FullscreenKeyboardAction.ToggleDanmaku -> {
+                        danmakuManager.isEnabled = !danmakuManager.isEnabled
+                        if (!danmakuManager.isEnabled) danmakuManager.clear()
+                        true
+                    }
+                    FullscreenKeyboardAction.ToggleLock -> false
+                    FullscreenKeyboardAction.None -> false
+                }
+            }
+            .focusable(enabled = inputDevicePolicy.enableKeyboardNavigation)
+            .semantics {
+                contentDescription = "全屏视频播放器"
+                stateDescription = if (isPlaying) "正在播放" else "已暂停"
+            }
+            .pointerInput(density) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            val position = event.changes.firstOrNull()?.position ?: continue
+                            contextMenuOffset = with(density) {
+                                DpOffset(position.x.toDp(), position.y.toDp())
+                            }
+                            showContextMenu = true
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+            }
             .pointerInput(
                 gesturesEnabled,
                 doubleTapSeekEnabled,
@@ -567,6 +788,7 @@ fun FullscreenPlayerOverlay(
                         showControls = true
                         lastInteractionTime = System.currentTimeMillis()
                         dragDelta = 0f
+                        dragVerticalDelta = 0f
                         
                         // 根据起始位置决定手势类型
                         gestureMode = when {
@@ -581,7 +803,8 @@ fun FullscreenPlayerOverlay(
                             else -> {
                                 seekPreviewPosition = currentPosition
                                 gestureSeekStartPosition = currentPosition
-                                FullscreenGestureMode.Seek
+                                lastSeekHapticTargetMs = currentPosition
+                                FullscreenGestureMode.None
                             }
                         }
                     },
@@ -610,6 +833,19 @@ fun FullscreenPlayerOverlay(
                     onDrag = { change, dragAmount ->
                         if (!dragGestureActive) return@detectDragGestures
                         change.consume()
+                        if (gestureMode == FullscreenGestureMode.None) {
+                            dragDelta += dragAmount.x
+                            dragVerticalDelta += dragAmount.y
+                            if (!shouldEngageHorizontalPlayerSeek(dragDelta, dragVerticalDelta)) {
+                                return@detectDragGestures
+                            }
+                            gestureMode = FullscreenGestureMode.Seek
+                            haptic.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+                            )
+                        } else if (gestureMode == FullscreenGestureMode.Seek) {
+                            dragDelta += dragAmount.x
+                        }
                         when (gestureMode) {
                             FullscreenGestureMode.Brightness -> {
                                 gestureValue = (gestureValue - dragAmount.y / screenHeight).coerceIn(0f, 1f)
@@ -629,7 +865,6 @@ fun FullscreenPlayerOverlay(
                                 )
                             }
                             FullscreenGestureMode.Seek -> {
-                                dragDelta += dragAmount.x
                                 val seekDelta = resolveHorizontalSeekDeltaMs(
                                     isFullscreen = true,
                                     fullscreenSwipeSeekEnabled = true,
@@ -641,7 +876,22 @@ fun FullscreenPlayerOverlay(
                                 )
                                 if (seekDelta != null) {
                                     seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)
-                                    currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                                    currentProgress = if (duration > 0L) {
+                                        (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                                    } else {
+                                        0f
+                                    }
+                                    if (
+                                        shouldTriggerSeekStepHaptic(
+                                            previousTargetMs = lastSeekHapticTargetMs,
+                                            currentTargetMs = seekPreviewPosition
+                                        )
+                                    ) {
+                                        haptic.performHapticFeedback(
+                                            androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+                                        )
+                                        lastSeekHapticTargetMs = seekPreviewPosition
+                                    }
                                 }
                             }
                             else -> {}
@@ -650,6 +900,51 @@ fun FullscreenPlayerOverlay(
                 )
             }
     ) {
+        AppDropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false },
+            offset = contextMenuOffset,
+        ) {
+            AppDropdownMenuItem(
+                text = { AppText(if (isPlaying) "暂停" else "播放") },
+                onClick = {
+                    showContextMenu = false
+                    player?.let(::togglePlayerPlaybackFromUserAction)
+                },
+            )
+            AppDropdownMenuItem(
+                text = { AppText("快退 ${seekBackwardSeconds} 秒") },
+                onClick = {
+                    showContextMenu = false
+                    player?.let { targetPlayer ->
+                        val target = (targetPlayer.currentPosition - seekBackwardSeconds * 1_000L)
+                            .coerceAtLeast(0L)
+                        seekPlayerFromUserAction(targetPlayer, target)
+                        danmakuManager.seekTo(target)
+                    }
+                },
+            )
+            AppDropdownMenuItem(
+                text = { AppText("快进 ${seekForwardSeconds} 秒") },
+                onClick = {
+                    showContextMenu = false
+                    player?.let { targetPlayer ->
+                        val durationLimit = targetPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                        val target = (targetPlayer.currentPosition + seekForwardSeconds * 1_000L)
+                            .coerceAtMost(durationLimit)
+                        seekPlayerFromUserAction(targetPlayer, target)
+                        danmakuManager.seekTo(target)
+                    }
+                },
+            )
+            AppDropdownMenuItem(
+                text = { AppText("退出全屏") },
+                onClick = {
+                    showContextMenu = false
+                    onNavigateToDetail()
+                },
+            )
+        }
         val danmakuScope = com.android.purebilibili.core.store.DanmakuSettingsScope.LANDSCAPE
         val danmakuSettings by SettingsManager
             .getDanmakuSettings(context, danmakuScope)
@@ -676,6 +971,7 @@ fun FullscreenPlayerOverlay(
         val currentCid = miniPlayerManager.currentCid
         LaunchedEffect(currentCid, danmakuEnabled, player) {
             if (currentCid > 0 && danmakuEnabled) {
+                danmakuManager.updateSettings(settings = danmakuSettings)
                 danmakuManager.isEnabled = true
                 
                 // 等待播放器 duration 可用后再加载弹幕，启用 Protobuf API
@@ -687,72 +983,27 @@ fun FullscreenPlayerOverlay(
                     retries++
                 }
                 
-                danmakuManager.loadDanmaku(currentCid, miniPlayerManager.currentAid, durationMs)
+                danmakuManager.loadDanmaku(
+                    currentCid,
+                    miniPlayerManager.currentAid,
+                    durationMs,
+                    miniPlayerManager.currentBvid.orEmpty()
+                )
             } else {
                 danmakuManager.isEnabled = false
             }
         }
 
         //  弹幕设置变化时实时应用
-        LaunchedEffect(
-            danmakuOpacity,
-            danmakuFontScale,
-            danmakuSpeed,
-            danmakuDisplayArea,
-            danmakuMergeDuplicates,
-            danmakuDuplicateMergeWindowMs,
-            danmakuDuplicateMergeCountThreshold,
-            danmakuAllowScroll,
-            danmakuAllowTop,
-            danmakuAllowBottom,
-            danmakuAllowColorful,
-            danmakuAllowSpecial,
-            danmakuBlockRules,
-            danmakuSmartOcclusion
-        ) {
-            danmakuManager.updateSettings(
-                opacity = danmakuOpacity,
-                fontScale = danmakuFontScale,
-                speed = danmakuSpeed,
-                displayArea = danmakuDisplayArea,
-                mergeDuplicates = danmakuMergeDuplicates,
-                duplicateMergeWindowMs = danmakuDuplicateMergeWindowMs,
-                duplicateMergeCountThreshold = danmakuDuplicateMergeCountThreshold,
-                allowScroll = danmakuAllowScroll,
-                allowTop = danmakuAllowTop,
-                allowBottom = danmakuAllowBottom,
-                allowColorful = danmakuAllowColorful,
-                allowSpecial = danmakuAllowSpecial,
-                blockedRules = danmakuBlockRules,
-                // Mask-only mode: keep lane layout fixed, do not move danmaku tracks.
-                smartOcclusion = false
-            )
+        LaunchedEffect(danmakuManager, danmakuSettings) {
+            danmakuManager.updateSettings(settings = danmakuSettings)
         }
 
-        //  绑定 Player（不在 onDispose 中释放，单例会保持状态）
-        //  [修复] 移除 detachView 调用，避免横竖屏切换时弹幕消失
-        // attachView 会自动暂停旧视图，不需要手动 detach
+        // 播放器 owner 成对绑定；渲染 View 由 AndroidView.onRelease 独立解绑。
         DisposableEffect(player) {
             player?.let { danmakuManager.attachPlayer(it) }
             onDispose {
-                //  不再调用 detachView()
-                // 单例模式下，视图引用会在下次 attachView 时自动更新
-            }
-        }
-        
-        //  [修复] 使用 LifecycleOwner 监听真正的 Activity 生命周期
-        // DisposableEffect(Unit) 会在重组时触发，导致 player 引用被清除
-        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-        DisposableEffect(lifecycleOwner) {
-            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                if (event == androidx.lifecycle.Lifecycle.Event.ON_DESTROY) {
-                    android.util.Log.d("FullscreenPlayer", " ON_DESTROY: Clearing danmaku references")
-                    danmakuManager.clearViewReference()
-                }
-            }
-            lifecycleOwner.lifecycle.addObserver(observer)
-            onDispose {
-                lifecycleOwner.lifecycle.removeObserver(observer)
+                player?.let(danmakuManager::detachPlayer)
             }
         }
         
@@ -802,7 +1053,7 @@ fun FullscreenPlayerOverlay(
                 if (danmakuEnabled) {
                     AndroidView(
                         factory = { ctx ->
-                            DanmakuView(ctx).apply {
+                            DanmakuRenderView(ctx).apply {
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 configureAsPassiveDanmakuOverlay()
                                 danmakuManager.attachView(this)
@@ -819,6 +1070,7 @@ fun FullscreenPlayerOverlay(
                                 }
                             }
                         },
+                        onRelease = { view -> danmakuManager.detachView(view) },
                         modifier = viewportModifier
                     )
                 }
@@ -838,7 +1090,12 @@ fun FullscreenPlayerOverlay(
                 seekTime = if (gestureMode == FullscreenGestureMode.Seek) seekPreviewPosition else null,
                 duration = duration,
                 hazeState = overlayHazeState,
-                modifier = Modifier.align(Alignment.Center)
+                // Level overlays (esp. MIUIX edge rails) need full-size host for side alignment.
+                modifier = if (gestureMode == FullscreenGestureMode.Seek) {
+                    Modifier.align(Alignment.Center)
+                } else {
+                    Modifier.fillMaxSize()
+                }
             )
         }
         
@@ -861,14 +1118,14 @@ fun FullscreenPlayerOverlay(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(16.dp)
                     ) {
-                        IconButton(onClick = onNavigateToDetail) {
-                            Icon(CupertinoIcons.Default.ChevronBackward, "返回详情页", tint = Color.White)
+                        AppIconButton(onClick = onNavigateToDetail) {
+                            AppIcon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "返回详情页", tint = Color.White)
                         }
                         Spacer(Modifier.width(8.dp))
-                        Text(
+                        AppText(
                             text = miniPlayerManager.currentTitle,
                             color = Color.White,
-                            fontSize = 16.sp,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -877,59 +1134,37 @@ fun FullscreenPlayerOverlay(
                                 .copyOnLongPress(miniPlayerManager.currentTitle, "视频标题")
                         )
 
-                        Text(
+                        AppText(
                             text = currentClockText,
                             color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(end = 8.dp)
                         )
                         
                         //  [新增] 弹幕开关按钮
-                        val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                        val danmakuActiveColor = MaterialTheme.colorScheme.primary
+                        val danmakuActiveColor = Color.White.copy(alpha = 0.96f)
                         val danmakuInactiveColor = Color.White.copy(alpha = 0.74f)
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    if (danmakuEnabled) {
-                                        danmakuActiveColor.copy(alpha = 0.22f)
-                                    } else {
-                                        danmakuInactiveColor.copy(alpha = 0.16f)
-                                    }
+                        NativeDanmakuToggleButton(
+                            enabled = danmakuEnabled,
+                            onToggle = {
+                                val newValue = !danmakuEnabled
+                                danmakuManager.isEnabled = newValue
+                                scope.launch {
+                                    SettingsManager.setDanmakuEnabled(context, newValue, danmakuScope)
+                                }
+                                com.android.purebilibili.core.util.Logger.d(
+                                    "FullscreenDanmaku",
+                                    " Danmaku toggle: $newValue",
                                 )
-                                .clickable(
-                                    interactionSource = danmakuToggleInteraction,
-                                    indication = null,
-                                    onClick = {
-                                        val newValue = !danmakuEnabled
-                                        danmakuManager.isEnabled = newValue
-                                        scope.launch { SettingsManager.setDanmakuEnabled(context, newValue, danmakuScope) }
-                                        com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " Danmaku toggle: $newValue")
-                                    }
-                                )
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
-                                contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                                tint = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (danmakuEnabled) "开" else "关",
-                                color = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                            },
+                            activeTint = danmakuActiveColor,
+                            inactiveTint = danmakuInactiveColor,
+                        )
                         
                         //  [新增] 弹幕设置按钮
-                        IconButton(onClick = { showDanmakuSettings = true }) {
-                            Icon(CupertinoIcons.Default.Gear, "弹幕设置", tint = Color.White)
+                        AppIconButton(onClick = { showDanmakuSettings = true }) {
+                            AppIcon(Icons.Outlined.Settings, "弹幕设置", tint = Color.White)
                         }
                     }
                 }
@@ -952,7 +1187,7 @@ fun FullscreenPlayerOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            IconButton(
+                            AppIconButton(
                                 onClick = {
                                     lastInteractionTime = System.currentTimeMillis()
                                     player?.let {
@@ -963,7 +1198,7 @@ fun FullscreenPlayerOverlay(
                                     }
                                 },
                             ) {
-                                Icon(
+                                AppIcon(
                                     imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                     contentDescription = if (isPlaying) "暂停" else "播放",
                                     tint = MaterialTheme.colorScheme.primary,
@@ -973,54 +1208,46 @@ fun FullscreenPlayerOverlay(
                             
                             Spacer(modifier = Modifier.width(8.dp))
                             
-                            Text(
+                            AppText(
                                 FormatUtils.formatDuration((displayedProgressState.current / 1000).toInt()),
                                 color = Color.White,
-                                fontSize = 12.sp
+                                style = MaterialTheme.typography.labelSmall
                             )
                             
                             var isDragging by remember { mutableStateOf(false) }
-                            var dragProgress by remember { mutableFloatStateOf(0f) }
                             
-                            Slider(
-                                value = if (isDragging) {
-                                    dragProgress
-                                } else if (displayedProgressState.duration > 0L) {
-                                    (displayedProgressState.current.toFloat() / displayedProgressState.duration.toFloat()).coerceIn(0f, 1f)
-                                } else {
-                                    currentProgress
-                                },
-                                onValueChange = { newValue ->
-                                    if (!isDragging) {
-                                        danmakuManager.clear()  //  拖动开始时清除弹幕
-                                    }
-                                    isDragging = true
-                                    dragProgress = newValue
-                                    lastInteractionTime = System.currentTimeMillis()
-                                },
-                                onValueChangeFinished = {
+                            ThinWigglyProgressBar(
+                                progress = currentProgress,
+                                seekPositionMs = displayedProgressState.current,
+                                isSeekScrubbing = isDragging,
+                                layoutPolicy = resolvePortraitProgressBarLayoutPolicy(
+                                    LocalConfiguration.current.screenWidthDp
+                                ),
+                                onSeek = { newProgress ->
                                     isDragging = false
                                     val seekableDuration = resolveSeekableDurationMs(
                                         playbackDurationMs = duration,
                                         fallbackDurationMs = miniPlayerManager.duration
                                     )
-                                    val newPosition = (dragProgress * seekableDuration).toLong()
+                                    val newPosition = (newProgress * seekableDuration).toLong()
                                     player?.let {
                                         pendingGestureSeekPositionMs = newPosition
                                         seekPlayerFromUserAction(it, newPosition)
                                         danmakuManager.seekTo(newPosition)
                                     }
-                                    currentProgress = dragProgress
+                                    currentProgress = newProgress
                                 },
+                                onSeekStart = {
+                                    danmakuManager.clear()
+                                    isDragging = true
+                                    lastInteractionTime = System.currentTimeMillis()
+                                },
+                                onSeekDragCancel = { isDragging = false },
+                                duration = duration,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                                )
                             )
                             
-                            Text(FormatUtils.formatDuration((duration / 1000).toInt()), color = Color.White, fontSize = 12.sp)
+                            AppText(FormatUtils.formatDuration((duration / 1000).toInt()), color = Color.White, style = MaterialTheme.typography.labelSmall)
                         }
                         
                         Spacer(modifier = Modifier.height(4.dp))
@@ -1044,6 +1271,13 @@ fun FullscreenPlayerOverlay(
                                 isHighlighted = aspectRatio != VideoAspectRatio.FIT,
                                 onClick = { showRatioMenu = true }
                             )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            //  弹幕设置按钮（横屏/全屏底栏右侧）
+                            FullscreenControlButton(
+                                text = "弹幕",
+                                isHighlighted = false,
+                                onClick = { showDanmakuSettings = true }
+                            )
                         }
                     }
                 }
@@ -1055,14 +1289,38 @@ fun FullscreenPlayerOverlay(
             //  使用本地状态确保滑动条可以更新
             var localOpacity by remember(danmakuOpacity) { mutableFloatStateOf(danmakuOpacity) }
             var localFontScale by remember(danmakuFontScale) { mutableFloatStateOf(danmakuFontScale) }
+            var localFontWeight by remember(danmakuSettings.fontWeight) {
+                mutableIntStateOf(danmakuSettings.fontWeight)
+            }
             var localSpeed by remember(danmakuSpeed) { mutableFloatStateOf(danmakuSpeed) }
             var localDisplayArea by remember(danmakuDisplayArea) { mutableFloatStateOf(danmakuDisplayArea) }
+            var localStrokeWidth by remember(danmakuSettings.strokeWidth) {
+                mutableFloatStateOf(danmakuSettings.strokeWidth)
+            }
+            var localLineHeight by remember(danmakuSettings.lineHeight) {
+                mutableFloatStateOf(danmakuSettings.lineHeight)
+            }
+            var localScrollDurationSeconds by remember(danmakuSettings.scrollDurationSeconds) {
+                mutableFloatStateOf(danmakuSettings.scrollDurationSeconds)
+            }
+            var localStaticDurationSeconds by remember(danmakuSettings.staticDurationSeconds) {
+                mutableFloatStateOf(danmakuSettings.staticDurationSeconds)
+            }
+            var localScrollFixedVelocity by remember(danmakuSettings.scrollFixedVelocity) {
+                mutableStateOf(danmakuSettings.scrollFixedVelocity)
+            }
+            var localStaticDanmakuToScroll by remember(danmakuSettings.staticDanmakuToScroll) {
+                mutableStateOf(danmakuSettings.staticDanmakuToScroll)
+            }
+            var localMassiveMode by remember(danmakuSettings.massiveMode) {
+                mutableStateOf(danmakuSettings.massiveMode)
+            }
             var localMergeDuplicates by remember(danmakuMergeDuplicates) { mutableStateOf(danmakuMergeDuplicates) }
             var localDuplicateMergeWindowMs by remember(danmakuDuplicateMergeWindowMs) {
-                mutableStateOf(danmakuDuplicateMergeWindowMs)
+                mutableIntStateOf(danmakuDuplicateMergeWindowMs)
             }
             var localDuplicateMergeCountThreshold by remember(danmakuDuplicateMergeCountThreshold) {
-                mutableStateOf(danmakuDuplicateMergeCountThreshold)
+                mutableIntStateOf(danmakuDuplicateMergeCountThreshold)
             }
             var localAllowScroll by remember(danmakuAllowScroll) { mutableStateOf(danmakuAllowScroll) }
             var localAllowTop by remember(danmakuAllowTop) { mutableStateOf(danmakuAllowTop) }
@@ -1077,14 +1335,26 @@ fun FullscreenPlayerOverlay(
             var localFullscreenPanelWidthMode by remember(danmakuSettings.fullscreenPanelWidthMode) {
                 mutableStateOf(danmakuSettings.fullscreenPanelWidthMode)
             }
+            var localPortraitDisplayAreaMode by remember(danmakuSettings.portraitDisplayAreaMode) {
+                mutableStateOf(danmakuSettings.portraitDisplayAreaMode)
+            }
             
             DanmakuSettingsPanel(
                 isFullscreen = true,
                 settingsScope = danmakuScope,
                 opacity = localOpacity,
                 fontScale = localFontScale,
+                showAdvancedSection = true,
+                fontWeight = localFontWeight,
                 speed = localSpeed,
                 displayArea = localDisplayArea,
+                strokeWidth = localStrokeWidth,
+                lineHeight = localLineHeight,
+                scrollDurationSeconds = localScrollDurationSeconds,
+                staticDurationSeconds = localStaticDurationSeconds,
+                scrollFixedVelocity = localScrollFixedVelocity,
+                staticDanmakuToScroll = localStaticDanmakuToScroll,
+                massiveMode = localMassiveMode,
                 mergeDuplicates = localMergeDuplicates,
                 duplicateMergeWindowMs = localDuplicateMergeWindowMs,
                 duplicateMergeCountThreshold = localDuplicateMergeCountThreshold,
@@ -1095,9 +1365,11 @@ fun FullscreenPlayerOverlay(
                 allowSpecial = localAllowSpecial,
                 hideInteractiveCommands = localHideInteractiveCommands,
                 showBlockRuleEditor = true,
+                showSmartOcclusionSection = true,
                 blockRulesRaw = localBlockRulesRaw,
                 smartOcclusion = localSmartOcclusion,
                 fullscreenWidthMode = localFullscreenPanelWidthMode,
+                portraitDisplayAreaMode = localPortraitDisplayAreaMode,
                 onOpacityChange = { 
                     localOpacity = it
                     danmakuManager.opacity = it
@@ -1108,6 +1380,11 @@ fun FullscreenPlayerOverlay(
                     danmakuManager.fontScale = it
                     scope.launch { SettingsManager.setDanmakuFontScale(context, it, danmakuScope) }
                 },
+                onFontWeightChange = {
+                    localFontWeight = it
+                    danmakuManager.fontWeight = it
+                    scope.launch { SettingsManager.setDanmakuFontWeight(context, it, danmakuScope) }
+                },
                 onSpeedChange = { 
                     localSpeed = it
                     danmakuManager.speedFactor = it
@@ -1117,6 +1394,47 @@ fun FullscreenPlayerOverlay(
                     localDisplayArea = it
                     danmakuManager.displayArea = it
                     scope.launch { SettingsManager.setDanmakuArea(context, it, danmakuScope) }
+                },
+                onStrokeWidthChange = {
+                    localStrokeWidth = it
+                    danmakuManager.strokeWidth = it
+                    scope.launch { SettingsManager.setDanmakuStrokeWidth(context, it, danmakuScope) }
+                },
+                onLineHeightChange = {
+                    localLineHeight = it
+                    danmakuManager.lineHeight = it
+                    scope.launch { SettingsManager.setDanmakuLineHeight(context, it, danmakuScope) }
+                },
+                onScrollDurationSecondsChange = {
+                    localScrollDurationSeconds = it
+                    danmakuManager.scrollDurationSeconds = it
+                    scope.launch {
+                        SettingsManager.setDanmakuScrollDurationSeconds(context, it, danmakuScope)
+                    }
+                },
+                onStaticDurationSecondsChange = {
+                    localStaticDurationSeconds = it
+                    danmakuManager.staticDurationSeconds = it
+                    scope.launch {
+                        SettingsManager.setDanmakuStaticDurationSeconds(context, it, danmakuScope)
+                    }
+                },
+                onScrollFixedVelocityChange = {
+                    localScrollFixedVelocity = it
+                    danmakuManager.scrollFixedVelocity = it
+                    scope.launch {
+                        SettingsManager.setDanmakuScrollFixedVelocity(context, it, danmakuScope)
+                    }
+                },
+                onStaticDanmakuToScrollChange = {
+                    localStaticDanmakuToScroll = it
+                    danmakuManager.staticDanmakuToScroll = it
+                    scope.launch { SettingsManager.setDanmakuStaticToScroll(context, it, danmakuScope) }
+                },
+                onMassiveModeChange = {
+                    localMassiveMode = it
+                    danmakuManager.massiveMode = it
+                    scope.launch { SettingsManager.setDanmakuMassiveMode(context, it, danmakuScope) }
                 },
                 onMergeDuplicatesChange = {
                     localMergeDuplicates = it
@@ -1168,35 +1486,30 @@ fun FullscreenPlayerOverlay(
                     localFullscreenPanelWidthMode = it
                     scope.launch { SettingsManager.setDanmakuFullscreenPanelWidthMode(context, it) }
                 },
+                onPortraitDisplayAreaModeChange = {
+                    localPortraitDisplayAreaMode = it
+                    scope.launch { SettingsManager.setPortraitDanmakuDisplayAreaMode(context, it) }
+                },
                 onDismiss = { showDanmakuSettings = false }
             )
         }
         
         //  播放速度选择菜单
         if (showSpeedMenu) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .pointerInput(Unit) {
-                        detectTapGestures { showSpeedMenu = false }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenu(
-                    currentSpeed = playbackSpeed,
-                    onSpeedSelected = { speed ->
-                        playbackSpeed = speed
-                        player?.setPlaybackSpeed(speed)
-                        scope.launch {
-                            SettingsManager.setLastPlaybackSpeed(context, speed)
-                        }
-                        showSpeedMenu = false
-                        lastInteractionTime = System.currentTimeMillis()
-                    },
-                    onDismiss = { showSpeedMenu = false }
-                )
-            }
+            com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenu(
+                currentSpeed = playbackSpeed,
+                onSpeedSelected = { speed ->
+                    playbackSpeed = speed
+                    player?.setPlaybackSpeed(speed)
+                    scope.launch {
+                        SettingsManager.setLastPlaybackSpeed(context, speed)
+                    }
+                    showSpeedMenu = false
+                    lastInteractionTime = System.currentTimeMillis()
+                },
+                onDismiss = { showSpeedMenu = false },
+                placement = SpeedSelectionMenuPlacement.RIGHT_SIDE
+            )
         }
         
         //  视频比例选择菜单
@@ -1213,11 +1526,15 @@ fun FullscreenPlayerOverlay(
                 com.android.purebilibili.feature.video.ui.components.AspectRatioMenu(
                     currentRatio = aspectRatio,
                     onRatioSelected = { ratio ->
-                        aspectRatio = ratio
+                        val safeRatio = resolveSafeVideoAspectRatio(
+                            preferred = ratio,
+                            isVerticalVideo = isVerticalContent
+                        )
+                        aspectRatio = safeRatio
                         scope.launch {
                             SettingsManager.setFullscreenAspectRatio(
                                 context,
-                                ratio.toFullscreenAspectRatio()
+                                safeRatio.toFullscreenAspectRatio()
                             )
                         }
                         showRatioMenu = false
@@ -1239,19 +1556,11 @@ private fun GestureIndicator(
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
-    val renderProgress by animateFloatAsState(
-        targetValue = value.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 120),
-        label = "fullscreen-gesture-progress"
-    )
-    val accentColor = when (mode) {
-        FullscreenGestureMode.Brightness -> Color(0xFFFFD54F)
-        FullscreenGestureMode.Volume -> Color(0xFF80DEEA)
-        else -> Color.White
-    }
-    val overlayShape = RoundedCornerShape(18.dp)
+    val playerChromeProfile = rememberAppPlayerChromeProfile()
+    val overlayStyle = rememberGestureLevelOverlayStyle(playerChromeProfile.tabPresentation)
+    val overlayShape = AppShapes.container(ContainerLevel.Card)
     if (mode == FullscreenGestureMode.Seek) {
-        Surface(
+        AppSurface(
             modifier = modifier.then(
                 if (hazeState != null) {
                     Modifier.unifiedBlur(
@@ -1273,93 +1582,44 @@ private fun GestureIndicator(
                     .widthIn(min = 128.dp, max = 190.dp)
                     .padding(horizontal = 18.dp, vertical = 14.dp)
             ) {
-                Text(
+                AppText(
                     "${FormatUtils.formatDuration(((seekTime ?: 0) / 1000).toInt())} / ${FormatUtils.formatDuration((duration / 1000).toInt())}",
                     color = Color.White,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
     } else {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = modifier
-                .widthIn(min = 128.dp, max = 190.dp)
-                .padding(horizontal = 18.dp, vertical = 14.dp)
+        val mappedMode = when (mode) {
+            FullscreenGestureMode.Brightness -> VideoGestureMode.Brightness
+            FullscreenGestureMode.Volume -> VideoGestureMode.Volume
+            else -> VideoGestureMode.None
+        }
+        val kind = resolveGestureLevelKind(mappedMode)
+        val sideAlignment = if (kind != null) {
+            resolveGestureLevelOverlaySpec(
+                style = overlayStyle,
+                kind = kind,
+                percent = value
+            ).alignment
+        } else {
+            Alignment.Center
+        }
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = sideAlignment
         ) {
-            when (mode) {
-                FullscreenGestureMode.Brightness -> {
-                    Icon(CupertinoIcons.Default.SunMax, null, tint = accentColor, modifier = Modifier.size(36.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text("亮度", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
-                    Spacer(Modifier.height(4.dp))
-                    AnimatedGesturePercentText(
-                        percent = (value * 100).toInt(),
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        label = "fullscreen-brightness-percent"
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(99.dp))
-                            .background(Color.White.copy(alpha = 0.20f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(renderProgress)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(accentColor.copy(alpha = 0.66f), accentColor)
-                                    )
-                                )
-                        )
-                    }
+            GestureLevelOverlayContent(
+                mode = mappedMode,
+                percent = value,
+                style = overlayStyle,
+                modifier = if (overlayStyle == GestureLevelOverlayStyle.Miuix) {
+                    Modifier.padding(horizontal = 22.dp)
+                } else {
+                    Modifier
                 }
-                FullscreenGestureMode.Volume -> {
-                    val volumeIcon = when {
-                        value < 0.01f -> CupertinoIcons.Default.SpeakerSlash
-                        value < 0.5f -> CupertinoIcons.Default.Speaker
-                        else -> CupertinoIcons.Default.SpeakerWave2
-                    }
-                    Icon(volumeIcon, null, tint = accentColor, modifier = Modifier.size(36.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text("音量", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
-                    Spacer(Modifier.height(4.dp))
-                    AnimatedGesturePercentText(
-                        percent = (value * 100).toInt(),
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        label = "fullscreen-volume-percent"
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(99.dp))
-                            .background(Color.White.copy(alpha = 0.20f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(renderProgress)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(accentColor.copy(alpha = 0.66f), accentColor)
-                                    )
-                                )
-                        )
-                    }
-                }
-                else -> Unit
-            }
+            )
         }
     }
 }
@@ -1373,15 +1633,15 @@ private fun FullscreenControlButton(
     isHighlighted: Boolean = false,
     onClick: () -> Unit
 ) {
-    Surface(
+    AppSurface(
         onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
+        shape = AppShapes.container(ContainerLevel.Chip),
         color = Color.Black.copy(alpha = 0.5f)
     ) {
-        Text(
+        AppText(
             text = text,
             color = if (isHighlighted) MaterialTheme.colorScheme.primary else Color.White,
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         )

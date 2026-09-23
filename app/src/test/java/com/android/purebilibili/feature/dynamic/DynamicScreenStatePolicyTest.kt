@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.dynamic
 import com.android.purebilibili.data.model.response.DynamicAuthorModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicModules
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,26 +14,65 @@ import kotlin.test.assertTrue
 class DynamicScreenStatePolicyTest {
 
     @Test
-    fun `horizontal dynamic header reserves top user list height at rest`() {
+    fun notInterestedIdsAreNormalizedAndBounded() {
         assertEquals(
-            184,
+            setOf("2", "3"),
+            normalizeDynamicNotInterestedIds(listOf(" 1 ", "", "2", "2", "3"), maxSize = 2),
+        )
+    }
+
+    @Test
+    fun `dynamic list top padding stays independent from scroll driven chrome collapse`() {
+        assertEquals(
+            144,
             resolveDynamicListTopPaddingExtraDp(
                 isHorizontalMode = true,
-                isHorizontalUserListCollapsed = false
+                shouldShowHorizontalUserList = true
             )
         )
         assertEquals(
             60,
             resolveDynamicListTopPaddingExtraDp(
                 isHorizontalMode = true,
-                isHorizontalUserListCollapsed = true
+                shouldShowHorizontalUserList = false
             )
         )
         assertEquals(
             60,
             resolveDynamicListTopPaddingExtraDp(
                 isHorizontalMode = false,
-                isHorizontalUserListCollapsed = false
+            )
+        )
+    }
+
+    @Test
+    fun `all tab hides horizontal user list by default while up tab keeps it visible`() {
+        assertFalse(
+            shouldShowDynamicHorizontalUserList(
+                isHorizontalMode = true,
+                selectedTab = 0,
+                allTabHorizontalUserListVisible = false
+            )
+        )
+        assertTrue(
+            shouldShowDynamicHorizontalUserList(
+                isHorizontalMode = true,
+                selectedTab = 4,
+                allTabHorizontalUserListVisible = false
+            )
+        )
+        assertTrue(
+            shouldShowDynamicHorizontalUserList(
+                isHorizontalMode = true,
+                selectedTab = 0,
+                allTabHorizontalUserListVisible = true
+            )
+        )
+        assertFalse(
+            shouldShowDynamicHorizontalUserList(
+                isHorizontalMode = false,
+                selectedTab = 4,
+                allTabHorizontalUserListVisible = true
             )
         )
     }
@@ -53,12 +93,96 @@ class DynamicScreenStatePolicyTest {
         assertTrue(
             shouldCollapseDynamicHorizontalUserList(
                 firstVisibleItemIndex = 0,
-                firstVisibleItemScrollOffset = 12
+                firstVisibleItemScrollOffset = 1,
+                topTolerancePx = DynamicHeaderCollapseTriggerPx,
             )
         )
         assertTrue(
             shouldCollapseDynamicHorizontalUserList(
                 firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 0
+            )
+        )
+        assertFalse(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = DynamicHorizontalExpandedHeaderReservedHeightDp,
+                topTolerancePx = DynamicHorizontalExpandedHeaderReservedHeightDp,
+            )
+        )
+        assertTrue(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = DynamicHorizontalExpandedHeaderReservedHeightDp + 1,
+                topTolerancePx = DynamicHorizontalExpandedHeaderReservedHeightDp,
+            )
+        )
+    }
+
+    @Test
+    fun `horizontal user list height follows scroll like home header`() {
+        assertEquals(
+            96,
+            resolveDynamicScrollCollapsedHeaderHeightPx(
+                expandedHeightPx = 96,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0,
+            )
+        )
+        assertEquals(
+            64,
+            resolveDynamicScrollCollapsedHeaderHeightPx(
+                expandedHeightPx = 96,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 32,
+            )
+        )
+        assertEquals(
+            -32,
+            resolveDynamicScrollCollapsedHeaderOffsetYPx(
+                expandedHeightPx = 96,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 32,
+            )
+        )
+        assertEquals(
+            0,
+            resolveDynamicScrollCollapsedHeaderHeightPx(
+                expandedHeightPx = 96,
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 0,
+            )
+        )
+    }
+
+    @Test
+    fun `dynamic top bar collapse respects optional setting`() {
+        assertFalse(
+            shouldCollapseDynamicTopBar(
+                collapseOnScrollEnabled = false,
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 20
+            )
+        )
+        assertTrue(
+            shouldCollapseDynamicTopBar(
+                collapseOnScrollEnabled = true,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 1,
+                topTolerancePx = DynamicHeaderCollapseTriggerPx,
+            )
+        )
+        assertTrue(
+            shouldCollapseDynamicTopBar(
+                collapseOnScrollEnabled = true,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 12
+            )
+        )
+        assertFalse(
+            shouldCollapseDynamicTopBar(
+                collapseOnScrollEnabled = true,
+                firstVisibleItemIndex = 0,
                 firstVisibleItemScrollOffset = 0
             )
         )
@@ -89,6 +213,61 @@ class DynamicScreenStatePolicyTest {
         assertTrue(shouldShowDynamicLoadingFooter(isLoading = true, activeItemsCount = 1))
         assertFalse(shouldShowDynamicLoadingFooter(isLoading = true, activeItemsCount = 0))
         assertFalse(shouldShowDynamicLoadingFooter(isLoading = false, activeItemsCount = 2))
+    }
+
+    @Test
+    fun `dynamic feed loads more from furthest visible waterfall lane`() {
+        val visibleLaneIndices = listOf(18, 22, 20)
+
+        assertTrue(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = visibleLaneIndices.maxOrNull(),
+                totalItemsCount = 25,
+                allowAutomaticLoadMore = true,
+                isLoading = false,
+                hasMore = true,
+            )
+        )
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = 20,
+                totalItemsCount = 25,
+                allowAutomaticLoadMore = true,
+                isLoading = false,
+                hasMore = true,
+            )
+        )
+    }
+
+    @Test
+    fun `dynamic feed does not load more when pagination is unavailable`() {
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = 22,
+                totalItemsCount = 25,
+                allowAutomaticLoadMore = false,
+                isLoading = false,
+                hasMore = true,
+            )
+        )
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = 22,
+                totalItemsCount = 25,
+                allowAutomaticLoadMore = true,
+                isLoading = true,
+                hasMore = true,
+            )
+        )
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = 22,
+                totalItemsCount = 25,
+                allowAutomaticLoadMore = true,
+                isLoading = false,
+                hasMore = false,
+            )
+        )
     }
 
     @Test
@@ -154,6 +333,45 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
+    fun `temp banned dynamic is filtered from all tab presentation`() {
+        val state = DynamicUiState(
+            items = listOf(
+                buildDynamicItem(id = "100"),
+                buildDynamicItem(id = "101"),
+                buildDynamicItem(id = "102")
+            ).toImmutableList(),
+            tempBannedDynamicIds = persistentSetOf("101")
+        )
+
+        val presentation = resolveDynamicPagePresentation(
+            state = state,
+            logicalTab = 0,
+            selectedUserId = null
+        )
+
+        assertEquals(listOf("100", "102"), presentation.items.map { it.id_str })
+    }
+
+    @Test
+    fun `temp banned dynamic is filtered from selected user presentation`() {
+        val state = DynamicUiState(
+            userItems = listOf(
+                buildDynamicItem(id = "200"),
+                buildDynamicItem(id = "201")
+            ).toImmutableList(),
+            tempBannedDynamicIds = persistentSetOf("201")
+        )
+
+        val presentation = resolveDynamicPagePresentation(
+            state = state,
+            logicalTab = 4,
+            selectedUserId = 1L
+        )
+
+        assertEquals(listOf("200"), presentation.items.map { it.id_str })
+    }
+
+    @Test
     fun `unfollowed author is removed from followed user sidebar`() {
         val users = listOf(
             SidebarUser(uid = 11L, name = "removed", face = ""),
@@ -163,6 +381,49 @@ class DynamicScreenStatePolicyTest {
         val updated = resolveFollowedUsersAfterAuthorUnfollow(users, authorMid = 11L)
 
         assertEquals(listOf(12L), updated.map { it.uid })
+    }
+
+    @Test
+    fun `up panel prepends self shortcut without all-dynamics entry`() {
+        val users = listOf(
+            SidebarUser(uid = 11L, name = "A", face = "a"),
+            SidebarUser(uid = 22L, name = "me", face = "old-me"),
+            SidebarUser(uid = DYNAMIC_UP_PANEL_ALL_UID, name = "全部动态", face = "")
+        )
+        val panel = resolveDynamicUpPanelUsers(
+            users = users,
+            selfUid = 22L,
+            selfFace = "new-me"
+        )
+
+        assertEquals(listOf(22L, 11L), panel.map { it.uid })
+        assertEquals(listOf("我", "A"), panel.map { it.name })
+        assertEquals("new-me", panel[0].face)
+        assertTrue(isDynamicUpPanelAllShortcut(-1L))
+        assertTrue(isDynamicUpPanelShortcut(-1L, selfUid = 22L))
+        assertTrue(isDynamicUpPanelShortcut(22L, selfUid = 22L))
+        assertFalse(isDynamicUpPanelShortcut(11L, selfUid = 22L))
+        assertTrue(isDynamicUpPanelItemSelected(selectedUserId = null, itemUid = -1L))
+        assertTrue(isDynamicUpPanelItemSelected(selectedUserId = 11L, itemUid = 11L))
+        assertFalse(isDynamicUpPanelItemSelected(selectedUserId = 11L, itemUid = -1L))
+    }
+
+    @Test
+    fun `clicking the all shortcut clears the selected user`() {
+        assertNull(
+            resolveDynamicSelectedUserIdAfterClick(
+                selectedUserId = 10001L,
+                clickedUserId = DYNAMIC_UP_PANEL_ALL_UID
+            )
+        )
+        assertEquals(
+            0,
+            resolveDynamicTabAfterUserSelection(
+                selectedUserId = 10001L,
+                clickedUserId = DYNAMIC_UP_PANEL_ALL_UID,
+                currentTab = 4
+            )
+        )
     }
 
     @Test
@@ -202,11 +463,20 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
-    fun `clicking the selected user again should return to all followed dynamics`() {
-        assertNull(
+    fun `clicking the selected user again should keep the scoped feed selected`() {
+        assertEquals(
+            10001L,
             resolveDynamicSelectedUserIdAfterClick(
                 selectedUserId = 10001L,
                 clickedUserId = 10001L
+            )
+        )
+        assertEquals(
+            4,
+            resolveDynamicTabAfterUserSelection(
+                selectedUserId = 10001L,
+                clickedUserId = 10001L,
+                currentTab = 4,
             )
         )
     }
@@ -272,7 +542,7 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
-    fun `clicking user avatar switches to up tab and clearing returns to all`() {
+    fun `clicking user avatar always keeps or switches to the up tab`() {
         assertEquals(
             4,
             resolveDynamicTabAfterUserSelection(
@@ -282,7 +552,7 @@ class DynamicScreenStatePolicyTest {
             )
         )
         assertEquals(
-            0,
+            4,
             resolveDynamicTabAfterUserSelection(
                 selectedUserId = 10001L,
                 clickedUserId = 10001L,
@@ -290,7 +560,7 @@ class DynamicScreenStatePolicyTest {
             )
         )
         assertEquals(
-            2,
+            4,
             resolveDynamicTabAfterUserSelection(
                 selectedUserId = 10001L,
                 clickedUserId = 10001L,
@@ -358,7 +628,7 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
-    fun `dynamic request type aligns with pili plus tab mapping`() {
+    fun `dynamic request type aligns with visible tab mapping`() {
         assertEquals("all", resolveDynamicFeedRequestType(selectedTab = 0))
         assertEquals("video", resolveDynamicFeedRequestType(selectedTab = 1))
         assertEquals("pgc", resolveDynamicFeedRequestType(selectedTab = 2))
@@ -376,7 +646,29 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
-    fun `incremental refresh prepends new items without dropping current list`() {
+    fun `incremental refresh prepends new items without dropping current list when items overlap`() {
+        val existing = listOf(buildDynamicItem("old_a"), buildDynamicItem("old_b")).toImmutableList()
+        val result = resolveDynamicFeedStateAfterSuccess(
+            currentState = DynamicUiState(items = existing),
+            incomingItems = listOf(buildDynamicItem("new_1"), buildDynamicItem("old_a")),
+            isRefresh = true,
+            requestType = "all",
+            incrementalRefreshEnabled = true,
+            hasMore = true
+        )
+
+        assertEquals(
+            listOf("new_1", "old_a", "old_b"),
+            result.items.map { it.id_str }
+        )
+        assertEquals("old_a", result.incrementalRefreshBoundaryKey)
+        assertEquals(1, result.incrementalPrependedCount)
+        assertEquals(DynamicFeedErrorSource.NONE, result.errorSource)
+        assertEquals("all", result.timelineRequestType)
+    }
+
+    @Test
+    fun `incremental refresh falls back to full replacement when incoming items have no overlap with existing items`() {
         val existing = listOf(buildDynamicItem("old_a"), buildDynamicItem("old_b")).toImmutableList()
         val result = resolveDynamicFeedStateAfterSuccess(
             currentState = DynamicUiState(items = existing),
@@ -388,13 +680,35 @@ class DynamicScreenStatePolicyTest {
         )
 
         assertEquals(
-            listOf("new_1", "new_2", "old_a", "old_b"),
+            listOf("new_1", "new_2"),
             result.items.map { it.id_str }
         )
-        assertEquals("old_a", result.incrementalRefreshBoundaryKey)
-        assertEquals(2, result.incrementalPrependedCount)
+        assertEquals(null, result.incrementalRefreshBoundaryKey)
+        assertEquals(0, result.incrementalPrependedCount)
         assertEquals(DynamicFeedErrorSource.NONE, result.errorSource)
-        assertEquals("all", result.timelineRequestType)
+    }
+
+    @Test
+    fun `incremental refresh on timeline page falls back to full replacement when page is cache placeholder`() {
+        val cachedPage = DynamicTimelinePageState(
+            items = listOf(buildDynamicItem("cached_old")).toImmutableList(),
+            isCachePlaceholder = true
+        )
+        val result = resolveDynamicTimelinePageAfterSuccess(
+            currentPage = cachedPage,
+            incomingItems = listOf(buildDynamicItem("fresh_1"), buildDynamicItem("cached_old")),
+            isRefresh = true,
+            incrementalRefreshEnabled = true,
+            hasMore = true
+        )
+
+        assertEquals(
+            listOf("fresh_1", "cached_old"),
+            result.items.map { it.id_str }
+        )
+        assertEquals(null, result.incrementalRefreshBoundaryKey)
+        assertEquals(0, result.incrementalPrependedCount)
+        assertFalse(result.isCachePlaceholder)
     }
 
     @Test
@@ -437,7 +751,7 @@ class DynamicScreenStatePolicyTest {
             ),
             incomingItems = listOf(
                 buildDynamicItem(id = "today_1000", pubTs = 2_000L),
-                buildDynamicItem(id = "yesterday_2200", pubTs = 800L)
+                buildDynamicItem(id = "today_0900", pubTs = 1_800L)
             ),
             isRefresh = true,
             requestType = "all",
@@ -446,7 +760,7 @@ class DynamicScreenStatePolicyTest {
         )
 
         assertEquals(
-            listOf("today_1000", "today_0900", "yesterday_2300", "yesterday_2200"),
+            listOf("today_1000", "today_0900", "yesterday_2300"),
             result.items.map { it.id_str }
         )
     }
@@ -562,6 +876,139 @@ class DynamicScreenStatePolicyTest {
                 selectedUserId = null
             )
         )
+    }
+
+    @Test
+    fun `isDynamicItemRealUser rejects UGC season and PGC dynamics`() {
+        val ugcSeasonItem = DynamicItem(
+            type = "DYNAMIC_TYPE_UGC_SEASON",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 1001L, name = "合集作者", following = true)
+            )
+        )
+        val pgcItem = DynamicItem(
+            type = "DYNAMIC_TYPE_PGC",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 1002L, name = "番剧", following = true)
+            )
+        )
+        val regularItem = DynamicItem(
+            type = "DYNAMIC_TYPE_AV",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 1003L, name = "普通UP", following = true)
+            )
+        )
+
+        assertFalse(isDynamicItemRealUser(ugcSeasonItem))
+        assertFalse(isDynamicItemRealUser(pgcItem))
+        assertTrue(isDynamicItemRealUser(regularItem))
+    }
+
+    @Test
+    fun `isDynamicItemRealUser rejects authors with following set to false`() {
+        val unfollowedItem = DynamicItem(
+            type = "DYNAMIC_TYPE_AV",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 2001L, name = "未关注UP", following = false)
+            )
+        )
+        val followedItem = DynamicItem(
+            type = "DYNAMIC_TYPE_AV",
+            modules = DynamicModules(
+                module_author = DynamicAuthorModule(mid = 2001L, name = "已关注UP", following = true)
+            )
+        )
+
+        assertFalse(isDynamicItemRealUser(unfollowedItem))
+        assertTrue(isDynamicItemRealUser(followedItem))
+    }
+
+    @Test
+    fun `extractUsersFromDynamicItems ignores UGC season and deduplicates identical name and face`() {
+        val items = listOf(
+            DynamicItem(
+                type = "DYNAMIC_TYPE_UGC_SEASON",
+                modules = DynamicModules(
+                    module_author = DynamicAuthorModule(mid = 9001L, name = "装机猿PC问答3", face = "face1")
+                )
+            ),
+            DynamicItem(
+                type = "DYNAMIC_TYPE_UGC_SEASON",
+                modules = DynamicModules(
+                    module_author = DynamicAuthorModule(mid = 9002L, name = "装机猿PC问答3", face = "face1")
+                )
+            ),
+            DynamicItem(
+                type = "DYNAMIC_TYPE_AV",
+                modules = DynamicModules(
+                    module_author = DynamicAuthorModule(mid = 260882L, name = "远古时代装机猿", face = "face2", pub_ts = 1000L, following = true)
+                )
+            ),
+            DynamicItem(
+                type = "DYNAMIC_TYPE_AV",
+                modules = DynamicModules(
+                    module_author = DynamicAuthorModule(mid = 260882L, name = "远古时代装机猿", face = "face2", pub_ts = 2000L, following = true)
+                )
+            )
+        )
+
+        val users = extractUsersFromDynamicItems(items)
+
+        assertEquals(1, users.size)
+        assertEquals(260882L, users[0].uid)
+        assertEquals("远古时代装机猿", users[0].name)
+        assertEquals(2000L, users[0].lastActiveTs)
+    }
+
+    @Test
+    fun `resolveMergedFollowedUsers preserves followed whitelist and does not add unfollowed authors from dynamics`() {
+        val followingUsers = listOf(
+            SidebarUser(uid = 101L, name = "关注UP 1", face = "face1"),
+            SidebarUser(uid = 102L, name = "关注UP 2", face = "face2")
+        )
+        val dynamicUsers = listOf(
+            SidebarUser(uid = 101L, name = "关注UP 1", face = "face1", lastActiveTs = 5000L),
+            SidebarUser(uid = 999L, name = "装机猿PC问答3", face = "face_fake", lastActiveTs = 9999L)
+        )
+        val liveUsers = listOf(
+            SidebarUser(uid = 102L, name = "关注UP 2", face = "face2", isLive = true, lastActiveTs = 6000L)
+        )
+
+        val merged = resolveMergedFollowedUsers(
+            followingUsers = followingUsers,
+            liveUsers = liveUsers,
+            dynamicUsers = dynamicUsers
+        )
+
+        val uids = merged.map { it.uid }.toSet()
+        assertEquals(setOf(101L, 102L), uids)
+        assertFalse(uids.contains(999L), "未关注的陌生人或合集虚拟号绝不能进入关注列表")
+
+        val user101 = merged.first { it.uid == 101L }
+        assertEquals(5000L, user101.lastActiveTs)
+
+        val user102 = merged.first { it.uid == 102L }
+        assertTrue(user102.isLive)
+        assertEquals(6000L, user102.lastActiveTs)
+    }
+
+    @Test
+    fun `resolveMergedFollowedUsers fallback deduplicates identical name and face when followingUsers is empty`() {
+        val dynamicUsers = listOf(
+            SidebarUser(uid = 8001L, name = "相同UP", face = "same_face", lastActiveTs = 100L),
+            SidebarUser(uid = 8002L, name = "相同UP", face = "same_face", lastActiveTs = 200L),
+            SidebarUser(uid = 8003L, name = "另一个UP", face = "other_face", lastActiveTs = 300L)
+        )
+
+        val merged = resolveMergedFollowedUsers(
+            followingUsers = emptyList(),
+            liveUsers = emptyList(),
+            dynamicUsers = dynamicUsers
+        )
+
+        assertEquals(2, merged.size)
+        val names = merged.map { it.name }
+        assertEquals(listOf("相同UP", "另一个UP"), names)
     }
 }
 

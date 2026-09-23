@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
+import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
 
 /**
  * 竖屏模式底部的输入栏
@@ -35,6 +37,8 @@ import androidx.compose.runtime.remember
 @Composable
 fun PortraitBottomInputBar(
     onInputClick: () -> Unit,
+    danmakuEnabled: Boolean,
+    onDanmakuToggle: () -> Unit,
     onRotateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -66,7 +70,7 @@ fun PortraitBottomInputBar(
                 .padding(horizontal = layoutPolicy.inputHorizontalPaddingDp.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            Text(
+            AppText(
                 text = "发弹幕...",
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = layoutPolicy.inputFontSp.sp
@@ -79,7 +83,15 @@ fun PortraitBottomInputBar(
             horizontalArrangement = Arrangement.spacedBy(layoutPolicy.actionSpacingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
+            NativeDanmakuToggleButton(
+                enabled = danmakuEnabled,
+                onToggle = onDanmakuToggle,
+                activeTint = MaterialTheme.colorScheme.primary,
+                inactiveTint = Color.White,
+                modifier = Modifier.size(layoutPolicy.actionButtonSizeDp.dp),
+                iconSize = layoutPolicy.actionIconSizeDp.dp,
+            )
+            PortraitInputIconButton(
                 icon = Icons.Rounded.ScreenRotation,
                 desc = "切换横屏",
                 layoutPolicy = layoutPolicy,
@@ -90,23 +102,27 @@ fun PortraitBottomInputBar(
 }
 
 @Composable
-private fun IconButton(
+private fun PortraitInputIconButton(
     icon: ImageVector,
     desc: String,
     layoutPolicy: PortraitBottomInputBarLayoutPolicy,
+    selected: Boolean = false,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .size(layoutPolicy.actionButtonSizeDp.dp)
             .clip(CircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.24f) else Color.Transparent
+            )
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Icon(
+        AppIcon(
             imageVector = icon,
             contentDescription = desc,
-            tint = Color.White,
+            tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
             modifier = Modifier.size(layoutPolicy.actionIconSizeDp.dp)
         )
     }

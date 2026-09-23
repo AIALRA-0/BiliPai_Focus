@@ -50,6 +50,26 @@ class PlaybackTransitionPolicyTest {
     }
 
     @Test
+    fun mediaSourceResume_holdPositionWhilePlayerIsStillBeforeTarget() {
+        assertTrue(
+            shouldHoldPlaybackResumeTransitionPosition(
+                playerPositionMs = 1_200L,
+                transitionPositionMs = 25_000L
+            )
+        )
+    }
+
+    @Test
+    fun mediaSourceResume_releasesAfterPlayerPassesTargetWindow() {
+        assertFalse(
+            shouldHoldPlaybackResumeTransitionPosition(
+                playerPositionMs = 26_000L,
+                transitionPositionMs = 25_000L
+            )
+        )
+    }
+
+    @Test
     fun displayedQuality_prefersRequestedQuality_whileSwitching() {
         assertEquals(
             80,

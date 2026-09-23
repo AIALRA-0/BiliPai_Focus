@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.CodecInfo
 import com.android.purebilibili.data.model.response.LivePlayUrlData
 import com.android.purebilibili.data.model.response.LiveQuality
@@ -31,6 +33,47 @@ internal sealed interface LiveAdvanceResult {
     data class ReloadCurrentQuality(
         val qualityQn: Int
     ) : LiveAdvanceResult
+}
+
+internal enum class LivePlaybackErrorRecovery {
+    SEEK_TO_LIVE_EDGE,
+    TRY_NEXT_SOURCE,
+    NONE
+}
+
+internal fun resolveLivePlaybackErrorRecovery(
+    errorCode: Int,
+    httpResponseCode: Int?
+): LivePlaybackErrorRecovery {
+    if (errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+        return LivePlaybackErrorRecovery.SEEK_TO_LIVE_EDGE
+    }
+    if (httpResponseCode in setOf(403, 404, 412, 500, 502, 503, 504)) {
+        return LivePlaybackErrorRecovery.TRY_NEXT_SOURCE
+    }
+    return if (errorCode in setOf(
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+        )
+    ) {
+        LivePlaybackErrorRecovery.TRY_NEXT_SOURCE
+    } else {
+        LivePlaybackErrorRecovery.NONE
+    }
+}
+
+internal fun shouldRecoverUnexpectedLiveEnd(
+    playbackState: Int,
+    playWhenReady: Boolean,
+    isRoomLive: Boolean,
+    isMiniLiveMode: Boolean
+): Boolean {
+    return playbackState == Player.STATE_ENDED &&
+        playWhenReady &&
+        isRoomLive &&
+        !isMiniLiveMode
 }
 
 internal fun resolveLivePlayback(

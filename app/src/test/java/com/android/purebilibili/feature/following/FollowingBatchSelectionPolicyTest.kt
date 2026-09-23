@@ -118,4 +118,33 @@ class FollowingBatchSelectionPolicyTest {
         )
         assertFalse(useCache)
     }
+
+    @Test
+    fun `refresh failure should keep cached following users visible`() {
+        val cachedState = FollowingListUiState.Success(
+            users = listOf(com.android.purebilibili.data.model.response.FollowingUser(mid = 10L)),
+            total = 1,
+            isLoadingMore = true
+        )
+
+        val resolved = resolveFollowingRefreshFailureState(
+            currentState = cachedState,
+            message = "网络错误"
+        )
+
+        assertTrue(resolved is FollowingListUiState.Success)
+        assertEquals(listOf(10L), resolved.users.map { it.mid })
+        assertFalse(resolved.isLoadingMore)
+    }
+
+    @Test
+    fun `refresh failure without cache should expose error`() {
+        val resolved = resolveFollowingRefreshFailureState(
+            currentState = FollowingListUiState.Loading,
+            message = "网络错误"
+        )
+
+        assertTrue(resolved is FollowingListUiState.Error)
+        assertEquals("网络错误", resolved.message)
+    }
 }

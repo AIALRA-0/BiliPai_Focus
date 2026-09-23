@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.CodecInfo
 import com.android.purebilibili.data.model.response.FormatInfo
 import com.android.purebilibili.data.model.response.LivePlayUrlData
@@ -11,10 +13,70 @@ import com.android.purebilibili.data.model.response.UrlInfo
 import java.net.URI
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class LivePlaybackPolicyTest {
+
+    @Test
+    fun `behind live window should seek to current live edge`() {
+        assertEquals(
+            LivePlaybackErrorRecovery.SEEK_TO_LIVE_EDGE,
+            resolveLivePlaybackErrorRecovery(
+                errorCode = PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+                httpResponseCode = null
+            )
+        )
+    }
+
+    @Test
+    fun `expired live url should try next source`() {
+        assertEquals(
+            LivePlaybackErrorRecovery.TRY_NEXT_SOURCE,
+            resolveLivePlaybackErrorRecovery(
+                errorCode = PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+                httpResponseCode = 403
+            )
+        )
+    }
+
+    @Test
+    fun `unexpected ended state recovers only with foreground playback intent`() {
+        assertTrue(
+            shouldRecoverUnexpectedLiveEnd(
+                playbackState = Player.STATE_ENDED,
+                playWhenReady = true,
+                isRoomLive = true,
+                isMiniLiveMode = false
+            )
+        )
+        assertFalse(
+            shouldRecoverUnexpectedLiveEnd(
+                playbackState = Player.STATE_ENDED,
+                playWhenReady = false,
+                isRoomLive = true,
+                isMiniLiveMode = false
+            )
+        )
+        assertFalse(
+            shouldRecoverUnexpectedLiveEnd(
+                playbackState = Player.STATE_ENDED,
+                playWhenReady = true,
+                isRoomLive = true,
+                isMiniLiveMode = true
+            )
+        )
+        assertFalse(
+            shouldRecoverUnexpectedLiveEnd(
+                playbackState = Player.STATE_ENDED,
+                playWhenReady = true,
+                isRoomLive = false,
+                isMiniLiveMode = false
+            )
+        )
+    }
 
     @Test
     fun `resolve playback should prefer hls and keep server ordered hosts`() {

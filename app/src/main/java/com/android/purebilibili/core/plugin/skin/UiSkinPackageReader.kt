@@ -10,7 +10,9 @@ import java.util.zip.ZipInputStream
 private const val SKIN_MANIFEST_ENTRY = "skin-manifest.json"
 private const val MAX_ENTRY_COUNT = 256
 private const val MAX_MANIFEST_BYTES = 64 * 1024
-private const val MAX_TOTAL_UNCOMPRESSED_BYTES = 16 * 1024 * 1024
+// 上游装扮中带个人页 MP4 的完整资源包解压后可超过 16 MiB；32 MiB 可覆盖当前存档，
+// 同时继续通过总量与条目数上限约束 zip bomb 风险。
+private const val MAX_TOTAL_UNCOMPRESSED_BYTES = 32 * 1024 * 1024
 
 object UiSkinPackageReader {
 
@@ -135,8 +137,8 @@ object UiSkinPackageReader {
         }
         return declaredPaths.map { path ->
             val bytes = assetBytesByPath.getValue(path)
-            val type = detectImageType(bytes)
-                ?: throw IllegalArgumentException("皮肤资源 $path 不是受支持的图片格式")
+            val type = detectAssetType(bytes)
+                ?: throw IllegalArgumentException("皮肤资源 $path 不是受支持的图片或 MP4 格式")
             UiSkinAssetEntry(
                 path = path,
                 type = type,
@@ -159,6 +161,7 @@ object UiSkinPackageReader {
             },
             assets = assets,
             colors = colors,
+            motion = motion,
             styleSourceName = styleSourceName,
             styleSourceUrl = styleSourceUrl,
             licenseNote = licenseNote,
@@ -167,7 +170,7 @@ object UiSkinPackageReader {
         )
     }
 
-    private fun detectImageType(bytes: ByteArray): UiSkinAssetType? {
+    private fun detectAssetType(bytes: ByteArray): UiSkinAssetType? {
         return when {
             bytes.size >= 8 &&
                 bytes[0] == 0x89.toByte() &&
@@ -191,6 +194,12 @@ object UiSkinPackageReader {
                 bytes[0] == 0xFF.toByte() &&
                 bytes[1] == 0xD8.toByte() &&
                 bytes[2] == 0xFF.toByte() -> UiSkinAssetType.JPEG
+            bytes.size >= 12 &&
+                bytes[4] == 0x66.toByte() &&
+                bytes[5] == 0x74.toByte() &&
+                bytes[6] == 0x79.toByte() &&
+                bytes[7] == 0x70.toByte() -> UiSkinAssetType.MP4
+            bytes.looksLikeJsonAsset() -> UiSkinAssetType.JSON
             else -> null
         }
     }
@@ -216,6 +225,13 @@ object UiSkinPackageReader {
     }
 }
 
+private fun ByteArray.looksLikeJsonAsset(): Boolean {
+    return firstOrNull { byte ->
+        byte != ' '.code.toByte() && byte != '\n'.code.toByte() &&
+            byte != '\r'.code.toByte() && byte != '\t'.code.toByte()
+    } == '{'.code.toByte()
+}
+
 private data class UiSkinScanResult(
     val manifestBytes: ByteArray?,
     val assetBytesByPath: Map<String, ByteArray>
@@ -232,6 +248,7 @@ private data class RawUiSkinManifest(
     val surfaces: Set<String>,
     val assets: UiSkinAssets = UiSkinAssets(),
     val colors: UiSkinColorTokens = UiSkinColorTokens(),
+    val motion: UiSkinMotionTokens = UiSkinMotionTokens(),
     val styleSourceName: String? = null,
     val styleSourceUrl: String? = null,
     val licenseNote: String? = null,

@@ -12,11 +12,15 @@ class AppNavigationSettingsViewModelStructureTest {
 
         assertTrue(source.contains("val settingsViewModel: SettingsViewModel = viewModel("))
         assertTrue(source.contains("SettingsViewModelFactory(application)"))
-        assertTrue(source.contains("SettingsScreen(\n                                viewModel = settingsViewModel"))
-        assertTrue(source.contains("AppearanceSettingsScreen(\n                                viewModel = settingsViewModel"))
-        assertTrue(source.contains("IconSettingsScreen(\n                                viewModel = settingsViewModel"))
-        assertTrue(source.contains("AnimationSettingsScreen(\n                                viewModel = settingsViewModel"))
-        assertTrue(source.contains("PlaybackSettingsScreen(\n                                viewModel = settingsViewModel"))
+        listOf(
+            "SettingsScreen",
+            "AppearanceSettingsScreen",
+            "IconSettingsScreen",
+            "AnimationSettingsScreen",
+            "PlaybackSettingsScreen",
+        ).forEach { screen ->
+            assertSettingsScreenUsesSharedViewModel(source, screen)
+        }
         assertTrue(source.contains("SettingsShareViewModelFactory(application)"))
         assertTrue(source.contains("viewModel = settingsShareViewModel"))
         assertTrue(source.contains("WebDavBackupViewModelFactory(application)"))
@@ -31,5 +35,10 @@ class AppNavigationSettingsViewModelStructureTest {
             File("..", path)
         )
         return candidates.first { it.exists() }.readText()
+    }
+
+    private fun assertSettingsScreenUsesSharedViewModel(source: String, screen: String) {
+        val callSource = source.substringAfter("$screen(").substringBefore(")")
+        assertTrue(callSource.contains("viewModel = settingsViewModel"))
     }
 }

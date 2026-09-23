@@ -7,6 +7,8 @@ import com.android.purebilibili.data.model.response.BangumiPublish
 import com.android.purebilibili.data.model.response.BangumiRights
 import com.android.purebilibili.data.model.response.BangumiSection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BangumiSeasonActionPolicyTest {
@@ -45,6 +47,33 @@ class BangumiSeasonActionPolicyTest {
         )
 
         assertEquals(listOf("试看", "地区受限", "付费观看"), labels)
+    }
+
+    @Test
+    fun `explicitly disabled rights should be shown as restrictions`() {
+        val labels = resolveBangumiRestrictionLabels(
+            BangumiDetail(
+                rights = BangumiRights(
+                    allowDownload = 0,
+                    allowReview = 0,
+                    allowDanmaku = 0
+                )
+            )
+        )
+
+        assertEquals(listOf("不可下载", "暂不可点评", "无弹幕"), labels)
+    }
+
+    @Test
+    fun `review and danmaku capabilities follow season rights`() {
+        assertTrue(canReviewBangumi(mediaId = 1L, rights = null))
+        assertTrue(canReviewBangumi(mediaId = 1L, rights = BangumiRights(allowReview = 1)))
+        assertFalse(canReviewBangumi(mediaId = 1L, rights = BangumiRights(allowReview = 0)))
+        assertFalse(canReviewBangumi(mediaId = 0L, rights = BangumiRights(allowReview = 1)))
+
+        assertTrue(canShowBangumiDanmaku(rights = null))
+        assertTrue(canShowBangumiDanmaku(BangumiRights(allowDanmaku = 1)))
+        assertFalse(canShowBangumiDanmaku(BangumiRights(allowDanmaku = 0)))
     }
 
     @Test

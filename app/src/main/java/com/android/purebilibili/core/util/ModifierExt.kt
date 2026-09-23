@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -22,15 +23,26 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 
 /**
- * 骨架屏闪光特效 Modifier
+ * 骨架屏闪光特效 Modifier（深浅色主题自适应）。
  */
 fun Modifier.shimmerEffect(): Modifier = composed {
+    if (com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()) {
+        val pulse = com.android.purebilibili.core.ui.skeleton.rememberGentleSkeletonPulse()
+        val onSurface = MaterialTheme.colorScheme.onSurface
+        val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        return@composed this.then(Modifier.drawBehind {
+            val alpha = if (dark) 0.10f + 0.08f * pulse.value else 0.08f + 0.06f * pulse.value
+            drawRect(onSurface.copy(alpha = alpha))
+        })
+    }
     var size by remember { mutableStateOf(IntSize.Zero) }
     val transition = rememberInfiniteTransition(label = "shimmer")
     val startOffsetX by transition.animateFloat(
@@ -41,14 +53,21 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         ),
         label = "shimmer_offset"
     )
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val base = if (isDark) {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    }
+    val highlight = if (isDark) {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
+    }
 
     background(
         brush = Brush.linearGradient(
-            colors = listOf(
-                Color(0xFFE0E0E0), // 浅灰
-                Color(0xFFF5F5F5), // 亮灰 (高光)
-                Color(0xFFE0E0E0), // 浅灰
-            ),
+            colors = listOf(base, highlight, base),
             start = Offset(startOffsetX, 0f),
             end = Offset(startOffsetX + size.width.toFloat(), size.height.toFloat())
         )
@@ -134,41 +153,17 @@ fun <T> rememberDebounceCallback(
 }
 
 /**
- * 一个假的视频卡片组件 (用于 Loading 时占位)
+ * 视频网格骨架（历史列表等）。
+ * 使用与首页一致的柔和 alpha 脉冲，避免 shimmer 扫光闪烁。
  */
 @Composable
-fun VideoGridItemSkeleton() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 12.dp)
-    ) {
-        // 封面占位
-        Box(
-            modifier = Modifier
-                .aspectRatio(16f / 10f)
-                .clip(RoundedCornerShape(8.dp))
-                .shimmerEffect() // ✨ 加上闪光特效
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        // 标题占位 (两行)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .height(16.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .shimmerEffect()
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        // 作者占位
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.5f)
-                .height(12.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .shimmerEffect()
-        )
-    }
+fun VideoGridItemSkeleton(coverAspectRatio: Float = 4f / 3f) {
+    val pulse = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse()
+    val blockColor = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(pulse)
+    com.android.purebilibili.core.ui.skeleton.ContentVideoGridItemSkeleton(
+        coverAspectRatio = coverAspectRatio,
+        blockColor = blockColor,
+    )
 }
 
 // =============================================================================
@@ -302,12 +297,12 @@ fun Modifier.iOSTapEffect(
     hapticEnabled: Boolean = true,
     onClick: () -> Unit
 ): Modifier = composed {
-    val uiPreset = LocalUiPreset.current
+    val uiStyle = LocalAppUiStyle.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val haptic = rememberHapticFeedback()
     val targetScale = if (isPressed) {
-        if (uiPreset == UiPreset.MD3) 0.985f else scale
+        if (uiStyle == AppUiStyle.MATERIAL3) 0.985f else scale
     } else {
         1f
     }
@@ -315,8 +310,8 @@ fun Modifier.iOSTapEffect(
     val animatedScale by animateFloatAsState(
         targetValue = targetScale,
         animationSpec = spring(
-            dampingRatio = if (uiPreset == UiPreset.MD3) 0.9f else 0.6f,
-            stiffness = if (uiPreset == UiPreset.MD3) 650f else 400f
+            dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.9f else 0.6f,
+            stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 650f else 400f
         ),
         label = "ios_tap_scale"
     )
@@ -345,19 +340,19 @@ fun Modifier.iOSTapEffect(
 fun Modifier.iOSTapScale(
     scale: Float = 0.96f
 ): Modifier = composed {
-    val uiPreset = LocalUiPreset.current
+    val uiStyle = LocalAppUiStyle.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
     val animatedScale by animateFloatAsState(
         targetValue = if (isPressed) {
-            if (uiPreset == UiPreset.MD3) 0.985f else scale
+            if (uiStyle == AppUiStyle.MATERIAL3) 0.985f else scale
         } else {
             1f
         },
         animationSpec = spring(
-            dampingRatio = if (uiPreset == UiPreset.MD3) 0.9f else 0.6f,
-            stiffness = if (uiPreset == UiPreset.MD3) 650f else 400f
+            dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.9f else 0.6f,
+            stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 650f else 400f
         ),
         label = "ios_tap_scale_only"
     )
@@ -387,17 +382,17 @@ fun Modifier.iOSCardTapEffect(
     hapticEnabled: Boolean = true,
     onClick: () -> Unit
 ): Modifier = composed {
-    val uiPreset = LocalUiPreset.current
+    val uiStyle = LocalAppUiStyle.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val haptic = rememberHapticFeedback()
     val targetScale = if (isPressed) {
-        if (uiPreset == UiPreset.MD3) 0.985f else pressScale
+        if (uiStyle == AppUiStyle.MATERIAL3) 0.985f else pressScale
     } else {
         1f
     }
     val targetTranslation = if (isPressed) {
-        if (uiPreset == UiPreset.MD3) 2f else pressTranslationY
+        if (uiStyle == AppUiStyle.MATERIAL3) 2f else pressTranslationY
     } else {
         0f
     }
@@ -405,8 +400,8 @@ fun Modifier.iOSCardTapEffect(
     val animatedScale by animateFloatAsState(
         targetValue = targetScale,
         animationSpec = spring(
-            dampingRatio = if (uiPreset == UiPreset.MD3) 0.92f else if (isPressed) 0.75f else 0.55f,
-            stiffness = if (uiPreset == UiPreset.MD3) 700f else if (isPressed) 600f else 300f
+            dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.92f else if (isPressed) 0.75f else 0.55f,
+            stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 700f else if (isPressed) 600f else 300f
         ),
         label = "card_tap_scale"
     )
@@ -414,8 +409,8 @@ fun Modifier.iOSCardTapEffect(
     val animatedTranslationY by animateFloatAsState(
         targetValue = targetTranslation,
         animationSpec = spring(
-            dampingRatio = if (uiPreset == UiPreset.MD3) 0.95f else if (isPressed) 0.85f else 0.5f,
-            stiffness = if (uiPreset == UiPreset.MD3) 850f else if (isPressed) 800f else 250f
+            dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.95f else if (isPressed) 0.85f else 0.5f,
+            stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 850f else if (isPressed) 800f else 250f
         ),
         label = "card_tap_translationY"
     )

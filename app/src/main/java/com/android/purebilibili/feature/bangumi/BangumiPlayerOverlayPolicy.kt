@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.bangumi
 
 import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.BangumiEpisode
+import com.android.purebilibili.data.model.response.BangumiVideoInfo
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
 
@@ -28,6 +29,59 @@ internal fun resolveBangumiOverlaySwitchableQualityIds(
     return acceptQuality
         .filter { it > 0 }
         .distinct()
+}
+
+internal data class BangumiQualityOptions(
+    val ids: List<Int>,
+    val labels: List<String>
+)
+
+internal fun resolveBangumiQualityOptions(playData: BangumiVideoInfo): BangumiQualityOptions {
+    val apiLabels = playData.acceptQuality.orEmpty()
+        .mapIndexedNotNull { index, quality ->
+            playData.acceptDescription.orEmpty().getOrNull(index)
+                ?.takeIf(String::isNotBlank)
+                ?.let { quality to it }
+        }
+        .toMap()
+    val formatLabels = playData.supportFormats.orEmpty().associate { format ->
+        format.quality to listOf(format.displayDesc, format.newDescription, format.description)
+            .firstOrNull(String::isNotBlank)
+            .orEmpty()
+    }
+    val ids = (
+        playData.acceptQuality.orEmpty() +
+            playData.supportFormats.orEmpty().map { it.quality } +
+            playData.dash?.video.orEmpty().map { it.id }
+        )
+        .filter { it > 0 }
+        .distinct()
+        .sortedDescending()
+    return BangumiQualityOptions(
+        ids = ids,
+        labels = ids.map { quality ->
+            apiLabels[quality]
+                ?: formatLabels[quality]?.takeIf(String::isNotBlank)
+                ?: resolveBangumiQualityFallbackLabel(quality)
+        }
+    )
+}
+
+private fun resolveBangumiQualityFallbackLabel(quality: Int): String = when (quality) {
+    127 -> "8K 超高清"
+    126 -> "杜比视界"
+    125 -> "HDR 真彩"
+    120 -> "4K 超清"
+    116 -> "1080P 60帧"
+    112 -> "1080P 高码率"
+    100 -> "智能修复"
+    80 -> "1080P 高清"
+    74 -> "720P 60帧"
+    64 -> "720P 高清"
+    32 -> "480P 清晰"
+    16 -> "360P 流畅"
+    6 -> "240P 极速"
+    else -> "画质 $quality"
 }
 
 internal fun buildBangumiOverlayPages(

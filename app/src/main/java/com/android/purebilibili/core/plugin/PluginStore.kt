@@ -20,6 +20,8 @@ private val Context.pluginDataStore by preferencesDataStore(name = "plugin_prefs
  * 使用 DataStore 存储每个插件的启用状态和配置
  */
 object PluginStore {
+
+    private val effectMatchHintsEnabledKey = booleanPreferencesKey("effect_match_hints_enabled")
     
     private val json = Json { 
         ignoreUnknownKeys = true 
@@ -32,7 +34,7 @@ object PluginStore {
     fun isEnabledFlow(context: Context, pluginId: String): Flow<Boolean> {
         val key = booleanPreferencesKey("plugin_enabled_$pluginId")
         return context.pluginDataStore.data.map { prefs ->
-            prefs[key] ?: false  // 默认禁用
+            prefs[key] ?: resolvePluginDefaultEnabled(pluginId)
         }
     }
     
@@ -50,6 +52,19 @@ object PluginStore {
         val key = booleanPreferencesKey("plugin_enabled_$pluginId")
         context.pluginDataStore.edit { prefs ->
             prefs[key] = enabled
+        }
+    }
+
+    /** 是否显示去广告、弹幕过滤等高频命中提示。 */
+    fun effectMatchHintsEnabledFlow(context: Context): Flow<Boolean> {
+        return context.pluginDataStore.data.map { prefs ->
+            prefs[effectMatchHintsEnabledKey] ?: false
+        }
+    }
+
+    suspend fun setEffectMatchHintsEnabled(context: Context, enabled: Boolean) {
+        context.pluginDataStore.edit { prefs ->
+            prefs[effectMatchHintsEnabledKey] = enabled
         }
     }
     

@@ -1,13 +1,13 @@
 package com.android.purebilibili.feature.settings
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -46,37 +46,40 @@ import com.android.purebilibili.core.util.CacheClearTarget
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
 import com.android.purebilibili.core.store.DEFAULT_CRASH_TRACKING_ENABLED
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.theme.LocalSettingsLiquidGlassEnabled
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.AppNavigationSettings
 import com.android.purebilibili.core.util.AnalyticsHelper
 import com.android.purebilibili.core.util.CacheUtils
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.EasterEggs
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
+import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.TopReadabilityChrome
 import com.android.purebilibili.core.ui.rememberAppBackIcon
-import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
-import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.plugin.PluginManager
 
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.launch
 
-import com.android.purebilibili.core.ui.components.IOSSectionTitle
+import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.animation.EntranceGroup
 import com.android.purebilibili.core.ui.animation.entrance
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.feature.dynamic.defaultDynamicTabVisibleIds
 import com.android.purebilibili.feature.dynamic.resolveDynamicVisibleTabIdsAfterToggle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.feature.settings.screen.CommentFraudHistoryScreen
 
 const val GITHUB_URL = OFFICIAL_GITHUB_URL
 
@@ -87,28 +90,42 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenSourceLicensesClick: () -> Unit,
     onAppearanceClick: () -> Unit = {},
+    onHomeClick: () -> Unit = {},
     onAnimationClick: () -> Unit = {},
     onPlaybackClick: () -> Unit = {},
     onFocusSettingsClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
+    onMessageNotificationClick: () -> Unit = {},
     onPluginsClick: () -> Unit = {},
     onSettingsShareClick: () -> Unit = {},
     onWebDavBackupClick: () -> Unit = {},
     onNavigateToBottomBarSettings: () -> Unit = {},
-    onTipsClick: () -> Unit = {}, // [Feature] Tips
+    onTipsClick: () -> Unit = {},
     onReplayOnboardingClick: () -> Unit = {},
-    mainHazeState: dev.chrisbanes.haze.HazeState? = null
+    onCategoryClick: (SettingsRootCategory) -> Unit = {},
+    onSearchOpen: () -> Unit = {},
+    destination: SettingsNavDestination = SettingsNavDestination.Home,
+    mainHazeState: dev.chrisbanes.haze.HazeState? = null,
+    forceSinglePaneContent: Boolean = false,
+    rootEntranceEnabled: Boolean = true,
 ) {
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val navigationTransitionRunning =
+        LocalAnimatedVisibilityScope.current?.transition?.isRunning == true
+    val rootEntranceStartWhen = shouldStartSettingsEntrance(
+        entranceEnabled = rootEntranceEnabled,
+        navigationTransitionRunning = navigationTransitionRunning,
+    )
     val versionClickThreshold = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
     
     // State Collection
     val state by viewModel.state.collectAsStateWithLifecycle()
     val privacyModeEnabled by SettingsManager.getPrivacyModeEnabled(context).collectAsStateWithLifecycle(initialValue = false)
+    val searchSuggestionsEnabled by SettingsManager.getSearchSuggestionsEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val privacyContentAuthenticationEnabled by SettingsManager
         .getPrivacyContentAuthenticationEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false)
@@ -116,14 +133,25 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = DEFAULT_CRASH_TRACKING_ENABLED)
     val analyticsEnabled by SettingsManager.getAnalyticsEnabled(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_ANALYTICS_ENABLED)
+    val enhancedDiagnosticLoggingEnabled by SettingsManager
+        .getEnhancedDiagnosticLoggingEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsStateWithLifecycle(initialValue = null)
     val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsStateWithLifecycle(initialValue = null)
     val imageSaveTreeUri by SettingsManager.getImageSaveTreeUri(context).collectAsStateWithLifecycle(initialValue = null)
+    val autoCacheClearInterval by SettingsManager.getAutoCacheClearInterval(context)
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.AutoCacheClearInterval.NEVER)
+    val autoCacheClearThresholdGb by SettingsManager.getAutoCacheClearThresholdGb(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DEFAULT_AUTO_CACHE_CLEAR_THRESHOLD_GB
+        )
     val feedApiType by SettingsManager.getFeedApiType(context).collectAsStateWithLifecycle(initialValue = SettingsManager.FeedApiType.WEB
     )
     val autoCheckUpdateEnabled by SettingsManager.getAutoCheckAppUpdate(context)
         .collectAsStateWithLifecycle(initialValue = true)
+    val appUpdateChannel by SettingsManager.getAppUpdateChannel(context)
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.AppUpdateChannel.STABLE)
     val incrementalTimelineRefreshEnabled by SettingsManager.getIncrementalTimelineRefresh(context)
         .collectAsStateWithLifecycle(initialValue = false)
     val homeRefreshCount by SettingsManager.getHomeRefreshCount(context)
@@ -132,6 +160,15 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
     val dynamicImagePreviewTextVisible by SettingsManager.getDynamicImagePreviewTextVisible(context)
         .collectAsStateWithLifecycle(initialValue = true)
+    val dynamicAllTabHorizontalUserListVisible by SettingsManager
+        .getDynamicAllTabHorizontalUserListVisible(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val dynamicTopBarCollapseOnScroll by SettingsManager
+        .getDynamicTopBarCollapseOnScroll(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val dynamicFeedLayoutMode by SettingsManager
+        .getDynamicFeedLayoutMode(context)
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode.WATERFALL)
     
     // Local UI State
     var showCacheDialog by remember { mutableStateOf(false) }
@@ -162,13 +199,16 @@ fun SettingsScreen(
     var updateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
     var changelogCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
     var updateDownloadState by remember { mutableStateOf(AppUpdateDownloadState()) }
-    var currentReleaseEvidence by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
-    var installedApkSha256 by remember { mutableStateOf<String?>(null) }
+    val currentReleaseEvidence = state.currentReleaseEvidence
+    val installedApkSha256 = state.installedApkSha256
     
     // [新增] 黑名单页面状态
     var showBlockedList by remember { mutableStateOf(false) }
-    var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
+    // [新增] 发评反诈页面状态
+    var showCommentFraudHistory by remember { mutableStateOf(false) }
     val installedBuildProvenance = remember { readInstalledAppBuildProvenance() }
+
+    // Effects
     val buildVerificationState = remember(currentReleaseEvidence, installedApkSha256) {
         resolveAppBuildVerificationState(
             currentVersion = com.android.purebilibili.BuildConfig.VERSION_NAME,
@@ -275,6 +315,9 @@ fun SettingsScreen(
     val onImageSavePathAction = { showImageSavePathDialog = true }
     
     // Logic Callbacks
+    val onSearchSuggestionsChange: (Boolean) -> Unit = { enabled ->
+        scope.launch { SettingsManager.setSearchSuggestionsEnabled(context, enabled) }
+    }
     val onPrivacyModeChange: (Boolean) -> Unit = { enabled ->
         scope.launch { SettingsManager.setPrivacyModeEnabled(context, enabled) }
     }
@@ -285,6 +328,7 @@ fun SettingsScreen(
         scope.launch {
             SettingsManager.setCrashTrackingEnabled(context, enabled)
             CrashReporter.setEnabled(enabled)
+            com.android.purebilibili.core.performance.Android17Diagnostics.updateEnabled(context, enabled)
         }
     }
     val onAnalyticsChange: (Boolean) -> Unit = { enabled ->
@@ -293,11 +337,20 @@ fun SettingsScreen(
             AnalyticsHelper.setEnabled(enabled)
         }
     }
+    val onEnhancedDiagnosticLoggingChange: (Boolean) -> Unit = { enabled ->
+        scope.launch {
+            SettingsManager.setEnhancedDiagnosticLoggingEnabled(context, enabled)
+            Logger.configureEnhancedDiagnosticLogging(context, enabled)
+        }
+    }
     val onEasterEggChange: (Boolean) -> Unit = { enabled ->
         scope.launch { SettingsManager.setEasterEggEnabled(context, enabled) }
     }
     val onAutoCheckUpdateChange: (Boolean) -> Unit = { enabled ->
         scope.launch { SettingsManager.setAutoCheckAppUpdate(context, enabled) }
+    }
+    val onAppUpdateChannelChange: (SettingsManager.AppUpdateChannel) -> Unit = { channel ->
+        scope.launch { SettingsManager.setAppUpdateChannel(context, channel) }
     }
     
     val onVersionClickAction: () -> Unit = {
@@ -323,7 +376,8 @@ fun SettingsScreen(
     }
     
     val onExportLogsAction: () -> Unit = { LogCollector.exportAndShare(context) }
-    val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
+    val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_CHANNEL_URL) }
+    val onTelegramGroupClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_GROUP_URL) }
     val onTwitterClick: () -> Unit = { uriHandler.openUri("https://x.com/YangY_0x00") }
     val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
     val onVerificationClick: () -> Unit = {
@@ -350,6 +404,7 @@ fun SettingsScreen(
     }
     val onDisclaimerClick: () -> Unit = { showReleaseDisclaimerDialog = true }
     val onBlockedListClickAction: () -> Unit = { showBlockedList = true }
+    val onCommentFraudHistoryClickAction: () -> Unit = { showCommentFraudHistory = true }
     suspend fun runUpdateCheck(
         silent: Boolean,
         shouldOpenReleaseNotes: Boolean = false
@@ -358,8 +413,13 @@ fun SettingsScreen(
         if (!silent) {
             updateStatusText = "检查中..."
         }
-        val result = AppUpdateChecker.check(com.android.purebilibili.BuildConfig.VERSION_NAME)
+        val result = AppUpdateChecker.check(
+            currentVersion = com.android.purebilibili.BuildConfig.VERSION_NAME,
+            currentVersionCode = com.android.purebilibili.BuildConfig.VERSION_CODE,
+            includePrerelease = appUpdateChannel == SettingsManager.AppUpdateChannel.BETA
+        )
         result.onSuccess { info ->
+            viewModel.recordReleaseEvidence(info)
             updateStatusText = info.message
             when (resolveAppUpdateDialogMode(info.isUpdateAvailable, shouldOpenReleaseNotes)) {
                 AppUpdateDialogMode.UPDATE_AVAILABLE -> {
@@ -410,25 +470,23 @@ fun SettingsScreen(
     // Effects
     LaunchedEffect(showCacheAnimation) {
         if (showCacheAnimation) {
-            val breakdown = CacheUtils.getCacheBreakdown(context)
-            val totalSize = breakdown.totalSize
-            val clearedSizeStr = breakdown.format()
-            for (i in 0..100 step 10) {
-                cacheProgress = CacheClearProgress(
-                    current = (totalSize * i / 100),
-                    total = totalSize,
-                    isComplete = false,
-                    clearedSize = clearedSizeStr
-                )
-                kotlinx.coroutines.delay(150)
-            }
+            val before = CacheUtils.getCacheBreakdown(context)
+            val selectedBytesBefore = resolveSelectedCacheBytes(before, pendingCacheClearTargets)
+            cacheProgress = CacheClearProgress(
+                current = 0L,
+                total = selectedBytesBefore,
+                isComplete = false
+            )
             val clearResult = viewModel.clearCache(pendingCacheClearTargets)
             if (shouldMarkCacheClearAnimationComplete(clearResult.isSuccess)) {
+                val after = clearResult.getOrThrow()
+                val selectedBytesAfter = resolveSelectedCacheBytes(after, pendingCacheClearTargets)
+                val actuallyClearedBytes = (selectedBytesBefore - selectedBytesAfter).coerceAtLeast(0L)
                 cacheProgress = CacheClearProgress(
-                    current = totalSize,
-                    total = totalSize,
+                    current = actuallyClearedBytes,
+                    total = selectedBytesBefore,
                     isComplete = true,
-                    clearedSize = clearedSizeStr
+                    clearedSize = formatCacheClearBytes(actuallyClearedBytes)
                 )
             } else {
                 Toast.makeText(
@@ -442,32 +500,17 @@ fun SettingsScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.refreshCacheSize()
-        AnalyticsHelper.logScreenView("SettingsScreen")
-        installedApkSha256 = calculateInstalledApkSha256(context)
-        currentReleaseEvidence = AppUpdateChecker
-            .check(com.android.purebilibili.BuildConfig.VERSION_NAME)
-            .getOrNull()
+    LaunchedEffect(viewModel) {
+        viewModel.ensureDiagnosticsLoaded()
     }
-
-    //  Transparent Navigation Bar
-    val view = androidx.compose.ui.platform.LocalView.current
-    DisposableEffect(Unit) {
-        val window = (context as? android.app.Activity)?.window
-        @Suppress("DEPRECATION")
-        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
-        @Suppress("DEPRECATION")
-        if (window != null) window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        onDispose {
-            @Suppress("DEPRECATION")
-            if (window != null) window.navigationBarColor = originalNavBarColor
-        }
+    LaunchedEffect(Unit) {
+        AnalyticsHelper.logScreenView("SettingsScreen")
     }
 
     // Dialogs
     if (showCacheDialog) {
         CacheClearConfirmDialog(
+            breakdown = state.cacheBreakdown,
             selectedCacheSizeSummary = selectedCacheSizeSummary,
             options = cacheClearOptions,
             selectedTargets = selectedCacheClearTargets,
@@ -496,22 +539,22 @@ fun SettingsScreen(
     }
     
     if (showPathDialog) {
-        com.android.purebilibili.core.ui.IOSAlertDialog(
+        com.android.purebilibili.core.ui.AppAlertDialog(
             onDismissRequest = { showPathDialog = false },
-            title = { Text("下载位置", color = MaterialTheme.colorScheme.onSurface) },
+            title = { AppText("下载位置", color = MaterialTheme.colorScheme.onSurface) },
             text = { 
                 Column {
-                    Text("默认位置（应用私有目录）：", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(defaultPath.substringAfterLast("Android/"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    AppText("默认位置（应用私有目录）：", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AppText(defaultPath.substringAfterLast("Android/"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    AppText(
                         "可选：通过系统文件夹授权设置导出目录（无需“管理所有文件”权限）",
                         style = MaterialTheme.typography.bodySmall,
                         color = com.android.purebilibili.core.theme.iOSOrange
                     )
                     if (!downloadExportTreeUri.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
+                        AppText(
                             "当前导出目录：已设置",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -520,43 +563,43 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = { 
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     showPathDialog = false
                     downloadFolderPicker.launch(null)
-                }) { Text("选择导出目录") }
+                }) { AppText("选择导出目录") }
             },
             dismissButton = { 
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = { 
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     scope.launch {
                         SettingsManager.setDownloadPath(context, null)
                         SettingsManager.setDownloadExportTreeUri(context, null)
                     }
                     showPathDialog = false
                     Toast.makeText(context, "已恢复仅应用内存储", Toast.LENGTH_SHORT).show()
-                }) { Text("仅使用默认") } 
+                }) { AppText("仅使用默认") }
             }
         )
     }
     if (showImageSavePathDialog) {
-        com.android.purebilibili.core.ui.IOSAlertDialog(
+        com.android.purebilibili.core.ui.AppAlertDialog(
             onDismissRequest = { showImageSavePathDialog = false },
-            title = { Text("图片保存位置", color = MaterialTheme.colorScheme.onSurface) },
+            title = { AppText("图片保存位置", color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column {
-                    Text(
+                    AppText(
                         "默认保存到系统相册的 BiliPai 文件夹。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    AppText(
                         "可通过系统文件夹授权选择动态图片、头像和评论图片的保存目录。",
                         style = MaterialTheme.typography.bodySmall,
                         color = com.android.purebilibili.core.theme.iOSOrange
                     )
                     if (!imageSaveTreeUri.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
+                        AppText(
                             "当前图片目录：已选择",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -565,29 +608,29 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     showImageSavePathDialog = false
                     imageSaveFolderPicker.launch(null)
-                }) { Text("选择图片目录") }
+                }) { AppText("选择图片目录") }
             },
             dismissButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     scope.launch {
                         SettingsManager.setImageSaveTreeUri(context, null)
                     }
                     showImageSavePathDialog = false
                     Toast.makeText(context, "已恢复默认图片保存位置", Toast.LENGTH_SHORT).show()
-                }) { Text("恢复默认") }
+                }) { AppText("恢复默认") }
             }
         )
     }
     
     if (showEasterEggDialog) {
-        com.android.purebilibili.core.ui.IOSAlertDialog(
+        com.android.purebilibili.core.ui.AppAlertDialog(
             onDismissRequest = { showEasterEggDialog = false; versionClickCount = 0 },
-            title = { Text(" 你发现了彩蛋！", fontWeight = FontWeight.Bold) },
-            text = { Text("感谢你使用 BiliPai！这是一个用爱发电的开源项目。") },
-            confirmButton = { com.android.purebilibili.core.ui.IOSDialogAction(onClick = { showEasterEggDialog = false; versionClickCount = 0 }) { Text("我知道了！") } }
+            title = { AppText(" 你发现了彩蛋！", fontWeight = FontWeight.Bold) },
+            text = { AppText("感谢你使用 BiliPai！这是一个用爱发电的开源项目。") },
+            confirmButton = { com.android.purebilibili.core.ui.AppDialogAction(onClick = { showEasterEggDialog = false; versionClickCount = 0 }) { AppText("我知道了！") } }
         )
     }
 
@@ -603,6 +646,14 @@ fun SettingsScreen(
         )
     }
 
+    updateCheckResult?.let { info ->
+        AppUpdateDialogHost(
+            update = info,
+            onDismissRequest = { updateCheckResult = null },
+        )
+    }
+
+    if (false) {
     updateCheckResult?.let { info ->
         val resolvedReleaseNotes = remember(info.releaseNotes) {
             resolveUpdateReleaseNotesText(info.releaseNotes)
@@ -633,54 +684,55 @@ fun SettingsScreen(
             )
         }
         val releaseNotesScrollState = rememberScrollState()
-        com.android.purebilibili.core.ui.IOSAlertDialog(
+        com.android.purebilibili.core.ui.AppAlertDialog(
             onDismissRequest = { updateCheckResult = null },
             title = {
-                Text(
+                AppText(
                     text = "发现新版本 v${info.latestVersion}",
                     color = dialogTextColors.titleColor
                 )
             },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
+                    AppText(
                         text = "当前版本 v${info.currentVersion}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = dialogTextColors.currentVersionColor
                     )
                     preferredAsset?.let { asset ->
                         Spacer(modifier = Modifier.height(6.dp))
-                        Text(
+                        AppText(
                             text = "安装包：${asset.name}",
                             style = MaterialTheme.typography.bodySmall,
                             color = dialogTextColors.currentVersionColor
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
+                    AppText(
                         text = "Release 锁定：${if (info.releaseIsImmutable) "Immutable" else "可变"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
-                    Text(
+                    AppText(
                         text = "源码提交：$releaseCommit",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
-                    Text(
+                    AppText(
                         text = "构建来源：$releaseWorkflowSubtitle",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
-                    Text(
+                    AppText(
                         text = "Provenance：$releaseVerificationEvidence",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
                     if (updateDownloadState.status != AppUpdateDownloadStatus.IDLE) {
                         Spacer(modifier = Modifier.height(6.dp))
-                        Text(
+                        AppText(
                             text = when (updateDownloadState.status) {
+                                AppUpdateDownloadStatus.QUEUED -> "等待网络后开始下载"
                                 AppUpdateDownloadStatus.DOWNLOADING -> "下载中 ${(updateDownloadState.progress * 100).toInt()}%"
                                 AppUpdateDownloadStatus.COMPLETED -> "下载完成，正在准备安装"
                                 AppUpdateDownloadStatus.FAILED -> updateDownloadState.errorMessage ?: "下载失败"
@@ -691,7 +743,7 @@ fun SettingsScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    AppText(
                         text = resolvedReleaseNotes,
                         style = MaterialTheme.typography.bodyMedium,
                         color = dialogTextColors.releaseNotesColor,
@@ -703,7 +755,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     val downloadedFile = updateDownloadState.filePath
                         ?.takeIf { updateDownloadState.status == AppUpdateDownloadStatus.COMPLETED }
                         ?.let { path -> java.io.File(path) }
@@ -711,18 +763,18 @@ fun SettingsScreen(
 
                     if (downloadedFile != null) {
                         installDownloadedAppUpdate(context, downloadedFile)
-                        return@IOSDialogAction
+                        return@AppDialogAction
                     }
 
                     val asset = preferredAsset
                     if (asset == null) {
                         updateCheckResult = null
                         uriHandler.openUri(info.releaseUrl)
-                        return@IOSDialogAction
+                        return@AppDialogAction
                     }
 
                     if (updateDownloadState.status == AppUpdateDownloadStatus.DOWNLOADING) {
-                        return@IOSDialogAction
+                        return@AppDialogAction
                     }
 
                     scope.launch {
@@ -748,7 +800,7 @@ fun SettingsScreen(
                         }
                     }
                 }) {
-                    Text(
+                    AppText(
                         when {
                             preferredAsset == null -> "前往下载"
                             updateDownloadState.status == AppUpdateDownloadStatus.DOWNLOADING ->
@@ -760,14 +812,25 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     updateCheckResult = null
                     updateDownloadState = AppUpdateDownloadState()
-                }) { Text("稍后") }
+                }) { AppText("稍后") }
             }
         )
     }
 
+    }
+
+    changelogCheckResult?.let { info ->
+        AppUpdateDialogHost(
+            update = info,
+            showReleaseNotesOnly = true,
+            onDismissRequest = { changelogCheckResult = null },
+        )
+    }
+
+    if (false) {
     changelogCheckResult?.let { info ->
         val resolvedReleaseNotes = remember(info.releaseNotes) {
             resolveUpdateReleaseNotesText(info.releaseNotes)
@@ -795,44 +858,44 @@ fun SettingsScreen(
             )
         }
         val releaseNotesScrollState = rememberScrollState()
-        com.android.purebilibili.core.ui.IOSAlertDialog(
+        com.android.purebilibili.core.ui.AppAlertDialog(
             onDismissRequest = { changelogCheckResult = null },
             title = {
-                Text(
+                AppText(
                     text = "更新日志 v${info.latestVersion}",
                     color = dialogTextColors.titleColor
                 )
             },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
+                    AppText(
                         text = "当前版本 v${info.currentVersion}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = dialogTextColors.currentVersionColor
                     )
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
+                    AppText(
                         text = "Release 锁定：${if (info.releaseIsImmutable) "Immutable" else "可变"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
-                    Text(
+                    AppText(
                         text = "源码提交：$releaseCommit",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
-                    Text(
+                    AppText(
                         text = "构建来源：$releaseWorkflowSubtitle",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
-                    Text(
+                    AppText(
                         text = "Provenance：$releaseVerificationEvidence",
                         style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    AppText(
                         text = resolvedReleaseNotes,
                         style = MaterialTheme.typography.bodyMedium,
                         color = dialogTextColors.releaseNotesColor,
@@ -844,17 +907,19 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     changelogCheckResult = null
                     uriHandler.openUri(info.releaseUrl)
-                }) { Text("查看发布页") }
+                }) { AppText("查看发布页") }
             },
             dismissButton = {
-                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                com.android.purebilibili.core.ui.AppDialogAction(onClick = {
                     changelogCheckResult = null
-                }) { Text("关闭") }
+                }) { AppText("关闭") }
             }
         )
+    }
+
     }
 
     val onOpenLinksAction: () -> Unit = {
@@ -873,68 +938,37 @@ fun SettingsScreen(
             Toast.makeText(context, "无法打开设置", Toast.LENGTH_SHORT).show()
         }
     }
-    val settingsSearchResults = remember(settingsSearchQuery) {
-        resolveSettingsSearchResults(
-            query = settingsSearchQuery,
-            maxResults = 20
-        )
-    }
-    BackHandler(enabled = shouldConsumeSettingsBack(showBlockedList)) {
-        showBlockedList = false
-    }
-    val onSettingsSearchResultClick: (SettingsSearchResult) -> Unit = handler@{ result ->
-        settingsSearchQuery = ""
-        resolveSettingsSceneDetailFocus(result.target)?.let { detailFocus ->
-            SettingsSearchFocusController.submit(detailFocus.target, detailFocus.focusId)
-            when (detailFocus.target) {
-                SettingsSearchTarget.APPEARANCE -> onAppearanceClick()
-                SettingsSearchTarget.ANIMATION -> onAnimationClick()
-                SettingsSearchTarget.PLAYBACK -> onPlaybackClick()
-                SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
-                else -> Unit
+    val settingsBackTarget = resolveSettingsBackTarget(
+        showCacheAnimation = showCacheAnimation,
+        showCacheDialog = showCacheDialog,
+        showPathDialog = showPathDialog,
+        showImageSavePathDialog = showImageSavePathDialog,
+        showEasterEggDialog = showEasterEggDialog,
+        showDonateDialog = showDonateDialog,
+        showReleaseDisclaimerDialog = showReleaseDisclaimerDialog,
+        showUpdateResult = updateCheckResult != null,
+        showChangelogResult = changelogCheckResult != null,
+        showBlockedList = showBlockedList,
+    )
+    SettingsLocalBackHandler(enabled = settingsBackTarget != SettingsBackTarget.NONE) {
+        when (settingsBackTarget) {
+            SettingsBackTarget.NONE -> Unit
+            SettingsBackTarget.CACHE_ANIMATION -> {
+                showCacheAnimation = false
+                cacheProgress = null
             }
-            return@handler
-        }
-        if (isSceneSettingsSearchTarget(result.target)) {
-            SettingsSearchFocusController.submit(result.target, result.focusId ?: result.target.name)
-            return@handler
-        }
-        SettingsSearchFocusController.submit(result.target, result.focusId)
-        when (result.target) {
-            SettingsSearchTarget.INTERFACE_THEME,
-            SettingsSearchTarget.HOME_FEED,
-            SettingsSearchTarget.NAVIGATION,
-            SettingsSearchTarget.PLAYBACK_QUALITY,
-            SettingsSearchTarget.FULLSCREEN_GESTURE,
-            SettingsSearchTarget.INTERACTION_COMMENT,
-            SettingsSearchTarget.DATA_BACKUP,
-            SettingsSearchTarget.PRIVACY_PERMISSION,
-            SettingsSearchTarget.DIAGNOSTICS,
-            SettingsSearchTarget.ABOUT_SUPPORT -> Unit
-            SettingsSearchTarget.APPEARANCE -> onAppearanceClick()
-            SettingsSearchTarget.ANIMATION -> onAnimationClick()
-            SettingsSearchTarget.PLAYBACK -> onPlaybackClick()
-            SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
-            SettingsSearchTarget.PERMISSION -> onPermissionClick()
-            SettingsSearchTarget.BLOCKED_LIST -> onBlockedListClickAction()
-            SettingsSearchTarget.SETTINGS_SHARE -> onSettingsShareClick()
-            SettingsSearchTarget.WEBDAV_BACKUP -> onWebDavBackupClick()
-            SettingsSearchTarget.DOWNLOAD_PATH -> onDownloadPathAction()
-            SettingsSearchTarget.IMAGE_SAVE_PATH -> onImageSavePathAction()
-            SettingsSearchTarget.CLEAR_CACHE -> onClearCacheAction()
-            SettingsSearchTarget.PLUGINS -> onPluginsClick()
-            SettingsSearchTarget.EXPORT_LOGS -> onExportLogsAction()
-            SettingsSearchTarget.OPEN_SOURCE_LICENSES -> onOpenSourceLicensesClick()
-            SettingsSearchTarget.OPEN_SOURCE_HOME -> onGithubClick()
-            SettingsSearchTarget.CHECK_UPDATE -> onCheckUpdateAction()
-            SettingsSearchTarget.VIEW_RELEASE_NOTES -> onViewReleaseNotesAction()
-            SettingsSearchTarget.REPLAY_ONBOARDING -> onReplayOnboardingClick()
-            SettingsSearchTarget.TIPS -> onTipsClick()
-            SettingsSearchTarget.OPEN_LINKS -> onOpenLinksAction()
-            SettingsSearchTarget.DONATE -> showDonateDialog = true
-            SettingsSearchTarget.TELEGRAM -> onTelegramClick()
-            SettingsSearchTarget.TWITTER -> onTwitterClick()
-            SettingsSearchTarget.DISCLAIMER -> onDisclaimerClick()
+            SettingsBackTarget.CACHE_DIALOG -> showCacheDialog = false
+            SettingsBackTarget.PATH_DIALOG -> showPathDialog = false
+            SettingsBackTarget.IMAGE_SAVE_PATH_DIALOG -> showImageSavePathDialog = false
+            SettingsBackTarget.EASTER_EGG_DIALOG -> {
+                showEasterEggDialog = false
+                versionClickCount = 0
+            }
+            SettingsBackTarget.DONATE_DIALOG -> showDonateDialog = false
+            SettingsBackTarget.RELEASE_DISCLAIMER_DIALOG -> showReleaseDisclaimerDialog = false
+            SettingsBackTarget.UPDATE_RESULT -> updateCheckResult = null
+            SettingsBackTarget.CHANGELOG_RESULT -> changelogCheckResult = null
+            SettingsBackTarget.BLOCKED_LIST -> showBlockedList = false
         }
     }
 
@@ -942,6 +976,8 @@ fun SettingsScreen(
     CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
         if (showBlockedList) {
             BlockedListScreen(onBack = { showBlockedList = false })
+        } else if (showCommentFraudHistory) {
+            CommentFraudHistoryScreen(onBack = { showCommentFraudHistory = false })
         } else {
         // Layout Switching
         Box(
@@ -949,14 +985,27 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .hazeSourceCompat(state = activeHazeState)
         ) {
-            if (shouldUseSettingsSplitLayout(widthDp = configuration.screenWidthDp)) {
-                TabletSettingsLayout(
+            if (shouldRenderSettingsSinglePaneContent(
+                    widthDp = configuration.screenWidthDp,
+                    forceSinglePaneContent = forceSinglePaneContent
+                )
+            ) {
+                MobileSettingsNavLayout(
+                    destination = destination,
+                    rootEntranceEnabled = rootEntranceEnabled,
+                    rootEntranceStartWhen = rootEntranceStartWhen,
                     onBack = onBack,
+                    onCategoryClick = onCategoryClick,
+                    onSearchOpen = onSearchOpen,
                     onAppearanceClick = onAppearanceClick,
+                    onHomeClick = onHomeClick,
                     onAnimationClick = onAnimationClick,
                     onPlaybackClick = onPlaybackClick,
                     onFocusSettingsClick = onFocusSettingsClick,
                     onPermissionClick = onPermissionClick,
+                    onMessageNotificationClick = onMessageNotificationClick,
+                    onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
+                    onTipsClick = onTipsClick,
                     onPluginsClick = onPluginsClick,
                     onExportLogsClick = onExportLogsAction,
                     onLicenseClick = onOpenSourceLicensesClick,
@@ -969,34 +1018,55 @@ fun SettingsScreen(
                     onViewReleaseNotesClick = onViewReleaseNotesAction,
                     onVersionClick = onVersionClickAction,
                     onReplayOnboardingClick = onReplayOnboardingClick,
-                    onTipsClick = onTipsClick, // [Feature]
                     onTelegramClick = onTelegramClick,
+                    onTelegramGroupClick = onTelegramGroupClick,
                     onTwitterClick = onTwitterClick,
                     onSettingsShareClick = onSettingsShareClick,
                     onWebDavBackupClick = onWebDavBackupClick,
                     onDownloadPathClick = onDownloadPathAction,
                     onImageSavePathClick = onImageSavePathAction,
                     onClearCacheClick = onClearCacheAction,
+                    onAutoCacheClearIntervalChange = { interval ->
+                        scope.launch { SettingsManager.setAutoCacheClearInterval(context, interval) }
+                    },
+                    onAutoCacheClearThresholdChange = { thresholdGb ->
+                        scope.launch {
+                            SettingsManager.setAutoCacheClearThresholdGb(context, thresholdGb)
+                        }
+                    },
+                    onDonateClick = { showDonateDialog = true },
+                    onOpenLinksClick = onOpenLinksAction,
+                    onBlockedListClick = onBlockedListClickAction,
+                    onCommentFraudHistoryClick = onCommentFraudHistoryClickAction,
                     onPrivacyModeChange = onPrivacyModeChange,
+                    onSearchSuggestionsChange = onSearchSuggestionsChange,
                     onPrivacyContentAuthenticationChange = onPrivacyContentAuthenticationChange,
                     onCrashTrackingChange = onCrashTrackingChange,
                     onAnalyticsChange = onAnalyticsChange,
+                    onEnhancedDiagnosticLoggingChange = onEnhancedDiagnosticLoggingChange,
                     onEasterEggChange = onEasterEggChange,
                     onAutoCheckUpdateChange = onAutoCheckUpdateChange,
+                    onAppUpdateChannelChange = onAppUpdateChannelChange,
                     privacyModeEnabled = privacyModeEnabled,
+                    searchSuggestionsEnabled = searchSuggestionsEnabled,
                     customDownloadPath = downloadExportTreeUri ?: customDownloadPath,
                     customImageSavePath = imageSaveTreeUri,
                     cacheSize = state.cacheSize,
+                    autoCacheClearInterval = autoCacheClearInterval,
+                    autoCacheClearThresholdGb = autoCacheClearThresholdGb,
                     crashTrackingEnabled = crashTrackingEnabled,
                     analyticsEnabled = analyticsEnabled,
+                    enhancedDiagnosticLoggingEnabled = enhancedDiagnosticLoggingEnabled,
                     pluginCount = PluginManager.getEnabledCount(),
                     versionName = com.android.purebilibili.BuildConfig.VERSION_NAME,
+                    appIcon = state.appIcon,
                     versionClickCount = versionClickCount,
                     versionClickThreshold = versionClickThreshold,
                     easterEggEnabled = easterEggEnabled,
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
                     autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                    appUpdateChannel = appUpdateChannel,
                     privacyContentAuthenticationEnabled = privacyContentAuthenticationEnabled,
                     verificationLabel = buildVerificationLabel,
                     verificationSubtitle = buildVerificationState.summary,
@@ -1005,13 +1075,9 @@ fun SettingsScreen(
                     buildFingerprintValue = buildFingerprintValue,
                     buildFingerprintCopyValue = buildFingerprintCopyValue,
                     buildFingerprintSubtitle = buildFingerprintSubtitle,
-                    onDonateClick = { showDonateDialog = true },
-                    onOpenLinksClick = onOpenLinksAction,
-                    onBlockedListClick = onBlockedListClickAction, // Pass to tablet layout
-                    searchQuery = settingsSearchQuery,
-                    onSearchQueryChange = { settingsSearchQuery = it },
-                    searchResults = settingsSearchResults,
-                    onSearchResultClick = onSettingsSearchResultClick,
+                    cardAnimationEnabled = state.cardAnimationEnabled,
+                    isBottomBarFloating = state.isBottomBarFloating,
+                    bottomBarLabelMode = state.bottomBarLabelMode,
                     feedApiType = feedApiType,
                     onFeedApiTypeChange = { type ->
                         scope.launch {
@@ -1035,103 +1101,22 @@ fun SettingsScreen(
                             SettingsManager.setDynamicImagePreviewTextVisible(context, visible)
                         }
                     },
-                    dynamicVisibleTabIds = dynamicVisibleTabIds,
-                    onDynamicTabVisibilityChange = { tabId ->
+                    dynamicAllTabHorizontalUserListVisible = dynamicAllTabHorizontalUserListVisible,
+                    onDynamicAllTabHorizontalUserListVisibleChange = { visible ->
                         scope.launch {
-                            SettingsManager.setDynamicTabVisibleTabs(
-                                context,
-                                resolveDynamicVisibleTabIdsAfterToggle(dynamicVisibleTabIds, tabId)
-                            )
+                            SettingsManager.setDynamicAllTabHorizontalUserListVisible(context, visible)
                         }
                     },
-                    homeRefreshCount = homeRefreshCount,
-                    onHomeRefreshCountChange = { count ->
+                    dynamicTopBarCollapseOnScroll = dynamicTopBarCollapseOnScroll,
+                    onDynamicTopBarCollapseOnScrollChange = { enabled ->
                         scope.launch {
-                            SettingsManager.setHomeRefreshCount(context, count)
-                        }
-                    }
-                )
-            } else {
-                MobileSettingsLayout(
-                    onBack = onBack,
-                    onAppearanceClick = onAppearanceClick,
-                    onAnimationClick = onAnimationClick,
-                    onPlaybackClick = onPlaybackClick,
-                    onFocusSettingsClick = onFocusSettingsClick,
-                    onPermissionClick = onPermissionClick,
-                    onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
-                    onPluginsClick = onPluginsClick,
-                    onExportLogsClick = onExportLogsAction,
-                    onLicenseClick = onOpenSourceLicensesClick,
-                    onDisclaimerClick = onDisclaimerClick,
-                    onGithubClick = onGithubClick,
-                    onVerificationClick = onVerificationClick,
-                    onBuildSourceClick = onBuildSourceClick,
-                    onBuildFingerprintClick = onBuildFingerprintClick,
-                    onCheckUpdateClick = onCheckUpdateAction,
-                    onViewReleaseNotesClick = onViewReleaseNotesAction,
-                    onVersionClick = onVersionClickAction,
-                    onTipsClick = onTipsClick, // [Feature]
-                    onReplayOnboardingClick = onReplayOnboardingClick,
-                    onTelegramClick = onTelegramClick,
-                    onTwitterClick = onTwitterClick,
-                    onSettingsShareClick = onSettingsShareClick,
-                    onWebDavBackupClick = onWebDavBackupClick,
-                    onDownloadPathClick = onDownloadPathAction,
-                    onImageSavePathClick = onImageSavePathAction,
-                    onClearCacheClick = onClearCacheAction,
-                    onPrivacyModeChange = onPrivacyModeChange,
-                    onPrivacyContentAuthenticationChange = onPrivacyContentAuthenticationChange,
-                    onCrashTrackingChange = onCrashTrackingChange,
-                    onAnalyticsChange = onAnalyticsChange,
-                    onEasterEggChange = onEasterEggChange,
-                    onAutoCheckUpdateChange = onAutoCheckUpdateChange,
-                    privacyModeEnabled = privacyModeEnabled,
-                    customDownloadPath = downloadExportTreeUri ?: customDownloadPath,
-                    customImageSavePath = imageSaveTreeUri,
-                    cacheSize = state.cacheSize,
-                    crashTrackingEnabled = crashTrackingEnabled,
-                    analyticsEnabled = analyticsEnabled,
-                    pluginCount = PluginManager.getEnabledCount(),
-                    versionName = com.android.purebilibili.BuildConfig.VERSION_NAME,
-                    versionClickCount = versionClickCount,
-                    versionClickThreshold = versionClickThreshold,
-                    easterEggEnabled = easterEggEnabled,
-                    updateStatusText = updateStatusText,
-                    isCheckingUpdate = isCheckingUpdate,
-                    autoCheckUpdateEnabled = autoCheckUpdateEnabled,
-                    privacyContentAuthenticationEnabled = privacyContentAuthenticationEnabled,
-                    verificationLabel = buildVerificationLabel,
-                    verificationSubtitle = buildVerificationState.summary,
-                    buildSourceValue = buildSourceValue,
-                    buildSourceSubtitle = buildSourceSubtitle,
-                    buildFingerprintValue = buildFingerprintValue,
-                    buildFingerprintCopyValue = buildFingerprintCopyValue,
-                    buildFingerprintSubtitle = buildFingerprintSubtitle,
-                    cardAnimationEnabled = state.cardAnimationEnabled,
-                    isBottomBarFloating = state.isBottomBarFloating,
-                    bottomBarLabelMode = state.bottomBarLabelMode,
-                    feedApiType = feedApiType,
-                    onFeedApiTypeChange = { type ->
-                        scope.launch {
-                            SettingsManager.setFeedApiType(context, type)
-                            android.widget.Toast.makeText(
-                                context, 
-                                "已切换为${type.label}，下拉刷新生效", 
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            SettingsManager.setDynamicTopBarCollapseOnScroll(context, enabled)
                         }
                     },
-                    incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
-                    onIncrementalTimelineRefreshChange = { enabled ->
+                    dynamicFeedLayoutMode = dynamicFeedLayoutMode,
+                    onDynamicFeedLayoutModeChange = { mode ->
                         scope.launch {
-                            SettingsManager.setIncrementalTimelineRefresh(context, enabled)
-                        }
-                    },
-                    dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
-                    onDynamicImagePreviewTextVisibleChange = { visible ->
-                        scope.launch {
-                            SettingsManager.setDynamicImagePreviewTextVisible(context, visible)
+                            SettingsManager.setDynamicFeedLayoutMode(context, mode)
                         }
                     },
                     dynamicVisibleTabIds = dynamicVisibleTabIds,
@@ -1149,18 +1134,8 @@ fun SettingsScreen(
                             SettingsManager.setHomeRefreshCount(context, count)
                         }
                     },
-                    onDonateClick = { showDonateDialog = true },
-                    onOpenLinksClick = onOpenLinksAction,
-                    onBlockedListClick = onBlockedListClickAction, // Pass to mobile layout
-                    searchQuery = settingsSearchQuery,
-                    onSearchQueryChange = { settingsSearchQuery = it },
-                    searchResults = settingsSearchResults,
-                    onSearchResultClick = onSettingsSearchResultClick
                 )
             }
-            
-            // Onboarding Bottom Sheet (Shared)
-    
         }
         }
     }
@@ -1174,27 +1149,33 @@ internal fun resolveCacheClearFailureMessage(error: Throwable?): String {
 
 @Composable
 internal fun SettingsCategoryHeader(title: String) {
-    Text(
+    AppText(
         text = title,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
-        fontSize = 13.sp,
+        style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = AppSpacingTokens.Small)
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MobileSettingsLayout(
+private fun MobileSettingsNavLayout(
+    destination: SettingsNavDestination,
+    rootEntranceEnabled: Boolean,
+    rootEntranceStartWhen: Boolean,
     onBack: () -> Unit,
-    // Callbacks
+    onCategoryClick: (SettingsRootCategory) -> Unit,
+    onSearchOpen: () -> Unit,
     onAppearanceClick: () -> Unit,
+    onHomeClick: () -> Unit,
     onAnimationClick: () -> Unit,
     onPlaybackClick: () -> Unit,
     onFocusSettingsClick: () -> Unit,
     onPermissionClick: () -> Unit,
+    onMessageNotificationClick: () -> Unit,
     onNavigateToBottomBarSettings: () -> Unit,
-    onTipsClick: () -> Unit, // [Feature]
+    onTipsClick: () -> Unit,
     onPluginsClick: () -> Unit,
     onExportLogsClick: () -> Unit,
     onLicenseClick: () -> Unit,
@@ -1208,44 +1189,49 @@ private fun MobileSettingsLayout(
     onVersionClick: () -> Unit,
     onReplayOnboardingClick: () -> Unit,
     onTelegramClick: () -> Unit,
+    onTelegramGroupClick: () -> Unit = {},
     onTwitterClick: () -> Unit,
     onSettingsShareClick: () -> Unit,
     onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onImageSavePathClick: () -> Unit,
     onClearCacheClick: () -> Unit,
+    onAutoCacheClearIntervalChange: (SettingsManager.AutoCacheClearInterval) -> Unit,
+    onAutoCacheClearThresholdChange: (Int) -> Unit,
     onDonateClick: () -> Unit,
-    onOpenLinksClick: () -> Unit, // [New]
-    onBlockedListClick: () -> Unit, // [New]
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    searchResults: List<SettingsSearchResult>,
-    onSearchResultClick: (SettingsSearchResult) -> Unit,
-    
-    // Logic Callbacks
+    onOpenLinksClick: () -> Unit,
+    onBlockedListClick: () -> Unit,
+    onCommentFraudHistoryClick: () -> Unit,
     onPrivacyModeChange: (Boolean) -> Unit,
+    onSearchSuggestionsChange: (Boolean) -> Unit,
     onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     onCrashTrackingChange: (Boolean) -> Unit,
     onAnalyticsChange: (Boolean) -> Unit,
+    onEnhancedDiagnosticLoggingChange: (Boolean) -> Unit,
     onEasterEggChange: (Boolean) -> Unit,
     onAutoCheckUpdateChange: (Boolean) -> Unit,
-    
-    // State
+    onAppUpdateChannelChange: (SettingsManager.AppUpdateChannel) -> Unit,
     privacyModeEnabled: Boolean,
+    searchSuggestionsEnabled: Boolean,
     privacyContentAuthenticationEnabled: Boolean,
     customDownloadPath: String?,
     customImageSavePath: String?,
     cacheSize: String,
+    autoCacheClearInterval: SettingsManager.AutoCacheClearInterval,
+    autoCacheClearThresholdGb: Int,
     crashTrackingEnabled: Boolean,
     analyticsEnabled: Boolean,
+    enhancedDiagnosticLoggingEnabled: Boolean,
     pluginCount: Int,
     versionName: String,
+    appIcon: String,
     versionClickCount: Int,
     versionClickThreshold: Int,
     easterEggEnabled: Boolean,
     updateStatusText: String,
     isCheckingUpdate: Boolean,
     autoCheckUpdateEnabled: Boolean,
+    appUpdateChannel: SettingsManager.AppUpdateChannel,
     verificationLabel: String,
     verificationSubtitle: String,
     buildSourceValue: String,
@@ -1262,38 +1248,40 @@ private fun MobileSettingsLayout(
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
     dynamicImagePreviewTextVisible: Boolean,
     onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
+    dynamicAllTabHorizontalUserListVisible: Boolean,
+    onDynamicAllTabHorizontalUserListVisibleChange: (Boolean) -> Unit,
+    dynamicTopBarCollapseOnScroll: Boolean,
+    onDynamicTopBarCollapseOnScrollChange: (Boolean) -> Unit,
+    dynamicFeedLayoutMode: com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode,
+    onDynamicFeedLayoutModeChange: (com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode) -> Unit,
     dynamicVisibleTabIds: Set<String>,
     onDynamicTabVisibilityChange: (String) -> Unit,
     homeRefreshCount: Int,
-    onHomeRefreshCountChange: (Int) -> Unit
+    onHomeRefreshCountChange: (Int) -> Unit,
 ) {
-    val listState = rememberLazyListState()
     val windowSizeClass = LocalWindowSizeClass.current
-    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
-        resolveDeviceUiProfile(
-            widthSizeClass = windowSizeClass.widthSizeClass
-        )
-    }
     val sectionOrder = remember { resolveSettingsRootCategoryOrder() }
-    val focusRequest by SettingsSearchFocusController.request.collectAsStateWithLifecycle()
     val bottomBarVisible = LocalBottomBarVisible.current
     val bottomInset = resolveSettingsContentBottomPadding(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
         bottomBarVisible = bottomBarVisible,
         isBottomBarFloating = isBottomBarFloating,
         bottomBarLabelMode = bottomBarLabelMode,
-        isTablet = windowSizeClass.isTablet
+        isTablet = windowSizeClass.isTablet,
     )
-    val screenTitle = stringResource(R.string.settings_title)
+    val screenTitle = resolveSettingsNavDestinationTitle(destination)
     val backLabel = stringResource(R.string.common_back)
     val rootCategoryActions = SettingsRootCategoryActions(
         onAppearanceClick = onAppearanceClick,
+        onHomeClick = onHomeClick,
         onAnimationClick = onAnimationClick,
         onPlaybackClick = onPlaybackClick,
         onFocusSettingsClick = onFocusSettingsClick,
         onBottomBarClick = onNavigateToBottomBarSettings,
         onPermissionClick = onPermissionClick,
+        onMessageNotificationClick = onMessageNotificationClick,
         onBlockedListClick = onBlockedListClick,
+        onCommentFraudHistoryClick = onCommentFraudHistoryClick,
         onPluginsClick = onPluginsClick,
         onExportLogsClick = onExportLogsClick,
         onSettingsShareClick = onSettingsShareClick,
@@ -1301,8 +1289,11 @@ private fun MobileSettingsLayout(
         onDownloadPathClick = onDownloadPathClick,
         onImageSavePathClick = onImageSavePathClick,
         onClearCacheClick = onClearCacheClick,
+        onAutoCacheClearIntervalChange = onAutoCacheClearIntervalChange,
+        onAutoCacheClearThresholdChange = onAutoCacheClearThresholdChange,
         onGithubClick = onGithubClick,
         onTelegramClick = onTelegramClick,
+        onTelegramGroupClick = onTelegramGroupClick,
         onTwitterClick = onTwitterClick,
         onDonateClick = onDonateClick,
         onDisclaimerClick = onDisclaimerClick,
@@ -1317,31 +1308,43 @@ private fun MobileSettingsLayout(
         onTipsClick = onTipsClick,
         onOpenLinksClick = onOpenLinksClick,
         onPrivacyModeChange = onPrivacyModeChange,
+        onSearchSuggestionsChange = onSearchSuggestionsChange,
         onPrivacyContentAuthenticationChange = onPrivacyContentAuthenticationChange,
         onCrashTrackingChange = onCrashTrackingChange,
         onAnalyticsChange = onAnalyticsChange,
+        onEnhancedDiagnosticLoggingChange = onEnhancedDiagnosticLoggingChange,
         onEasterEggChange = onEasterEggChange,
         onAutoCheckUpdateChange = onAutoCheckUpdateChange,
+        onAppUpdateChannelChange = onAppUpdateChannelChange,
         onFeedApiTypeChange = onFeedApiTypeChange,
         onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
         onDynamicImagePreviewTextVisibleChange = onDynamicImagePreviewTextVisibleChange,
+        onDynamicAllTabHorizontalUserListVisibleChange = onDynamicAllTabHorizontalUserListVisibleChange,
+        onDynamicTopBarCollapseOnScrollChange = onDynamicTopBarCollapseOnScrollChange,
+        onDynamicFeedLayoutModeChange = onDynamicFeedLayoutModeChange,
         onDynamicTabVisibilityChange = onDynamicTabVisibilityChange,
-        onHomeRefreshCountChange = onHomeRefreshCountChange
+        onHomeRefreshCountChange = onHomeRefreshCountChange,
     )
     val rootCategoryState = SettingsRootCategoryState(
         privacyModeEnabled = privacyModeEnabled,
+        searchSuggestionsEnabled = searchSuggestionsEnabled,
         privacyContentAuthenticationEnabled = privacyContentAuthenticationEnabled,
         crashTrackingEnabled = crashTrackingEnabled,
         analyticsEnabled = analyticsEnabled,
+        enhancedDiagnosticLoggingEnabled = enhancedDiagnosticLoggingEnabled,
         pluginCount = pluginCount,
         customDownloadPath = customDownloadPath,
         customImageSavePath = customImageSavePath,
         cacheSize = cacheSize,
+        autoCacheClearInterval = autoCacheClearInterval,
+        autoCacheClearThresholdGb = autoCacheClearThresholdGb,
         versionName = versionName,
+        appIcon = appIcon,
         easterEggEnabled = easterEggEnabled,
         updateStatusText = updateStatusText,
         isCheckingUpdate = isCheckingUpdate,
         autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+        appUpdateChannel = appUpdateChannel,
         verificationLabel = verificationLabel,
         verificationSubtitle = verificationSubtitle,
         buildSourceValue = buildSourceValue,
@@ -1354,93 +1357,69 @@ private fun MobileSettingsLayout(
         feedApiType = feedApiType,
         incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
         dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
+        dynamicAllTabHorizontalUserListVisible = dynamicAllTabHorizontalUserListVisible,
+        dynamicTopBarCollapseOnScroll = dynamicTopBarCollapseOnScroll,
+        dynamicFeedLayoutMode = dynamicFeedLayoutMode,
         dynamicVisibleTabIds = dynamicVisibleTabIds,
-        homeRefreshCount = homeRefreshCount
+        homeRefreshCount = homeRefreshCount,
     )
 
-    LaunchedEffect(focusRequest, searchQuery) {
-        val request = focusRequest ?: return@LaunchedEffect
-        if (!isSceneSettingsSearchTarget(request.target) || searchQuery.isNotBlank()) {
-            return@LaunchedEffect
-        }
-        val category = resolveSettingsRootCategoryForSearchTarget(request.target) ?: return@LaunchedEffect
-        listState.animateScrollToItem(resolveSettingsRootCategoryListIndex(category))
-        SettingsSearchFocusController.clear(request.token)
-    }
-
-    AdaptiveScaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(
-                        onClick = onBack
-                    ) {
-                        Icon(
-                            rememberAppBackIcon(),
-                            contentDescription = backLabel
+    @Composable
+    fun SettingsRootContent() {
+        when (destination) {
+            SettingsNavDestination.Home -> {
+                Column {
+                    SettingsHomeSearchEntry(onClick = onSearchOpen)
+                    Box(modifier = Modifier.padding(top = 8.dp).entrance()) {
+                        SettingsRootCategoryListSection(
+                            categories = sectionOrder,
+                            onCategoryClick = onCategoryClick,
+                            onDonateClick = onDonateClick,
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppSurfaceTokens.groupedListContainer(),
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        containerColor = AppSurfaceTokens.groupedListContainer(),
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        EntranceGroup {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(bottom = bottomInset)
-        ) {
-            item {
-                SettingsSearchBarSection(
-                    query = searchQuery,
-                    onQueryChange = onSearchQueryChange
-                )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
-
-            if (searchQuery.isNotBlank()) {
-                item {
-                    SettingsSearchResultsSection(
-                        results = searchResults,
-                        onResultClick = onSearchResultClick
+            is SettingsNavDestination.Category -> {
+                Box(modifier = Modifier.padding(top = 12.dp)) {
+                    SettingsRootCategoryContent(
+                        category = destination.category,
+                        actions = rootCategoryActions,
+                        state = rootCategoryState,
                     )
                 }
-                item { Spacer(modifier = Modifier.height(16.dp)) }
-            } else {
-                sectionOrder.forEachIndexed { index, section ->
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = if (index == 0) 8.dp else 16.dp)
-                                .entrance()
-                        ) {
-                            SettingsRootCategoryContent(
-                                category = section,
-                                actions = rootCategoryActions,
-                                state = rootCategoryState
-                            )
-                        }
-                    }
-                }
-
-                item { Spacer(modifier = Modifier.height(16.dp)) }
             }
+            SettingsNavDestination.Search -> Unit
         }
+    }
+
+    com.android.purebilibili.feature.settings.ui.SettingsPageScaffold(
+        title = screenTitle,
+        onBack = onBack,
+        backContentDescription = backLabel,
+        bottomContentPadding = bottomInset,
+        topBarStyle = when {
+            destination == SettingsNavDestination.Home &&
+                com.android.purebilibili.core.ui.isMiuixNonGlassEnabled() -> {
+                com.android.purebilibili.core.ui.AppTopBarStyle.LARGE
+            }
+            destination == SettingsNavDestination.Home -> {
+                com.android.purebilibili.core.ui.AppTopBarStyle.SMALL
+            }
+            else -> {
+                com.android.purebilibili.core.ui.AppTopBarStyle.CENTERED
+            }
+        },
+    ) {
+        if (rootEntranceEnabled) {
+            EntranceGroup(startWhen = rootEntranceStartWhen) {
+                SettingsRootContent()
+            }
+        } else {
+            SettingsRootContent()
         }
     }
 }
-
-// Imports... (Ensure clickable is imported)
 
 @Composable
 fun DonateDialog(onDismiss: () -> Unit) {
@@ -1474,15 +1453,15 @@ fun DonateDialog(onDismiss: () -> Unit) {
                     )
 
                     // Close Button (Top Left of Image)
-                    IconButton(
+                    AppIconButton(
                         onClick = onDismiss,
                         modifier = Modifier
                             .padding(8.dp)
                             .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
                             .size(32.dp)
                     ) {
-                        Icon(
-                            imageVector = CupertinoIcons.Default.Xmark, // Fixed: Filled.Xmark -> Default.Xmark or correct path
+                        AppIcon(
+                            imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_close_24), // Fixed: Filled.Xmark -> Default.Xmark or correct path
                             contentDescription = "关闭",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
@@ -1492,7 +1471,7 @@ fun DonateDialog(onDismiss: () -> Unit) {
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                Text(
+                AppText(
                     "感谢您的支持！",
                     color = Color.White.copy(alpha = 0.9f),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
@@ -1500,7 +1479,7 @@ fun DonateDialog(onDismiss: () -> Unit) {
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                Text(
+                AppText(
                     "点击二维码或关闭按钮退出",
                     color = Color.White.copy(alpha = 0.6f),
                     style = MaterialTheme.typography.bodySmall

@@ -58,8 +58,16 @@ enum class VideoDecodeFormat(val codecs: String, val description: String) {
     AVC("avc1", "AVC");
 
     companion object {
-        fun fromCodecs(codecs: String): VideoDecodeFormat? = 
-            values().find { codecs.startsWith(it.codecs) }
+        fun fromCodecs(codecs: String): VideoDecodeFormat? {
+            val normalized = codecs.trim().lowercase()
+            return when {
+                normalized.startsWith("dvh1") -> DVH1
+                normalized.startsWith("av01") -> AV1
+                normalized.startsWith("hev") || normalized.startsWith("hvc") -> HEVC
+                normalized.startsWith("avc") -> AVC
+                else -> null
+            }
+        }
         
         // AVC 兼容性最好，优先选择
         val preferredOrder = listOf(AVC, HEVC, AV1, DVH1)

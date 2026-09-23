@@ -50,6 +50,7 @@ object DanmakuProto {
         val content: String = "",   // 弹幕内容
         val weight: Int = 0,        // 权重 (AI过滤)
         val pool: Int = 0,          // 弹幕池: 0普通, 1字幕, 2特殊
+        val attr: Int = 0,          // 属性位: 保护/直播/高赞
         val like: Long = 0L,
         val colorful: Int = DmColorfulTypeNone,
         val count: Int = 0,
@@ -482,6 +483,7 @@ object DanmakuProto {
         var content = ""
         var weight = 0
         var pool = 0
+        var attr = 0
         var like = 0L
         var colorful = DmColorfulTypeNone
         var count = 0
@@ -508,7 +510,7 @@ object DanmakuProto {
                     10 -> input.readString()                    // action (skip)
                     11 -> pool = input.readVarint().toInt()     // pool
                     12 -> input.readString()                    // idStr (skip)
-                    13 -> input.readVarint()                    // attr (skip)
+                    13 -> attr = input.readVarint().toInt()    // attr
                     15 -> like = input.readVarint()              // like
                     22 -> input.readString()                    // animation (skip)
                     23 -> input.readString()                    // extra (skip)
@@ -536,6 +538,7 @@ object DanmakuProto {
             content = content,
             weight = weight,
             pool = pool,
+            attr = attr,
             like = like,
             colorful = colorful,
             count = count,

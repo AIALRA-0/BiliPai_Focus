@@ -1,7 +1,8 @@
 package com.android.purebilibili.feature.settings
 
 internal data class TopBarVisualEffectState(
-    val headerBlurEnabled: Boolean
+    val headerBlurEnabled: Boolean,
+    val progressiveTopBlurEnabled: Boolean
 )
 
 internal data class BottomBarVisualEffectState(
@@ -10,10 +11,22 @@ internal data class BottomBarVisualEffectState(
 )
 
 internal fun resolveTopBarBlurToggleState(
-    enableHeaderBlur: Boolean
+    enableHeaderBlur: Boolean,
+    currentProgressiveTopBlurEnabled: Boolean = false
 ): TopBarVisualEffectState {
     return TopBarVisualEffectState(
-        headerBlurEnabled = enableHeaderBlur
+        headerBlurEnabled = enableHeaderBlur,
+        progressiveTopBlurEnabled = if (enableHeaderBlur) false else currentProgressiveTopBlurEnabled
+    )
+}
+
+internal fun resolveProgressiveTopBlurToggleState(
+    enableProgressiveTopBlur: Boolean,
+    currentHeaderBlurEnabled: Boolean = false
+): TopBarVisualEffectState {
+    return TopBarVisualEffectState(
+        headerBlurEnabled = if (enableProgressiveTopBlur) false else currentHeaderBlurEnabled,
+        progressiveTopBlurEnabled = enableProgressiveTopBlur
     )
 }
 

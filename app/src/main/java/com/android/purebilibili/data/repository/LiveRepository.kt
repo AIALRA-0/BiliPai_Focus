@@ -1,8 +1,11 @@
 // 文件路径: data/repository/LiveRepository.kt
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -93,6 +96,21 @@ data class LiveDanmakuPermission(
 
 private const val DEFAULT_LIVE_HEARTBEAT_INTERVAL_SEC = 60
 private const val DEFAULT_LIVE_DANMAKU_MAX_LENGTH = 40
+
+internal fun hasPlayableLiveUrl(data: LivePlayUrlData): Boolean {
+    if (data.durl.orEmpty().any { it.url.isNotBlank() }) return true
+    return data.playurl_info
+        ?.playurl
+        ?.stream
+        .orEmpty()
+        .any { stream ->
+            stream.format.orEmpty().any { format ->
+                format.codec.orEmpty().any { codec ->
+                    codec.baseUrl.isNotBlank() && codec.url_info.orEmpty().any { it.host.isNotBlank() }
+                }
+            }
+        }
+}
 
 internal fun parseLiveDanmakuHistoryItems(rawJson: String): Result<List<LivePrefetchDanmaku>> {
     val root = liveRepositoryJson.parseToJsonElement(rawJson).jsonObject
@@ -214,9 +232,11 @@ internal fun parseLiveShieldInfo(rawJson: String): Result<LiveShieldInfo> {
             ?: shieldInfo.optJSONObject("shield_rules")
             ?: shieldInfo
         LiveShieldInfo(
-            level = firstPositiveInt(rules, "level", "rank"),
+            level = firstPositiveInt(rules, "level"),
             medal = firstPositiveInt(rules, "medal", "medal_level"),
             verify = firstPositiveInt(rules, "verify", "verify_level", "shield_verify"),
+            rank = firstPositiveInt(rules, "rank"),
+            phone = firstPositiveInt(rules, "phone"),
             keywords = parseLiveShieldKeywords(
                 shieldInfo.optJSONArray("keyword_list")
                     ?: shieldInfo.optJSONArray("keywords")
@@ -332,6 +352,54 @@ internal fun parseLiveRedPocketInfo(rawJson: String): LiveRedPocketInfo? {
     )
 }
 
+internal fun parseLiveVotePanel(rawJson: String): LiveVoteInfo? {
+    val root = JSONObject(rawJson)
+    if (root.optInt("code") != 0) return null
+    return root.optJSONObject("data")?.optJSONObject("vote_info")?.let(::parseLiveVoteInfo)
+}
+
+internal fun parseLiveVoteHistory(rawJson: String): List<LiveVoteInfo> {
+    val root = JSONObject(rawJson)
+    if (root.optInt("code") != 0) return emptyList()
+    val history = root.optJSONObject("data")?.optJSONArray("history") ?: return emptyList()
+    return buildList {
+        for (index in 0 until history.length()) {
+            history.optJSONObject(index)?.let(::parseLiveVoteInfo)?.let(::add)
+        }
+    }
+}
+
+private fun parseLiveVoteInfo(json: JSONObject): LiveVoteInfo? {
+    val question = json.optString("question").trim()
+    if (question.isBlank()) return null
+    val optionsJson = json.optJSONArray("options")
+    val options = buildList {
+        if (optionsJson != null) for (index in 0 until optionsJson.length()) {
+            val option = optionsJson.optJSONObject(index) ?: continue
+            val description = option.optString("desc").trim()
+            if (description.isNotBlank()) {
+                add(
+                    LiveVoteOption(
+                        id = option.optInt("idx"),
+                        description = description,
+                        percent = option.optDouble("percent", 0.0).toFloat().coerceIn(0f, 1f)
+                    )
+                )
+            }
+        }
+    }
+    return LiveVoteInfo(
+        status = json.optInt("status"),
+        question = question,
+        options = options,
+        durationMillis = json.optLong("duration"),
+        remainingMillis = json.optLong("left_duration"),
+        resultText = json.optString("result_text"),
+        endTimeText = json.optString("etime_str"),
+        interactionId = json.optLong("interaction_id")
+    )
+}
+
 private fun formatLiveRedPocketAwards(awards: JsonArray?): String {
     return awards
         ?.mapNotNull { it as? JsonObject }
@@ -421,6 +489,180 @@ object LiveRepository {
         } catch (e: Exception) {
             getLiveRooms(page = 1)
         }
+    }
+
+    /**
+     * BiliPai 同款 App 直播首页 feed。
+     * page=1 时解析关注模块 + 分区入口 + small_card；后续页仅追加 small_card。
+     */
+    suspend fun getLiveFeedHome(
+        page: Int = 1,
+        moduleSelect: Boolean = false,
+    ): Result<LiveFeedHomeSnapshot> = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.getLiveFeedIndex(buildLiveAppFeedParams(page = page, moduleSelect = moduleSelect))
+            if (resp.code != 0 || resp.data == null) {
+                return@withContext if (page == 1) {
+                    fallbackLiveFeedHome()
+                } else {
+                    Result.failure(Exception(resp.message.ifBlank { "直播 feed 加载失败" }))
+                }
+            }
+            Result.success(parseLiveFeedHomeSnapshot(resp.data))
+        } catch (e: Exception) {
+            if (page == 1) fallbackLiveFeedHome() else Result.failure(e)
+        }
+    }
+
+    /**
+     * BiliPai 同款二级分区列表（含 new_tags 排序 chip）。
+     * 失败时回退 web second/getList。
+     */
+    suspend fun getLiveSecondHome(
+        parentAreaId: Int,
+        areaId: Int = 0,
+        page: Int = 1,
+        sortType: String? = null,
+    ): Result<LiveFeedHomeSnapshot> = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.getLiveAppSecondList(
+                buildLiveAppSecondListParams(
+                    page = page,
+                    parentAreaId = parentAreaId,
+                    areaId = areaId,
+                    sortType = sortType,
+                )
+            )
+            if (resp.code == 0 && resp.data != null) {
+                val rooms = resp.data.list
+                    ?.filter { isUsableLiveFeedRoom(it) }
+                    ?.map { it.toLiveRoom() }
+                    ?.filter(::shouldKeepLiveSecondListRoom)
+                    ?.distinctBy { it.roomid }
+                    .orEmpty()
+                val hasMore = when {
+                    resp.data.hasMore != 0 -> resp.data.hasMore == 1
+                    resp.data.count > 0 -> page * 20 < resp.data.count
+                    else -> rooms.size >= 20
+                }
+                return@withContext Result.success(
+                    LiveFeedHomeSnapshot(
+                        rooms = rooms,
+                        sortTags = resp.data.newTags.orEmpty().filter { it.name.isNotBlank() || it.sortType.isNotBlank() },
+                        hasMore = hasMore,
+                        totalCount = resp.data.count,
+                    )
+                )
+            }
+        } catch (_: Exception) {
+            // fall through
+        }
+
+        getAreaRoomsPage(
+            parentAreaId = parentAreaId,
+            areaId = areaId,
+            page = page,
+            sortType = sortType?.takeIf { it.isNotBlank() } ?: "online",
+        ).map { pageResult ->
+            LiveFeedHomeSnapshot(
+                rooms = pageResult.rooms,
+                hasMore = pageResult.hasMore,
+                totalCount = pageResult.totalCount,
+            )
+        }
+    }
+
+    private fun buildLiveAppFeedParams(page: Int, moduleSelect: Boolean): Map<String, String> {
+        val params = linkedMapOf(
+            "appkey" to AppSignUtils.ANDROID_APP_KEY,
+            "actionKey" to "appkey",
+            "build" to "8430300",
+            "version" to "8.43.0",
+            "c_locale" to "zh_CN",
+            "s_locale" to "zh_CN",
+            "channel" to "master",
+            "device" to "android",
+            "device_name" to "android",
+            "device_type" to "0",
+            "fnval" to "912",
+            "disable_rcmd" to "0",
+            "https_url_req" to "1",
+            "mobi_app" to "android",
+            "network" to "wifi",
+            "page" to page.toString(),
+            "platform" to "android",
+            "scale" to "2",
+            "ts" to AppSignUtils.getTimestamp().toString(),
+        )
+        TokenManager.accessTokenCache?.takeIf { it.isNotBlank() }?.let {
+            params["access_key"] = it
+            params["relation_page"] = "1"
+        }
+        if (moduleSelect) params["module_select"] = "1"
+        return AppSignUtils.signForAndroidApi(params)
+    }
+
+    private fun buildLiveAppSecondListParams(
+        page: Int,
+        parentAreaId: Int,
+        areaId: Int,
+        sortType: String?,
+    ): Map<String, String> {
+        val params = linkedMapOf(
+            "appkey" to AppSignUtils.ANDROID_APP_KEY,
+            "actionKey" to "appkey",
+            "build" to "8430300",
+            "version" to "8.43.0",
+            "c_locale" to "zh_CN",
+            "s_locale" to "zh_CN",
+            "channel" to "master",
+            "device" to "android",
+            "device_name" to "android",
+            "device_type" to "0",
+            "fnval" to "912",
+            "disable_rcmd" to "0",
+            "https_url_req" to "1",
+            "mobi_app" to "android",
+            "module_select" to "0",
+            "network" to "wifi",
+            "page" to page.toString(),
+            "page_size" to "20",
+            "platform" to "android",
+            "qn" to "0",
+            "tag_version" to "1",
+            "scale" to "2",
+            "parent_area_id" to parentAreaId.toString(),
+            "area_id" to areaId.toString(),
+            "ts" to AppSignUtils.getTimestamp().toString(),
+        )
+        TokenManager.accessTokenCache?.takeIf { it.isNotBlank() }?.let {
+            params["access_key"] = it
+        }
+        if (!sortType.isNullOrBlank()) {
+            params["sort_type"] = sortType
+        }
+        return AppSignUtils.signForAndroidApi(params)
+    }
+
+    private suspend fun fallbackLiveFeedHome(): Result<LiveFeedHomeSnapshot> {
+        val recommend = getRecommendedLiveRooms().getOrElse { emptyList() }
+        val follow = getFollowedLive(page = 1).getOrElse { emptyList() }
+        val areas = getLiveAreaIndex().getOrElse { emptyList() }
+            .map {
+                LiveFeedAreaEntry(
+                    title = it.name,
+                    areaId = 0,
+                    parentAreaId = it.id,
+                )
+            }
+        return Result.success(
+            LiveFeedHomeSnapshot(
+                rooms = recommend,
+                followRooms = follow,
+                areaEntries = areas,
+                hasMore = recommend.size >= 20,
+            )
+        )
     }
 
     suspend fun getLiveAreaIndex(): Result<List<LiveAreaParent>> = withContext(Dispatchers.IO) {
@@ -688,6 +930,16 @@ object LiveRepository {
         }
     }
 
+    suspend fun getLiveVoteSnapshot(roomId: Long): Result<LiveVoteSnapshot> = withContext(Dispatchers.IO) {
+        runCatching {
+            val realRoomId = resolveRealRoomId(roomId)
+            LiveVoteSnapshot(
+                current = parseLiveVotePanel(api.getLiveVotePanel(realRoomId).string()),
+                history = parseLiveVoteHistory(api.getLiveVoteHistory(realRoomId).string())
+            )
+        }
+    }
+
     suspend fun getLiveContributionRank(
         roomId: Long,
         ruid: Long,
@@ -933,13 +1185,15 @@ object LiveRepository {
                 signedParams = signWithWbi(emptyMap())
             )
 
-            if (resp.code == 0 && resp.data != null) {
+            if (resp.code == 0 && resp.data != null && hasPlayableLiveUrl(resp.data)) {
                 val xliveQualities = resp.data.playurl_info?.playurl?.gQnDesc.orEmpty()
                 if (xliveQualities.isNotEmpty() || !resp.data.quality_description.isNullOrEmpty()) {
                     return@withContext Result.success(resp.data)
                 }
                 val legacyResp = try {
                     api.getLivePlayUrlLegacy(cid = realRoomId, qn = qn)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.w("LiveRepo", "Legacy API failed: ${e.message}")
                     null
@@ -957,17 +1211,26 @@ object LiveRepository {
             } else {
                 val legacyResp = try {
                     api.getLivePlayUrlLegacy(cid = realRoomId, qn = qn)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.w("LiveRepo", "Legacy API failed: ${e.message}")
                     null
                 }
-                if (legacyResp?.code == 0 && legacyResp.data != null) {
+                if (
+                    legacyResp?.code == 0 &&
+                    legacyResp.data != null &&
+                    hasPlayableLiveUrl(legacyResp.data)
+                ) {
                     com.android.purebilibili.core.util.Logger.w("LiveRepo", "🔴 xlive API unavailable, falling back to legacy durl response")
                     Result.success(legacyResp.data)
                 } else {
-                    Result.failure(Exception("获取直播流失败: ${resp.message}"))
+                    val reason = resp.message.ifBlank { "接口未返回可播放地址" }
+                    Result.failure(Exception("获取直播流失败: $reason"))
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("LiveRepo", " getLivePlayUrlWithQuality failed: ${e.message}")
             e.printStackTrace()
@@ -1096,9 +1359,11 @@ object LiveRepository {
                                     emoji = emotion.emoji,
                                     url = emotion.url,
                                     description = emotion.des,
+                                    emoticonUnique = emotion.emoticon_unique,
                                     emoticonOptions = buildLiveEmoticonOptions(
                                         emoji = emotion.emoji,
-                                        url = emotion.url
+                                        url = emotion.url,
+                                        emoticonUnique = emotion.emoticon_unique
                                     )
                                 )
                             }
@@ -1118,10 +1383,11 @@ object LiveRepository {
 
     private fun buildLiveEmoticonOptions(
         emoji: String,
-        url: String
+        url: String,
+        emoticonUnique: String = ""
     ): String {
         return JSONObject()
-            .put("emoticon_unique", emoji)
+            .put("emoticon_unique", emoticonUnique.ifBlank { emoji })
             .put("bulge_display", 0)
             .put(
                 "emoticon_player",

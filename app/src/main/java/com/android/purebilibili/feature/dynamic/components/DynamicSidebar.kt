@@ -1,22 +1,35 @@
 // 文件路径: feature/dynamic/components/DynamicSidebar.kt
 package com.android.purebilibili.feature.dynamic.components
 
+import coil3.request.crossfade
+
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import androidx.compose.material3.*
+//  Material Icons
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppTextButton
+import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,17 +45,24 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
+import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
+import com.android.purebilibili.feature.dynamic.isDynamicUpPanelItemSelected
+import com.android.purebilibili.feature.dynamic.isDynamicUpPanelShortcut
 import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
@@ -52,6 +72,14 @@ import com.android.purebilibili.feature.dynamic.shouldShowDynamicUserLiveBadge
 import com.android.purebilibili.feature.dynamic.SidebarUser
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.runtime.derivedStateOf
+import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarAvatarPrefetchUrls
+import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarFlingDampingFactor
+import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarUserAvatarUrl
+import com.android.purebilibili.feature.dynamic.shouldAnimateSidebarItemCascade
 
 internal fun performDynamicSidebarUserAvatarClick(
     haptic: (HapticType) -> Unit,
@@ -61,6 +89,59 @@ internal fun performDynamicSidebarUserAvatarClick(
     onClick()
 }
 
+internal fun resolveDynamicSidebarContainerColor(
+    surfaceColor: Color,
+    globalWallpaperVisible: Boolean
+): Color {
+    return if (globalWallpaperVisible) {
+        resolveGlobalWallpaperProtectiveColor(
+            baseColor = surfaceColor,
+            lightAlpha = 0.74f,
+            darkAlpha = 0.80f
+        )
+    } else {
+        surfaceColor
+    }
+}
+
+internal fun resolveDynamicSidebarReturnHeaderColor(
+    surfaceColor: Color,
+    backgroundAlpha: Float,
+    globalWallpaperVisible: Boolean
+): Color {
+    val rawColor = surfaceColor.copy(alpha = backgroundAlpha)
+    if (!globalWallpaperVisible) return rawColor
+    val protectiveColor = resolveGlobalWallpaperProtectiveColor(
+        baseColor = surfaceColor,
+        lightAlpha = 0.74f,
+        darkAlpha = 0.80f
+    )
+    return rawColor.copy(alpha = maxOf(rawColor.alpha, protectiveColor.alpha))
+}
+
+@Composable
+internal fun rememberDynamicSidebarFlingBehavior(
+    velocityMultiplier: Float = resolveDynamicSidebarFlingDampingFactor()
+): FlingBehavior {
+    val defaultFling = ScrollableDefaults.flingBehavior()
+    return remember(defaultFling, velocityMultiplier) {
+        DynamicSidebarDampedFlingBehavior(defaultFling, velocityMultiplier)
+    }
+}
+
+internal class DynamicSidebarDampedFlingBehavior(
+    private val baseFling: FlingBehavior,
+    private val velocityMultiplier: Float
+) : FlingBehavior {
+    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        val dampedVelocity = initialVelocity * velocityMultiplier
+        val leftoverDamped = with(baseFling) {
+            performFling(dampedVelocity)
+        }
+        return if (velocityMultiplier > 0f) leftoverDamped / velocityMultiplier else 0f
+    }
+}
+
 /**
  *  动态侧边栏 - 显示关注的UP主（支持展开/收起、在线状态）
  */
@@ -68,11 +149,13 @@ internal fun performDynamicSidebarUserAvatarClick(
 fun DynamicSidebar(
     users: List<SidebarUser>,
     selectedUserId: Long?,
+    selfUid: Long = 0L,
     isExpanded: Boolean,
     userListState: androidx.compose.foundation.lazy.LazyListState,
     onUserClick: (Long?) -> Unit,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
+    uplistUpdateMids: Set<Long> = emptySet(),
     onToggleShowHidden: () -> Unit,
     onTogglePin: (Long) -> Unit,
     onToggleHidden: (Long) -> Unit,
@@ -93,7 +176,82 @@ fun DynamicSidebar(
     val blurIntensity = currentUnifiedBlurIntensity()
     val backgroundAlpha = BlurStyles.getBackgroundAlpha(blurIntensity)
     val returnHeaderHeight = resolveDynamicSidebarReturnHeaderHeightDp().dp
+    val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+    val sidebarContainerColor = resolveDynamicSidebarContainerColor(
+        surfaceColor = AppSurfaceTokens.surface(),
+        globalWallpaperVisible = globalWallpaperVisible
+    )
+    val returnHeaderColor = resolveDynamicSidebarReturnHeaderColor(
+        surfaceColor = AppSurfaceTokens.surface(),
+        backgroundAlpha = backgroundAlpha,
+        globalWallpaperVisible = globalWallpaperVisible
+    )
+    val liveUsers = remember(users, selfUid) {
+        users.filter { it.isLive && !isDynamicUpPanelShortcut(it.uid, selfUid) }
+    }
+    val shortcutUsers = remember(users, selfUid) {
+        users.filter { isDynamicUpPanelShortcut(it.uid, selfUid) }
+    }
+    val restUsers = remember(users, selfUid) {
+        users.filter { !it.isLive && !isDynamicUpPanelShortcut(it.uid, selfUid) }
+    }
+    var showLiveUsers by remember { mutableStateOf(true) }
+    val visibleUsers = remember(liveUsers, shortcutUsers, restUsers, showLiveUsers) {
+        buildList {
+            if (showLiveUsers) addAll(liveUsers)
+            addAll(shortcutUsers)
+            addAll(restUsers)
+        }
+    }
     
+    var initialEntranceActive by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(400)
+        initialEntranceActive = false
+    }
+    val hasScrolled by remember {
+        derivedStateOf {
+            userListState.firstVisibleItemIndex > 0 || userListState.firstVisibleItemScrollOffset > 0
+        }
+    }
+    val flingBehavior = rememberDynamicSidebarFlingBehavior()
+
+    val context = LocalContext.current
+    // 初始加载时提前加载数倍视口高度的 UP 主头像
+    LaunchedEffect(visibleUsers) {
+        val initialUrls = resolveDynamicSidebarAvatarPrefetchUrls(visibleUsers)
+        if (initialUrls.isNotEmpty()) {
+            val imageLoader = coil3.SingletonImageLoader.get(context)
+            initialUrls.forEach { url ->
+                imageLoader.enqueue(
+                    coil3.request.ImageRequest.Builder(context)
+                        .data(url)
+                        .build()
+                )
+            }
+        }
+    }
+
+    // 随滑动位置动态预加载接下来数倍高度的 UP 主头像，避免快速滑动时空白
+    val firstVisibleIndex = userListState.firstVisibleItemIndex
+    LaunchedEffect(firstVisibleIndex, visibleUsers) {
+        val scrollUrls = resolveDynamicSidebarAvatarPrefetchUrls(
+            users = visibleUsers,
+            startIndex = firstVisibleIndex,
+            limit = 20
+        )
+        if (scrollUrls.isNotEmpty()) {
+            val imageLoader = coil3.SingletonImageLoader.get(context)
+            scrollUrls.forEach { url ->
+                imageLoader.enqueue(
+                    coil3.request.ImageRequest.Builder(context)
+                        .data(url)
+                        .build()
+                )
+            }
+        }
+    }
+
     // 侧边栏容器 - Glassmorphism 升级版
     Box(
         modifier = modifier
@@ -101,7 +259,7 @@ fun DynamicSidebar(
             .fillMaxHeight()
             .clip(androidx.compose.ui.graphics.RectangleShape) // [修复] 直角
             .background(
-                MaterialTheme.colorScheme.surface // 纯白背景，减少割裂感
+                sidebarContainerColor
             )
     ) {
         // 内容层 - 使用 Box 重新组织布局以支持模糊
@@ -109,10 +267,11 @@ fun DynamicSidebar(
             // 可滚动内容 - 作为模糊源
             LazyColumn(
                 state = userListState,
+                flingBehavior = flingBehavior,
                 horizontalAlignment = Alignment.CenterHorizontally,
                 contentPadding = PaddingValues(
                     top = topPadding + returnHeaderHeight, // 与右侧动态顶栏同高，保证视觉中线一致
-                    bottom = 16.dp
+                    bottom = AppSpacingTokens.Large
                 ),
                 modifier = Modifier
                     .fillMaxSize()
@@ -123,35 +282,89 @@ fun DynamicSidebar(
                     item(key = "hidden_toggle") {
                         Box(
                             modifier = Modifier
-                                .padding(bottom = 12.dp)
-                                .size(40.dp)
+                                .padding(bottom = AppSpacingTokens.Medium)
+                                .size(AppChromeSizeTokens.MinimumTouchTarget)
                                 .clip(CircleShape)
-                                .background(
-                                    if (showHiddenUsers) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) 
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
-                                )
                                 .clickable { onToggleShowHidden() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = if (showHiddenUsers) rememberAppVisibilityOnIcon() else rememberAppVisibilityOffIcon(),
-                                contentDescription = null,
-                                tint = if (showHiddenUsers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Small)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (showHiddenUsers) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AppIcon(
+                                    imageVector = if (showHiddenUsers) rememberAppVisibilityOnIcon() else rememberAppVisibilityOffIcon(),
+                                    contentDescription = if (showHiddenUsers) "隐藏已隐藏用户" else "显示隐藏用户",
+                                    tint = if (showHiddenUsers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall)
+                                )
+                            }
                         }
                     }
                 }
 
-                // 关注的UP主列表 - 带瀑布入场动画
-                itemsIndexed(users, key = { _, u -> "sidebar_${u.uid}" }) { index, user ->
+                if (liveUsers.isNotEmpty()) {
+                    item(key = "live_fold") {
+                        AppTextButton(
+                            onClick = { showLiveUsers = !showLiveUsers },
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(
+                                horizontal = AppSpacingTokens.None,
+                                vertical = AppSpacingTokens.ExtraSmall,
+                            ),
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                AppText(
+                                    text = "Live(${liveUsers.size})",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    autoSize = TextAutoSize.StepBased(
+                                        minFontSize = 8.sp,
+                                        maxFontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                        stepSize = 0.5.sp,
+                                    ),
+                                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                                AppIcon(
+                                    imageVector = if (showLiveUsers) rememberAppChevronUpIcon() else rememberAppChevronDownIcon(),
+                                    contentDescription = if (showLiveUsers) "收起直播" else "展开直播",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(AppSpacingTokens.Medium)
+                                )
+                            }
+                        }
+                    }
+                }
+                itemsIndexed(visibleUsers, key = { _, u -> "sidebar_${u.uid}" }) { index, user ->
+                    val shouldAnimate = shouldAnimateSidebarItemCascade(
+                        index = index,
+                        hasScrolled = hasScrolled,
+                        initialEntranceActive = initialEntranceActive
+                    )
                     CascadeSidebarItem(
                         index = index,
+                        enabled = shouldAnimate,
                         content = {
+                            val isShortcut = isDynamicUpPanelShortcut(user.uid, selfUid)
                             SidebarUserItem(
                                 user = user,
-                                isSelected = selectedUserId == user.uid,
+                                isSelected = isDynamicUpPanelItemSelected(selectedUserId, user.uid),
                                 showLabel = isExpanded,
+                                showUnreadBadge = user.uid in uplistUpdateMids,
+                                allowManageMenu = !isShortcut,
                                 onClick = { onUserClick(user.uid) },
                                 onTogglePin = { onTogglePin(user.uid) },
                                 onToggleHidden = { onToggleHidden(user.uid) }
@@ -167,7 +380,7 @@ fun DynamicSidebar(
                     .fillMaxWidth()
                     .height(topPadding + returnHeaderHeight)
                     .unifiedBlur(sidebarHazeState) // 应用模糊
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha))
+                    .background(returnHeaderColor)
                     .align(Alignment.TopCenter)
             ) {
                 Box(
@@ -178,11 +391,11 @@ fun DynamicSidebar(
                         .clickable { onBackClick() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
+                    AppIcon(
                         imageVector = rememberAppBackIcon(),
                         contentDescription = "Back",
                         tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(AppSpacingTokens.ExtraLarge)
                     )
                 }
             }
@@ -194,7 +407,7 @@ fun DynamicSidebar(
                 .align(Alignment.TopEnd)
                 .padding(top = resolveDynamicSidebarDividerTopOffset(topPadding))
                 .fillMaxHeight()
-                .width(0.5.dp)
+                .width(AppSpacingTokens.Micro / 4)
                 .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
         )
     }
@@ -202,13 +415,19 @@ fun DynamicSidebar(
 
 /**
  *  [新增] 瀑布入场动画包装器
- * 每个项目有递增的延迟，形成瀑布展开效果
+ * 仅在首次入场且未滑动时对前几个项目使用递增延迟，形成瀑布展开效果
  */
 @Composable
 private fun CascadeSidebarItem(
     index: Int,
+    enabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    if (!enabled) {
+        content()
+        return
+    }
+
     var visible by remember { mutableStateOf(false) }
     val delay = 30 * index  // 每个项目延迟 30ms
     
@@ -219,16 +438,13 @@ private fun CascadeSidebarItem(
     
     val offsetY by animateFloatAsState(
         targetValue = if (visible) 0f else 20f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.7f,
-            stiffness = 400f
-        ),
+        animationSpec = AppMotionTokens.emphasizedSpec(),
         label = "cascadeOffsetY"
     )
     
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(200),
+        animationSpec = AppMotionTokens.standardSpec(),
         label = "cascadeAlpha"
     )
     
@@ -259,11 +475,11 @@ fun SidebarItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp)
+            .padding(vertical = AppSpacingTokens.Small)
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Small)
                 .clip(CircleShape)
                 .background(
                     if (isSelected) MaterialTheme.colorScheme.primaryContainer
@@ -271,20 +487,22 @@ fun SidebarItem(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Text(
+            AppText(
                 text = icon,
-                fontSize = 14.sp,
+                fontSize = MaterialTheme.typography.labelMedium.fontSize,
                 fontWeight = FontWeight.Bold,
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         
         if (label != null) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
+            Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+            AppText(
                 text = label,
-                fontSize = 10.sp,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                // The label sits outside the selected icon container, so it uses the
+                // accent role rather than the container's paired content role.
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -300,6 +518,8 @@ fun SidebarUserItem(
     user: SidebarUser,
     isSelected: Boolean,
     showLabel: Boolean,
+    showUnreadBadge: Boolean = false,
+    allowManageMenu: Boolean = true,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleHidden: () -> Unit
@@ -313,8 +533,8 @@ fun SidebarUserItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp, horizontal = 4.dp) // 增加水平间距以适应选中背景
-                .clip(RoundedCornerShape(12.dp)) // 选中态圆角背景
+                .padding(vertical = AppSpacingTokens.ExtraSmall, horizontal = AppSpacingTokens.ExtraSmall) // 增加水平间距以适应选中背景
+                .clip(AppShapes.container(ContainerLevel.Card)) // 选中态圆角背景
                 .then(
                     if (isSelected) Modifier.background(MaterialTheme.colorScheme.primaryContainer)
                     else Modifier
@@ -326,35 +546,31 @@ fun SidebarUserItem(
                             onClick = onClick
                         )
                     },
-                    onLongClick = { showMenu = true }
+                    onLongClick = { if (allowManageMenu) showMenu = true }
                 )
-                .padding(vertical = 8.dp) // 内部间距
+                .padding(vertical = AppSpacingTokens.Small) // 内部间距
                 .alpha(if (user.isHidden) 0.5f else 1f)
         ) {
             Box {
                 // 头像
                 val faceUrl = remember(user.face) {
-                    val raw = user.face.trim()
-                    when {
-                        raw.isEmpty() -> ""
-                        raw.startsWith("https://") -> raw
-                        raw.startsWith("http://") -> raw.replace("http://", "https://")
-                        raw.startsWith("//") -> "https:$raw"
-                        else -> "https://$raw"
-                    }
+                    resolveDynamicSidebarUserAvatarUrl(user.face)
                 }
 
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Medium)
                         .then(
-                            if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                            else Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+                            when {
+                                isSelected -> Modifier.border(AppSpacingTokens.Micro, MaterialTheme.colorScheme.primary, CircleShape)
+                                else -> Modifier.border(AppSpacingTokens.Micro / 2, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+                            }
                         )
-                        .padding(2.dp)
+                        .padding(AppSpacingTokens.Micro),
+                    contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
-                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                        model = coil3.request.ImageRequest.Builder(LocalContext.current)
                             .data(faceUrl.ifEmpty { null })
                             .crossfade(true)
                             .build(),
@@ -365,40 +581,49 @@ fun SidebarUserItem(
                         contentScale = ContentScale.Crop
                     )
                 }
+                if (showUnreadBadge) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(AppSpacingTokens.Small)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
             }
 
             if (shouldShowDynamicUserLiveBadge(user.isLive)) {
-                DynamicUserLiveBadge(modifier = Modifier.padding(top = 2.dp))
+                DynamicUserLiveBadge(modifier = Modifier.padding(top = AppSpacingTokens.Micro))
             }
 
             if (showLabel) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppText(
                     text = displayName,
-                    fontSize = 11.sp,
+                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface, // 自适应文字
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 2.dp)
+                    modifier = Modifier.padding(horizontal = AppSpacingTokens.Micro)
                 )
             }
         }
 
-        DropdownMenu(
+        AppDropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
             modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainer) // 自适应菜单背景
         ) {
-            DropdownMenuItem(
-                text = { Text(if (user.isPinned) "取消置顶" else "置顶", color = MaterialTheme.colorScheme.onSurface) },
+            AppDropdownMenuItem(
+                text = { AppText(if (user.isPinned) "取消置顶" else "置顶", color = MaterialTheme.colorScheme.onSurface) },
                 onClick = {
                     showMenu = false
                     onTogglePin()
                 }
             )
-            DropdownMenuItem(
-                text = { Text(if (user.isHidden) "取消隐藏" else "隐藏", color = MaterialTheme.colorScheme.onSurface) },
+            AppDropdownMenuItem(
+                text = { AppText(if (user.isHidden) "取消隐藏" else "隐藏", color = MaterialTheme.colorScheme.onSurface) },
                 onClick = {
                     showMenu = false
                     onToggleHidden()

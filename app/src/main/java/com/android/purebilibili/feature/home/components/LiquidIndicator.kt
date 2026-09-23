@@ -1,9 +1,12 @@
 // 文件路径: feature/home/components/LiquidIndicator.kt
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
+import com.android.purebilibili.core.ui.OpticalContrastPalette
 
 
-import android.os.Build
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,20 +25,20 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.blur
+import com.android.purebilibili.feature.home.components.liquid.lens
 import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.LiquidGlassStyle
-import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.motion.BottomBarMotionSpec
 import com.android.purebilibili.core.ui.motion.resolveBottomBarMotionSpec
+import top.yukonga.miuix.kmp.blur.Backdrop
+import top.yukonga.miuix.kmp.blur.blur
+import top.yukonga.miuix.kmp.blur.drawBackdrop
 
 /**
  * 🌊 液态玻璃选中指示器
@@ -60,18 +63,18 @@ internal fun LiquidIndicator(
     itemCount: Int,
     isDragging: Boolean,
     velocity: Float = 0f,
-    startPadding: Dp = 0.dp,
+    startPadding: Dp = AppSpacingTokens.None,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
     isLiquidGlassEnabled: Boolean = false,
     clampToBounds: Boolean = false,
-    edgeInset: Dp = 0.dp,
+    edgeInset: Dp = AppSpacingTokens.None,
     viewportShiftPx: Float = 0f,
     indicatorWidthMultiplier: Float = 1.42f,
-    indicatorMinWidth: Dp = 104.dp,
-    indicatorMaxWidth: Dp = 136.dp,
+    indicatorMinWidth: Dp = AppSpacingTokens.TripleExtraLarge * 2 + AppSpacingTokens.Small,
+    indicatorMaxWidth: Dp = AppSpacingTokens.TripleExtraLarge * 3 - AppSpacingTokens.Small,
     maxWidthToItemRatio: Float = Float.POSITIVE_INFINITY,
-    indicatorHeight: Dp = 54.dp,
+    indicatorHeight: Dp = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro,
     lensIntensityBoost: Float = 1f,
     edgeWarpBoost: Float = 1f,
     chromaticBoost: Float = 1f,
@@ -133,6 +136,8 @@ internal fun LiquidIndicator(
     val targetScaleX = 1f + deformation
     val targetScaleY = 1f - (deformation * motionSpec.indicator.deformationScaleYCompressionRatio)
 
+    // 放大弹簧照搬 HyperIsland LiquidGlassNavigationBar：X 用 scaleSpring(0.6/250)、
+    // Y 用 scaleYSpring(0.7/250)，不再叠加 BiliPai 早先恒为 1f 的 dragScale 层。
     val scaleX by animateFloatAsState(
         targetValue = targetScaleX,
         animationSpec = motionSpec.indicator.scaleSpring.toSpringSpec(),
@@ -140,26 +145,20 @@ internal fun LiquidIndicator(
     )
     val scaleY by animateFloatAsState(
         targetValue = targetScaleY,
-        animationSpec = motionSpec.indicator.scaleSpring.toSpringSpec(),
+        animationSpec = motionSpec.indicator.scaleYSpring.toSpringSpec(),
         label = "scaleY"
     )
-    val dragScale by animateFloatAsState(
-        targetValue = if (isDragging) 1.0f else 1f,
-        animationSpec = motionSpec.indicator.dragScaleSpring.toSpringSpec(),
-        label = "dragScale"
-    )
-
-    val finalScaleX = scaleX * dragScale
-    val finalScaleY = scaleY * dragScale
 
     // 指示器形状
     val shape = RoundedCornerShape(indicatorHeight / 2)
-    
-    BoxWithConstraints(
-        modifier = modifier.fillMaxSize(),
+    var containerWidthPx by remember { mutableFloatStateOf(0f) }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .onSizeChanged { containerWidthPx = it.width.toFloat() },
         contentAlignment = Alignment.CenterStart
     ) {
-        val containerWidthPx = with(density) { maxWidth.toPx() }
          Box(
             modifier = Modifier
                 .graphicsLayer {
@@ -175,35 +174,43 @@ internal fun LiquidIndicator(
                         viewportShiftPx = viewportShiftPx
                     )
                     
-                    this.scaleX = finalScaleX
-                    this.scaleY = finalScaleY
+                    this.scaleX = scaleX
+                    this.scaleY = scaleY
                     shadowElevation = 0f
                 }
                 .size(indicatorWidth, indicatorHeight)
                 .clip(shape)
                 .run {
-                    if (isLiquidGlassEnabled && backdrop != null && shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)) {
+                    if (isLiquidGlassEnabled && backdrop != null) {
                         this.drawBackdrop(
                             backdrop = backdrop,
                             shape = { shape },
                             effects = {
-                                blur(
-                                    styleTuning.idleBlurRadius *
-                                        (0.06f + resolvedTuning.progress * 0.94f)
-                                )
+                                val blurRadius = styleTuning.idleBlurRadius *
+                                    (0.06f + resolvedTuning.progress * 0.94f)
+                                blur(blurRadius, blurRadius)
                                 if (lensProfile.shouldRefract && resolvedTuning.refractionAmount > 0.5f) {
                                     lens(
                                         refractionHeight = lensProfile.refractionHeight *
                                             lensHeightScale.coerceIn(0.1f, 1f) *
-                                            blendFloat(1f, 0.35f, resolvedTuning.progress),
+                                            blendFloat(1f, 0.35f, resolvedTuning.progress) *
+                                            resolvedTuning.contentDistortionScale,
                                         refractionAmount = lensProfile.refractionAmount *
                                             lensAmountScale.coerceIn(0.1f, 1f) *
-                                            blendFloat(1f, 0.18f, resolvedTuning.progress),
+                                            blendFloat(1f, 0.18f, resolvedTuning.progress) *
+                                            resolvedTuning.contentDistortionScale,
                                         depthEffect = styleTuning.depthEffectEnabled,
-                                        chromaticAberration = forceChromaticAberration || (
-                                            styleTuning.allowChromaticAberration &&
-                                                lensProfile.aberrationStrength > 0.01f
+                                        chromaticAberration = if (
+                                            forceChromaticAberration ||
+                                            (styleTuning.allowChromaticAberration &&
+                                                lensProfile.aberrationStrength > 0.01f)
+                                        ) {
+                                            resolveLiquidGlassIndicatorChromaticAberration(
+                                                resolvedTuning
                                             )
+                                        } else {
+                                            0f
+                                        }
                                     )
                                 }
                             },
@@ -246,11 +253,13 @@ fun SimpleLiquidIndicator(
     liquidGlassTuning: LiquidGlassTuning? = null,
     backdrop: Backdrop? = null,
     indicatorColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-    indicatorHeight: Dp = 34.dp,
-    cornerRadius: Dp = 16.dp,
+    indicatorHeight: Dp = AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Micro,
+    cornerRadius: Dp = AppSpacingTokens.Large,
     widthRatio: Float = 0.78f,
-    minWidth: Dp = 48.dp,
-    horizontalInset: Dp = 16.dp,
+    minWidth: Dp = AppSpacingTokens.TripleExtraLarge,
+    horizontalInset: Dp = AppSpacingTokens.Large,
+    /** Home chrome keeps a thin optical highlight; soft tonal tabs can turn it off. */
+    drawHighlightBorder: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -297,18 +306,15 @@ fun SimpleLiquidIndicator(
         alpha = (indicatorColor.alpha * indicatorAlphaScale).coerceIn(0f, 1f)
     )
     
-    // [修复] 使用 BoxWithConstraints 获取父容器高度来计算垂直居中
-    BoxWithConstraints(
-        modifier = modifier.fillMaxHeight()
+    // 居中放置指示器，避免使用 BoxWithConstraints 产生子组合 (SubcomposeLayout) 开销
+    Box(
+        modifier = modifier.fillMaxHeight(),
+        contentAlignment = Alignment.CenterStart
     ) {
-        val parentHeightPx = with(density) { maxHeight.toPx() }
-        val verticalCenterOffsetPx = (parentHeightPx - indicatorHeightPx) / 2f
-        
         Box(
             modifier = Modifier
                 .graphicsLayer {
                     translationX = position * itemWidthPx + centerOffsetPx
-                    translationY = verticalCenterOffsetPx
                     
                     this.scaleX = scale
                     this.scaleY = 1f - lensProfile.motionFraction * (0.08f * styleTuning.deformationMultiplier)
@@ -316,24 +322,33 @@ fun SimpleLiquidIndicator(
                 .size(indicatorWidth, indicatorHeight)
                 .clip(RoundedCornerShape(cornerRadius))
                 .run {
-                    if (isLiquidGlassEnabled && backdrop != null && shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)) {
+                    if (isLiquidGlassEnabled && backdrop != null) {
                         this.drawBackdrop(
                             backdrop = backdrop,
                             shape = { RoundedCornerShape(cornerRadius) },
                             effects = {
-                                blur(
-                                    styleTuning.idleBlurRadius *
-                                        (0.06f + resolvedTuning.progress * 0.94f)
-                                )
+                                val blurRadius = styleTuning.idleBlurRadius *
+                                    (0.06f + resolvedTuning.progress * 0.94f)
+                                blur(blurRadius, blurRadius)
                                 if (lensProfile.shouldRefract && resolvedTuning.refractionAmount > 0.5f) {
                                     lens(
                                         refractionHeight = lensProfile.refractionHeight *
-                                            blendFloat(1f, 0.35f, resolvedTuning.progress),
+                                            blendFloat(1f, 0.35f, resolvedTuning.progress) *
+                                            resolvedTuning.contentDistortionScale,
                                         refractionAmount = lensProfile.refractionAmount *
-                                            blendFloat(1f, 0.18f, resolvedTuning.progress),
+                                            blendFloat(1f, 0.18f, resolvedTuning.progress) *
+                                            resolvedTuning.contentDistortionScale,
                                         depthEffect = styleTuning.depthEffectEnabled,
-                                        chromaticAberration = styleTuning.allowChromaticAberration &&
+                                        chromaticAberration = if (
+                                            styleTuning.allowChromaticAberration &&
                                             lensProfile.aberrationStrength > 0.01f
+                                        ) {
+                                            resolveLiquidGlassIndicatorChromaticAberration(
+                                                resolvedTuning
+                                            )
+                                        } else {
+                                            0f
+                                        }
                                     )
                                 }
                             },
@@ -349,10 +364,18 @@ fun SimpleLiquidIndicator(
                         this.background(resolvedIndicatorColor)
                     }
                 }
-                .border(
-                    width = 0.7.dp,
-                    color = Color.White.copy(alpha = if (isLiquidGlassEnabled) 0.62f else 0.25f),
-                    shape = RoundedCornerShape(cornerRadius)
+                .then(
+                    if (drawHighlightBorder) {
+                        Modifier.border(
+                            width = AppSpacingTokens.Micro * 0.35f,
+                            color = OpticalContrastPalette.Highlight.copy(
+                                alpha = if (isLiquidGlassEnabled) 0.62f else 0.25f
+                            ),
+                            shape = RoundedCornerShape(cornerRadius),
+                        )
+                    } else {
+                        Modifier
+                    }
                 )
         )
     }
@@ -455,7 +478,7 @@ internal fun resolveLiquidStyleTuning(tuning: LiquidGlassTuning): LiquidStyleTun
             deformationMultiplier = 0.92f + tuning.strength * 0.14f,
             idleBlurRadius = tuning.backdropBlurRadius,
             depthEffectEnabled = true,
-            allowChromaticAberration = tuning.chromaticAberrationAmount > 0.01f
+            allowChromaticAberration = tuning.indicatorChromaticAberrationAmount > 0.01f
         )
         LiquidGlassMode.FROSTED -> LiquidStyleTuning(
             idleThresholdPxPerSecond = 220f,
@@ -552,8 +575,8 @@ private fun DrawScope.drawLiquidSphereSurface(
     drawRect(
         brush = Brush.radialGradient(
             colors = listOf(
-                Color.White.copy(alpha = centerGlowAlpha),
-                Color.White.copy(alpha = centerGlowAlpha * 0.35f),
+                OpticalContrastPalette.Highlight.copy(alpha = centerGlowAlpha),
+                OpticalContrastPalette.Highlight.copy(alpha = centerGlowAlpha * 0.35f),
                 Color.Transparent
             ),
             center = Offset(x = size.width / 2f, y = size.height * 0.54f),
@@ -564,10 +587,10 @@ private fun DrawScope.drawLiquidSphereSurface(
     drawRect(
         brush = Brush.horizontalGradient(
             colors = listOf(
-                Color.Black.copy(alpha = edgeShadeAlpha),
+                OpticalContrastPalette.Shadow.copy(alpha = edgeShadeAlpha),
                 Color.Transparent,
                 Color.Transparent,
-                Color.Black.copy(alpha = edgeShadeAlpha)
+                OpticalContrastPalette.Shadow.copy(alpha = edgeShadeAlpha)
             )
         )
     )
@@ -575,7 +598,7 @@ private fun DrawScope.drawLiquidSphereSurface(
     drawRect(
         brush = Brush.verticalGradient(
             colors = listOf(
-                Color.White.copy(
+                OpticalContrastPalette.Highlight.copy(
                     alpha = blendFloat(
                         start = if (isMoving) 0.10f else 0.06f,
                         stop = tuning.whiteOverlayAlpha * 1.2f,
@@ -583,7 +606,7 @@ private fun DrawScope.drawLiquidSphereSurface(
                     )
                 ),
                 Color.Transparent,
-                Color.Black.copy(alpha = if (isMoving) 0.09f else 0.04f)
+                OpticalContrastPalette.Shadow.copy(alpha = if (isMoving) 0.09f else 0.04f)
             )
         )
     )
@@ -591,9 +614,9 @@ private fun DrawScope.drawLiquidSphereSurface(
     val ringAlpha = clearWeight * if (isMoving) 0.22f else 0.16f
     if (ringAlpha > 0.01f) {
         val ringStroke = (size.minDimension * 0.05f).coerceAtLeast(1f)
-        val ringHighlight = lerp(baseColor, Color.White, 0.48f).copy(alpha = ringAlpha)
-        val ringMid = lerp(baseColor, Color.White, 0.22f).copy(alpha = ringAlpha * 0.86f)
-        val ringShadow = lerp(baseColor, Color.Black, 0.24f).copy(alpha = ringAlpha * 0.70f)
+        val ringHighlight = lerp(baseColor, OpticalContrastPalette.Highlight, 0.48f).copy(alpha = ringAlpha)
+        val ringMid = lerp(baseColor, OpticalContrastPalette.Highlight, 0.22f).copy(alpha = ringAlpha * 0.86f)
+        val ringShadow = lerp(baseColor, OpticalContrastPalette.Shadow, 0.24f).copy(alpha = ringAlpha * 0.70f)
         drawRoundRect(
             brush = Brush.sweepGradient(
                 colors = listOf(
@@ -610,15 +633,19 @@ private fun DrawScope.drawLiquidSphereSurface(
         )
     }
 
-    if (isMoving && lensProfile.aberrationStrength > 0f && tuning.chromaticAberrationAmount > 0f) {
+    if (
+        isMoving &&
+        lensProfile.aberrationStrength > 0f &&
+        tuning.indicatorChromaticAberrationAmount > 0f
+    ) {
         val fringe = (lensProfile.aberrationStrength * 3.2f * clearWeight).coerceIn(0f, 0.18f)
         drawRect(
             brush = Brush.horizontalGradient(
                 colors = listOf(
-                    lerp(baseColor, Color.White, 0.45f).copy(alpha = fringe),
+                    lerp(baseColor, OpticalContrastPalette.Highlight, 0.45f).copy(alpha = fringe),
                     Color.Transparent,
                     Color.Transparent,
-                    lerp(baseColor, Color.Black, 0.18f).copy(alpha = fringe)
+                    lerp(baseColor, OpticalContrastPalette.Shadow, 0.18f).copy(alpha = fringe)
                 )
             )
         )

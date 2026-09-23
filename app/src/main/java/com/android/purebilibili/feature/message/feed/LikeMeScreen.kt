@@ -15,10 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -30,10 +29,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
-import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.data.model.response.MessageFeedLikeItem
 import com.android.purebilibili.data.repository.MessageRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -182,13 +182,14 @@ fun LikeMeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    AdaptiveScaffold(
+    AppScaffold(
+        blurContentReady = !uiState.isLoading,
         topBar = {
-            AdaptiveTopAppBar(
+            AppTopBar(
                 title = "收到的赞",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 }
             )
@@ -197,11 +198,12 @@ fun LikeMeScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
         ) {
             when {
-                uiState.isLoading -> com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-                    modifier = Modifier.align(Alignment.Center)
+                uiState.isLoading -> com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton(
+                    modifier = Modifier.fillMaxSize(),
+                    useUserRow = true,
+                    itemCount = 8,
                 )
                 uiState.error != null -> MessageFeedError(
                     text = uiState.error ?: "加载失败",
@@ -212,14 +214,16 @@ fun LikeMeScreen(
                     text = "暂无点赞消息",
                     modifier = Modifier.fillMaxSize()
                 )
-                else -> ComfortablePullToRefreshBox(
+                // Scaffold already pads out the top bar — indicator at box top (inset 0).
+                else -> AdaptivePullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
                     onRefresh = viewModel::refresh,
+                    indicatorTopInset = paddingValues.calculateTopPadding(),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 10.dp),
+                        contentPadding = PaddingValues(top = paddingValues.calculateTopPadding() + 10.dp, bottom = paddingValues.calculateBottomPadding() + 10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (uiState.latestItems.isNotEmpty()) {
@@ -237,7 +241,8 @@ fun LikeMeScreen(
                                                 subjectId = content.subjectId,
                                                 rootId = content.rootId,
                                                 sourceId = content.sourceId,
-                                                targetId = content.targetId
+                                                targetId = content.targetId,
+                                                business = content.business
                                             )?.let(onOpenLink)
                                         }
                                     },
@@ -265,7 +270,8 @@ fun LikeMeScreen(
                                                 subjectId = content.subjectId,
                                                 rootId = content.rootId,
                                                 sourceId = content.sourceId,
-                                                targetId = content.targetId
+                                                targetId = content.targetId,
+                                                business = content.business
                                             )?.let(onOpenLink)
                                         }
                                     },
@@ -314,7 +320,7 @@ private fun LikeMeCard(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     text = buildString {
                         append(firstUser?.nickname.orEmpty().ifBlank { "用户" })
                         if (item.counts > 1) append(" 等${item.counts}人")
@@ -326,24 +332,24 @@ private fun LikeMeCard(
                 )
                 item.item?.title?.takeIf { it.isNotBlank() }?.let {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = it, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    AppText(text = it, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
+                    AppText(
                         text = formatMessageFeedTime(item.likeTime),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    Text(
+                    AppText(
                         text = if (item.noticeState == 1) "接收通知" else "不再通知",
                         modifier = Modifier.clickable(onClick = onToggleNotice),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(
+                    AppText(
                         text = "删除",
                         modifier = Modifier.clickable(onClick = onRemove),
                         style = MaterialTheme.typography.bodySmall,

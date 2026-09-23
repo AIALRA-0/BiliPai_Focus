@@ -12,7 +12,7 @@ class AppBuildVerificationPolicyTest {
             currentVersion = "7.3.3",
             localBuildCommitSha = "abcdef1234567890",
             localWorkflowRunId = "123456789",
-            localWorkflowRunUrl = "https://github.com/jay3-yy/BiliPai/actions/runs/123456789",
+            localWorkflowRunUrl = "https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/123456789",
             localReleaseTag = "v7.3.3",
             localApkSha256 = "feedbeef",
             remoteRelease = AppUpdateCheckResult(
@@ -24,7 +24,7 @@ class AppBuildVerificationPolicyTest {
                 publishedAt = null,
                 assets = listOf(
                     AppUpdateAsset(
-                        name = "BiliPai-release-7.3.3.apk",
+                        name = "BiliPai-Focus-7.3.3.apk",
                         downloadUrl = "https://example.com/app.apk",
                         sizeBytes = 100,
                         contentType = "application/vnd.android.package-archive",
@@ -36,11 +36,11 @@ class AppBuildVerificationPolicyTest {
                 buildMetadata = AppReleaseBuildMetadata(
                     gitCommitSha = "abcdef1234567890",
                     workflowRunId = "123456789",
-                    workflowRunUrl = "https://github.com/jay3-yy/BiliPai/actions/runs/123456789",
+                    workflowRunUrl = "https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/123456789",
                     releaseTag = "v7.3.3"
                 ),
                 verificationMetadata = AppReleaseVerificationMetadata(
-                    attestationUrl = "https://github.com/jay3-yy/BiliPai/attestations/123"
+                    attestationUrl = "https://github.com/AIALRA-0/BiliPai_Focus/attestations/123"
                 )
             )
         )
@@ -58,7 +58,7 @@ class AppBuildVerificationPolicyTest {
             currentVersion = "7.3.3",
             localBuildCommitSha = "abcdef1234567890",
             localWorkflowRunId = "123456789",
-            localWorkflowRunUrl = "https://github.com/jay3-yy/BiliPai/actions/runs/123456789",
+            localWorkflowRunUrl = "https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/123456789",
             localReleaseTag = "v7.3.3",
             localApkSha256 = null,
             remoteRelease = null
@@ -73,7 +73,7 @@ class AppBuildVerificationPolicyTest {
             currentVersion = "7.3.3",
             localBuildCommitSha = "abcdef1234567890",
             localWorkflowRunId = "123456789",
-            localWorkflowRunUrl = "https://github.com/jay3-yy/BiliPai/actions/runs/123456789",
+            localWorkflowRunUrl = "https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/123456789",
             localReleaseTag = "v7.3.3",
             localApkSha256 = "feedbeef",
             remoteRelease = AppUpdateCheckResult(
@@ -85,7 +85,7 @@ class AppBuildVerificationPolicyTest {
                 publishedAt = null,
                 assets = listOf(
                     AppUpdateAsset(
-                        name = "BiliPai-release-7.3.3.apk",
+                        name = "BiliPai-Focus-7.3.3.apk",
                         downloadUrl = "https://example.com/app.apk",
                         sizeBytes = 100,
                         contentType = "application/vnd.android.package-archive",
@@ -97,7 +97,7 @@ class AppBuildVerificationPolicyTest {
                 buildMetadata = AppReleaseBuildMetadata(
                     gitCommitSha = "abcdef1234567890",
                     workflowRunId = "123456789",
-                    workflowRunUrl = "https://github.com/jay3-yy/BiliPai/actions/runs/123456789",
+                    workflowRunUrl = "https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/123456789",
                     releaseTag = "v7.3.3"
                 )
             )
@@ -125,7 +125,7 @@ class AppBuildVerificationPolicyTest {
                 publishedAt = null,
                 assets = listOf(
                     AppUpdateAsset(
-                        name = "BiliPai-release-7.4.0.apk",
+                        name = "BiliPai-Focus-7.4.0.apk",
                         downloadUrl = "https://example.com/app.apk",
                         sizeBytes = 100,
                         contentType = "application/vnd.android.package-archive",
@@ -137,11 +137,11 @@ class AppBuildVerificationPolicyTest {
                 buildMetadata = AppReleaseBuildMetadata(
                     gitCommitSha = "abcdef1234567890",
                     workflowRunId = "123456789",
-                    workflowRunUrl = "https://github.com/jay3-yy/BiliPai/actions/runs/123456789",
+                    workflowRunUrl = "https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/123456789",
                     releaseTag = "v7.4.0"
                 ),
                 verificationMetadata = AppReleaseVerificationMetadata(
-                    attestationUrl = "https://github.com/jay3-yy/BiliPai/attestations/123"
+                    attestationUrl = "https://github.com/AIALRA-0/BiliPai_Focus/attestations/123"
                 )
             )
         )
@@ -171,7 +171,7 @@ class AppBuildVerificationPolicyTest {
                 publishedAt = null,
                 assets = listOf(
                     AppUpdateAsset(
-                        name = "BiliPai-release-7.4.0.apk",
+                        name = "BiliPai-Focus-7.4.0.apk",
                         downloadUrl = "https://example.com/app.apk",
                         sizeBytes = 100,
                         contentType = "application/vnd.android.package-archive",

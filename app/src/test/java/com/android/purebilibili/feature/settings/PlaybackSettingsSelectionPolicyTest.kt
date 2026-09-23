@@ -1,9 +1,13 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppSegmentedChrome
+import com.android.purebilibili.core.ui.components.resolveAppSegmentedChrome
+import com.android.purebilibili.core.ui.components.resolveAppSegmentedLabelFontSizeSp
 import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.FullscreenMode
+import com.android.purebilibili.core.store.player.DEFAULT_AUDIO_QUALITY_FOLLOW_LAST
 import com.android.purebilibili.core.store.PortraitPlayerCollapseMode
-import com.android.purebilibili.core.theme.UiPreset
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,6 +15,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackSettingsSelectionPolicyTest {
+
+    @Test
+    fun `default audio quality options expose follow last and supported preferences`() {
+        assertEquals(
+            listOf(
+                DEFAULT_AUDIO_QUALITY_FOLLOW_LAST,
+                30251,
+                30250,
+                -1
+            ),
+            resolveDefaultAudioQualityOptions().map { it.value }
+        )
+        assertEquals(
+            listOf("跟随上次", "Hi-Res 无损", "杜比全景声", "AAC"),
+            resolveDefaultAudioQualityOptions().map { it.label }
+        )
+    }
+
+    @Test
+    fun `legacy concrete AAC preference is normalized to high quality AAC`() {
+        assertEquals(-1, normalizeDefaultAudioQualityOption(30280))
+        assertEquals(-1, normalizeDefaultAudioQualityOption(30232))
+        assertEquals(-1, normalizeDefaultAudioQualityOption(30216))
+    }
 
     @Test
     fun `playback interaction and fullscreen blocks should be split into scene composables`() {
@@ -23,8 +51,12 @@ class PlaybackSettingsSelectionPolicyTest {
         val contentBlock = source
             .substringAfter("fun PlaybackSettingsContent(")
             .substringBefore("private fun PlaybackInteractionSettingsSection(")
-        assertTrue(contentBlock.contains("IOSSectionTitle(\"互动与评论\")"))
-        assertTrue(contentBlock.contains("IOSSectionTitle(\"全屏与手势\")"))
+        assertTrue(source.contains("视频小横条"))
+        assertTrue(source.contains("setAudioNowPlayingBarEnabled(context, it)"))
+        assertTrue(source.contains("点击小横条进入听视频"))
+        assertTrue(source.contains("setAudioNowPlayingBarOpensAudioMode(context, it)"))
+        assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"互动与评论\")"))
+        assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"全屏与手势\")"))
         assertTrue(contentBlock.contains("PlaybackInteractionSettingsSection("))
         assertTrue(contentBlock.contains("PlaybackFullscreenGestureSettingsSection("))
     }
@@ -87,9 +119,9 @@ class PlaybackSettingsSelectionPolicyTest {
     @Test
     fun `resolveSelectionIndex should return matched option index`() {
         val options = listOf(
-            PlaybackSegmentOption("avc1", "AVC"),
-            PlaybackSegmentOption("hev1", "HEVC"),
-            PlaybackSegmentOption("av01", "AV1")
+            AppSegmentOption("avc1", "AVC"),
+            AppSegmentOption("hev1", "HEVC"),
+            AppSegmentOption("av01", "AV1")
         )
 
         assertEquals(1, resolveSelectionIndex(options, "hev1"))
@@ -98,9 +130,9 @@ class PlaybackSettingsSelectionPolicyTest {
     @Test
     fun `resolveSelectionIndex should fallback to first option when value missing`() {
         val options = listOf(
-            PlaybackSegmentOption(116, "1080P60"),
-            PlaybackSegmentOption(80, "1080P"),
-            PlaybackSegmentOption(64, "720P")
+            AppSegmentOption(116, "1080P60"),
+            AppSegmentOption(80, "1080P"),
+            AppSegmentOption(64, "720P")
         )
 
         assertEquals(0, resolveSelectionIndex(options, 32))
@@ -111,16 +143,16 @@ class PlaybackSettingsSelectionPolicyTest {
     @Test
     fun `md3 segmented labels should shrink for crowded language options`() {
         assertEquals(
-            14f,
-            resolveMd3SegmentedLabelFontSizeSp(
+            12f,
+            resolveAppSegmentedLabelFontSizeSp(
                 optionCount = 4,
                 longestLabelLength = "English".length
             ),
             0.001f
         )
         assertEquals(
-            16f,
-            resolveMd3SegmentedLabelFontSizeSp(
+            13f,
+            resolveAppSegmentedLabelFontSizeSp(
                 optionCount = 3,
                 longestLabelLength = "HEVC".length
             ),
@@ -130,13 +162,13 @@ class PlaybackSettingsSelectionPolicyTest {
 
     @Test
     fun `ios liquid segmented control default label size matches tall indicator`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/IOSSlidingSegmentedControl.kt")
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/AppSegmentedControl.kt")
 
         assertTrue(source.contains("labelFontSize: TextUnit = 14.sp"))
         assertFalse(source.contains("labelFontSize: TextUnit = 12.sp"))
         assertEquals(
-            13f,
-            resolveMd3SegmentedLabelFontSizeSp(
+            12f,
+            resolveAppSegmentedLabelFontSizeSp(
                 optionCount = 5,
                 longestLabelLength = "跟随系统".length
             ),
@@ -145,26 +177,38 @@ class PlaybackSettingsSelectionPolicyTest {
     }
 
     @Test
+    fun `material md3 segmented control drops outer capsule shell`() {
+        val source = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/renderer/material3/AppMaterial3SegmentedControl.kt")
+        val materialBlock = source
+            .substringAfter("internal fun <T> AppMaterial3SegmentedControl(")
+
+        assertTrue(materialBlock.contains("SingleChoiceSegmentedButtonRow("))
+        assertTrue(materialBlock.contains("SegmentedButtonDefaults.borderStroke("))
+        assertFalse(materialBlock.contains("adaptiveSquircleBackground("))
+        assertFalse(materialBlock.contains("outerContainerColor"))
+    }
+
+    @Test
     fun `android native liquid glass opt in makes shared ios segmented control use liquid indicator`() {
         assertEquals(
-            IosSlidingSegmentedControlChrome.MD3_SEGMENTED,
-            resolveIosSlidingSegmentedControlChrome(
-                uiPreset = UiPreset.MD3,
-                androidNativeLiquidGlassEnabled = false
+            AppSegmentedChrome.NATIVE,
+            resolveAppSegmentedChrome(
+                usesMaterialFallback = true,
+                nativeLiquidGlassEnabled = false
             )
         )
         assertEquals(
-            IosSlidingSegmentedControlChrome.LIQUID_INDICATOR,
-            resolveIosSlidingSegmentedControlChrome(
-                uiPreset = UiPreset.MD3,
-                androidNativeLiquidGlassEnabled = true
+            AppSegmentedChrome.LIQUID,
+            resolveAppSegmentedChrome(
+                usesMaterialFallback = true,
+                nativeLiquidGlassEnabled = true
             )
         )
         assertEquals(
-            IosSlidingSegmentedControlChrome.LIQUID_INDICATOR,
-            resolveIosSlidingSegmentedControlChrome(
-                uiPreset = UiPreset.IOS,
-                androidNativeLiquidGlassEnabled = false
+            AppSegmentedChrome.LIQUID,
+            resolveAppSegmentedChrome(
+                usesMaterialFallback = false,
+                nativeLiquidGlassEnabled = false
             )
         )
     }
@@ -180,8 +224,11 @@ class PlaybackSettingsSelectionPolicyTest {
     fun `resolveDefaultPlaybackQualityOptions should only expose fixed quality tiers`() {
         val options = resolveDefaultPlaybackQualityOptions()
 
-        assertEquals(listOf(125, 116, 80, 64, 32, 16), options.map { it.value })
-        assertEquals(listOf("4K HDR", "1080P60", "1080P", "720P", "480P", "360P"), options.map { it.label })
+        assertEquals(listOf(126, 125, 116, 80, 64, 32, 16), options.map { it.value })
+        assertEquals(
+            listOf("杜比视界", "4K HDR", "1080P60", "1080P", "720P", "480P", "360P"),
+            options.map { it.label }
+        )
     }
 
     @Test
@@ -374,9 +421,9 @@ class PlaybackSettingsSelectionPolicyTest {
         val source = File("src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt")
             .readText()
 
-        assertTrue(source.contains("视频实际最高可播"))
+        assertTrue(source.contains("每个视频都会自动选择当前账号和设备可播放的最高画质"))
         assertTrue(source.contains("视频本身无更高档不打断播放"))
-        assertTrue(source.contains("默认画质会作为关闭后的偏好保留"))
+        assertTrue(source.contains("仅作为关闭自动最高后的无线网络偏好保留"))
     }
 
     private fun loadSource(path: String): String {
@@ -386,6 +433,6 @@ class PlaybackSettingsSelectionPolicyTest {
             File(path.removePrefix("app/")),
             File("..", path)
         )
-        return candidates.first { it.exists() }.readText()
+        return candidates.first { it.exists() }.readText().replace("\r\n", "\n")
     }
 }

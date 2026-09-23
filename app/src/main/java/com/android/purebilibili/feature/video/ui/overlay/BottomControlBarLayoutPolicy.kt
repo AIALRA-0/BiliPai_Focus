@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.store.PlayerProgressPlacement
+
 data class BottomControlBarLayoutPolicy(
     val bottomPaddingDp: Int,
     val progressSpacingDp: Int,
@@ -26,6 +28,35 @@ data class BottomControlBarLayoutPolicy(
     val actionTextFontSp: Int,
     val fullscreenIconSizeDp: Int
 )
+
+internal fun resolveBottomControlBarBottomPaddingDp(
+    defaultBottomPaddingDp: Int,
+    progressPlacement: PlayerProgressPlacement
+): Int {
+    return if (progressPlacement == PlayerProgressPlacement.BOTTOM_EDGE) {
+        0
+    } else {
+        defaultBottomPaddingDp
+    }
+}
+
+/**
+ * Keeps the inline detail player's scrubber anchored to the video edge.
+ *
+ * The phone detail player is always drawn edge-to-edge, including when the transparent system
+ * status bar remains visible. Placing the progress bar above the controls makes it appear in
+ * the middle of the video frame.
+ */
+internal fun resolveVideoDetailProgressPlacement(
+    requestedPlacement: PlayerProgressPlacement,
+    isFullscreen: Boolean
+): PlayerProgressPlacement {
+    return if (!isFullscreen) {
+        PlayerProgressPlacement.BOTTOM_EDGE
+    } else {
+        requestedPlacement
+    }
+}
 
 fun resolveBottomControlBarLayoutPolicy(
     widthDp: Int

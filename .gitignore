@@ -11,7 +11,6 @@
 /build
 /captures
 .externalNativeBuild
-.external/KernelSU/
 .cxx
 local.properties
 
@@ -53,6 +52,8 @@ app/release/
 
 # 🔥 忽略 AI/Agent 相关文件
 .agent/
+.trae/
+.codegraph/
 .gemini/
 .cursor/
 .claude/
@@ -70,13 +71,15 @@ bilibili-API-collect/
 /.external/
 /.local/
 external/
-AndroidLiquidGlass/
 SimpMusic/
 Telegram/
 TMessagesProj/
 
 # Backup directory
 BiliPai_BusinessCode_Backup/
+
+# Local icon references used during UI icon planning
+/icons/
 
 # Docs / plans should not be pushed
 docs/
@@ -95,8 +98,26 @@ report.md
 docs/*
 !docs/GOOGLE_CAST_PLUGIN.md
 !docs/DLNA_CAST_PLUGIN.md
+!docs/android17-verification.md
 !docs/images/
 !docs/images/screenshot*.png
 !docs/wiki/
 !docs/wiki/*.md
+!docs/wiki/ui-design/
+!docs/wiki/ui-design/**/*.md
 .omx/
+
+# Local-only design specifications and their repository validation test
+docs/wiki/ui-design/
+docs/wiki/FRONTEND_ARCHITECTURE_THEME_SIMPLIFICATION_PLAN.md
+docs/wiki/FRONTEND_THEME_SYSTEM_REFACTOR_PLAN_V2.md
+docs/wiki/LIQUID_GLASS_REUSE_PARITY.md
+docs/wiki/MIUIX_ALIGNMENT.md
+docs/wiki/NATIVE_THEME_COMPONENT_MIGRATION.md
+docs/wiki/THEME_SIMPLIFICATION_PHASE0_BASELINE.md
+docs/perf/
+app/src/test/java/com/android/purebilibili/docs/UiDesignDocumentationStructureTest.kt
+
+# Local Reasonix session settings and metadata
+.reasonix/
+reasonix.toml

@@ -11,7 +11,7 @@ class SplashExitAnimationSpecTest {
         assertEquals(920L, splashExitDurationMs())
         assertEquals(220f, splashExitTranslateYDp(), 0.001f)
         assertEquals(1.12f, splashExitScaleEnd(), 0.001f)
-        assertEquals(32f, splashExitBlurRadiusEnd(), 0.001f)
+        assertEquals(24f, splashExitBlurRadiusEnd(), 0.001f)
         assertEquals(1000L, splashMaxKeepOnScreenMs())
     }
 
@@ -33,6 +33,7 @@ class SplashExitAnimationSpecTest {
 
     @Test
     fun appliesBlurMoreGentlyAtBeginning() {
+        assertEquals(0f, splashExitBlurProgress(0.1f), 0.001f)
         assertTrue(splashExitBlurProgress(0.25f) < 0.25f)
         assertEquals(1f, splashExitBlurProgress(1f), 0.001f)
     }

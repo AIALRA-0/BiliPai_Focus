@@ -11,6 +11,7 @@ import com.android.purebilibili.data.model.response.SearchTopicItem
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.SearchUpItem
 import com.android.purebilibili.data.model.response.LiveRoomSearchItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -70,13 +71,15 @@ object SearchRepository {
         ).apply { putAll(extra) }
     }
 
-    //  视频搜索 - 支持排序、时长过滤和分页
+    //  视频搜索 - 支持排序、时长/分区/发布时间过滤和分页
     suspend fun search(
         keyword: String,
         order: SearchOrder = SearchOrder.TOTALRANK,
         duration: SearchDuration = SearchDuration.ALL,
         tids: Int = 0,
-        page: Int = 1
+        page: Int = 1,
+        pubBegin: Long? = null,
+        pubEnd: Long? = null
     ): Result<Pair<List<VideoItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
             val params = mutableMapOf(
@@ -84,45 +87,43 @@ object SearchRepository {
                 "search_type" to "video",
                 "order" to order.value,
                 "duration" to duration.value.toString(),
-                "tids" to tids.toString(),
                 "page" to page.toString(),
                 "page_size" to "20",
                 "platform" to "pc",
                 "web_location" to "1430654"
             )
-            
+            if (tids != 0) {
+                params["tids"] = tids.toString()
+            }
+            if (pubBegin != null) {
+                params["pubtime_begin_s"] = pubBegin.toString()
+            }
+            if (pubEnd != null) {
+                params["pubtime_end_s"] = pubEnd.toString()
+            }
+
             com.android.purebilibili.core.util.Logger.d(
                 "SearchRepo",
-                " search(video): keyword=$keyword, order=${order.value}, duration=${duration.value}, tids=$tids, page=$page"
+                " search(video): keyword=$keyword, order=${order.value}, duration=${duration.value}, tids=$tids, pubBegin=$pubBegin, pubEnd=$pubEnd, page=$page"
             )
 
             val signedParams = signWithWbi(params)
 
             val response = api.search(signedParams)
             if (response.code != 0) {
-                com.android.purebilibili.core.util.Logger.w(
-                    "SearchRepo",
-                    "search(video) primary api failed: code=${response.code}, msg=${response.message}, fallback=all/v2"
-                )
-                return@withContext searchVideoFallback(keyword = keyword, page = page)
+                return@withContext Result.failure(createSearchError(response.code, response.message))
             }
-            
+
             val videoList = response.data?.result
                 ?.map { it.toVideoItem() }
                 ?: emptyList()
-            if (shouldFallbackEmptyFirstPageVideoSearch(page = page, primaryResultCount = videoList.size)) {
-                com.android.purebilibili.core.util.Logger.d(
-                    "SearchRepo",
-                    " search(video) primary first page empty, fallback=all/v2"
-                )
-                return@withContext searchVideoFallback(keyword = keyword, page = page)
-            }
-            val pageInfo = createPageInfo(
+            val pageInfo = resolveVideoSearchPageInfo(
                 requestedPage = page,
                 responsePage = response.data?.page ?: page,
-                totalPages = response.data?.numPages ?: 1,
+                totalPages = response.data?.numPages ?: 0,
                 totalResults = response.data?.numResults ?: videoList.size,
-                fallbackResultCount = videoList.size
+                pageSize = response.data?.pagesize ?: 20,
+                resultCount = videoList.size
             )
             
             com.android.purebilibili.core.util.Logger.d(
@@ -131,14 +132,11 @@ object SearchRepository {
             )
 
             Result.success(Pair(videoList, pageInfo))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            e.printStackTrace()
-            com.android.purebilibili.core.util.Logger.e(
-                "SearchRepo",
-                "search(video) primary api exception, fallback=all/v2",
-                e
-            )
-            searchVideoFallback(keyword = keyword, page = page)
+            com.android.purebilibili.core.util.Logger.e("SearchRepo", "search(video) failed", e)
+            Result.failure(e)
         }
     }
 
@@ -147,7 +145,9 @@ object SearchRepository {
         order: SearchOrder = SearchOrder.TOTALRANK,
         durations: Set<SearchDuration> = emptySet(),
         tids: Int = 0,
-        page: Int = 1
+        page: Int = 1,
+        pubBegin: Long? = null,
+        pubEnd: Long? = null
     ): Result<Pair<List<VideoItem>, SearchPageInfo>> {
         val requests = resolveSearchDurationRequests(durations)
         if (requests.size == 1) {
@@ -156,7 +156,9 @@ object SearchRepository {
                 order = order,
                 duration = requests.single(),
                 tids = tids,
-                page = page
+                page = page,
+                pubBegin = pubBegin,
+                pubEnd = pubEnd
             )
         }
 
@@ -168,7 +170,9 @@ object SearchRepository {
                 order = order,
                 duration = duration,
                 tids = tids,
-                page = page
+                page = page,
+                pubBegin = pubBegin,
+                pubEnd = pubEnd
             ).fold(
                 onSuccess = { pages += it },
                 onFailure = { error ->
@@ -262,7 +266,7 @@ object SearchRepository {
         }
     }
 
-    //  热搜榜单（PiliPlus 同源）
+    //  热搜榜单（BiliPai 同源）
     suspend fun getTrendingKeywords(limit: Int = 30): Result<SearchTrendingBundle> = withContext(Dispatchers.IO) {
         try {
             val wbiResponse = runCatching {
@@ -434,13 +438,19 @@ object SearchRepository {
 
     suspend fun searchArticle(
         keyword: String,
-        page: Int = 1
+        page: Int = 1,
+        order: SearchOrder = SearchOrder.TOTALRANK,
+        categoryId: Int = 0
     ): Result<Pair<List<SearchArticleItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
             val params = searchTypeParams(
                 keyword = keyword,
                 searchType = "article",
-                page = page
+                page = page,
+                extra = mapOf(
+                    "order" to order.value,
+                    "category_id" to categoryId.toString()
+                )
             )
 
             val signedParams = signWithWbi(params)
@@ -520,10 +530,22 @@ object SearchRepository {
 
     suspend fun searchPhoto(
         keyword: String,
-        page: Int = 1
+        page: Int = 1,
+        order: SearchOrder = SearchOrder.TOTALRANK,
+        categoryId: Int = 0
     ): Result<Pair<List<SearchPhotoItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
-            val signedParams = signWithWbi(searchTypeParams(keyword, "photo", page))
+            val signedParams = signWithWbi(
+                searchTypeParams(
+                    keyword = keyword,
+                    searchType = "photo",
+                    page = page,
+                    extra = mapOf(
+                        "order" to order.value,
+                        "category_id" to categoryId.toString()
+                    )
+                )
+            )
             val response = api.searchPhoto(signedParams)
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, response.message))
@@ -565,50 +587,66 @@ object SearchRepository {
     }
 
     //  获取搜索发现（优先最近搜索/关注 UP，再补官方推荐和热搜）
-    suspend fun getSearchRecommend(historyKeywords: List<String>): Result<List<HotItem>> = withContext(Dispatchers.IO) {
+    suspend fun getSearchRecommend(
+        historyKeywords: List<String>,
+        enablePersonalizedRecommend: Boolean = true
+    ): Result<List<HotItem>> = withContext(Dispatchers.IO) {
         val fallbackKeywords = listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰")
-        val historySuggestions = try {
-            val lastKeyword = historyKeywords.firstOrNull()
-            if (!lastKeyword.isNullOrBlank()) {
-                val response = api.getSearchSuggest(lastKeyword)
-                response.result?.tag
-                    ?.mapNotNull { tag ->
-                        tag.term.ifBlank { tag.value.ifBlank { tag.name } }
-                            .replace(Regex("<.*?>"), "")
-                            .trim()
-                            .takeIf { it.isNotBlank() && it != lastKeyword }
-                    }
-                    ?.take(8)
-                    .orEmpty()
-            } else {
+        val historySuggestions = if (enablePersonalizedRecommend) {
+            try {
+                val lastKeyword = historyKeywords.firstOrNull()
+                if (!lastKeyword.isNullOrBlank()) {
+                    val response = api.getSearchSuggest(lastKeyword)
+                    response.result?.tag
+                        ?.mapNotNull { tag ->
+                            tag.term.ifBlank { tag.value.ifBlank { tag.name } }
+                                .replace(Regex("<.*?>"), "")
+                                .trim()
+                                .takeIf { it.isNotBlank() && it != lastKeyword }
+                        }
+                        ?.take(8)
+                        .orEmpty()
+                } else {
+                    emptyList()
+                }
+            } catch (e: Exception) {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } else {
             emptyList()
         }
 
-        val followedUpNames = try {
-            val navResponse = navApi.getNavInfo()
-            val mid = navResponse.data?.mid ?: 0L
-            if (navResponse.data?.isLogin == true && mid > 0L) {
-                navApi.getFollowings(mid, pn = 1, ps = 20)
-                    .data
-                    ?.list
-                    ?.mapNotNull { user -> user.uname.trim().takeIf { it.isNotBlank() } }
-                    .orEmpty()
-            } else {
+        val followedUpNames = if (enablePersonalizedRecommend) {
+            try {
+                val navResponse = navApi.getNavInfo()
+                val mid = navResponse.data?.mid ?: 0L
+                if (navResponse.data?.isLogin == true && mid > 0L) {
+                    navApi.getFollowings(mid, pn = 1, ps = 20)
+                        .data
+                        ?.list
+                        ?.mapNotNull { user -> user.uname.trim().takeIf { it.isNotBlank() } }
+                        .orEmpty()
+                } else {
+                    emptyList()
+                }
+            } catch (e: Exception) {
                 emptyList()
             }
-        } catch (e: Exception) {
+        } else {
             emptyList()
         }
 
         val officialItems = try {
             val recommendResponse = api.getSearchRecommend()
             if (recommendResponse.code == 0) {
-                recommendResponse.data?.list
+                val list = recommendResponse.data?.list
                     ?.filter { item -> item.keyword.isNotBlank() || item.show_name.isNotBlank() }
                     ?: emptyList()
+                if (!enablePersonalizedRecommend) {
+                    list.filter { it.recommend_reason.isBlank() }
+                } else {
+                    list
+                }
             } else {
                 emptyList()
             }
@@ -644,6 +682,8 @@ object SearchRepository {
                 )
                 params
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e(
                 "SearchRepo",
@@ -651,53 +691,6 @@ object SearchRepository {
                 e
             )
             params
-        }
-    }
-
-    private suspend fun searchVideoFallback(
-        keyword: String,
-        page: Int
-    ): Result<Pair<List<VideoItem>, SearchPageInfo>> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = api.searchAll(
-                    signWithWbi(
-                        mapOf(
-                        "keyword" to keyword,
-                        "page" to page.toString(),
-                        "page_size" to "20",
-                        "platform" to "pc",
-                        "web_location" to "1430654"
-                        )
-                    )
-                )
-                if (response.code != 0) {
-                    return@withContext Result.failure(createSearchError(response.code, response.message))
-                }
-
-                val videos = response.data?.result
-                    ?.firstOrNull { it.result_type == "video" }
-                    ?.data
-                    ?.map { it.toVideoItem() }
-                    ?: emptyList()
-
-                val pageInfo = SearchPageInfo(
-                    currentPage = page,
-                    totalPages = response.data?.numPages?.takeIf { it > 0 } ?: if (videos.size >= 20) page + 1 else page,
-                    totalResults = response.data?.numResults?.takeIf { it > 0 } ?: videos.size,
-                    hasMore = response.data?.numPages?.let { page < it } ?: (videos.size >= 20)
-                )
-
-                com.android.purebilibili.core.util.Logger.d(
-                    "SearchRepo",
-                    "search(video) fallback result: size=${videos.size}, page=${pageInfo.currentPage}, hasMore=${pageInfo.hasMore}"
-                )
-
-                Result.success(Pair(videos, pageInfo))
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Result.failure(e)
-            }
         }
     }
 
@@ -719,7 +712,26 @@ enum class SearchOrder(val value: String, val displayName: String) {
     PUBDATE("pubdate", "最新发布"),
     CLICK("click", "播放最多"),
     DM("dm", "弹幕最多"),
-    STOW("stow", "收藏最多")
+    STOW("stow", "收藏最多"),
+    SCORES("scores", "评论最多"),
+    ATTENTION("attention", "喜欢最多")
+}
+
+enum class SearchArticleCategory(val value: Int, val displayName: String) {
+    ALL(0, "全部分区"),
+    GAME(1, "游戏"),
+    ANIMATION(2, "动画"),
+    LIFE(3, "生活"),
+    LIGHT_NOVEL(16, "轻小说"),
+    TECHNOLOGY(17, "科技"),
+    MOVIE(28, "影视"),
+    INTEREST(29, "兴趣")
+}
+
+enum class SearchPhotoCategory(val value: Int, val displayName: String) {
+    ALL(0, "全部分区"),
+    ILLUSTRATION(1, "画友"),
+    PHOTOGRAPHY(2, "摄影")
 }
 
 //  搜索时长筛选
@@ -743,8 +755,8 @@ enum class SearchOrderSort(val value: Int, val displayName: String) {
 }
 
 enum class SearchUserType(val value: Int, val displayName: String) {
-    ALL(0, "全部用户"),
-    UP(1, "UP主"),
+    ALL(0, "全部类型"),
+    UP(1, "仅UP主"),
     NORMAL(2, "普通用户"),
     VERIFIED(3, "认证用户")
 }

@@ -7,6 +7,19 @@ import kotlin.test.assertEquals
 class CommentFraudDetectionPolicyTest {
 
     @Test
+    fun `sub reply scan follows known total and stops on final page`() {
+        assertEquals(true, shouldContinueSubReplyFraudScan(1, 20, 20, 41, 50))
+        assertEquals(false, shouldContinueSubReplyFraudScan(3, 20, 1, 41, 50))
+    }
+
+    @Test
+    fun `sub reply scan fallback remains bounded when total is absent`() {
+        assertEquals(true, shouldContinueSubReplyFraudScan(1, 20, 20, 0, 50))
+        assertEquals(false, shouldContinueSubReplyFraudScan(50, 20, 20, 0, 50))
+        assertEquals(false, shouldContinueSubReplyFraudScan(1, 20, 0, 0, 50))
+    }
+
+    @Test
     fun `fraud detection should start only when enabled and reply id is valid`() {
         assertEquals(true, shouldStartCommentFraudDetection(enabled = true, rpid = 123L))
         assertEquals(false, shouldStartCommentFraudDetection(enabled = false, rpid = 123L))
@@ -24,6 +37,7 @@ class CommentFraudDetectionPolicyTest {
         assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.SHADOW_BANNED))
         assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.DELETED))
         assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.UNDER_REVIEW))
+        assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.INVISIBLE))
         assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.UNKNOWN))
         assertEquals(null, resolveCommentFraudLightMessage(CommentFraudStatus.SHADOW_BANNED))
     }
@@ -39,6 +53,16 @@ class CommentFraudDetectionPolicyTest {
     }
 
     @Test
+    fun `reply status should be invisible when guest probe found invisible comment`() {
+        val status = resolveReplyFraudStatus(
+            guestProbe = CommentPresenceProbe(requestSucceeded = true, found = true, invisible = true),
+            authProbe = CommentPresenceProbe(requestSucceeded = true, found = true),
+            confirmedNotFoundAfterRetry = false
+        )
+        assertEquals(CommentFraudStatus.INVISIBLE, status)
+    }
+
+    @Test
     fun `reply status should be shadow banned when only auth probe found`() {
         val status = resolveReplyFraudStatus(
             guestProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
@@ -46,6 +70,16 @@ class CommentFraudDetectionPolicyTest {
             confirmedNotFoundAfterRetry = false
         )
         assertEquals(CommentFraudStatus.SHADOW_BANNED, status)
+    }
+
+    @Test
+    fun `reply status should be invisible when auth probe found invisible comment`() {
+        val status = resolveReplyFraudStatus(
+            guestProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
+            authProbe = CommentPresenceProbe(requestSucceeded = true, found = true, invisible = true),
+            confirmedNotFoundAfterRetry = false
+        )
+        assertEquals(CommentFraudStatus.INVISIBLE, status)
     }
 
     @Test
@@ -95,6 +129,17 @@ class CommentFraudDetectionPolicyTest {
     }
 
     @Test
+    fun `root status should be invisible when auth seek found invisible comment`() {
+        val status = resolveRootFraudStatus(
+            guestSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
+            authSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = true, invisible = true),
+            guestReplyPageVisible = null,
+            confirmedNotFoundAfterRetry = false
+        )
+        assertEquals(CommentFraudStatus.INVISIBLE, status)
+    }
+
+    @Test
     fun `root status should be deleted when auth seek probe has deleted hint`() {
         val status = resolveRootFraudStatus(
             guestSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
@@ -110,6 +155,28 @@ class CommentFraudDetectionPolicyTest {
     }
 
     @Test
+    fun `root status should be normal when guest seek found comment`() {
+        val status = resolveRootFraudStatus(
+            guestSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = true),
+            authSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = true),
+            guestReplyPageVisible = null,
+            confirmedNotFoundAfterRetry = false
+        )
+        assertEquals(CommentFraudStatus.NORMAL, status)
+    }
+
+    @Test
+    fun `root status should be invisible when guest seek found invisible comment`() {
+        val status = resolveRootFraudStatus(
+            guestSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = true, invisible = true),
+            authSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = true),
+            guestReplyPageVisible = null,
+            confirmedNotFoundAfterRetry = false
+        )
+        assertEquals(CommentFraudStatus.INVISIBLE, status)
+    }
+
+    @Test
     fun `root status should stay unknown when probes are not conclusive`() {
         val status = resolveRootFraudStatus(
             guestSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
@@ -121,64 +188,12 @@ class CommentFraudDetectionPolicyTest {
     }
 
     @Test
-    fun `root timeline status should be normal when guest timeline found comment`() {
-        val status = resolveRootFraudStatusFromTimeline(
-            guestTimelineProbe = CommentPresenceProbe(requestSucceeded = true, found = true),
-            authReplyPageProbe = CommentReplyPageProbe(requestSucceeded = true, visible = true),
-            guestReplyPageProbe = null,
-            confirmedDeletedAfterRetry = false
-        )
-        assertEquals(CommentFraudStatus.NORMAL, status)
-    }
-
-    @Test
-    fun `root timeline status should be shadow banned when auth page visible but guest page deleted`() {
-        val status = resolveRootFraudStatusFromTimeline(
-            guestTimelineProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
-            authReplyPageProbe = CommentReplyPageProbe(requestSucceeded = true, visible = true),
-            guestReplyPageProbe = CommentReplyPageProbe(
-                requestSucceeded = true,
-                visible = false,
-                deletedHint = true
-            ),
-            confirmedDeletedAfterRetry = false
-        )
-        assertEquals(CommentFraudStatus.SHADOW_BANNED, status)
-    }
-
-    @Test
-    fun `root timeline status should be under review when auth and guest reply pages are visible`() {
-        val status = resolveRootFraudStatusFromTimeline(
-            guestTimelineProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
-            authReplyPageProbe = CommentReplyPageProbe(requestSucceeded = true, visible = true),
-            guestReplyPageProbe = CommentReplyPageProbe(requestSucceeded = true, visible = true),
-            confirmedDeletedAfterRetry = false
-        )
-        assertEquals(CommentFraudStatus.UNDER_REVIEW, status)
-    }
-
-    @Test
-    fun `root timeline status should not be deleted when auth page lacks deleted hint`() {
-        val status = resolveRootFraudStatusFromTimeline(
-            guestTimelineProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
-            authReplyPageProbe = CommentReplyPageProbe(requestSucceeded = true, visible = false),
-            guestReplyPageProbe = null,
-            confirmedDeletedAfterRetry = true
-        )
-        assertEquals(CommentFraudStatus.UNKNOWN, status)
-    }
-
-    @Test
-    fun `root timeline status should be deleted only after auth deleted hint and retry confirmation`() {
-        val status = resolveRootFraudStatusFromTimeline(
-            guestTimelineProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
-            authReplyPageProbe = CommentReplyPageProbe(
-                requestSucceeded = true,
-                visible = false,
-                deletedHint = true
-            ),
-            guestReplyPageProbe = null,
-            confirmedDeletedAfterRetry = true
+    fun `root status should be deleted when confirmed not found after retry`() {
+        val status = resolveRootFraudStatus(
+            guestSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
+            authSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
+            guestReplyPageVisible = null,
+            confirmedNotFoundAfterRetry = true
         )
         assertEquals(CommentFraudStatus.DELETED, status)
     }

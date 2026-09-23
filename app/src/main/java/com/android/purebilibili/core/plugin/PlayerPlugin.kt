@@ -55,7 +55,9 @@ sealed class SkipAction {
         val reason: String,
         val segmentId: String? = null,
         val startMs: Long? = null,
-        val categoryName: String? = null
+        val category: String? = null,
+        val categoryName: String? = null,
+        val showToast: Boolean = true,
     ) : SkipAction()
     
     /** 显示跳过按钮（手动跳过模式） */
@@ -63,5 +65,13 @@ sealed class SkipAction {
         val skipToMs: Long,
         val label: String,           // 按钮文字，如"跳过广告"
         val segmentId: String        // 片段标识，用于防止重复显示
+    ) : SkipAction()
+
+    /** Temporarily silence an actionType=mute SponsorBlock segment. */
+    data class Mute(
+        val untilMs: Long,
+        val reason: String,
+        val segmentId: String? = null,
+        val showToast: Boolean = true,
     ) : SkipAction()
 }

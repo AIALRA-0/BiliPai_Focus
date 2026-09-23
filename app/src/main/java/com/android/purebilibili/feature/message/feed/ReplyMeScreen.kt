@@ -15,10 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -30,10 +29,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
-import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.data.model.response.MessageFeedReplyItem
 import com.android.purebilibili.data.repository.MessageRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -149,26 +149,32 @@ fun ReplyMeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    AdaptiveScaffold(
+    AppScaffold(
+        blurContentReady = !uiState.isLoading,
         topBar = {
-            AdaptiveTopAppBar(
+            AppTopBar(
                 title = "回复我的",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
                     }
-                }
+                },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                ),
             )
         }
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
         ) {
             when {
-                uiState.isLoading -> com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-                    modifier = Modifier.align(Alignment.Center)
+                uiState.isLoading -> com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton(
+                    modifier = Modifier.fillMaxSize(),
+                    useUserRow = true,
+                    itemCount = 8,
                 )
                 uiState.error != null -> MessageFeedError(
                     text = uiState.error ?: "加载失败",
@@ -179,14 +185,16 @@ fun ReplyMeScreen(
                     text = "暂无回复消息",
                     modifier = Modifier.fillMaxSize()
                 )
-                else -> ComfortablePullToRefreshBox(
+                // Scaffold body already below topBar.
+                else -> AdaptivePullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
                     onRefresh = viewModel::refresh,
+                    indicatorTopInset = paddingValues.calculateTopPadding(),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = paddingValues.calculateTopPadding() + 12.dp, bottom = paddingValues.calculateBottomPadding() + 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(uiState.items, key = { it.id }) { item ->
@@ -201,7 +209,8 @@ fun ReplyMeScreen(
                                             subjectId = content.subjectId,
                                             rootId = content.rootId,
                                             sourceId = content.sourceId,
-                                            targetId = content.targetId
+                                            targetId = content.targetId,
+                                            business = content.business
                                         )?.let(onOpenLink)
                                     }
                                 },
@@ -244,7 +253,7 @@ private fun ReplyMeCard(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     text = buildString {
                         append(item.user?.nickname.orEmpty().ifBlank { "用户" })
                         append(if (item.isMulti == 1) " 等人" else "")
@@ -256,11 +265,11 @@ private fun ReplyMeCard(
                 )
                 item.item?.sourceContent?.takeIf { it.isNotBlank() }?.let {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    AppText(text = it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 firstNonBlank(item.item?.targetReplyContent, item.item?.rootReplyContent)?.let {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
+                    AppText(
                         text = "| $it",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -270,13 +279,13 @@ private fun ReplyMeCard(
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
+                    AppText(
                         text = formatMessageFeedTime(item.replyTime),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    Text(
+                    AppText(
                         text = "删除",
                         modifier = Modifier.clickable(onClick = onRemove),
                         style = MaterialTheme.typography.bodySmall,

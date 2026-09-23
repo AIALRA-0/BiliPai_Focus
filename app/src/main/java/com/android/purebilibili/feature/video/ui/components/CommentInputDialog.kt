@@ -1,10 +1,28 @@
 // 文件路径: feature/video/ui/components/CommentInputDialog.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.theme.opaqueCompositeOver
+import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
+import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppOutlinedTextField
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.appDesktopFocusableItemVisuals
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.android.purebilibili.core.util.PickMultipleGalleryVisualMedia
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,15 +41,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +63,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -54,14 +74,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.motion.resolveCommentVerticalContentRevealMotionSpec
 import com.android.purebilibili.core.ui.motion.verticalContentRevealEnterTransition
 import com.android.purebilibili.core.ui.motion.verticalContentRevealExitTransition
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.data.model.response.MentionSearchUser
 import kotlinx.coroutines.delay
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 private const val COMMENT_INPUT_FOCUS_RETRY_COUNT = 3
 private const val COMMENT_INPUT_FOCUS_RETRY_DELAY_MS = 80L
@@ -76,11 +98,36 @@ internal data class CommentInputDialogLayoutPolicy(
     val sendButtonHorizontalPaddingDp: Int
 )
 
+/**
+ * 评论输入弹层尺寸策略。
+ *
+ * 平板在 48dp 触控下限之上再抬高输入舒适区（对标 BiliPai isTablet ? 300 : 170 的加高思路），
+ * 横屏仍相对竖屏略压缩，避免遮挡过多视频区域。
+ */
 internal fun resolveCommentInputDialogLayoutPolicy(
-    isLandscape: Boolean
+    isLandscape: Boolean,
+    isTablet: Boolean = false
 ): CommentInputDialogLayoutPolicy {
-    return if (isLandscape) {
-        CommentInputDialogLayoutPolicy(
+    return when {
+        isTablet && isLandscape -> CommentInputDialogLayoutPolicy(
+            inputBoxMinHeightDp = 96,
+            inputBoxMaxHeightDp = 168,
+            emojiPanelHeightDp = 240,
+            sheetHorizontalPaddingDp = 20,
+            toolbarToolButtonSizeDp = 44,
+            toolbarToolSpacingDp = 8,
+            sendButtonHorizontalPaddingDp = 20
+        )
+        isTablet -> CommentInputDialogLayoutPolicy(
+            inputBoxMinHeightDp = 120,
+            inputBoxMaxHeightDp = 200,
+            emojiPanelHeightDp = 280,
+            sheetHorizontalPaddingDp = 20,
+            toolbarToolButtonSizeDp = 44,
+            toolbarToolSpacingDp = 8,
+            sendButtonHorizontalPaddingDp = 18
+        )
+        isLandscape -> CommentInputDialogLayoutPolicy(
             inputBoxMinHeightDp = 64,
             inputBoxMaxHeightDp = 112,
             emojiPanelHeightDp = 196,
@@ -89,8 +136,7 @@ internal fun resolveCommentInputDialogLayoutPolicy(
             toolbarToolSpacingDp = 6,
             sendButtonHorizontalPaddingDp = 18
         )
-    } else {
-        CommentInputDialogLayoutPolicy(
+        else -> CommentInputDialogLayoutPolicy(
             inputBoxMinHeightDp = 84,
             inputBoxMaxHeightDp = 136,
             emojiPanelHeightDp = 220,
@@ -114,6 +160,21 @@ internal fun resolveCommentProgressInsertText(positionMs: Long): String {
     return " ${FormatUtils.formatDuration(positionMs.coerceAtLeast(0L))} "
 }
 
+internal fun commentDraftTextFieldValue(text: String): TextFieldValue {
+    return TextFieldValue(
+        text = text,
+        selection = TextRange(text.length)
+    )
+}
+
+internal fun canPublishCommentDraft(
+    text: String,
+    selectedImageCount: Int,
+    canInputComment: Boolean,
+    isSending: Boolean
+): Boolean = canInputComment && !isSending &&
+    (text.isNotBlank() || selectedImageCount > 0)
+
 /**
  * 评论输入对话框
  * 
@@ -128,7 +189,6 @@ fun CommentInputDialog(
     isSending: Boolean = false,
     replyToName: String? = null,
     inputHint: String = "进来唠会嗑呗~",
-    canUploadImage: Boolean = true,
     canInputComment: Boolean = true,
     modifier: Modifier = Modifier,
     currentVideoPositionMsProvider: () -> Long = { 0L },
@@ -136,23 +196,37 @@ fun CommentInputDialog(
     isMentionSearching: Boolean = false,
     mentionSearchError: String? = null,
     onMentionSearchQueryChange: (String) -> Unit = {},
+    initialText: String = "",
+    initialImageUris: List<Uri> = emptyList(),
+    initialSyncToDynamic: Boolean = false,
+    onDraftChange: (String, List<Uri>, Boolean) -> Unit = { _, _, _ -> },
     emotePackages: List<com.android.purebilibili.data.model.response.EmotePackage> = emptyList() // [新增] 表情包列表
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    val layoutPolicy = remember(isLandscape) {
-        resolveCommentInputDialogLayoutPolicy(isLandscape = isLandscape)
+    val isTablet = LocalWindowSizeClass.current.isTablet
+    val layoutPolicy = remember(isLandscape, isTablet) {
+        resolveCommentInputDialogLayoutPolicy(
+            isLandscape = isLandscape,
+            isTablet = isTablet
+        )
     }
 
     // 状态
-    var textFieldValue by remember { mutableStateOf(TextFieldValue("")) }
-    var isForwardToDynamic by remember { mutableStateOf(false) } // 转发到动态
+    var textFieldValue by remember { mutableStateOf(commentDraftTextFieldValue(initialText)) }
+    var isForwardToDynamic by remember { mutableStateOf(initialSyncToDynamic) } // 转发到动态
     var showEmojiPanel by remember { mutableStateOf(false) }    // 表情面板
     var showMentionPanel by remember { mutableStateOf(false) }
     var mentionSearchText by remember { mutableStateOf("") }
-    var currentTab by remember { mutableStateOf(0) } // 0=Kaomoji, 1=Emoji, 2+=API Packages
-    var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var currentTab by remember { mutableIntStateOf(0) } // 0=Kaomoji, 1=Emoji, 2+=API Packages
+    var selectedImageUris by remember { mutableStateOf(initialImageUris) }
     val text = textFieldValue.text
+    val canPublish = canPublishCommentDraft(
+        text = text,
+        selectedImageCount = selectedImageUris.size,
+        canInputComment = canInputComment,
+        isSending = isSending
+    )
     
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -165,18 +239,20 @@ fun CommentInputDialog(
         }
     }
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 9)
+        PickMultipleGalleryVisualMedia(maxItems = 9)
     ) { uris ->
         if (uris.isNotEmpty()) {
             selectedImageUris = (selectedImageUris + uris)
                 .distinct()
                 .take(9)
+            onDraftChange(textFieldValue.text, selectedImageUris, isForwardToDynamic)
         }
     }
 
     fun updateTextFieldValue(nextValue: TextFieldValue) {
         if (nextValue.text.length > 1000) return
         textFieldValue = nextValue
+        onDraftChange(nextValue.text, selectedImageUris, isForwardToDynamic)
         val mentionQuery = resolveActiveCommentMentionQuery(
             text = nextValue.text,
             cursor = nextValue.selection.end
@@ -207,14 +283,15 @@ fun CommentInputDialog(
     }
     
     // 重置状态
-    LaunchedEffect(visible, canInputComment) {
+    LaunchedEffect(visible) {
         if (visible) {
-            textFieldValue = TextFieldValue("")
-            isForwardToDynamic = false
+            // 草稿更新会随每次输入回流，不能作为 effect key，否则会持续覆盖 IME 选区。
+            textFieldValue = commentDraftTextFieldValue(initialText)
+            isForwardToDynamic = initialSyncToDynamic
             showEmojiPanel = false
             showMentionPanel = false
             mentionSearchText = ""
-            selectedImageUris = emptyList()
+            selectedImageUris = initialImageUris
         }
     }
     
@@ -270,11 +347,11 @@ fun CommentInputDialog(
                 )
                 
                 // 输入区域
-                Surface(
+                AppSurface(
                     modifier = modifier
                         .fillMaxWidth()
                         .wrapContentHeight(),
-                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                    shape = AppShapes.container(ContainerLevel.Sheet),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 8.dp
                 ) {
@@ -291,7 +368,7 @@ fun CommentInputDialog(
                                     min = layoutPolicy.inputBoxMinHeightDp.dp,
                                     max = layoutPolicy.inputBoxMaxHeightDp.dp
                                 )
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), AppShapes.container(ContainerLevel.Chip))
                                 .padding(12.dp)
                         ) {
                             BasicTextField(
@@ -302,10 +379,8 @@ fun CommentInputDialog(
                                     .fillMaxWidth()
                                     .fillMaxHeight() // 填满 Box
                                     .focusRequester(focusRequester),
-                                textStyle = TextStyle(
-                                    fontSize = 16.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    lineHeight = 24.sp
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.onSurface
                                 ),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                 decorationBox = { innerTextField ->
@@ -315,10 +390,10 @@ fun CommentInputDialog(
                                         if (text.isEmpty()) {
                                             val fallbackHint = "进来唠会嗑呗~"
                                             val resolvedHint = inputHint.ifBlank { fallbackHint }
-                                            Text(
+                                            AppText(
                                                 text = if (replyToName != null) "回复 @$replyToName: $resolvedHint" else resolvedHint,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                fontSize = 16.sp
+                                                style = MaterialTheme.typography.bodyLarge
                                             )
                                         }
                                         innerTextField()
@@ -327,7 +402,7 @@ fun CommentInputDialog(
                             )
                             
                             // 右上角全屏图标 (装饰)
-                            Icon(
+                            AppIcon(
                                 imageVector = Icons.Filled.Fullscreen,
                                 contentDescription = "Expand",
                                 modifier = Modifier
@@ -374,7 +449,7 @@ fun CommentInputDialog(
                                     .padding(top = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
+                                AppText(
                                     text = "已选 ${selectedImageUris.size}/9 张",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -390,11 +465,11 @@ fun CommentInputDialog(
                                     Box(
                                         modifier = Modifier
                                             .size(64.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(AppShapes.container(ContainerLevel.Chip))
                                             .border(
                                                 width = 1.dp,
                                                 color = MaterialTheme.colorScheme.outlineVariant,
-                                                shape = RoundedCornerShape(8.dp)
+                                                shape = AppShapes.container(ContainerLevel.Chip)
                                             )
                                     ) {
                                         AsyncImage(
@@ -402,17 +477,22 @@ fun CommentInputDialog(
                                             contentDescription = "已选图片",
                                             modifier = Modifier.fillMaxSize()
                                         )
-                                        Surface(
-                                            shape = RoundedCornerShape(999.dp),
+                                        AppSurface(
+                                            shape = AppShapes.container(ContainerLevel.Pill),
                                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                                             modifier = Modifier
                                                 .align(Alignment.TopEnd)
                                                 .padding(3.dp)
                                                 .clickable {
                                                     selectedImageUris = selectedImageUris.filterNot { it == uri }
+                                                    onDraftChange(
+                                                        textFieldValue.text,
+                                                        selectedImageUris,
+                                                        isForwardToDynamic
+                                                    )
                                                 }
                                         ) {
-                                            Icon(
+                                            AppIcon(
                                                 imageVector = Icons.Outlined.Close,
                                                 contentDescription = "移除",
                                                 modifier = Modifier
@@ -444,33 +524,40 @@ fun CommentInputDialog(
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable(enabled = canInputComment && !isSending) { isForwardToDynamic = !isForwardToDynamic }
+                                        .clip(AppShapes.container(ContainerLevel.Tag))
+                                        .clickable(enabled = canInputComment && !isSending) {
+                                            isForwardToDynamic = !isForwardToDynamic
+                                            onDraftChange(
+                                                textFieldValue.text,
+                                                selectedImageUris,
+                                                isForwardToDynamic
+                                            )
+                                        }
                                         .padding(horizontal = 4.dp, vertical = 4.dp)
                                 ) {
                                     // 模拟 RadioButton/Checkbox
-                                    Icon(
+                                    AppIcon(
                                         imageVector = if (isForwardToDynamic) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
                                         contentDescription = null,
                                         tint = if (isForwardToDynamic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
+                                    AppText(
                                         text = "转发到动态",
-                                        fontSize = 13.sp,
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1
                                     )
                                 }
 
                                 // 图标栏: 表情 @ 图片
-                                IconButton(
+                                AppIconButton(
                                     onClick = { showEmojiPanel = !showEmojiPanel },
                                     enabled = canInputComment && !isSending,
                                     modifier = Modifier.size(layoutPolicy.toolbarToolButtonSizeDp.dp)
                                 ) {
-                                    Icon(
+                                    AppIcon(
                                         imageVector = Icons.Filled.Face,
                                         contentDescription = "Emoji",
                                         tint = if (showEmojiPanel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -478,7 +565,7 @@ fun CommentInputDialog(
                                     )
                                 }
 
-                                IconButton(
+                                AppIconButton(
                                     onClick = {
                                         insertTextAtCursor("@")
                                         showEmojiPanel = false
@@ -489,7 +576,7 @@ fun CommentInputDialog(
                                     enabled = canInputComment && !isSending,
                                     modifier = Modifier.size(layoutPolicy.toolbarToolButtonSizeDp.dp)
                                 ) {
-                                    Icon(
+                                    AppIcon(
                                         imageVector = Icons.Filled.Email,
                                         contentDescription = "At",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -497,7 +584,7 @@ fun CommentInputDialog(
                                     )
                                 }
 
-                                TextButton(
+                                AppTextButton(
                                     onClick = {
                                         insertTextAtCursor(resolveCommentProgressInsertText(currentVideoPositionMsProvider()))
                                         showEmojiPanel = false
@@ -507,30 +594,26 @@ fun CommentInputDialog(
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                     modifier = Modifier.height(36.dp)
                                 ) {
-                                    Text(
+                                    AppText(
                                         text = "进度",
-                                        fontSize = 13.sp,
+                                        style = MaterialTheme.typography.labelMedium,
                                         maxLines = 1
                                     )
                                 }
 
-                                IconButton(
+                                AppIconButton(
                                     onClick = {
                                         imagePickerLauncher.launch(
                                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                         )
                                     },
-                                    enabled = canUploadImage && canInputComment && !isSending,
+                                    enabled = canInputComment && !isSending,
                                     modifier = Modifier.size(layoutPolicy.toolbarToolButtonSizeDp.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.AddCircle,
-                                        contentDescription = "Add",
-                                        tint = if (canUploadImage) {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                        },
+                                    AppIcon(
+                                        imageVector = Icons.Outlined.Image,
+                                        contentDescription = "图片",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(26.dp)
                                     )
                                 }
@@ -539,34 +622,36 @@ fun CommentInputDialog(
                             Spacer(modifier = Modifier.width(8.dp))
 
                             // 发送按钮
-                            Button(
+                            AppButton(
                                 onClick = {
-                                    if (text.isNotBlank() && !isSending && canInputComment) {
+                                    if (canPublish) {
                                         keyboardController?.hide()
                                         focusManager.clearFocus(force = true)
                                         android.util.Log.d("CommentInputDialog", "📤 Sending comment: $text")
                                         onSend(text.trim(), selectedImageUris, isForwardToDynamic)
                                     }
                                 },
-                                enabled = text.isNotBlank() && !isSending && canInputComment,
-                                shape = RoundedCornerShape(20.dp),
+                                enabled = canPublish,
+                                shape = AppShapes.container(ContainerLevel.Floating),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary, // 应该是粉色
+                                    containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
+
+                                    contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme), // 应该是粉色
                                     disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                                 ),
                                 contentPadding = PaddingValues(horizontal = layoutPolicy.sendButtonHorizontalPaddingDp.dp, vertical = 0.dp),
                                 modifier = Modifier.height(36.dp)
                             ) {
                                 if (isSending) {
-                                    CircularProgressIndicator(
+                                    AppCircularProgressIndicator(
                                         modifier = Modifier.size(16.dp),
                                         strokeWidth = 2.dp,
                                         color = MaterialTheme.colorScheme.onPrimary
                                     )
                                 } else {
-                                    Text(
+                                    AppText(
                                         text = "发布",
-                                        fontSize = 14.sp,
+                                        style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -574,17 +659,10 @@ fun CommentInputDialog(
                         }
 
                         if (!canInputComment) {
-                            Text(
+                            AppText(
                                 text = "当前评论区暂不可评论",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
-                        } else if (!canUploadImage) {
-                            Text(
-                                text = "当前评论区不支持图片评论",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(top = 6.dp)
                             )
                         }
@@ -605,54 +683,19 @@ fun CommentInputDialog(
                                     .padding(top = 8.dp)
                             ) {
                                 // 顶部标签栏 (可滚动)
-                                ScrollableTabRow(
-                                    selectedTabIndex = currentTab,
-                                    edgePadding = 16.dp,
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    contentColor = MaterialTheme.colorScheme.primary,
-                                    indicator = { tabPositions ->
-                                        if (currentTab < tabPositions.size) {
-                                            TabRowDefaults.SecondaryIndicator(
-                                                Modifier.tabIndicatorOffset(tabPositions[currentTab]),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
+                                AppThemeAdaptiveTabRow(
+                                    options = buildList {
+                                        add(AppSegmentOption(0, "颜文字"))
+                                        add(AppSegmentOption(1, "Emoji"))
+                                        emotePackages.forEachIndexed { index, pkg ->
+                                            add(AppSegmentOption(index + 2, pkg.text))
                                         }
                                     },
-                                    divider = { HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) },
-                                    modifier = Modifier.height(48.dp)
-                                ) {
-                                    // Tab 0: 颜文字
-                                    Tab(
-                                        selected = currentTab == 0,
-                                        onClick = { currentTab = 0 },
-                                        text = { Text("颜文字") }
-                                    )
-                                    // Tab 1: Emoji
-                                    Tab(
-                                        selected = currentTab == 1,
-                                        onClick = { currentTab = 1 },
-                                        text = { Text("Emoji") }
-                                    )
-                                    // API Packages (Tab 2+)
-                                    emotePackages.forEachIndexed { index, pkg ->
-                                        Tab(
-                                            selected = currentTab == index + 2,
-                                            onClick = { currentTab = index + 2 },
-                                            text = { 
-                                                // 尝试显示图标，没有则显示文字
-                                                if (pkg.url.isNotEmpty()) {
-                                                    AsyncImage(
-                                                        model = pkg.url,
-                                                        contentDescription = pkg.text,
-                                                        modifier = Modifier.size(24.dp)
-                                                    )
-                                                } else {
-                                                    Text(pkg.text) 
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
+                                    selectedValue = currentTab,
+                                    onSelectionChange = { currentTab = it },
+                                    height = 48.dp,
+                                    scrollable = true,
+                                )
 
                                 // 内容区域
                                 Box(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp)) {
@@ -675,12 +718,27 @@ fun CommentInputDialog(
                                                     Box(
                                                         contentAlignment = Alignment.Center,
                                                         modifier = Modifier
-                                                            .height(36.dp)
-                                                            .clip(RoundedCornerShape(4.dp))
-                                                            .clickable { insertTextAtCursor(kaomojis[i]) }
-                                                            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f))
+                                                            .height(48.dp)
+                                                            .appDesktopFocusableItemVisuals()
+                                                            .clickable(role = Role.Button) {
+                                                                insertTextAtCursor(kaomojis[i])
+                                                            },
                                                     ) {
-                                                        Text(kaomojis[i], fontSize = 13.sp)
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .height(36.dp)
+                                                                .clip(AppShapes.container(ContainerLevel.Tag))
+                                                                .background(
+                                                                    opaqueCompositeOver(
+                                                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f),
+                                                                        MaterialTheme.colorScheme.surface,
+                                                                    )
+                                                                ),
+                                                            contentAlignment = Alignment.Center,
+                                                        ) {
+                                                            AppText(kaomojis[i], style = MaterialTheme.typography.bodySmall)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -695,7 +753,7 @@ fun CommentInputDialog(
                                                 "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼"
                                             )
                                             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                                                columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(40.dp),
+                                                columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(48.dp),
                                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
@@ -703,10 +761,13 @@ fun CommentInputDialog(
                                                     Box(
                                                         contentAlignment = Alignment.Center,
                                                         modifier = Modifier
-                                                            .size(40.dp)
-                                                            .clickable { insertTextAtCursor(emojis[i]) }
+                                                            .size(48.dp)
+                                                            .appDesktopFocusableItemVisuals()
+                                                            .clickable(role = Role.Button) {
+                                                                insertTextAtCursor(emojis[i])
+                                                            }
                                                     ) {
-                                                        Text(emojis[i], fontSize = 24.sp)
+                                                        AppText(emojis[i], style = MaterialTheme.typography.headlineSmall)
                                                     }
                                                 }
                                             }
@@ -733,9 +794,9 @@ fun CommentInputDialog(
                                                                 contentDescription = emote.text,
                                                                 modifier = Modifier.size(50.dp)
                                                             )
-                                                            Text(
+                                                            AppText(
                                                                 text = emote.text.replace("[", "").replace("]", ""),
-                                                                fontSize = 10.sp,
+                                                                style = MaterialTheme.typography.labelSmall,
                                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                                 maxLines = 1,
                                                                 overflow = TextOverflow.Ellipsis
@@ -766,17 +827,17 @@ private fun CommentMentionSearchPanel(
     onUserClick: (MentionSearchUser) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    AppSurface(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(max = 220.dp),
-        shape = RoundedCornerShape(8.dp),
+        shape = AppShapes.container(ContainerLevel.Chip),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedTextField(
+            AppOutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier
@@ -784,15 +845,15 @@ private fun CommentMentionSearchPanel(
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 singleLine = true,
                 leadingIcon = {
-                    Icon(
+                    AppIcon(
                         imageVector = Icons.Filled.Search,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                 },
-                placeholder = { Text("搜索好友昵称") },
+                placeholder = { AppText("搜索好友昵称") },
                 textStyle = MaterialTheme.typography.bodySmall,
-                shape = RoundedCornerShape(18.dp),
+                shape = AppShapes.container(ContainerLevel.Card),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.56f),
@@ -809,12 +870,12 @@ private fun CommentMentionSearchPanel(
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CircularProgressIndicator(
+                        AppCircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text(
+                        AppText(
                             text = "正在搜索好友",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -823,7 +884,7 @@ private fun CommentMentionSearchPanel(
                 }
 
                 errorMessage != null -> {
-                    Text(
+                    AppText(
                         text = errorMessage,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -832,7 +893,7 @@ private fun CommentMentionSearchPanel(
                 }
 
                 users.isEmpty() -> {
-                    Text(
+                    AppText(
                         text = if (query.isBlank()) "输入好友昵称搜索" else "没有找到匹配的用户",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -859,20 +920,20 @@ private fun CommentMentionSearchPanel(
                                     contentDescription = user.name,
                                     modifier = Modifier
                                         .size(34.dp)
-                                        .clip(RoundedCornerShape(17.dp))
+                                        .clip(AppShapes.container(ContainerLevel.Card))
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text(
+                                    AppText(
                                         text = user.name,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    Text(
+                                    AppText(
                                         text = "${FormatUtils.formatStat(user.fans.toLong())} 粉丝",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,

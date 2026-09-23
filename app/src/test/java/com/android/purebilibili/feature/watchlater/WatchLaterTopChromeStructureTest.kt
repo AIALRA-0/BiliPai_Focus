@@ -1,0 +1,32 @@
+package com.android.purebilibili.feature.watchlater
+
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class WatchLaterTopChromeStructureTest {
+    @Test
+    fun `watch later follows global immersive top chrome and progressive blur`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/watchlater/WatchLaterScreen.kt"
+        ).readText()
+
+        assertTrue(source.contains("homeSettings.homeHeaderCollapseMode.hasAnyCollapse"))
+        assertTrue(source.contains("TopAppBarDefaults.enterAlwaysScrollBehavior()"))
+        assertTrue(source.contains("TopAppBarDefaults.pinnedScrollBehavior()"))
+        assertTrue(source.contains("BiliPaiImmersiveTopBar("))
+        assertTrue(source.contains("layerBackdrop(watchLaterChromeBackdrop)"))
+        assertTrue(source.contains("AppLiquidAwareSearchField("))
+        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(source.contains("dragSelectionEnabled = watchLaterFilterChrome.dragSelectionEnabled"))
+        assertTrue(source.contains("tapPressRefractionEnabled = true"))
+        assertTrue(source.contains("backdrop = watchLaterChromeBackdrop"))
+        assertTrue(source.contains("miuixBackdrop = watchLaterChromeBackdrop"))
+        assertTrue(source.contains("AppWindowActionMenu("))
+        assertTrue(source.contains("label = \"全部听\""))
+        assertTrue(source.contains("label = \"复制到收藏夹\""))
+        assertFalse(source.contains("AppDropdownMenu("))
+        assertFalse(source.contains("AppDropdownMenuItem("))
+    }
+}

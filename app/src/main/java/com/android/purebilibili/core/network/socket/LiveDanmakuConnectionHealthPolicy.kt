@@ -80,10 +80,5 @@ internal fun resolveLiveDanmakuHealthAction(
         return LiveDanmakuHealthAction.RECONNECT
     }
 
-    val lastBusinessMessageAtMs = health.lastBusinessMessageAtMs
-    if (lastBusinessMessageAtMs > 0L && nowMs - lastBusinessMessageAtMs > silenceTimeoutMs) {
-        return LiveDanmakuHealthAction.RECONNECT
-    }
-
     return LiveDanmakuHealthAction.KEEP_ALIVE
 }

@@ -72,4 +72,36 @@ class LandscapeEndDrawerLayoutPolicyTest {
         assertEquals(14, policy.itemMetaFontSp)
         assertEquals(16, policy.metaIconSizeDp)
     }
+
+    @Test
+    fun visibleFullscreenDrawer_reservesDrawerWidthForPlayerContent() {
+        assertEquals(
+            348,
+            resolveLandscapeEndDrawerReservedWidthDp(
+                drawerVisible = true,
+                isFullscreen = true,
+                screenWidthDp = 720
+            )
+        )
+    }
+
+    @Test
+    fun hiddenOrInlineDrawer_doesNotReservePlayerContentWidth() {
+        assertEquals(
+            0,
+            resolveLandscapeEndDrawerReservedWidthDp(
+                drawerVisible = false,
+                isFullscreen = true,
+                screenWidthDp = 720
+            )
+        )
+        assertEquals(
+            0,
+            resolveLandscapeEndDrawerReservedWidthDp(
+                drawerVisible = true,
+                isFullscreen = false,
+                screenWidthDp = 720
+            )
+        )
+    }
 }

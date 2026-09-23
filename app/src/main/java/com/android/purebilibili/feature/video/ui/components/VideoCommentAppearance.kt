@@ -4,6 +4,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
+
+internal object VideoCommentTypographyTokens {
+    val author: TextUnit = 13.sp
+    val metadata: TextUnit = 12.sp
+    val body: TextUnit = 15.sp
+    val action: TextUnit = 13.sp
+    val actionCount: TextUnit = 12.sp
+    val subReply: TextUnit = 13.sp
+}
 
 internal data class VideoCommentAppearance(
     val panelColor: Color,

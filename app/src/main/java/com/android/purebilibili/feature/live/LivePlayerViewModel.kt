@@ -4,6 +4,7 @@ package com.android.purebilibili.feature.live
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.data.model.response.LiveQuality
@@ -17,9 +18,12 @@ import com.android.purebilibili.data.repository.LiveReportReason
 import com.android.purebilibili.data.repository.LiveRepository
 import com.android.purebilibili.data.repository.LiveShieldInfo
 import com.android.purebilibili.data.repository.LiveSuperChatReportRequest
+import com.android.purebilibili.data.repository.LiveVoteSnapshot
+import com.android.purebilibili.feature.plugin.PlaybackCdnPlugin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.network.socket.DanmakuProtocol
@@ -60,7 +64,9 @@ data class LiveDanmakuItem(
     val reportTs: Long = 0,
     val reportSign: String = "",
     val superChatToken: String = "",
-    val superChatReportTs: Long = 0
+    val superChatReportTs: Long = 0,
+    // SC 展示时长（秒），用于全屏大字浮层自动消失
+    val superChatDuration: Int = 0
 )
 
 /**
@@ -130,6 +136,7 @@ sealed interface LivePlayerEvent {
 class LivePlayerViewModel : ViewModel() {
     companion object {
         private const val MAX_PLAYBACK_RELOAD_ATTEMPTS = 1
+        private const val MAX_ACTIVE_SUPER_CHAT_ITEMS = 100
     }
     
     private val _uiState = MutableStateFlow<LivePlayerState>(LivePlayerState.Loading)
@@ -145,6 +152,10 @@ class LivePlayerViewModel : ViewModel() {
     private val _superChatItems = MutableStateFlow<List<LiveDanmakuItem>>(emptyList())
     val superChatItems = _superChatItems.asStateFlow()
 
+    // [新增] 实时 SC 事件流（仅 WS 实时到达的新 SC，不含历史预加载），驱动全屏大字浮层
+    private val _superChatFlashFlow = MutableSharedFlow<LiveDanmakuItem>(extraBufferCapacity = 4)
+    val superChatFlashFlow: SharedFlow<LiveDanmakuItem> = _superChatFlashFlow
+
     private val _events = MutableSharedFlow<LivePlayerEvent>(extraBufferCapacity = 16)
     val events = _events.asSharedFlow()
 
@@ -156,8 +167,13 @@ class LivePlayerViewModel : ViewModel() {
 
     private val _shieldInfo = MutableStateFlow<LiveShieldInfo?>(null)
     val shieldInfo = _shieldInfo.asStateFlow()
+
+    private val _voteSnapshot = MutableStateFlow(LiveVoteSnapshot())
+    val voteSnapshot = _voteSnapshot.asStateFlow()
     
     private var danmakuClient: com.android.purebilibili.core.network.socket.LiveDanmakuClient? = null
+    private var liveStreamLoadJob: Job? = null
+    private var danmakuConnectJob: Job? = null
     private var danmakuCollectJob: Job? = null
     private var liveHeartbeatJob: Job? = null
     
@@ -177,6 +193,7 @@ class LivePlayerViewModel : ViewModel() {
      * 加载直播流和直播间详情
      */
     fun loadLiveStream(roomId: Long, qn: Int = 10000) {
+        resetPlaybackReloadBudget()
         loadLiveStreamInternal(
             roomId = roomId,
             qn = qn,
@@ -194,11 +211,15 @@ class LivePlayerViewModel : ViewModel() {
         refreshEmoticons: Boolean
     ) {
         pauseLiveHeartbeat()
+        if (currentRoomId != roomId) {
+            _voteSnapshot.value = LiveVoteSnapshot()
+        }
         currentRoomId = roomId
         currentRequestedQuality = qn
         CrashReporter.markLivePlaybackStage("load_stream_request")
         
-        viewModelScope.launch {
+        liveStreamLoadJob?.cancel()
+        liveStreamLoadJob = viewModelScope.launch {
             if (showLoading) {
                 _uiState.value = LivePlayerState.Loading
                 CrashReporter.markLivePlaybackStage("load_stream_loading")
@@ -237,6 +258,9 @@ class LivePlayerViewModel : ViewModel() {
             val danmakuPermissionDeferred = async {
                 LiveRepository.getLiveDanmakuPermission(roomId).getOrNull()
             }
+            val voteSnapshotDeferred = async {
+                LiveRepository.getLiveVoteSnapshot(roomId).getOrNull()
+            }
             
             val playUrlResult = playUrlDeferred.await()
             val roomInitResponse = roomInitDeferred.await()
@@ -244,6 +268,7 @@ class LivePlayerViewModel : ViewModel() {
             val roomH5Snapshot = roomH5Deferred.await()
             val redPocketInfo = redPocketDeferred.await()
             val danmakuPermission = danmakuPermissionDeferred.await() ?: LiveDanmakuPermission()
+            voteSnapshotDeferred.await()?.let { _voteSnapshot.value = it }
             val roomInitData = roomInitResponse?.data
             val realRoomId = roomInitData?.roomId?.takeIf { it > 0L } ?: roomId
             currentRoomId = realRoomId
@@ -472,12 +497,19 @@ class LivePlayerViewModel : ViewModel() {
     /**
      * 切换画质
      */
+    fun dismissSuperChat(superChatId: Long) {
+        if (superChatId <= 0L) return
+        _superChatItems.value = _superChatItems.value.filterNot { it.superChatId == superChatId }
+    }
+
     fun changeQuality(qn: Int) {
         val currentState = _uiState.value as? LivePlayerState.Success ?: return
         android.util.Log.d("LivePlayer", "🔴 changeQuality called: qn=$qn")
         currentRequestedQuality = qn
+        resetPlaybackReloadBudget()
         
-        viewModelScope.launch {
+        liveStreamLoadJob?.cancel()
+        liveStreamLoadJob = viewModelScope.launch {
             val result = LiveRepository.getLivePlayUrlWithQuality(
                 roomId = currentRoomId,
                 qn = qn,
@@ -538,11 +570,12 @@ class LivePlayerViewModel : ViewModel() {
     }
 
     /**
-     * PiliPlus 直播控制栏同款“仅播放音频”：切换后保留当前画质并重新请求播放地址。
+     * BiliPai 直播控制栏同款“仅播放音频”：切换后保留当前画质并重新请求播放地址。
      */
     fun toggleAudioOnly() {
         val currentState = _uiState.value as? LivePlayerState.Success ?: return
         currentAudioOnly = !currentAudioOnly
+        resetPlaybackReloadBudget()
         _uiState.value = currentState.copy(isAudioOnly = currentAudioOnly)
         loadLiveStreamInternal(
             roomId = currentRoomId,
@@ -619,6 +652,38 @@ class LivePlayerViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 当前播放候选快照（供手动线路选择 UI 使用）
+     */
+    internal fun playbackCandidatesSnapshot(): List<LivePlaybackCandidate> {
+        return resolvedPlayback?.candidates.orEmpty()
+    }
+
+    fun currentPlaybackPosition(): Pair<Int, Int> {
+        return activeCandidateIndex to activeUrlIndex
+    }
+
+    /**
+     * 手动切换播放候选（协议/格式/编码/线路）
+     * 更新 playUrl 后，LivePlayerScreen 的 LaunchedEffect(playUrl) 会自动重建播放源
+     */
+    fun switchPlaybackCandidate(candidateIndex: Int, urlIndex: Int) {
+        val currentState = _uiState.value as? LivePlayerState.Success ?: return
+        val playback = resolvedPlayback ?: return
+        val candidate = playback.candidates.getOrNull(candidateIndex) ?: return
+        val url = candidate.urls.getOrNull(urlIndex) ?: return
+        activeCandidateIndex = candidateIndex
+        activeUrlIndex = urlIndex
+        resetPlaybackReloadBudget()
+        android.util.Log.d("LivePlayer", " Manual switch source (candidate=$candidateIndex, url=$urlIndex): ${url.take(80)}...")
+        CrashReporter.markLivePlaybackStage("manual_switch_source_${candidateIndex}_${urlIndex}")
+        _uiState.value = currentState.copy(
+            playUrl = url,
+            allPlayUrls = candidate.urls,
+            currentUrlIndex = urlIndex
+        )
+    }
+
     private fun publishResolvedPlayback(
         data: com.android.purebilibili.data.model.response.LivePlayUrlData,
         requestedQn: Int,
@@ -629,13 +694,22 @@ class LivePlayerViewModel : ViewModel() {
         danmakuPermission: LiveDanmakuPermission
     ): Boolean {
         val danmakuEnabled = (_uiState.value as? LivePlayerState.Success)?.isDanmakuEnabled ?: true
-        val resolved = resolveLivePlayback(data, requestedQn)
+        val resolved = resolveLivePlayback(data, requestedQn)?.let { playback ->
+            val plugin = PluginManager.getEnabledPlugins(PlaybackCdnPlugin::class).firstOrNull()
+                ?: return@let playback
+            playback.copy(
+                candidates = playback.candidates.map { candidate ->
+                    candidate.copy(
+                        urls = plugin.rewritePlaybackCandidates(candidate.urls, emptyList()).videoUrls
+                    )
+                }
+            )
+        }
         val primaryUrl = resolved?.primaryUrl
         if (resolved != null && primaryUrl != null) {
             resolvedPlayback = resolved
             activeCandidateIndex = 0
             activeUrlIndex = 0
-            remainingReloadAttempts = MAX_PLAYBACK_RELOAD_ATTEMPTS
             _uiState.value = LivePlayerState.Success(
                 playUrl = primaryUrl,
                 allPlayUrls = resolved.candidates.first().urls,
@@ -657,7 +731,6 @@ class LivePlayerViewModel : ViewModel() {
         resolvedPlayback = null
         activeCandidateIndex = 0
         activeUrlIndex = 0
-        remainingReloadAttempts = MAX_PLAYBACK_RELOAD_ATTEMPTS
 
         val allUrls = data.durl?.mapNotNull { it.url } ?: emptyList()
         val url = allUrls.firstOrNull() ?: extractPlayUrl(data) ?: return false
@@ -733,6 +806,7 @@ class LivePlayerViewModel : ViewModel() {
      * 重试
      */
     fun retry() {
+        resetPlaybackReloadBudget()
         loadLiveStreamInternal(
             roomId = currentRoomId,
             qn = currentRequestedQuality,
@@ -747,14 +821,19 @@ class LivePlayerViewModel : ViewModel() {
      */
     private fun startLiveDanmaku(roomId: Long) {
         // 先断开旧连接
+        danmakuConnectJob?.cancel()
         danmakuCollectJob?.cancel()
         danmakuClient?.disconnect()
         danmakuClient = null
         
-        viewModelScope.launch {
+        danmakuConnectJob = viewModelScope.launch {
             preloadLiveRoomMessages(roomId)
             val result = DanmakuRepository.startLiveDanmaku(viewModelScope, roomId)
             result.onSuccess { client ->
+                if (!isActive) {
+                    client.disconnect()
+                    return@onSuccess
+                }
                 danmakuClient = client
                 CrashReporter.markLivePlaybackStage("danmaku_connected")
                 
@@ -813,7 +892,7 @@ class LivePlayerViewModel : ViewModel() {
             }
         }
         if (prefetchedSuperChats.isNotEmpty()) {
-            _superChatItems.value = prefetchedSuperChats
+            _superChatItems.value = prefetchedSuperChats.take(MAX_ACTIVE_SUPER_CHAT_ITEMS)
         }
     }
     
@@ -823,8 +902,11 @@ class LivePlayerViewModel : ViewModel() {
     
     /**
      * 发送弹幕
+     *
+     * @param color 弹幕颜色（RGB，默认白色 16777215）
+     * @param mode 弹幕模式（1=滚动，4=底部，5=顶部，默认滚动）
      */
-    fun sendDanmaku(text: String) {
+    fun sendDanmaku(text: String, color: Int = 16777215, mode: Int = 1) {
         if (text.isBlank() || currentRoomId == 0L) return
         val currentPermission = (_uiState.value as? LivePlayerState.Success)?.danmakuPermission
         if (currentPermission != null) {
@@ -853,6 +935,8 @@ class LivePlayerViewModel : ViewModel() {
             val request = LiveDanmakuSendRequest(
                 roomId = currentRoomId,
                 message = text,
+                color = color,
+                mode = mode,
                 replyMid = reply?.uid ?: 0L,
                 replyAttr = if (reply != null) 1 else 0,
                 replyUname = reply?.uname.orEmpty(),
@@ -865,12 +949,12 @@ class LivePlayerViewModel : ViewModel() {
                 recentSentTime = System.currentTimeMillis()
                 _replyTarget.value = null
                 
-                // 发送成功，模拟一条本地弹幕立即上屏
+                // 发送成功，模拟一条本地弹幕立即上屏（沿用所选颜色与模式）
                 val mid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
                 val item = LiveDanmakuItem(
                     text = text,
-                    color = 16777215, // White
-                    mode = 1, // Scroll
+                    color = color,
+                    mode = mode,
                     uid = mid,
                     uname = "我",
                     isSelf = true
@@ -1131,9 +1215,12 @@ class LivePlayerViewModel : ViewModel() {
             is LiveRealtimeAction.UpdateRoomTitle -> updateRoomTitle(action.title)
             is LiveRealtimeAction.EmitChat -> emitLiveChatItem(action.item)
             is LiveRealtimeAction.EmitSuperChat -> {
-                _superChatItems.value = listOf(action.item) + _superChatItems.value
-                    .filterNot { it.superChatId > 0L && it.superChatId == action.id }
+                _superChatItems.value = (
+                    listOf(action.item) + _superChatItems.value
+                        .filterNot { it.superChatId > 0L && it.superChatId == action.id }
+                ).take(MAX_ACTIVE_SUPER_CHAT_ITEMS)
                 emitLiveChatItem(action.item)
+                _superChatFlashFlow.tryEmit(action.item)
             }
             is LiveRealtimeAction.RemoveSuperChats -> {
                 val ids = action.ids.toSet()
@@ -1151,6 +1238,18 @@ class LivePlayerViewModel : ViewModel() {
                 )
             }
             is LiveRealtimeAction.RefreshRedPocket -> refreshLiveRedPocket(action.message)
+            is LiveRealtimeAction.UpdateVote -> {
+                val previous = _voteSnapshot.value
+                _voteSnapshot.value = previous.copy(
+                    current = action.vote,
+                    history = if (action.vote.isActive) previous.history else {
+                        listOf(action.vote) + previous.history.filterNot {
+                            it.interactionId > 0L && it.interactionId == action.vote.interactionId
+                        }
+                    }.take(10)
+                )
+                emitLiveChatItem(action.announcement)
+            }
         }
     }
 
@@ -1246,9 +1345,23 @@ class LivePlayerViewModel : ViewModel() {
             }
         }
     }
+
+    /**
+     * 播放器真正开始输出后才恢复自动刷新额度，避免一批持续 403 的新地址
+     * 在“刷新地址 -> 再次失败”之间无限重置恢复次数。
+     */
+    fun onPlaybackStarted() {
+        resetPlaybackReloadBudget()
+    }
+
+    private fun resetPlaybackReloadBudget() {
+        remainingReloadAttempts = MAX_PLAYBACK_RELOAD_ATTEMPTS
+    }
     
     override fun onCleared() {
         super.onCleared()
+        liveStreamLoadJob?.cancel()
+        danmakuConnectJob?.cancel()
         danmakuCollectJob?.cancel()
         liveHeartbeatJob?.cancel()
         danmakuClient?.disconnect()

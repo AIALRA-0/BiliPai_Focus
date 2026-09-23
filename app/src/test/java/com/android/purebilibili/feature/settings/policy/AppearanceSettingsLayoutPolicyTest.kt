@@ -3,8 +3,6 @@ package com.android.purebilibili.feature.settings
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
-import kotlin.test.assertFalse
 
 class AppearanceSettingsLayoutPolicyTest {
 
@@ -26,11 +24,5 @@ class AppearanceSettingsLayoutPolicyTest {
         )
 
         assertEquals(44.dp, result)
-    }
-
-    @Test
-    fun shouldBringDisplayModeIntoView_onlyWhenExpanded() {
-        assertTrue(shouldBringDisplayModeIntoView(isExpanded = true))
-        assertFalse(shouldBringDisplayModeIntoView(isExpanded = false))
     }
 }

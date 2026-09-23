@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.viewmodel
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -92,5 +93,22 @@ class VideoCommentViewModelTest {
                 activeDialogId = 44L
             )
         )
+    }
+
+    @Test
+    fun `sub reply loading preserves server sort and pagination cursor`() {
+        val viewModelSource = listOf(
+            File("src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoCommentViewModel.kt"),
+            File("app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoCommentViewModel.kt")
+        ).first { it.exists() }.readText()
+        val loadingSource = viewModelSource.substringAfter("private fun loadSubReplies(")
+            .substringBefore("private fun loadConversationReplies(")
+
+        assertTrue(loadingSource.contains("CommentRepository.getSortedSubCommentsForSubject("))
+        assertTrue(loadingSource.contains("mode = sortMode.apiMode"))
+        assertTrue(loadingSource.contains("paginationOffset = paginationOffset"))
+        assertTrue(loadingSource.contains("grpcNextOffset = data.grpcNextOffset"))
+        assertTrue(loadingSource.contains("subReplyLoadJob?.cancel()"))
+        assertFalse(loadingSource.contains("grpcNextOffset = null"))
     }
 }

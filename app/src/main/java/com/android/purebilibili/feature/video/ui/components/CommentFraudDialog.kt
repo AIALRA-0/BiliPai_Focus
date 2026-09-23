@@ -1,5 +1,7 @@
 // 文件路径: feature/video/ui/components/CommentFraudDialog.kt
 package com.android.purebilibili.feature.video.ui.components
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -10,9 +12,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.data.model.CommentFraudStatus
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 
 /**
  * [新增] 评论反诈检测结果弹窗
@@ -27,31 +32,37 @@ fun CommentFraudResultDialog(
     val (icon, title, description, color) = remember(status) {
         when (status) {
             CommentFraudStatus.NORMAL -> FraudDialogInfo(
-                icon = CupertinoIcons.Default.CheckmarkCircle,
+                icon = Icons.Outlined.CheckCircle,
                 title = "评论正常",
                 description = "您的评论可以被其他用户正常看到。",
                 color = FraudStatusColor.GREEN
             )
             CommentFraudStatus.SHADOW_BANNED -> FraudDialogInfo(
-                icon = CupertinoIcons.Default.EyeSlash,
+                icon = Icons.Outlined.VisibilityOff,
                 title = "评论被 ShadowBan",
                 description = "您的评论仅自己可见，其他用户无法看到。这可能是因为评论内容触发了阿瓦隆风控系统。\n\n建议：删除此评论并修改内容后重新发送。",
                 color = FraudStatusColor.RED
             )
             CommentFraudStatus.DELETED -> FraudDialogInfo(
-                icon = CupertinoIcons.Default.Trash,
+                icon = Icons.Outlined.Delete,
                 title = "评论被系统秒删",
                 description = "您的评论已被系统自动删除，包括您自己也无法看到。评论内容可能包含严格敏感词。",
                 color = FraudStatusColor.RED
             )
             CommentFraudStatus.UNDER_REVIEW -> FraudDialogInfo(
-                icon = CupertinoIcons.Default.Clock,
+                icon = Icons.Outlined.Schedule,
                 title = "评论疑似审核中",
                 description = "您的评论可能正在等待审核，目前其他用户暂时无法看到。审核通过后将自动显示。",
                 color = FraudStatusColor.ORANGE
             )
+            CommentFraudStatus.INVISIBLE -> FraudDialogInfo(
+                icon = Icons.Outlined.Visibility,
+                title = "评论被前端隐藏",
+                description = "您的评论数据存在，但已被前端隐藏，其他用户看不到。这通常是因为被 UP 主拉黑或评论被标记为隐身。\n\n建议：删除此评论。",
+                color = FraudStatusColor.ORANGE
+            )
             CommentFraudStatus.UNKNOWN -> FraudDialogInfo(
-                icon = CupertinoIcons.Default.QuestionmarkCircle,
+                icon = Icons.Outlined.HelpOutline,
                 title = "检测结果未知",
                 description = "无法确定评论状态，可能是网络问题导致检测失败。",
                 color = FraudStatusColor.GRAY
@@ -59,10 +70,10 @@ fun CommentFraudResultDialog(
         }
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Icon(
+            AppIcon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
@@ -75,7 +86,7 @@ fun CommentFraudResultDialog(
             )
         },
         title = {
-            Text(
+            AppText(
                 text = title,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -83,22 +94,21 @@ fun CommentFraudResultDialog(
             )
         },
         text = {
-            Text(
+            AppText(
                 text = description,
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 20.sp
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("知道了")
+            AppTextButton(onClick = onDismiss) {
+                AppText("知道了")
             }
         },
         dismissButton = {
             // 如果被 ShadowBan，提供快捷删除操作
             if (status == CommentFraudStatus.SHADOW_BANNED && onDeleteComment != null) {
-                TextButton(
+                AppTextButton(
                     onClick = {
                         onDeleteComment()
                         onDismiss()
@@ -107,7 +117,7 @@ fun CommentFraudResultDialog(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("删除评论")
+                    AppText("删除评论")
                 }
             }
         }
@@ -135,15 +145,15 @@ fun CommentFraudDetectingBanner(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(12.dp),
+            AdaptiveLoadingIndicator(
+                size = 12.dp,
                 strokeWidth = 1.5.dp,
                 color = MaterialTheme.colorScheme.tertiary
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
+            AppText(
                 text = "正在检测评论可见性…",
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.ui.animation
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -10,6 +11,26 @@ class DissolveRenderPolicyTest {
     fun `shouldWrapWithDissolveAnimation only when dissolving`() {
         assertTrue(shouldWrapWithDissolveAnimation(isDissolving = true))
         assertFalse(shouldWrapWithDissolveAnimation(isDissolving = false))
+    }
+
+    @Test
+    fun `scrolling video lists mount dissolve tracking only when requested`() {
+        listOf(
+            "feature/home/HomeCategoryPage.kt",
+            "feature/list/CommonListScreen.kt",
+            "feature/watchlater/WatchLaterScreen.kt",
+        ).forEach { relativePath ->
+            val source = listOf(
+                File("app/src/main/java/com/android/purebilibili/$relativePath"),
+                File("src/main/java/com/android/purebilibili/$relativePath"),
+            ).first { it.exists() }.readText()
+
+            assertTrue(source.contains("MaybeDissolvableVideoCard("), relativePath)
+            assertFalse(
+                Regex("(?m)^\\s*DissolvableVideoCard\\(").containsMatchIn(source),
+                relativePath,
+            )
+        }
     }
 
     @Test

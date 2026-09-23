@@ -8,6 +8,45 @@ import kotlin.test.assertTrue
 class VideoDetailInternalBvidSyncPolicyTest {
 
     @Test
+    fun routeVideoWithoutInternalCid_shouldUseRouteCid() {
+        assertEquals(
+            101L,
+            resolveVideoDetailPlaybackTargetCid(
+                routeBvid = "BV_ROUTE",
+                routeCid = 101L,
+                currentBvid = "BV_ROUTE",
+                currentBvidCid = 0L
+            )
+        )
+    }
+
+    @Test
+    fun internalCidSwitch_shouldOverrideStaleRouteCid() {
+        assertEquals(
+            202L,
+            resolveVideoDetailPlaybackTargetCid(
+                routeBvid = "BV_ROUTE",
+                routeCid = 101L,
+                currentBvid = "BV_ROUTE",
+                currentBvidCid = 202L
+            )
+        )
+    }
+
+    @Test
+    fun internalBvidWithoutResolvedCid_shouldNotReuseRouteCid() {
+        assertEquals(
+            0L,
+            resolveVideoDetailPlaybackTargetCid(
+                routeBvid = "BV_ROUTE",
+                routeCid = 101L,
+                currentBvid = "BV_TARGET",
+                currentBvidCid = 0L
+            )
+        )
+    }
+
+    @Test
     fun nonPortraitRegularPlaybackSwitch_shouldNotForceReloadFromRouteBvid() {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
@@ -101,6 +140,52 @@ class VideoDetailInternalBvidSyncPolicyTest {
                 currentBvidCid = 101L,
                 loadedBvid = "BV_NEXT",
                 loadedCid = 202L
+            )
+        )
+    }
+
+    @Test
+    fun loadedVideoMatchesInPageInitiatedBvid_shouldSkipInternalSync() {
+        assertTrue(
+            shouldSkipInternalBvidSyncForPlayerInitiatedAdvance(
+                loadedBvid = "BV_NEXT",
+                inPageInitiatedBvid = "BV_NEXT"
+            )
+        )
+    }
+
+    @Test
+    fun loadedVideoDiffersFromInPageInitiatedBvid_shouldKeepRestoreGuard() {
+        assertFalse(
+            shouldSkipInternalBvidSyncForPlayerInitiatedAdvance(
+                loadedBvid = "BV_CHILD",
+                inPageInitiatedBvid = "BV_NEXT"
+            )
+        )
+    }
+
+    @Test
+    fun blankOrMissingInPageInitiatedBvid_shouldKeepRestoreGuard() {
+        assertFalse(
+            shouldSkipInternalBvidSyncForPlayerInitiatedAdvance(
+                loadedBvid = "BV_NEXT",
+                inPageInitiatedBvid = null
+            )
+        )
+        assertFalse(
+            shouldSkipInternalBvidSyncForPlayerInitiatedAdvance(
+                loadedBvid = "BV_NEXT",
+                inPageInitiatedBvid = " "
+            )
+        )
+    }
+
+    @Test
+    fun inPageInitiatedBvidComparison_shouldTrimWhitespace() {
+        assertTrue(
+            shouldSkipInternalBvidSyncForPlayerInitiatedAdvance(
+                loadedBvid = "BV_NEXT",
+                inPageInitiatedBvid = " BV_NEXT "
             )
         )
     }

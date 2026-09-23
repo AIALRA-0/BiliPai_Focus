@@ -2,6 +2,8 @@
 package com.android.purebilibili.core.plugin
 
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -65,4 +67,18 @@ interface Plugin {
      */
     @Composable
     fun SettingsContent(): Unit = Unit
+
+    /**
+     * Modifier-aware settings entry point used by the built-in plugin detail screen.
+     *
+     * The no-argument entry point stays in place for older and experimental plugins.
+     * Implementations can override this overload when their root layout needs to consume
+     * the caller-owned detail-page constraints directly.
+     */
+    @Composable
+    fun SettingsContent(modifier: Modifier) {
+        Box(modifier = modifier) {
+            SettingsContent()
+        }
+    }
 }

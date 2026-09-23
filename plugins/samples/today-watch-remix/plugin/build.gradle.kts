@@ -1,11 +1,11 @@
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.android")
+    // AGP 9+ built-in Kotlin
 }
 
 android {
     namespace = "dev.example.todaywatchremix"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26

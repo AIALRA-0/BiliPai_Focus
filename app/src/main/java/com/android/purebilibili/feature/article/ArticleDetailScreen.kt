@@ -3,22 +3,26 @@ package com.android.purebilibili.feature.article
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.skeleton.ArticleDetailSkeleton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -35,12 +39,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.android.purebilibili.R
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.rememberAppBackIcon
@@ -48,6 +55,9 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.repository.ArticleDetailUiModel
 import com.android.purebilibili.data.repository.ArticleRepository
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.appDesktopFocusableItemVisuals
 
 private const val ARTICLE_BANNER_CORNER_RADIUS_DP = 20f
 private const val ARTICLE_BODY_IMAGE_CORNER_RADIUS_DP = 18f
@@ -102,13 +112,14 @@ fun ArticleDetailScreen(
         onBack(sharedReturnReady)
     }
 
-    AdaptiveScaffold(
+    AppScaffold(
+        blurContentReady = uiState !is ArticleDetailUiState.Loading,
         topBar = {
-            AdaptiveTopAppBar(
+            AppTopBar(
                 title = screenTitle,
                 navigationIcon = {
-                    IconButton(onClick = { onBack(sharedReturnReady) }) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
+                    AppIconButton(onClick = { onBack(sharedReturnReady) }) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 }
             )
@@ -116,14 +127,11 @@ fun ArticleDetailScreen(
     ) { paddingValues ->
         when (val state = uiState) {
             ArticleDetailUiState.Loading -> {
-                Box(
+                ArticleDetailSkeleton(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
+                )
             }
 
             is ArticleDetailUiState.Error -> {
@@ -137,12 +145,12 @@ fun ArticleDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
+                        AppText(
                             text = state.message,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Button(onClick = { retryToken++ }) {
-                            Text(retryLabel)
+                        AppButton(onClick = { retryToken++ }) {
+                            AppText(retryLabel)
                         }
                     }
                 }
@@ -180,10 +188,15 @@ private fun ArticleDetailContent(
     val coverTransitionKey = remember(article.articleId) {
         resolveArticleSharedTransitionKey(article.articleId, ArticleSharedElementSlot.COVER)
     }
-    val sharedReturnReady = remember(listState.firstVisibleItemIndex) {
-        shouldEnableArticleSharedReturn(
-            firstVisibleItemIndex = listState.firstVisibleItemIndex
-        )
+    // 用 derivedStateOf 而不是 remember(firstVisibleItemIndex)：
+    // 后者把「每滚过一个 item」都变成一次重组，而这里真正关心的只是一个布尔值，
+    // 它在整个滚动过程中至多翻转一次。derivedStateOf 只在结果变化时才失效。
+    val sharedReturnReady by remember {
+        derivedStateOf {
+            shouldEnableArticleSharedReturn(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex
+            )
+        }
     }
     val bodyImageUrls = remember(article.blocks) {
         collectArticleBodyImageUrls(article.blocks)
@@ -210,7 +223,7 @@ private fun ArticleDetailContent(
     }
     val baseBannerModifier = Modifier
         .fillMaxWidth()
-        .clip(RoundedCornerShape(20.dp))
+        .clip(AppShapes.container(ContainerLevel.Floating))
         .onGloballyPositioned { coordinates ->
             bannerSourceRect = coordinates.boundsInWindow()
         }
@@ -228,7 +241,7 @@ private fun ArticleDetailContent(
                 sharedContentState = rememberSharedContentState(key = coverTransitionKey),
                 animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                 boundsTransform = { _, _ -> spring(dampingRatio = 0.82f, stiffness = 260f) },
-                clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(20.dp))
+                clipInOverlayDuringTransition = OverlayClip(AppShapes.container(ContainerLevel.Floating))
             )
         }
     } else {
@@ -241,12 +254,11 @@ private fun ArticleDetailContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(paddingValues)
             .responsiveContentWidth(),
         state = listState,
         contentPadding = PaddingValues(
             start = 20.dp,
-            top = 12.dp,
+            top = paddingValues.calculateTopPadding() + 12.dp,
             end = 20.dp,
             bottom = bottomSafeAreaPadding
         ),
@@ -265,7 +277,7 @@ private fun ArticleDetailContent(
 
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
+                AppText(
                     text = article.title,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
@@ -273,24 +285,34 @@ private fun ArticleDetailContent(
                 if (article.authorName.isNotBlank() || article.publishTime.isNotBlank()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (article.authorFace.isNotBlank()) {
-                            AsyncImage(
-                                model = article.authorFace,
-                                contentDescription = article.authorName,
+                            Box(
                                 modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .clickable(enabled = article.authorMid > 0) {
+                                    .size(48.dp)
+                                    .appDesktopFocusableItemVisuals(enabled = article.authorMid > 0)
+                                    .clickable(
+                                        enabled = article.authorMid > 0,
+                                        role = Role.Button,
+                                    ) {
                                         if (article.authorMid > 0) onUserClick(article.authorMid)
                                     },
-                                contentScale = ContentScale.Crop
-                            )
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AsyncImage(
+                                    model = article.authorFace,
+                                    contentDescription = article.authorName,
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
                         }
                         Column(
                             modifier = Modifier.padding(start = if (article.authorFace.isNotBlank()) 12.dp else 0.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             if (article.authorName.isNotBlank()) {
-                                Text(
+                                AppText(
                                     text = article.authorName,
                                     style = MaterialTheme.typography.titleSmall,
                                     modifier = Modifier.clickable(enabled = article.authorMid > 0) {
@@ -299,7 +321,7 @@ private fun ArticleDetailContent(
                                 )
                             }
                             if (article.publishTime.isNotBlank()) {
-                                Text(
+                                AppText(
                                     text = article.publishTime,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -308,8 +330,8 @@ private fun ArticleDetailContent(
                         }
                     }
                 }
-                if (article.summary.isNotBlank() && article.blocks.none { it is ArticleContentBlock.Paragraph && it.text == article.summary }) {
-                    Text(
+                if (shouldShowArticleSummary(article.summary, article.blocks)) {
+                    AppText(
                         text = article.summary,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -321,7 +343,7 @@ private fun ArticleDetailContent(
         itemsIndexed(article.blocks, key = { index, _ -> index }) { index, block ->
             when (block) {
                 is ArticleContentBlock.Heading -> {
-                    Text(
+                    AppText(
                         text = block.text,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
@@ -329,11 +351,50 @@ private fun ArticleDetailContent(
                 }
 
                 is ArticleContentBlock.Paragraph -> {
-                    Text(
+                    AppText(
                         text = block.text,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                }
+
+                is ArticleContentBlock.Quote -> {
+                    AppText(
+                        text = block.text,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 12.dp)
+                    )
+                }
+
+                is ArticleContentBlock.ListBlock -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        block.items.forEachIndexed { itemIndex, item ->
+                            val prefix = if (block.ordered) "${itemIndex + 1}. " else "• "
+                            AppText(
+                                text = prefix + item,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                is ArticleContentBlock.Code -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(AppShapes.container(ContainerLevel.Card))
+                            .background(AppSurfaceTokens.surfaceContainer())
+                            .horizontalScroll(rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        AppText(
+                            text = block.content,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
                 is ArticleContentBlock.Image -> {
@@ -353,7 +414,7 @@ private fun ArticleDetailContent(
                                     Modifier
                                 }
                             )
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(AppShapes.container(ContainerLevel.Card))
                             .onGloballyPositioned { coordinates ->
                                 bodyImageSourceRects[index] = coordinates.boundsInWindow()
                             }

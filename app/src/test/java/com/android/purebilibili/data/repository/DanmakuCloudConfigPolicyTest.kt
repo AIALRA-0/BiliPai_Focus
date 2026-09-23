@@ -32,7 +32,17 @@ class DanmakuCloudConfigPolicyTest {
         assertEquals(1.0f, payload.opacity)
         assertEquals(75, payload.dmArea)
         assertEquals(1.6f, payload.speedPlus)
-        assertEquals(0.4f, payload.fontSize)
+        // ≤50% 上云抬到 0.51，避免 B 站 API 拒绝
+        assertEquals(0.51f, payload.fontSize)
+    }
+
+    @Test
+    fun mapDanmakuFontScaleToCloudFontSize_rejectsApiFloorAtOrBelowHalf() {
+        assertEquals(0.51f, mapDanmakuFontScaleToCloudFontSize(0.3f))
+        assertEquals(0.51f, mapDanmakuFontScaleToCloudFontSize(0.5f))
+        assertEquals(0.501f, mapDanmakuFontScaleToCloudFontSize(0.501f), 0.0001f)
+        assertEquals(1.0f, mapDanmakuFontScaleToCloudFontSize(1.0f))
+        assertEquals(1.6f, mapDanmakuFontScaleToCloudFontSize(2.0f))
     }
 
     @Test

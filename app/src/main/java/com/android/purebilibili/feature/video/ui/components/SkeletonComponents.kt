@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,9 +22,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.HomeFeedCardStyle
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
+import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.video.ui.VideoDetailShapes
 
 /**
  *  骨架屏组件 - iOS 风格加载占位
@@ -35,9 +44,10 @@ private val LocalVideoSkeletonPulse = staticCompositionLocalOf { 0.5f }
 @Composable
 fun ShimmerContainer(
     modifier: Modifier = Modifier,
+    animated: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val pulse = rememberVideoSkeletonPulse()
+    val pulse = if (animated) rememberVideoSkeletonPulse() else 0.5f
     CompositionLocalProvider(LocalVideoSkeletonPulse provides pulse) {
         Box(modifier = modifier) {
             content()
@@ -68,8 +78,11 @@ fun SkeletonCircle(size: Dp = 48.dp) {
  *  视频详情页内容骨架屏（不包含播放器区域）
  */
 @Composable
-fun VideoDetailSkeleton() {
-    ShimmerContainer(modifier = Modifier.fillMaxSize()) {
+fun VideoDetailSkeleton(animated: Boolean = true) {
+    ShimmerContainer(
+        modifier = Modifier.fillMaxSize(),
+        animated = animated,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -86,8 +99,8 @@ fun VideoDetailSkeleton() {
                 VideoDetailActionButtonsSkeleton()
             }
             VideoDetailRelatedHeaderSkeleton()
-            repeat(3) {
-                RelatedVideoItemSkeleton()
+            repeat(2) {
+                RelatedVideoGridRowSkeleton()
             }
         }
     }
@@ -227,65 +240,64 @@ private fun VideoDetailRelatedHeaderSkeleton() {
 }
 
 @Composable
-private fun RelatedVideoItemSkeleton() {
-    Box(
+private fun RelatedVideoGridRowSkeleton() {
+    val context = LocalContext.current
+    val homeFeedCardStyle by SettingsManager
+        .getHomeFeedCardStyle(context)
+        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
+    val cardLayout = remember(homeFeedCardStyle) {
+        resolveHomeFeedCardLayout(homeFeedCardStyle)
+    }
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp)
+            .padding(horizontal = cardLayout.outerPaddingDp.dp, vertical = 4.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(5.dp)
-        ) {
-            val relatedCoverWidth = 130.dp
-            val relatedCoverHeight = relatedCoverWidth / VIDEO_SHARED_COVER_ASPECT_RATIO
-            SkeletonBlock(
-                modifier = Modifier
-                    .width(relatedCoverWidth)
-                    .height(relatedCoverHeight),
-                shape = RoundedCornerShape(12.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = relatedCoverHeight)
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        SkeletonBox(modifier = Modifier.fillMaxWidth(), height = 16.dp, cornerRadius = 8.dp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        SkeletonBox(modifier = Modifier.fillMaxWidth(0.82f), height = 16.dp, cornerRadius = 8.dp)
-                    }
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            SkeletonBlock(modifier = Modifier.size(16.dp), shape = CircleShape)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            SkeletonBox(modifier = Modifier.width(84.dp), height = 14.dp, cornerRadius = 7.dp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            SkeletonBox(modifier = Modifier.width(52.dp), height = 13.dp, cornerRadius = 7.dp)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            SkeletonBox(modifier = Modifier.width(52.dp), height = 13.dp, cornerRadius = 7.dp)
-                        }
-                    }
-                }
-            }
-        }
+        RelatedVideoItemSkeleton(
+            modifier = Modifier.fillMaxWidth(),
+            coverAspectRatio = cardLayout.coverAspectRatio,
+        )
     }
+}
+
+@Composable
+private fun RelatedVideoItemSkeleton(
+    modifier: Modifier = Modifier,
+    @Suppress("UNUSED_PARAMETER") coverAspectRatio: Float = RELATED_VIDEO_CARD_COVER_ASPECT_RATIO,
+) {
+    HorizontalVideoCardFrame(
+        modifier = modifier
+            .clip(VideoDetailShapes.contentCard())
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(8.dp),
+        coverContent = {
+            SkeletonBlock(
+                modifier = Modifier.fillMaxSize(),
+                shape = VideoDetailShapes.media(),
+            )
+        },
+        infoVerticalArrangement = Arrangement.spacedBy(4.dp),
+        infoContent = {
+            SkeletonBox(modifier = Modifier.fillMaxWidth(), height = 16.dp, cornerRadius = 8.dp)
+            SkeletonBox(modifier = Modifier.fillMaxWidth(0.82f), height = 16.dp, cornerRadius = 8.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SkeletonBlock(modifier = Modifier.size(16.dp), shape = CircleShape)
+                Spacer(modifier = Modifier.width(6.dp))
+                SkeletonBox(modifier = Modifier.width(72.dp), height = 14.dp, cornerRadius = 7.dp)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SkeletonBox(modifier = Modifier.width(48.dp), height = 13.dp, cornerRadius = 7.dp)
+                Spacer(modifier = Modifier.width(12.dp))
+                SkeletonBox(modifier = Modifier.width(48.dp), height = 13.dp, cornerRadius = 7.dp)
+            }
+        },
+    )
 }
 
 @Composable
 private fun SkeletonBlock(
     modifier: Modifier,
-    shape: Shape = RoundedCornerShape(8.dp)
+    shape: Shape = AppShapes.container(ContainerLevel.Chip)
 ) {
     Box(
         modifier = modifier
@@ -296,6 +308,9 @@ private fun SkeletonBlock(
 
 @Composable
 private fun rememberVideoSkeletonPulse(): Float {
+    if (com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()) {
+        return com.android.purebilibili.core.ui.skeleton.rememberGentleSkeletonPulse().value
+    }
     val transition = rememberInfiniteTransition(label = "videoSkeletonPulse")
     val pulse by transition.animateFloat(
         initialValue = 0f,

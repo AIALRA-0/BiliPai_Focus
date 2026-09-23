@@ -1,11 +1,69 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoCommentSheetHostPolicyTest {
+
+    @Test
+    fun `main comment header occupies layout space above the scrolling list`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt"
+        ).readText()
+        val mainListSource = source
+            .substringAfter("internal fun VideoCommentMainList(")
+            .substringBefore("private fun VideoCommentBackToTopButton(")
+
+        val headerIndex = mainListSource.indexOf("CommentSortHeader(")
+        val listIndex = mainListSource.indexOf("LazyColumn(")
+        assertTrue(mainListSource.contains("Column(modifier = Modifier.fillMaxSize())"))
+        assertTrue(headerIndex >= 0 && headerIndex < listIndex)
+        assertFalse(mainListSource.contains(".zIndex("))
+    }
+
+    @Test
+    fun `thread detail return keeps the hoisted main comment list state`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt"
+        ).readText()
+
+        assertTrue(source.contains("val mainCommentListState = rememberLazyListState()"))
+        assertTrue(source.contains("listState = mainCommentListState"))
+        assertFalse(source.contains("mainListScrollToTopRequest"))
+    }
+
+    @Test
+    fun `predictive back pops conversation then thread then the sheet`() {
+        assertEquals(
+            VideoCommentPredictiveBackTarget.CLOSE_CONVERSATION,
+            resolveVideoCommentPredictiveBackTarget(
+                subReplyVisible = true,
+                conversationActive = true
+            )
+        )
+        assertEquals(
+            VideoCommentPredictiveBackTarget.CLOSE_THREAD,
+            resolveVideoCommentPredictiveBackTarget(
+                subReplyVisible = true,
+                conversationActive = false
+            )
+        )
+        assertEquals(
+            VideoCommentPredictiveBackTarget.DISMISS_SHEET,
+            resolveVideoCommentPredictiveBackTarget(
+                subReplyVisible = false,
+                conversationActive = false
+            )
+        )
+        assertEquals(0.4f, resolveVideoCommentPredictiveBackProgress(inProgress = true, progress = 0.4f))
+        assertEquals(0f, resolveVideoCommentPredictiveBackProgress(inProgress = false, progress = 0.4f))
+        assertEquals(40f, resolveCommentThreadPredictiveBackOffsetY(progress = 0.4f, heightPx = 100f))
+        assertEquals(1f, resolveCommentThreadCoveredBlurProgress(threadBackProgress = 0f))
+        assertEquals(0f, resolveCommentThreadCoveredBlurProgress(threadBackProgress = 1f))
+    }
 
     @Test
     fun `host should stay hidden when neither main sheet nor thread detail is visible`() {
@@ -101,6 +159,19 @@ class VideoCommentSheetHostPolicyTest {
     }
 
     @Test
+    fun `overridden scrim alpha should suppress shadow while backdrop tap stays intercepted`() {
+        val shown = resolveVideoCommentSheetHostOverlayVisual(
+            mainSheetVisible = true,
+            presentationProgress = 1f,
+            maxScrimAlphaOverride = 0f
+        )
+        assertEquals(0f, shown.scrimAlpha)
+        // 点击背景关闭仍由 mainSheetVisible 控制，不受 scrim 覆盖影响。
+        assertTrue(shouldInterceptVideoCommentSheetHostBackdropTap(mainSheetVisible = true))
+        assertTrue(shouldDismissVideoCommentSheetHostOnBackdropTap(mainSheetVisible = true))
+    }
+
+    @Test
     fun `thread only detail should stay below the reserved top area`() {
         assertEquals(
             0.55f,
@@ -128,13 +199,25 @@ class VideoCommentSheetHostPolicyTest {
     }
 
     @Test
-    fun `embedded portrait pager thread detail covers content when top reserve is not measured`() {
+    fun `embedded portrait pager thread detail keeps drawer height when top reserve is not measured`() {
         assertEquals(
-            1f,
+            0.60f,
             resolveVideoCommentSheetHostHeightFraction(
                 hostContent = VideoCommentSheetHostContent.THREAD_DETAIL,
                 mainSheetVisible = true,
                 screenHeightPx = 1000,
+                topReservedPx = 0
+            )
+        )
+    }
+
+    @Test
+    fun `embedded portrait pager thread detail pixel height matches main comment drawer`() {
+        assertEquals(
+            720,
+            resolveVideoCommentSheetHostHeightPx(
+                hostContent = VideoCommentSheetHostContent.THREAD_DETAIL,
+                hostHeightPx = 1200,
                 topReservedPx = 0
             )
         )
@@ -210,6 +293,16 @@ class VideoCommentSheetHostPolicyTest {
         )
         assertFalse(
             shouldDismissVideoCommentSheetHostOnBackdropTap(
+                mainSheetVisible = false
+            )
+        )
+        assertTrue(
+            shouldInterceptVideoCommentSheetHostBackdropTap(
+                mainSheetVisible = true
+            )
+        )
+        assertFalse(
+            shouldInterceptVideoCommentSheetHostBackdropTap(
                 mainSheetVisible = false
             )
         )
@@ -302,6 +395,101 @@ class VideoCommentSheetHostPolicyTest {
             resolveVideoCommentSheetPresentationProgress(
                 hostVisibilityProgress = -1f,
                 dragVisibilityProgress = 1f
+            )
+        )
+    }
+
+    @Test
+    fun `sheet presentation progress prefers drag progress while finger or dismiss settling is active`() {
+        assertEquals(
+            0.4f,
+            resolveVideoCommentSheetPresentationProgress(
+                hostVisibilityProgress = 1f,
+                dragVisibilityProgress = 0.4f,
+                preferDragProgress = true
+            )
+        )
+    }
+
+    @Test
+    fun `dismiss drag settling keeps drag visibility until sheet offset reaches bottom`() {
+        assertEquals(
+            0.5f,
+            resolveVideoCommentSheetDragVisibilityProgress(
+                hostContent = VideoCommentSheetHostContent.MAIN_LIST,
+                mainSheetVisible = true,
+                isDismissDragSettling = true,
+                sheetOffsetPx = 300f,
+                sheetHeightPx = 600f,
+                hostVisibilityProgress = 1f
+            )
+        )
+        assertFalse(
+            shouldCompletePortraitCommentDismissDragSettling(
+                sheetOffsetPx = 300f,
+                sheetHeightPx = 600f
+            )
+        )
+        assertTrue(
+            shouldCompletePortraitCommentDismissDragSettling(
+                sheetOffsetPx = 590f,
+                sheetHeightPx = 600f
+            )
+        )
+    }
+
+    @Test
+    fun `sheet presentation progress avoids squared host fade on exit`() {
+        assertEquals(
+            0.4f,
+            resolveVideoCommentSheetPresentationProgress(
+                hostVisibilityProgress = 0.4f,
+                dragVisibilityProgress = 0.4f
+            )
+        )
+        assertEquals(
+            0f,
+            resolveVideoCommentSheetPresentationProgress(
+                hostVisibilityProgress = 0f,
+                dragVisibilityProgress = 0f
+            )
+        )
+    }
+
+    @Test
+    fun `host exit visibility follows host fade instead of snapping drag progress to expanded`() {
+        assertEquals(
+            0.4f,
+            resolveVideoCommentSheetDragVisibilityProgress(
+                hostContent = VideoCommentSheetHostContent.HIDDEN,
+                mainSheetVisible = false,
+                isDismissDragSettling = false,
+                sheetOffsetPx = 0f,
+                sheetHeightPx = 600f,
+                hostVisibilityProgress = 0.4f
+            )
+        )
+    }
+
+    @Test
+    fun `host exit after drag dismiss keeps video expanded while sheet fades out`() {
+        assertEquals(
+            0f,
+            resolveVideoCommentSheetDragVisibilityProgress(
+                hostContent = VideoCommentSheetHostContent.HIDDEN,
+                mainSheetVisible = false,
+                isDismissDragSettling = false,
+                sheetOffsetPx = 590f,
+                sheetHeightPx = 600f,
+                hostVisibilityProgress = 0.6f,
+                isDragDismissExitPending = true
+            )
+        )
+        assertEquals(
+            0f,
+            resolveVideoCommentSheetPresentationProgress(
+                hostVisibilityProgress = 0.6f,
+                dragVisibilityProgress = 0f
             )
         )
     }

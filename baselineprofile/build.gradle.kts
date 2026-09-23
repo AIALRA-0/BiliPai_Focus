@@ -1,6 +1,6 @@
 plugins {
     id("com.android.test")
-    id("org.jetbrains.kotlin.android")
+    // AGP 9+ built-in Kotlin
 }
 
 android {
@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR,LOW_BATTERY"
         // Enable Perfetto composition tracing in macrobenchmark runs when needed.

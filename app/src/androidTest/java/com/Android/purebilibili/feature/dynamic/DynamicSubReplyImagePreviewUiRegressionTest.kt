@@ -38,6 +38,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                         .size(width = 390.dp, height = 844.dp)
                 ) {
                     DynamicSubReplyPreviewHost(
+                        onSortModeChange = {},
                         state = SubReplyUiState(
                             visible = true,
                             rootReply = ReplyItem(
@@ -108,6 +109,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                         .size(width = 390.dp, height = 844.dp)
                 ) {
                     DynamicSubReplyPreviewHost(
+                        onSortModeChange = {},
                         state = SubReplyUiState(
                             visible = true,
                             rootReply = ReplyItem(

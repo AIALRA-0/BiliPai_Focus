@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_blue_snow_maid_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_blue_snow_maid_front_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_blue_snow_maid_front_monochrome" />
+</adaptive-icon>

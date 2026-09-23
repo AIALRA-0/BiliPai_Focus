@@ -29,11 +29,30 @@ class DynamicCommentLoadPolicyTest {
 
         val resolved = resolveDynamicCommentPayload(
             data = data,
-            fallbackCount = 29
+            fallbackCount = 29,
+            includeHotReplies = true
         )
 
         assertEquals(listOf(100L, 101L, 102L), resolved.replies.map { it.rpid })
         assertEquals(29, resolved.totalCount)
+    }
+
+    @Test
+    fun `dynamic newest comment payload skips hot replies to preserve time order`() {
+        val data = ReplyData(
+            top = ReplyTop(upper = ReplyItem(rpid = 100L)),
+            hots = listOf(ReplyItem(rpid = 101L)),
+            replies = listOf(ReplyItem(rpid = 102L), ReplyItem(rpid = 103L))
+        )
+
+        val resolved = resolveDynamicCommentPayload(
+            data = data,
+            fallbackCount = 0,
+            includeHotReplies = false
+        )
+
+        assertEquals(listOf(100L, 102L, 103L), resolved.replies.map { it.rpid })
+        assertEquals(3, resolved.totalCount)
     }
 
     @Test
@@ -74,12 +93,60 @@ class DynamicCommentLoadPolicyTest {
     }
 
     @Test
+    fun `detail comments load more only when near end and not already loading`() {
+        assertEquals(
+            true,
+            shouldLoadMoreDynamicDetailComments(
+                lastVisibleIndex = 18,
+                itemCount = 20,
+                loadedCount = 20,
+                totalCount = 138,
+                isLoading = false,
+                isLoadingMore = false,
+            )
+        )
+        assertEquals(
+            false,
+            shouldLoadMoreDynamicDetailComments(
+                lastVisibleIndex = 18,
+                itemCount = 20,
+                loadedCount = 20,
+                totalCount = 138,
+                isLoading = false,
+                isLoadingMore = true,
+            )
+        )
+        assertEquals(
+            false,
+            shouldLoadMoreDynamicDetailComments(
+                lastVisibleIndex = 10,
+                itemCount = 20,
+                loadedCount = 20,
+                totalCount = 138,
+                isLoading = false,
+                isLoadingMore = false,
+            )
+        )
+        assertEquals(
+            false,
+            shouldLoadMoreDynamicDetailComments(
+                lastVisibleIndex = 18,
+                itemCount = 20,
+                loadedCount = 138,
+                totalCount = 138,
+                isLoading = false,
+                isLoadingMore = false,
+            )
+        )
+    }
+
+    @Test
     fun `dynamic main comments end after empty page without larger total`() {
         val isEnd = resolveDynamicMainCommentPageEnd(
             cursorIsEnd = false,
             fetchedReplyCount = 0,
             loadedReplyCount = 20,
-            totalCount = 20
+            totalCount = 138
         )
 
         assertEquals(true, isEnd)

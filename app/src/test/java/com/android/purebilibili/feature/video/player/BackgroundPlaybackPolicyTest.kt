@@ -133,6 +133,20 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun audioBarKeepsDetailPlaybackAcrossNavigationExit() {
+        assertTrue(
+            shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = false,
+                mode = SettingsManager.MiniPlayerMode.OFF,
+                isActive = true,
+                isLeavingByNavigation = true,
+                stopPlaybackOnExit = false,
+                keepForAudioNowPlaying = true,
+            )
+        )
+    }
+
+    @Test
     fun inAppMiniModeCanFallbackToBackgroundAudioWhenAppLeavesForeground() {
         assertTrue(
             shouldContinueBackgroundAudioByPolicy(
@@ -278,6 +292,309 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun shortBackgroundLightMode_keepsVideoTrackUntilThreshold() {
+        assertFalse(
+            shouldApplyHeavyBackgroundVideoOptimization(
+                backgroundElapsedMs = 0L,
+                shortBackgroundLightModeMs = SHORT_BACKGROUND_LIGHT_MODE_MS
+            )
+        )
+        assertFalse(
+            shouldApplyHeavyBackgroundVideoOptimization(
+                backgroundElapsedMs = SHORT_BACKGROUND_LIGHT_MODE_MS - 1L,
+                shortBackgroundLightModeMs = SHORT_BACKGROUND_LIGHT_MODE_MS
+            )
+        )
+        assertTrue(
+            shouldApplyHeavyBackgroundVideoOptimization(
+                backgroundElapsedMs = SHORT_BACKGROUND_LIGHT_MODE_MS,
+                shortBackgroundLightModeMs = SHORT_BACKGROUND_LIGHT_MODE_MS
+            )
+        )
+    }
+
+    @Test
+    fun heavyBackgroundVideoOptimization_requiresDisableIntentAndElapsedThreshold() {
+        assertFalse(
+            shouldRunHeavyBackgroundVideoOptimization(
+                shouldDisableVideoTrack = true,
+                stillInBackground = true,
+                backgroundElapsedMs = 1_000L
+            )
+        )
+        assertFalse(
+            shouldRunHeavyBackgroundVideoOptimization(
+                shouldDisableVideoTrack = true,
+                stillInBackground = false,
+                backgroundElapsedMs = SHORT_BACKGROUND_LIGHT_MODE_MS
+            )
+        )
+        assertFalse(
+            shouldRunHeavyBackgroundVideoOptimization(
+                shouldDisableVideoTrack = false,
+                stillInBackground = true,
+                backgroundElapsedMs = SHORT_BACKGROUND_LIGHT_MODE_MS
+            )
+        )
+        assertTrue(
+            shouldRunHeavyBackgroundVideoOptimization(
+                shouldDisableVideoTrack = true,
+                stillInBackground = true,
+                backgroundElapsedMs = SHORT_BACKGROUND_LIGHT_MODE_MS
+            )
+        )
+    }
+
+    @Test
+    fun memoryPressureTrimLevels_forceHeavyBackgroundVideoOptimization() {
+        assertFalse(
+            shouldForceHeavyBackgroundVideoOptimizationOnTrimLevel(
+                android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+            )
+        )
+        assertFalse(
+            shouldForceHeavyBackgroundVideoOptimizationOnTrimLevel(
+                android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE
+            )
+        )
+        assertTrue(
+            shouldForceHeavyBackgroundVideoOptimizationOnTrimLevel(
+                android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW
+            )
+        )
+        assertTrue(
+            shouldForceHeavyBackgroundVideoOptimizationOnTrimLevel(
+                android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL
+            )
+        )
+        assertTrue(
+            shouldForceHeavyBackgroundVideoOptimizationOnTrimLevel(
+                android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+            )
+        )
+        assertTrue(
+            shouldForceHeavyBackgroundVideoOptimizationOnTrimLevel(
+                android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE
+            )
+        )
+        assertTrue(
+            shouldForceHeavyBackgroundVideoOptimizationOnTrimLevel(
+                android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE
+            )
+        )
+    }
+
+    @Test
+    fun memoryPressure_canBypassShortBackgroundLightModeWindow() {
+        assertTrue(
+            shouldRunHeavyBackgroundVideoOptimization(
+                shouldDisableVideoTrack = true,
+                stillInBackground = true,
+                backgroundElapsedMs = 1_000L,
+                forceDueToMemoryPressure = true
+            )
+        )
+        assertFalse(
+            shouldRunHeavyBackgroundVideoOptimization(
+                shouldDisableVideoTrack = true,
+                stillInBackground = false,
+                backgroundElapsedMs = 1_000L,
+                forceDueToMemoryPressure = true
+            )
+        )
+        assertFalse(
+            shouldRunHeavyBackgroundVideoOptimization(
+                shouldDisableVideoTrack = false,
+                stillInBackground = true,
+                backgroundElapsedMs = 1_000L,
+                forceDueToMemoryPressure = true
+            )
+        )
+    }
+
+    @Test
+    fun pendingHeavyOptimization_shouldApplyOnMemoryPressure() {
+        assertTrue(
+            shouldApplyPendingHeavyBackgroundVideoOptimizationOnMemoryPressure(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = false,
+                shouldDisableVideoTrack = true,
+                forceDueToMemoryPressure = true
+            )
+        )
+        assertFalse(
+            shouldApplyPendingHeavyBackgroundVideoOptimizationOnMemoryPressure(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = true,
+                shouldDisableVideoTrack = true,
+                forceDueToMemoryPressure = true
+            )
+        )
+        assertFalse(
+            shouldApplyPendingHeavyBackgroundVideoOptimizationOnMemoryPressure(
+                isLowMemoryMode = false,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = false,
+                shouldDisableVideoTrack = true,
+                forceDueToMemoryPressure = true
+            )
+        )
+        assertFalse(
+            shouldApplyPendingHeavyBackgroundVideoOptimizationOnMemoryPressure(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = false,
+                shouldDisableVideoTrack = true,
+                forceDueToMemoryPressure = false
+            )
+        )
+    }
+
+    @Test
+    fun idleBackgroundRelease_stopsAndClearsSurfaceWhenNoBackgroundAudio() {
+        assertTrue(
+            shouldStopIdlePlaybackForBackgroundOptimization(
+                shouldContinueBackgroundAudio = false,
+                wasPlaybackActive = false
+            )
+        )
+        assertFalse(
+            shouldStopIdlePlaybackForBackgroundOptimization(
+                shouldContinueBackgroundAudio = true,
+                wasPlaybackActive = true
+            )
+        )
+        assertTrue(shouldClearVideoSurfaceOnEnterBackground(shouldDisableVideoTrack = true))
+        assertFalse(shouldClearVideoSurfaceOnEnterBackground(shouldDisableVideoTrack = false))
+    }
+
+    @Test
+    fun pausedSession_withBackgroundAudioSettingOn_stillIdleReleases() {
+        assertFalse(
+            shouldRetainBackgroundAudioSession(
+                shouldContinueBackgroundAudio = true,
+                wasPlaybackActive = false
+            )
+        )
+        assertTrue(
+            shouldStopIdlePlaybackForBackgroundOptimization(
+                shouldContinueBackgroundAudio = true,
+                wasPlaybackActive = false
+            )
+        )
+        assertTrue(shouldClearVideoSurfaceOnEnterBackground(shouldDisableVideoTrack = true))
+        assertTrue(
+            shouldUpgradeHeavyBackgroundOptimizationToIdleRelease(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = true,
+                alreadyAppliedIdleRelease = false,
+                shouldContinueBackgroundAudio = true,
+                wasPlaybackActive = false,
+                requestIdlePlaybackRelease = true
+            )
+        )
+        assertFalse(
+            shouldUpgradeHeavyBackgroundOptimizationToIdleRelease(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = true,
+                alreadyAppliedIdleRelease = false,
+                shouldContinueBackgroundAudio = true,
+                wasPlaybackActive = true,
+                requestIdlePlaybackRelease = true
+            )
+        )
+    }
+
+    @Test
+    fun criticalMemoryPressure_canUpgradeAlreadyHeavySessionToIdleRelease() {
+        assertTrue(
+            shouldUpgradeHeavyBackgroundOptimizationToIdleRelease(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = true,
+                alreadyAppliedIdleRelease = false,
+                shouldContinueBackgroundAudio = false,
+                wasPlaybackActive = false,
+                requestIdlePlaybackRelease = true
+            )
+        )
+        assertFalse(
+            shouldUpgradeHeavyBackgroundOptimizationToIdleRelease(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = true,
+                alreadyAppliedIdleRelease = true,
+                shouldContinueBackgroundAudio = false,
+                wasPlaybackActive = false,
+                requestIdlePlaybackRelease = true
+            )
+        )
+        assertFalse(
+            shouldUpgradeHeavyBackgroundOptimizationToIdleRelease(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = true,
+                alreadyAppliedIdleRelease = false,
+                shouldContinueBackgroundAudio = true,
+                wasPlaybackActive = true,
+                requestIdlePlaybackRelease = true
+            )
+        )
+        assertFalse(
+            shouldUpgradeHeavyBackgroundOptimizationToIdleRelease(
+                isLowMemoryMode = true,
+                stillInBackground = true,
+                alreadyAppliedHeavyOptimization = false,
+                alreadyAppliedIdleRelease = false,
+                shouldContinueBackgroundAudio = false,
+                wasPlaybackActive = false,
+                requestIdlePlaybackRelease = true
+            )
+        )
+    }
+
+    @Test
+    fun idleStoppedSession_preparesOnForegroundWhenMediaItemsRemain() {
+        assertTrue(
+            shouldPreparePlaybackOnForegroundResume(
+                hasForegroundResumeIntent = true,
+                hasMediaItems = true,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+        assertFalse(
+            shouldPreparePlaybackOnForegroundResume(
+                hasForegroundResumeIntent = false,
+                hasMediaItems = true,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+    }
+
+    @Test
+    fun shortBackgroundForegroundResume_skipsTrackRestoreAndFrameSeek() {
+        assertFalse(
+            shouldRefreshVideoFrameOnEnterForeground(
+                hadSavedTrackParams = false,
+                hasMediaItems = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldKickPlaybackAfterForegroundTrackRestore(
+                hadSavedTrackParams = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY,
+                hasForegroundResumeIntent = true
+            )
+        )
+    }
+
+    @Test
     fun backgroundEntry_doesNotPauseBufferingWhenBackgroundAudioShouldContinue() {
         assertFalse(
             shouldPauseBufferingOnEnterBackground(
@@ -320,25 +637,9 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
-    fun backgroundEntryClearsVideoSurface_onlyForAudioOnlyBackgroundPlayback() {
-        assertTrue(
-            shouldClearVideoSurfaceOnEnterBackground(
-                shouldDisableVideoTrack = true,
-                shouldContinueBackgroundAudio = true
-            )
-        )
-        assertFalse(
-            shouldClearVideoSurfaceOnEnterBackground(
-                shouldDisableVideoTrack = true,
-                shouldContinueBackgroundAudio = false
-            )
-        )
-        assertFalse(
-            shouldClearVideoSurfaceOnEnterBackground(
-                shouldDisableVideoTrack = false,
-                shouldContinueBackgroundAudio = true
-            )
-        )
+    fun backgroundEntryClearsVideoSurface_whenVideoTrackDisabled() {
+        assertTrue(shouldClearVideoSurfaceOnEnterBackground(shouldDisableVideoTrack = true))
+        assertFalse(shouldClearVideoSurfaceOnEnterBackground(shouldDisableVideoTrack = false))
     }
 
     @Test
@@ -383,6 +684,18 @@ class BackgroundPlaybackPolicyTest {
                 hadSavedTrackParams = true,
                 hasMediaItems = true,
                 playbackState = Player.STATE_IDLE
+            )
+        )
+    }
+
+    @Test
+    fun foregroundEntryDoesNotSeek_whenBackgroundAudioTimelineStayedActive() {
+        assertFalse(
+            shouldRefreshVideoFrameOnEnterForeground(
+                hadSavedTrackParams = true,
+                hasMediaItems = true,
+                playbackState = Player.STATE_READY,
+                retainedBackgroundAudio = true,
             )
         )
     }
@@ -539,6 +852,36 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun audioNowPlayingRetentionDoesNotOverrideExplicitStop() {
+        assertTrue(
+            shouldKeepPlaybackForAudioNowPlayingBar(
+                sessionActive = true,
+                barEnabled = true,
+            )
+        )
+        assertFalse(
+            shouldKeepPlaybackForAudioNowPlayingBar(
+                sessionActive = false,
+                barEnabled = true,
+            )
+        )
+        assertTrue(
+            shouldClearPlaybackNotificationOnNavigationExit(
+                mode = SettingsManager.MiniPlayerMode.OFF,
+                stopPlaybackOnExit = true,
+                keepForAudioNowPlaying = true,
+            )
+        )
+        assertTrue(
+            shouldClearPlaybackNotificationOnNavigationExit(
+                mode = SettingsManager.MiniPlayerMode.OFF,
+                stopPlaybackOnExit = true,
+                keepForAudioNowPlaying = false,
+            )
+        )
+    }
+
+    @Test
     fun navigationExitShouldClearPlaybackNotificationForOffAndPipButNotInAppModes() {
         assertTrue(
             shouldClearPlaybackNotificationOnNavigationExit(
@@ -600,16 +943,18 @@ class BackgroundPlaybackPolicyTest {
 
     @Test
     fun notificationIconShouldFollowSelectedAppIconKey() {
-        assertEquals(R.mipmap.ic_launcher_telegram_blue, resolveNotificationSmallIconRes("icon_telegram_blue"))
-        assertEquals(R.mipmap.ic_launcher_telegram_dark, resolveNotificationSmallIconRes("Dark"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("icon_blue_snow_maid"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_front_monochrome, resolveNotificationSmallIconRes("icon_blue_snow_maid_front"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("icon_telegram_blue"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("Dark"))
         assertEquals(R.mipmap.ic_launcher_bilipai, resolveNotificationSmallIconRes("icon_bilipai"))
         assertEquals(R.mipmap.ic_launcher_bilipai_pink, resolveNotificationSmallIconRes("icon_bilipai_pink"))
         assertEquals(R.mipmap.ic_launcher_bilipai_white, resolveNotificationSmallIconRes("BiliPai White"))
         assertEquals(R.mipmap.ic_launcher_bilipai_monet, resolveNotificationSmallIconRes("BiliPai Monet"))
-        assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("Flat Material"))
-        assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("Neon"))
-        assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("Pink"))
-        assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("unknown_key"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("Flat Material"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("Neon"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("Pink"))
+        assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("unknown_key"))
     }
 
     @Test
@@ -626,7 +971,7 @@ class BackgroundPlaybackPolicyTest {
     @Test
     fun notificationIconShouldFallbackToIconKeyWhenLauncherIconMissing() {
         assertEquals(
-            R.mipmap.ic_launcher_3d,
+            R.mipmap.ic_launcher_blue_snow_maid_monochrome,
             resolveNotificationIconResByPriority(
                 launcherIconRes = 0,
                 fallbackIconKey = "Neon"

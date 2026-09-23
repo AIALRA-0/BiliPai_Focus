@@ -32,6 +32,7 @@ class VideoDetailDisposePolicyTest {
             shouldHandleVideoDetailDisposeAsNavigationExit(
                 isNavigatingToAudioMode = false,
                 isNavigatingToMiniMode = false,
+                isMiniModeActive = false,
                 isChangingConfigurations = false,
                 isNavigatingToVideo = false
             )
@@ -44,6 +45,7 @@ class VideoDetailDisposePolicyTest {
             shouldHandleVideoDetailDisposeAsNavigationExit(
                 isNavigatingToAudioMode = true,
                 isNavigatingToMiniMode = false,
+                isMiniModeActive = false,
                 isChangingConfigurations = false,
                 isNavigatingToVideo = false
             )
@@ -56,6 +58,20 @@ class VideoDetailDisposePolicyTest {
             shouldHandleVideoDetailDisposeAsNavigationExit(
                 isNavigatingToAudioMode = false,
                 isNavigatingToMiniMode = true,
+                isMiniModeActive = false,
+                isChangingConfigurations = false,
+                isNavigatingToVideo = false
+            )
+        )
+    }
+
+    @Test
+    fun disposeSkippedWhenMiniModeWasActivatedByNavigationLayer() {
+        assertFalse(
+            shouldHandleVideoDetailDisposeAsNavigationExit(
+                isNavigatingToAudioMode = false,
+                isNavigatingToMiniMode = false,
+                isMiniModeActive = true,
                 isChangingConfigurations = false,
                 isNavigatingToVideo = false
             )
@@ -68,6 +84,7 @@ class VideoDetailDisposePolicyTest {
             shouldHandleVideoDetailDisposeAsNavigationExit(
                 isNavigatingToAudioMode = false,
                 isNavigatingToMiniMode = false,
+                isMiniModeActive = false,
                 isChangingConfigurations = true,
                 isNavigatingToVideo = false
             )
@@ -80,6 +97,7 @@ class VideoDetailDisposePolicyTest {
             shouldHandleVideoDetailDisposeAsNavigationExit(
                 isNavigatingToAudioMode = false,
                 isNavigatingToMiniMode = false,
+                isMiniModeActive = false,
                 isChangingConfigurations = false,
                 isNavigatingToVideo = true
             )

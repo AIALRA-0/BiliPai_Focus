@@ -1,5 +1,6 @@
 // 文件路径: feature/video/ui/components/SpeedSelectionPanel.kt
 package com.android.purebilibili.feature.video.ui.components
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +12,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppSlider
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 //  已改用 MaterialTheme.colorScheme.primary
 
 /**
@@ -48,9 +55,9 @@ fun SpeedSelectionMenu(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    AppSurface(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
+        shape = AppShapes.container(ContainerLevel.Card),
         color = Color.Black.copy(alpha = 0.85f),
         shadowElevation = 8.dp
     ) {
@@ -59,14 +66,13 @@ fun SpeedSelectionMenu(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 标题
-            Text(
+            AppText(
                 text = "播放速度",
                 color = Color.White.copy(alpha = 0.7f),
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             
-            // 速度选项
             // 速度选项
             var isCustomMode by remember { mutableStateOf(currentSpeed !in PlaybackSpeed.OPTIONS && currentSpeed != 1.0f) }
             
@@ -76,16 +82,16 @@ fun SpeedSelectionMenu(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text(
+                    AppText(
                         text = "自定义: ${PlaybackSpeed.formatSpeedFull(currentSpeed)}",
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 18.sp,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     
                     // 滑块
-                    Slider(
+                    AppSlider(
                         value = currentSpeed,
                         onValueChange = onSpeedSelected,
                         valueRange = 0.1f..8.0f,
@@ -97,8 +103,8 @@ fun SpeedSelectionMenu(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("0.1x", color = Color.White.copy(0.5f), fontSize = 10.sp)
-                        Text("8.0x", color = Color.White.copy(0.5f), fontSize = 10.sp)
+                        AppText("0.1x", color = Color.White.copy(0.5f), style = MaterialTheme.typography.labelSmall)
+                        AppText("8.0x", color = Color.White.copy(0.5f), style = MaterialTheme.typography.labelSmall)
                     }
                     
                     Spacer(modifier = Modifier.height(16.dp))
@@ -107,7 +113,7 @@ fun SpeedSelectionMenu(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Button(
+                        AppButton(
                             onClick = { 
                                 val newSpeed = (currentSpeed - 0.1f).coerceAtLeast(0.1f)
                                 onSpeedSelected((newSpeed * 10).toInt() / 10f) 
@@ -115,10 +121,10 @@ fun SpeedSelectionMenu(
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("-0.1")
+                            AppText("-0.1")
                         }
                         
-                        Button(
+                        AppButton(
                             onClick = { 
                                 val newSpeed = (currentSpeed + 0.1f).coerceAtMost(8.0f)
                                 onSpeedSelected((newSpeed * 10).toInt() / 10f)
@@ -126,15 +132,15 @@ fun SpeedSelectionMenu(
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("+0.1")
+                            AppText("+0.1")
                         }
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     // 返回预设
-                    TextButton(onClick = { isCustomMode = false }) {
-                        Text("返回预设选项")
+                    AppTextButton(onClick = { isCustomMode = false }) {
+                        AppText("返回预设选项")
                     }
                 }
             } else {
@@ -147,21 +153,21 @@ fun SpeedSelectionMenu(
                 
                 PlaybackSpeed.OPTIONS.forEach { speed ->
                     val isSelected = speed == currentSpeed
-                    Surface(
+                    AppSurface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 2.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = AppShapes.container(ContainerLevel.Chip),
                         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent,
                         onClick = {
                             onSpeedSelected(speed)
                             onDismiss()
                         }
                     ) {
-                        Text(
+                        AppText(
                             text = PlaybackSpeed.formatSpeedFull(speed),
                             color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                         )
@@ -169,20 +175,20 @@ fun SpeedSelectionMenu(
                 }
                 
                 // 自定义按钮
-                Surface(
+                AppSurface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp), // 稍微分开一点
-                    shape = RoundedCornerShape(8.dp),
+                    shape = AppShapes.container(ContainerLevel.Chip),
                     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(0.3f)),
                     color = Color.Transparent,
                     onClick = { isCustomMode = true }
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
-                         Text(
+                         AppText(
                             text = "自定义倍速...",
                             color = Color.White.copy(0.9f),
-                            fontSize = 14.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
@@ -200,16 +206,16 @@ fun SpeedButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    AppSurface(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(6.dp),
+        shape = AppShapes.container(ContainerLevel.Chip),
         color = Color.Black.copy(alpha = 0.5f)
     ) {
-        Text(
+        AppText(
             text = PlaybackSpeed.formatSpeed(currentSpeed),
             color = if (currentSpeed != 1.0f) MaterialTheme.colorScheme.primary else Color.White,
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = if (currentSpeed != 1.0f) FontWeight.Bold else FontWeight.Normal,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
         )

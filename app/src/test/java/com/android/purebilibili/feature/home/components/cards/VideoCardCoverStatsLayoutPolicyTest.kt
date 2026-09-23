@@ -72,11 +72,76 @@ class VideoCardCoverStatsLayoutPolicyTest {
     }
 
     @Test
-    fun `cover overlay keeps original bottom padding without history progress bar`() {
+    fun `cover overlay keeps stable bottom padding without history progress bar`() {
         val layout = resolveVideoCardCoverOverlayBottomLayout(showHistoryProgressBar = false)
 
         assertEquals(2f, layout.historyProgressBarHeightDp, 0.0001f)
-        assertEquals(6f, layout.compactStatsBottomPaddingDp, 0.0001f)
-        assertEquals(10f, layout.floatingDurationBottomPaddingDp, 0.0001f)
+        assertEquals(10f, layout.compactStatsBottomPaddingDp, 0.0001f)
+        assertEquals(14f, layout.floatingDurationBottomPaddingDp, 0.0001f)
+    }
+
+    @Test
+    fun `duration stat pill expands width for hh mm ss text`() {
+        assertEquals(60f, resolveVideoCardDurationStatMinWidthDp("12:34"), 0.0001f)
+        assertEquals(68f, resolveVideoCardDurationStatMinWidthDp("1:25:10"), 0.0001f)
+    }
+
+    @Test
+    fun `duration stat pill keeps play and duration while danmaku and online yield on narrow covers`() {
+        val layout = resolveVideoCardCompactCoverStatsLayout(
+            availableWidthDp = 148f,
+            primaryStatText = "2.0亿",
+            secondaryStatText = "1.2万",
+            hasOnlineCount = true,
+            durationStatMinWidthDp = resolveVideoCardDurationStatMinWidthDp("12:34")
+        )
+
+        assertEquals(58f, layout.primaryMinWidthDp, 0.0001f)
+        assertEquals(false, layout.showSecondaryStat)
+        assertEquals(false, layout.showOnlineCount)
+        assertEquals(0f, layout.statsEndPaddingDp, 0.0001f)
+    }
+
+    @Test
+    fun `duration stat pill keeps danmaku when cover width allows`() {
+        val layout = resolveVideoCardCompactCoverStatsLayout(
+            availableWidthDp = 200f,
+            primaryStatText = "2.0亿",
+            secondaryStatText = "1.2万",
+            hasOnlineCount = true,
+            durationStatMinWidthDp = resolveVideoCardDurationStatMinWidthDp("12:34")
+        )
+
+        assertEquals(true, layout.showSecondaryStat)
+        assertEquals(false, layout.showOnlineCount)
+    }
+
+    @Test
+    fun `duration stat pill alone yields online count only when width is tight`() {
+        val layout = resolveVideoCardCompactCoverStatsLayout(
+            availableWidthDp = 160f,
+            primaryStatText = "2.0亿",
+            secondaryStatText = "1.2万",
+            hasOnlineCount = true,
+            durationStatMinWidthDp = resolveVideoCardDurationStatMinWidthDp("12:34")
+        )
+
+        assertEquals(false, layout.showSecondaryStat)
+        assertEquals(false, layout.showOnlineCount)
+    }
+
+    @Test
+    fun `duration stat pill without danmaku keeps online count on wide covers`() {
+        val layout = resolveVideoCardCompactCoverStatsLayout(
+            availableWidthDp = 190f,
+            primaryStatText = "2.0亿",
+            secondaryStatText = null,
+            hasOnlineCount = true,
+            durationStatMinWidthDp = resolveVideoCardDurationStatMinWidthDp("12:34")
+        )
+
+        // 播放量 58 + 时长 60 + 间距 6 + 在线 52 + 间距 6 = 182 ≤ 190，在线保留
+        assertEquals(true, layout.showOnlineCount)
+        assertEquals(false, layout.showSecondaryStat)
     }
 }

@@ -1,6 +1,34 @@
 package com.android.purebilibili.feature.download
 
 import androidx.media3.common.Player
+import com.android.purebilibili.core.util.AppDisplayContext
+import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
+
+internal enum class OfflineRequestedOrientationMode {
+    Unspecified,
+    SensorLandscape,
+    Portrait,
+}
+
+internal fun resolveOfflineRequestedOrientationMode(
+    isFullscreen: Boolean,
+    usesInWindowFullscreen: Boolean,
+    isPhonePlayerOrientation: Boolean = true,
+): OfflineRequestedOrientationMode = when {
+    usesInWindowFullscreen || !isPhonePlayerOrientation ->
+        OfflineRequestedOrientationMode.Unspecified
+    isFullscreen -> OfflineRequestedOrientationMode.SensorLandscape
+    else -> OfflineRequestedOrientationMode.Portrait
+}
+
+internal fun resolveOfflineRequestedOrientationMode(
+    isFullscreen: Boolean,
+    displayContext: AppDisplayContext,
+): OfflineRequestedOrientationMode = resolveOfflineRequestedOrientationMode(
+    isFullscreen = isFullscreen,
+    usesInWindowFullscreen = displayContext.usesInWindowFullscreen,
+    isPhonePlayerOrientation = shouldUsePhonePlayerOrientation(displayContext),
+)
 
 internal fun resolveOfflineVideoStartFullscreen(
     isAudioOnly: Boolean,

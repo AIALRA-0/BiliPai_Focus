@@ -100,6 +100,29 @@ class HistoryDeletePolicyTest {
     }
 
     @Test
+    fun `Android 13 Xiaomi should skip native GL dissolve`() {
+        val animationSafe = isHistoryDissolveAnimationSafe(
+            sdkInt = 33,
+            manufacturer = "Xiaomi"
+        )
+
+        assertEquals(false, animationSafe)
+        assertEquals(
+            HistoryDeleteAnimationMode.DIRECT_DELETE,
+            resolveHistoryDeleteAnimationMode(
+                itemCount = 1,
+                dissolveAnimationSafe = animationSafe
+            )
+        )
+    }
+
+    @Test
+    fun `history dissolve remains enabled outside affected Xiaomi platform`() {
+        assertEquals(true, isHistoryDissolveAnimationSafe(sdkInt = 34, manufacturer = "Xiaomi"))
+        assertEquals(true, isHistoryDissolveAnimationSafe(sdkInt = 33, manufacturer = "Google"))
+    }
+
+    @Test
     fun `batch delete should skip dissolve animation and delete directly`() {
         assertEquals(
             HistoryDeleteAnimationMode.DIRECT_DELETE,

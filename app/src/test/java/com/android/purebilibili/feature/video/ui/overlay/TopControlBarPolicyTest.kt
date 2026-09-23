@@ -89,19 +89,27 @@ class TopControlBarPolicyTest {
     }
 
     @Test
-    fun fullscreenTopBar_appliesStatusBarPaddingForSafeTapArea() {
+    fun topBar_padsWhenStatusBarVisibleEvenIfInline() {
         assertTrue(
             shouldApplyStatusBarPaddingToTopControlBar(
-                isFullscreen = true
+                isFullscreen = false,
+                statusBarVisible = true,
             )
         )
     }
 
     @Test
-    fun inlineTopBar_doesNotConsumeStatusBarPaddingEither() {
+    fun topBar_skipsPaddingWhenStatusBarHidden() {
         assertFalse(
             shouldApplyStatusBarPaddingToTopControlBar(
-                isFullscreen = false
+                isFullscreen = true,
+                statusBarVisible = false,
+            )
+        )
+        assertFalse(
+            shouldApplyStatusBarPaddingToTopControlBar(
+                isFullscreen = false,
+                statusBarVisible = false,
             )
         )
     }

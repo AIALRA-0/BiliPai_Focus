@@ -35,7 +35,7 @@
 
 | 插件名称 | 描述 | 作者 | 链接 |
 |----------|------|------|------|
-| BP 示例过滤插件 | 示例 .bp 插件：过滤低质短视频与营销关键词，带 iconUrl | BiliPai Community Demo | [Raw](https://raw.githubusercontent.com/jay3-yy/BiliPai/codex/bp-demo-package/plugins/community/bp_demo_focus_filter.bp) |
+| BP 示例过滤插件 | 示例 .bp 插件：过滤低质短视频与营销关键词，带 iconUrl | BiliPai Community Demo | [Raw](https://raw.githubusercontent.com/jay3-yy/BiliPai/codex/ui-design/plugins/community/bp_demo_focus_filter.bp) |
 
 ---
 

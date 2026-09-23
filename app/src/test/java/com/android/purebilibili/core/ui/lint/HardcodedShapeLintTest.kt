@@ -7,11 +7,18 @@ class HardcodedShapeLintTest {
 
     @Test
     fun feature_kt_must_not_introduce_new_hardcoded_RoundedCornerShape() {
-        val pattern = Regex("""RoundedCornerShape\(\s*\d+""")
-        val offenders = StyleLintSupport.findOffenders(
-            pattern = pattern,
+        val legacyOffenders = StyleLintSupport.findOffenders(
+            pattern = Regex("""RoundedCornerShape\(\s*\d+"""),
             allowlist = StyleLintAllowlist.SHAPE_HITS
         )
+        val migratedOffenders = StyleLintSupport.findOffendersInMigratedFeatures(
+            Regex(
+                """RoundedCornerShape\s*\([^)]*\d+(?:\.\d+)?\s*\.dp""",
+                RegexOption.DOT_MATCHES_ALL,
+            ),
+            allowlist = StyleLintAllowlist.SHAPE_HITS,
+        )
+        val offenders = (legacyOffenders + migratedOffenders).distinct()
         assertTrue(
             offenders.isEmpty(),
             "New hardcoded RoundedCornerShape detected in feature/. Use " +

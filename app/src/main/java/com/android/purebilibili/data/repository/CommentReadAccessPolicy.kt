@@ -28,7 +28,8 @@ internal fun resolveCommentReadPlan(hasSession: Boolean): CommentReadPlan {
 }
 
 internal fun shouldFallbackCommentRead(code: Int): Boolean {
-    return code in setOf(-101, -111, -352, -412)
+    // -403: WBI 签名失败（桌面文档注明 wbi/main 签错返回 -403 而非 -352）
+    return code in setOf(-101, -111, -352, -403, -412)
 }
 
 internal fun hasRenderableCommentPayload(data: ReplyData?): Boolean {
@@ -66,12 +67,24 @@ internal fun shouldFallbackGuestHotCommentReadOnEmptySuccess(
     data: ReplyData?
 ): Boolean {
     return primaryMode == CommentReadApiMode.GUEST &&
-        page == 1 &&
-        mode == 3 &&
-        shouldFallbackCommentReadOnEmptyRenderableSuccess(
+        shouldFallbackHotCommentReadOnEmptySuccess(
+            page = page,
+            mode = mode,
             responseCode = responseCode,
-            data = data
+            data = data,
         )
+}
+
+internal fun shouldFallbackHotCommentReadOnEmptySuccess(
+    page: Int,
+    mode: Int,
+    responseCode: Int,
+    data: ReplyData?,
+): Boolean {
+    return page == 1 &&
+        mode == 3 &&
+        responseCode == 0 &&
+        !hasRenderableCommentPayload(data)
 }
 
 internal fun shouldFallbackCommentReadOnEmptyRenderableSuccess(

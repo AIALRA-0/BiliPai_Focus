@@ -6,12 +6,13 @@ import com.android.purebilibili.data.model.response.VideoItem
 
 internal data class HistoryCardPresentation(
     val videoItem: VideoItem,
-    val showUpBadge: Boolean
+    val showUpBadge: Boolean?
 )
 
 internal enum class HistoryNavigationKind {
     VIDEO,
     PGC,
+    CHEESE,
     LIVE,
     ARTICLE
 }
@@ -21,6 +22,7 @@ internal fun resolveHistoryNavigationKind(
 ): HistoryNavigationKind {
     return when (historyItem?.business) {
         HistoryBusiness.PGC -> HistoryNavigationKind.PGC
+        HistoryBusiness.CHEESE -> HistoryNavigationKind.CHEESE
         HistoryBusiness.LIVE -> HistoryNavigationKind.LIVE
         HistoryBusiness.ARTICLE -> HistoryNavigationKind.ARTICLE
         else -> HistoryNavigationKind.VIDEO
@@ -45,7 +47,7 @@ internal fun resolveHistoryCardPresentation(
         }
         else -> HistoryCardPresentation(
             videoItem = historyItem.videoItem,
-            showUpBadge = true
+            showUpBadge = null
         )
     }
 }

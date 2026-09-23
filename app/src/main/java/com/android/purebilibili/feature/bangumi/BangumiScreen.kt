@@ -1,1291 +1,393 @@
-// 文件路径: feature/bangumi/BangumiScreen.kt
 package com.android.purebilibili.feature.bangumi
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.ExperimentalFoundationApi
+import android.os.Build
+import com.android.purebilibili.core.ui.LocalNavigationBackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
+import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
-//  已改用 MaterialTheme.colorScheme.primary
-import com.android.purebilibili.core.theme.iOSYellow
-import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.responsiveContentWidth
-import com.android.purebilibili.data.model.response.BangumiItem
-import com.android.purebilibili.data.model.response.BangumiSearchItem
-import com.android.purebilibili.data.model.response.BangumiType
-import com.android.purebilibili.data.model.response.FollowBangumiItem
-import com.android.purebilibili.data.model.response.TimelineDay
-import com.android.purebilibili.data.model.response.TimelineEpisode
-import com.android.purebilibili.data.model.response.resolveBangumiIndexFilterGroups
-import com.android.purebilibili.data.model.response.resolveBangumiIndexFilterKey
-import com.android.purebilibili.data.model.response.resolveBangumiSearchPlaceholder
-// [重构] 使用提取的可复用组件
-import com.android.purebilibili.feature.bangumi.ui.components.BangumiModeTabs
-import com.android.purebilibili.feature.bangumi.ui.components.BangumiIndexFilterRows
-import com.android.purebilibili.feature.bangumi.ui.list.BangumiCard
-import com.android.purebilibili.feature.bangumi.ui.list.BangumiGrid
-import com.android.purebilibili.feature.bangumi.ui.list.BangumiSearchCardGrid
-import java.util.Calendar
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.AppScaffold
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
+import com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor
+import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
+import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
+import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect
+import com.android.purebilibili.core.ui.blur.BlurSurfaceType
+import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
+import com.android.purebilibili.core.ui.resolveTopChromeRenderMode
+import com.android.purebilibili.core.ui.TopChromeRenderMode
+import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
+import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
+import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppLiquidAwareTabRow
+import com.android.purebilibili.core.ui.components.AppSearchField
+import com.android.purebilibili.core.ui.components.AppSearchFieldPresentation
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppSearchIcon
+import com.android.purebilibili.core.util.responsiveContentWidth
+import com.android.purebilibili.feature.download.DownloadManager
+import kotlinx.coroutines.launch
 
-/**
- * 番剧主页面
- */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
+/** Navigation-compatible state holder for the Bangumi/Cinema hub. */
 @Composable
 fun BangumiScreen(
     onBack: () -> Unit,
-    onBangumiClick: (Long) -> Unit,  // 点击番剧 -> seasonId
+    onBangumiClick: (Long) -> Unit,
     onBangumiEpisodeClick: (Long, Long) -> Unit = { seasonId, _ -> onBangumiClick(seasonId) },
-    initialType: Int = 1,  // 初始类型：1=番剧 2=电影 等
-    viewModel: BangumiViewModel = viewModel()
+    initialType: Int = 1,
+    viewModel: BangumiHubViewModel = viewModel(),
 ) {
-    val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
-    val selectedType by viewModel.selectedType.collectAsStateWithLifecycle()
-    val listState by viewModel.listState.collectAsStateWithLifecycle()
-    val timelineState by viewModel.timelineState.collectAsStateWithLifecycle()
-    val searchState by viewModel.searchState.collectAsStateWithLifecycle()
-    val myFollowState by viewModel.myFollowState.collectAsStateWithLifecycle()
-    val myFollowType by viewModel.myFollowType.collectAsStateWithLifecycle()
-    val myFollowStats by viewModel.myFollowStats.collectAsStateWithLifecycle()
-    val filter by viewModel.filter.collectAsStateWithLifecycle()
-    val searchKeyword by viewModel.searchKeyword.collectAsStateWithLifecycle()
-    
-    // 搜索状态
-    var showSearchBar by remember { mutableStateOf(false) }
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
     var searchQuery by remember { mutableStateOf("") }
-    var indexChromeCollapsed by remember { mutableStateOf(false) }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    
-    // 初始类型切换
-    LaunchedEffect(initialType) {
-        if (initialType != 1) {
-            viewModel.selectType(initialType)
+    val selectionActive = state.page == BangumiHubPage.FOLLOW &&
+        state.followStates[state.channel to state.followStatus]?.selectedIds?.isNotEmpty() == true
+    var scrollToTopRequestId by remember { mutableIntStateOf(0) }
+    var homeScrollIndex by remember { mutableIntStateOf(0) }
+    var homeScrollOffset by remember { mutableIntStateOf(0) }
+    val shouldShowBackToTop by remember {
+        derivedStateOf<Boolean> {
+            state.page == BangumiHubPage.HOME &&
+                (homeScrollIndex > 2 || (homeScrollIndex > 0 && homeScrollOffset > 300))
         }
-    }
-    
-    // 番剧类型列表
-    val types = listOf(
-        BangumiType.ANIME,
-        BangumiType.GUOCHUANG,
-        BangumiType.MOVIE,
-        BangumiType.TV_SHOW,
-        BangumiType.DOCUMENTARY,
-        BangumiType.VARIETY
-    )
-    val currentYear = remember {
-        Calendar.getInstance().get(Calendar.YEAR)
-    }
-    val filterGroups = remember(selectedType, currentYear) {
-        resolveBangumiIndexFilterGroups(
-            seasonType = selectedType,
-            currentYear = currentYear
-        )
-    }
-    val listTransitionKey = remember(selectedType, filter) {
-        resolveBangumiIndexFilterKey(selectedType, filter)
     }
 
-    LaunchedEffect(displayMode, selectedType, filter) {
-        if (displayMode != BangumiDisplayMode.LIST) {
-            indexChromeCollapsed = false
-        }
+    val showPgcTimeline by SettingsManager.getShowPgcTimeline(context)
+        .collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(initialType) { viewModel.initialize(initialType) }
+    LaunchedEffect(showPgcTimeline) { viewModel.setShowPgcTimeline(showPgcTimeline) }
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
-    
-    //  [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
-    val context = androidx.compose.ui.platform.LocalContext.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        val window = (context as? android.app.Activity)?.window
-        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
-        
-        if (window != null) {
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        }
-        
-        onDispose {
-            if (window != null) {
-                window.navigationBarColor = originalNavBarColor
-            }
-        }
+    LaunchedEffect(state.page) {
+        if (state.page == BangumiHubPage.SEARCH) focusRequester.requestFocus()
     }
-    
-    AdaptiveScaffold(
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+
+    val handleBack = {
+        if (!viewModel.consumeBack()) onBack()
+    }
+    LocalNavigationBackHandler(enabled = true, onBackCompleted = handleBack)
+
+    val themeConfig = LocalAppThemeConfig.current
+    val lowBlurBudget = isLowBlurBudgetForced()
+    val headerBlurRequested = themeConfig.headerBlurEnabled
+    val hazeState = if (
+        headerBlurRequested &&
+        !lowBlurBudget &&
+        shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT)
+    ) rememberRecoverableHazeState() else null
+    val hazeReady = hazeState?.let { recoverableBlurEnabled(it) } == true
+    val progressiveRequested = themeConfig.progressiveTopBlurEnabled && !headerBlurRequested
+    val progressiveBlur = shouldUseBiliPaiProgressiveTopBlur(
+        enabled = progressiveRequested,
+        hasBackdrop = true,
+    ) && !lowBlurBudget
+    // Keep progressive sampling attached through skeleton → content transitions.
+    // Recreating its graphics layers briefly exposes an empty/dark texture.
+    val chromeSource = if (progressiveBlur || themeConfig.liquidGlassEnabled) {
+        rememberChromeBackdropSource()
+    } else {
+        null
+    }
+    val chromeBackdrop = chromeSource?.takeIf {
+        (progressiveBlur || shouldCaptureBangumiHubChrome(state)) && it.isReady
+    }?.backdrop
+    val renderMode = resolveTopChromeRenderMode(
+        headerBlurRequested = headerBlurRequested,
+        progressiveBlurRequested = progressiveRequested,
+        hazeAvailable = hazeReady,
+        progressiveAvailable = chromeBackdrop != null,
+    )
+    val hazeActive = renderMode == TopChromeRenderMode.HAZE
+    val progressiveActive = renderMode == TopChromeRenderMode.PROGRESSIVE
+    val fadeActive = themeConfig.progressiveTopFadeEnabled && !hazeActive
+    val chromeActive = hazeActive || progressiveActive || fadeActive
+
+    AppScaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0.dp),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            if (showSearchBar) {
-                // 搜索模式顶栏
-                BangumiSearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    onSearch = {
-                        if (it.isNotBlank()) {
-                            viewModel.searchBangumi(it)
-                            keyboardController?.hide()
-                        }
-                    },
-                    onBack = {
-                        showSearchBar = false
-                        searchQuery = ""
-                        viewModel.clearSearch()
+            BiliPaiImmersiveTopBar(
+                backdrop = chromeBackdrop.takeIf { progressiveActive },
+                enabled = progressiveActive,
+                headerBlurActive = hazeActive,
+                surfaceColor = globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.background),
+                fadeEnabled = fadeActive,
+                extendBelowBounds = false,
+                modifier = Modifier.background(
+                    if (chromeActive) Color.Transparent
+                    else globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.background)
+                ).then(
+                    if (hazeActive) {
+                        hazeState?.let {
+                            Modifier
+                                .unifiedBlur(hazeState = it, surfaceType = BlurSurfaceType.HEADER)
+                                .background(AppSurfaceTokens.cardContainer().copy(alpha = AppSurfaceTokens.FrostedScrimAlpha))
+                        } ?: Modifier
+                    } else {
+                        Modifier
                     }
-                )
-            } else {
-                BangumiNavigationBar(
-                    title = if (displayMode == BangumiDisplayMode.MY_FOLLOW) "我的追番/追剧" else "番剧影视",
-                    isMyFollowMode = displayMode == BangumiDisplayMode.MY_FOLLOW,
-                    onBack = {
-                        if (displayMode == BangumiDisplayMode.MY_FOLLOW) {
-                            viewModel.setDisplayMode(BangumiDisplayMode.LIST)
-                        } else {
-                            onBack()
-                        }
-                    },
-                    onSearch = { showSearchBar = true },
-                    onOpenMyFollow = { viewModel.openMyFollowEntry() }
-                )
+                ),
+            ) {
+                Column {
+                    if (state.page == BangumiHubPage.SEARCH) {
+                        BangumiSearchTopBar(
+                            query = searchQuery,
+                            focusRequester = focusRequester,
+                            category = state.search.category,
+                            onQueryChange = { searchQuery = it },
+                            onSearch = {
+                                viewModel.search(searchQuery)
+                                keyboard?.hide()
+                            },
+                            onBack = handleBack,
+                        )
+                    } else {
+                        AppTopBar(
+                            title = when (state.page) {
+                                BangumiHubPage.HOME -> "番剧影视"
+                                BangumiHubPage.INDEX -> "索引"
+                                BangumiHubPage.FOLLOW -> if (state.channel == BangumiChannel.BANGUMI) "我的追番" else "我的追剧"
+                                BangumiHubPage.SEARCH -> "搜索"
+                            },
+                            navigationIcon = {
+                                AppIconButton(
+                                    onClick = handleBack,
+                                ) {
+                                    AppIcon(rememberAppBackIcon(), contentDescription = "返回")
+                                }
+                            },
+                            actions = {
+                                AppIconButton(
+                                    onClick = viewModel::openSearch,
+                                    enabled = !selectionActive,
+                                ) {
+                                    AppIcon(rememberAppSearchIcon(), contentDescription = "搜索")
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = if (chromeActive) Color.Transparent else AppSurfaceTokens.groupedListContainer(),
+                                scrolledContainerColor = if (chromeActive) Color.Transparent else AppSurfaceTokens.groupedListContainer(),
+                            ),
+                        )
+                    }
+                    if (state.page != BangumiHubPage.SEARCH) {
+                        AppLiquidAwareTabRow(
+                            options = BangumiChannel.entries.map { AppSegmentOption(it, it.label) },
+                            selectedValue = state.channel,
+                            enabled = !selectionActive,
+                            onSelectionChange = viewModel::selectChannel,
+                            dragSelectionEnabled = true,
+                            tapPressRefractionEnabled = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .responsiveContentWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            miuixBackdrop = chromeBackdrop,
+                        )
+                    }
+                    if (state.page == BangumiHubPage.FOLLOW) {
+                        AppLiquidAwareTabRow(
+                            options = BangumiFollowStatus.entries.map { AppSegmentOption(it, it.label) },
+                            selectedValue = state.followStatus,
+                            enabled = state.followStates[state.channel to state.followStatus]?.isMutating != true,
+                            onSelectionChange = viewModel::selectFollowStatus,
+                            dragSelectionEnabled = true,
+                            tapPressRefractionEnabled = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .responsiveContentWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            miuixBackdrop = chromeBackdrop,
+                        )
+                    }
+                }
             }
         },
-        //  [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，让内容区域自行处理
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .responsiveContentWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.surface,
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                        )
-                    )
-                )
-                //  [修复] 移除这里的底部内边距，让内容区域自己处理（如 LazyVerticalGrid 的 contentPadding）
-        ) {
-            val shouldShowIndexChrome = displayMode != BangumiDisplayMode.LIST || !indexChromeCollapsed
-            if (displayMode == BangumiDisplayMode.LIST || displayMode == BangumiDisplayMode.TIMELINE) {
-                AnimatedVisibility(
-                    visible = shouldShowIndexChrome,
-                    enter = expandVertically(animationSpec = tween(180)) + fadeIn(animationSpec = tween(150)),
-                    exit = shrinkVertically(animationSpec = tween(160)) + fadeOut(animationSpec = tween(120))
-                ) {
-                    Column {
-                        BangumiModeTabs(
-                            currentMode = displayMode,
-                            onModeChange = { viewModel.setDisplayMode(it) }
-                        )
-
-                        if (displayMode == BangumiDisplayMode.LIST) {
-                            BangumiTypeTabs(
-                                types = types,
-                                selectedType = selectedType,
-                                onTypeSelected = { viewModel.selectType(it) }
-                            )
-                            BangumiIndexFilterRows(
-                                groups = filterGroups,
-                                filter = filter,
-                                onFilterChange = { viewModel.updateFilter(it) }
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // 内容区域
-            when (displayMode) {
-                BangumiDisplayMode.LIST -> {
-                    AnimatedContent(
-                        targetState = listTransitionKey,
-                        transitionSpec = {
-                            (slideInHorizontally(animationSpec = tween(180)) { it / 12 } +
-                                fadeIn(animationSpec = tween(150))) togetherWith
-                                (slideOutHorizontally(animationSpec = tween(160)) { -it / 12 } +
-                                    fadeOut(animationSpec = tween(120))) using
-                                SizeTransform(clip = false)
-                        },
-                        label = "bangumiIndexListTransition"
-                    ) {
-                        BangumiPiliPlusHomeContent(
-                            listState = listState,
-                            timelineState = timelineState,
-                            myFollowState = myFollowState,
-                            selectedType = selectedType,
-                            myFollowType = myFollowType,
-                            onRetry = { viewModel.loadBangumiList() },
-                            onRetryTimeline = { viewModel.loadTimeline() },
-                            onRetryMyFollow = { viewModel.loadMyFollowBangumi(myFollowType) },
-                            onLoadMore = { viewModel.loadMore() },
-                            onOpenMyFollow = { viewModel.openMyFollowEntry() },
-                            onItemClick = onBangumiClick,
-                            onChromeCollapsedChange = { indexChromeCollapsed = it }
-                        )
-                    }
-                }
-                BangumiDisplayMode.TIMELINE -> {
-                    BangumiTimelineContent(
-                        timelineState = timelineState,
-                        onRetry = { viewModel.loadTimeline() },
-                        onBangumiClick = onBangumiClick
-                    )
-                }
-                BangumiDisplayMode.MY_FOLLOW -> {
-                    MyBangumiContent(
-                        myFollowState = myFollowState,
-                        followStats = myFollowStats,
-                        followType = myFollowType,
-                        onFollowTypeChange = { viewModel.selectMyFollowType(it) },
-                        onRetry = { viewModel.loadMyFollowBangumi(myFollowType) },
-                        onLoadMore = { viewModel.loadMoreMyFollow() },
-                        onBangumiClick = onBangumiClick
-                    )
-                }
-                BangumiDisplayMode.SEARCH -> {
-                    BangumiSearchContent(
-                        searchState = searchState,
-                        selectedType = selectedType,
-                        onRetry = { viewModel.searchBangumi(searchKeyword) },
-                        onLoadMore = { viewModel.loadMoreSearchResults() },
-                        onItemClick = onBangumiClick,
-                        onEpisodeClick = onBangumiEpisodeClick
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * PiliPlus 风格番剧首页：最近追番/追剧、时间表、推荐索引在同一信息流中展示。
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun BangumiPiliPlusHomeContent(
-    listState: BangumiListState,
-    timelineState: TimelineState,
-    myFollowState: MyFollowState,
-    selectedType: Int,
-    myFollowType: Int,
-    onRetry: () -> Unit,
-    onRetryTimeline: () -> Unit,
-    onRetryMyFollow: () -> Unit,
-    onLoadMore: () -> Unit,
-    onOpenMyFollow: () -> Unit,
-    onItemClick: (Long) -> Unit,
-    onChromeCollapsedChange: (Boolean) -> Unit
-) {
-    val gridState = rememberLazyGridState()
-    val coroutineScope = rememberCoroutineScope()
-    val currentOnChromeCollapsedChange by rememberUpdatedState(onChromeCollapsedChange)
-    val hasMore = (listState as? BangumiListState.Success)?.hasMore == true
-    val shouldShowBackToTop by remember(gridState) {
-        derivedStateOf {
-            shouldShowBangumiIndexBackToTop(
-                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
-            )
-        }
-    }
-
-    LaunchedEffect(gridState) {
-        snapshotFlow {
-            shouldCollapseBangumiIndexChrome(
-                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
-            )
-        }
-            .distinctUntilChanged()
-            .collect { collapsed ->
-                currentOnChromeCollapsedChange(collapsed)
-            }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            currentOnChromeCollapsedChange(false)
-        }
-    }
-
-    LaunchedEffect(gridState, hasMore) {
-        snapshotFlow {
-            val layoutInfo = gridState.layoutInfo
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleItem >= layoutInfo.totalItemsCount - 6
-        }.collect { shouldLoad ->
-            if (shouldLoad && hasMore) {
-                onLoadMore()
-            }
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 106.dp),
-            state = gridState,
+    ) { contentPadding ->
+        val listTopPadding = contentPadding.calculateTopPadding()
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        Box(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 12.dp,
-                top = 12.dp,
-                end = 12.dp,
-                bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            val shouldShowFollowSection = (myFollowState as? MyFollowState.Error)?.message != "未登录"
-            if (shouldShowFollowSection) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    BangumiHomeSectionHeader(
-                        title = if (myFollowType == MY_FOLLOW_TYPE_BANGUMI) "最近追番" else "最近追剧",
-                        actionText = "查看全部",
-                        onAction = onOpenMyFollow
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    BangumiFollowPreviewSection(
-                        state = myFollowState,
-                        onRetry = onRetryMyFollow,
-                        onOpenMyFollow = onOpenMyFollow,
-                        onItemClick = onItemClick
-                    )
-                }
-            }
-
-            if (selectedType == BangumiType.ANIME.value || selectedType == BangumiType.GUOCHUANG.value) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    BangumiHomeSectionHeader(
-                        title = "追番时间表",
-                        actionText = "刷新",
-                        onAction = onRetryTimeline
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    BangumiTimelinePreviewSection(
-                        state = timelineState,
-                        onRetry = onRetryTimeline,
-                        onItemClick = onItemClick
-                    )
-                }
-            }
-
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                BangumiHomeSectionHeader(title = "推荐")
-            }
-
-            when (listState) {
-                is BangumiListState.Loading -> {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        HomeLoadingStrip(minHeight = 180.dp)
-                    }
-                }
-                is BangumiListState.Error -> {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        HomeErrorStrip(
-                            message = listState.message,
-                            onRetry = onRetry
-                        )
-                    }
-                }
-                is BangumiListState.Success -> {
-                    if (listState.isRefreshing) {
-                        item(
-                            key = "refreshing-indicator",
-                            span = { GridItemSpan(maxLineSpan) }
-                        ) {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 2.dp),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    if (listState.items.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text(
-                                text = "暂无推荐内容",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 32.dp),
-                                fontSize = 14.sp
-                            )
-                        }
-                    } else {
-                        itemsIndexed(
-                            items = listState.items,
-                            key = { index, item -> resolveBangumiIndexItemLazyKey(index, item) }
-                        ) { _, item ->
-                            BangumiCard(
-                                item = item,
-                                modifier = Modifier.animateItem(),
-                                onClick = { onItemClick(item.seasonId) }
-                            )
-                        }
-                        if (listState.hasMore) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                HomeLoadingStrip(minHeight = 56.dp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = shouldShowBackToTop,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    end = 20.dp,
-                    bottom = 28.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                ),
-            enter = fadeIn(animationSpec = tween(180)) + scaleIn(initialScale = 0.92f),
-            exit = fadeOut(animationSpec = tween(140)) + scaleOut(targetScale = 0.92f)
-        ) {
-            SmallFloatingActionButton(
-                onClick = {
-                    coroutineScope.launch {
-                        gridState.animateScrollToItem(0)
-                        currentOnChromeCollapsedChange(false)
-                    }
-                },
-                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
-                contentColor = MaterialTheme.colorScheme.primary
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(chromeSource?.modifier ?: Modifier)
+                    .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
+                    .globalWallpaperAwareBackground(MaterialTheme.colorScheme.background),
             ) {
-                Icon(
-                    imageVector = rememberAppChevronUpIcon(),
-                    contentDescription = "回到顶部"
-                )
+                Box(modifier = Modifier.fillMaxSize().responsiveContentWidth()) {
+                    BangumiHubContent(
+                        state = state,
+                        onBangumiClick = onBangumiClick,
+                        onEpisodeClick = onBangumiEpisodeClick,
+                        onRefreshHome = { viewModel.refreshHome() },
+                        onLoadMoreHomeRecommendations = viewModel::loadMoreHomeRecommendations,
+                        onLoadMoreHomeFollows = viewModel::loadMoreHomeFollows,
+                        onRetryTimeline = viewModel::retryTimeline,
+                        onTimelineRangeSelected = viewModel::selectTimelineRange,
+                        onOpenIndex = viewModel::openIndex,
+                        onOpenFollow = viewModel::openFollowManager,
+                        onIndexCategorySelected = viewModel::selectIndexCategory,
+                        onIndexFilterSelected = viewModel::selectIndexFilter,
+                        onToggleFiltersExpanded = viewModel::toggleIndexFiltersExpanded,
+                        onRetryIndexConditions = viewModel::retryIndexConditions,
+                        onRetryIndexResults = viewModel::retryIndexResults,
+                        onLoadMoreIndexResults = viewModel::loadMoreIndexResults,
+                        onFollowStatusSelected = viewModel::selectFollowStatus,
+                        onRefreshFollow = viewModel::refreshFollowManager,
+                        onLoadMoreFollow = viewModel::loadMoreFollowManager,
+                        onToggleFollowSelection = viewModel::toggleFollowSelection,
+                        onSelectAllFollow = viewModel::selectAllFollowItems,
+                        onClearFollowSelection = viewModel::clearFollowSelection,
+                        onMoveSelectedFollow = viewModel::moveSelectedFollowItems,
+                        onMoveSingleFollow = viewModel::updateSingleFollowItem,
+                        onUnfollowSingle = viewModel::unfollowSingleItem,
+                        onSearchCategorySelected = viewModel::selectSearchCategory,
+                        onLoadMoreSearch = viewModel::loadMoreSearch,
+                        onSaveCover = { url, title ->
+                            scope.launch {
+                                val saved = DownloadManager.saveImageToGallery(context, url, title)
+                                snackbarHostState.showSnackbar(if (saved) "封面已保存" else "保存封面失败")
+                            }
+                        },
+                        onHomeScrollChanged = { index, offset ->
+                            homeScrollIndex = index
+                            homeScrollOffset = offset
+                        },
+                        scrollToTopRequestId = scrollToTopRequestId,
+                        listBottomPadding = maxOf(navBarBottom, 16.dp) + 80.dp,
+                        listTopPadding = listTopPadding,
+                        tabBackdrop = null,
+                        showFollowStatusTabs = false,
+                    )
+                }
             }
+
+            AppLiquidGlassBackToTopButton(
+                visible = rememberBackToTopButtonEnabled() && shouldShowBackToTop,
+                onClick = {
+                    scrollToTopRequestId++
+                },
+                backdrop = chromeBackdrop,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 20.dp,
+                        bottom = maxOf(navBarBottom, 16.dp) + 20.dp,
+                    ),
+            )
         }
     }
 }
 
+/** Source-compatible bridge for callers that injected the former combined ViewModel. */
+@Deprecated("BangumiScreen now owns a dedicated lightweight hub state holder")
 @Composable
-private fun BangumiHomeSectionHeader(
-    title: String,
-    actionText: String? = null,
-    onAction: (() -> Unit)? = null
+fun BangumiScreen(
+    onBack: () -> Unit,
+    onBangumiClick: (Long) -> Unit,
+    onBangumiEpisodeClick: (Long, Long) -> Unit = { seasonId, _ -> onBangumiClick(seasonId) },
+    initialType: Int = 1,
+    @Suppress("UNUSED_PARAMETER") viewModel: BangumiViewModel,
+) {
+    BangumiScreen(
+        onBack = onBack,
+        onBangumiClick = onBangumiClick,
+        onBangumiEpisodeClick = onBangumiEpisodeClick,
+        initialType = initialType,
+    )
+}
+
+@Composable
+private fun BangumiSearchTopBar(
+    query: String,
+    focusRequester: FocusRequester,
+    category: BangumiIndexCategory,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onBack: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 2.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .statusBarsPadding()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            text = title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
-        if (actionText != null && onAction != null) {
-            TextButton(
-                onClick = onAction,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(actionText, fontSize = 13.sp)
-            }
+        AppIconButton(
+            onClick = onBack,
+        ) {
+            AppIcon(rememberAppBackIcon(), contentDescription = "返回")
         }
-    }
-}
-
-@Composable
-private fun BangumiFollowPreviewSection(
-    state: MyFollowState,
-    onRetry: () -> Unit,
-    onOpenMyFollow: () -> Unit,
-    onItemClick: (Long) -> Unit
-) {
-    when (state) {
-        is MyFollowState.Loading -> HomeLoadingStrip(minHeight = 150.dp)
-        is MyFollowState.Error -> HomeErrorStrip(
-            message = state.message,
-            onRetry = onRetry,
-            minHeight = 120.dp
-        )
-        is MyFollowState.Success -> {
-            if (state.items.isEmpty()) {
-                Surface(
-                    onClick = onOpenMyFollow,
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 1.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 96.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "还没有追番追剧",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
+        AppSearchField(
+            query = query,
+            onQueryChange = onQueryChange,
+            onSearch = onSearch,
+            placeholder = if (category == BangumiIndexCategory.CINEMA_ALL) {
+                "搜索影视"
             } else {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(end = 4.dp)
-                ) {
-                    itemsIndexed(
-                        items = state.items.take(12),
-                        key = { index, item -> resolveMyFollowItemLazyKey(index, item) }
-                    ) { _, item ->
-                        FollowBangumiHomeCard(
-                            item = item,
-                            onClick = { onItemClick(item.seasonId) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FollowBangumiHomeCard(
-    item: FollowBangumiItem,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(110.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.75f)
-                .clip(RoundedCornerShape(8.dp))
+                "搜索${category.label}"
+            },
+            presentation = AppSearchFieldPresentation.TOP_BAR,
+            autoFocusEnabled = true,
+            focusRequester = focusRequester,
+            modifier = Modifier.weight(1f),
+        )
+        AppIconButton(
+            onClick = onSearch,
+            enabled = query.isNotBlank(),
         ) {
-            AsyncImage(
-                model = FormatUtils.fixImageUrl(item.cover),
-                contentDescription = item.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
-                            startY = 90f
-                        )
-                    )
-            )
-            val bottomText = item.progress.ifBlank {
-                item.newEp?.indexShow.orEmpty()
-            }
-            if (bottomText.isNotBlank()) {
-                Text(
-                    text = bottomText,
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(7.dp)
-                )
-            }
-            if (item.badge.isNotBlank()) {
-                BangumiHomeBadge(
-                    text = item.badge,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                )
-            }
-        }
-        Text(
-            text = item.title,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            modifier = Modifier.padding(top = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun BangumiTimelinePreviewSection(
-    state: TimelineState,
-    onRetry: () -> Unit,
-    onItemClick: (Long) -> Unit
-) {
-    when (state) {
-        is TimelineState.Loading -> HomeLoadingStrip(minHeight = 170.dp)
-        is TimelineState.Error -> HomeErrorStrip(
-            message = state.message,
-            onRetry = onRetry,
-            minHeight = 130.dp
-        )
-        is TimelineState.Success -> {
-            val visibleDays = state.days.filter { !it.episodes.isNullOrEmpty() }
-            if (visibleDays.isEmpty()) {
-                Text(
-                    text = "今天暂无更新",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 24.dp),
-                    fontSize = 14.sp
-                )
-                return
-            }
-            var selectedIndex by remember(visibleDays) {
-                mutableIntStateOf(visibleDays.indexOfFirst { it.isToday == 1 }.coerceAtLeast(0))
-            }
-            val selectedDay = visibleDays.getOrNull(selectedIndex) ?: visibleDays.first()
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(visibleDays.size, key = { index -> visibleDays[index].date }) { index ->
-                        val day = visibleDays[index]
-                        val selected = index == selectedIndex
-                        Surface(
-                            onClick = { selectedIndex = index },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        ) {
-                            Text(
-                                text = buildTimelineDayLabel(day),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onPrimary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                fontSize = 13.sp,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    itemsIndexed(
-                        items = selectedDay.episodes.orEmpty(),
-                        key = { index, episode -> resolveTimelineEpisodeLazyKey(index, episode) }
-                    ) { _, episode ->
-                        TimelineEpisodeHomeCard(
-                            episode = episode,
-                            onClick = { onItemClick(episode.seasonId) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun buildTimelineDayLabel(day: TimelineDay): String {
-    if (day.isToday == 1) return "今天"
-    val week = when (day.dayOfWeek) {
-        1 -> "周一"
-        2 -> "周二"
-        3 -> "周三"
-        4 -> "周四"
-        5 -> "周五"
-        6 -> "周六"
-        7 -> "周日"
-        else -> day.date.takeLast(5)
-    }
-    return "${day.date.takeLast(5)} $week"
-}
-
-@Composable
-private fun TimelineEpisodeHomeCard(
-    episode: TimelineEpisode,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(112.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.75f)
-                .clip(RoundedCornerShape(8.dp))
-        ) {
-            AsyncImage(
-                model = FormatUtils.fixImageUrl(episode.cover),
-                contentDescription = episode.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
-                            startY = 90f
-                        )
-                    )
-            )
-            val updateLabel = episode.pubIndex.ifBlank { episode.pubTime }
-            if (updateLabel.isNotBlank()) {
-                Text(
-                    text = updateLabel,
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(7.dp)
-                )
-            }
-            if (episode.follow == 1) {
-                BangumiHomeBadge(
-                    text = "已追",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                )
-            }
-        }
-        Text(
-            text = episode.title,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            modifier = Modifier.padding(top = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun BangumiHomeBadge(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.primary,
-        shape = RoundedCornerShape(4.dp)
-    ) {
-        Text(
-            text = text,
-            color = MaterialTheme.colorScheme.onPrimary,
-            fontSize = 10.sp,
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun HomeLoadingStrip(
-    minHeight: androidx.compose.ui.unit.Dp
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = minHeight),
-        contentAlignment = Alignment.Center
-    ) {
-        com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-            modifier = Modifier.size(32.dp),
-            strokeWidth = 2.dp
-        )
-    }
-}
-
-@Composable
-private fun HomeErrorStrip(
-    message: String,
-    onRetry: () -> Unit,
-    minHeight: androidx.compose.ui.unit.Dp = 150.dp
-) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = minHeight)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = message,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = onRetry) {
-                Text("重试")
-            }
-        }
-    }
-}
-
-
-/**
- * 搜索顶栏
- */
-@Composable
-private fun BangumiSearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onSearch: (String) -> Unit,
-    onBack: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().responsiveContentWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp
-    ) {
-        Column {
-            Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
-                }
-                
-                Spacer(modifier = Modifier.width(4.dp))
-                
-                // 搜索框
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(42.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        CupertinoIcons.Default.MagnifyingGlass,
-                        null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    BasicTextField(
-                        value = query,
-                        onValueChange = onQueryChange,
-                        modifier = Modifier.weight(1f),
-                        textStyle = TextStyle(
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 15.sp
-                        ),
-                        singleLine = true,
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
-                        decorationBox = { inner ->
-                            Box(contentAlignment = Alignment.CenterStart) {
-                                if (query.isEmpty()) {
-                                    Text(
-                                        "搜索番剧名称、声优...",
-                                        style = TextStyle(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
-                                            fontSize = 15.sp
-                                        )
-                                    )
-                                }
-                                inner()
-                            }
-                        }
-                    )
-                    
-                    if (query.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onQueryChange("") },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                CupertinoIcons.Default.XmarkCircle,
-                                null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                TextButton(
-                    onClick = { onSearch(query) },
-                    enabled = query.isNotEmpty()
-                ) {
-                    Text(
-                        "搜索",
-                        color = if (query.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BangumiNavigationBar(
-    title: String,
-    isMyFollowMode: Boolean,
-    onBack: () -> Unit,
-    onSearch: () -> Unit,
-    onOpenMyFollow: () -> Unit
-) {
-    val configuration = LocalConfiguration.current
-    val titleFontSize = resolveBangumiNavigationTitleFontSizeSp(configuration.screenWidthDp).sp
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        shadowElevation = 2.dp
-    ) {
-        Column {
-            Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp)
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
-                }
-                Text(
-                    text = title,
-                    fontSize = titleFontSize,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onSearch) {
-                    Icon(CupertinoIcons.Default.MagnifyingGlass, contentDescription = "搜索")
-                }
-                IconButton(onClick = onOpenMyFollow) {
-                    Icon(
-                        CupertinoIcons.Default.Bookmark,
-                        contentDescription = "我的追番",
-                        tint = if (isMyFollowMode) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                    )
-                }
-                if (!isMyFollowMode) {
-                    Spacer(modifier = Modifier.width(48.dp))
-                } else {
-                    Spacer(modifier = Modifier.width(48.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BangumiTypeTabs(
-    types: List<BangumiType>,
-    selectedType: Int,
-    onTypeSelected: (Int) -> Unit
-) {
-    val configuration = LocalConfiguration.current
-    val tabFontSize = resolveBangumiTypeTabFontSizeSp(configuration.screenWidthDp).sp
-
-    Surface(color = MaterialTheme.colorScheme.surface) {
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            items(types, key = { it.value }) { type ->
-                val selected = type.value == selectedType
-                Column(
-                    modifier = Modifier
-                        .clickable { onTypeSelected(type.value) }
-                        .padding(top = 10.dp, bottom = 2.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = type.label,
-                        fontSize = tabFontSize,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .height(3.dp)
-                            .width(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-                            )
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * 番剧列表内容
- */
-@Composable
-private fun BangumiListContent(
-    listState: BangumiListState,
-    onRetry: () -> Unit,
-    onLoadMore: () -> Unit,
-    onItemClick: (Long) -> Unit
-) {
-    when (listState) {
-        is BangumiListState.Loading -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
-            }
-        }
-        is BangumiListState.Error -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = listState.message,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onRetry) {
-                        Text("重试")
-                    }
-                }
-            }
-        }
-        is BangumiListState.Success -> {
-            BangumiGrid(
-                items = listState.items,
-                hasMore = listState.hasMore,
-                onLoadMore = onLoadMore,
-                onItemClick = { onItemClick(it.seasonId) }
-            )
-        }
-    }
-}
-
-/**
- * 番剧搜索结果内容
- */
-@Composable
-private fun BangumiSearchContent(
-    searchState: BangumiSearchState,
-    selectedType: Int,
-    onRetry: () -> Unit,
-    onLoadMore: () -> Unit,
-    onItemClick: (Long) -> Unit,
-    onEpisodeClick: (Long, Long) -> Unit
-) {
-    when (searchState) {
-        is BangumiSearchState.Idle -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    resolveBangumiSearchPlaceholder(selectedType),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        is BangumiSearchState.Loading -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
-            }
-        }
-        is BangumiSearchState.Error -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = searchState.message,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onRetry) {
-                        Text("重试")
-                    }
-                }
-            }
-        }
-        is BangumiSearchState.Success -> {
-            if (searchState.items.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "未找到相关番剧",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                BangumiSearchGrid(
-                    items = searchState.items,
-                    hasMore = searchState.hasMore,
-                    onLoadMore = onLoadMore,
-                    onItemClick = onItemClick,
-                    onEpisodeClick = onEpisodeClick
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun BangumiSearchGrid(
-    items: List<BangumiSearchItem>,
-    hasMore: Boolean,
-    onLoadMore: () -> Unit,
-    onItemClick: (Long) -> Unit,
-    onEpisodeClick: (Long, Long) -> Unit
-) {
-    val gridState = rememberLazyGridState()
-    
-    LaunchedEffect(gridState) {
-        snapshotFlow {
-            val layoutInfo = gridState.layoutInfo
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleItem >= layoutInfo.totalItemsCount - 4
-        }.collect { shouldLoad ->
-            if (shouldLoad && hasMore) {
-                onLoadMore()
-            }
-        }
-    }
-    
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 100.dp),
-        state = gridState,
-        contentPadding = PaddingValues(
-            start = 12.dp,
-            top = 12.dp,
-            end = 12.dp,
-            bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        itemsIndexed(
-            items = items,
-            key = { index, item -> resolveBangumiSearchItemLazyKey(index, item) }
-        ) { _, item ->
-            BangumiSearchCardGrid(
-                item = item,
-                onClick = { onItemClick(item.seasonId.takeIf { it > 0L } ?: item.pgcSeasonId) },
-                onEpisodeClick = item.episodes?.firstOrNull { it.id > 0L }?.let { episode ->
-                    {
-                        val targetSeasonId = item.seasonId.takeIf { it > 0L } ?: item.pgcSeasonId
-                        onEpisodeClick(targetSeasonId, episode.id)
-                    }
-                }
-            )
-        }
-        
-        if (hasMore) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
-                }
-            }
+            AppIcon(rememberAppSearchIcon(), contentDescription = "搜索")
         }
     }
 }

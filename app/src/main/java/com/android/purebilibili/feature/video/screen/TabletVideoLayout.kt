@@ -1,6 +1,11 @@
 // 文件路径: feature/video/screen/TabletVideoLayout.kt
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.navigation.animatePagerSelection
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppText
+
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.pager.HorizontalPager
@@ -10,14 +15,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.clickable
@@ -26,39 +39,175 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppSplitLayout
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.util.ShareUtils
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.ViewPoint
+import com.android.purebilibili.feature.video.progress.PbpProgressData
 import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.ui.components.*
+import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
+import com.android.purebilibili.data.model.response.AiSummaryData
+import com.android.purebilibili.feature.video.note.VideoNoteEditorDocument
+import com.android.purebilibili.feature.video.note.VideoNoteUiState
+import com.android.purebilibili.feature.video.note.buildVideoNoteShareText
+import com.android.purebilibili.feature.video.note.shouldShowVideoNoteCard
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
+import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
+import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
+import com.android.purebilibili.feature.video.ui.section.VideoNoteCard
+import com.android.purebilibili.feature.video.ui.section.VideoNoteDeleteConfirmDialog
+import com.android.purebilibili.feature.video.ui.section.VideoNoteEditorSheet
 import com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList
+import com.android.purebilibili.feature.video.ui.section.shouldShowAiSummaryEntry
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
+import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActions
+import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionState
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
+import com.android.purebilibili.feature.video.ui.section.resolveAllowLivePlayerSharedElementForMorph
+import com.android.purebilibili.feature.video.ui.section.resolveNavigationLiveSurfaceTextureEnabled
+import com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState
+import com.android.purebilibili.core.store.DanmakuSettings
+import com.android.purebilibili.core.store.DanmakuSettingsScope
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
-import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
-import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
-import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
-import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
+import com.android.purebilibili.feature.video.viewmodel.VideoEngagementUiState
+import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import kotlinx.coroutines.launch
 
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
+import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
+import com.android.purebilibili.core.ui.transition.LocalVideoTransitionAdaptiveInfo
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
+import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionSourceCornerDp
+import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
+import com.android.purebilibili.feature.video.viewmodel.withEngagementUiState
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+
+internal enum class TabletSecondaryTab(val label: String) {
+    COMMENTS("评论"),
+    INTRO("简介"),
+    RELATED("相关推荐"),
+    COLLECTION("合集"),
+    OWNER_UPLOADS("UP 投稿")
+}
+
+
+@Composable
+internal fun TabletSecondaryDanmakuActions(
+    danmakuEnabled: Boolean,
+    onDanmakuSendClick: () -> Unit,
+    onDanmakuToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp) {
+        resolveVideoContentTabBarDanmakuActionLayoutPolicy(widthDp = configuration.screenWidthDp)
+    }
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppText(
+            text = layoutPolicy.sendLabel,
+            fontSize = layoutPolicy.sendTextSizeSp.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            tapToCopyEnabled = false,
+            modifier = Modifier
+                .heightIn(min = layoutPolicy.sendMinHeightDp.dp)
+                .wrapContentHeight(align = Alignment.CenterVertically)
+                .clickable(onClick = onDanmakuSendClick),
+        )
+        NativeDanmakuToggleButton(
+            enabled = danmakuEnabled,
+            onToggle = onDanmakuToggle,
+            activeTint = MaterialTheme.colorScheme.secondary,
+            inactiveTint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier
+                .padding(end = layoutPolicy.toggleTrailingPaddingDp.dp)
+                .size(layoutPolicy.toggleButtonSizeDp.dp),
+            iconSize = layoutPolicy.toggleIconSizeDp.dp,
+        )
+    }
+}
+
+
+@Composable
+internal fun TabletSecondaryLiquidTabRow(
+    labels: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    indicatorPositionProvider: () -> Float,
+    isScrollInProgressProvider: () -> Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
+    BoxWithConstraints(modifier = modifier) {
+        val minimumScrollableWidth = (labels.size * 76).dp
+        val needsHorizontalScroll = maxWidth < minimumScrollableWidth
+        val scrollState = rememberScrollState()
+        Box(
+            modifier = if (needsHorizontalScroll) {
+                Modifier
+                    .horizontalScroll(scrollState)
+                    .width(minimumScrollableWidth)
+            } else {
+                Modifier.fillMaxWidth()
+            }
+        ) {
+            BottomBarLiquidSegmentedControl(
+                items = labels,
+                selectedIndex = selectedIndex,
+                onSelected = onSelected,
+                modifier = Modifier.fillMaxWidth(),
+                itemWidth = if (needsHorizontalScroll) 76.dp else null,
+                height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
+                indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
+                labelFontSize = 15.sp,
+                liquidGlassEffectsEnabled = liquidGlassEnabled,
+                equalizeMiuixNonGlassItemWidths = false,
+                allowNativeLabelOverflow = true,
+                forceEqualWidth = !needsHorizontalScroll,
+                compactMiuixWhenTwoOptions = false,
+                dragSelectionEnabled = true,
+                tapPressRefractionEnabled = true,
+                indicatorPositionProvider = indicatorPositionProvider,
+                isScrollInProgressProvider = isScrollInProgressProvider,
+                externalPagerMotionEffectsEnabled = true,
+            )
+        }
+    }
+}
 
 /**
  * 🖥️ 平板端视频详情页布局
@@ -69,22 +218,29 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun TabletVideoLayout(
+internal fun TabletVideoLayout(
     playerState: VideoPlayerState,
-    uiState: PlayerUiState,
+    uiState: VideoPlaybackUiState,
     commentState: CommentUiState,
-    viewModel: PlayerViewModel,
-    commentViewModel: VideoCommentViewModel,
+    engagementState: VideoEngagementUiState,
+    subReplyState: SubReplyUiState,
+    downloadProgress: Float,
+    commentMemberDecorationsEnabled: Boolean,
+    playbackActions: VideoDetailPlaybackActions,
+    engagementActions: VideoDetailEngagementActions,
+    commentActions: VideoDetailCommentActions,
     configuration: Configuration,
     isVerticalVideo: Boolean,
     sleepTimerMinutes: Int?,
     viewPoints: List<ViewPoint>,
+    pbpProgressData: PbpProgressData? = null,
     bvid: String,
     coverUrl: String = "",
     onBack: () -> Unit,
     onUpClick: (Long) -> Unit,
     onNavigateToAudioMode: () -> Unit,
     onToggleFullscreen: () -> Unit,  // 📺 全屏切换回调
+    onPortraitFullscreen: () -> Unit,
     isInPipMode: Boolean,
     onPipClick: () -> Unit,
     isPortraitFullscreen: Boolean = false,
@@ -99,7 +255,6 @@ fun TabletVideoLayout(
     onAudioQualityChange: (Int) -> Unit = {},
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    showRelatedVideosSection: Boolean = true,
     onBgmClick: (BgmInfo) -> Unit = {},
     showUpBadge: Boolean = true,
     onSearchKeywordClick: (String) -> Unit = {},
@@ -107,16 +262,28 @@ fun TabletVideoLayout(
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
-    forceCoverOnlyOnReturn: Boolean = false
+    forceCoverOnlyOnReturn: Boolean = false,
+    predictiveBackCancelRecoveryGeneration: Int = 0,
+    liveSurfaceCardTransitionEnabled: Boolean = true,
+    paneControlsEnabled: Boolean = true,
+    videoAiSummaryEntryEnabled: Boolean = true,
+    videoNoteEnabled: Boolean = true,
+    videoNoteDefaultCollapsed: Boolean = true,
+    playerContent: (@Composable (Modifier) -> Unit)? = null,
 ) {
-    val layoutPolicy = remember(configuration.screenWidthDp) {
+    val adaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
+    val foldHalfOpened = adaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Book ||
+        adaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Tabletop
+    val layoutPolicy = remember(configuration.screenWidthDp, adaptiveInfo.posture) {
         resolveTabletVideoLayoutPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = configuration.screenWidthDp,
+            foldPosture = adaptiveInfo.posture,
         )
     }
     var secondaryPaneModeName by rememberSaveable(bvid) {
         mutableStateOf(TabletSecondaryPaneMode.EXPANDED.name)
     }
+    var requestedSecondaryTabName by rememberSaveable(bvid) { mutableStateOf<String?>(null) }
     val secondaryPaneMode = remember(secondaryPaneModeName) {
         runCatching { TabletSecondaryPaneMode.valueOf(secondaryPaneModeName) }
             .getOrDefault(TabletSecondaryPaneMode.EXPANDED)
@@ -125,53 +292,87 @@ fun TabletVideoLayout(
         basePrimaryRatio = layoutPolicy.primaryRatio,
         secondaryPaneMode = secondaryPaneMode
     )
+    val useThreePaneLayout = LocalWindowSizeClass.current.shouldUseThreePaneLayout &&
+        !layoutPolicy.useTabletopLayout
+    val secondaryPaneHidden = shouldHideTabletSecondaryPane(
+        paneMode = secondaryPaneMode,
+        useThreePaneLayout = useThreePaneLayout,
+        useTabletopLayout = layoutPolicy.useTabletopLayout,
+    )
+    val danmakuChrome = rememberTabletDanmakuChromeState(bvid)
     
     // 🖥️ [修复] 使用 LocalContext 获取 Activity，而非 playerState.context
     val context = LocalContext.current
-    val commentMemberDecorationsEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getCommentMemberDecorationsEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false
-        )
-    val success = uiState as? PlayerUiState.Success
-    val relatedVideos = remember(success?.related, showRelatedVideosSection) {
-        if (showRelatedVideosSection) success?.related.orEmpty() else emptyList()
-    }
+    val secondaryDefaultTab by SettingsManager
+        .getTabletSecondaryDefaultTab(context)
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED)
     val activity = remember(context) {
         (context as? android.app.Activity)
             ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
     }
     
-    AdaptiveSplitLayout(
+    AppSplitLayout(
+        secondaryPaneVisible = !secondaryPaneHidden,
         primaryContent = {
-            // 📹 左侧：播放器 + 视频信息（可滚动）
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 📹 左侧：播放器 + 视频信息（可滚动）
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
                 // 视频播放器（固定高度，不参与滚动）
                 
                 //  尝试获取共享元素作用域
                 val sharedTransitionScope = LocalSharedTransitionScope.current
                 val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+                val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
+                val sharedCoverShape = remember(sourceRoute) {
+                    RoundedCornerShape(resolveVideoSharedTransitionSourceCornerDp(sourceRoute).dp)
+                }
+                val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
+                val transitionAdaptiveInfo = LocalVideoTransitionAdaptiveInfo.current
+                val sharedTransitionMotionSpec = remember(
+                    sourceRoute,
+                    transitionEnabled,
+                    sharedTransitionSpeedSettings,
+                    transitionAdaptiveInfo,
+                ) {
+                    resolveVideoCardSharedTransitionMotionSpec(
+                        sourceRoute = sourceRoute,
+                        transitionEnabled = transitionEnabled,
+                        speedSettings = sharedTransitionSpeedSettings,
+                        adaptiveInfo = transitionAdaptiveInfo,
+                    )
+                }
                 
                 //  为播放器容器添加共享元素标记（受开关控制）
                 val playerContainerModifier = if (
                     transitionEnabled &&
+                    !foldHalfOpened &&
                     sharedTransitionScope != null &&
                     animatedVisibilityScope != null &&
                     !forceCoverOnlyOnReturn
                 ) {
-                    with(sharedTransitionScope) {
+                    with(requireNotNull(sharedTransitionScope)) {
                         Modifier
                             .sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey(bvid)),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                boundsTransform = { _, _ -> com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec() },
-                                clipInOverlayDuringTransition = OverlayClip(
-                                    RoundedCornerShape(12.dp)
-                                )
+                                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
+                                boundsTransform = { initialBounds, targetBounds ->
+                                    if (sharedTransitionMotionSpec.enabled) {
+                                        videoSharedElementBoundsTransformSpec(
+                                            motion = sharedTransitionMotionSpec,
+                                            initialBounds = initialBounds,
+                                            targetBounds = targetBounds,
+                                            durationMillis = sharedTransitionMotionSpec.durationMillis,
+                                        )
+                                    } else {
+                                        com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                                    }
+                                },
+                                clipInOverlayDuringTransition = OverlayClip(sharedCoverShape)
                             )
                     }
                 } else {
@@ -179,7 +380,11 @@ fun TabletVideoLayout(
                 }
 
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val playerWidth = minOf(maxWidth, layoutPolicy.playerMaxWidthDp.dp)
+                    val playerWidth = if (layoutPolicy.useTabletopLayout) {
+                        minOf(maxWidth, maxHeight * 16f / 9f, layoutPolicy.playerMaxWidthDp.dp)
+                    } else {
+                        minOf(maxWidth, layoutPolicy.playerMaxWidthDp.dp)
+                    }
                     val videoHeight = if (forceCoverOnlyOnReturn) {
                         playerWidth / VIDEO_SHARED_COVER_ASPECT_RATIO
                     } else {
@@ -190,126 +395,307 @@ fun TabletVideoLayout(
                             .width(playerWidth)
                             .height(videoHeight)
                             .align(Alignment.Center)
-                            .background(Color.Black)
+                            .background(MaterialTheme.colorScheme.scrim)
                     ) {
-                        VideoPlayerSection(
-                            playerState = playerState,
-                            uiState = uiState,
-                            isFullscreen = false,
-                            isInPipMode = isInPipMode,
-                            onToggleFullscreen = onToggleFullscreen,
-                            onQualityChange = { qid -> viewModel.changeQuality(qid) },
-                            onBack = onBack,
-                            onHomeClick = onHomeClick,
-                            bvid = bvid,
-                            coverUrl = coverUrl,
-                            onDoubleTapLike = { viewModel.toggleLike() },
-                            onReloadVideo = { viewModel.reloadVideo() },
-                            cdnCount = (uiState as? PlayerUiState.Success)?.cdnCount ?: 1,
-                            cdnLineDiagnostics = (uiState as? PlayerUiState.Success)?.cdnLineDiagnostics.orEmpty(),
-                            isCdnProbing = (uiState as? PlayerUiState.Success)?.isCdnProbing ?: false,
-                            onSwitchCdn = { viewModel.switchCdn() },
-                            onSwitchCdnTo = { viewModel.switchCdnTo(it) },
-                            onProbeCdnCandidates = { viewModel.probeCurrentCdnCandidates() },
-                            isAudioOnly = false,
-                            onAudioOnlyToggle = {
-                                viewModel.setAudioMode(true)
-                                onNavigateToAudioMode()
-                            },
-                            sleepTimerMinutes = sleepTimerMinutes,
-                            onSleepTimerChange = { viewModel.setSleepTimer(it) },
-                            videoshotData = (uiState as? PlayerUiState.Success)?.videoshotData,
-                            viewPoints = viewPoints,
-                            isVerticalVideo = isVerticalVideo,
-                            onPortraitFullscreen = { playerState.setPortraitFullscreen(true) },
-                            isPortraitFullscreen = isPortraitFullscreen,
-
-                            onPipClick = onPipClick,
-                            // [New] Codec & Audio
-                            currentCodec = currentCodec,
-                            onCodecChange = onCodecChange,
-                            currentSecondCodec = currentSecondCodec,
-                            onSecondCodecChange = onSecondCodecChange,
-                            currentAudioQuality = currentAudioQuality,
-                            onAudioQualityChange = onAudioQualityChange,
-                            onPlaybackSpeedChange = { viewModel.applyPlaybackSpeedFromUi(it) },
-                            // [New Actions]
-                            onSaveCover = { viewModel.saveCover(context) },
-                            onDownloadAudio = { viewModel.downloadAudio(context) },
-                            // 🔁 [新增] 播放模式
-                            currentPlayMode = currentPlayMode,
-                            onPlayModeClick = onPlayModeClick,
-                            onSubtitleTrackSelected = viewModel::selectSubtitleTrack
-                        )
+                        if (playerContent != null) {
+                            playerContent(Modifier.fillMaxSize())
+                        } else {
+                            VideoPlayerSection(
+                                state = VideoPlayerSectionState(
+                                    playerState = playerState,
+                                    uiState = uiState,
+                                    isFullscreen = false,
+                                    isInPipMode = isInPipMode,
+                                    useTextureSurfaceForNavigation = resolveNavigationLiveSurfaceTextureEnabled(
+                                        cardTransitionEnabled = transitionEnabled && !foldHalfOpened,
+                                        liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
+                                    ),
+                                    allowLivePlayerSharedElement = !foldHalfOpened &&
+                                        resolveAllowLivePlayerSharedElementForMorph(
+                                            cardTransitionEnabled = transitionEnabled,
+                                            liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
+                                        ),
+                                    predictiveBackCancelRecoveryGeneration = predictiveBackCancelRecoveryGeneration,
+                                    bvid = bvid,
+                                    coverUrl = coverUrl,
+                                    cdnCount = (uiState as? VideoPlaybackUiState.Success)?.cdnCount ?: 1,
+                                    cdnLineDiagnostics = (uiState as? VideoPlaybackUiState.Success)
+                                        ?.cdnLineDiagnostics.orEmpty(),
+                                    isCdnProbing = (uiState as? VideoPlaybackUiState.Success)?.isCdnProbing ?: false,
+                                    isAudioOnly = false,
+                                    sleepTimerMinutes = sleepTimerMinutes,
+                                    videoshotData = (uiState as? VideoPlaybackUiState.Success)?.videoshotData,
+                                    viewPoints = viewPoints,
+                                    pbpProgressData = pbpProgressData,
+                                    isVerticalVideo = isVerticalVideo,
+                                    isPortraitFullscreen = isPortraitFullscreen,
+                                    currentCodec = currentCodec,
+                                    currentSecondCodec = currentSecondCodec,
+                                    currentAudioQuality = currentAudioQuality,
+                                    currentPlayMode = currentPlayMode,
+                                    viewportWidthDpOverride = playerWidth.value.toInt(),
+                                ),
+                                actions = VideoPlayerSectionActions(
+                                    onToggleFullscreen = onToggleFullscreen,
+                                    onQualityChange = playbackActions.changeQuality,
+                                    onBack = onBack,
+                                    onHomeClick = onHomeClick,
+                                    onDoubleTapLike = engagementActions.toggleLike,
+                                    onReloadVideo = playbackActions.reloadVideo,
+                                    onSwitchCdn = playbackActions.switchCdn,
+                                    onSwitchCdnTo = playbackActions.switchCdnTo,
+                                    onProbeCdnCandidates = playbackActions.probeCdnCandidates,
+                                    onAudioOnlyToggle = {
+                                        playbackActions.setAudioMode(true)
+                                        onNavigateToAudioMode()
+                                    },
+                                    onSleepTimerChange = playbackActions.setSleepTimer,
+                                    onPortraitFullscreen = onPortraitFullscreen,
+                                    onPipClick = onPipClick,
+                                    onCodecChange = onCodecChange,
+                                    onSecondCodecChange = onSecondCodecChange,
+                                    onAudioQualityChange = onAudioQualityChange,
+                                    onPlaybackSpeedChange = playbackActions.applyPlaybackSpeed,
+                                    onSaveCover = playbackActions.saveCover,
+                                    onDownloadAudio = playbackActions.downloadAudio,
+                                    onPlayModeClick = onPlayModeClick,
+                                    onSubtitleTrackSelected = playbackActions.selectSubtitleTrack,
+                                    onDanmakuInputClick = playbackActions.showDanmakuSendDialog,
+                                    onLikeDanmaku = playbackActions.likeDanmaku,
+                                    onRecallDanmaku = playbackActions.recallDanmaku,
+                                ),
+                            )
+                        }
                     }
                 }
                 
-                // 📜 视频信息区域（可滚动）
-                if (success != null) {
-                    val currentPageIndex = success.info.pages.indexOfFirst { it.cid == success.info.cid }.coerceAtLeast(0)
-                    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
-                    
-                    ScrollableVideoInfoSection(
-                        info = success.info,
-                        isFollowing = success.isFollowing,
-                        isFavorited = success.isFavorited,
-                        isLiked = success.isLiked,
-                        coinCount = success.coinCount,
-                        currentPageIndex = currentPageIndex,
+                // Tabletop 把简介移到铰链下方；普通平板仍在播放器下方展示。
+                if (uiState is VideoPlaybackUiState.Success && !layoutPolicy.useTabletopLayout) {
+                    TabletVideoInfoPane(
+                        success = uiState,
+                        engagementState = engagementState,
                         downloadProgress = downloadProgress,
-                        isInWatchLater = success.isInWatchLater,
-                        videoTags = success.videoTags,
-                        ownerFollowerCount = success.ownerFollowerCount,
-                        ownerVideoCount = success.ownerVideoCount,
-                        bgmInfo = success.bgmInfo,
-                        bgmInfoList = success.bgmInfoList,
+                        playbackActions = playbackActions,
+                        engagementActions = engagementActions,
                         onBgmClick = onBgmClick,
-                        relatedVideos = relatedVideos,
-                        onFollowClick = { viewModel.toggleFollow() },
-                        onFavoriteClick = { viewModel.toggleFavorite() },
-                        onLikeClick = { viewModel.toggleLike() },
-                        onCoinClick = { viewModel.openCoinDialog() },
-                        onTripleClick = { viewModel.doTripleAction() },
-                        onPageSelect = { viewModel.switchPage(it) },
-                        onUpClick = onUpClick,
-                        onDownloadClick = { viewModel.openDownloadDialog() },
-                        onWatchLaterClick = { viewModel.toggleWatchLater() },
                         onRelatedVideoClick = onRelatedVideoClick,
                         onOpenBilibiliLink = onOpenBilibiliLink,
+                        danmakuEnabled = danmakuChrome.enabled,
+                        onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
+                        onDanmakuToggle = danmakuChrome.onToggle,
+                        onOwnerUploadsClick = {
+                            requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
+                            secondaryPaneModeName = TabletSecondaryPaneMode.EXPANDED.name
+                        },
+                        videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
+                        videoNoteEnabled = videoNoteEnabled,
+                        videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
+                        showRelatedVideos = false,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .widthIn(max = layoutPolicy.infoMaxWidthDp.dp)
-                            .align(Alignment.CenterHorizontally)
+                            .align(Alignment.CenterHorizontally),
+                    )
+                }
+            }
+        }
+    },
+        secondaryContent = {
+            // 📝 右侧：评论 / 相关推荐
+            if (uiState is VideoPlaybackUiState.Success) {
+                val success = uiState
+                Box(modifier = Modifier.fillMaxSize()) {
+                    TabletSecondaryContent(
+                        success = success,
+                        commentState = commentState,
+                        subReplyState = subReplyState,
+                        playbackActions = playbackActions,
+                        engagementState = engagementState,
+                        engagementActions = engagementActions,
+                        commentActions = commentActions,
+                        playerState = playerState,
+                        onUpClick = onUpClick,
+                        paneMode = secondaryPaneMode,
+                        onPaneModeChange = { secondaryPaneModeName = it.name },
+                        onRelatedVideoClick = onRelatedVideoClick,
+                        onSearchKeywordClick = onSearchKeywordClick,
+                        showUpBadge = showUpBadge,
+                        showIdentityDecorations = commentMemberDecorationsEnabled,
+                        onOpenBilibiliLink = onOpenBilibiliLink,
+                        requestedTabName = requestedSecondaryTabName,
+                        onRequestedTabConsumed = { requestedSecondaryTabName = null },
+                        danmakuEnabled = danmakuChrome.enabled,
+                        onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
+                        onDanmakuToggle = danmakuChrome.onToggle,
+                        fixedTab = if (useThreePaneLayout) TabletSecondaryTab.COMMENTS else null,
+                        relatedTabFirst = secondaryDefaultTab ==
+                            com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED,
+                        introContent = if (layoutPolicy.useTabletopLayout) {
+                            {
+                                TabletVideoInfoPane(
+                                    success = success,
+                                    engagementState = engagementState,
+                                    downloadProgress = downloadProgress,
+                                    playbackActions = playbackActions,
+                                    engagementActions = engagementActions,
+                                    onBgmClick = onBgmClick,
+                                    onRelatedVideoClick = onRelatedVideoClick,
+                                    onOpenBilibiliLink = onOpenBilibiliLink,
+                                    danmakuEnabled = danmakuChrome.enabled,
+                                    onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
+                                    onDanmakuToggle = danmakuChrome.onToggle,
+                                    onOwnerUploadsClick = {
+                                        requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
+                                    },
+                                    videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
+                                    videoNoteEnabled = videoNoteEnabled,
+                                    videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        } else null,
                     )
                 }
             }
         },
-        secondaryContent = {
-            // 📝 右侧：评论 / 相关推荐
-            if (success != null) {
-                TabletSecondaryContent(
-                    success = success,
-                    relatedVideos = relatedVideos,
-                    commentState = commentState,
-                    commentViewModel = commentViewModel,
-                    viewModel = viewModel,
-                    playerState = playerState,
-                    onUpClick = onUpClick,
-                    paneMode = secondaryPaneMode,
-                    onPaneModeChange = { secondaryPaneModeName = it.name },
-                    onPaneModeCycle = {
-                        secondaryPaneModeName = nextTabletSecondaryPaneMode(secondaryPaneMode).name
-                    },
-                    onRelatedVideoClick = onRelatedVideoClick,
-                    showUpBadge = showUpBadge,
-                    showIdentityDecorations = commentMemberDecorationsEnabled,
-                    onSearchKeywordClick = onSearchKeywordClick,
-                    onOpenBilibiliLink = onOpenBilibiliLink
-                )
+        tertiaryContent = if (useThreePaneLayout) {
+            {
+                if (uiState is VideoPlaybackUiState.Success) {
+                    TabletSecondaryContent(
+                        success = uiState,
+                        commentState = commentState,
+                        subReplyState = subReplyState,
+                        playbackActions = playbackActions,
+                        engagementState = engagementState,
+                        engagementActions = engagementActions,
+                        commentActions = commentActions,
+                        playerState = playerState,
+                        onUpClick = onUpClick,
+                        paneMode = TabletSecondaryPaneMode.EXPANDED,
+                        onPaneModeChange = {},
+                        onRelatedVideoClick = onRelatedVideoClick,
+                        onSearchKeywordClick = onSearchKeywordClick,
+                        showUpBadge = showUpBadge,
+                        showIdentityDecorations = commentMemberDecorationsEnabled,
+                        onOpenBilibiliLink = onOpenBilibiliLink,
+                        requestedTabName = null,
+                        onRequestedTabConsumed = {},
+                        fixedTab = TabletSecondaryTab.RELATED,
+                        introContent = null,
+                    )
+                }
             }
-        },
+        } else null,
         primaryRatio = primaryRatio
+    )
+}
+
+@Composable
+internal fun TabletVideoInfoPane(
+    success: VideoPlaybackUiState.Success,
+    engagementState: VideoEngagementUiState,
+    downloadProgress: Float,
+    playbackActions: VideoDetailPlaybackActions,
+    engagementActions: VideoDetailEngagementActions,
+    onBgmClick: (BgmInfo) -> Unit,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    onOpenBilibiliLink: ((String) -> Unit)?,
+    danmakuEnabled: Boolean,
+    onDanmakuSendClick: () -> Unit,
+    onDanmakuToggle: () -> Unit,
+    onOwnerUploadsClick: () -> Unit,
+    videoAiSummaryEntryEnabled: Boolean = true,
+    videoNoteEnabled: Boolean = true,
+    videoNoteDefaultCollapsed: Boolean = true,
+    modifier: Modifier = Modifier,
+    showRelatedVideos: Boolean = true,
+) {
+    val context = LocalContext.current
+    var confirmDeleteNote by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
+    val onShareVideoNote: (VideoNoteEditorDocument, Boolean) -> Unit = { document, isDraft ->
+        ShareUtils.shareText(
+            context = context,
+            subject = document.title.ifBlank { success.info.title },
+            text = buildVideoNoteShareText(
+                videoTitle = success.info.title,
+                bvid = success.info.bvid,
+                document = document,
+                isDraft = isDraft
+            ),
+            chooserTitle = "分享视频笔记"
+        )
+    }
+    val engagementSuccess = success.withEngagementUiState(engagementState)
+    val currentPageIndex = success.info.pages
+        .indexOfFirst { it.cid == success.info.cid }
+        .coerceAtLeast(0)
+    ScrollableVideoInfoSection(
+        info = engagementSuccess.info,
+        isFollowing = engagementState.isFollowing,
+        isFavorited = engagementState.isFavorited,
+        isLiked = engagementState.isLiked,
+        coinCount = engagementState.coinCount,
+        currentPageIndex = currentPageIndex,
+        downloadProgress = downloadProgress,
+        isInWatchLater = engagementState.isInWatchLater,
+        videoTags = success.videoTags,
+        ownerFollowerCount = success.ownerFollowerCount,
+        ownerVideoCount = success.ownerVideoCount,
+        bgmInfo = success.bgmInfo,
+        bgmInfoList = success.bgmInfoList,
+        onBgmClick = onBgmClick,
+        relatedVideos = if (showRelatedVideos) success.related else emptyList(),
+        showRelatedVideos = showRelatedVideos,
+        onFollowClick = engagementActions.toggleFollow,
+        onFavoriteClick = engagementActions.toggleFavorite,
+        onLikeClick = engagementActions.toggleLike,
+        onCoinClick = engagementActions.openCoinDialog,
+        onTripleClick = engagementActions.doTripleAction,
+        onPageSelect = playbackActions.switchPage,
+        onUpClick = { onOwnerUploadsClick() },
+        onDownloadClick = playbackActions.openDownloadDialog,
+        onWatchLaterClick = engagementActions.toggleWatchLater,
+        onRelatedVideoClick = onRelatedVideoClick,
+        onOpenBilibiliLink = onOpenBilibiliLink,
+        aiSummary = success.aiSummary,
+        aiSummaryPrompt = success.aiSummaryPrompt,
+        videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
+        onRetryAiSummary = playbackActions.retryAiSummary,
+        onCreateNoteDraftFromAiSummary = playbackActions.createVideoNoteDraftFromAiSummary,
+        onTimestampClick = { timestamp -> playbackActions.seekTo(timestamp) },
+        videoNoteState = success.videoNoteState,
+        isLoggedIn = success.isLoggedIn,
+        videoNoteEnabled = videoNoteEnabled,
+        videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
+        onOpenVideoNoteEditor = playbackActions.openVideoNoteEditor,
+        onRetryVideoNote = playbackActions.retryVideoNote,
+        onDeleteVideoNoteClick = { confirmDeleteNote = true },
+        onShareVideoNote = { document -> onShareVideoNote(document, false) },
+        onPublicVideoNoteClick = { cvid, _ ->
+            onOpenBilibiliLink?.invoke("https://www.bilibili.com/read/cv$cvid")
+        },
+        modifier = modifier,
+    )
+
+    VideoNoteEditorSheet(
+        noteState = success.videoNoteState,
+        onDismiss = playbackActions.closeVideoNoteEditor,
+        onDocumentChange = playbackActions.updateVideoNoteEditorDocument,
+        onInsertTimestamp = playbackActions.insertCurrentPlaybackTimestampIntoNote,
+        onTimestampClick = { timestamp -> playbackActions.seekTo(timestamp) },
+        onShare = { document -> onShareVideoNote(document, success.videoNoteState.editorFromAiSummary) },
+        onSave = playbackActions.saveVideoNote
+    )
+
+    VideoNoteDeleteConfirmDialog(
+        visible = confirmDeleteNote,
+        deleting = success.videoNoteState.deleting,
+        onConfirm = {
+            confirmDeleteNote = false
+            playbackActions.deleteVideoNote()
+        },
+        onDismiss = { confirmDeleteNote = false }
     )
 }
 
@@ -317,38 +703,73 @@ fun TabletVideoLayout(
  * 📝 平板右侧内容区域（评论/推荐切换）
  */
 @Composable
-private fun TabletSecondaryContent(
-    success: PlayerUiState.Success,
-    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
+internal fun TabletSecondaryContent(
+    success: VideoPlaybackUiState.Success,
     commentState: CommentUiState,
-    commentViewModel: VideoCommentViewModel,
-    viewModel: PlayerViewModel,
+    subReplyState: SubReplyUiState,
+    playbackActions: VideoDetailPlaybackActions,
+    engagementState: VideoEngagementUiState,
+    engagementActions: VideoDetailEngagementActions,
+    commentActions: VideoDetailCommentActions,
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
     paneMode: TabletSecondaryPaneMode,
     onPaneModeChange: (TabletSecondaryPaneMode) -> Unit,
-    onPaneModeCycle: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     showUpBadge: Boolean,
     showIdentityDecorations: Boolean,
     onSearchKeywordClick: (String) -> Unit,
-    onOpenBilibiliLink: ((String) -> Unit)?
+    onOpenBilibiliLink: ((String) -> Unit)?,
+    requestedTabName: String?,
+    onRequestedTabConsumed: () -> Unit,
+    fixedTab: TabletSecondaryTab? = null,
+    introContent: (@Composable () -> Unit)? = null,
+    applyStatusBarPadding: Boolean = true,
+    includeRelatedTab: Boolean = true,
+    includeOwnerUploadsTab: Boolean = true,
+    relatedTabFirst: Boolean = false,
+    danmakuEnabled: Boolean = true,
+    onDanmakuSendClick: () -> Unit = {},
+    onDanmakuToggle: () -> Unit = {},
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
-    var selectedTab by rememberSaveable(success.info.bvid) {
+    val tabs = remember(
+        success.info.ugc_season,
+        success.info.owner.mid,
+        fixedTab,
+        introContent != null,
+        includeRelatedTab,
+        includeOwnerUploadsTab,
+        relatedTabFirst,
+    ) {
+        if (fixedTab != null) {
+            listOf(requireNotNull(fixedTab))
+        } else {
+            buildList {
+                if (relatedTabFirst && includeRelatedTab) add(TabletSecondaryTab.RELATED)
+                add(TabletSecondaryTab.COMMENTS)
+                if (introContent != null) add(TabletSecondaryTab.INTRO)
+                if (!relatedTabFirst && includeRelatedTab) add(TabletSecondaryTab.RELATED)
+                if (success.info.ugc_season != null) add(TabletSecondaryTab.COLLECTION)
+                if (includeOwnerUploadsTab && success.info.owner.mid > 0L) {
+                    add(TabletSecondaryTab.OWNER_UPLOADS)
+                }
+            }
+        }
+    }
+    val relatedTabIndex = tabs.indexOf(TabletSecondaryTab.RELATED).coerceAtLeast(0)
+    var selectedTab by rememberSaveable(success.info.bvid, fixedTab, relatedTabFirst) {
         mutableIntStateOf(
-            resolveTabletSecondaryDefaultTab(
-                replyCount = commentState.replyCount,
-                hasRelatedVideos = relatedVideos.isNotEmpty()
+            if (fixedTab != null) 0 else resolveTabletSecondaryDefaultTabIndex(
+                tabs = tabs,
+                preferRelated = relatedTabFirst,
             )
         )
     }
     val pagerState = rememberPagerState(
         initialPage = selectedTab,
-        pageCount = { 2 }
+        pageCount = { tabs.size }
     )
-    val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
-    val tabs = listOf("评论 ${if (commentState.replyCount > 0) "(${commentState.replyCount})" else ""}", "相关推荐")
     
     // 评论图片预览状态
     var showImagePreview by remember { mutableStateOf(false) }
@@ -360,9 +781,10 @@ private fun TabletSecondaryContent(
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
+    val latestOnRequestedTabConsumed by rememberUpdatedState(onRequestedTabConsumed)
     LaunchedEffect(selectedTab) {
         if (pagerState.currentPage != selectedTab) {
-            pagerState.animateScrollToPage(selectedTab)
+            animatePagerSelection(pagerState, selectedTab)
         }
     }
     LaunchedEffect(pagerState.currentPage) {
@@ -370,9 +792,22 @@ private fun TabletSecondaryContent(
             selectedTab = pagerState.currentPage
         }
     }
+    LaunchedEffect(requestedTabName, tabs) {
+        if (fixedTab != null) return@LaunchedEffect
+        val requestedTab = requestedTabName?.let { name ->
+            TabletSecondaryTab.entries.firstOrNull { it.name == name }
+        }
+        if (requestedTab != null) {
+            val index = tabs.indexOf(requestedTab)
+            if (index >= 0) selectedTab = index
+            latestOnRequestedTabConsumed()
+        }
+    }
     LaunchedEffect(subReplyState.visible) {
-        if (subReplyState.visible) {
-            selectedTab = 0
+        if (subReplyState.visible && fixedTab != TabletSecondaryTab.RELATED) {
+            resolveTabletCommentTabIndex(tabs)
+                .takeIf { it >= 0 }
+                ?.let { selectedTab = it }
             if (paneMode == TabletSecondaryPaneMode.COLLAPSED) {
                 onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
             }
@@ -422,7 +857,7 @@ private fun TabletSecondaryContent(
         )
     }
 
-    if (paneMode == TabletSecondaryPaneMode.COLLAPSED) {
+    if (fixedTab == null && paneMode == TabletSecondaryPaneMode.COLLAPSED) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -430,24 +865,20 @@ private fun TabletSecondaryContent(
                 .padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            TextButton(onClick = { onPaneModeChange(TabletSecondaryPaneMode.COMPACT) }) {
-                Text("半开")
+            AppTextButton(onClick = { onPaneModeChange(TabletSecondaryPaneMode.COMPACT) }) {
+                AppText("半开")
             }
-            TextButton(onClick = { onPaneModeChange(TabletSecondaryPaneMode.EXPANDED) }) {
-                Text("展开")
+            AppTextButton(onClick = { onPaneModeChange(TabletSecondaryPaneMode.EXPANDED) }) {
+                AppText("展开")
             }
             Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = {
-                selectedTab = 0
-                onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
-            }) {
-                Text("评论")
-            }
-            TextButton(onClick = {
-                selectedTab = 1
-                onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
-            }) {
-                Text("推荐")
+            tabs.forEachIndexed { index, tab ->
+                AppTextButton(onClick = {
+                    selectedTab = index
+                    onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
+                }) {
+                    AppText(tab.label)
+                }
             }
         }
         return
@@ -456,65 +887,100 @@ private fun TabletSecondaryContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .statusBarsPadding()
+            .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
             .background(MaterialTheme.colorScheme.background)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End
-        ) {
-            TextButton(onClick = onPaneModeCycle) {
-                Text(
-                    when (paneMode) {
-                        TabletSecondaryPaneMode.EXPANDED -> "半开"
-                        TabletSecondaryPaneMode.COMPACT -> "收起"
-                        TabletSecondaryPaneMode.COLLAPSED -> "展开"
-                    }
-                )
-            }
-        }
-
-        // Tab 栏
-        PrimaryTabRow(
-            selectedTabIndex = pagerState.currentPage,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = pagerState.currentPage == index,
-                    onClick = {
-                        scope.launch {
-                            pagerState.animateScrollToPage(index)
-                        }
+        if (fixedTab == null && tabs.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TabletSecondaryLiquidTabRow(
+                    labels = tabs.map { it.label },
+                    selectedIndex = pagerState.currentPage,
+                    onSelected = { index ->
+                        scope.launch { animatePagerSelection(pagerState, index) }
                     },
-                    text = { Text(title) }
+                    indicatorPositionProvider = {
+                        pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    },
+                    isScrollInProgressProvider = { pagerState.isScrollInProgress },
+                    modifier = Modifier.weight(1f),
                 )
+                if (shouldShowTabletSecondaryDanmakuActions()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TabletSecondaryDanmakuActions(
+                        danmakuEnabled = danmakuEnabled,
+                        onDanmakuSendClick = onDanmakuSendClick,
+                        onDanmakuToggle = onDanmakuToggle,
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = requireNotNull(fixedTab).label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (shouldShowTabletSecondaryDanmakuActions()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TabletSecondaryDanmakuActions(
+                        danmakuEnabled = danmakuEnabled,
+                        onDanmakuSendClick = onDanmakuSendClick,
+                        onDanmakuToggle = onDanmakuToggle,
+                    )
+                }
             }
         }
         
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = true,
+            userScrollEnabled = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .verticalPriorityHorizontalPagerSwipe(
+                    state = pagerState,
+                    enabled = shouldEnableVideoContentHorizontalPagerSwipe(
+                        currentPage = pagerState.currentPage,
+                        commentPageIndex = 0,
+                        isPagerScrollInProgress = pagerState.isScrollInProgress,
+                    ),
+                )
         ) { page ->
-            when (page) {
-                0 -> {
+            when (tabs[page]) {
+                TabletSecondaryTab.COMMENTS -> {
                     val listState = rememberLazyListState()
-                    val shouldLoadMore by remember {
+                    val shouldLoadMore by remember(listState) {
                         derivedStateOf {
                             val layoutInfo = listState.layoutInfo
                             val totalItems = layoutInfo.totalItemsCount
                             val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                            totalItems > 0 && lastVisibleItemIndex >= totalItems - 3 && !commentState.isRepliesLoading
+                            totalItems > 0 && lastVisibleItemIndex >= totalItems - 3
                         }
                     }
-                    LaunchedEffect(shouldLoadMore) {
-                        if (shouldLoadMore) commentViewModel.loadComments()
+                    LaunchedEffect(
+                        shouldLoadMore,
+                        commentState.isRepliesLoading,
+                        commentState.isRepliesEnd,
+                        commentState.replies.size,
+                    ) {
+                        if (
+                            shouldLoadMore &&
+                            !commentState.isRepliesLoading &&
+                            !commentState.isRepliesEnd
+                        ) {
+                            commentActions.loadComments()
+                        }
                     }
 
                     if (subReplyState.visible && subReplyState.rootReply != null) {
@@ -523,9 +989,10 @@ private fun TabletSecondaryContent(
                             commentState = commentState,
                             emoteMap = success.emoteMap,
                             maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
-                            onLoadMore = { commentViewModel.loadMoreSubReplies() },
-                            onDismiss = { commentViewModel.closeSubReply() },
-                            onRootCommentClick = { viewModel.openRootCommentComposer() },
+                            onLoadMore = commentActions.loadMoreSubReplies,
+                            onSortModeChange = commentActions.setSubReplySortMode,
+                            onDismiss = commentActions.closeSubReply,
+                            onRootCommentClick = playbackActions.openRootCommentComposer,
                             onTimestampClick = { positionMs ->
                                 seekPlayerFromUserAction(playerState.player, positionMs)
                             },
@@ -536,59 +1003,48 @@ private fun TabletSecondaryContent(
                                 previewTextContent = textContent
                                 showImagePreview = true
                             },
-                            onReplyClick = { reply ->
-                                viewModel.setReplyingTo(reply)
-                                viewModel.showCommentInputDialog()
-                            },
-                            onConversationClick = commentViewModel::openSubReplyConversation,
-                            onConversationBack = commentViewModel::closeSubReplyConversation,
-                            onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
-                            onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
-                            onCommentLike = commentViewModel::likeComment,
-                            onReportComment = commentViewModel::reportComment,
+                            onReplyClick = playbackActions.replyTo,
+                            onConversationClick = commentActions.openSubReplyConversation,
+                            onConversationBack = commentActions.closeSubReplyConversation,
+                            onDissolveStart = commentActions.startSubDissolve,
+                            onDeleteComment = commentActions.deleteSubComment,
+                            onCheckCommentFraud = commentActions.checkCommentFraud,
+                            onCommentLike = commentActions.likeComment,
+                            onCommentHate = commentActions.hateComment,
+                            onReportComment = commentActions.reportComment,
                             onUrlClick = openCommentUrl,
                             showIdentityDecorations = showIdentityDecorations,
                             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
                         )
                     } else {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(8.dp)
-                        ) {
-                            item {
-                                CommentSortFilterBar(
-                                    count = commentState.replyCount,
-                                    sortMode = commentState.sortMode,
-                                    onSortModeChange = { mode ->
-                                        commentViewModel.setSortMode(mode)
-                                        scope.launch {
-                                            com.android.purebilibili.core.store.SettingsManager
-                                                .setCommentDefaultSortMode(context, mode.apiMode)
-                                        }
+                        val commentChromeBackdrop = rememberLayerBackdrop()
+                        var showCommentSearchSheet by remember { mutableStateOf(false) }
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            CommentSortHeader(
+                                count = commentState.replyCount,
+                                sortMode = commentState.sortMode,
+                                onSortModeChange = { mode ->
+                                    commentActions.setSortMode(mode)
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.SettingsManager
+                                            .setCommentDefaultSortMode(context, mode.apiMode)
                                     }
+                                },
+                                onSearchClick = { showCommentSearchSheet = true },
+                            )
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .layerBackdrop(commentChromeBackdrop),
+                                contentPadding = PaddingValues(
+                                    start = 8.dp,
+                                    top = 8.dp,
+                                    end = 8.dp,
+                                    bottom = 104.dp,
                                 )
-                            }
-                            item {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    color = commentAppearance.composerHintBackgroundColor,
-                                    shape = RoundedCornerShape(14.dp),
-                                    onClick = {
-                                        viewModel.openRootCommentComposer()
-                                    }
-                                ) {
-                                    Text(
-                                        text = "写评论，直接和 UP 主交流",
-                                        color = commentAppearance.secondaryTextColor,
-                                        fontSize = 13.sp,
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                                    )
-                                }
-                            }
+                            ) {
                             items(
                                 items = commentState.replies,
                                 key = { "reply_${it.rpid}" },
@@ -596,7 +1052,7 @@ private fun TabletSecondaryContent(
                             ) { reply ->
                                 com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                                     isDissolving = reply.rpid in commentState.dissolvingIds,
-                                    onDissolveComplete = { commentViewModel.deleteComment(reply.rpid) },
+                                    onDissolveComplete = { commentActions.deleteComment(reply.rpid) },
                                     cardId = "comment_${reply.rpid}",
                                     modifier = Modifier.padding(bottom = 1.dp)
                                 ) {
@@ -608,7 +1064,7 @@ private fun TabletSecondaryContent(
                                         showIdentityDecorations = showIdentityDecorations,
                                         isPinned = reply.rpid in commentState.pinnedReplyIds,
                                         onClick = {},
-                                        onSubClick = { commentViewModel.openSubReply(it) },
+                                        onSubClick = commentActions.openSubReply,
                                         onTimestampClick = { positionMs ->
                                             seekPlayerFromUserAction(playerState.player, positionMs)
                                         },
@@ -620,28 +1076,34 @@ private fun TabletSecondaryContent(
                                             previewTextContent = textContent
                                             showImagePreview = true
                                         },
-                                        onLikeClick = { commentViewModel.likeComment(reply.rpid) },
+                                        onLikeClick = { commentActions.likeComment(reply.rpid) },
+                                        onHateClick = { commentActions.hateComment(reply.rpid) },
                                         isLiked = reply.action == 1 || reply.rpid in commentState.likedComments,
-                                        onReplyClick = {
-                                            viewModel.setReplyingTo(reply)
-                                            viewModel.showCommentInputDialog()
-                                        },
-                                        onReportClick = { reason -> commentViewModel.reportComment(reply.rpid, reason) },
+                                        isHated = reply.action == 2 || reply.rpid in commentState.hatedComments,
+                                        onReplyClick = { playbackActions.replyTo(reply) },
+                                        onReportClick = { reason -> commentActions.reportComment(reply.rpid, reason) },
                                         canToggleTop = shouldShowReplyTopAction(
                                             currentMid = commentState.currentMid,
                                             upMid = success.info.owner.mid,
                                             item = reply
                                         ),
-                                        onToggleTopClick = { commentViewModel.toggleTopComment(reply) },
+                                        onToggleTopClick = { commentActions.toggleTopComment(reply) },
                                         onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
-                                            { commentViewModel.startDissolve(reply.rpid) }
+                                            { commentActions.startDissolve(reply.rpid) }
+                                        } else null,
+                                        onCheckFraudClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
+                                            { commentActions.checkCommentFraud(reply) }
                                         } else null,
                                         onUrlClick = openCommentUrl,
                                         onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
                                     )
                                 }
                             }
-                            if (commentState.isRepliesLoading) {
+                            if (commentState.isRepliesLoading && commentState.replies.isEmpty()) {
+                                item(key = "tablet_comment_skeleton") {
+                                    com.android.purebilibili.core.ui.skeleton.CommentListColumnSkeleton()
+                                }
+                            } else if (commentState.isRepliesLoading) {
                                 item {
                                     Box(
                                         modifier = Modifier
@@ -649,11 +1111,11 @@ private fun TabletSecondaryContent(
                                             .padding(16.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        CupertinoActivityIndicator()
+                                        AdaptiveLoadingIndicator()
                                     }
                                 }
                             }
-                        }
+                            }
 
                         if (commentState.replies.isEmpty() && !commentState.isRepliesLoading) {
                             Column(
@@ -662,96 +1124,206 @@ private fun TabletSecondaryContent(
                                     .padding(horizontal = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
+                                AppText(
                                     text = "暂无评论",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = commentAppearance.secondaryTextColor
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "先看看相关推荐",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = commentAppearance.secondaryTextColor
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                TextButton(onClick = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(1)
+                                if (includeRelatedTab) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    AppText(
+                                        text = "先看看相关推荐",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = commentAppearance.secondaryTextColor
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    AppTextButton(onClick = {
+                                        scope.launch {
+                                            animatePagerSelection(pagerState, relatedTabIndex)
+                                        }
+                                    }) {
+                                        AppText("切换到相关推荐")
                                     }
-                                }) {
-                                    Text("切换到相关推荐")
                                 }
                             }
                         }
 
-                        FloatingActionButton(
-                            onClick = { commentViewModel.toggleUpOnly() },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp),
-                            containerColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                            shape = androidx.compose.foundation.shape.CircleShape,
-                            elevation = FloatingActionButtonDefaults.elevation(8.dp)
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (commentState.upOnlyFilter) io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.CheckmarkCircle else io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "只看\nUP",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 10.sp,
-                                    lineHeight = 12.sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            }
+                        BottomInputBar(
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            isLiked = engagementState.isLiked,
+                            isFavorited = engagementState.isFavorited,
+                            isCoined = engagementState.coinCount > 0,
+                            onLikeClick = engagementActions.toggleLike,
+                            onFavoriteClick = engagementActions.toggleFavorite,
+                            onCoinClick = engagementActions.openCoinDialog,
+                            onShareClick = {
+                                ShareUtils.shareVideo(context, success.info.title, success.info.bvid)
+                            },
+                            onCommentClick = playbackActions.openRootCommentComposer,
+                            backdrop = commentChromeBackdrop,
+                            isScrollInProgressProvider = { listState.isScrollInProgress },
+                            scrollPositionProvider = {
+                                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                            },
+                            showActionButtons = false,
+                        )
+
+                        if (showCommentSearchSheet) {
+                            CommentSearchSheet(
+                                replies = commentState.replies,
+                                upMid = success.info.owner.mid,
+                                onCommentClick = { reply ->
+                                    playbackActions.replyTo(reply)
+                                },
+                                onSubReplyClick = { rootReply ->
+                                    commentActions.openSubReply(rootReply, 0L)
+                                },
+                                onDismiss = { showCommentSearchSheet = false },
+                                miuixBackdrop = commentChromeBackdrop,
+                                liquidGlassEffectsEnabled = LocalAppThemeConfig.current.liquidGlassEnabled,
+                            )
                         }
-                    }
+
+                           }
+                        }
                     }
                 }
 
-                1 -> {
+                TabletSecondaryTab.INTRO -> {
+                    introContent?.invoke()
+                }
+
+                TabletSecondaryTab.RELATED -> {
+                    var hiddenRelatedBvids by remember(success.info.bvid) {
+                        mutableStateOf(emptySet<String>())
+                    }
+                    val visibleRelatedVideos = remember(success.related, hiddenRelatedBvids) {
+                        filterRelatedVideosByHiddenBvids(success.related, hiddenRelatedBvids)
+                    }
+                    val relatedVideoCardLayout = rememberRelatedVideoCardLayout()
+                    val relatedListState = rememberLazyListState()
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
+                        state = relatedListState,
                         contentPadding = PaddingValues(8.dp)
                     ) {
-                        itemsIndexed(
-                            items = relatedVideos,
-                            key = { index, item ->
-                                resolveIndexedVideoLazyKey(
-                                    namespace = "tablet_related",
-                                    index = index,
-                                    bvid = item.bvid,
-                                    aid = item.aid,
-                                    cid = item.cid
+                            val relatedRows = chunkRelatedVideosForHomeStyleGrid(visibleRelatedVideos)
+                            itemsIndexed(
+                                items = relatedRows,
+                                key = { rowIndex, row ->
+                                    val first = row.firstOrNull()
+                                    resolveIndexedVideoLazyKey(
+                                        namespace = "tablet_related_row",
+                                        index = rowIndex,
+                                        bvid = first?.bvid.orEmpty(),
+                                        aid = first?.aid ?: 0L,
+                                        cid = first?.cid ?: 0L
+                                    )
+                                }
+                            ) { _, row ->
+                                CompositionLocalProvider(
+                                    LocalVideoCardSharedElementSourceRoute provides "video/${success.info.bvid}"
+                                ) {
+                                    RelatedVideoGridRow(
+                                        videos = row,
+                                        cardLayout = relatedVideoCardLayout,
+                                        followingMids = success.followingMids,
+                                        showUpBadge = showUpBadge,
+                                        onVideoClick = { video ->
+                                            val navOptions = buildVideoNavigationOptions(
+                                                targetCid = video.cid,
+                                                coverUrl = video.pic,
+                                            ) ?: android.os.Bundle.EMPTY
+                                            onRelatedVideoClick(video.bvid, navOptions)
+                                        },
+                                        onVideoHidden = { video ->
+                                            hiddenRelatedBvids = hiddenRelatedBvids + video.bvid
+                                        }
+                                    )
+                                }
+                            }
+                    }
+                }
+
+                TabletSecondaryTab.COLLECTION -> {
+                    val season = success.info.ugc_season
+                    if (season != null) {
+                        TabletCollectionPane(
+                            ugcSeason = season,
+                            currentBvid = success.info.bvid,
+                            currentCid = success.info.cid,
+                            onEpisodeClick = { episode ->
+                                onRelatedVideoClick(
+                                    episode.bvid,
+                                    buildVideoNavigationOptions(targetCid = episode.cid)
                                 )
                             }
-                        ) { _, video ->
-                            RelatedVideoItem(
-                                video = video,
-                                isFollowed = video.owner.mid in success.followingMids,
-                                showUpBadge = showUpBadge,
-                                onClick = {
-                                    val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
-                                    val options = activity?.let {
-                                        android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
-                                    }
-                                    val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
-                                    if (video.cid > 0L) {
-                                        navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
-                                    }
-                                    onRelatedVideoClick(video.bvid, navOptions)
-                                }
-                            )
-                        }
+                        )
                     }
+                }
+
+                TabletSecondaryTab.OWNER_UPLOADS -> {
+                    TabletOwnerUploadsPane(
+                        mid = success.info.owner.mid,
+                        onVideoClick = onRelatedVideoClick
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabletCollectionPane(
+    ugcSeason: com.android.purebilibili.data.model.response.UgcSeason,
+    currentBvid: String,
+    currentCid: Long,
+    onEpisodeClick: (com.android.purebilibili.data.model.response.UgcEpisode) -> Unit
+) {
+    val episodes = remember(ugcSeason.sections) { ugcSeason.sections.flatMap { it.episodes } }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            AppText(
+                text = ugcSeason.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            AppText(
+                text = "共 ${episodes.size} 个视频",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        items(episodes, key = { it.id }) { episode ->
+            val isCurrent = isCurrentUgcEpisode(currentBvid, currentCid, episode)
+            AppSingleChoiceRow(
+                selected = isCurrent,
+                onClick = { if (!isCurrent) onEpisodeClick(episode) },
+                shape = AppShapes.container(ContainerLevel.Card),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                coil3.compose.AsyncImage(
+                    model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(episode.arc?.pic.orEmpty()),
+                    contentDescription = episode.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .width(112.dp)
+                        .aspectRatio(16f / 9f)
+                        .clip(AppShapes.container(ContainerLevel.Chip))
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(
+                        text = episode.title,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isCurrent) AppText(text = "正在播放", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -789,36 +1361,48 @@ private fun ScrollableVideoInfoSection(
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    onSearchKeywordClick: (String) -> Unit = {},
     onOpenBilibiliLink: ((String) -> Unit)?,
+    aiSummary: AiSummaryData? = null,
+    aiSummaryPrompt: AiSummaryPromptState? = null,
+    videoAiSummaryEntryEnabled: Boolean = true,
+    onRetryAiSummary: () -> Unit = {},
+    onCreateNoteDraftFromAiSummary: () -> Unit = {},
+    onTimestampClick: (Long) -> Unit = {},
+    videoNoteState: VideoNoteUiState = VideoNoteUiState(),
+    isLoggedIn: Boolean = false,
+    videoNoteEnabled: Boolean = true,
+    videoNoteDefaultCollapsed: Boolean = true,
+    onOpenVideoNoteEditor: () -> Unit = {},
+    onRetryVideoNote: () -> Unit = {},
+    onDeleteVideoNoteClick: () -> Unit = {},
+    onShareVideoNote: (VideoNoteEditorDocument) -> Unit = {},
+    onPublicVideoNoteClick: (Long, String) -> Unit = { _, _ -> },
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
-    modifier: Modifier = Modifier
+    showRelatedVideos: Boolean = true,
+    modifier: Modifier = Modifier,
+    ownerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    // 合集展开状态
-    var showCollectionSheet by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    // 合集底部弹窗
-    info.ugc_season?.let { season ->
-        if (showCollectionSheet) {
-            CollectionSheet(
-                ugcSeason = season,
-                currentBvid = info.bvid,
-                currentCid = info.cid,
-                onDismiss = { showCollectionSheet = false },
-                onEpisodeClick = { episode ->
-                    showCollectionSheet = false
-                    val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
-                    val options = activity?.let { 
-                        android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle() 
-                    }
-                    val navOptions = buildVideoNavigationOptions(
-                        base = options,
-                        targetCid = episode.cid
-                    )
-                    onRelatedVideoClick(episode.bvid, navOptions)
-                }
-            )
-        }
+    val windowSizeClass = LocalWindowSizeClass.current
+    val adaptiveInfo = LocalAppWindowAdaptiveInfo.current
+    val systemReduceMotion = rememberSystemReduceMotion()
+    val entranceSpec = remember(
+        windowSizeClass.widthSizeClass,
+        adaptiveInfo.posture,
+        systemReduceMotion,
+    ) {
+        resolveTabletVideoInfoEntranceSpec(
+            motionTier = resolveDeviceUiProfile(
+                widthSizeClass = windowSizeClass.widthSizeClass,
+                foldPosture = adaptiveInfo.posture,
+            ).motionTier,
+            systemReduceMotion = systemReduceMotion,
+        )
+    }
+    var entranceVisible by remember(info.bvid) { mutableStateOf(false) }
+    LaunchedEffect(info.bvid) {
+        entranceVisible = true
     }
 
     LazyColumn(
@@ -827,73 +1411,141 @@ private fun ScrollableVideoInfoSection(
     ) {
         // 1. 视频标题
         item {
-            VideoTitleWithDesc(
-                info = info,
-                videoTags = videoTags,
-                bgmList = resolveDisplayBgmList(
-                    bgmInfo = bgmInfo,
-                    bgmInfoList = bgmInfoList
-                ),
-                onBgmClick = onBgmClick,
-                onRelatedVideoClick = onRelatedVideoClick,
-                onDescriptionUrlClick = onOpenBilibiliLink
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            TabletVideoInfoStaggeredItem(
+                visible = entranceVisible,
+                index = 0,
+                spec = entranceSpec,
+            ) {
+                VideoTitleWithDesc(
+                    info = info,
+                    videoTags = videoTags,
+                    bgmList = resolveDisplayBgmList(
+                        bgmInfo = bgmInfo,
+                        bgmInfoList = bgmInfoList
+                    ),
+                    onBgmClick = onBgmClick,
+                    onRelatedVideoClick = onRelatedVideoClick,
+                    onDescriptionUrlClick = onOpenBilibiliLink,
+                    onTagClick = onSearchKeywordClick
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
         }
 
         // 2. UP主信息
         item {
-            UpInfoSection(
-                info = info,
-                isFollowing = isFollowing,
-                onFollowClick = onFollowClick,
-                onUpClick = onUpClick,
-                followerCount = ownerFollowerCount,
-                videoCount = ownerVideoCount
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            TabletVideoInfoStaggeredItem(
+                visible = entranceVisible,
+                index = 1,
+                spec = entranceSpec,
+            ) {
+                UpInfoSection(
+                    info = info,
+                    isFollowing = isFollowing,
+                    onFollowClick = onFollowClick,
+                    onUpClick = onUpClick,
+                    followerCount = ownerFollowerCount,
+                    videoCount = ownerVideoCount,
+                    horizontalPadding = 0.dp,
+                    trailingContent = ownerTrailingContent,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
         }
 
         // 3. 互动按钮
         item {
-            ActionButtonsRow(
-                info = info,
-                isLiked = isLiked,
-                isFavorited = isFavorited,
-                coinCount = coinCount,
-                isInWatchLater = isInWatchLater,
-                onLikeClick = onLikeClick,
-                onCoinClick = onCoinClick,
-                onFavoriteClick = onFavoriteClick,
-                onTripleClick = onTripleClick,
-                onDownloadClick = onDownloadClick,
-                onWatchLaterClick = onWatchLaterClick,
-                downloadProgress = downloadProgress ?: -1f,
-                onCommentClick = { /* 平板模式不需要跳转评论 */ },
-                onShareClick = {
-                    ShareUtils.shareVideo(
-                        context,
-                        info.title,
-                        info.bvid
-                    )
-                }
-            )
-        }
-
-        // 4. 合集
-        item {
-            info.ugc_season?.let { season ->
-                Spacer(modifier = Modifier.height(12.dp))
-                CollectionRow(
-                    ugcSeason = season,
-                    currentBvid = info.bvid,
-                    currentCid = info.cid,
-                    onClick = { showCollectionSheet = true }
+            TabletVideoInfoStaggeredItem(
+                visible = entranceVisible,
+                index = 2,
+                spec = entranceSpec,
+            ) {
+                ActionButtonsRow(
+                    info = info,
+                    isLiked = isLiked,
+                    isFavorited = isFavorited,
+                    coinCount = coinCount,
+                    isInWatchLater = isInWatchLater,
+                    onLikeClick = onLikeClick,
+                    onCoinClick = onCoinClick,
+                    onFavoriteClick = onFavoriteClick,
+                    onTripleClick = onTripleClick,
+                    onDownloadClick = onDownloadClick,
+                    onWatchLaterClick = onWatchLaterClick,
+                    downloadProgress = downloadProgress ?: -1f,
+                    onCommentClick = { /* 平板模式不需要跳转评论 */ },
+                    showCommentAction = false,
+                    onShareClick = {
+                        ShareUtils.shareVideo(
+                            context,
+                            info.title,
+                            info.bvid
+                        )
+                    }
                 )
             }
         }
 
-        // 5. 分P选择器
+        // 4. AI 视频总结
+        if (shouldShowAiSummaryEntry(
+                aiSummary = aiSummary,
+                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
+            )
+        ) {
+            item {
+                TabletVideoInfoStaggeredItem(
+                    visible = entranceVisible,
+                    index = 3,
+                    spec = entranceSpec,
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AiSummaryCard(
+                        aiSummary = aiSummary,
+                        onTimestampClick = onTimestampClick,
+                        onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
+                    )
+                }
+            }
+        } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
+            item {
+                TabletVideoInfoStaggeredItem(
+                    visible = entranceVisible,
+                    index = 3,
+                    spec = entranceSpec,
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AiSummaryPromptCard(
+                        promptState = aiSummaryPrompt,
+                        onActionClick = onRetryAiSummary,
+                    )
+                }
+            }
+        }
+
+        // 5. 视频笔记
+        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
+            item {
+                TabletVideoInfoStaggeredItem(
+                    visible = entranceVisible,
+                    index = 4,
+                    spec = entranceSpec,
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    VideoNoteCard(
+                        noteState = videoNoteState,
+                        isLoggedIn = isLoggedIn,
+                        onCreateOrEditClick = onOpenVideoNoteEditor,
+                        onRetryClick = onRetryVideoNote,
+                        onDeleteClick = onDeleteVideoNoteClick,
+                        onShareClick = onShareVideoNote,
+                        onPublicNoteClick = onPublicVideoNoteClick,
+                        defaultCollapsed = videoNoteDefaultCollapsed,
+                    )
+                }
+            }
+        }
+
+        // 6. 分P选择器（合集已移到右侧内容栏）
         item {
             if (info.pages.size > 1) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -905,54 +1557,11 @@ private fun ScrollableVideoInfoSection(
             }
         }
 
-        // 6. 简介（展开式）
+        // 6. 更多推荐 (水平滚动)。大屏右栏已有相关推荐 Tab 时不再重复。
+        if (showRelatedVideos && relatedVideos.isNotEmpty()) {
         item {
             Spacer(modifier = Modifier.height(24.dp))
-            if (info.desc.isNotEmpty()) {
-                Text(
-                    text = "简介",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                var isExpanded by remember { mutableStateOf(false) }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize()
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), // 🎨 修复粉色背景，使用中性灰
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                        )
-                        .clickable { isExpanded = !isExpanded }
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = info.desc,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (isExpanded) Int.MAX_VALUE else 3,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        lineHeight = 16.sp
-                    )
-                    if (info.desc.length > 50) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (isExpanded) "收起" else "展开",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.align(Alignment.End)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 7. 更多推荐 (水平滚动)
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
+            AppText(
                 text = "更多推荐",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
@@ -966,7 +1575,18 @@ private fun ScrollableVideoInfoSection(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(end = 4.dp)
                 ) {
-                    items(relatedVideos.take(10), key = { it.bvid }) { video ->
+                    itemsIndexed(
+                        items = relatedVideos.take(10),
+                        key = { index, video ->
+                            resolveIndexedVideoLazyKey(
+                                namespace = "tablet_related_video",
+                                index = index,
+                                bvid = video.bvid,
+                                aid = video.aid,
+                                cid = video.cid,
+                            )
+                        },
+                    ) { _, video ->
                         Column(
                             modifier = Modifier
                                 .width(160.dp)
@@ -986,32 +1606,24 @@ private fun ScrollableVideoInfoSection(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1.6f)
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                    .clip(AppShapes.container(ContainerLevel.Chip))
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                             ) {
-                                coil.compose.AsyncImage(
+                                coil3.compose.AsyncImage(
                                     model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(video.pic),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                                Box(
+                                com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
+                                    text = com.android.purebilibili.core.util.FormatUtils.formatDuration(video.duration),
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
-                                        .padding(4.dp)
-                                        .background(Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = com.android.purebilibili.core.util.FormatUtils.formatDuration(video.duration),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
-                                        fontSize = 10.sp
-                                    )
-                                }
+                                        .padding(4.dp),
+                                )
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(
+                            AppText(
                                 text = video.title,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -1020,7 +1632,7 @@ private fun ScrollableVideoInfoSection(
                                 lineHeight = 16.sp
                             )
                             Spacer(modifier = Modifier.height(2.dp))
-                            Text(
+                            AppText(
                                 text = video.owner.name,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1037,11 +1649,11 @@ private fun ScrollableVideoInfoSection(
                         .height(100.dp)
                         .background(
                             color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.3f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                            shape = AppShapes.container(ContainerLevel.Chip)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
+                    AppText(
                         text = "暂无更多推荐",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -1051,5 +1663,41 @@ private fun ScrollableVideoInfoSection(
             // 底部留白，防止被圆角遮挡
             Spacer(modifier = Modifier.height(24.dp))
         }
+        }
+    }
+}
+
+@Composable
+private fun TabletVideoInfoStaggeredItem(
+    visible: Boolean,
+    index: Int,
+    spec: TabletVideoInfoEntranceSpec,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    if (!spec.enabled) {
+        Box(modifier = modifier) { content() }
+        return
+    }
+    val delayMillis = index.coerceAtLeast(0) * spec.staggerDelayMillis
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(
+            animationSpec = tween(
+                durationMillis = spec.durationMillis,
+                delayMillis = delayMillis,
+                easing = AppMotionEasing.EmphasizedEnter,
+            ),
+        ) + slideInVertically(
+            animationSpec = tween(
+                durationMillis = spec.durationMillis,
+                delayMillis = delayMillis,
+                easing = AppMotionEasing.EmphasizedEnter,
+            ),
+            initialOffsetY = { fullHeight -> -fullHeight / spec.initialOffsetDivisor },
+        ),
+    ) {
+        content()
     }
 }

@@ -110,7 +110,7 @@ class SettingsShareViewModelTest {
             advanceUntilIdle()
 
             assertEquals(shareUri, viewModel.uiState.value.pendingShareUri)
-            assertEquals("已生成分享文件", viewModel.uiState.value.statusMessage)
+            assertEquals("已生成分享文件（含设备调试信息）", viewModel.uiState.value.statusMessage)
         }
     }
 
@@ -128,10 +128,14 @@ private class FakeSettingsShareService(
 
     override suspend fun exportToUri(
         uri: Uri,
-        profileName: String
+        profileName: String,
+        includeDeviceDebug: Boolean,
     ): Result<SettingsShareExportArtifact> = exportToUriResult
 
-    override suspend fun createShareUri(profileName: String): Result<Uri> = createShareUriResult
+    override suspend fun createShareUri(
+        profileName: String,
+        includeDeviceDebug: Boolean,
+    ): Result<Uri> = createShareUriResult
 
     override suspend fun readImportSession(uri: Uri): Result<SettingsShareImportSession> = readImportSessionResult
 

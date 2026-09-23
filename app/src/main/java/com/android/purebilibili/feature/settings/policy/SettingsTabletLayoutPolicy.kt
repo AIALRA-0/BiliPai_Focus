@@ -12,6 +12,11 @@ fun shouldUseSettingsSplitLayout(
     widthDp: Int
 ): Boolean = widthDp >= 840
 
+fun shouldRenderSettingsSinglePaneContent(
+    widthDp: Int,
+    forceSinglePaneContent: Boolean
+): Boolean = forceSinglePaneContent || !shouldUseSettingsSplitLayout(widthDp)
+
 fun resolveSettingsTabletLayoutPolicy(
     widthDp: Int
 ): SettingsTabletLayoutPolicy {

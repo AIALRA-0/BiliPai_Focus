@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+import kotlin.math.abs
+
 internal data class PortraitExitRestoreTarget(
     val bvid: String,
     val cid: Long
@@ -34,6 +36,29 @@ internal fun shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer: Boolean):
     return !useSharedPlayer
 }
 
+/**
+ * Portrait progress polls every few hundred ms. Committing each tick into the giant
+ * VideoDetailScreenStateHolder invalidates composition continuously and can ANR the
+ * main thread while the standalone pager owns playback.
+ *
+ * Identity changes always commit. Position commits only after a meaningful delta so
+ * exit/back still receive a fresh enough snapshot without thrashing composition.
+ */
+internal fun shouldCommitPortraitProgressToDetailState(
+    previousBvid: String?,
+    previousCid: Long,
+    previousPositionMs: Long,
+    nextBvid: String,
+    nextCid: Long,
+    nextPositionMs: Long,
+    positionCommitThresholdMs: Long = 1_000L,
+): Boolean {
+    if (!nextBvid.isNullOrBlank() && nextBvid != previousBvid) return true
+    if (nextCid > 0L && nextCid != previousCid) return true
+    if (previousPositionMs < 0L) return true
+    return abs(nextPositionMs - previousPositionMs) >= positionCommitThresholdMs
+}
+
 internal fun shouldExitPortraitForExternalNavigation(isPortraitFullscreen: Boolean): Boolean {
     return isPortraitFullscreen
 }
@@ -56,12 +81,20 @@ internal fun shouldApplyDeferredPortraitRestoreOnResume(
     return hasDeferredRestore && !isPortraitFullscreen
 }
 
+internal fun shouldReplaceVideoDetailRouteAfterPortraitExit(
+    routeBvid: String,
+    portraitBvid: String,
+): Boolean {
+    return routeBvid.isNotBlank() &&
+        portraitBvid.isNotBlank() &&
+        routeBvid != portraitBvid
+}
+
 internal fun resolvePortraitExitRestoreTarget(
     pendingMainReloadBvidAfterPortrait: String?,
     portraitPendingSelectionBvid: String?,
     portraitSyncSnapshotBvid: String?,
     portraitSyncSnapshotCid: Long,
-    currentBvidCid: Long
 ): PortraitExitRestoreTarget? {
     val targetBvid = pendingMainReloadBvidAfterPortrait
         ?: portraitPendingSelectionBvid
@@ -70,7 +103,10 @@ internal fun resolvePortraitExitRestoreTarget(
     val targetCid = if (targetBvid == portraitSyncSnapshotBvid) {
         portraitSyncSnapshotCid
     } else {
-        currentBvidCid
+        // currentBvidCid still belongs to the inline detail subject until the portrait
+        // selection is committed. Reusing it for a new bvid can load metadata for one
+        // video while the shared player is already showing another.
+        0L
     }
     return PortraitExitRestoreTarget(
         bvid = targetBvid,

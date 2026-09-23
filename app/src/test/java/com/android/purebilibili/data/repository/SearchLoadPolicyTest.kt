@@ -11,33 +11,38 @@ import kotlin.test.assertTrue
 class SearchLoadPolicyTest {
 
     @Test
-    fun `first page video search retries fallback when primary result is empty`() {
-        assertTrue(
-            shouldFallbackEmptyFirstPageVideoSearch(
-                page = 1,
-                primaryResultCount = 0
-            )
-        )
+    fun `video pagination uses result total when page total is absent`() {
+        val first = resolveVideoSearchPageInfo(1, 1, 0, 41, 20, 20)
+        assertEquals(3, first.totalPages)
+        assertTrue(first.hasMore)
+        assertTrue(resolveVideoSearchPageInfo(3, 3, 0, 41, 20, 1).hasMore)
     }
 
     @Test
-    fun `later pages do not retry fallback when primary result is empty`() {
-        assertFalse(
-            shouldFallbackEmptyFirstPageVideoSearch(
-                page = 2,
-                primaryResultCount = 0
-            )
-        )
+    fun `both full and short video pages without totals can continue`() {
+        assertTrue(resolveVideoSearchPageInfo(2, 1, 0, 0, 20, 20).hasMore)
+        assertEquals(2, resolveVideoSearchPageInfo(2, 1, 0, 0, 20, 20).currentPage)
+        assertTrue(resolveVideoSearchPageInfo(2, 2, 0, 0, 20, 2).hasMore)
     }
 
     @Test
-    fun `non empty first page keeps primary result`() {
-        assertFalse(
-            shouldFallbackEmptyFirstPageVideoSearch(
-                page = 1,
-                primaryResultCount = 1
-            )
-        )
+    fun `short nonempty video page respects explicit remaining pages`() {
+        assertTrue(resolveVideoSearchPageInfo(1, 1, 4, 80, 20, 2).hasMore)
+    }
+
+    @Test
+    fun `thirteen sorted results probe next page like PiliPlus before ending`() {
+        val first = resolveVideoSearchPageInfo(1, 1, 1, 13, 20, 13)
+        assertTrue(first.hasMore)
+        assertEquals(13, first.totalResults)
+        val next = resolveVideoSearchPageInfo(2, 2, 1, 13, 20, 0)
+        assertFalse(next.hasMore)
+        assertEquals(2, next.currentPage)
+    }
+
+    @Test
+    fun `empty server page stops even when pagination metadata claims more`() {
+        assertFalse(resolveVideoSearchPageInfo(2, 2, 9, 180, 20, 0).hasMore)
     }
 
     @Test

@@ -57,6 +57,9 @@ data class LiveShieldInfo(
     val level: Int = 0,
     val medal: Int = 0,
     val verify: Int = 0,
+    // [新增] 非正式会员 / 未绑定手机 屏蔽规则（0=关，>0=开）
+    val rank: Int = 0,
+    val phone: Int = 0,
     val keywords: List<LiveShieldKeyword> = emptyList(),
     val users: List<LiveShieldUser> = emptyList()
 )
@@ -83,7 +86,29 @@ data class LiveEmoticonItem(
     val emoji: String,
     val url: String,
     val description: String = "",
+    // 表情唯一标识（emoticon_unique），用于发送表情弹幕
+    val emoticonUnique: String = "",
     val emoticonOptions: String? = null
+)
+
+data class LiveVoteOption(val id: Int = 0, val description: String = "", val percent: Float = 0f)
+
+data class LiveVoteInfo(
+    val status: Int = 0,
+    val question: String = "",
+    val options: List<LiveVoteOption> = emptyList(),
+    val durationMillis: Long = 0L,
+    val remainingMillis: Long = 0L,
+    val resultText: String = "",
+    val endTimeText: String = "",
+    val interactionId: Long = 0L
+) {
+    val isActive: Boolean get() = status == 4
+}
+
+data class LiveVoteSnapshot(
+    val current: LiveVoteInfo? = null,
+    val history: List<LiveVoteInfo> = emptyList()
 )
 
 val DefaultLiveReportReasons = listOf(

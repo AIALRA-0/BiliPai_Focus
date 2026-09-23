@@ -33,4 +33,36 @@ class PlayerSettingsStoreParityTest {
             PlayerSettingsStore.normalizePlaybackSpeed(9.5f)
         )
     }
+
+    @Test
+    fun `player volume is normalized to two percent steps`() {
+        assertEquals(0f, PlayerSettingsStore.normalizePlayerVolume(-0.2f))
+        assertEquals(0.02f, PlayerSettingsStore.normalizePlayerVolume(0.011f))
+        assertEquals(0.48f, PlayerSettingsStore.normalizePlayerVolume(0.489f))
+        assertEquals(1f, PlayerSettingsStore.normalizePlayerVolume(1.2f))
+    }
+
+    @Test
+    fun `player insight mode prefers stored value and migrates legacy switch`() {
+        assertEquals(
+            PlayerSettingsStore.PlayerInsightMode.OFF,
+            PlayerSettingsStore.resolvePlayerInsightMode("OFF", true, true)
+        )
+        assertEquals(
+            PlayerSettingsStore.PlayerInsightMode.ALWAYS,
+            PlayerSettingsStore.resolvePlayerInsightMode(null, true, true)
+        )
+        assertEquals(
+            PlayerSettingsStore.PlayerInsightMode.OFF,
+            PlayerSettingsStore.resolvePlayerInsightMode(null, true, false)
+        )
+        assertEquals(
+            PlayerSettingsStore.PlayerInsightMode.OFF,
+            PlayerSettingsStore.resolvePlayerInsightMode("UNKNOWN", false, false)
+        )
+        assertEquals(
+            PlayerSettingsStore.PlayerInsightMode.OFF,
+            PlayerSettingsStore.resolvePlayerInsightMode(null, false, false)
+        )
+    }
 }

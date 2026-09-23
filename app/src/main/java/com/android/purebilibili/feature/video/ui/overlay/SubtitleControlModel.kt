@@ -12,12 +12,14 @@ data class SubtitleControlUiState(
     val primaryLabel: String = "中文",
     val secondaryLabel: String = "英文",
     val trackOptions: List<SubtitleTrackOption> = emptyList(),
-    val largeTextEnabled: Boolean = false
+    val largeTextEnabled: Boolean = false,
+    val positionLocked: Boolean = true
 )
 
 data class SubtitleControlCallbacks(
     val onDisplayModeChange: (SubtitleDisplayMode) -> Unit = {},
     val onEnabledChange: (Boolean) -> Unit = {},
     val onTrackSelected: (String) -> Unit = {},
-    val onLargeTextChange: (Boolean) -> Unit = {}
+    val onLargeTextChange: (Boolean) -> Unit = {},
+    val onPositionLockedChange: (Boolean) -> Unit = {}
 )

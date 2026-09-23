@@ -3,10 +3,12 @@ package com.android.purebilibili.feature.video.viewmodel
 import com.android.purebilibili.data.repository.AiSummaryFetchStatus
 
 private val AI_SUMMARY_AUTO_RETRY_DELAYS_MS = listOf(
-    2_500L,
-    5_000L,
-    10_000L,
-    20_000L
+    3_000L,
+    8_000L,
+    15_000L,
+    30_000L,
+    60_000L,
+    120_000L
 )
 private const val AI_SUMMARY_RETRYABLE_FAILURE_AUTO_RETRY_LIMIT = 2
 

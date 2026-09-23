@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.settings
 
 import androidx.compose.ui.graphics.Color
-import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.ui.components.resolveAppSegmentedControlColors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -9,8 +9,8 @@ class AppearanceMd3SegmentedControlPolicyTest {
 
     @Test
     fun `material3 segmented control follows material primary roles`() {
-        val tokens = resolveMd3SegmentedControlColorTokens(
-            androidNativeVariant = AndroidNativeVariant.MATERIAL3,
+        val tokens = resolveAppSegmentedControlColors(
+            usesMaterialColorTokens = true,
             materialPrimaryContainer = Color(0xFFFFD8E5),
             materialOnPrimaryContainer = Color(0xFF5F1130),
             materialSurfaceContainerHigh = Color(0xFF281D22),
@@ -29,8 +29,8 @@ class AppearanceMd3SegmentedControlPolicyTest {
 
     @Test
     fun `miuix segmented control keeps miuix secondary roles`() {
-        val tokens = resolveMd3SegmentedControlColorTokens(
-            androidNativeVariant = AndroidNativeVariant.MIUIX,
+        val tokens = resolveAppSegmentedControlColors(
+            usesMaterialColorTokens = false,
             materialPrimaryContainer = Color(0xFFFFD8E5),
             materialOnPrimaryContainer = Color(0xFF5F1130),
             materialSurfaceContainerHigh = Color(0xFF281D22),

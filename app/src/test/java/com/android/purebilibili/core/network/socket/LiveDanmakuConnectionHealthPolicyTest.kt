@@ -57,7 +57,7 @@ class LiveDanmakuConnectionHealthPolicyTest {
     }
 
     @Test
-    fun `heartbeat only connection reconnects after business message stalls`() {
+    fun `heartbeat reply keeps quiet room connected after business message stalls`() {
         val health = markLiveDanmakuHeartbeatReply(
             health = markLiveDanmakuBusinessMessage(
                 health = markLiveDanmakuConnected(LiveDanmakuConnectionHealth(), nowMs = 1_000L),
@@ -72,7 +72,7 @@ class LiveDanmakuConnectionHealthPolicyTest {
             silenceTimeoutMs = 75_000L
         )
 
-        assertEquals(LiveDanmakuHealthAction.RECONNECT, action)
+        assertEquals(LiveDanmakuHealthAction.KEEP_ALIVE, action)
     }
 
     @Test
@@ -104,5 +104,10 @@ class LiveDanmakuConnectionHealthPolicyTest {
         )
 
         assertEquals(LiveDanmakuHealthAction.KEEP_ALIVE, action)
+    }
+
+    @Test
+    fun `auth requests documented brotli protocol`() {
+        assertEquals(DanmakuProtocol.PROTO_VER_BROTLI, LIVE_DANMAKU_AUTH_PROTOCOL_VERSION)
     }
 }

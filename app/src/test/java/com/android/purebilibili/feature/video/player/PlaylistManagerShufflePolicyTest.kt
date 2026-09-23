@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.video.player
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PlaylistManagerShufflePolicyTest {
 
@@ -10,6 +12,7 @@ class PlaylistManagerShufflePolicyTest {
     fun setUp() {
         PlaylistManager.clearPlaylist()
         PlaylistManager.setPlayMode(PlayMode.SEQUENTIAL)
+        PlaylistManager.setShuffleEnabled(false)
     }
 
     @Test
@@ -136,18 +139,60 @@ class PlaylistManagerShufflePolicyTest {
     }
 
     @Test
-    fun `repeat one mode should keep current item on next`() {
+    fun `repeat one skip still advances to the next track`() {
         PlaylistManager.setPlaylist(
             items = listOf(
                 playlistItem("BV1"),
                 playlistItem("BV2")
             ),
-            startIndex = 1
+            startIndex = 0
         )
         PlaylistManager.setPlayMode(PlayMode.REPEAT_ONE)
 
         assertEquals("BV2", PlaylistManager.playNext()?.bvid)
         assertEquals(1, PlaylistManager.currentIndex.value)
+    }
+
+    @Test
+    fun `repeat all mode should return to first item at queue end`() {
+        PlaylistManager.setPlaylist(
+            items = listOf(playlistItem("BV1"), playlistItem("BV2")),
+            startIndex = 1
+        )
+        PlaylistManager.setPlayMode(PlayMode.REPEAT_ALL)
+
+        assertEquals("BV1", PlaylistManager.playNext()?.bvid)
+        assertEquals(0, PlaylistManager.currentIndex.value)
+    }
+
+    @Test
+    fun `late playlist completion only appends to the session that started it`() {
+        val staleSession = PlaylistManager.setExternalPlaylist(
+            items = listOf(playlistItem("favorite-1")),
+            source = ExternalPlaylistSource.FAVORITE,
+        )
+        val currentSession = PlaylistManager.setExternalPlaylist(
+            items = listOf(playlistItem("watch-later-1")),
+            source = ExternalPlaylistSource.WATCH_LATER,
+        )
+
+        assertFalse(
+            PlaylistManager.addAllToPlaylistIfCurrent(
+                items = listOf(playlistItem("favorite-2")),
+                session = staleSession,
+            )
+        )
+        assertEquals(listOf("watch-later-1"), PlaylistManager.playlist.value.map { it.bvid })
+        assertTrue(
+            PlaylistManager.addAllToPlaylistIfCurrent(
+                items = listOf(playlistItem("watch-later-2")),
+                session = currentSession,
+            )
+        )
+        assertEquals(
+            listOf("watch-later-1", "watch-later-2"),
+            PlaylistManager.playlist.value.map { it.bvid },
+        )
     }
 
     private fun playlistItem(bvid: String) = PlaylistItem(

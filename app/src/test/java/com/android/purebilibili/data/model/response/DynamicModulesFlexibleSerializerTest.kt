@@ -13,6 +13,191 @@ class DynamicModulesFlexibleSerializerTest {
     }
 
     @Test
+    fun dynamicFeedModule_preservesStandaloneTopicMetadata() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "items": [
+                  {
+                    "id_str": "123456",
+                    "type": "DYNAMIC_TYPE_DRAW",
+                    "modules": {
+                      "module_dynamic": {
+                        "topic": {
+                          "id": "1314000",
+                          "name": "新机来了！"
+                        },
+                        "desc": {
+                          "text": "正文",
+                          "rich_text_nodes": []
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val topic = json.decodeFromString<DynamicFeedResponse>(payload)
+            .data?.items?.single()?.modules?.module_dynamic?.topic
+
+        assertEquals(1314000L, topic?.id)
+        assertEquals("新机来了！", topic?.name)
+    }
+
+    @Test
+    fun opusDetailParagraph_preservesAtMentionMetadata() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "item": {
+                  "modules": [
+                    {
+                      "module_type": "MODULE_TYPE_CONTENT",
+                      "module_content": {
+                        "paragraphs": [
+                          {
+                            "para_type": 1,
+                            "text": {
+                              "nodes": [
+                                { "type": "TEXT_NODE_TYPE_WORD", "word": { "words": "谢谢" } },
+                                {
+                                  "type": "TEXT_NODE_TYPE_RICH",
+                                  "rich": {
+                                    "type": "RICH_TEXT_NODE_TYPE_AT",
+                                    "text": "@叽米",
+                                    "orig_text": "@叽米",
+                                    "rid": "12345"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<DynamicDetailResponse>(payload)
+        val block = response.data?.item?.modules?.module_dynamic?.major?.opus
+            ?.contentBlocks?.single() as? OpusContentBlock.Text
+
+        assertEquals("谢谢@叽米", block?.text)
+        assertEquals("12345", block?.richTextNodes?.last()?.rid)
+        assertEquals("RICH_TEXT_NODE_TYPE_AT", block?.richTextNodes?.last()?.type)
+    }
+
+    @Test
+    fun opusDetailParagraph_preservesEmojiMetadataAndExtractsEmojiInfo() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "item": {
+                  "modules": [
+                    {
+                      "module_type": "MODULE_TYPE_CONTENT",
+                      "module_content": {
+                        "paragraphs": [
+                          {
+                            "para_type": 1,
+                            "text": {
+                              "nodes": [
+                                { "type": "TEXT_NODE_TYPE_WORD", "word": { "words": "画完了" } },
+                                {
+                                  "type": "TEXT_NODE_TYPE_RICH",
+                                  "rich": {
+                                    "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                                    "text": "",
+                                    "orig_text": "",
+                                    "emoji": {
+                                      "icon_url": "https://i0.hdslb.com/bfs/emote/baofu.png",
+                                      "size": 1,
+                                      "text": "[豹富]"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<DynamicDetailResponse>(payload)
+        val opus = response.data?.item?.modules?.module_dynamic?.major?.opus
+        val block = opus?.contentBlocks?.single() as? OpusContentBlock.Text
+
+        assertEquals("画完了[豹富]", block?.text)
+        val emojiNode = block?.richTextNodes?.last()
+        assertEquals("RICH_TEXT_NODE_TYPE_EMOJI", emojiNode?.type)
+        assertEquals("[豹富]", emojiNode?.text)
+        assertEquals("https://i0.hdslb.com/bfs/emote/baofu.png", emojiNode?.emoji?.icon_url)
+        assertTrue(opus?.summary?.rich_text_nodes?.any { it.emoji?.icon_url == "https://i0.hdslb.com/bfs/emote/baofu.png" } == true)
+    }
+
+    @Test
+    fun opusDetailParagraph_keepsFormulaBeforeAtMentionInRichNodeStream() {
+        val payload = """
+            {
+              "data": {
+                "item": {
+                  "modules": [
+                    {
+                      "module_type": "MODULE_TYPE_CONTENT",
+                      "module_content": {
+                        "paragraphs": [
+                          {
+                            "para_type": 1,
+                            "text": {
+                              "nodes": [
+                                { "type": "TEXT_NODE_TYPE_FORMULA", "formula": { "latex_content": "x^2" } },
+                                {
+                                  "type": "TEXT_NODE_TYPE_RICH",
+                                  "rich": {
+                                    "type": "RICH_TEXT_NODE_TYPE_AT",
+                                    "text": "@叽米",
+                                    "orig_text": "@叽米",
+                                    "rid": "12345"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<DynamicDetailResponse>(payload)
+        val block = response.data?.item?.modules?.module_dynamic?.major?.opus
+            ?.contentBlocks?.single() as? OpusContentBlock.Text
+
+        assertEquals("x^2@叽米", block?.text)
+        assertEquals(
+            listOf("RICH_TEXT_NODE_TYPE_TEXT", "RICH_TEXT_NODE_TYPE_AT"),
+            block?.richTextNodes?.map { it.type },
+        )
+        assertEquals("12345", block?.richTextNodes?.last()?.rid)
+    }
+
+    @Test
     fun dynamicDetailResponse_parsesModulesWhenModulesIsArray() {
         val payload = """
             {
@@ -120,6 +305,23 @@ class DynamicModulesFlexibleSerializerTest {
                         "forward": { "count": 3 },
                         "like": { "count": 11 }
                       }
+                    },
+                    {
+                      "module_tag": { "text": "置顶" }
+                    },
+                    {
+                      "module_fold": {
+                        "ids": ["1", "2"],
+                        "statement": "展开2条相关动态",
+                        "users": [{ "mid": 11, "face": "https://a" }]
+                      }
+                    },
+                    {
+                      "module_dispute": {
+                        "title": "风险提示",
+                        "desc": "desc",
+                        "jump_url": "//www.bilibili.com/"
+                      }
                     }
                   ]
                 }
@@ -135,6 +337,12 @@ class DynamicModulesFlexibleSerializerTest {
         assertEquals(7, modules?.module_stat?.comment?.count)
         assertEquals(3, modules?.module_stat?.forward?.count)
         assertEquals(11, modules?.module_stat?.like?.count)
+        assertEquals("置顶", modules?.module_tag?.text)
+        assertEquals("展开2条相关动态", modules?.module_fold?.statement)
+        assertEquals(listOf("1", "2"), modules?.module_fold?.ids)
+        assertEquals(11L, modules?.module_fold?.users?.single()?.mid)
+        assertEquals("风险提示", modules?.module_dispute?.title)
+        assertEquals("//www.bilibili.com/", modules?.module_dispute?.jump_url)
     }
 
     @Test
@@ -518,6 +726,78 @@ class DynamicModulesFlexibleSerializerTest {
     }
 
     @Test
+    fun opusDetailModules_keepHeadingAndFormulaParagraphs() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "item": {
+                  "id_str": "1236527093179744277",
+                  "modules": [
+                    {
+                      "module_type": "MODULE_TYPE_TITLE",
+                      "module_title": { "text": "新翼神龙卡组考卷，已快速公式答题" }
+                    },
+                    {
+                      "module_type": "MODULE_TYPE_CONTENT",
+                      "module_content": {
+                        "paragraphs": [
+                          {
+                            "para_type": 1,
+                            "text": {
+                              "nodes": [
+                                { "word": { "words": "开门见山介绍combo" } }
+                              ]
+                            }
+                          },
+                          {
+                            "para_type": 8,
+                            "heading": {
+                              "nodes": [
+                                { "word": { "words": "新翼神龙卡组考卷，已快速公式答题" } }
+                              ]
+                            }
+                          },
+                          {
+                            "para_type": 2,
+                            "pics": [
+                              { "url": "https://i0.hdslb.com/card.jpg", "width": 800, "height": 600 }
+                            ]
+                          },
+                          {
+                            "para_type": 1,
+                            "text": {
+                              "nodes": [
+                                { "formula": { "latex_content": "ATK=3000" } },
+                                { "word": { "words": " 答题解析" } }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<DynamicDetailResponse>(payload)
+        val opus = response.data?.item?.modules?.module_dynamic?.major?.opus
+
+        assertEquals("新翼神龙卡组考卷，已快速公式答题", opus?.title)
+        assertEquals(
+            listOf(
+                OpusContentBlock.Text("开门见山介绍combo"),
+                OpusContentBlock.Heading("新翼神龙卡组考卷，已快速公式答题"),
+                OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/card.jpg", width = 800, height = 600)),
+                OpusContentBlock.Text("ATK=3000 答题解析")
+            ),
+            opus?.contentBlocks
+        )
+    }
+
+    @Test
     fun dynamicDetailResponse_parsesNumericTypeAndOrderedOpusLinkCards() {
         val payload = """
             {
@@ -680,7 +960,7 @@ class DynamicModulesFlexibleSerializerTest {
             opus?.contentBlocks?.get(1)
         )
         assertEquals(
-            OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/line.jpg", width = 1000, height = 20)),
+            OpusContentBlock.Divider(OpusPic(url = "https://i0.hdslb.com/line.jpg", width = 1000, height = 20)),
             opus?.contentBlocks?.get(2)
         )
 
@@ -715,5 +995,62 @@ class DynamicModulesFlexibleSerializerTest {
         val invalid = (opus?.contentBlocks?.get(8) as? OpusContentBlock.LinkCard)?.card
         assertEquals("LINK_CARD_TYPE_ITEM_NULL", invalid?.type)
         assertEquals("内容已失效", invalid?.title)
+    }
+
+    @Test
+    fun opusDetailModules_preserveQuoteListCodeDividerAndAlignment() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "item": {
+                  "id_str": "1",
+                  "modules": [
+                    {
+                      "module_type": "MODULE_TYPE_CONTENT",
+                      "module_content": {
+                        "paragraphs": [
+                          {
+                            "para_type": 4,
+                            "align": 1,
+                            "text": { "nodes": [{ "word": { "words": "引用" } }] }
+                          },
+                          {
+                            "para_type": 5,
+                            "list": {
+                              "style": 1,
+                              "items": [
+                                { "nodes": [{ "word": { "words": "第一项" } }] },
+                                { "nodes": [{ "word": { "words": "第二项" } }] }
+                              ]
+                            }
+                          },
+                          {
+                            "para_type": 7,
+                            "code": { "content": "if (a &lt; b) return a" }
+                          },
+                          {
+                            "para_type": 3,
+                            "line": {}
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val blocks = json.decodeFromString<DynamicDetailResponse>(payload)
+            .data?.item?.modules?.module_dynamic?.major?.opus?.contentBlocks
+
+        assertEquals(OpusContentBlock.Quote("引用", alignment = 1), blocks?.get(0))
+        assertEquals(
+            OpusContentBlock.ListBlock(listOf("第一项", "第二项"), ordered = true),
+            blocks?.get(1),
+        )
+        assertEquals(OpusContentBlock.Code("if (a < b) return a"), blocks?.get(2))
+        assertEquals(OpusContentBlock.Divider(), blocks?.get(3))
     }
 }

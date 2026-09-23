@@ -4,17 +4,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -30,10 +31,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
-import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
+import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
+import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse
 import com.android.purebilibili.data.model.response.SystemNoticeItem
 import com.android.purebilibili.data.repository.MessageRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -134,13 +139,14 @@ fun SystemNoticeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    AdaptiveScaffold(
+    AppScaffold(
+        blurContentReady = !uiState.isLoading,
         topBar = {
-            AdaptiveTopAppBar(
+            AppTopBar(
                 title = "系统通知",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 }
             )
@@ -149,12 +155,9 @@ fun SystemNoticeScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
         ) {
             when {
-                uiState.isLoading -> com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                uiState.isLoading -> SystemNoticeListSkeleton(modifier = Modifier.fillMaxSize())
                 uiState.error != null -> MessageFeedError(
                     text = uiState.error ?: "加载失败",
                     onRetry = viewModel::loadInitial,
@@ -164,14 +167,16 @@ fun SystemNoticeScreen(
                     text = "暂无系统通知",
                     modifier = Modifier.fillMaxSize()
                 )
-                else -> ComfortablePullToRefreshBox(
+                // Scaffold body already below topBar.
+                else -> AdaptivePullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
                     onRefresh = viewModel::refresh,
+                    indicatorTopInset = paddingValues.calculateTopPadding(),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = paddingValues.calculateTopPadding() + 12.dp, bottom = paddingValues.calculateBottomPadding() + 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(uiState.items, key = { it.id }) { item ->
@@ -181,7 +186,7 @@ fun SystemNoticeScreen(
                                     modifier = Modifier.padding(14.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text(
+                                    AppText(
                                         text = item.title,
                                         style = MaterialTheme.typography.bodyLarge,
                                         fontWeight = FontWeight.Medium
@@ -199,7 +204,7 @@ fun SystemNoticeScreen(
                                                 ?.let(onOpenLink)
                                         }
                                     )
-                                    Text(
+                                    AppText(
                                         text = item.timeAt,
                                         modifier = Modifier
                                             .align(Alignment.End),
@@ -217,6 +222,53 @@ fun SystemNoticeScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemNoticeListSkeleton(modifier: Modifier = Modifier) {
+    val blockColor = rememberContentSkeletonBlockColor(rememberContentSkeletonPulse())
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        userScrollEnabled = false,
+    ) {
+        items(7) {
+            MessageFeedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ContentSkeletonBlock(
+                        color = blockColor,
+                        modifier = Modifier
+                            .fillMaxWidth(0.46f)
+                            .height(17.dp),
+                    )
+                    ContentSkeletonBlock(
+                        color = blockColor,
+                        modifier = Modifier
+                            .fillMaxWidth(0.94f)
+                            .height(14.dp),
+                    )
+                    ContentSkeletonBlock(
+                        color = blockColor,
+                        modifier = Modifier
+                            .fillMaxWidth(0.72f)
+                            .height(14.dp),
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    ContentSkeletonBlock(
+                        color = blockColor,
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .fillMaxWidth(0.28f)
+                            .height(12.dp),
+                    )
                 }
             }
         }

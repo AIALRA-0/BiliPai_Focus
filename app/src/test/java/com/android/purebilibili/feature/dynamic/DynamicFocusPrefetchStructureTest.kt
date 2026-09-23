@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.dynamic
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DynamicFocusPrefetchStructureTest {
@@ -40,6 +41,21 @@ class DynamicFocusPrefetchStructureTest {
         assertTrue(source.contains("onFocusFollowGroupClick = { showFocusFollowGroupSheet = true }"))
         assertTrue(source.contains("FocusFollowGroupSheet("))
         assertTrue(topBarSource.contains("contentDescription = \"关注分组过滤设置\""))
+    }
+
+    @Test
+    fun `focus group sheet uses adaptive sheet image and touch target APIs`() {
+        val source = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt"
+        ).replace(Regex("\\s+"), " ")
+
+        assertTrue(source.contains("AppModalBottomSheet(onDismissRequest = onDismissRequest)"))
+        assertTrue(source.contains("import coil3.compose.AsyncImage"))
+        assertTrue(source.contains("heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)"))
+        assertTrue(source.contains("val actionButtonHeight = 52.dp"))
+        assertTrue(source.contains("val inputHeight = 60.dp"))
+        assertFalse(source.contains("IOSModalBottomSheet"))
+        assertFalse(source.contains("import coil.compose.AsyncImage"))
     }
 
     private fun loadSource(path: String): String {

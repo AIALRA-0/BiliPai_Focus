@@ -10,7 +10,7 @@
 | **源码级原生 Kotlin 插件** | ⭐⭐⭐ 进阶 | 复杂功能、API 集成、自定义 UI、立即运行的深度集成 |
 
 > [!CAUTION]
-> 当前仓库已内置 5 个内置插件，并支持通过 URL 导入外部 JSON 规则插件；但插件生态仍处于早期阶段。
+> 当前仓库注册了 10 个内置插件，并支持通过 URL 导入外部 JSON 规则插件；但插件生态仍处于早期阶段。
 > `plugins/community/` 目前仅包含 1 个演示插件，社区规模和兼容性样本都还有限。
 > 外部 `.bpplugin` Kotlin 包当前支持预览、签名/哈希展示和能力授权记录，宿主尚不执行外部 Dex。
 > 外部 `.bpskin` 皮肤包是数据型资源包，只能提供资源、颜色和适用界面声明，不能替换 Compose 组件或执行代码。
@@ -27,13 +27,8 @@
   - [操作符大全](#操作符大全)
   - [示例插件](#示例插件)
 - [外部 `.bpplugin` Kotlin 包（预览）](#-外部-bpplugin-kotlin-包预览)
-  - [开发步骤](#开发步骤)
-  - [推荐插件最小示例](#推荐插件最小示例)
-  - [打包为 `.bpplugin`](#打包为-bpplugin)
 - [外部 `.bpskin` 皮肤包（预览）](#-外部-bpskin-皮肤包预览)
 - [源码级原生 Kotlin 插件](#-源码级原生-kotlin-插件)
-  - [插件接口](#插件接口)
-  - [插件类型](#插件类型)
 - [安装与分发](#-安装与分发)
 - [常见问题](#-常见问题)
 
@@ -130,7 +125,7 @@ JSON 规则插件是最简单的插件形式，只需编写一个 JSON 文件即
 
 ### 🆕 复合条件（AND/OR）
 
-从 v3.2.0 开始，支持使用 `and` 和 `or` 组合多个条件实现更精确的过滤。
+当前版本支持使用 `and` 和 `or` 组合多个条件实现更精确的过滤。
 
 #### AND 条件
 
@@ -278,163 +273,10 @@ JSON 规则插件是最简单的插件形式，只需编写一个 JSON 文件即
 
 ## 📦 外部 `.bpplugin` Kotlin 包（预览）
 
-外部 `.bpplugin` 是面向未来插件生态的 Kotlin 包格式。它适合提前开发推荐算法、播放器和弹幕接口适配，并验证插件包预览、签名展示和能力授权流程。
+外部 `.bpplugin` 是面向未来插件生态的 Kotlin 包格式。完整的 SDK 接口选择、`plugin-manifest.json` 与能力声明、推荐插件最小示例、打包与构建命令见 [Plugin SDK 指南](../plugins/sdk/README.md)。可打包预览的示例见 [Today Watch Remix](../plugins/samples/today-watch-remix/) 与[观感罗盘](../plugins/samples/watch-compass/)。
 
 > [!IMPORTANT]
-> 当前宿主只解析和保存 `.bpplugin`，不会执行外部 Dex。如果你需要插件立即影响应用行为，请使用[源码级原生 Kotlin 插件](#-源码级原生-kotlin-插件)。
-
-### 开发步骤
-
-1. 创建 Android Library 插件工程。
-2. 添加 SDK 依赖：
-
-```kotlin
-repositories {
-    google()
-    mavenCentral()
-    maven("https://jitpack.io")
-}
-
-dependencies {
-    implementation("com.github.jay3-yy.BiliPai:plugin-sdk:<tag-or-commit>")
-}
-```
-
-3. 选择接口：
-   - `RecommendationPluginApi`：推荐队列排序和分组。
-   - `PlayerPluginApi`：播放器状态读取、跳过片段、跳转控制等预留接口。
-   - `DanmakuPluginApi`：弹幕过滤和样式化预留接口。
-4. 实现入口类，并声明 `PluginCapabilityManifest`。
-5. 在插件包根目录创建 `plugin-manifest.json`，字段与代码里的 `capabilityManifest` 保持一致。
-6. 编译插件模块，生成 `classes.jar`、`classes.dex` 或其他后续版本支持的载荷。
-7. 将 `plugin-manifest.json`、可选 `plugin-signature.json` 和编译载荷打包为 `.bpplugin`。
-8. 在 BiliPai 插件中心选择 `.bpplugin`，检查 manifest、SHA-256、签名状态和能力授权提示。
-
-完整 SDK 中文说明见：[Plugin SDK](../plugins/sdk/README.md)。
-
-### Manifest 示例
-
-`.bpplugin` 根目录必须包含 `plugin-manifest.json`：
-
-```json
-{
-  "pluginId": "dev.example.today_watch_remix",
-  "displayName": "Today Watch Remix",
-  "version": "1.0.0",
-  "apiVersion": 1,
-  "entryClassName": "dev.example.todaywatchremix.TodayWatchRemixPlugin",
-  "capabilities": [
-    "RECOMMENDATION_CANDIDATES",
-    "LOCAL_HISTORY_READ"
-  ]
-}
-```
-
-| 字段 | 说明 |
-| --- | --- |
-| `pluginId` | 全局唯一 ID，建议使用反向域名 |
-| `displayName` | 插件中心展示名称 |
-| `version` | 插件版本 |
-| `apiVersion` | SDK API 版本，当前为 `1` |
-| `entryClassName` | 插件入口类完整类名 |
-| `capabilities` | 插件申请的能力 |
-
-### 能力说明
-
-| 能力 | 含义 |
-| --- | --- |
-| `RECOMMENDATION_CANDIDATES` | 读取推荐候选，用于排序或筛选 |
-| `LOCAL_HISTORY_READ` | 读取本地历史摘要和偏好画像 |
-| `LOCAL_FEEDBACK_READ` | 读取本地“不感兴趣”等反馈 |
-| `NETWORK` | 访问远程服务 |
-| `PLUGIN_STORAGE` | 读写插件本地配置或缓存 |
-| `PLAYER_STATE` / `PLAYER_CONTROL` | 读取或控制播放器 |
-| `DANMAKU_STREAM` / `DANMAKU_MUTATION` | 读取或改写弹幕 |
-
-敏感能力会在安装前要求用户确认。开发者应只申请当前插件确实需要的能力。
-
-### 推荐插件最小示例
-
-```kotlin
-class TodayWatchRemixPlugin : RecommendationPluginApi {
-    override val capabilityManifest = PluginCapabilityManifest(
-        pluginId = "dev.example.today_watch_remix",
-        displayName = "Today Watch Remix",
-        version = "1.0.0",
-        apiVersion = 1,
-        entryClassName = "dev.example.todaywatchremix.TodayWatchRemixPlugin",
-        capabilities = setOf(
-            PluginCapability.RECOMMENDATION_CANDIDATES,
-            PluginCapability.LOCAL_HISTORY_READ
-        )
-    )
-
-    override fun buildRecommendations(request: RecommendationRequest): RecommendationResult {
-        val ranked = request.candidateVideos
-            .filterNot { it.bvid in request.feedbackSignals.consumedBvids }
-            .sortedWith(compareByDescending<PluginVideoCandidate> { it.likeCount }.thenByDescending { it.playCount })
-            .take(request.queueLimit)
-            .mapIndexed { index, candidate ->
-                RecommendedVideo(
-                    video = candidate,
-                    score = 100.0 - index,
-                    confidence = 0.7f,
-                    explanation = "按点赞优先，其次按播放量排序"
-                )
-            }
-
-        return RecommendationResult(
-            sourcePluginId = capabilityManifest.pluginId,
-            mode = request.mode,
-            items = ranked,
-            historySampleCount = request.historyVideos.size,
-            sceneSignals = request.sceneSignals
-        )
-    }
-}
-```
-
-可打包预览的示例：
-
-- [Today Watch Remix](../plugins/samples/today-watch-remix/)：最小推荐排序样例。
-- [观感罗盘](../plugins/samples/watch-compass/)：解释型推荐样例，输出“轻松起步 / 深挖正片 / 冷门宝藏”三类推荐。
-
-### 打包为 `.bpplugin`
-
-`.bpplugin` 本质是 ZIP 文件。最小包内容：
-
-```text
-today-watch-remix.bpplugin
-├── plugin-manifest.json
-└── classes.jar
-```
-
-Gradle 打包任务示例：
-
-```kotlin
-val packageBpPlugin by tasks.registering(Zip::class) {
-    dependsOn("assembleRelease")
-    archiveBaseName.set("today-watch-remix")
-    archiveExtension.set("bpplugin")
-    destinationDirectory.set(rootProject.layout.buildDirectory.dir("distributions"))
-
-    from(rootProject.layout.projectDirectory.file("plugin-manifest.json"))
-    from(layout.buildDirectory.file("intermediates/aar_main_jar/release/syncReleaseLibJars/classes.jar")) {
-        rename { "classes.jar" }
-    }
-}
-```
-
-构建后在 BiliPai 插件中心选择生成的 `.bpplugin`，确认插件名称、版本、SHA-256、签名状态和能力授权是否符合预期。
-
-仓库内示例目录没有独立 Gradle wrapper。请在示例目录调用仓库根 wrapper，并显式提供 Android SDK 路径：
-
-```bash
-cd plugins/samples/today-watch-remix
-ANDROID_HOME=/Users/yiyang/Library/Android/sdk ../../../gradlew -p . packageBpPlugin --no-daemon
-```
-
-复制到仓库外独立开发时，可在插件工程根目录创建 `local.properties` 并写入 `sdk.dir=/path/to/android/sdk`。
+> 当前宿主只解析、签名校验、展示和能力授权记录 `.bpplugin`，不会执行外部 Dex。如果你需要插件立即影响应用行为，请使用[源码级原生 Kotlin 插件](#-源码级原生-kotlin-插件)。
 
 ---
 
@@ -515,80 +357,14 @@ my-skin.bpskin
 
 > ⚠️ 原生插件需要修改源码并重新编译，适合有 Android 开发经验的开发者
 
-### 插件接口
-
-所有插件必须实现 `Plugin` 基础接口：
-
-```kotlin
-interface Plugin {
-    val id: String           // 唯一标识符
-    val name: String         // 显示名称
-    val description: String  // 插件描述
-    val version: String      // 版本号
-    val author: String       // 作者
-    val icon: ImageVector?   // 图标（可选）
-    
-    suspend fun onEnable() {}     // 启用回调
-    suspend fun onDisable() {}    // 禁用回调
-    
-    @Composable
-    fun SettingsContent() {}      // 配置界面
-}
-```
-
-### 插件类型
-
-#### PlayerPlugin - 播放器插件
-
-用于控制视频播放行为，如自动跳过片段：
-
-```kotlin
-interface PlayerPlugin : Plugin {
-    suspend fun onVideoLoad(bvid: String, cid: Long)
-    suspend fun onPositionUpdate(positionMs: Long): SkipAction?
-    fun onVideoEnd()
-}
-
-// 跳过动作
-sealed class SkipAction {
-    object None : SkipAction()
-    data class SkipTo(val positionMs: Long, val reason: String) : SkipAction()
-    data class ShowButton(val skipToMs: Long, val label: String, val segmentId: String) : SkipAction()
-}
-```
-
-**示例**: [SponsorBlockPlugin](../app/src/main/java/com/android/purebilibili/feature/plugin/SponsorBlockPlugin.kt)
-
-#### FeedPlugin - 推荐流插件
-
-用于过滤首页推荐视频：
-
-```kotlin
-interface FeedPlugin : Plugin {
-    fun shouldShowItem(item: VideoItem): Boolean
-}
-```
-
-#### DanmakuPlugin - 弹幕插件
-
-用于处理弹幕样式和过滤：
-
-```kotlin
-interface DanmakuPlugin : Plugin {
-    fun processDanmaku(danmaku: DanmakuItem): DanmakuItem?
-}
-```
-
-### 注册插件
+完整的 `Plugin` / `PlayerPlugin` / `FeedPlugin` / `DanmakuPlugin` 接口签名、`SkipAction` 与数据结构、配置持久化、UI 开发、调试与最佳实践见[原生插件开发指南](NATIVE_PLUGIN_DEVELOPMENT.md)。示例：[SponsorBlockPlugin](../app/src/main/java/com/android/purebilibili/feature/plugin/SponsorBlockPlugin.kt)。
 
 在 `PureApplication.kt` 的插件初始化区域注册：
 
 ```kotlin
-Looper.myQueue().addIdleHandler {
+private fun initPluginStackNow() {
     PluginManager.initialize(this)
-    PluginManager.register(SponsorBlockPlugin())
-    PluginManager.register(YourCustomPlugin())  // 添加你的插件
-    false
+    PluginManager.register(YourCustomPlugin())
 }
 ```
 
@@ -605,8 +381,7 @@ Looper.myQueue().addIdleHandler {
 
 ### 链接格式要求
 
-- 必须以 `.json` 结尾
-- 必须是直接下载链接（不是 HTML 页面）
+- 必须是 http/https 直接下载链接（内容为 JSON，`.json` 或 `.bp` 后缀均可）
 - 建议使用 HTTPS
 
 ---

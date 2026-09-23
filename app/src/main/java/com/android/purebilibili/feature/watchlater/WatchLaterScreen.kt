@@ -1,38 +1,47 @@
 // 文件路径: feature/watchlater/WatchLaterScreen.kt
 package com.android.purebilibili.feature.watchlater
 
+import android.os.Build
+import com.android.purebilibili.core.ui.components.VideoListLayoutToggle
+import com.android.purebilibili.core.ui.components.resolveVideoListColumns
+import com.android.purebilibili.core.ui.components.rememberVideoListLayoutControl
+import com.android.purebilibili.core.ui.components.videoListItemModifier
+import com.android.purebilibili.core.ui.components.AnimatedVideoListItem
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
+import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
+import com.android.purebilibili.core.ui.components.AppText
+
+import com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText
+
 import android.app.Application
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
-import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
+import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
+import com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
@@ -44,47 +53,76 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.refresh.WatchLaterRefreshBus
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.AppScaffold
+import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.videoCardTitleMaxLines
+import com.android.purebilibili.core.ui.videoCardTitleOverflow
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppWindowAction
+import com.android.purebilibili.core.ui.components.AppWindowActionMenu
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppLiquidAwareSearchField
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppPlayIcon
+import com.android.purebilibili.core.ui.rememberAppWatchLaterIcon
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
+import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
+import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
+import com.android.purebilibili.core.ui.transition.VideoCardSourceCoverPresentation
+import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
+import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
-import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionVisualSpec
-import com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey
-import com.android.purebilibili.core.ui.transition.videoTitleSharedElementKey
-import com.android.purebilibili.core.ui.transition.videoUpNameSharedElementKey
-import com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey
+import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
+import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
+import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
+import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.data.model.response.VideoItem
-import com.android.purebilibili.data.model.response.Owner
-import com.android.purebilibili.data.model.response.Stat
+import com.android.purebilibili.data.model.response.FavFolder
+import com.android.purebilibili.data.repository.FavoriteRepository
+import com.android.purebilibili.data.repository.WatchLaterRepository
 import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
-import com.android.purebilibili.feature.list.resolveDeleteBatchParallelism
+import com.android.purebilibili.feature.list.resolveHistoryFilterTabChromeSpec
+import com.android.purebilibili.feature.personal.PersonalMediaCardFrame
+import com.android.purebilibili.feature.personal.PersonalMediaCardSkeleton
+import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
+import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
+import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
 import com.android.purebilibili.core.util.CardPositionManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.Search
 import com.android.purebilibili.core.util.FormatUtils
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -157,6 +195,14 @@ data class WatchLaterUiState(
     val totalCount: Int = 0,
     val isLoading: Boolean = false,
     val isManaging: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val page: Int = 1,
+    val hasMore: Boolean = false,
+    val filter: WatchLaterFilter = WatchLaterFilter.ALL,
+    val query: String = "",
+    val sortOrder: WatchLaterSortOrder = WatchLaterSortOrder.FORWARD,
+    val favoriteFolders: List<FavFolder> = emptyList(),
+    val isTransferLoading: Boolean = false,
     val error: String? = null,
     val dissolvingIds: Set<String> = emptySet() // [新增] 用于已播放 Thanos Snap 动画的卡片
 )
@@ -172,69 +218,112 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
         val state: WatchLaterUiState,
         val affectedCount: Int
     )
+    private val tabCache = mutableMapOf<WatchLaterFilter, WatchLaterUiState>()
+    private var loadGeneration = 0L
     
     init {
-        loadData()
         observeWatchLaterRefresh()
     }
 
     private fun observeWatchLaterRefresh() {
         viewModelScope.launch {
             WatchLaterRefreshBus.changes.collect {
-                loadData()
+                loadData(showLoading = false)
             }
         }
     }
     
-    fun loadData() {
+    fun loadData(showLoading: Boolean = true) = loadPage(reset = true, showLoading = showLoading)
+
+    fun loadMore() {
+        val state = _uiState.value
+        if (!state.hasMore || state.isLoading || state.isLoadingMore) return
+        loadPage(reset = false, showLoading = false)
+    }
+
+    fun selectFilter(filter: WatchLaterFilter) {
+        if (filter == _uiState.value.filter) return
+        tabCache[_uiState.value.filter] = _uiState.value.copy(isLoading = false, isLoadingMore = false)
+        val current = _uiState.value
+        val cached = tabCache[filter]
+        _uiState.value = if (
+            cached != null && cached.query == current.query && cached.sortOrder == current.sortOrder
+        ) {
+            cached.copy(filter = filter, dissolvingIds = emptySet())
+        } else {
+            WatchLaterUiState(
+                isLoading = true,
+                filter = filter,
+                query = current.query,
+                sortOrder = current.sortOrder,
+                favoriteFolders = current.favoriteFolders,
+            )
+        }
+        if (cached == null || cached.query != current.query || cached.sortOrder != current.sortOrder) {
+            loadPage(reset = true, showLoading = true)
+        }
+    }
+
+    fun updateQuery(query: String) {
+        if (query == _uiState.value.query) return
+        _uiState.value = _uiState.value.copy(query = query)
+        tabCache.clear()
+        loadPage(reset = true, showLoading = true)
+    }
+
+    fun updateSortOrder(order: WatchLaterSortOrder) {
+        if (order == _uiState.value.sortOrder) return
+        _uiState.value = _uiState.value.copy(sortOrder = order)
+        tabCache.clear()
+        loadPage(reset = true, showLoading = true)
+    }
+
+    private fun loadPage(reset: Boolean, showLoading: Boolean) {
+        val request = _uiState.value
+        val requestPage = if (reset) 1 else request.page + 1
+        val generation = ++loadGeneration
+        _uiState.value = if (reset) {
+            request.copy(
+                isLoading = showLoading || request.items.isEmpty(),
+                isLoadingMore = false,
+                error = null,
+                page = 1,
+                hasMore = false,
+            )
+        } else {
+            request.copy(isLoadingMore = true, error = null)
+        }
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            try {
-                val api = NetworkModule.api
-                val response = api.getWatchLaterList()
-                if (response.code == 0 && response.data != null) {
-                    val items = response.data.list?.map { item ->
-                        VideoItem(
-                            id = item.aid,  // 存储 aid 用于删除
-                            aid = item.aid,
-                            bvid = item.bvid ?: "",
-                            cid = item.cid ?: 0L,
-                            title = item.title ?: "",
-                            pic = item.pic ?: "",
-                            duration = item.duration ?: 0,
-                            progress = item.progress ?: -1,
-                            owner = Owner(
-                                mid = item.owner?.mid ?: 0L,
-                                name = item.owner?.name ?: "",
-                                face = item.owner?.face ?: ""
-                            ),
-                            stat = Stat(
-                                view = item.stat?.view ?: 0,
-                                danmaku = item.stat?.danmaku ?: 0,
-                                reply = item.stat?.reply ?: 0,
-                                like = item.stat?.like ?: 0,
-                                coin = item.stat?.coin ?: 0,
-                                favorite = item.stat?.favorite ?: 0,
-                                share = item.stat?.share ?: 0
-                            ),
-                            pubdate = item.pubdate ?: 0L
-                        )
-                    } ?: emptyList()
+            val result = WatchLaterRepository.getPage(
+                page = requestPage,
+                viewed = request.filter.viewed,
+                keyword = request.query,
+                ascending = request.sortOrder == WatchLaterSortOrder.REVERSE,
+            )
+            if (generation != loadGeneration || _uiState.value.filter != request.filter) return@launch
+            result.fold(
+                onSuccess = { page ->
+                    val current = _uiState.value
+                    val next = current.copy(
+                        items = if (reset) page.items else (current.items + page.items).distinctBy { it.aid },
+                        totalCount = page.totalCount,
+                        isLoading = false,
+                        isLoadingMore = false,
+                        page = requestPage,
+                        hasMore = page.hasMore,
+                        error = null,
+                    )
+                    _uiState.value = next
+                    tabCache[next.filter] = next
+                },
+                onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        items = items,
-                        totalCount = response.data.count.takeIf { it > 0 } ?: items.size
+                        isLoadingMore = false,
+                        error = error.message ?: "加载失败",
                     )
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = response.message.ifBlank { "加载失败" }
-                    )
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "加载失败")
-            }
+                },
+            )
         }
     }
     
@@ -285,6 +374,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 val result = deleteWatchLaterAidWithRetry(aid = aid, csrf = csrf)
                 if (result.isSuccess) {
+                    tabCache.clear()
                     android.widget.Toast.makeText(getApplication(), "已从稍后再看移除", android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     _uiState.value = snapshotState
@@ -330,6 +420,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
 
                 withContext(Dispatchers.Main.immediate) {
                     val successCount = successIds.size
+                    if (successCount > 0) tabCache.clear()
                     _uiState.value = _uiState.value.copy(
                         items = snapshot.filterNot { it.id in successIds },
                         totalCount = (snapshotState.totalCount - successCount).coerceAtLeast(
@@ -362,19 +453,12 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
     private suspend fun deleteWatchLaterItemsInBackground(
         aids: List<Long>,
         csrf: String
-    ): Set<Long> = supervisorScope {
-        val semaphore = Semaphore(resolveDeleteBatchParallelism(aids.size))
-        aids.map { aid ->
-            async {
-                semaphore.withPermit {
-                    if (deleteWatchLaterAidWithRetry(aid = aid, csrf = csrf).isSuccess) {
-                        aid
-                    } else {
-                        null
-                    }
-                }
-            }
-        }.awaitAll().filterNotNull().toSet()
+    ): Set<Long> = withContext(Dispatchers.IO) {
+        val response = NetworkModule.api.deleteMultipleFromWatchLater(
+            aids = aids.distinct().joinToString(","),
+            csrf = csrf,
+        )
+        if (response.code == 0) aids.toSet() else emptySet()
     }
 
     internal fun runManagementAction(action: WatchLaterManagementAction) {
@@ -409,6 +493,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.value = snapshotState.copy(
             items = optimisticItems,
             totalCount = when (action) {
+                WatchLaterManagementAction.CLEAR_INVALID -> snapshotState.totalCount
                 WatchLaterManagementAction.CLEAR_VIEWED ->
                     (snapshotState.totalCount - affectedCount).coerceAtLeast(optimisticItems.size)
                 WatchLaterManagementAction.CLEAR_ALL -> 0
@@ -425,6 +510,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
         result: Result<Unit>
     ) {
         if (result.isSuccess) {
+            tabCache.clear()
             _uiState.value = _uiState.value.copy(isManaging = false)
             android.widget.Toast.makeText(
                 getApplication(),
@@ -446,23 +532,77 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
         action: WatchLaterManagementAction,
         csrf: String
     ): Result<Unit> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val api = NetworkModule.api
-                val response = when (action) {
-                    WatchLaterManagementAction.CLEAR_VIEWED ->
-                        api.deleteFromWatchLater(viewed = true, csrf = csrf)
-                    WatchLaterManagementAction.CLEAR_ALL ->
-                        api.clearWatchLater(csrf = csrf)
-                }
-                if (response.code == 0) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(Exception(response.message.ifEmpty { "接口返回 ${response.code}" }))
-                }
-            } catch (e: Exception) {
-                Result.failure(e)
+        if (csrf.isBlank()) return Result.failure(Exception("请先登录"))
+        return WatchLaterRepository.clear(
+            cleanType = when (action) {
+                WatchLaterManagementAction.CLEAR_INVALID -> 1
+                WatchLaterManagementAction.CLEAR_VIEWED -> 2
+                WatchLaterManagementAction.CLEAR_ALL -> null
             }
+        )
+    }
+
+    fun loadFavoriteFolders() {
+        if (_uiState.value.isTransferLoading) return
+        viewModelScope.launch {
+            val mid = com.android.purebilibili.core.store.TokenManager.midCache
+            if (mid == null) {
+                android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(isTransferLoading = true)
+            FavoriteRepository.getFavFolders(mid).fold(
+                onSuccess = { folders ->
+                    _uiState.value = _uiState.value.copy(
+                        favoriteFolders = folders,
+                        isTransferLoading = false,
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(isTransferLoading = false)
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        error.message ?: "加载收藏夹失败",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                },
+            )
+        }
+    }
+
+    fun copyOrMoveToFavorite(aids: Set<Long>, targetMediaId: Long, copy: Boolean) {
+        if (aids.isEmpty() || _uiState.value.isTransferLoading) return
+        val snapshot = _uiState.value
+        if (!copy) {
+            _uiState.value = snapshot.copy(
+                items = snapshot.items.filterNot { it.aid in aids },
+                totalCount = (snapshot.totalCount - aids.size).coerceAtLeast(0),
+                isTransferLoading = true,
+            )
+        } else {
+            _uiState.value = snapshot.copy(isTransferLoading = true)
+        }
+        viewModelScope.launch {
+            WatchLaterRepository.copyOrMoveToFavorite(targetMediaId, aids, copy).fold(
+                onSuccess = {
+                    tabCache.clear()
+                    _uiState.value = _uiState.value.copy(isTransferLoading = false)
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        if (copy) "复制成功" else "移动成功",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                    if (!copy) loadData(showLoading = false)
+                },
+                onFailure = { error ->
+                    _uiState.value = snapshot.copy(isTransferLoading = false)
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        error.message ?: if (copy) "复制失败" else "移动失败",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                },
+            )
         }
     }
 
@@ -512,21 +652,74 @@ fun WatchLaterScreen(
     onBack: () -> Unit,
     onVideoClick: (String, Long, Long) -> Unit,
     onPlayAllAudioClick: ((String, Long, Long) -> Unit)? = null,
+    initialSearchQuery: String = "",
+    onOpenSearchDestination: ((String) -> Unit)? = null,
     viewModel: WatchLaterViewModel = viewModel(),
-    globalHazeState: HazeState? = null // [新增]
+    globalHazeState: HazeState? = null, // [新增]
+    scrollToTopChannel: Channel<Unit>? = null
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val listLayout = rememberVideoListLayoutControl(
+        defaultSingleColumn = true,
+    )
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings(),
         context = kotlin.coroutines.EmptyCoroutineContext
     )
-    val hazeState = rememberRecoverableHazeState()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val appThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    val hazeState = if (
+        appThemeConfig.headerBlurEnabled &&
+            shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT) &&
+            !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
+    ) rememberRecoverableHazeState() else null
+    val watchLaterChromeSource = if (appThemeConfig.progressiveTopBlurEnabled || appThemeConfig.liquidGlassEnabled) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    } else {
+        null
+    }
+    val watchLaterChromeBackdrop = watchLaterChromeSource?.takeIf { !state.isLoading && it.isReady }?.backdrop
+    val progressiveChromeActive = shouldUseBiliPaiProgressiveTopBlur(
+        enabled = appThemeConfig.progressiveTopBlurEnabled && !appThemeConfig.headerBlurEnabled,
+        hasBackdrop = watchLaterChromeBackdrop != null,
+    ) && !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
+    val fadeActive = appThemeConfig.progressiveTopFadeEnabled && !appThemeConfig.headerBlurEnabled
+    val headerBlurActive = appThemeConfig.headerBlurEnabled &&
+        hazeState?.let { recoverableBlurEnabled(it) } == true &&
+        !progressiveChromeActive
+    val topChromePolicy = rememberAppTopChromePolicy()
+    val watchLaterFilterChrome = remember(homeSettings, topChromePolicy) {
+        resolveHistoryFilterTabChromeSpec(
+            homeSettings = homeSettings,
+            topChromePolicy = topChromePolicy,
+            filterCount = WatchLaterFilter.entries.size,
+        )
+    }
+    val scrollBehavior = if (homeSettings.homeHeaderCollapseMode.hasAnyCollapse) {
+        TopAppBarDefaults.enterAlwaysScrollBehavior()
+    } else {
+        TopAppBarDefaults.pinnedScrollBehavior()
+    }
     var isBatchMode by rememberSaveable { mutableStateOf(false) }
     var selectedBvids by rememberSaveable { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by rememberSaveable { mutableStateOf(false) }
-    var showManagementMenu by rememberSaveable { mutableStateOf(false) }
+    var pendingTransferCopy by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var selectedTransferFolderId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingManagementAction by rememberSaveable { mutableStateOf<WatchLaterManagementAction?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf(initialSearchQuery) }
+    val displayedItems = state.items
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(scrollToTopChannel) {
+        scrollToTopChannel?.receiveAsFlow()?.collect {
+            if (gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0) {
+                gridState.animateScrollToItem(0)
+            }
+        }
+    }
+
+    LaunchedEffect(searchQuery) {
+        kotlinx.coroutines.delay(350)
+        viewModel.updateQuery(searchQuery)
+    }
 
     LaunchedEffect(state.items) {
         val valid = state.items.map { it.bvid }.toSet()
@@ -536,60 +729,111 @@ fun WatchLaterScreen(
         }
         if (state.items.isEmpty()) {
             pendingManagementAction = null
-            showManagementMenu = false
         }
     }
 
-    AdaptiveScaffold(
+    AppScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             // 使用 Box 包裹实现毛玻璃背景
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .unifiedBlur(hazeState)
+            BiliPaiImmersiveTopBar(
+                backdrop = watchLaterChromeBackdrop,
+                enabled = progressiveChromeActive,
+                headerBlurActive = headerBlurActive,
+                surfaceColor = AppSurfaceTokens.groupedListContainer(),
+                fadeEnabled = fadeActive,
+                extendBelowBounds = false,
+                modifier = Modifier.fillMaxWidth().then(
+                    if (progressiveChromeActive || fadeActive) {
+                        Modifier.background(Color.Transparent)
+                    } else if (headerBlurActive && hazeState != null) {
+                        Modifier
+                            .unifiedBlur(
+                                hazeState = hazeState,
+                                surfaceType = com.android.purebilibili.core.ui.blur.BlurSurfaceType.HEADER,
+                            )
+                            .background(
+                                AppSurfaceTokens.cardContainer()
+                                    .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
+                            )
+                    } else {
+                        Modifier.background(AppSurfaceTokens.groupedListContainer())
+                    }
+                ),
             ) {
-                AdaptiveTopAppBar(
-                    title = resolveWatchLaterTitle(
-                        state.totalCount.takeIf { it > 0 } ?: state.items.size
-                    ),
+                Column {
+                AppTopBar(
+                    title = "",
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        AppIconButton(onClick = onBack) {
+                            AppIcon(rememberAppBackIcon(), contentDescription = "返回")
                         }
                     },
                     actions = {
+                        VideoListLayoutToggle(
+                            singleColumn = listLayout.singleColumn,
+                            onClick = listLayout.toggle,
+                            enabled = !isBatchMode,
+                        )
+                        onOpenSearchDestination?.let { openSearch ->
+                            AppIconButton(onClick = { openSearch(searchQuery) }) {
+                                AppIcon(Icons.Rounded.Search, contentDescription = "搜索")
+                            }
+                        }
                         if (state.items.isNotEmpty()) {
                             if (isBatchMode) {
                                 val allSelected = selectedBvids.size == state.items.size
-                                TextButton(
+                                AppTextButton(
                                     onClick = {
                                         selectedBvids = if (allSelected) emptySet() else state.items.map { it.bvid }.toSet()
                                     }
                                 ) {
-                                    Text(if (allSelected) "取消全选" else "全选")
+                                    AppText(if (allSelected) "取消全选" else "全选")
                                 }
-                                TextButton(
-                                    enabled = selectedBvids.isNotEmpty(),
-                                    onClick = { showBatchDeleteConfirm = true }
+                                AppWindowActionMenu(
+                                    enabled = selectedBvids.isNotEmpty() && !state.isTransferLoading,
+                                    groups = listOf(
+                                        listOf(
+                                            AppWindowAction(
+                                                label = "复制到收藏夹",
+                                                onClick = {
+                                                    pendingTransferCopy = true
+                                                    selectedTransferFolderId = null
+                                                    viewModel.loadFavoriteFolders()
+                                                },
+                                            ),
+                                            AppWindowAction(
+                                                label = "移动到收藏夹",
+                                                onClick = {
+                                                    pendingTransferCopy = false
+                                                    selectedTransferFolderId = null
+                                                    viewModel.loadFavoriteFolders()
+                                                },
+                                            ),
+                                            AppWindowAction(
+                                                label = "删除(${selectedBvids.size})",
+                                                onClick = { showBatchDeleteConfirm = true },
+                                            ),
+                                        ),
+                                    ),
                                 ) {
-                                    Text("删除(${selectedBvids.size})")
+                                    AppIcon(Icons.Filled.MoreVert, contentDescription = "批量操作")
                                 }
-                                TextButton(
+                                AppTextButton(
                                     onClick = {
                                         isBatchMode = false
                                         selectedBvids = emptySet()
                                     }
                                 ) {
-                                    Text("完成")
+                                    AppText("完成")
                                 }
                             } else {
-                                IconButton(
+                                AppIconButton(
                                     onClick = {
                                         val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                            items = state.items,
-                                            clickedBvid = state.items.firstOrNull()?.bvid
-                                        ) ?: return@IconButton
+                                            items = displayedItems,
+                                            clickedBvid = displayedItems.firstOrNull()?.bvid
+                                        ) ?: return@AppIconButton
 
                                         com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
                                             externalPlaylist.playlistItems,
@@ -599,103 +843,110 @@ fun WatchLaterScreen(
                                         com.android.purebilibili.feature.video.player.PlaylistManager
                                             .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
 
-                                        val item = state.items[externalPlaylist.startIndex]
+                                        val item = displayedItems[externalPlaylist.startIndex]
                                         val target = resolveWatchLaterPlaybackTargetOrDefault(
-                                            items = state.items,
+                                            items = displayedItems,
                                             bvid = item.bvid,
                                             fallbackCid = item.cid
                                         )
                                         onVideoClick(target.bvid, target.cid, target.resumePositionMs)
                                     }
                                 ) {
-                                    Icon(
-                                        CupertinoIcons.Filled.Play,
+                                    AppIcon(
+                                        rememberAppPlayIcon(),
                                         contentDescription = "全部播放",
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
 
-                                IconButton(
+                                AppTextButton(
                                     onClick = {
-                                        val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                            items = state.items,
-                                            clickedBvid = state.items.firstOrNull()?.bvid
-                                        ) ?: return@IconButton
-
-                                        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
-                                            externalPlaylist.playlistItems,
-                                            externalPlaylist.startIndex,
-                                            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
-                                        )
-                                        com.android.purebilibili.feature.video.player.PlaylistManager
-                                            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
-
-                                        val target = resolveWatchLaterPlayAllStartTarget(state.items)
-                                            ?: return@IconButton
-                                        val playbackTarget = resolveWatchLaterPlaybackTargetOrDefault(
-                                            items = state.items,
-                                            bvid = target.first,
-                                            fallbackCid = target.second
-                                        )
-                                        onPlayAllAudioClick?.invoke(
-                                            playbackTarget.bvid,
-                                            playbackTarget.cid,
-                                            playbackTarget.resumePositionMs
-                                        ) ?: onVideoClick(
-                                            playbackTarget.bvid,
-                                            playbackTarget.cid,
-                                            playbackTarget.resumePositionMs
-                                        )
+                                        viewModel.updateSortOrder(state.sortOrder.toggled())
                                     }
                                 ) {
-                                    Icon(
-                                        CupertinoIcons.Outlined.Headphones,
-                                        contentDescription = "全部听",
-                                        tint = MaterialTheme.colorScheme.primary
+                                    AppText(
+                                        if (state.sortOrder == WatchLaterSortOrder.FORWARD) "最近添加"
+                                        else "最早添加"
                                     )
                                 }
 
-                                Box {
-                                    IconButton(
-                                        enabled = !state.isManaging,
-                                        onClick = { showManagementMenu = true }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.MoreVert,
-                                            contentDescription = "更多管理",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    DropdownMenu(
-                                        expanded = showManagementMenu,
-                                        onDismissRequest = { showManagementMenu = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("清空已看") },
-                                            enabled = !state.isManaging,
-                                            onClick = {
-                                                showManagementMenu = false
-                                                pendingManagementAction = WatchLaterManagementAction.CLEAR_VIEWED
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("清空全部") },
-                                            enabled = !state.isManaging,
-                                            onClick = {
-                                                showManagementMenu = false
-                                                pendingManagementAction = WatchLaterManagementAction.CLEAR_ALL
-                                            }
-                                        )
-                                    }
-                                }
+                                AppWindowActionMenu(
+                                    enabled = !state.isManaging,
+                                    groups = listOf(
+                                        listOf(
+                                            AppWindowAction(
+                                                label = "全部听",
+                                                enabled = !state.isManaging,
+                                                onClick = {
+                                                    val externalPlaylist = buildExternalPlaylistFromWatchLater(
+                                                        items = displayedItems,
+                                                        clickedBvid = displayedItems.firstOrNull()?.bvid
+                                                    )
+                                                    if (externalPlaylist != null) {
+                                                        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                                                            externalPlaylist.playlistItems,
+                                                            externalPlaylist.startIndex,
+                                                            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
+                                                        )
+                                                        com.android.purebilibili.feature.video.player.PlaylistManager
+                                                            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
 
-                                TextButton(
-                                    onClick = {
-                                        isBatchMode = true
-                                        selectedBvids = emptySet()
-                                    }
+                                                        resolveWatchLaterPlayAllStartTarget(displayedItems)?.let { target ->
+                                                            val playbackTarget = resolveWatchLaterPlaybackTargetOrDefault(
+                                                                items = displayedItems,
+                                                                bvid = target.first,
+                                                                fallbackCid = target.second
+                                                            )
+                                                            onPlayAllAudioClick?.invoke(
+                                                                playbackTarget.bvid,
+                                                                playbackTarget.cid,
+                                                                playbackTarget.resumePositionMs
+                                                            ) ?: onVideoClick(
+                                                                playbackTarget.bvid,
+                                                                playbackTarget.cid,
+                                                                playbackTarget.resumePositionMs
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                            ),
+                                            AppWindowAction(
+                                                label = "批量删除",
+                                                enabled = !state.isManaging,
+                                                onClick = {
+                                                    isBatchMode = true
+                                                    selectedBvids = emptySet()
+                                                },
+                                            ),
+                                            AppWindowAction(
+                                                label = "清除失效",
+                                                enabled = !state.isManaging,
+                                                onClick = {
+                                                    pendingManagementAction = WatchLaterManagementAction.CLEAR_INVALID
+                                                },
+                                            ),
+                                            AppWindowAction(
+                                                label = "清空已看",
+                                                enabled = !state.isManaging,
+                                                onClick = {
+                                                    pendingManagementAction = WatchLaterManagementAction.CLEAR_VIEWED
+                                                },
+                                            ),
+                                            AppWindowAction(
+                                                label = "清空全部",
+                                                enabled = !state.isManaging,
+                                                onClick = {
+                                                    pendingManagementAction = WatchLaterManagementAction.CLEAR_ALL
+                                                },
+                                            ),
+                                        ),
+                                    ),
                                 ) {
-                                    Text("批量删除")
+                                    AppIcon(
+                                        imageVector = Icons.Filled.MoreVert,
+                                        contentDescription = "更多管理",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                             }
                         }
@@ -707,37 +958,104 @@ fun WatchLaterScreen(
                     ),
                     scrollBehavior = scrollBehavior
                 )
-                
+                AppLiquidAwareSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = "搜索稍后再看",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppSpacingTokens.Medium),
+                    backdrop = watchLaterChromeBackdrop,
+                )
+                Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                val watchLaterFilterOptions = remember(state.filter, state.totalCount) {
+                    WatchLaterFilter.entries.map { filter ->
+                        AppSegmentOption(
+                            value = filter,
+                            label = if (filter == state.filter) {
+                                "${filter.label}(${state.totalCount})"
+                            } else {
+                                filter.label
+                            },
+                        )
+                    }
+                }
+                AppThemeAdaptiveTabRow(
+                    options = watchLaterFilterOptions,
+                    selectedValue = state.filter,
+                    onSelectionChange = viewModel::selectFilter,
+                    enabled = !isBatchMode,
+                    height = watchLaterFilterChrome.heightDp.dp,
+                    indicatorHeight = watchLaterFilterChrome.indicatorHeightDp.dp,
+                    labelFontSize = watchLaterFilterChrome.labelFontSizeSp.sp,
+                    dragSelectionEnabled = watchLaterFilterChrome.dragSelectionEnabled,
+                    tapPressRefractionEnabled = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = watchLaterFilterChrome.horizontalPaddingDp.dp),
+                    miuixBackdrop = watchLaterChromeBackdrop,
+                )
+                Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                }
                 // 分割线 (仅在滚动时显示? 这里简化一直显示细线或跟随滚动)
                 // 暂时不加显式分割线，依靠毛玻璃效果
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = AppSurfaceTokens.groupedListContainer()
     ) { padding ->
+        val bottomContentPadding = LocalBottomBarContentPadding.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSourceCompat(state = hazeState) // 内容作为模糊源（全局源由根层提供）
+                .then(watchLaterChromeSource?.modifier ?: Modifier)
+                .then(
+                    if (hazeState != null) {
+                        Modifier.hazeSourceCompat(state = hazeState)
+                    } else {
+                        Modifier
+                    }
+                )
+                .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
         ) {
             when {
                 state.isLoading -> {
-                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val skeletonColumns = resolveVideoListColumns(listLayout.singleColumn, maxWidth.value)
+                        val skeletonBlockColor = com.android.purebilibili.core.ui.skeleton
+                            .rememberContentSkeletonBlockColor(
+                                com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse()
+                            )
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(skeletonColumns),
+                            contentPadding = PaddingValues(
+                                start = AppSpacingTokens.Medium,
+                                end = AppSpacingTokens.Medium,
+                                top = padding.calculateTopPadding() + AppSpacingTokens.Small,
+                                bottom = bottomContentPadding,
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                            userScrollEnabled = false,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            items(skeletonColumns * 6) {
+                                PersonalMediaCardSkeleton(blockColor = skeletonBlockColor)
+                            }
+                        }
+                    }
                 }
                 state.error != null -> {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
+                        AppText(
                             text = state.error ?: "未知错误",
                             color = MaterialTheme.colorScheme.error
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(onClick = { viewModel.loadData() }) {
-                            Text("重试")
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                        AppOutlinedButton(onClick = { viewModel.loadData() }) {
+                            AppText("重试")
                         }
                     }
                 }
@@ -746,93 +1064,111 @@ fun WatchLaterScreen(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            CupertinoIcons.Default.Clock,
+                        AppIcon(
+                            rememberAppWatchLaterIcon(),
                             contentDescription = null,
-                            modifier = Modifier.size(64.dp),
+                            modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "稍后再看列表为空",
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                        AppText(
+                            text = if (searchQuery.isBlank()) "稍后再看列表为空" else "未找到相关视频",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 else -> {
-                    LazyColumn(
-                        contentPadding = PaddingValues(
-                            start = 12.dp,
-                            end = 12.dp,
-                            top = padding.calculateTopPadding() + 8.dp,
-                            bottom = padding.calculateBottomPadding() + 8.dp + 80.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        itemsIndexed(
-                            items = state.items,
-                            key = { index, item ->
-                                resolveIndexedVideoLazyKey(
-                                    namespace = "watch_later_video",
-                                    index = index,
-                                    bvid = item.bvid,
-                                    id = item.id,
-                                    aid = item.aid,
-                                    cid = item.cid
-                                )
-                            }
-                        ) { _, item ->
-                            val isDissolving = item.bvid in state.dissolvingIds
-                            val isSelected = item.bvid in selectedBvids
-
-                            DissolvableVideoCard(
-                                isDissolving = isDissolving,
-                                onDissolveComplete = { viewModel.completeVideoDissolve(item.bvid) },
-                                cardId = item.bvid,
-                                preset = DissolveAnimationPreset.TELEGRAM_FAST,
-                                modifier = Modifier.jiggleOnDissolve(
-                                    cardId = item.bvid,
-                                    isCurrentCardDissolving = isDissolving
-                                )
-                            ) {
-                                WatchLaterVideoCard(
-                                    item = item,
-                                    isBatchMode = isBatchMode,
-                                    isSelected = isSelected,
-                                    transitionEnabled = homeSettings.cardTransitionEnabled,
-                                    onDelete = { viewModel.startVideoDissolve(item.bvid) },
-                                    onClick = {
-                                        if (isBatchMode) {
-                                            selectedBvids = if (item.bvid in selectedBvids) {
-                                                selectedBvids - item.bvid
-                                            } else {
-                                                selectedBvids + item.bvid
-                                            }
-                                        } else {
-                                            val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                                items = state.items,
-                                                clickedBvid = item.bvid
-                                            )
-                                            if (externalPlaylist != null) {
-                                                com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
-                                                    externalPlaylist.playlistItems,
-                                                    externalPlaylist.startIndex,
-                                                    source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
-                                                )
-                                                com.android.purebilibili.feature.video.player.PlaylistManager
-                                                    .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
-                                            }
-
-                                            val target = resolveWatchLaterPlaybackTargetOrDefault(
-                                                items = state.items,
-                                                bvid = item.bvid,
-                                                fallbackCid = item.cid
-                                            )
-                                            onVideoClick(target.bvid, target.cid, target.resumePositionMs)
-                                        }
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val columns = resolveVideoListColumns(
+                            listLayout.singleColumn, maxWidth.value,
+                        )
+                        LazyVerticalGrid(
+                            state = gridState,
+                            columns = GridCells.Fixed(columns),
+                            contentPadding = PaddingValues(
+                                start = AppSpacingTokens.Medium,
+                                end = AppSpacingTokens.Medium,
+                                top = padding.calculateTopPadding() + AppSpacingTokens.Small,
+                                bottom = bottomContentPadding,
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            itemsIndexed(
+                                items = displayedItems,
+                                key = { index, item ->
+                                    resolveIndexedVideoLazyKey(
+                                        namespace = "watch_later_video",
+                                        index = index,
+                                        bvid = item.bvid,
+                                        id = item.id,
+                                        aid = item.aid,
+                                        cid = item.cid
+                                    )
+                                }
+                            ) { index, item ->
+                                AnimatedVideoListItem(modifier = videoListItemModifier(enabled = homeSettings.cardAnimationEnabled), enabled = homeSettings.cardAnimationEnabled) {
+                                    if (index == displayedItems.lastIndex && state.hasMore && !state.isLoadingMore) {
+                                        LaunchedEffect(state.page, displayedItems.size) { viewModel.loadMore() }
                                     }
-                                )
+                                    val isDissolving = item.bvid in state.dissolvingIds
+                                    val isSelected = item.bvid in selectedBvids
+
+                                    MaybeDissolvableVideoCard(
+                                        isDissolving = isDissolving,
+                                        onDissolveComplete = { viewModel.completeVideoDissolve(item.bvid) },
+                                        cardId = item.bvid,
+                                        preset = DissolveAnimationPreset.TELEGRAM_FAST,
+                                        modifier = Modifier.jiggleOnDissolve(
+                                            cardId = item.bvid,
+                                            isCurrentCardDissolving = isDissolving
+                                        )
+                                    ) {
+                                        WatchLaterVideoCard(
+                                            item = item,
+                                            stacked = columns > 1,
+                                            isBatchMode = isBatchMode,
+                                            isSelected = isSelected,
+                                            transitionEnabled = homeSettings.cardTransitionEnabled,
+                                            onDelete = { viewModel.startVideoDissolve(item.bvid) },
+                                            onLongClick = {
+                                                isBatchMode = true
+                                                selectedBvids = selectedBvids + item.bvid
+                                            },
+                                            onClick = {
+                                                if (isBatchMode) {
+                                                    selectedBvids = if (item.bvid in selectedBvids) {
+                                                        selectedBvids - item.bvid
+                                                    } else {
+                                                        selectedBvids + item.bvid
+                                                    }
+                                                } else {
+                                                    val externalPlaylist = buildExternalPlaylistFromWatchLater(
+                                                        items = displayedItems,
+                                                        clickedBvid = item.bvid
+                                                    )
+                                                    if (externalPlaylist != null) {
+                                                        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                                                            externalPlaylist.playlistItems,
+                                                            externalPlaylist.startIndex,
+                                                            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
+                                                        )
+                                                        com.android.purebilibili.feature.video.player.PlaylistManager
+                                                            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
+                                                    }
+
+                                                    val target = resolveWatchLaterPlaybackTargetOrDefault(
+                                                        items = displayedItems,
+                                                        bvid = item.bvid,
+                                                        fallbackCid = item.cid
+                                                    )
+                                                    onVideoClick(target.bvid, target.cid, target.resumePositionMs)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -842,12 +1178,12 @@ fun WatchLaterScreen(
     }
 
     if (showBatchDeleteConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showBatchDeleteConfirm = false },
-            title = { Text("批量删除") },
-            text = { Text("确认删除已选择的 ${selectedBvids.size} 个视频吗？") },
+            title = { AppText("批量删除") },
+            text = { AppText("确认删除已选择的 ${selectedBvids.size} 个视频吗？") },
             confirmButton = {
-                TextButton(
+                AppTextButton(
                     onClick = {
                         val aidList = state.items
                             .filter { it.bvid in selectedBvids }
@@ -858,14 +1194,59 @@ fun WatchLaterScreen(
                         showBatchDeleteConfirm = false
                     }
                 ) {
-                    Text("删除")
+                    AppText("删除")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showBatchDeleteConfirm = false }) {
-                    Text("取消")
+                AppTextButton(onClick = { showBatchDeleteConfirm = false }) {
+                    AppText("取消")
                 }
             }
+        )
+    }
+
+    pendingTransferCopy?.let { copy ->
+        AppAlertDialog(
+            onDismissRequest = { pendingTransferCopy = null },
+            title = { AppText(if (copy) "复制到收藏夹" else "移动到收藏夹") },
+            text = {
+                if (state.isTransferLoading && state.favoriteFolders.isEmpty()) {
+                    AppText("正在加载收藏夹…")
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                        items(state.favoriteFolders, key = { it.id }) { folder ->
+                            AppSingleChoiceRow(
+                                selected = selectedTransferFolderId == folder.id,
+                                onClick = { selectedTransferFolderId = folder.id },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                AppText(folder.title, modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                AppTextButton(
+                    enabled = selectedTransferFolderId != null && !state.isTransferLoading,
+                    onClick = {
+                        val aids = state.items
+                            .filter { it.bvid in selectedBvids }
+                            .map { it.aid }
+                            .filter { it > 0L }
+                            .toSet()
+                        selectedTransferFolderId?.let { folderId ->
+                            viewModel.copyOrMoveToFavorite(aids, folderId, copy)
+                        }
+                        pendingTransferCopy = null
+                        selectedBvids = emptySet()
+                        isBatchMode = false
+                    },
+                ) { AppText("确认") }
+            },
+            dismissButton = {
+                AppTextButton(onClick = { pendingTransferCopy = null }) { AppText("取消") }
+            },
         )
     }
 
@@ -876,30 +1257,31 @@ fun WatchLaterScreen(
                 action = action
             ).size
         }
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { pendingManagementAction = null },
             title = {
-                Text(
+                AppText(
                     when (action) {
+                        WatchLaterManagementAction.CLEAR_INVALID -> "清除失效"
                         WatchLaterManagementAction.CLEAR_VIEWED -> "清空已看"
                         WatchLaterManagementAction.CLEAR_ALL -> "清空全部"
                     }
                 )
             },
-            text = { Text(resolveWatchLaterManagementConfirmText(action, affectedCount)) },
+            text = { AppText(resolveWatchLaterManagementConfirmText(action, affectedCount)) },
             confirmButton = {
-                TextButton(
+                AppTextButton(
                     onClick = {
                         viewModel.runManagementAction(action)
                         pendingManagementAction = null
                     }
                 ) {
-                    Text("确认")
+                    AppText("确认")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingManagementAction = null }) {
-                    Text("取消")
+                AppTextButton(onClick = { pendingManagementAction = null }) {
+                    AppText("取消")
                 }
             }
         )
@@ -910,12 +1292,15 @@ fun WatchLaterScreen(
 @Composable
 private fun WatchLaterVideoCard(
     item: VideoItem,
+    stacked: Boolean = false,
     isBatchMode: Boolean,
     isSelected: Boolean,
     transitionEnabled: Boolean,
     onDelete: () -> Unit,
+    onLongClick: () -> Unit,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = remember(configuration.screenWidthDp, density) {
@@ -925,7 +1310,10 @@ private fun WatchLaterVideoCard(
         with(density) { configuration.screenHeightDp.dp.toPx() }
     }
     val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val coverBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(item.bvid)
     val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
+    val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val sharedElementReady = transitionEnabled &&
@@ -933,199 +1321,189 @@ private fun WatchLaterVideoCard(
         sourceRoute != null &&
         sharedTransitionScope != null &&
         animatedVisibilityScope != null
-    val sharedTransitionMotionSpec = remember(sourceRoute, transitionEnabled) {
+    val transitionAdaptiveInfo = com.android.purebilibili.core.ui.transition
+        .LocalVideoTransitionAdaptiveInfo.current
+    val sharedTransitionMotionSpec = remember(
+        sourceRoute,
+        transitionEnabled,
+        sharedTransitionSpeedSettings,
+        transitionAdaptiveInfo,
+    ) {
         resolveVideoCardSharedTransitionMotionSpec(
             sourceRoute = sourceRoute,
-            transitionEnabled = transitionEnabled
+            transitionEnabled = transitionEnabled,
+            speedSettings = sharedTransitionSpeedSettings,
+            adaptiveInfo = transitionAdaptiveInfo,
         )
     }
+    val stationaryCoverUrl = remember(item.pic) { fixCoverUrl(item.pic) }
+    val stationaryCoverRequest = remember(stationaryCoverUrl) {
+        ImageRequest.Builder(context)
+            .data(stationaryCoverUrl)
+            .crossfade(false)
+            .memoryCacheKey(stationaryCoverUrl)
+            .diskCacheKey(stationaryCoverUrl)
+            .build()
+    }
+    val cardCornerRadiusDp = AppShapes.containerCornerDp(ContainerLevel.Card).value.toInt()
     val cardClick = {
         if (!isBatchMode) {
             cardBoundsRef.value?.let { bounds ->
+                val sourceCoverBounds = coverBoundsRef.value
                 CardPositionManager.recordVideoCardPosition(
                     bvid = item.bvid,
                     sourceRoute = sourceRoute,
                     bounds = bounds,
                     screenWidth = screenWidthPx,
                     screenHeight = screenHeightPx,
-                    sourceCornerDp = 8
+                    sourceCornerDp = cardCornerRadiusDp,
+                    coverBounds = sourceCoverBounds,
+                    sourceLayout = if (stacked) VideoCardSourceLayout.STACKED else VideoCardSourceLayout.SIDE_BY_SIDE,
+                    sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                        title = item.title,
+                        ownerName = item.owner.name.ifBlank { "未知UP主" },
+                        ownerFaceUrl = item.owner.face,
+                        viewText = formatNumber(item.stat.view),
+                        danmakuText = formatNumber(item.stat.danmaku),
+                        durationText = formatDuration(item.duration),
+                        infoPresentation = com.android.purebilibili.core.ui.transition
+                            .resolveVideoCardSourceInfoPresentation(
+                                publishTimeText = "",
+                                showStatsInInfo = true,
+                                showOverflowMenu = !isBatchMode,
+                            ),
+                        coverPresentation = VideoCardSourceCoverPresentation(
+                            showDurationOnCover = true,
+                            showHistoryProgressBar = item.duration > 0 && item.progress > 0,
+                            historyProgressFraction = if (item.duration > 0) {
+                                (item.progress.toFloat() / item.duration).coerceIn(0f, 1f)
+                            } else {
+                                0f
+                            },
+                        ),
+                        coverUrl = stationaryCoverUrl,
+                        coverCacheKey = stationaryCoverUrl,
+                    ).withMeasuredCoverDecodeSize(sourceCoverBounds),
                 )
+                nativeCardSnapshot.capture()
             }
         }
         onClick()
     }
-    val sharedTransitionVisualSpec = remember(sourceRoute, transitionEnabled) {
-        resolveVideoSharedTransitionVisualSpec(
-            sourceRoute = sourceRoute,
-            sourceCornerDp = 8
-        )
-    }
-    val coverShape = RoundedCornerShape(sharedTransitionVisualSpec.sourceCornerDp.dp)
-    val coverModifier = if (sharedElementReady) {
-        with(requireNotNull(sharedTransitionScope)) {
-            Modifier.sharedBounds(
-                sharedContentState = rememberSharedContentState(
-                    key = videoCoverSharedElementKey(
-                        item.bvid,
-                        sourceRoute = sourceRoute
-                    )
-                ),
-                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                boundsTransform = { _, _ ->
-                    if (sharedTransitionMotionSpec.enabled) {
-                        tween(
-                            durationMillis = sharedTransitionMotionSpec.durationMillis,
-                            easing = sharedTransitionMotionSpec.easing
-                        )
-                    } else {
-                        com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
-                    }
-                },
-                clipInOverlayDuringTransition = OverlayClip(coverShape)
-            )
-        }
-    } else {
-        Modifier
-    }
-    var titleModifier: Modifier = Modifier
-    var upNameModifier: Modifier = Modifier
-    var viewsModifier: Modifier = Modifier
-    if (sharedElementReady) {
-        with(requireNotNull(sharedTransitionScope)) {
-            titleModifier = titleModifier.sharedBounds(
-                sharedContentState = rememberSharedContentState(key = videoTitleSharedElementKey(item.bvid)),
-                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                boundsTransform = { _, _ -> com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec() }
-            )
-            upNameModifier = upNameModifier.sharedBounds(
-                sharedContentState = rememberSharedContentState(key = videoUpNameSharedElementKey(item.bvid)),
-                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                boundsTransform = { _, _ -> com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec() }
-            )
-            viewsModifier = viewsModifier.sharedBounds(
-                sharedContentState = rememberSharedContentState(key = videoViewsSharedElementKey(item.bvid)),
-                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                boundsTransform = { _, _ -> com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec() }
-            )
-        }
-    }
+    val useCardShellSharedBounds = shouldUseVideoCardShellSharedBounds(
+        sourceRoute = sourceRoute,
+        transitionEnabled = sharedElementReady
+    )
+    val cardShellShape = AppShapes.container(ContainerLevel.Card)
 
-    Row(
+    PersonalMediaCardFrame(
+        stacked = stacked,
+        coverModifier = Modifier.onGloballyPositioned { coordinates ->
+            coverBoundsRef.value = coordinates.boundsInRoot()
+        },
+        selected = isSelected,
         modifier = Modifier
-            .fillMaxWidth()
+            .videoCardShellSharedBoundsOrEmpty(
+                enabled = useCardShellSharedBounds,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                bvid = item.bvid,
+                sourceRoute = sourceRoute,
+                motionSpec = sharedTransitionMotionSpec,
+                clipShape = cardShellShape,
+                // 让播放器接管移动中的整卡，返回时再在 morph 末段接回源卡，避免与播放器重叠。
+                crossfadeSourceContent = true,
+            )
             .height(IntrinsicSize.Min)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
-            }
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .then(
-                if (isBatchMode) {
-                    Modifier.border(
-                        width = if (isSelected) 2.dp else 1.dp,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                        },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    Modifier
-                }
-            )
-            .clickable(onClick = cardClick)
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 封面
-        Box(
-            modifier = coverModifier
-                .width(140.dp)
-                .aspectRatio(16f / 9f)
-                .clip(coverShape)
-        ) {
-            AsyncImage(
-                model = fixCoverUrl(item.pic),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            // 时长
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(4.dp)
-                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = formatDuration(item.duration),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White
-                )
-            }
-        }
-        
-        // 信息
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
+            },
+        nativeSnapshotModifier = nativeCardSnapshot.modifier,
+        coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier,
+        headlineContent = {
+            AppText(
                 text = item.title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = videoCardTitleMaxLines(),
+                overflow = videoCardTitleOverflow(),
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = titleModifier
             )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            Text(
-                text = item.owner.name,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = upNameModifier
-            )
-            
-            Text(
-                text = "${formatNumber(item.stat.view)}播放",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = viewsModifier
-            )
-        }
-
-        if (isBatchMode) {
-            Icon(
-                imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                contentDescription = if (isSelected) "已选择" else "未选择",
-                tint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                },
-                modifier = Modifier.size(24.dp)
-            )
-        } else {
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        overlineContent = item.contentType.takeIf(String::isNotBlank)?.let { badges ->
+            {
+                AppText(
+                    badges,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    overflow = TextOverflow.Visible,
                 )
             }
-        }
-    }
+        },
+        supportingContent = {
+            Column(
+                modifier = Modifier.videoCardShellReturnChromeAlpha(
+                    enabled = useCardShellSharedBounds,
+                    bvid = item.bvid,
+                    sourceRoute = sourceRoute,
+                ),
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
+            ) {
+                AppText(
+                    text = item.owner.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    overflow = TextOverflow.Visible,
+                )
+                HorizontalVideoStatRow(
+                    playText = formatNumber(item.stat.view),
+                    danmakuText = formatNumber(item.stat.danmaku),
+                )
+            }
+        },
+        coverContent = {
+            AsyncImage(
+                model = stationaryCoverRequest,
+                contentDescription = item.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+        coverOverlayContent = {
+            val watched = item.duration > 0 && item.progress >= item.duration
+            VideoCardCoverDurationText(
+                text = if (watched) "已看完" else formatDuration(item.duration),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(AppSpacingTokens.ExtraSmall),
+            )
+            if (item.duration > 0 && item.progress > 0) {
+                AppLinearProgressIndicator(
+                    progress = { (item.progress.toFloat() / item.duration).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Transparent,
+                )
+            }
+        },
+        trailingContent = {
+            if (isBatchMode) {
+                AppIcon(
+                    imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                    contentDescription = if (isSelected) "已选择" else "未选择",
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(AppSpacingTokens.ExtraLarge),
+                )
+            } else {
+                AppIconButton(
+                    onClick = onDelete,
+                ) {
+                    AppIcon(Icons.Rounded.Close, contentDescription = "删除")
+                }
+            }
+        },
+        onClick = cardClick,
+        onLongClick = onLongClick,
+    )
 }

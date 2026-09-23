@@ -128,9 +128,11 @@ data class SearchTypeData(
 
 @Serializable
 data class SearchVideoItem(
+    val type: String = "",
     @Serializable(with = FlexibleLongSerializer::class)
     val id: Long = 0,
     val bvid: String = "",
+    val arcurl: String = "",
     val title: String = "",
     val pic: String = "",
     val author: String = "",
@@ -158,13 +160,16 @@ data class SearchVideoItem(
                 .replace("&amp;", "&")        // 修复 & 符号转义
                 .replace("&lt;", "<")         // 修复 < 符号
                 .replace("&gt;", ">"),        // 修复 > 符号
+            searchHighlightedTitle = title,
 
             pic = if (pic.startsWith("//")) "https:$pic" else pic,
             owner = Owner(mid = mid, name = author),
             stat = Stat(view = play, danmaku = video_review),
             duration = parseDuration(duration),
             //  传递发布时间
-            pubdate = pubdate
+            pubdate = pubdate,
+            contentType = type,
+            navigationUrl = arcurl
         )
     }
 
@@ -399,6 +404,7 @@ data class SearchUpItem(
     val videos: Int = 0, // 视频数
     val level: Int = 0, // 等级
     val official_verify: SearchOfficialVerify? = null,
+    val vip: SearchUpVip? = null,
     val is_senior_member: Int = 0 // 是否硬核会员
 ) {
     fun cleanupFields(): SearchUpItem {
@@ -409,6 +415,12 @@ data class SearchUpItem(
         )
     }
 }
+
+@Serializable
+data class SearchUpVip(
+    val type: Int = 0,
+    val status: Int = 0,
+)
 
 @Serializable
 data class SearchTopicResponse(

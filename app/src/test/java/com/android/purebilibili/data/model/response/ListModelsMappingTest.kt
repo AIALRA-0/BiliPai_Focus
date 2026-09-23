@@ -101,4 +101,83 @@ class ListModelsMappingTest {
 
         assertTrue(response.data?.seasonFav == true)
     }
+
+    @Test
+    fun `mobile feed keeps three point reasons and server feedback metadata`() {
+        val payload = """
+            {
+              "idx": 123,
+              "param": "456",
+              "goto": "av",
+              "uri": "bilibili://video/BV1xx411c7mD",
+              "title": "test",
+              "args": {
+                "up_id": 42,
+                "up_name": "UP-X",
+                "rid": 4,
+                "rname": "游戏"
+              },
+              "three_point_v2": [
+                {
+                  "type": "feedback",
+                  "reasons": [
+                    {"id": 1, "name": "恐怖血腥", "toast": "将优化首页此类内容"}
+                  ]
+                },
+                {
+                  "type": "dislike",
+                  "reasons": [
+                    {"id": 4, "name": "UP主:UP-X", "toast": "将减少相似内容推荐"},
+                    {"id": 2, "name": "分区:游戏", "toast": "将减少相似内容推荐"}
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val video = json.decodeFromString<MobileFeedItem>(payload).toVideoItem()
+        val metadata = requireNotNull(video.recommendationFeedback)
+
+        assertEquals("av", metadata.goto)
+        assertEquals("456", metadata.param)
+        assertTrue(metadata.supportsServerSync)
+        assertEquals(3, metadata.reasons.size)
+        assertEquals(
+            RecommendationFeedbackLocalAction.CREATOR,
+            metadata.reasons.first { it.id == 4L }.localAction
+        )
+        assertEquals(
+            RecommendationFeedbackType.FEEDBACK,
+            metadata.reasons.first { it.name == "恐怖血腥" }.type
+        )
+        assertEquals("游戏", video.tname)
+    }
+
+    @Test
+    fun `unknown dislike reason id still infers localAction from name`() {
+        assertEquals(
+            RecommendationFeedbackLocalAction.CREATOR,
+            resolveRecommendationFeedbackLocalAction(
+                type = RecommendationFeedbackType.DISLIKE,
+                reasonId = 99L,
+                reasonName = "UP主:测试UP"
+            )
+        )
+        assertEquals(
+            RecommendationFeedbackLocalAction.CATEGORY,
+            resolveRecommendationFeedbackLocalAction(
+                type = RecommendationFeedbackType.DISLIKE,
+                reasonId = 98L,
+                reasonName = "分区:动物圈"
+            )
+        )
+        assertEquals(
+            RecommendationFeedbackLocalAction.SIMILAR_CONTENT,
+            resolveRecommendationFeedbackLocalAction(
+                type = RecommendationFeedbackType.DISLIKE,
+                reasonId = 97L,
+                reasonName = "此类内容过多"
+            )
+        )
+    }
 }

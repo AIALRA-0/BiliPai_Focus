@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.danmaku
 
-import com.bytedance.danmaku.render.engine.data.DanmakuData
-import com.bytedance.danmaku.render.engine.render.draw.text.TextData
+import com.android.purebilibili.danmaku.engine.DanmakuItem
 import android.util.Log
 
 /**
@@ -29,22 +28,19 @@ object DanmakuMerger {
      *         标准弹幕继续在原层渲染；不再将重复弹幕转换为黄色高级弹幕。
      */
     fun merge(
-        list: List<DanmakuData>,
+        list: List<DanmakuItem>,
         intervalMs: Long = 500,
         countThreshold: Int = 2
-    ): Pair<List<DanmakuData>, List<AdvancedDanmakuData>> {
+    ): Pair<List<DanmakuItem>, List<AdvancedDanmakuData>> {
         if (list.isEmpty()) return Pair(list, emptyList())
         val normalizedCountThreshold = countThreshold.coerceAtLeast(2)
 
-        val standardList = mutableListOf<DanmakuData>()
+        val standardList = mutableListOf<DanmakuItem>()
         
         // 1. 分离 TextData 和其他数据
-        val textDanmakus = mutableListOf<TextData>()
+        val textDanmakus = mutableListOf<DanmakuItem>()
         
-        list.forEach { 
-            if (it is TextData) textDanmakus.add(it)
-            else standardList.add(it) // 非文本弹幕直接保留在标准列表
-        }
+        textDanmakus.addAll(list)
         
         // 2. 对 TextData 按内容分组
         val groupedByContent = textDanmakus.groupBy { it.text }
@@ -57,7 +53,7 @@ object DanmakuMerger {
                 standardList.add(items[0])
             } else {
                 // 对同一内容的弹幕进行时间聚类
-                var currentBatch = mutableListOf<TextData>()
+                var currentBatch = mutableListOf<DanmakuItem>()
 
                 for (item in items) {
                     if (currentBatch.isEmpty()) {
@@ -98,8 +94,8 @@ object DanmakuMerger {
      * 处理一批重复弹幕
      */
     private fun processBatch(
-        batch: List<TextData>, 
-        standardOut: MutableList<DanmakuData>,
+        batch: List<DanmakuItem>,
+        standardOut: MutableList<DanmakuItem>,
         countThreshold: Int
     ) {
         if (batch.isEmpty()) return
@@ -114,27 +110,14 @@ object DanmakuMerger {
     /**
      * 将一批 TextData 合并为一个
      */
-    private fun combineBatch(batch: List<TextData>, countThreshold: Int): TextData {
+    private fun combineBatch(batch: List<DanmakuItem>, countThreshold: Int): DanmakuItem {
         if (batch.size == 1) return batch[0]
         
         // 取第一个作为基准
         val base = batch[0]
         val count = batch.size
         
-        val mergedText = if (base is WeightedTextData) {
-            WeightedTextData().also {
-                it.danmakuId = base.danmakuId
-                it.userHash = base.userHash
-                it.weight = base.weight
-                it.pool = base.pool
-                it.likeCount = base.likeCount
-                it.isVipGradualColor = base.isVipGradualColor
-                it.duplicateCount = count
-                it.isSelf = base.isSelf
-            }
-        } else {
-            TextData()
-        }
+        val mergedText = base.copy().also { it.duplicateCount = count }
         mergedText.text = if (count >= countThreshold) {
             "${base.text} x$count"
         } else {
@@ -142,6 +125,7 @@ object DanmakuMerger {
         }
         mergedText.showAtTime = base.showAtTime
         mergedText.textColor = base.textColor
+        mergedText.textSizeScale = base.textSizeScale
         mergedText.textSize = base.textSize
         mergedText.layerType = base.layerType
         mergedText.typeface = base.typeface

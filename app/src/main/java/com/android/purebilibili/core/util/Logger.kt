@@ -3,10 +3,12 @@ package com.android.purebilibili.core.util
 
 import android.content.Context
 import android.content.Intent
+import android.app.ActivityManager
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.android.purebilibili.BuildConfig
+import com.android.purebilibili.core.performance.Android17Diagnostics
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -14,23 +16,26 @@ import java.util.concurrent.Executors
 
 private const val LOG_DIRECTORY_NAME = "logs"
 private const val RUNTIME_LOG_FILE_NAME = "runtime.log"
+private const val BASIC_LOG_FILE_NAME = "basic.log"
 private const val CRASH_SNAPSHOT_FILE_NAME = "last_crash_log.txt"
 private const val CRASH_SNAPSHOT_MARKER_FILE_NAME = "pending_crash.marker"
 private const val DOWNLOAD_LOG_RELATIVE_PATH = "Download/BiliPai/logs"
+internal const val ENHANCED_DIAGNOSTIC_LOG_PREFS_NAME = "diagnostic_logging"
+internal const val ENHANCED_DIAGNOSTIC_LOG_PREF_KEY = "enhanced_enabled"
 
 internal fun resolveLogPersistenceDir(baseDir: File): File = File(baseDir, LOG_DIRECTORY_NAME)
 
 internal fun resolveRuntimeLogFile(baseDir: File): File =
     File(resolveLogPersistenceDir(baseDir), RUNTIME_LOG_FILE_NAME)
 
+internal fun resolveBasicLogFile(baseDir: File): File =
+    File(resolveLogPersistenceDir(baseDir), BASIC_LOG_FILE_NAME)
+
 internal fun resolveCrashSnapshotFile(baseDir: File): File =
     File(resolveLogPersistenceDir(baseDir), CRASH_SNAPSHOT_FILE_NAME)
 
 internal fun resolveCrashSnapshotMarkerFile(baseDir: File): File =
     File(resolveLogPersistenceDir(baseDir), CRASH_SNAPSHOT_MARKER_FILE_NAME)
-
-internal fun resolveCrashSnapshotExportRelativePath(): String =
-    "$DOWNLOAD_LOG_RELATIVE_PATH/$CRASH_SNAPSHOT_FILE_NAME"
 
 internal fun resolvePlayerDiagnosticExportFileName(
     exportedAtMillis: Long
@@ -42,7 +47,13 @@ internal fun resolvePlayerDiagnosticExportFileName(
 
 internal fun shouldEnableVerboseRuntimeLogs(
     isDebugBuild: Boolean,
-    verboseDebugLogsEnabled: Boolean
+    verboseDebugLogsEnabled: Boolean,
+    enhancedDiagnosticLoggingEnabled: Boolean,
+): Boolean = (isDebugBuild && verboseDebugLogsEnabled) || enhancedDiagnosticLoggingEnabled
+
+internal fun shouldEmitVerboseLogcat(
+    isDebugBuild: Boolean,
+    verboseDebugLogsEnabled: Boolean,
 ): Boolean = isDebugBuild && verboseDebugLogsEnabled
 
 internal fun shouldCaptureRuntimeLogEntry(
@@ -56,7 +67,34 @@ internal fun shouldCaptureRuntimeLogEntry(
 internal fun shouldPersistRuntimeLogEntry(
     level: String,
     verboseRuntimeLogPersistenceEnabled: Boolean
-): Boolean = verboseRuntimeLogPersistenceEnabled
+): Boolean = level == "W" || level == "E" || verboseRuntimeLogPersistenceEnabled
+
+internal fun hasExportableDiagnostics(
+    logCount: Int,
+    hasCrashSnapshot: Boolean,
+    processExitCount: Int,
+    profilingArtifactCount: Int
+): Boolean = logCount > 0 || hasCrashSnapshot || processExitCount > 0 || profilingArtifactCount > 0
+
+/** Limits bytes, including multibyte UTF-8 messages and a single oversized entry. */
+internal fun appendRollingDiagnosticLog(file: File, text: String, maxBytes: Int) {
+    require(maxBytes > 0)
+    file.parentFile?.mkdirs()
+    val incoming = text.toByteArray(Charsets.UTF_8)
+    if (file.length() + incoming.size <= maxBytes) {
+        file.appendBytes(incoming)
+        return
+    }
+    val existing = if (file.isFile) file.readBytes() else byteArrayOf()
+    val combined = existing + incoming
+    var start = (combined.size - maxBytes / 2).coerceAtLeast(0)
+    // Do not begin a retained file in the middle of a UTF-8 code point.
+    while (start < combined.size && (combined[start].toInt() and 0xC0) == 0x80) start++
+    file.writeBytes(combined.copyOfRange(start, combined.size))
+}
+
+internal fun sanitizeLogMessage(message: String): String =
+    LogCollector.sanitizeMessage(message)
 
 internal fun resolveLogArtifactDirsToClear(
     filesDir: File,
@@ -80,7 +118,9 @@ internal fun buildCrashSnapshotContent(
     manufacturer: String,
     model: String,
     androidRelease: String,
-    apiLevel: Int
+    apiLevel: Int,
+    buildType: String = "unknown",
+    buildCommit: String = "unknown"
 ): String {
     val headerDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
     return buildString {
@@ -89,14 +129,15 @@ internal fun buildCrashSnapshotContent(
         appendLine("========================================")
         appendLine("生成时间: ${headerDateFormat.format(Date(exportedAtMillis))}")
         appendLine("应用版本: $appVersionName ($versionCode)")
+        appendLine("构建: $buildType / $buildCommit")
         appendLine("设备信息: $manufacturer $model")
         appendLine("Android版本: $androidRelease (API $apiLevel)")
         appendLine("异常类型: ${throwable.javaClass.simpleName}")
-        appendLine("异常信息: ${throwable.message.orEmpty()}")
+        appendLine("异常信息: ${sanitizeLogMessage(throwable.message.orEmpty())}")
         appendLine("========================================")
         appendLine()
         appendLine("----- Throwable -----")
-        appendLine(throwable.stackTraceToString())
+        appendLine(sanitizeLogMessage(throwable.stackTraceToString()))
         appendLine("----- Recent Logs -----")
         entries.forEach { appendLine(it.format()) }
     }
@@ -105,63 +146,150 @@ internal fun buildCrashSnapshotContent(
 /**
  *  统一日志工具类
  * 
- * 在 Release 版本中自动禁用日志输出，减少性能开销
- * 同时收集日志到内存缓冲区，支持导出供用户反馈
+ * 默认在私有目录滚动保留警告、错误及最小启动诊断；用户主动开启增强诊断后，另行
+ * 滚动保存脱敏后的 Debug/Info 日志，支持导出供用户反馈。
  */
 object Logger {
-    
-    @PublishedApi
-    internal val verboseRuntimeLogsEnabled = shouldEnableVerboseRuntimeLogs(
+
+    /** Fixed startup stage names only; no links, account identifiers or user input. */
+    fun recordStartupStage(stage: String) {
+        LogCollector.add(
+            level = "I",
+            tag = "StartupDiagnostics",
+            message = "stage=$stage, app=${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE}), " +
+                "build=${BuildConfig.BUILD_TYPE}/${BuildConfig.BUILD_COMMIT_SHA.take(12)}, " +
+                "android=${android.os.Build.VERSION.RELEASE}(API ${android.os.Build.VERSION.SDK_INT}), " +
+                "device=${android.os.Build.MANUFACTURER}/${android.os.Build.MODEL}",
+            persistToDisk = true,
+            basicDiagnostic = true,
+        )
+    }
+
+    private val debugVerboseLogsEnabled = shouldEmitVerboseLogcat(
         isDebugBuild = BuildConfig.DEBUG,
-        verboseDebugLogsEnabled = BuildConfig.ENABLE_VERBOSE_DEBUG_LOGS
+        verboseDebugLogsEnabled = BuildConfig.ENABLE_VERBOSE_DEBUG_LOGS,
     )
+    @Volatile
+    private var enhancedDiagnosticLoggingEnabled = false
+    @Volatile
+    private var diagnosticSessionRecorded = false
+
     @PublishedApi
-    internal val verboseRuntimeLogPersistenceEnabled =
-        verboseRuntimeLogsEnabled && BuildConfig.ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE
+    internal fun areVerboseRuntimeLogsEnabled(): Boolean = shouldEnableVerboseRuntimeLogs(
+        isDebugBuild = BuildConfig.DEBUG,
+        verboseDebugLogsEnabled = BuildConfig.ENABLE_VERBOSE_DEBUG_LOGS,
+        enhancedDiagnosticLoggingEnabled = enhancedDiagnosticLoggingEnabled,
+    )
+
+    @PublishedApi
+    internal fun isVerboseRuntimeLogPersistenceEnabled(): Boolean =
+        enhancedDiagnosticLoggingEnabled ||
+            (debugVerboseLogsEnabled && BuildConfig.ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE)
 
     fun init(context: Context) {
-        LogCollector.init(context.applicationContext)
+        val applicationContext = context.applicationContext
+        LogCollector.init(applicationContext)
+        enhancedDiagnosticLoggingEnabled = applicationContext
+            .getSharedPreferences(ENHANCED_DIAGNOSTIC_LOG_PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(ENHANCED_DIAGNOSTIC_LOG_PREF_KEY, false)
+        if (enhancedDiagnosticLoggingEnabled) {
+            recordDiagnosticSessionStart(applicationContext)
+        }
+    }
+
+    fun configureEnhancedDiagnosticLogging(context: Context, enabled: Boolean) {
+        val applicationContext = context.applicationContext
+        LogCollector.init(applicationContext)
+        enhancedDiagnosticLoggingEnabled = enabled
+        if (enabled) {
+            recordDiagnosticSessionStart(applicationContext)
+        } else {
+            diagnosticSessionRecorded = false
+            LogCollector.clearRuntimeDiagnostics()
+        }
+    }
+
+    private fun recordDiagnosticSessionStart(context: Context) {
+        if (diagnosticSessionRecorded) return
+        synchronized(this) {
+            if (diagnosticSessionRecorded) return
+            diagnosticSessionRecorded = true
+        }
+
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val configuration = context.resources.configuration
+        LogCollector.add(
+            level = "I",
+            tag = "Diagnostics",
+            message = "增强诊断已开启；仅保存在应用私有目录，导出前会再次脱敏，滚动上限=256KB",
+            persistToDisk = true,
+        )
+        LogCollector.add(
+            level = "I",
+            tag = "Diagnostics",
+            message = "app=${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE}), " +
+                "build=${BuildConfig.BUILD_COMMIT_SHA.take(12)}, debug=${BuildConfig.DEBUG}",
+            persistToDisk = true,
+        )
+        LogCollector.add(
+            level = "I",
+            tag = "Diagnostics",
+            message = "device=${android.os.Build.MANUFACTURER}/${android.os.Build.MODEL}, " +
+                "android=${android.os.Build.VERSION.RELEASE}(API ${android.os.Build.VERSION.SDK_INT}), " +
+                "abis=${android.os.Build.SUPPORTED_ABIS.joinToString()}, locale=${configuration.locales[0]}, " +
+                "densityDpi=${configuration.densityDpi}, memoryClassMb=${activityManager?.memoryClass}, " +
+                "lowRam=${activityManager?.isLowRamDevice}",
+            persistToDisk = true,
+        )
     }
     
     /**
-     * Debug 日志 - 仅在 Debug 版本输出
+     * Debug 日志 - Debug 包输出到 Logcat；正式版仅在用户主动开启增强诊断后收集
      */
     fun d(tag: String, message: String) {
+        val verboseRuntimeLogsEnabled = areVerboseRuntimeLogsEnabled()
         if (!verboseRuntimeLogsEnabled) return
-        Log.d(tag, message)
+        if (debugVerboseLogsEnabled) Log.d(tag, message)
         if (shouldCaptureRuntimeLogEntry("D", verboseRuntimeLogsEnabled)) {
             LogCollector.add(
                 level = "D",
                 tag = tag,
                 message = message,
-                persistToDisk = shouldPersistRuntimeLogEntry("D", verboseRuntimeLogPersistenceEnabled)
+                persistToDisk = shouldPersistRuntimeLogEntry(
+                    "D",
+                    isVerboseRuntimeLogPersistenceEnabled(),
+                )
             )
         }
     }
 
     inline fun d(tag: String, message: () -> String) {
-        if (!verboseRuntimeLogsEnabled) return
+        if (!areVerboseRuntimeLogsEnabled()) return
         d(tag, message())
     }
     
     /**
-     * Info 日志 - 仅在 Debug 版本输出
+     * Info 日志 - Debug 包输出到 Logcat；正式版仅在用户主动开启增强诊断后收集
      */
     fun i(tag: String, message: String) {
+        val verboseRuntimeLogsEnabled = areVerboseRuntimeLogsEnabled()
         if (!verboseRuntimeLogsEnabled) return
-        Log.i(tag, message)
+        if (debugVerboseLogsEnabled) Log.i(tag, message)
         if (shouldCaptureRuntimeLogEntry("I", verboseRuntimeLogsEnabled)) {
             LogCollector.add(
                 level = "I",
                 tag = tag,
                 message = message,
-                persistToDisk = shouldPersistRuntimeLogEntry("I", verboseRuntimeLogPersistenceEnabled)
+                persistToDisk = shouldPersistRuntimeLogEntry(
+                    "I",
+                    isVerboseRuntimeLogPersistenceEnabled(),
+                )
             )
         }
     }
 
     inline fun i(tag: String, message: () -> String) {
-        if (!verboseRuntimeLogsEnabled) return
+        if (!areVerboseRuntimeLogsEnabled()) return
         i(tag, message())
     }
     
@@ -173,17 +301,23 @@ object Logger {
             "$message\n${throwable.stackTraceToString()}"
         } else message
         
-        if (throwable != null) {
+        if (BuildConfig.DEBUG && throwable != null) {
             Log.w(tag, message, throwable)
-        } else {
+        } else if (BuildConfig.DEBUG) {
             Log.w(tag, message)
+        } else {
+            Log.w(tag, sanitizeLogMessage(fullMessage))
         }
+        val verboseRuntimeLogsEnabled = areVerboseRuntimeLogsEnabled()
         if (shouldCaptureRuntimeLogEntry("W", verboseRuntimeLogsEnabled)) {
             LogCollector.add(
                 level = "W",
                 tag = tag,
                 message = fullMessage,
-                persistToDisk = shouldPersistRuntimeLogEntry("W", verboseRuntimeLogPersistenceEnabled)
+                persistToDisk = shouldPersistRuntimeLogEntry(
+                    "W",
+                    isVerboseRuntimeLogPersistenceEnabled(),
+                )
             )
         }
     }
@@ -196,17 +330,23 @@ object Logger {
             "$message\n${throwable.stackTraceToString()}"
         } else message
         
-        if (throwable != null) {
+        if (BuildConfig.DEBUG && throwable != null) {
             Log.e(tag, message, throwable)
-        } else {
+        } else if (BuildConfig.DEBUG) {
             Log.e(tag, message)
+        } else {
+            Log.e(tag, sanitizeLogMessage(fullMessage))
         }
+        val verboseRuntimeLogsEnabled = areVerboseRuntimeLogsEnabled()
         if (shouldCaptureRuntimeLogEntry("E", verboseRuntimeLogsEnabled)) {
             LogCollector.add(
                 level = "E",
                 tag = tag,
                 message = fullMessage,
-                persistToDisk = shouldPersistRuntimeLogEntry("E", verboseRuntimeLogPersistenceEnabled)
+                persistToDisk = shouldPersistRuntimeLogEntry(
+                    "E",
+                    isVerboseRuntimeLogPersistenceEnabled(),
+                )
             )
         }
     }
@@ -219,6 +359,10 @@ object Logger {
         init(context)
         return LogCollector.getPendingCrashSnapshotFile()?.absolutePath
     }
+
+    /** Returns whether a crash snapshot is waiting for the user to review/share. */
+    fun hasPendingCrashSnapshot(context: Context): Boolean =
+        getPendingCrashSnapshotPath(context) != null
 
     fun clearPendingCrashSnapshot(context: Context) {
         init(context)
@@ -282,7 +426,8 @@ object LogCollector {
     private const val MAX_ENTRIES = 1000
     private const val DUPLICATE_SUPPRESS_WINDOW_MS = 250L
     private const val MAX_PERSISTED_LOG_BYTES = 256 * 1024
-    private const val PERSISTED_LOG_TRIM_TARGET_BYTES = 128 * 1024
+    private const val MAX_BASIC_LOG_BYTES = 64 * 1024
+    private const val MAX_LOG_MESSAGE_CHARS = 16 * 1024
     private val lock = Any()
     private val buffer = ArrayDeque<LogEntry>(MAX_ENTRIES)
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
@@ -303,17 +448,28 @@ object LogCollector {
         val message: String
     ) {
         fun format(): String {
-            val time = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date(timestamp))
+            val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date(timestamp))
             return "[$time] $level/$tag: $message"
         }
     }
     
     /**
-     * 添加日志条目（轻量路径，脱敏延后到导出）
+     * 添加日志条目。敏感信息在进入内存和磁盘前即被移除，导出时再做一次纵深防御。
      */
-    fun add(level: String, tag: String, message: String, persistToDisk: Boolean = true) {
+    fun add(
+        level: String,
+        tag: String,
+        message: String,
+        persistToDisk: Boolean = true,
+        basicDiagnostic: Boolean = false,
+    ) {
         val now = System.currentTimeMillis()
-        val fingerprint = "$level|$tag|$message"
+        val sanitizedTag = sanitizeMessage(tag).take(80)
+        val sanitizedMessage = sanitizeMessage(message).let { value ->
+            if (value.length <= MAX_LOG_MESSAGE_CHARS) value
+            else value.take(MAX_LOG_MESSAGE_CHARS) + "…[truncated]"
+        }
+        val fingerprint = "$level|$sanitizedTag|$sanitizedMessage"
         var entryToPersist: LogEntry? = null
         synchronized(lock) {
             // 高频重复日志直接抑制，避免日志风暴拖垮主线程
@@ -329,8 +485,8 @@ object LogCollector {
             entryToPersist = LogEntry(
                 timestamp = now,
                 level = level,
-                tag = tag,
-                message = message
+                tag = sanitizedTag,
+                message = sanitizedMessage
             )
             buffer.addLast(entryToPersist)
 
@@ -344,7 +500,7 @@ object LogCollector {
         }
 
         if (persistToDisk) {
-            entryToPersist?.let { appendEntryToRuntimeFile(it) }
+            entryToPersist?.let { appendEntryToRuntimeFile(it, basicDiagnostic) }
         }
     }
 
@@ -369,7 +525,7 @@ object LogCollector {
      * - 文件路径 (可能包含用户名)
      * - 其他敏感参数
      */
-    private fun sanitizeMessage(message: String): String {
+    internal fun sanitizeMessage(message: String): String {
         var sanitized = message
         
         // ========== Cookie 脱敏 ==========
@@ -392,8 +548,19 @@ object LogCollector {
         sanitized = sanitized.replace(Regex("csrf=[^&\\s]+"), "csrf=***")
         sanitized = sanitized.replace(Regex("\"token\":\"[^\"]+\""), "\"token\":\"***\"")
         sanitized = sanitized.replace(Regex("\"csrf\":\"[^\"]+\""), "\"csrf\":\"***\"")
-        sanitized = sanitized.replace(Regex("Authorization:\\s*[^\\s]+"), "Authorization: ***")
+        sanitized = sanitized.replace(
+            Regex("(?i)Authorization\\s*[:=]\\s*[^\\r\\n]+"),
+            "Authorization: ***"
+        )
         sanitized = sanitized.replace(Regex("Bearer\\s+[^\\s]+"), "Bearer ***")
+        sanitized = sanitized.replace(
+            Regex("(?i)(cookie|set-cookie)\\s*[:=]\\s*[^\\r\\n]+"),
+            "$1: ***"
+        )
+        sanitized = sanitized.replace(
+            Regex("(?i)(password|passwd|pwd|sms_code|captcha|challenge|validate)[=:]\\s*[^&\\s,}]+"),
+            "$1=***"
+        )
         
         // ========== 用户 ID 脱敏 ==========
         // Bilibili mid/uid (通常为 6-11 位数字，在特定上下文中)
@@ -482,6 +649,16 @@ object LogCollector {
         sanitized = sanitized.replace(Regex("keyword=[^&\\s]+"), "keyword=***")
         sanitized = sanitized.replace(Regex("\"keyword\":\"[^\"]+\""), "\"keyword\":\"***\"")
         sanitized = sanitized.replace(Regex("Search:\\s*[^\\n]+"), "Search: ***")
+
+        // 私信、评论草稿等用户输入内容不进入诊断日志。
+        sanitized = sanitized.replace(
+            Regex("(?i)\\b(content|message_text|query)[=:]\\s*[^&\\r\\n]+"),
+            "$1=***"
+        )
+        sanitized = sanitized.replace(
+            Regex("(?i)\"(content|message_text|query)\"\\s*:\\s*\"[^\"]*\""),
+            "\"$1\":\"***\""
+        )
         
         // ========== 📝 视频标题脱敏（仅保留前两个字符） ==========
         sanitized = sanitized.replace(Regex("video_title=[^&\\s]{3,}")) { 
@@ -519,6 +696,21 @@ object LogCollector {
         }
     }
 
+    fun clearRuntimeDiagnostics() {
+        synchronized(lock) {
+            buffer.removeAll { it.level != "W" && it.level != "E" && it.tag != "StartupDiagnostics" }
+            lastEntryFingerprint = null
+        }
+        val context = appContext ?: return
+        diskWriter.execute {
+            runCatching {
+                resolveRuntimeLogFile(context.filesDir).delete()
+            }.onFailure {
+                Log.e("LogCollector", "清理增强诊断日志失败", it)
+            }
+        }
+    }
+
     fun persistCrashSnapshot(throwable: Throwable) {
         val context = appContext ?: return
         val sanitizedEntries = getEntries().map { entry ->
@@ -534,19 +726,15 @@ object LogCollector {
                 manufacturer = android.os.Build.MANUFACTURER,
                 model = android.os.Build.MODEL,
                 androidRelease = android.os.Build.VERSION.RELEASE,
-                apiLevel = android.os.Build.VERSION.SDK_INT
+                apiLevel = android.os.Build.VERSION.SDK_INT,
+                buildType = BuildConfig.BUILD_TYPE,
+                buildCommit = BuildConfig.BUILD_COMMIT_SHA,
             )
             val snapshotFile = resolveCrashSnapshotFile(context.filesDir)
             val markerFile = resolveCrashSnapshotMarkerFile(context.filesDir)
             snapshotFile.parentFile?.mkdirs()
             snapshotFile.writeText(content)
             markerFile.writeText(System.currentTimeMillis().toString())
-            saveToExternalDownload(
-                context = context,
-                fileName = CRASH_SNAPSHOT_FILE_NAME,
-                content = content,
-                replaceExisting = true
-            )
         }.onFailure {
             Log.e("LogCollector", "写入崩溃快照失败", it)
         }
@@ -593,61 +781,84 @@ object LogCollector {
      * 
      * 日志会保存到 Download/BiliPai/logs/ 目录，方便 MT 管理器等工具直接访问
      */
-    fun exportAndShare(context: Context) {
-        try {
-            val entries = getEntries()
-            if (entries.isEmpty()) {
-                Toast.makeText(context, "暂无日志记录", Toast.LENGTH_SHORT).show()
-                return
+    fun exportAndShare(context: Context, includeSystemDiagnostics: Boolean = true) {
+        init(context)
+        // Queue behind pending writes: exporting immediately after an error must include it.
+        // File reads, MediaStore writes and trace copies must not block the recovery UI.
+        diskWriter.execute {
+            try {
+                val persistedLines = listOf(
+                    resolveBasicLogFile(context.filesDir),
+                    resolveRuntimeLogFile(context.filesDir),
+                ).flatMap { file ->
+                    runCatching { if (file.isFile) file.readLines() else emptyList() }
+                        .getOrDefault(emptyList())
+                }
+                val logLines = (persistedLines + getEntries().map { it.format() })
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                // Dismissing the prompt only clears its marker, not the retained evidence.
+                val crashContent = resolveCrashSnapshotFile(context.filesDir)
+                    .takeIf(File::isFile)?.readText()?.let(::sanitizeMessage)
+                val recentProcessExits = if (includeSystemDiagnostics) {
+                    Android17Diagnostics.recentProcessExitSummaries(context)
+                } else emptyList()
+                val retainedProfiles = if (includeSystemDiagnostics) {
+                    Android17Diagnostics.retainedArtifacts(context)
+                } else emptyList()
+                if (!hasExportableDiagnostics(
+                        logCount = logLines.size,
+                        hasCrashSnapshot = !crashContent.isNullOrBlank(),
+                        processExitCount = recentProcessExits.size,
+                        profilingArtifactCount = retainedProfiles.size,
+                    )) {
+                    showExportToast(context, "暂无日志记录")
+                    return@execute
+                }
+                val content = buildString {
+                    appendLine("BiliPai 应用日志导出")
+                    appendLine("导出时间: ${dateFormat.format(Date())}")
+                    appendLine("应用版本: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    appendLine("构建: ${BuildConfig.BUILD_TYPE} / ${BuildConfig.BUILD_COMMIT_SHA}")
+                    appendLine("设备信息: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                    appendLine("Android版本: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                    appendLine("基础诊断: 默认保留，滚动上限 64KB")
+                    appendLine("增强诊断: ${if (Logger.areVerboseRuntimeLogsEnabled()) "已开启" else "未开启"}")
+                    appendLine("历史进程退出记录: ${recentProcessExits.size} 条")
+                    recentProcessExits.forEach { appendLine(sanitizeMessage(it)) }
+                    appendLine("隐私说明: 日志已脱敏，仅在用户主动导出时分享")
+                    appendLine("----- 运行日志（${logLines.size} 条）-----")
+                    logLines.forEach { appendLine(sanitizeMessage(it)) }
+                    if (!crashContent.isNullOrBlank()) {
+                        appendLine("----- 最近一次崩溃快照 -----")
+                        appendLine(crashContent)
+                    }
+                }
+                val fileName = "bilipai_log_${fileDateFormat.format(Date())}.txt"
+                val savedPath = saveToExternalDownload(context, fileName, content)
+                val shareCacheDir = File(context.cacheDir, LOG_DIRECTORY_NAME).apply { mkdirs() }
+                val shareFile = File(shareCacheDir, fileName).apply { writeText(content) }
+                val profilingFiles = if (retainedProfiles.isNotEmpty()) {
+                    Android17Diagnostics.copyRetainedArtifactsTo(context, shareCacheDir)
+                } else emptyList()
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    if (context is android.app.Activity && (context.isFinishing || context.isDestroyed)) {
+                        return@post
+                    }
+                    val message = if (savedPath != null) "日志已保存到 $savedPath" else "日志已准备好，请选择分享方式"
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    shareLogFilesFromCache(context, listOf(shareFile) + profilingFiles)
+                }
+            } catch (error: Exception) {
+                Log.e("LogCollector", "导出日志失败", error)
+                showExportToast(context, "日志导出失败，请重试")
             }
-            
-            // 生成日志内容
-            val header = buildString {
-                appendLine("========================================")
-                appendLine("BiliPai 应用日志导出")
-                appendLine("========================================")
-                appendLine("导出时间: ${dateFormat.format(Date())}")
-                appendLine("应用版本: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                appendLine("设备信息: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
-                appendLine("Android版本: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
-                appendLine("日志条数: ${entries.size}")
-                appendLine("========================================")
-                appendLine()
-            }
-            
-            val content = header + entries.joinToString("\n") { entry ->
-                entry.copy(message = sanitizeMessage(entry.message)).format()
-            }
-            val fileName = "bilipai_log_${fileDateFormat.format(Date())}.txt"
-            
-            //  [优化] 保存到外部 Download 目录，MT 管理器可直接访问
-            val savedPath = saveToExternalDownload(context, fileName, content)
-            
-            if (savedPath != null) {
-                // 保存成功，显示路径并提供分享选项
-                val displayPath = savedPath.substringAfter("Download/")
-                Toast.makeText(
-                    context, 
-                    "📁 已保存到: Download/$displayPath\n\n点击分享按钮可发送给开发者", 
-                    Toast.LENGTH_LONG
-                ).show()
-                
-                // 通过 FileProvider 分享（兼容所有 Android 版本）
-                shareLogFile(context, savedPath, fileName)
-            } else {
-                // 外部存储不可用，回退到内部缓存
-                val cacheDir = File(context.cacheDir, "logs")
-                cacheDir.mkdirs()
-                val logFile = File(cacheDir, fileName)
-                logFile.writeText(content)
-                
-                Toast.makeText(context, "日志已保存，点击分享发送", Toast.LENGTH_SHORT).show()
-                shareLogFileFromCache(context, logFile)
-            }
-            
-        } catch (e: Exception) {
-            Log.e("LogCollector", "导出日志失败", e)
-            Toast.makeText(context, "导出失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showExportToast(context: Context, message: String) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -721,6 +932,7 @@ object LogCollector {
         }
     }
 
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.Q)
     private fun findExistingDownloadUri(context: Context, fileName: String): android.net.Uri? {
         val projection = arrayOf(
             android.provider.MediaStore.Downloads._ID
@@ -748,63 +960,42 @@ object LogCollector {
     }
     
     /**
-     * 分享日志文件（从外部存储）
-     */
-    private fun shareLogFile(context: Context, filePath: String, fileName: String) {
-        try {
-            // 构建文件 URI
-            val file = if (filePath.startsWith("Download/")) {
-                // MediaStore 路径，需要重新查询
-                @Suppress("DEPRECATION")
-                val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_DOWNLOADS
-                )
-                File(downloadDir, filePath.substringAfter("Download/"))
-            } else {
-                File(filePath)
-            }
-            
-            if (!file.exists()) {
-                // 文件可能是通过 MediaStore 创建的，使用缓存备份分享
-                return
-            }
-            
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-            
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "BiliPai 日志反馈")
-                putExtra(Intent.EXTRA_TEXT, "请查看附件中的日志文件\n\n文件位置: $filePath")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            
-            context.startActivity(Intent.createChooser(shareIntent, "分享日志"))
-        } catch (e: Exception) {
-            Log.e("LogCollector", "分享失败", e)
-        }
-    }
-    
-    /**
      * 分享日志文件（从缓存目录）
      */
     private fun shareLogFileFromCache(context: Context, logFile: File) {
+        shareLogFilesFromCache(context, listOf(logFile))
+    }
+
+    private fun shareLogFilesFromCache(context: Context, files: List<File>) {
         try {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                logFile
-            )
-            
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_STREAM, uri)
+            val validFiles = files.filter(File::isFile)
+            val uris = ArrayList(validFiles.map { file ->
+                FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+            })
+            if (uris.isEmpty()) return
+            val shareIntent = Intent(
+                if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE
+            ).apply {
+                type = if (uris.size == 1 && validFiles.single().extension == "txt") {
+                    "text/plain"
+                } else {
+                    "application/octet-stream"
+                }
+                if (uris.size == 1) {
+                    putExtra(Intent.EXTRA_STREAM, uris.single())
+                } else {
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                }
                 putExtra(Intent.EXTRA_SUBJECT, "BiliPai 日志反馈")
-                putExtra(Intent.EXTRA_TEXT, "请查看附件中的日志文件")
+                putExtra(
+                    Intent.EXTRA_TEXT,
+                    if (uris.size == 1) "请查看附件中的日志文件"
+                    else "请查看附件中的日志与用户主动导出的性能诊断文件"
+                )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             
@@ -814,35 +1005,22 @@ object LogCollector {
         }
     }
 
-    private fun appendEntryToRuntimeFile(entry: LogEntry) {
+    private fun appendEntryToRuntimeFile(entry: LogEntry, basicDiagnostic: Boolean = false) {
         val context = appContext ?: return
         val sanitizedEntry = entry.copy(message = sanitizeMessage(entry.message)).format() + "\n"
         diskWriter.execute {
             runCatching {
-                val runtimeLogFile = resolveRuntimeLogFile(context.filesDir)
-                runtimeLogFile.parentFile?.mkdirs()
-                appendTextWithRollingLimit(runtimeLogFile, sanitizedEntry)
+                val isBasic = basicDiagnostic || entry.level == "W" || entry.level == "E"
+                appendRollingDiagnosticLog(
+                    file = if (isBasic) resolveBasicLogFile(context.filesDir)
+                        else resolveRuntimeLogFile(context.filesDir),
+                    text = sanitizedEntry,
+                    maxBytes = if (isBasic) MAX_BASIC_LOG_BYTES else MAX_PERSISTED_LOG_BYTES,
+                )
             }.onFailure {
                 Log.e("LogCollector", "持久化运行日志失败", it)
             }
         }
     }
 
-    private fun appendTextWithRollingLimit(file: File, text: String) {
-        if (!file.exists()) {
-            file.writeText(text)
-            return
-        }
-
-        if (file.length() + text.toByteArray().size <= MAX_PERSISTED_LOG_BYTES) {
-            file.appendText(text)
-            return
-        }
-
-        val retained = runCatching {
-            val current = file.readText()
-            current.takeLast(PERSISTED_LOG_TRIM_TARGET_BYTES)
-        }.getOrDefault("")
-        file.writeText(retained + text)
-    }
 }

@@ -47,7 +47,7 @@ class FavoriteCollectionResourceMappingTest {
     }
 
     @Test
-    fun `resolveFavoriteCollectionRoute returns season route payload for collection items`() {
+    fun `resolveFavoriteCollectionRoute returns favorite season route payload for collection items`() {
         val item = VideoItem(
             title = "小约翰可汗高分视频",
             isCollectionResource = true,
@@ -58,7 +58,7 @@ class FavoriteCollectionResourceMappingTest {
         val route = resolveFavoriteCollectionRoute(item)
 
         assertNotNull(route)
-        assertEquals("season", route.type)
+        assertEquals("favorite_season", route.type)
         assertEquals(725909L, route.id)
         assertEquals(96070394L, route.mid)
         assertEquals("小约翰可汗高分视频", route.title)

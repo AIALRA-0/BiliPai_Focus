@@ -4,7 +4,107 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 
-internal fun shouldConsumeSettingsBack(showBlockedList: Boolean): Boolean = showBlockedList
+internal enum class SettingsBackTarget {
+    NONE,
+    CACHE_ANIMATION,
+    CACHE_DIALOG,
+    PATH_DIALOG,
+    IMAGE_SAVE_PATH_DIALOG,
+    EASTER_EGG_DIALOG,
+    DONATE_DIALOG,
+    RELEASE_DISCLAIMER_DIALOG,
+    UPDATE_RESULT,
+    CHANGELOG_RESULT,
+    BLOCKED_LIST,
+}
+
+internal data class SettingsBottomBarScrollState(
+    val firstVisibleItemIndex: Int,
+    val firstVisibleItemScrollOffset: Int,
+)
+
+internal data class SettingsBottomBarScrollTracker(
+    val previousState: SettingsBottomBarScrollState,
+    val accumulatedDeltaPx: Int = 0,
+)
+
+internal data class SettingsBottomBarScrollUpdate(
+    val tracker: SettingsBottomBarScrollTracker,
+    val bottomBarVisible: Boolean?,
+)
+
+internal fun reduceSettingsBottomBarScroll(
+    tracker: SettingsBottomBarScrollTracker,
+    currentState: SettingsBottomBarScrollState,
+    topRevealThresholdPx: Int,
+    directionThresholdPx: Int,
+): SettingsBottomBarScrollUpdate {
+    val previousState = tracker.previousState
+    if (
+        currentState.firstVisibleItemIndex == 0 &&
+        currentState.firstVisibleItemScrollOffset <= topRevealThresholdPx
+    ) {
+        return SettingsBottomBarScrollUpdate(
+            tracker = SettingsBottomBarScrollTracker(currentState),
+            bottomBarVisible = true,
+        )
+    }
+
+    val itemDirection = currentState.firstVisibleItemIndex.compareTo(previousState.firstVisibleItemIndex)
+    if (itemDirection != 0) {
+        return SettingsBottomBarScrollUpdate(
+            tracker = SettingsBottomBarScrollTracker(currentState),
+            bottomBarVisible = itemDirection < 0,
+        )
+    }
+
+    val frameDeltaPx = currentState.firstVisibleItemScrollOffset - previousState.firstVisibleItemScrollOffset
+    val continuesDirection = tracker.accumulatedDeltaPx == 0 ||
+        frameDeltaPx == 0 ||
+        (tracker.accumulatedDeltaPx > 0) == (frameDeltaPx > 0)
+    val accumulatedDeltaPx = if (continuesDirection) {
+        tracker.accumulatedDeltaPx + frameDeltaPx
+    } else {
+        frameDeltaPx
+    }
+    val visibility = when {
+        accumulatedDeltaPx >= directionThresholdPx -> false
+        accumulatedDeltaPx <= -directionThresholdPx -> true
+        else -> null
+    }
+    return SettingsBottomBarScrollUpdate(
+        tracker = SettingsBottomBarScrollTracker(
+            previousState = currentState,
+            accumulatedDeltaPx = if (visibility == null) accumulatedDeltaPx else 0,
+        ),
+        bottomBarVisible = visibility,
+    )
+}
+
+internal fun resolveSettingsBackTarget(
+    showCacheAnimation: Boolean = false,
+    showCacheDialog: Boolean = false,
+    showPathDialog: Boolean = false,
+    showImageSavePathDialog: Boolean = false,
+    showEasterEggDialog: Boolean = false,
+    showDonateDialog: Boolean = false,
+    showReleaseDisclaimerDialog: Boolean = false,
+    showUpdateResult: Boolean = false,
+    showChangelogResult: Boolean = false,
+    showBlockedList: Boolean = false,
+): SettingsBackTarget = when {
+    showBlockedList -> SettingsBackTarget.BLOCKED_LIST
+    showChangelogResult -> SettingsBackTarget.CHANGELOG_RESULT
+    showUpdateResult -> SettingsBackTarget.UPDATE_RESULT
+    showReleaseDisclaimerDialog -> SettingsBackTarget.RELEASE_DISCLAIMER_DIALOG
+    showDonateDialog -> SettingsBackTarget.DONATE_DIALOG
+    showEasterEggDialog -> SettingsBackTarget.EASTER_EGG_DIALOG
+    showImageSavePathDialog -> SettingsBackTarget.IMAGE_SAVE_PATH_DIALOG
+    showPathDialog -> SettingsBackTarget.PATH_DIALOG
+    showCacheDialog && !showCacheAnimation -> SettingsBackTarget.CACHE_DIALOG
+    showCacheAnimation -> SettingsBackTarget.CACHE_ANIMATION
+    else -> SettingsBackTarget.NONE
+}
 
 internal fun resolveSettingsBottomBarReservedPadding(
     bottomBarVisible: Boolean,

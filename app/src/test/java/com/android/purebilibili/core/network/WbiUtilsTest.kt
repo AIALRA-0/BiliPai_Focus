@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 class WbiUtilsTest {
 
     @Test
-    fun `sign keeps playback params lean for PiliPlus parity`() {
+    fun `sign keeps playback params lean for BiliPai parity`() {
         val signed = WbiUtils.sign(
             params = mapOf(
                 "bvid" to "BV1TEST12345",

@@ -3,6 +3,7 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.core.network.grpc.BiliGrpcClient
 import com.android.purebilibili.core.network.grpc.ProtoWire
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.HtmlEntityUtils
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyConfig
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -11,7 +12,9 @@ import com.android.purebilibili.data.model.response.ReplyControl
 import com.android.purebilibili.data.model.response.ReplyCursor
 import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyEmote
+import com.android.purebilibili.data.model.response.OfficialVerify
 import com.android.purebilibili.data.model.response.ReplyFansDetail
+import com.android.purebilibili.data.model.response.ReplySailingPendant
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyLevelInfo
 import com.android.purebilibili.data.model.response.ReplyPage
@@ -24,12 +27,15 @@ import com.android.purebilibili.data.model.response.ReplyTop
 import com.android.purebilibili.data.model.response.ReplyUpper
 import com.android.purebilibili.data.model.response.ReplyVipInfo
 import com.android.purebilibili.data.model.response.ReplyVote
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 
 internal object CommentGrpcRepository {
     private const val PATH_MAIN_LIST = "/bilibili.main.community.reply.v1.Reply/MainList"
     private const val PATH_DETAIL_LIST = "/bilibili.main.community.reply.v1.Reply/DetailList"
     private const val PATH_DIALOG_LIST = "/bilibili.main.community.reply.v1.Reply/DialogList"
+    private const val PATH_TRANSLATE_REPLY = "/bilibili.main.community.reply.v1.Reply/TranslateReply"
     internal const val MODE_TIME = 2
     internal const val MODE_HOT = 3
 
@@ -179,6 +185,66 @@ internal object CommentGrpcRepository {
             )
             parseDialogListReply(response)
         }
+    }
+
+    /**
+     * 翻译评论 (gRPC TranslateReply)。
+     * 返回翻译后的消息文本，失败返回 null。
+     */
+    suspend fun translateReply(
+        type: Long,
+        oid: Long,
+        rpid: Long
+    ): Result<String?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = ProtoWire.message(
+                ProtoWire.int64(1, type),
+                ProtoWire.int64(2, oid),
+                ProtoWire.packedInt64(3, listOf(rpid))
+            )
+            val response = BiliGrpcClient.request(
+                path = PATH_TRANSLATE_REPLY,
+                message = request
+            )
+            parseTranslateReplyResp(response, rpid)
+        }
+    }
+
+    /**
+     * 解析 TranslateReplyResp，提取指定 rpid 的翻译文本。
+     * Resp 字段 1 是 map<int64, ReplyInfo>；
+     * map entry: 字段 1 = key(rpid), 字段 2 = value(ReplyInfo)；
+     * ReplyInfo 字段 17 = translatedContent (Content)，Content 字段 1 = message。
+     */
+    private fun parseTranslateReplyResp(bytes: ByteArray, targetRpid: Long): String? {
+        ProtoWire.parseFields(bytes).forEach { field ->
+            if (field.number == 1) {
+                var key = 0L
+                var translatedMessage: String? = null
+                ProtoWire.parseFields(field.bytes).forEach { entryField ->
+                    when (entryField.number) {
+                        1 -> key = entryField.varint
+                        2 -> {
+                            // ReplyInfo: 只需字段 17 (translatedContent)
+                            ProtoWire.parseFields(entryField.bytes).forEach { replyInfoField ->
+                                if (replyInfoField.number == 17) {
+                                    // Content: 字段 1 = message
+                                    ProtoWire.parseFields(replyInfoField.bytes).forEach { contentField ->
+                                        if (contentField.number == 1) {
+                                            translatedMessage = HtmlEntityUtils.unescape(
+                                                ProtoWire.stringValue(contentField)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (key == targetRpid) return translatedMessage
+            }
+        }
+        return null
     }
 
     internal fun parseMainListReply(bytes: ByteArray): ReplyData {
@@ -381,7 +447,8 @@ internal object CommentGrpcRepository {
             cardLabels = control.cardLabels,
             replyControl = control.replyControl,
             parent = parent,
-            dialog = dialog
+            dialog = dialog,
+            replyType = if (type != 0L) type.toInt() else 1
         )
     }
 
@@ -392,6 +459,8 @@ internal object CommentGrpcRepository {
         var level = 0
         var vipType = 0
         var vipStatus = 0
+        var officialVerifyType: Int? = null
+        var garbPendantImage = ""
         var garbCardImage = ""
         var garbCardImageWithFocus = ""
         var garbCardNumber = ""
@@ -407,8 +476,10 @@ internal object CommentGrpcRepository {
                 2 -> name = ProtoWire.stringValue(field)
                 4 -> face = ProtoWire.stringValue(field)
                 5 -> level = field.varint.toInt()
+                6 -> officialVerifyType = field.varint.toInt()
                 7 -> vipType = field.varint.toInt()
                 8 -> vipStatus = field.varint.toInt()
+                11 -> garbPendantImage = ProtoWire.stringValue(field)
                 12 -> garbCardImage = ProtoWire.stringValue(field)
                 13 -> garbCardImageWithFocus = ProtoWire.stringValue(field)
                 15 -> garbCardNumber = ProtoWire.stringValue(field)
@@ -427,6 +498,10 @@ internal object CommentGrpcRepository {
             isSeniorMember = isSeniorMember,
             levelInfo = ReplyLevelInfo(currentLevel = level),
             vip = ReplyVipInfo(vipType = vipType, vipStatus = vipStatus),
+            officialVerify = OfficialVerify(type = officialVerifyType ?: -1),
+            pendant = garbPendantImage.takeIf { it.isNotBlank() }?.let {
+                ReplySailingPendant(image = it)
+            },
             fansDetail = if (fansMedalName.isNotBlank() && fansMedalLevel > 0) {
                 ReplyFansDetail(uid = mid, medalName = fansMedalName, level = fansMedalLevel)
             } else {
@@ -452,7 +527,7 @@ internal object CommentGrpcRepository {
 
         ProtoWire.parseFields(bytes).forEach { field ->
             when (field.number) {
-                1 -> message = ProtoWire.stringValue(field)
+                1 -> message = HtmlEntityUtils.unescape(ProtoWire.stringValue(field))
                 3 -> parseMapEntry(field.bytes) { key, value ->
                     parseEmote(value, key)?.let { emotes[key.ifBlank { it.text }] = it }
                 }
@@ -600,6 +675,7 @@ internal object CommentGrpcRepository {
         var upReply = false
         var isUpTop = false
         var location = ""
+        var translationSwitch = 0
         val labels = mutableListOf<ReplyCardLabel>()
         ProtoWire.parseFields(bytes).forEach { field ->
             when (field.number) {
@@ -608,6 +684,7 @@ internal object CommentGrpcRepository {
                 12 -> isUpTop = field.varint != 0L
                 19 -> labels += parseCardLabel(field.bytes)
                 25 -> location = ProtoWire.stringValue(field)
+                37 -> translationSwitch = field.varint.toInt()
             }
         }
         return GrpcReplyControl(
@@ -615,7 +692,8 @@ internal object CommentGrpcRepository {
             replyControl = ReplyControl(
                 location = location,
                 isUpTop = isUpTop,
-                upReply = upReply
+                upReply = upReply,
+                translationSwitch = translationSwitch
             ),
             cardLabels = labels.takeIf { it.isNotEmpty() }
         )

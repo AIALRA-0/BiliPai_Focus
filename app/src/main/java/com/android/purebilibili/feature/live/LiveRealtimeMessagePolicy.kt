@@ -14,6 +14,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.roundToInt
+import com.android.purebilibili.data.repository.LiveVoteInfo
+import com.android.purebilibili.data.repository.LiveVoteOption
 
 private val liveRealtimeJson = Json {
     ignoreUnknownKeys = true
@@ -32,6 +34,7 @@ internal sealed interface LiveRealtimeAction {
     data class RemoveSuperChats(val ids: List<Long>) : LiveRealtimeAction
     data class RecallDanmaku(val id: String) : LiveRealtimeAction
     data class RefreshRedPocket(val message: String) : LiveRealtimeAction
+    data class UpdateVote(val vote: LiveVoteInfo, val announcement: LiveDanmakuItem) : LiveRealtimeAction
 }
 
 internal fun resolveLiveRealtimeAction(
@@ -143,7 +146,8 @@ private fun parseLiveSuperChat(json: JsonObject): LiveRealtimeAction {
             data["background_bottom_color"] ?: data["background_color"]
         ),
         superChatToken = data.string("token"),
-        superChatReportTs = data.long("ts").takeIf { it > 0L } ?: data.long("start_time")
+        superChatReportTs = data.long("ts").takeIf { it > 0L } ?: data.long("start_time"),
+        superChatDuration = data.int("duration").takeIf { it > 0 } ?: 0
     )
     return LiveRealtimeAction.EmitSuperChat(item, id)
 }
@@ -228,18 +232,38 @@ private fun parseDmInteraction(json: JsonObject): LiveRealtimeAction {
 
 private fun parseVoteInteraction(data: JsonObject): LiveRealtimeAction {
     val question = data.string("question").ifBlank { return LiveRealtimeAction.Ignore }
-    val options = data.array("options").orEmpty()
+    val voteOptions = data.array("options").orEmpty()
         .mapNotNull { option ->
             val obj = option.asObjectOrNull() ?: return@mapNotNull null
             val desc = obj.string("desc").ifBlank { return@mapNotNull null }
-            val percent = (obj.float("percent") * 100f).roundToInt()
-            "$desc $percent%"
+            LiveVoteOption(
+                id = obj.int("idx"),
+                description = desc,
+                percent = obj.float("percent").coerceIn(0f, 1f)
+            )
         }
         .take(2)
-    if (options.isEmpty()) return LiveRealtimeAction.Ignore
+    if (voteOptions.isEmpty()) return LiveRealtimeAction.Ignore
     val remainingSeconds = (data.long("left_duration") / 1000L).coerceAtLeast(0L)
     val suffix = if (remainingSeconds > 0L) "｜剩余 ${remainingSeconds}s" else ""
-    return systemMessage("投票", "投票：$question｜${options.joinToString(" / ")}$suffix")
+    val optionSummary = voteOptions.joinToString(" / ") {
+        "${it.description} ${(it.percent * 100f).roundToInt()}%"
+    }
+    val announcement = systemMessage("投票", "投票：$question｜$optionSummary$suffix")
+    val chat = (announcement as? LiveRealtimeAction.EmitChat)?.item ?: return LiveRealtimeAction.Ignore
+    return LiveRealtimeAction.UpdateVote(
+        vote = LiveVoteInfo(
+            status = data.int("status", 4),
+            question = question,
+            options = voteOptions,
+            durationMillis = data.long("duration"),
+            remainingMillis = data.long("left_duration"),
+            resultText = data.string("result_text"),
+            endTimeText = data.string("etime_str"),
+            interactionId = data.long("interaction_id")
+        ),
+        announcement = chat
+    )
 }
 
 private fun parseFollowInteraction(data: JsonObject): LiveRealtimeAction {

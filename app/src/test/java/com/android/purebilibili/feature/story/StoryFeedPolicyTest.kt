@@ -1,12 +1,16 @@
 package com.android.purebilibili.feature.story
 
+import com.android.purebilibili.data.model.response.Owner
+import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.StoryItem
 import com.android.purebilibili.data.model.response.StoryOwner
 import com.android.purebilibili.data.model.response.StoryPlayerArgs
 import com.android.purebilibili.data.model.response.StoryStat
+import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class StoryFeedPolicyTest {
 
@@ -58,6 +62,59 @@ class StoryFeedPolicyTest {
     }
 
     @Test
+    fun buildStoryPortraitFeed_usesSeedVideoAsInitialEntry() {
+        val feed = buildStoryPortraitFeed(
+            items = listOf(
+                storyItem(id = 1L, aid = 100L, cid = 1100L, bvid = "BV_OTHER")
+            ),
+            seed = StoryFeedSeed(
+                bvid = "BV_SEED",
+                cid = 2200L,
+                cover = "https://img.test/seed.jpg",
+                title = "Seed"
+            )
+        )
+
+        val portraitFeed = assertNotNull(feed)
+        assertEquals("BV_SEED", portraitFeed.initialInfo.bvid)
+        assertEquals(2200L, portraitFeed.initialInfo.cid)
+        assertEquals("https://img.test/seed.jpg", portraitFeed.initialInfo.pic)
+        assertEquals(listOf("BV_OTHER"), portraitFeed.recommendations.map { it.bvid })
+    }
+
+    @Test
+    fun resolveStoryPortraitIndexForBvid_mapsFeedAndSeedPositions() {
+        val items = listOf(
+            storyItem(id = 1L, aid = 100L, cid = 1L, bvid = "BV_A"),
+            storyItem(id = 2L, aid = 200L, cid = 2L, bvid = "BV_B")
+        )
+        assertEquals(
+            1,
+            resolveStoryPortraitIndexForBvid(
+                bvid = "BV_B",
+                items = items,
+                seedBvid = "BV_SEED"
+            )
+        )
+        assertEquals(
+            0,
+            resolveStoryPortraitIndexForBvid(
+                bvid = "BV_SEED",
+                items = items,
+                seedBvid = "BV_SEED"
+            )
+        )
+        assertEquals(
+            -1,
+            resolveStoryPortraitIndexForBvid(
+                bvid = "BV_MISSING",
+                items = items,
+                seedBvid = "BV_SEED"
+            )
+        )
+    }
+
+    @Test
     fun buildStoryPortraitFeed_mapsRemainingPlayableStoriesAsRecommendations() {
         val feed = buildStoryPortraitFeed(
             listOf(
@@ -72,6 +129,41 @@ class StoryFeedPolicyTest {
         assertEquals("BV_FIRST", portraitFeed.initialInfo.bvid)
         assertEquals(listOf("BV_SECOND", "av102"), portraitFeed.recommendations.map { it.bvid })
         assertEquals(listOf(1101L, 1102L), portraitFeed.recommendations.map { it.cid })
+    }
+
+    @Test
+    fun videoItemToStoryItem_mapsHomeRecommendIntoStoryShape() {
+        val story = videoItemToStoryItem(
+            VideoItem(
+                id = 9L,
+                bvid = "BV_HOME",
+                aid = 900L,
+                cid = 0L,
+                title = "Home clip",
+                pic = "https://img/home.jpg",
+                owner = Owner(mid = 1L, name = "UP", face = "f"),
+                stat = Stat(view = 12, danmaku = 3, like = 4),
+                duration = 88,
+            )
+        )
+        val mapped = assertNotNull(story)
+        assertEquals("Home clip", mapped.title)
+        assertEquals("BV_HOME", mapped.playerArgs?.bvid)
+        assertEquals(900L, mapped.playerArgs?.aid)
+        assertEquals(0L, mapped.playerArgs?.cid)
+
+        val feed = buildStoryPortraitFeed(listOf(mapped))
+        val portrait = assertNotNull(feed)
+        assertEquals("BV_HOME", portrait.initialInfo.bvid)
+    }
+
+    @Test
+    fun videoItemToStoryItem_rejectsItemsWithoutPlayableId() {
+        assertNull(
+            videoItemToStoryItem(
+                VideoItem(bvid = "", aid = 0L, title = "x")
+            )
+        )
     }
 
     private fun storyItem(
@@ -93,5 +185,18 @@ class StoryFeedPolicyTest {
                 bvid = bvid
             )
         )
+    }
+
+    @Test
+    fun `storyItemToRelatedVideo maps playable story items and skips unplayable`() {
+        val playable = storyItemToRelatedVideo(storyItem(id = 1, aid = 100L, bvid = "BV_100", cid = 1100L))
+        assertEquals("BV_100", playable?.bvid)
+        assertEquals(100L, playable?.aid)
+        assertEquals("up 1", playable?.owner?.name)
+
+        val unplayable = storyItemToRelatedVideo(
+            StoryItem(id = 2, title = "no args", playerArgs = null)
+        )
+        assertNull(unplayable)
     }
 }

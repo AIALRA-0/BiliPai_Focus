@@ -12,12 +12,13 @@ class VideoCardRememberOptimizationStructureTest {
         val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
             .readText()
 
-        assertTrue(source.contains("val pillColors = remember(glassEnabled, blurEnabled, inlinePillBaseColor)"))
+        assertTrue(source.contains("val pillColors = remember(effectiveGlassEnabled, effectiveBlurEnabled, inlinePillBaseColor)"))
         assertFalse(source.contains("val coverPillColors = rememberHomeGlassPillColors("))
         assertFalse(source.contains("val emphasizedCoverPillColors = rememberHomeGlassPillColors("))
         assertFalse(source.contains("val inlinePillColors = rememberHomeGlassPillColors("))
         assertTrue(source.contains("val homeSharedTransitionSpecs = remember("))
         assertTrue(source.contains("VideoCardSharedTransitionSpecs("))
+        assertTrue(source.contains("val homeSharedTransitionVisualSpec = homeSharedTransitionSpecs.visual"))
         assertFalse(source.contains("val homeSharedTransitionVisualSpec = remember("))
     }
 }

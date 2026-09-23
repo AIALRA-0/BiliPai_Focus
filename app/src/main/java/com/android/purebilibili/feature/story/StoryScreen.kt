@@ -6,9 +6,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,18 +19,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
 import com.android.purebilibili.feature.video.ui.pager.PortraitVideoPager
-import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
-import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
+import com.android.purebilibili.feature.video.viewmodel.VideoEngagementEvent
+import com.android.purebilibili.feature.video.viewmodel.VideoEngagementViewModel
 
 @UnstableApi
 @Composable
 fun StoryScreen(
+    seedBvid: String = "",
+    seedCid: Long = 0L,
+    seedCover: String = "",
+    seedTitle: String = "",
+    sourceRoute: String? = null,
+    transitionEnabled: Boolean = true,
     viewModel: StoryViewModel = viewModel(),
-    playerViewModel: PlayerViewModel = viewModel(),
-    commentViewModel: VideoCommentViewModel = viewModel(),
+    playerViewModel: VideoPlaybackViewModel = viewModel(),
+    engagementViewModel: VideoEngagementViewModel = viewModel(),
     isActive: Boolean = true,
     onBack: () -> Unit,
     onVideoClick: (String, Long, String) -> Unit = { _, _, _ -> },
@@ -37,9 +46,46 @@ fun StoryScreen(
     onSearchClick: () -> Unit = {},
     onRotateToLandscape: () -> Unit = {}
 ) {
+    @Suppress("UNUSED_PARAMETER")
+    val unusedSourceRoute = sourceRoute
+    @Suppress("UNUSED_PARAMETER")
+    val unusedTransitionEnabled = transitionEnabled
+
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val portraitFeed = remember(uiState.items) {
-        buildStoryPortraitFeed(uiState.items)
+    val onlyVerticalRecommendations by com.android.purebilibili.core.store.SettingsManager
+        .getPortraitOnlyVerticalRecommendations(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    LaunchedEffect(context) {
+        engagementViewModel.initWithContext(context)
+    }
+    LaunchedEffect(engagementViewModel) {
+        engagementViewModel.events.collect { event ->
+            when (event) {
+                is VideoEngagementEvent.Message -> playerViewModel.toast(event.text)
+                is VideoEngagementEvent.OpenFollowGroups ->
+                    playerViewModel.showFollowGroupDialogForUser(event.mid)
+                is VideoEngagementEvent.LoadVideo ->
+                    playerViewModel.loadVideo(event.bvid, autoPlay = true)
+                VideoEngagementEvent.InvalidateFavoriteFolders ->
+                    playerViewModel.invalidateFavoriteFolderCache()
+            }
+        }
+    }
+    val seed = remember(seedBvid, seedCid, seedCover, seedTitle) {
+        if (seedBvid.isNotBlank()) {
+            StoryFeedSeed(
+                bvid = seedBvid,
+                cid = seedCid,
+                cover = seedCover,
+                title = seedTitle
+            )
+        } else {
+            null
+        }
+    }
+    val portraitFeed = remember(uiState.items, seed) {
+        buildStoryPortraitFeed(uiState.items, seed = seed)
     }
     var latestExitSnapshot by remember { mutableStateOf<StoryPortraitExitSnapshot?>(null) }
 
@@ -66,7 +112,7 @@ fun StoryScreen(
 
             portraitFeed == null -> {
                 StoryErrorState(
-                    message = "暂时没有可播放的竖屏视频",
+                    message = "暂时没有可播放的推荐视频",
                     onRetry = viewModel::refresh,
                     modifier = Modifier.align(Alignment.Center)
                 )
@@ -77,16 +123,27 @@ fun StoryScreen(
                     initialBvid = portraitFeed.initialInfo.bvid,
                     initialInfo = portraitFeed.initialInfo,
                     recommendations = portraitFeed.recommendations,
+                    onlyVerticalRecommendations = onlyVerticalRecommendations,
                     isActive = isActive,
                     onBack = onBack,
                     onHomeClick = onBack,
-                    onVideoChange = { },
+                    onVideoChange = { bvid ->
+                        val index = resolveStoryPortraitIndexForBvid(
+                            bvid = bvid,
+                            items = uiState.items,
+                            seedBvid = seed?.bvid.orEmpty()
+                        )
+                        if (index >= 0) {
+                            viewModel.updateCurrentIndex(index)
+                        }
+                    },
                     viewModel = playerViewModel,
-                    commentViewModel = commentViewModel,
-                    onExitSnapshot = { bvid, _, cid ->
+                    engagementViewModel = engagementViewModel,
+                    onExitSnapshot = { bvid, _, cid, coverUrl ->
                         latestExitSnapshot = StoryPortraitExitSnapshot(
                             bvid = bvid,
-                            cid = cid
+                            cid = cid,
+                            coverUrl = coverUrl,
                         )
                     },
                     onSearchClick = onSearchClick,
@@ -94,7 +151,8 @@ fun StoryScreen(
                     onRotateToLandscape = {
                         val snapshot = latestExitSnapshot
                         if (snapshot != null) {
-                            onVideoClick(snapshot.bvid, snapshot.cid, "")
+                            // 带上当前页封面，避免横屏详情首帧闪成 Story 入口种子封面
+                            onVideoClick(snapshot.bvid, snapshot.cid, snapshot.coverUrl)
                         } else {
                             onRotateToLandscape()
                         }
@@ -115,15 +173,16 @@ private fun StoryErrorState(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(message, color = Color.White)
+        AppText(message, color = Color.White)
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onRetry) {
-            Text("重试")
+        AppButton(onClick = onRetry) {
+            AppText("重试")
         }
     }
 }
 
 private data class StoryPortraitExitSnapshot(
     val bvid: String,
-    val cid: Long
+    val cid: Long,
+    val coverUrl: String = "",
 )

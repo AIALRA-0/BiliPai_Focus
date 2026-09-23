@@ -1,19 +1,23 @@
 package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
+import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
+import com.android.purebilibili.core.util.AppFoldPosture
 import androidx.compose.ui.graphics.Color
 
 data class TabletVideoLayoutPolicy(
     val primaryRatio: Float,
     val playerMaxWidthDp: Int,
-    val infoMaxWidthDp: Int
+    val infoMaxWidthDp: Int,
+    val useTabletopLayout: Boolean = false
 )
 
 data class TabletCinemaLayoutPolicy(
     val curtainPeekWidthDp: Int,
     val curtainOpenWidthDp: Int,
     val horizontalPaddingDp: Int,
-    val playerMaxWidthDp: Int
+    val playerMaxWidthDp: Int,
+    val useTabletopLayout: Boolean = false
 )
 
 internal enum class CinemaMetaPanelBlock {
@@ -34,6 +38,14 @@ internal enum class TabletSecondaryPaneMode {
     COMPACT,
     COLLAPSED
 }
+
+internal fun shouldHideTabletSecondaryPane(
+    paneMode: TabletSecondaryPaneMode,
+    useThreePaneLayout: Boolean,
+    useTabletopLayout: Boolean,
+): Boolean = paneMode == TabletSecondaryPaneMode.COLLAPSED &&
+    !useThreePaneLayout &&
+    !useTabletopLayout
 
 internal fun nextTabletSecondaryPaneMode(
     current: TabletSecondaryPaneMode
@@ -71,33 +83,61 @@ internal fun resolveTabletPrimaryRatio(
 }
 
 fun resolveTabletVideoLayoutPolicy(
-    widthDp: Int
+    widthDp: Int,
+    foldPosture: AppFoldPosture = AppFoldPosture.None
 ): TabletVideoLayoutPolicy {
+    val useTabletopLayout = foldPosture == AppFoldPosture.Tabletop
     return when {
         widthDp >= 1600 -> TabletVideoLayoutPolicy(
             primaryRatio = 0.66f,
             playerMaxWidthDp = 1240,
-            infoMaxWidthDp = 1160
+            infoMaxWidthDp = 1160,
+            useTabletopLayout = useTabletopLayout
         )
         else -> TabletVideoLayoutPolicy(
-            primaryRatio = 0.72f,
+            primaryRatio = if (useTabletopLayout) 0.55f else 0.72f,
             playerMaxWidthDp = 1080,
-            infoMaxWidthDp = 1000
+            infoMaxWidthDp = 1000,
+            useTabletopLayout = useTabletopLayout
         )
     }
 }
 
-internal fun resolveTabletSecondaryDefaultTab(
-    replyCount: Int,
-    hasRelatedVideos: Boolean
+internal fun resolveTabletSecondaryDefaultTabIndex(
+    tabs: List<TabletSecondaryTab>,
+    preferRelated: Boolean,
 ): Int {
-    return if (replyCount == 0 && hasRelatedVideos) 1 else 0
+    val preferredTab = if (preferRelated) TabletSecondaryTab.RELATED else TabletSecondaryTab.COMMENTS
+    return tabs.indexOf(preferredTab).takeIf { it >= 0 } ?: 0
 }
+
+internal fun resolveTabletCommentTabIndex(tabs: List<TabletSecondaryTab>): Int =
+    tabs.indexOf(TabletSecondaryTab.COMMENTS)
+
+internal fun resolveTabletCinemaDefaultTab(tab: TabletSecondaryDefaultTab): Int =
+    if (tab == TabletSecondaryDefaultTab.RELATED) 1 else 0
+
+/** Always-visible 发弹幕 / toggle next to 评论, matching the phone content tab bar. */
+internal fun shouldShowTabletSecondaryDanmakuActions(): Boolean = true
+
+internal fun shouldShowTabletCinemaDanmakuActions(
+    curtainState: TabletSideCurtainState
+): Boolean = curtainState == TabletSideCurtainState.OPEN
+
+internal fun resolveCinemaPlayerViewportWidthDp(
+    availableWidthDp: Int,
+    playerMaxWidthDp: Int,
+): Int = minOf(
+    availableWidthDp.coerceAtLeast(1),
+    playerMaxWidthDp.coerceAtLeast(1),
+)
 
 fun resolveTabletCinemaLayoutPolicy(
     widthDp: Int,
-    commentWidthPreset: TabletCommentPanelWidthPreset = TabletCommentPanelWidthPreset.STANDARD
+    commentWidthPreset: TabletCommentPanelWidthPreset = TabletCommentPanelWidthPreset.STANDARD,
+    foldPosture: AppFoldPosture = AppFoldPosture.None
 ): TabletCinemaLayoutPolicy {
+    val useTabletopLayout = foldPosture == AppFoldPosture.Tabletop
     val normalizedWidth = widthDp.coerceIn(960, 1800)
     val baseCurtainOpenWidthDp = interpolateByWidth(
         widthDp = normalizedWidth,
@@ -142,15 +182,21 @@ fun resolveTabletCinemaLayoutPolicy(
     }
     val maxCurtainWidthWithPlayerGuard =
         widthDp - horizontalPaddingDp * 2 - minimumPlayerWidthDp - 4
-    val curtainOpenWidthDp = targetCurtainOpenWidthDp
-        .coerceIn(280, 560)
-        .coerceAtMost(maxCurtainWidthWithPlayerGuard.coerceAtLeast(280))
+    val curtainOpenWidthDp = if (useTabletopLayout) {
+        // Tabletop 模式下侧栏收起，避免铰链遮挡
+        0
+    } else {
+        targetCurtainOpenWidthDp
+            .coerceIn(280, 560)
+            .coerceAtMost(maxCurtainWidthWithPlayerGuard.coerceAtLeast(280))
+    }
 
     return TabletCinemaLayoutPolicy(
-        curtainPeekWidthDp = curtainPeekWidthDp,
+        curtainPeekWidthDp = if (useTabletopLayout) 0 else curtainPeekWidthDp,
         curtainOpenWidthDp = curtainOpenWidthDp,
         horizontalPaddingDp = horizontalPaddingDp,
-        playerMaxWidthDp = playerMaxWidthDp
+        playerMaxWidthDp = playerMaxWidthDp,
+        useTabletopLayout = useTabletopLayout
     )
 }
 
@@ -165,12 +211,11 @@ internal fun resolveCurtainWidthDp(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun resolveInitialCurtainState(widthDp: Int): TabletSideCurtainState {
-    return if (widthDp >= 960) {
-        TabletSideCurtainState.OPEN
-    } else {
-        TabletSideCurtainState.PEEK
-    }
+    // Tablet cinema is only used on expanded widths. Always land with the
+    // right pane open so comments are immediately available.
+    return TabletSideCurtainState.OPEN
 }
 
 internal fun resolveCurtainStateAfterAutoBehavior(
@@ -188,22 +233,17 @@ internal fun resolveCurtainStateAfterAutoBehavior(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun resolveCinemaSideCurtainSelectedTab(
     currentSelectedTab: Int,
     replyCount: Int,
     isRepliesLoading: Boolean,
     hasRelatedVideos: Boolean
 ): Int {
-    return if (
-        currentSelectedTab == 0 &&
-        replyCount == 0 &&
-        !isRepliesLoading &&
-        hasRelatedVideos
-    ) {
-        1
-    } else {
-        currentSelectedTab
-    }
+    // Comments is the default landing tab. Do not auto-switch to related
+    // when replies are empty or still loading — that moved the indicator
+    // off 评论 as soon as the page opened.
+    return currentSelectedTab
 }
 
 internal fun resolveCinemaMetaPanelContainerColor(

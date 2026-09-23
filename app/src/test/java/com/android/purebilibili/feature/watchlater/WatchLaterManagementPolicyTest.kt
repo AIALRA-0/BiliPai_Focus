@@ -61,4 +61,18 @@ class WatchLaterManagementPolicyTest {
 
         assertEquals(emptyList(), result)
     }
+
+    @Test
+    fun `invalid cleanup waits for server result while unfinished filter uses viewed two`() {
+        val items = listOf(item("BV1", progress = 100), item("BV2", progress = 12))
+
+        assertEquals(
+            items,
+            resolveWatchLaterItemsAfterManagementAction(
+                items,
+                WatchLaterManagementAction.CLEAR_INVALID,
+            ),
+        )
+        assertEquals(2, WatchLaterFilter.UNFINISHED.viewed)
+    }
 }

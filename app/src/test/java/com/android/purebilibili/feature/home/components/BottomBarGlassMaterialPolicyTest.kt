@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.core.store.BottomBarLiquidGlassPreset
+import com.android.purebilibili.core.store.LiquidGlassAdvancedSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -82,7 +83,30 @@ class BottomBarGlassMaterialPolicyTest {
     }
 
     @Test
-    fun `ios26 material spec uses KSU visible shell chain`() {
+    fun `zero content distortion disables shell refraction for every preset`() {
+        val noDistortionTuning = resolveLiquidGlassTuning(
+            progress = 0f,
+            advancedSettings = LiquidGlassAdvancedSettings(contentDistortion = 0f),
+        )
+
+        BottomBarLiquidGlassPreset.entries.forEach { preset ->
+            val spec = resolveBottomBarGlassMaterialSpec(
+                preset = preset,
+                isDarkTheme = false,
+                isScrolling = false,
+                glassEnabled = true,
+                motionProgress = 0f,
+                pressProgress = 0f,
+                liquidGlassTuning = noDistortionTuning,
+            )
+
+            assertEquals(0f, spec.shellRefractionHeightDp)
+            assertEquals(0f, spec.shellRefractionAmountDp)
+        }
+    }
+
+    @Test
+    fun `ios26 material spec uses BiliPai visible shell chain`() {
         val light = resolveBottomBarGlassMaterialSpec(
             preset = BottomBarLiquidGlassPreset.IOS26_REFINED,
             isDarkTheme = false,

@@ -23,5 +23,23 @@ class AppUpdateReleaseNotesPolicyTest {
         assertEquals(longNotes, resolved)
         assertTrue(resolved.length > 240)
     }
-}
 
+    @Test
+    fun `parseUpdateReleaseNotes should preserve headings lists dividers and paragraphs`() {
+        val blocks = parseUpdateReleaseNotes(
+            """
+            # 7.4.0
+            - 修复播放器
+            1. 优化更新下载
+            ---
+            其他说明
+            """.trimIndent()
+        )
+
+        assertEquals(AppUpdateReleaseNotesBlock.Heading("7.4.0", 1), blocks[0])
+        assertEquals(AppUpdateReleaseNotesBlock.Bullet("修复播放器", false), blocks[1])
+        assertEquals(AppUpdateReleaseNotesBlock.Bullet("优化更新下载", true), blocks[2])
+        assertEquals(AppUpdateReleaseNotesBlock.Divider, blocks[3])
+        assertEquals(AppUpdateReleaseNotesBlock.Paragraph("其他说明"), blocks[4])
+    }
+}

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.screen
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoDetailSystemBarsPolicyTest {
@@ -65,7 +66,7 @@ class VideoDetailSystemBarsPolicyTest {
     }
 
     @Test
-    fun visibilityPolicy_hideSettingOnlyHidesStatusBarOnOrdinaryPage() {
+    fun visibilityPolicy_immersiveSettingKeepsStatusBarVisibleOnOrdinaryPage() {
         val policy = resolveVideoDetailSystemBarsVisibilityPolicy(
             isFullscreenMode = false,
             hideVideoPageStatusBar = true,
@@ -73,7 +74,7 @@ class VideoDetailSystemBarsPolicyTest {
             isScreenActive = true
         )
 
-        assertEquals(true, policy.hideStatusBars)
+        assertEquals(false, policy.hideStatusBars)
         assertEquals(false, policy.hideNavigationBars)
     }
 
@@ -88,6 +89,35 @@ class VideoDetailSystemBarsPolicyTest {
 
         assertEquals(true, policy.hideStatusBars)
         assertEquals(true, policy.hideNavigationBars)
+    }
+
+    @Test
+    fun visibilityPolicy_portraitFullscreenHidesAllSystemBarsForImmersion() {
+        val policy = resolveVideoDetailSystemBarsVisibilityPolicy(
+            isFullscreenMode = false,
+            hideVideoPageStatusBar = false,
+            isInPipMode = false,
+            isScreenActive = true,
+            isPortraitFullscreen = true
+        )
+
+        assertEquals(true, policy.hideStatusBars)
+        assertEquals(true, policy.hideNavigationBars)
+    }
+
+    @Test
+    fun visibilityPolicy_portraitFullscreenCanForceShowBars() {
+        val policy = resolveVideoDetailSystemBarsVisibilityPolicy(
+            isFullscreenMode = false,
+            hideVideoPageStatusBar = false,
+            isInPipMode = false,
+            isScreenActive = true,
+            isPortraitFullscreen = true,
+            forceShowSystemBarsInPortrait = true
+        )
+
+        assertEquals(false, policy.hideStatusBars)
+        assertEquals(false, policy.hideNavigationBars)
     }
 
     @Test
@@ -237,25 +267,60 @@ class VideoDetailSystemBarsPolicyTest {
     }
 
     @Test
-    fun portraitPlayerTopInset_isZeroWhenStatusBarHidden() {
+    fun portraitPlayerTopInset_alwaysReservesStatusBarWhenBarsVisible() {
+        // 详情页内联播放器始终沉浸：开关只切换背景条样式（实时模糊 / 纯黑），
+        // 不再决定是否预留状态栏高度。
         assertEquals(
             0f,
             resolveVideoDetailPortraitPlayerTopInsetDp(
                 stableStatusBarHeightDp = 24f,
-                hideStatusBars = true
+                hideStatusBars = true,
+                immersiveStatusBarBackdropEnabled = false,
+            )
+        )
+        assertEquals(
+            24f,
+            resolveVideoDetailPortraitPlayerTopInsetDp(
+                stableStatusBarHeightDp = 24f,
+                hideStatusBars = false,
+                immersiveStatusBarBackdropEnabled = false,
+            )
+        )
+        assertEquals(
+            24f,
+            resolveVideoDetailPortraitPlayerTopInsetDp(
+                stableStatusBarHeightDp = 24f,
+                hideStatusBars = false,
+                immersiveStatusBarBackdropEnabled = true,
+                isSharedCardTransition = true,
             )
         )
     }
 
     @Test
-    fun portraitPlayerTopInset_keepsStatusInsetWhenStatusBarVisible() {
-        assertEquals(
-            24f,
-            resolveVideoDetailPortraitPlayerTopInsetDp(
-                stableStatusBarHeightDp = 24f,
-                hideStatusBars = false
-            )
+    fun collapsedPlayerChrome_usesReadableStatusBarIconsOnLightSurface() {
+        val spec = resolveVideoDetailSystemBarsApplySpec(
+            visibilityPolicy = VideoDetailSystemBarsVisibilityPolicy(
+                hideStatusBars = false,
+                hideNavigationBars = false,
+            ),
+            useTabletLayout = false,
+            isLightBackground = true,
+            useCollapsedPlayerChromeAppearance = true,
+            backgroundColor = 1,
+            transparentColor = 2,
+            blackColor = 3,
+            transientBarsBehavior = 4,
         )
+
+        assertTrue(spec.lightStatusBars)
+        assertFalse(spec.lightNavigationBars)
+    }
+
+    @Test
+    fun playerChrome_padsOnlyWhenStatusBarVisible() {
+        assertTrue(shouldApplyStatusBarPaddingToVideoPlayerChrome(statusBarVisible = true))
+        assertFalse(shouldApplyStatusBarPaddingToVideoPlayerChrome(statusBarVisible = false))
     }
 
     @Test
@@ -284,6 +349,67 @@ class VideoDetailSystemBarsPolicyTest {
             !shouldRestoreSystemBarsDuringVideoDetailExitTransition(
                 isExitTransitionInProgress = false,
                 isActuallyLeaving = false
+            )
+        )
+    }
+
+    @Test
+    fun reactivatePolicy_restoresImmersiveAfterCancelledPredictiveExit() {
+        assertTrue(
+            shouldReactivateVideoDetailSystemBarsAfterCancelledExit(
+                isExitTransitionInProgress = false,
+                isActuallyLeaving = false,
+                isScreenActive = false,
+            )
+        )
+    }
+
+    @Test
+    fun reactivatePolicy_skipsWhileExitStillInProgressOrAlreadyActive() {
+        assertTrue(
+            !shouldReactivateVideoDetailSystemBarsAfterCancelledExit(
+                isExitTransitionInProgress = true,
+                isActuallyLeaving = false,
+                isScreenActive = false,
+            )
+        )
+        assertTrue(
+            !shouldReactivateVideoDetailSystemBarsAfterCancelledExit(
+                isExitTransitionInProgress = false,
+                isActuallyLeaving = false,
+                isScreenActive = true,
+            )
+        )
+        assertTrue(
+            !shouldReactivateVideoDetailSystemBarsAfterCancelledExit(
+                isExitTransitionInProgress = false,
+                isActuallyLeaving = true,
+                isScreenActive = false,
+            )
+        )
+    }
+
+    @Test
+    fun reapplyPolicy_whenReturningFromBackPreviewToTopDetail() {
+        assertTrue(
+            shouldReapplyVideoDetailSystemBarsAfterBecomingTop(
+                wasKeepLoadedContentForBackPreview = true,
+                keepLoadedContentForBackPreview = false,
+                isActuallyLeaving = false,
+            )
+        )
+        assertTrue(
+            !shouldReapplyVideoDetailSystemBarsAfterBecomingTop(
+                wasKeepLoadedContentForBackPreview = false,
+                keepLoadedContentForBackPreview = false,
+                isActuallyLeaving = false,
+            )
+        )
+        assertTrue(
+            !shouldReapplyVideoDetailSystemBarsAfterBecomingTop(
+                wasKeepLoadedContentForBackPreview = true,
+                keepLoadedContentForBackPreview = false,
+                isActuallyLeaving = true,
             )
         )
     }

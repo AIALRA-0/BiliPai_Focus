@@ -145,4 +145,148 @@ class EyeProtectionPolicyTest {
         assertFalse(policy.useCompactSecondaryActions)
         assertEquals(0.92f, policy.maxHeightFraction)
     }
+
+    @Test
+    fun `schedule progress ramps in after window start`() {
+        val startProgress = resolveScheduleProgress(
+            currentMinuteOfDay = minuteOfDay(22),
+            startHour = 22,
+            endHour = 7,
+            rampMinutes = 20
+        )
+        val midRamp = resolveScheduleProgress(
+            currentMinuteOfDay = minuteOfDay(22, 10),
+            startHour = 22,
+            endHour = 7,
+            rampMinutes = 20
+        )
+        val full = resolveScheduleProgress(
+            currentMinuteOfDay = minuteOfDay(23),
+            startHour = 22,
+            endHour = 7,
+            rampMinutes = 20
+        )
+        val fadeOut = resolveScheduleProgress(
+            currentMinuteOfDay = minuteOfDay(6, 50),
+            startHour = 22,
+            endHour = 7,
+            rampMinutes = 20
+        )
+        val outside = resolveScheduleProgress(
+            currentMinuteOfDay = minuteOfDay(14),
+            startHour = 22,
+            endHour = 7,
+            rampMinutes = 20
+        )
+
+        assertEquals(0.08f, startProgress, 0.001f)
+        assertEquals(0.5f, midRamp, 0.001f)
+        assertEquals(1f, full, 0.001f)
+        assertEquals(0.5f, fadeOut, 0.001f)
+        assertEquals(0f, outside, 0.001f)
+    }
+
+    @Test
+    fun `visual state follows schedule ramp instead of snapping`() {
+        val ramping = resolveEyeVisualState(
+            settingsPreviewEnabled = false,
+            forceEnabled = false,
+            nightModeEnabled = true,
+            currentMinuteOfDay = minuteOfDay(22, 10),
+            startHour = 22,
+            endHour = 7,
+            brightnessLevel = 0.6f,
+            warmFilterStrength = 0.4f,
+            rampMinutes = 20
+        )
+
+        assertTrue(ramping.isActive)
+        assertEquals(0.5f, ramping.scheduleProgress, 0.001f)
+        assertEquals(0.8f, ramping.brightnessLevel, 0.001f)
+        assertEquals(0.2f, ramping.warmFilterStrength, 0.001f)
+    }
+
+    @Test
+    fun `overlay paint weakens during playback`() {
+        val full = resolveEyeOverlayPaint(
+            brightnessLevel = 0.7f,
+            warmFilterStrength = 0.3f,
+            playbackWeaken = false
+        )
+        val weakened = resolveEyeOverlayPaint(
+            brightnessLevel = 0.7f,
+            warmFilterStrength = 0.3f,
+            playbackWeaken = true
+        )
+
+        assertTrue(weakened.dimAlpha < full.dimAlpha)
+        assertTrue(weakened.warmAlpha < full.warmAlpha)
+        assertEquals(EYE_WARM_FILTER_COLOR, full.warmColor)
+    }
+
+    @Test
+    fun `status copy reports active schedule and standby`() {
+        val active = resolveEyeProtectionStatusCopy(
+            pluginEnabled = true,
+            isActive = true,
+            forceEnabled = false,
+            nightModeEnabled = true,
+            startHour = 22,
+            endHour = 7,
+            brightnessPercent = 78,
+            warmPercent = 22,
+            usageMinutes = 12,
+            reminderEnabled = true,
+            nextReminderInMinutes = 18
+        )
+        assertEquals("护眼已开启", active.title)
+        assertTrue(active.subtitle.contains("07:00"))
+        assertTrue(active.subtitle.contains("12 分钟"))
+
+        val standby = resolveEyeProtectionStatusCopy(
+            pluginEnabled = true,
+            isActive = false,
+            forceEnabled = false,
+            nightModeEnabled = true,
+            startHour = 22,
+            endHour = 7,
+            brightnessPercent = 78,
+            warmPercent = 22,
+            usageMinutes = 0,
+            reminderEnabled = true,
+            nextReminderInMinutes = 30
+        )
+        assertEquals("定时护眼待机", standby.title)
+        assertTrue(standby.subtitle.contains("22:00"))
+    }
+
+    @Test
+    fun `minutes until reminder respects snooze`() {
+        assertEquals(
+            30,
+            resolveMinutesUntilReminder(
+                usageMinutes = 0,
+                intervalMinutes = 30,
+                snoozeUntilMinute = null,
+                reminderEnabled = true
+            )
+        )
+        assertEquals(
+            8,
+            resolveMinutesUntilReminder(
+                usageMinutes = 20,
+                intervalMinutes = 30,
+                snoozeUntilMinute = 28,
+                reminderEnabled = true
+            )
+        )
+        assertNull(
+            resolveMinutesUntilReminder(
+                usageMinutes = 12,
+                intervalMinutes = 30,
+                snoozeUntilMinute = null,
+                reminderEnabled = false
+            )
+        )
+    }
 }

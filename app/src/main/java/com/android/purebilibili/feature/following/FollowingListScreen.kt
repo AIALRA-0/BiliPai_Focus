@@ -1,5 +1,11 @@
 package com.android.purebilibili.feature.following
 
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
@@ -18,9 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -39,21 +42,37 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.FollowingCacheStore
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
-import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
-import com.android.purebilibili.core.ui.OfficialVerifyBadge
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
+import com.android.purebilibili.core.ui.OfficialVerifyAvatarBadge
+import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
+import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppCheckbox
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppFilterChip
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSnackbarHost
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.RelationTagItem
 import com.android.purebilibili.data.repository.ActionRepository
-import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -142,6 +161,17 @@ internal fun shouldUseFollowingPersistentCache(
     return cachedUsersCount > 0
 }
 
+internal fun resolveFollowingRefreshFailureState(
+    currentState: FollowingListUiState,
+    message: String
+): FollowingListUiState {
+    return if (currentState is FollowingListUiState.Success && currentState.users.isNotEmpty()) {
+        currentState.copy(isLoadingMore = false)
+    } else {
+        FollowingListUiState.Error(message)
+    }
+}
+
 internal fun isRetryableBatchOperationError(message: String?): Boolean {
     val text = message.orEmpty()
     if (text.isBlank()) return false
@@ -206,21 +236,20 @@ class FollowingListViewModel : ViewModel() {
         _userFollowGroupIds.value = emptyMap()
         _isFollowGroupMetaLoading.value = false
 
-        if (restoreFollowingListFromPersistentCache(mid, forceRefresh)) {
-            return
-        }
+        val restoredFromCache = restoreFollowingListFromPersistentCache(mid, forceRefresh)
         
         viewModelScope.launch {
-            _uiState.value = FollowingListUiState.Loading
+            if (!restoredFromCache) {
+                _uiState.value = FollowingListUiState.Loading
+            }
             
             try {
-                // 1. 加载第一页
+                // 缓存只负责首屏快速展示，服务器第一页始终作为最新关注关系的真源。
                 val response = NetworkModule.api.getFollowings(mid, pn = 1, ps = 50)
                 if (response.code == 0 && response.data != null) {
                     val initialUsers = response.data.list.orEmpty()
                         .filterNot { removedUserMids.contains(it.mid) }
                     val total = response.data.total
-                    
                     _uiState.value = FollowingListUiState.Success(
                         users = initialUsers,
                         total = total,
@@ -228,16 +257,27 @@ class FollowingListViewModel : ViewModel() {
                     )
                     persistFollowingCache(mid = mid, total = total, users = initialUsers)
                     refreshFollowGroupMetadata(initialUsers)
-                    
                     // 2. 如果还有更多数据，自动在后台加载剩余所有页面 (为了支持全量搜索)
                     if (initialUsers.size < total) {
                         loadAllRemainingPages(mid, total, initialUsers)
                     }
                 } else {
-                    _uiState.value = FollowingListUiState.Error("加载失败: ${response.message}")
+                    _uiState.update { current ->
+                        resolveFollowingRefreshFailureState(
+                            currentState = current,
+                            message = "加载失败: ${response.message}"
+                        )
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _uiState.value = FollowingListUiState.Error(e.message ?: "网络错误")
+                _uiState.update { current ->
+                    resolveFollowingRefreshFailureState(
+                        currentState = current,
+                        message = e.message ?: "网络错误"
+                    )
+                }
             }
         }
     }
@@ -287,13 +327,10 @@ class FollowingListViewModel : ViewModel() {
                         _uiState.value = current.copy(isLoadingMore = true)
                     }
                 }
-                
                 for (page in startPage..totalPages) {
                     if (mid != currentMid) break // 如果用户切换了查看的 UP 主，停止加载
-                    
                     // 延迟一点时间，避免请求过于频繁触发风控
                     delay(300)
-                    
                     val response = NetworkModule.api.getFollowings(mid, pn = page, ps = pageSize)
                     if (response.code == 0 && response.data != null) {
                         val newUsers = response.data.list.orEmpty()
@@ -334,7 +371,6 @@ class FollowingListViewModel : ViewModel() {
                         )
                     }
                 }
-                
                 // 加载完成
                 val current = _uiState.value
                 if (current is FollowingListUiState.Success) {
@@ -461,18 +497,22 @@ class FollowingListViewModel : ViewModel() {
     }
 
     private fun persistFollowingCache(mid: Long, total: Int, users: List<FollowingUser>) {
-        if (mid <= 0L || users.isEmpty()) return
+        if (mid <= 0L) return
         val context = NetworkModule.appContext ?: return
         val snapshotUsers = users.toList()
 
         followingCacheSaveJob?.cancel()
         followingCacheSaveJob = viewModelScope.launch(Dispatchers.IO) {
-            FollowingCacheStore.saveSnapshot(
-                context = context,
-                mid = mid,
-                total = total,
-                users = snapshotUsers
-            )
+            if (snapshotUsers.isEmpty()) {
+                FollowingCacheStore.clear(context)
+            } else {
+                FollowingCacheStore.saveSnapshot(
+                    context = context,
+                    mid = mid,
+                    total = total,
+                    users = snapshotUsers
+                )
+            }
         }
     }
 
@@ -645,19 +685,21 @@ fun FollowingListScreen(
     var groupDialogSelection by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var groupDialogMixed by remember { mutableStateOf(false) }
 
-    AdaptiveScaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+    AppScaffold(
+        blurContentReady = uiState !is FollowingListUiState.Loading,
+        snackbarHost = { AppSnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            AdaptiveTopAppBar(
+            Column {
+            AppTopBar(
                 title = "我的关注",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                    AppIconButton(onClick = onBack) {
+                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 actions = {
                     if (uiState is FollowingListUiState.Success) {
-                        TextButton(
+                        AppTextButton(
                             onClick = {
                                 isEditMode = !isEditMode
                                 if (!isEditMode) {
@@ -666,59 +708,60 @@ fun FollowingListScreen(
                             },
                             enabled = !isBatchUnfollowing
                         ) {
-                            Text(if (isEditMode) "完成" else "管理")
+                            AppText(if (isEditMode) "完成" else "管理")
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = AppSurfaceTokens.chromeBackground()
                 )
             )
+            // 🔍 搜索栏
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Small)
+            ) {
+                com.android.purebilibili.core.ui.components.AppLiquidAwareSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = "搜索 UP 主",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            }
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .globalWallpaperAwareBackground()
         ) {
-            // 🔍 搜索栏
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                com.android.purebilibili.core.ui.components.IOSSearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    placeholder = "搜索 UP 主"
-                )
-            }
-
             Box(
                 modifier = Modifier.weight(1f)
             ) {
                 when (val state = uiState) {
                     is FollowingListUiState.Loading -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CupertinoActivityIndicator()
-                        }
+                        com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton(
+                            modifier = Modifier.fillMaxSize(),
+                            useUserRow = true,
+                            itemCount = 10,
+                        )
                     }
-                    
                     is FollowingListUiState.Error -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("😢", fontSize = 48.sp)
-                                Spacer(Modifier.height(16.dp))
-                                Text(state.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(16.dp))
-                                Button(onClick = { viewModel.loadFollowingList(mid, forceRefresh = true) }) {
-                                    Text("重试")
+                                AppText("😢", fontSize = MaterialTheme.typography.displaySmall.fontSize)
+                                Spacer(Modifier.height(AppSpacingTokens.Large))
+                                AppText(state.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.height(AppSpacingTokens.Large))
+                                AppButton(onClick = { viewModel.loadFollowingList(mid, forceRefresh = true) }) {
+                                    AppText("重试")
                                 }
                             }
                         }
                     }
-                    
                     is FollowingListUiState.Success -> {
                         LaunchedEffect(state.users) {
                             val available = state.users.asSequence().map { it.mid }.toSet()
@@ -772,7 +815,8 @@ fun FollowingListScreen(
                         val selectedCount = selectedMids.size
                         val hasSelection = selectedCount > 0
 
-                        ComfortablePullToRefreshBox(
+                        // Scaffold + search sit above this box; indicator at list region top.
+                        AdaptivePullToRefreshBox(
                             isRefreshing = isPullRefreshing,
                             onRefresh = {
                                 if (!isPullRefreshing) {
@@ -781,14 +825,23 @@ fun FollowingListScreen(
                                 }
                             },
                             state = pullRefreshState,
+                            indicatorTopInset = padding.calculateTopPadding(),
                             modifier = Modifier.fillMaxSize()
                         ) {
                             if (filteredUsers.isEmpty() && searchQuery.isNotEmpty()) {
                                  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("没有找到相关 UP 主", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppText("没有找到相关 UP 主", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                  }
                             } else {
-                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                        top = padding.calculateTopPadding(),
+                                        bottom = padding.calculateBottomPadding(),
+                                    ),
+                                    modifier = Modifier
+                                        .responsiveContentWidth(resolveFollowingListMaxWidth())
+                                        .fillMaxSize(),
+                                ) {
                                     // 统计信息
                                     item {
                                         AnimatedBlurFadeText(
@@ -799,11 +852,11 @@ fun FollowingListScreen(
                                                 searchQuery.isEmpty() -> "当前分组 ${filteredUsers.size} 人"
                                                 else -> "找到 ${filteredUsers.size} 个结果"
                                             },
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                            modifier = Modifier.padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Medium)
                                         ) { text, animatedModifier ->
-                                            Text(
+                                            AppText(
                                                 text = text,
-                                                fontSize = 13.sp,
+                                                fontSize = MaterialTheme.typography.labelMedium.fontSize,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = animatedModifier
                                             )
@@ -815,18 +868,18 @@ fun FollowingListScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .horizontalScroll(rememberScrollState())
-                                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.ExtraSmall),
+                                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
                                         ) {
                                             groupFilterChips.forEach { chip ->
                                                 val chipFilterId = if (chip.tagid == Long.MIN_VALUE) null else chip.tagid
-                                                FilterChip(
+                                                AppFilterChip(
                                                     selected = selectedGroupFilter == chipFilterId ||
                                                         (selectedGroupFilter == null && chip.tagid == Long.MIN_VALUE),
                                                     onClick = { selectedGroupFilter = chipFilterId },
                                                     label = {
                                                         AnimatedBlurFadeText(targetText = "${chip.name} ${chip.count}") { text, modifier ->
-                                                            Text(text = text, modifier = modifier)
+                                                            AppText(text = text, modifier = modifier)
                                                         }
                                                     }
                                                 )
@@ -836,11 +889,11 @@ fun FollowingListScreen(
 
                                     if (isFollowGroupMetaLoading) {
                                         item {
-                                            Text(
+                                            AppText(
                                                 text = "分组信息加载中...($followGroupMetaLoadedCount/${state.users.size})",
-                                                fontSize = 12.sp,
+                                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                                modifier = Modifier.padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.ExtraSmall)
                                             )
                                         }
                                     }
@@ -868,10 +921,10 @@ fun FollowingListScreen(
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(16.dp),
+                                                        .padding(AppSpacingTokens.Large),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    CupertinoActivityIndicator()
+                                                    AdaptiveLoadingIndicator()
                                                 }
                                             }
                                         } else if (state.hasMore) {
@@ -880,13 +933,13 @@ fun FollowingListScreen(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
                                                         .clickable { viewModel.loadMore() }
-                                                        .padding(16.dp),
+                                                        .padding(AppSpacingTokens.Large),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    Text(
+                                                    AppText(
                                                         "加载更多",
                                                         color = MaterialTheme.colorScheme.primary,
-                                                        fontSize = 14.sp
+                                                        fontSize = MaterialTheme.typography.labelMedium.fontSize
                                                     )
                                                 }
                                             }
@@ -897,18 +950,18 @@ fun FollowingListScreen(
                         }
 
                         if (isEditMode) {
-                            Surface(
-                                tonalElevation = 3.dp,
-                                shadowElevation = 3.dp
+                            AppSurface(
+                                tonalElevation = AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2,
+                                shadowElevation = AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Small + AppSpacingTokens.Micro),
+                                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    OutlinedButton(
+                                    AppOutlinedButton(
                                         onClick = {
                                             selectedMids = resolveFollowingSelectAll(
                                                 visibleMids = visibleMids,
@@ -919,10 +972,10 @@ fun FollowingListScreen(
                                     ) {
                                         val allVisibleSelected = visibleMids.isNotEmpty() &&
                                             visibleMids.all { selectedMids.contains(it) }
-                                        Text(if (allVisibleSelected) "取消全选" else "全选当前")
+                                        AppText(if (allVisibleSelected) "取消全选" else "全选当前")
                                     }
 
-                                    OutlinedButton(
+                                    AppOutlinedButton(
                                         onClick = {
                                             showBatchGroupDialog = true
                                             groupDialogLoading = true
@@ -941,22 +994,22 @@ fun FollowingListScreen(
                                         },
                                         enabled = hasSelection && !isBatchUnfollowing
                                     ) {
-                                        Text("设置分组")
+                                        AppText("设置分组")
                                     }
 
-                                    Button(
+                                    AppButton(
                                         onClick = { showBatchUnfollowConfirm = true },
                                         enabled = hasSelection && !isBatchUnfollowing,
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         if (isBatchUnfollowing) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
+                                            AppCircularProgressIndicator(
+                                                modifier = Modifier.size(AppSpacingTokens.Large),
+                                                strokeWidth = AppSpacingTokens.Micro,
                                                 color = MaterialTheme.colorScheme.onPrimary
                                             )
                                         } else {
-                                            Text("取消关注 ($selectedCount)")
+                                            AppText("取消关注 ($selectedCount)")
                                         }
                                     }
                                 }
@@ -964,14 +1017,14 @@ fun FollowingListScreen(
                         }
 
                         if (showBatchUnfollowConfirm) {
-                            AlertDialog(
+                            AppAlertDialog(
                                 onDismissRequest = {
                                     if (!isBatchUnfollowing) showBatchUnfollowConfirm = false
                                 },
-                                title = { Text("批量取消关注") },
-                                text = { Text("确认取消关注已选择的 $selectedCount 位 UP 主吗？") },
+                                title = { AppText("批量取消关注") },
+                                text = { AppText("确认取消关注已选择的 $selectedCount 位 UP 主吗？") },
                                 confirmButton = {
-                                    Button(
+                                    AppButton(
                                         onClick = {
                                             val targets = state.users.filter { selectedMids.contains(it.mid) }
                                             scope.launch {
@@ -991,56 +1044,56 @@ fun FollowingListScreen(
                                         },
                                         enabled = !isBatchUnfollowing
                                     ) {
-                                        Text("确认")
+                                        AppText("确认")
                                     }
                                 },
                                 dismissButton = {
-                                    TextButton(
+                                    AppTextButton(
                                         onClick = { showBatchUnfollowConfirm = false },
                                         enabled = !isBatchUnfollowing
                                     ) {
-                                        Text("取消")
+                                        AppText("取消")
                                     }
                                 }
                             )
                         }
 
                         if (showBatchGroupDialog) {
-                            AlertDialog(
+                            AppAlertDialog(
                                 onDismissRequest = {
                                     if (!groupDialogSaving) showBatchGroupDialog = false
                                 },
-                                title = { Text("批量设置分组") },
+                                title = { AppText("批量设置分组") },
                                 text = {
                                     if (groupDialogLoading) {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(vertical = 12.dp),
+                                                .padding(vertical = AppSpacingTokens.Medium),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            CupertinoActivityIndicator()
+                                            AdaptiveLoadingIndicator()
                                         }
                                     } else {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .heightIn(max = 320.dp)
+                                                .heightIn(max = resolveFollowingBatchGroupDialogMaxHeight())
                                                 .verticalScroll(rememberScrollState())
                                         ) {
                                             if (groupDialogMixed) {
-                                                Text(
+                                                AppText(
                                                     text = "检测到已选 UP 主原分组不一致，已默认全部不选。",
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 12.sp,
-                                                    modifier = Modifier.padding(bottom = 8.dp)
+                                                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                                    modifier = Modifier.padding(bottom = AppSpacingTokens.Small)
                                                 )
                                             }
                                             if (groupDialogTags.isEmpty()) {
-                                                Text(
+                                                AppText(
                                                     text = "暂无可用分组（不勾选即回到默认分组）",
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 13.sp
+                                                    fontSize = MaterialTheme.typography.labelMedium.fontSize
                                                 )
                                             } else {
                                                 groupDialogTags.forEach { tag ->
@@ -1054,10 +1107,10 @@ fun FollowingListScreen(
                                                                     groupDialogSelection + tag.tagid
                                                                 }
                                                             }
-                                                            .padding(vertical = 6.dp),
+                                                            .padding(vertical = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Checkbox(
+                                                        AppCheckbox(
                                                             checked = groupDialogSelection.contains(tag.tagid),
                                                             onCheckedChange = { checked ->
                                                                 groupDialogSelection = if (checked == true) {
@@ -1067,25 +1120,25 @@ fun FollowingListScreen(
                                                                 }
                                                             }
                                                         )
-                                                        Text(
+                                                        AppText(
                                                             text = "${tag.name} (${tag.count})",
-                                                            fontSize = 14.sp,
+                                                            fontSize = MaterialTheme.typography.labelMedium.fontSize,
                                                             color = MaterialTheme.colorScheme.onSurface
                                                         )
                                                     }
                                                 }
                                             }
-                                            Text(
+                                            AppText(
                                                 text = "确定后会完全覆盖原分组设置。",
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontSize = 12.sp,
-                                                modifier = Modifier.padding(top = 8.dp)
+                                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                                modifier = Modifier.padding(top = AppSpacingTokens.Small)
                                             )
                                         }
                                     }
                                 },
                                 confirmButton = {
-                                    Button(
+                                    AppButton(
                                         onClick = {
                                             groupDialogSaving = true
                                             scope.launch {
@@ -1105,22 +1158,22 @@ fun FollowingListScreen(
                                         enabled = !groupDialogLoading && !groupDialogSaving
                                     ) {
                                         if (groupDialogSaving) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
+                                            AppCircularProgressIndicator(
+                                                modifier = Modifier.size(AppSpacingTokens.Large),
+                                                strokeWidth = AppSpacingTokens.Micro,
                                                 color = MaterialTheme.colorScheme.onPrimary
                                             )
                                         } else {
-                                            Text("确定")
+                                            AppText("确定")
                                         }
                                     }
                                 },
                                 dismissButton = {
-                                    TextButton(
+                                    AppTextButton(
                                         onClick = { showBatchGroupDialog = false },
                                         enabled = !groupDialogSaving
                                     ) {
-                                        Text("取消")
+                                        AppText("取消")
                                     }
                                 }
                             )
@@ -1140,6 +1193,7 @@ private fun AnimatedBlurFadeText(
 ) {
     val blurAnim = remember { Animatable(0f) }
     val alphaAnim = remember { Animatable(1f) }
+    val standardMotionSpec = AppMotionTokens.standardSpec<Float>()
 
     LaunchedEffect(targetText) {
         blurAnim.snapTo(6f)
@@ -1147,20 +1201,20 @@ private fun AnimatedBlurFadeText(
         launch {
             blurAnim.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(durationMillis = 220)
+                animationSpec = standardMotionSpec
             )
         }
         alphaAnim.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 180)
+            animationSpec = standardMotionSpec
         )
     }
 
     AnimatedContent(
         targetState = targetText,
         transitionSpec = {
-            (fadeIn(animationSpec = tween(180)) togetherWith
-                fadeOut(animationSpec = tween(140))) using
+            (fadeIn(animationSpec = standardMotionSpec) togetherWith
+                fadeOut(animationSpec = standardMotionSpec)) using
                 SizeTransform(clip = false)
         },
         label = "following-count-blur-fade"
@@ -1192,24 +1246,41 @@ private fun FollowingUserItem(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Medium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 头像
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(user.face))
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        )
+        Box(modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge)) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(FormatUtils.fixImageUrl(user.face))
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+            if (officialBadge != null) {
+                OfficialVerifyAvatarBadge(
+                    badge = officialBadge,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                )
+            } else {
+                UserAvatarCornerMarkBadge(
+                    mark = resolveUserAvatarCornerMark(
+                        officialType = null,
+                        vipStatus = user.vip?.vipStatus,
+                    ),
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    badgeSize = 14.dp,
+                )
+            }
+        }
         
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(AppSpacingTokens.Medium))
         
         // 用户信息
         Column(modifier = Modifier.weight(1f)) {
@@ -1217,35 +1288,31 @@ private fun FollowingUserItem(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
+                AppText(
                     text = user.uname,
-                    fontSize = 15.sp,
+                    fontSize = MaterialTheme.typography.bodyMedium.fontSize,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                if (officialBadge != null) {
-                    Spacer(Modifier.width(6.dp))
-                    FollowingOfficialVerifyBadgeView(officialBadge)
-                }
             }
             if (followingSinceLabel.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
+                Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppText(
                     text = followingSinceLabel,
-                    fontSize = 12.sp,
+                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             if (user.sign.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
+                Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppText(
                     text = user.sign,
-                    fontSize = 12.sp,
+                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1254,17 +1321,10 @@ private fun FollowingUserItem(
         }
 
         if (isEditMode) {
-            Checkbox(
+            AppCheckbox(
                 checked = isSelected,
                 onCheckedChange = { onClick() }
             )
         }
     }
-}
-
-@Composable
-private fun FollowingOfficialVerifyBadgeView(
-    badge: FollowingOfficialVerifyBadge
-) {
-    OfficialVerifyBadge(badge = badge)
 }

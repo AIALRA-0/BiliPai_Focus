@@ -15,6 +15,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -105,10 +106,7 @@ data class ReplyPageControl(
     val childInputText: String = "",
     @SerialName("upload_picture_icon_state")
     val uploadPictureIconState: Int = 0
-) {
-    val canUploadPicture: Boolean
-        get() = uploadPictureIconState == 1 && !inputDisable
-}
+)
 
 @Serializable
 data class ReplyConfig(
@@ -137,7 +135,13 @@ data class ReplyTop(
 data class ReplyCursor(
     @SerialName("all_count") val allCount: Int = 0,
     @SerialName("is_end") val isEnd: Boolean = false,
-    val next: Int = 0
+    val next: Int = 0,
+    @SerialName("pagination_reply") val paginationReply: ReplyPaginationReply? = null
+)
+
+@Serializable
+data class ReplyPaginationReply(
+    @SerialName("next_offset") val nextOffset: String = ""
 )
 
 //  旧版 API 的分页信息
@@ -182,12 +186,22 @@ data class ReplyItem(
     @SerialName("reply_control")
     val replyControl: ReplyControl? = null,
 
+    // [新增] 隐身评论标记（数据存在但前端不展示，可能被 UP 拉黑）
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    @SerialName("invisible")
+    val invisible: Boolean = false,
+
     // 二级评论对话归属，用于“查看对话”筛选同一段回复链。
     val parent: Long = 0,
     val dialog: Long = 0,
     @Serializable(with = FlexibleStringSerializer::class)
     @SerialName("note_cvid_str")
-    val noteCvidStr: String = ""
+    val noteCvidStr: String = "",
+
+    // [新增] 评论类型 (1=视频, 11=动态, 17=专栏...)，用于翻译接口
+    @Serializable(with = FlexibleIntSerializer::class)
+    @SerialName("type")
+    val replyType: Int = 1
 )
 
 //  UP主操作信息
@@ -251,6 +265,10 @@ data class ReplyMember(
 
     @SerialName("fans_detail")
     val fansDetail: ReplyFansDetail? = null,
+
+    // 评论接口同时返回传统 pendant 与 user_sailing(.v2).pendant。
+    // 前者使用 pid，后者使用 id；渲染时只需其图片字段，故共用同一可选模型。
+    val pendant: ReplySailingPendant? = null,
 
     val nameplate: ReplyNameplate? = null,
 
@@ -535,12 +553,14 @@ object FlexibleNullableBooleanSerializer : KSerializer<Boolean?> {
 
 @Serializable
 data class ReplyContent(
+    @Serializable(with = UnescapedStringSerializer::class)
     val message: String = "",
     val device: String? = "",
     val emote: Map<String, ReplyEmote>? = null,
     val vote: ReplyVote? = null,
     @SerialName("rich_text")
     val richText: ReplyRichText = ReplyRichText(),
+    @JsonNames("jump_url", "urls")
     val urls: Map<String, ReplyContentUrl> = emptyMap(),
     val topics: Map<String, JsonElement> = emptyMap(),
     @SerialName("at_name_to_mid")
@@ -594,10 +614,10 @@ data class ReplyContentUrl(
     @Serializable(with = FlexibleStringSerializer::class)
     val url: String = "",
     @Serializable(with = FlexibleStringSerializer::class)
-    @SerialName("app_url_schema")
+    @JsonNames("appUrlSchema", "app_url_schema")
     val appUrlSchema: String = "",
     @Serializable(with = FlexibleStringSerializer::class)
-    @SerialName("prefix_icon")
+    @JsonNames("prefixIcon", "prefix_icon")
     val prefixIcon: String = ""
 )
 
@@ -695,5 +715,9 @@ data class ReplyControl(
     val upReply: Boolean = false,
     @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("support_share")
-    val supportShare: Boolean = true
+    val supportShare: Boolean = true,
+    // [新增] 翻译开关 (0=未指定, 1=不支持, 2=显示翻译, 3=显示原文)
+    @Serializable(with = FlexibleIntSerializer::class)
+    @SerialName("translation_switch")
+    val translationSwitch: Int = 0
 )

@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.R
+import com.android.purebilibili.core.store.FocusSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -28,20 +29,19 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `top tab entries include partition as sixth default page`() {
+    fun `top tab entries keep five default categories`() {
         assertEquals(
             listOf(
                 HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
                 HomeTopTabEntry.Category(HomeCategory.FOLLOW),
                 HomeTopTabEntry.Category(HomeCategory.POPULAR),
                 HomeTopTabEntry.Category(HomeCategory.LIVE),
-                HomeTopTabEntry.Category(HomeCategory.GAME),
-                HomeTopTabEntry.Partition
+                HomeTopTabEntry.Category(HomeCategory.GAME)
             ),
             resolveHomeTopTabEntries()
         )
         assertEquals(
-            listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME", "PARTITION"),
+            listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
             resolveDefaultHomeTopTabIds()
         )
     }
@@ -62,10 +62,13 @@ class HomeTopCategoryPolicyTest {
 
     @Test
     fun `tab entry key and label should support partition`() {
-        val entries = resolveHomeTopTabEntries()
+        val entries = resolveHomeTopTabEntries(
+            customOrderIds = listOf("PARTITION"),
+            visibleIds = setOf("PARTITION")
+        )
 
-        assertEquals(HomeTopTabEntry.Partition, resolveHomeTopTabEntryOrNull(entries, 5))
-        assertEquals(HomeCategory.entries.size, resolveHomeTopTabEntryKey(entries, 5))
+        assertEquals(HomeTopTabEntry.Partition, resolveHomeTopTabEntryOrNull(entries, 0))
+        assertEquals(HomeCategory.entries.size, resolveHomeTopTabEntryKey(entries, 0))
         assertEquals("分区", resolveHomeTopTabEntryLabel(HomeTopTabEntry.Partition))
     }
 
@@ -103,7 +106,7 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `legacy default top tab settings should migrate to inline partition entry`() {
+    fun `legacy default top tab settings should keep five default categories`() {
         val entries = resolveHomeTopTabEntries(
             customOrderIds = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
             visibleIds = setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
@@ -115,8 +118,7 @@ class HomeTopCategoryPolicyTest {
                 HomeTopTabEntry.Category(HomeCategory.FOLLOW),
                 HomeTopTabEntry.Category(HomeCategory.POPULAR),
                 HomeTopTabEntry.Category(HomeCategory.LIVE),
-                HomeTopTabEntry.Category(HomeCategory.GAME),
-                HomeTopTabEntry.Partition
+                HomeTopTabEntry.Category(HomeCategory.GAME)
             ),
             entries
         )
@@ -163,5 +165,104 @@ class HomeTopCategoryPolicyTest {
         assertEquals(R.string.home_category_popular, resolveHomeCategoryLabelRes(HomeCategory.POPULAR))
         assertEquals(R.string.home_category_live, resolveHomeCategoryLabelRes(HomeCategory.LIVE))
         assertEquals(R.string.home_category_game, resolveHomeCategoryLabelRes(HomeCategory.GAME))
+    }
+
+    @Test
+    fun `ensureSubscriptionHomeTab retains custom ordered subscription when enabled`() {
+        val entries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Subscriptions,
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+        )
+
+        val result = ensureSubscriptionHomeTab(
+            entries = entries,
+            feedsEnabled = true,
+            visibleIds = setOf("RECOMMEND", "SUBSCRIPTIONS", "FOLLOW")
+        )
+
+        assertEquals(entries, result)
+    }
+
+    @Test
+    fun `ensureSubscriptionHomeTab strips subscription when feeds disabled`() {
+        val entries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Subscriptions,
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+        )
+
+        val result = ensureSubscriptionHomeTab(
+            entries = entries,
+            feedsEnabled = false,
+            visibleIds = setOf("RECOMMEND", "SUBSCRIPTIONS", "FOLLOW")
+        )
+
+        assertEquals(
+            listOf(
+                HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+                HomeTopTabEntry.Category(HomeCategory.FOLLOW)
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun `ensureSubscriptionHomeTab appends subscription on legacy default when enabled`() {
+        val entries = resolveHomeTopTabEntries()
+
+        val result = ensureSubscriptionHomeTab(
+            entries = entries,
+            feedsEnabled = true,
+            visibleIds = null
+        )
+
+        assertEquals(entries + HomeTopTabEntry.Subscriptions, result)
+    }
+
+    @Test
+    fun `ensureSubscriptionHomeTab strips subscription if custom visibleIds excludes it`() {
+        val entries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Subscriptions,
+            HomeTopTabEntry.Category(HomeCategory.LIVE)
+        )
+
+        val result = ensureSubscriptionHomeTab(
+            entries = entries,
+            feedsEnabled = true,
+            visibleIds = setOf("RECOMMEND", "LIVE")
+        )
+
+        assertEquals(
+            listOf(
+                HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+                HomeTopTabEntry.Category(HomeCategory.LIVE)
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun `focus category filtering preserves upstream subscription tab`() {
+        val subscriptionsOnly = listOf(HomeTopTabEntry.Subscriptions)
+
+        assertEquals(
+            subscriptionsOnly,
+            resolveFocusHomeTopTabEntries(
+                entries = subscriptionsOnly,
+                focusSettings = FocusSettings(
+                    showHomeRecommendTab = false,
+                    showHomeFollowTab = false,
+                    showHomePopularTab = false,
+                    showHomeLiveTab = false,
+                    showHomeAnimeTab = false,
+                    showHomeGameTab = false,
+                    showHomeKnowledgeTab = false,
+                    showHomeTechTab = false,
+                    showHomePartitionButton = false,
+                ),
+            ),
+        )
     }
 }

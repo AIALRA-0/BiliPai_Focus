@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.onboarding
 
 import androidx.annotation.AnyRes
 import com.android.purebilibili.R
+import com.android.purebilibili.core.store.DEFAULT_APP_ICON_KEY
 import com.android.purebilibili.feature.settings.getIconGroups
 
 internal data class OnboardingHeroIconSpec(
@@ -9,8 +10,7 @@ internal data class OnboardingHeroIconSpec(
     val imageScale: Float
 )
 
-private const val DEFAULT_APP_ICON_KEY = "icon_3d"
-private const val DEFAULT_ICON_IMAGE_SCALE = 1.38f
+private const val DEFAULT_ICON_IMAGE_SCALE = 1f
 private const val NORMAL_ICON_IMAGE_SCALE = 1f
 
 internal fun resolveOnboardingHeroIconSpec(
@@ -19,7 +19,7 @@ internal fun resolveOnboardingHeroIconSpec(
     val normalizedKey = appIconKey.ifBlank { DEFAULT_APP_ICON_KEY }
     return when (normalizedKey) {
         DEFAULT_APP_ICON_KEY -> OnboardingHeroIconSpec(
-            iconRes = R.mipmap.ic_launcher_3d_foreground,
+            iconRes = R.mipmap.ic_launcher_blue_snow_maid_round,
             imageScale = DEFAULT_ICON_IMAGE_SCALE
         )
 

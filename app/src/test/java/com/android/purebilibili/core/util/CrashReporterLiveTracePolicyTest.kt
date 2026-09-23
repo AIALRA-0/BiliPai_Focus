@@ -1,5 +1,7 @@
 package com.android.purebilibili.core.util
 
+import java.io.IOException
+import java.util.concurrent.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -77,5 +79,69 @@ class CrashReporterLiveTracePolicyTest {
 
         assertEquals("", resolveCrashlyticsUserId(mid = 123456L))
         assertEquals("", resolveCrashlyticsUserId(mid = null))
+    }
+
+    @Test
+    fun canceledApiRequestsAreNotReportedAsFailures() {
+        assertFalse(
+            shouldReportApiFailure(
+                callCanceled = true,
+                throwable = IOException("Socket closed")
+            )
+        )
+        assertFalse(
+            shouldReportApiFailure(
+                callCanceled = false,
+                throwable = IOException("Canceled")
+            )
+        )
+        assertFalse(
+            shouldReportApiFailure(
+                callCanceled = false,
+                throwable = IOException("request failed", CancellationException())
+            )
+        )
+        assertTrue(
+            shouldReportApiFailure(
+                callCanceled = false,
+                throwable = IOException("Unable to resolve host")
+            )
+        )
+    }
+
+    @Test
+    fun mediaAssetEndpointsAreGroupedForRateLimiting() {
+        assertEquals(
+            "GET /bfs/face",
+            normalizeApiErrorEndpoint("GET /bfs/face/a1/b2/avatar.jpg")
+        )
+        assertEquals(
+            "GET /videoshotpvhdboss",
+            normalizeApiErrorEndpoint("GET /videoshotpvhdboss/38581767200_wn163b-0001.jpg")
+        )
+        assertEquals(
+            "GET /x/polymer/web-dynamic/v1/feed/all",
+            normalizeApiErrorEndpoint("GET /x/polymer/web-dynamic/v1/feed/all")
+        )
+    }
+
+    @Test
+    fun nonFatalReportingStopsBeforeHeapIsExhausted() {
+        val heapLimit = 256L * 1024 * 1024
+
+        assertFalse(
+            shouldRecordNonFatalEvent(
+                maxMemoryBytes = heapLimit,
+                totalMemoryBytes = heapLimit,
+                freeMemoryBytes = 700L * 1024
+            )
+        )
+        assertTrue(
+            shouldRecordNonFatalEvent(
+                maxMemoryBytes = heapLimit,
+                totalMemoryBytes = 180L * 1024 * 1024,
+                freeMemoryBytes = 12L * 1024 * 1024
+            )
+        )
     }
 }

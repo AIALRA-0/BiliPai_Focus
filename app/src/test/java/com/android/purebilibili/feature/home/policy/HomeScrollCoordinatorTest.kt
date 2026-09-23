@@ -1,10 +1,71 @@
 package com.android.purebilibili.feature.home.policy
 
+import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
+import com.android.purebilibili.core.store.HomeHeaderCollapseMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class HomeScrollCoordinatorTest {
+
+    @Test
+    fun homeRecommendationHeader_usesItsOwnPreference() {
+        assertEquals(
+            HomeHeaderCollapseMode.BOTH,
+            resolveHomeRecommendationHeaderCollapseMode(
+                homeHeaderCollapseMode = HomeHeaderCollapseMode.BOTH
+            )
+        )
+    }
+
+    @Test
+    fun otherListHeaderModes_preserveHomeRecommendationHeaderPreference() {
+        assertEquals(
+            HomeHeaderCollapseMode.SEARCH_ONLY,
+            resolveHomeRecommendationHeaderCollapseMode(
+                homeHeaderCollapseMode = HomeHeaderCollapseMode.SEARCH_ONLY
+            )
+        )
+        assertEquals(
+            HomeHeaderCollapseMode.TABS_ONLY,
+            resolveHomeRecommendationHeaderCollapseMode(
+                homeHeaderCollapseMode = HomeHeaderCollapseMode.TABS_ONLY
+            )
+        )
+    }
+
+    @Test
+    fun headerOffset_isQuantizedInsteadOfChangingEveryPixel() {
+        assertEquals(0f, quantizeHomeHeaderOffset(offsetPx = 1f, stepPx = 4f))
+        assertEquals(4f, quantizeHomeHeaderOffset(offsetPx = 3f, stepPx = 4f))
+        assertEquals(-8f, quantizeHomeHeaderOffset(offsetPx = -7f, stepPx = 4f))
+    }
+
+    @Test
+    fun embeddedPageTopPadding_releasesCollapsedSearchAndTabSpace() {
+        assertEquals(
+            32f,
+            resolveHomeEmbeddedPageTopPaddingPx(
+                expandedTopPaddingPx = 184f,
+                headerOffsetPx = -96f,
+                collapsedTabInsetPx = 56f,
+                minimumTopPaddingPx = 24f,
+            )
+        )
+    }
+
+    @Test
+    fun embeddedPageTopPadding_keepsStatusBarSafeArea() {
+        assertEquals(
+            24f,
+            resolveHomeEmbeddedPageTopPaddingPx(
+                expandedTopPaddingPx = 160f,
+                headerOffsetPx = -120f,
+                collapsedTabInsetPx = 56f,
+                minimumTopPaddingPx = 24f,
+            )
+        )
+    }
 
     @Test
     fun collapsedHeaderWithoutMotion_doesNotCountAsHeaderTransition() {
@@ -80,6 +141,33 @@ class HomeScrollCoordinatorTest {
     }
 
     @Test
+    fun release_respectsConfiguredHeaderRevealMode() {
+        assertEquals(
+            -120f,
+            resolveHomeHeaderReleaseTarget(
+                maxHeaderCollapsePx = 120f,
+                canRevealHeader = false,
+                collapseMode = CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+            )
+        )
+        assertEquals(
+            0f,
+            resolveHomeHeaderReleaseTarget(
+                maxHeaderCollapsePx = 120f,
+                canRevealHeader = true
+            )
+        )
+        assertEquals(
+            0f,
+            resolveHomeHeaderReleaseTarget(
+                maxHeaderCollapsePx = 120f,
+                canRevealHeader = false,
+                collapseMode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+            )
+        )
+    }
+
+    @Test
     fun unchangedSettledHeaderOffset_skipsAnimation() {
         val result = resolveHomeHeaderSettleTransition(
             currentHeaderOffsetPx = -54f,
@@ -107,6 +195,64 @@ class HomeScrollCoordinatorTest {
         assertEquals(-120f, result.headerOffsetPx)
         assertNull(result.bottomBarVisibilityIntent)
         assertNull(result.globalScrollOffset)
+    }
+
+    @Test
+    fun reverseScrollMode_revealsHeaderBeforeFeedReturnsToTop() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -120f,
+            deltaY = 48f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
+            collapseMode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 0f,
+        )
+
+        assertEquals(-72f, result.headerOffsetPx)
+    }
+
+    @Test
+    fun subscriptionTab_usesItsOwnListPositionForHeaderReveal() {
+        assertEquals(
+            4,
+            resolveHomeHeaderListIndex(
+                displayedEntryIsSubscription = true,
+                categoryFirstVisibleIndex = 0,
+                subscriptionFirstVisibleIndex = 4,
+            ),
+        )
+        assertEquals(false, canRevealHomeHeaderForList(firstVisibleItemIndex = 4, listMissing = false))
+        assertEquals(
+            0,
+            resolveHomeHeaderListIndex(
+                displayedEntryIsSubscription = false,
+                categoryFirstVisibleIndex = 0,
+                subscriptionFirstVisibleIndex = 4,
+            ),
+        )
+    }
+
+    @Test
+    fun showAtTopOnly_keepsHeaderHiddenOnReverseScrollAwayFromTop() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -120f,
+            deltaY = 48f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
+            collapseMode = CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 0f,
+        )
+
+        assertEquals(-120f, result.headerOffsetPx)
+        assertEquals(false, result.shouldAnimateHeader)
     }
 
     @Test
@@ -229,7 +375,7 @@ class HomeScrollCoordinatorTest {
     }
 
     @Test
-    fun upwardScrollAwayFromTop_keepsHeaderCollapsed() {
+    fun upwardScrollAwayFromTop_staysCollapsedInShowAtTopOnlyMode() {
         val result = reduceHomePreScroll(
             currentHeaderOffsetPx = -120f,
             deltaY = 36f,
@@ -246,7 +392,43 @@ class HomeScrollCoordinatorTest {
     }
 
     @Test
-    fun upwardScrollAtTop_allowsHeaderToExpand() {
+    fun downwardScrollOnFirstItem_followsHandToCollapseSearch() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -40f,
+            deltaY = -12f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = true,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 40f
+        )
+
+        assertEquals(-52f, result.headerOffsetPx)
+        assertEquals(false, result.shouldAnimateHeader)
+    }
+
+    @Test
+    fun reverseScrollAwayFromTop_keepsHeaderHidden() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -120f,
+            deltaY = 8f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 0f,
+        )
+
+        assertEquals(-120f, result.headerOffsetPx)
+        assertEquals(false, result.shouldAnimateHeader)
+    }
+
+    @Test
+    fun upwardScrollOnFirstItem_followsHandToExpandSearch() {
         val result = reduceHomePreScroll(
             currentHeaderOffsetPx = -120f,
             deltaY = 36f,
@@ -260,22 +442,53 @@ class HomeScrollCoordinatorTest {
         )
 
         assertEquals(-84f, result.headerOffsetPx)
+        assertEquals(false, result.shouldAnimateHeader)
     }
 
     @Test
-    fun settledTopPage_resolvesExpandedHeaderOffset() {
-        val result = resolveHomeHeaderOffsetForSettledPage(
-            firstVisibleItemIndex = 0,
-            firstVisibleItemScrollOffset = 0,
-            maxHeaderCollapsePx = 120f
+    fun revealLock_forcesHeaderExpandedDuringScrollToTop() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -120f,
+            deltaY = -40f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 0f,
+            isHeaderRevealLocked = true,
         )
 
-        assertEquals(0f, result)
+        assertEquals(0f, result.headerOffsetPx)
+    }
+
+    @Test
+    fun settledTopPage_preservesCurrentHeaderOffsetInsteadOfForcingExpand() {
+        assertEquals(
+            -96f,
+            resolveHomeHeaderOffsetForSettledPage(
+                currentHeaderOffsetPx = -96f,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0,
+                maxHeaderCollapsePx = 120f
+            )
+        )
+        assertEquals(
+            0f,
+            resolveHomeHeaderOffsetForSettledPage(
+                currentHeaderOffsetPx = 0f,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0,
+                maxHeaderCollapsePx = 120f
+            )
+        )
     }
 
     @Test
     fun settledFirstItemScroll_keepsHeaderCollapsedUntilExactTop() {
         val result = resolveHomeHeaderOffsetForSettledPage(
+            currentHeaderOffsetPx = 0f,
             firstVisibleItemIndex = 0,
             firstVisibleItemScrollOffset = 36,
             maxHeaderCollapsePx = 120f
@@ -287,6 +500,7 @@ class HomeScrollCoordinatorTest {
     @Test
     fun settledPagePastFirstItem_resolvesFullyCollapsedHeaderOffset() {
         val result = resolveHomeHeaderOffsetForSettledPage(
+            currentHeaderOffsetPx = 0f,
             firstVisibleItemIndex = 2,
             firstVisibleItemScrollOffset = 0,
             maxHeaderCollapsePx = 120f

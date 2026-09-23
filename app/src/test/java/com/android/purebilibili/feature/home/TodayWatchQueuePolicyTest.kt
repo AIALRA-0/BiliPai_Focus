@@ -17,7 +17,9 @@ class TodayWatchQueuePolicyTest {
                 VideoItem(bvid = "a", title = "A"),
                 VideoItem(bvid = "b", title = "B")
             ).toImmutableList(),
-            explanationByBvid = mapOf("a" to "exp-a", "b" to "exp-b").toImmutableMap()
+            explanationByBvid = mapOf("a" to "exp-a", "b" to "exp-b").toImmutableMap(),
+            scoreByBvid = mapOf("a" to 0.8, "b" to 0.7).toImmutableMap(),
+            confidenceByBvid = mapOf("a" to 0.8f, "b" to 0.7f).toImmutableMap()
         )
 
         val update = consumeVideoFromTodayWatchPlan(
@@ -30,6 +32,8 @@ class TodayWatchQueuePolicyTest {
         assertTrue(update.shouldRefill)
         assertEquals(listOf("b"), update.updatedPlan.videoQueue.map { it.bvid })
         assertFalse(update.updatedPlan.explanationByBvid.containsKey("a"))
+        assertFalse(update.updatedPlan.scoreByBvid.containsKey("a"))
+        assertFalse(update.updatedPlan.confidenceByBvid.containsKey("a"))
     }
 
     @Test

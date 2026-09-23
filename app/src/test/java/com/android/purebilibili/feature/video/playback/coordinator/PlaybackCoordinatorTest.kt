@@ -34,6 +34,25 @@ class PlaybackCoordinatorTest {
     }
 
     @Test
+    fun `resolvePlaybackEnded should auto continue only when auto mode has page or season target`() {
+        val store = PlaybackSessionStore()
+        val coordinator = PlaybackCoordinator(store)
+
+        val action = coordinator.resolvePlaybackEnded(
+            behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
+            autoPlayEnabled = false,
+            isExternalPlaylist = false,
+            externalPlaylistAutoContinueEnabled = false,
+            externalPlaylistSource = ExternalPlaylistSource.NONE,
+            playMode = PlayMode.SEQUENTIAL,
+            hasNextPageOrSeasonTarget = true
+        )
+
+        assertEquals(PlaybackEndAction.AUTO_CONTINUE, action)
+        assertEquals(action, store.state.value.lastCompletionAction)
+    }
+
+    @Test
     fun `refreshResumeSuggestion should store suggestion and mark prompt as shown`() {
         val store = PlaybackSessionStore()
         val coordinator = PlaybackCoordinator(store)

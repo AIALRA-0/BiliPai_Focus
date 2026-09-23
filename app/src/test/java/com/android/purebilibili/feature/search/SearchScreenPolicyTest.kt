@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.search
 
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.data.repository.SearchUpOrder
+import com.android.purebilibili.data.repository.SearchUserType
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,6 +10,40 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SearchScreenPolicyTest {
+
+    @Test
+    fun searchResultCardsUseSemanticTypographyOnlyForMiuixNonGlassMode() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt")
+        val typographyFacade = source
+            .substringAfter("private enum class SearchResultTextRole")
+            .substringBefore("/**\n *  搜索结果卡片")
+
+        assertTrue(typographyFacade.contains("if (isMiuixNonGlassEnabled())"))
+        assertTrue(typographyFacade.contains("MaterialTheme.typography.titleSmall"))
+        assertTrue(typographyFacade.contains("MaterialTheme.typography.bodySmall"))
+        assertTrue(typographyFacade.contains("MaterialTheme.typography.labelMedium"))
+        assertTrue(typographyFacade.contains("MaterialTheme.typography.labelSmall"))
+        assertTrue(typographyFacade.contains("fontSize = legacyFontSize"))
+        assertTrue(typographyFacade.contains("lineHeight = legacyLineHeight"))
+
+        listOf(
+            "fun SearchResultCard(",
+            "internal fun UpSearchResultCard(",
+            "internal fun BangumiSearchResultCard(",
+            "internal fun LiveSearchResultCard(",
+            "internal fun LiveUserSearchResultCard(",
+            "internal fun TopicSearchResultCard(",
+            "internal fun PhotoSearchResultCard(",
+            "internal fun ArticleSearchResultCard(",
+        ).forEach { signature ->
+            val card = source.substringAfter(signature).substringBefore("\n}\n")
+            assertTrue(card.contains("SearchResultText("), "$signature should use semantic text facade")
+        }
+
+        assertTrue(source.contains("AppSpacingTokens.Medium"))
+        assertTrue(source.contains("AppSpacingTokens.ExtraSmall"))
+        assertTrue(source.contains("if (useMiuixNonGlassPresentation) AppSpacingTokens.Medium else 14.dp"))
+    }
 
     @Test
     fun resetSearchScroll_onlyWhenShowingNonBlankResults() {
@@ -31,6 +66,18 @@ class SearchScreenPolicyTest {
                 searchSessionId = 2L,
                 showResults = false,
                 lastResetSessionId = 1L
+            )
+        )
+    }
+
+    @Test
+    fun resetSearchScroll_preservesPositionWhenReturningFromVideoDetail() {
+        assertFalse(
+            shouldResetSearchResultScroll(
+                searchSessionId = 2L,
+                showResults = true,
+                lastResetSessionId = 0L,
+                isReturningFromVideoDetail = true,
             )
         )
     }
@@ -83,21 +130,42 @@ class SearchScreenPolicyTest {
     }
 
     @Test
-    fun searchFilterTabs_exposeFullSearchTypesInPlannedOrder() {
+    fun `searchDefaultPlaceholder covers all visible tabs`() {
+        assertEquals(
+            "搜索视频、番剧、影视、直播、UP主、专栏等...",
+            resolveSearchDefaultPlaceholder()
+        )
+    }
+
+    @Test
+    fun `searchUpUserTypeFilterLabel avoids repeating tab name`() {
+        assertEquals("用户类型", resolveSearchUpUserTypeFilterLabel(SearchUserType.ALL))
+        assertEquals("仅UP主", resolveSearchUpUserTypeFilterLabel(SearchUserType.UP))
+    }
+
+    @Test
+    fun searchFilterTabs_followBiliPaiPrimaryOrder() {
         assertEquals(
             listOf(
                 SearchType.VIDEO,
-                SearchType.UP,
                 SearchType.BANGUMI,
                 SearchType.MEDIA_FT,
                 SearchType.LIVE,
                 SearchType.LIVE_USER,
+                SearchType.UP,
                 SearchType.ARTICLE,
                 SearchType.TOPIC,
                 SearchType.PHOTO
             ),
             resolveSearchFilterTabs()
         )
+    }
+
+    @Test
+    fun searchFilterTabs_exposeEverySupportedApiType() {
+        val visibleTabs = resolveSearchFilterTabs()
+
+        assertEquals(SearchType.entries.toSet(), visibleTabs.toSet())
     }
 
     @Test
@@ -132,12 +200,45 @@ class SearchScreenPolicyTest {
             )
         )
         assertEquals(
-            emptyList(),
+            listOf(
+                SearchFilterControl.PHOTO_ORDER,
+                SearchFilterControl.PHOTO_CATEGORY
+            ),
             resolveSearchFilterControls(
                 currentType = SearchType.PHOTO,
                 currentUpOrder = SearchUpOrder.DEFAULT
             )
         )
+        assertEquals(
+            listOf(
+                SearchFilterControl.ARTICLE_ORDER,
+                SearchFilterControl.ARTICLE_CATEGORY
+            ),
+            resolveSearchFilterControls(
+                currentType = SearchType.ARTICLE,
+                currentUpOrder = SearchUpOrder.DEFAULT
+            )
+        )
+    }
+
+    @Test
+    fun videoResultCardsReceiveReturnStateForSharedElementBack() {
+        val source = File("src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt")
+            .readText()
+
+        assertTrue(source.contains("isReturningFromVideoDetail: Boolean = false"))
+        assertTrue(source.contains("isQuickReturningFromVideoDetail: Boolean = false"))
+        assertTrue(source.contains("isReturningFromVideoDetail = isReturningFromVideoDetail"))
+        assertTrue(source.contains("isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail"))
+    }
+
+    @Test
+    fun videoResultCardsFollowCompactCoverStatsSetting() {
+        val source = File("src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt")
+            .readText()
+
+        assertTrue(source.contains("getCompactVideoStatsOnCover(context)"))
+        assertTrue(source.contains("compactStatsOnCover = compactVideoStatsOnCover"))
     }
 
     @Test
@@ -223,6 +324,18 @@ class SearchScreenPolicyTest {
     }
 
     @Test
+    fun searchHighlightedTextSegments_preserveEmphasisAndDecodeEntities() {
+        assertEquals(
+            listOf(
+                SearchHighlightedTextSegment("这是", highlighted = false),
+                SearchHighlightedTextSegment("关键词", highlighted = true),
+                SearchHighlightedTextSegment("&结尾", highlighted = false)
+            ),
+            resolveSearchHighlightedTextSegments("这是<em class=\"keyword\">关键词</em>&amp;结尾")
+        )
+    }
+
+    @Test
     fun searchTypeTabs_useCompactDensityOnNarrowScreens() {
         val compact = resolveSearchTypeTabLayoutSpec(widthDp = 360)
         val regular = resolveSearchTypeTabLayoutSpec(widthDp = 412)
@@ -239,53 +352,163 @@ class SearchScreenPolicyTest {
     }
 
     @Test
-    fun searchResultSwipe_switchesToAdjacentSearchType() {
+    fun searchResultPager_mapsPageAndTypeUsingVisibleTabs() {
         assertEquals(
-            SearchType.VIDEO,
-            resolveSearchSwipeTargetType(
-                currentType = SearchType.UP,
-                dragDistancePx = 120f
-            )
+            SearchType.MEDIA_FT,
+            resolveSearchTypeForPagerPage(2)
         )
         assertEquals(
-            SearchType.BANGUMI,
-            resolveSearchSwipeTargetType(
-                currentType = SearchType.UP,
-                dragDistancePx = -120f
-            )
+            3,
+            resolveSearchPagerPageForType(SearchType.LIVE)
         )
         assertEquals(
-            SearchType.UP,
-            resolveSearchSwipeTargetType(
-                currentType = SearchType.VIDEO,
-                dragDistancePx = -120f
-            )
+            0,
+            resolveSearchPagerPageForType(SearchType.PHOTO)
         )
     }
 
     @Test
-    fun searchResultSwipe_ignoresWeakDragAndClampsEdges() {
-        assertEquals(
-            null,
-            resolveSearchSwipeTargetType(
-                currentType = SearchType.UP,
-                dragDistancePx = -40f
-            )
+    fun searchResultPageState_usesCurrentMirrorForActiveType() {
+        val state = SearchUiState(
+            query = "动画",
+            showResults = true,
+            searchType = SearchType.LIVE,
+            isSearching = false,
+            currentPage = 2,
+            totalPages = 5,
+            hasMoreResults = true
         )
+
         assertEquals(
-            null,
-            resolveSearchSwipeTargetType(
-                currentType = SearchType.VIDEO,
-                dragDistancePx = 120f
-            )
+            2,
+            resolveSearchResultPageState(state, SearchType.LIVE).currentPage
         )
+        assertTrue(resolveSearchResultPageState(state, SearchType.LIVE).hasMoreResults)
+    }
+
+    @Test
+    fun searchResultPageState_restoresCachedInactiveType() {
+        val cached = SearchResultPageUiState(
+            query = "动画",
+            currentPage = 1,
+            totalPages = 3,
+            hasMoreResults = true
+        )
+        val state = SearchUiState(
+            query = "动画",
+            showResults = true,
+            searchType = SearchType.VIDEO,
+            resultPages = mapOf(SearchType.UP to cached)
+        )
+
         assertEquals(
-            null,
-            resolveSearchSwipeTargetType(
-                currentType = SearchType.PHOTO,
-                dragDistancePx = -120f
-            )
+            cached,
+            resolveSearchResultPageState(state, SearchType.UP)
         )
+    }
+
+    @Test
+    fun filterAndLayoutActionsUseCircularLiquidSurfaces() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchVideoFilterSheet.kt")
+            .substringBefore("if (showFilterSheet)")
+        assertEquals(2, Regex("BottomBarMatchedReusableLiquidDock\\(").findAll(source).count())
+        assertEquals(2, Regex("shape = CircleShape").findAll(source).count())
+        assertEquals(2, Regex("backdrop = miuixBackdrop").findAll(source).count())
+        assertTrue(source.contains("reuseEnabled = true"))
+    }
+
+    @Test
+    fun searchResultTransition_usesPagerAndKeepsFilterBarOutsidePager() {
+        val searchSource = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt")
+        val filterSheetSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/search/SearchVideoFilterSheet.kt"
+        )
+        val resultPagerStart = searchSource.indexOf("HorizontalPager(")
+        val videoFilterBeforePager = searchSource.lastIndexOf("SearchVideoFilterBar(", resultPagerStart)
+        val legacyFilterBeforePager = searchSource.lastIndexOf("SearchFilterBar(", resultPagerStart)
+        val filterBarDeclaration = searchSource.indexOf("fun SearchFilterBar(")
+        val resultPagerBody = searchSource.substring(resultPagerStart, filterBarDeclaration)
+
+        assertTrue(resultPagerStart > 0)
+        assertTrue(videoFilterBeforePager > 0 || legacyFilterBeforePager > 0)
+        assertFalse(resultPagerBody.contains("SearchFilterBar("))
+        assertFalse(resultPagerBody.contains("SearchVideoFilterBar("))
+        assertFalse(searchSource.contains("detectHorizontalDragGestures"))
+        // 液态胶囊 Tab（primary 渐变选中态 + 颜色过渡，与液体分段控件同语言，
+        // 可横向滚动；不再用静态 surfaceContainerHigh 灰胶囊）。
+        assertTrue(searchSource.contains("private fun SearchResultTypeTabRow("))
+        assertTrue(searchSource.contains("BottomBarLiquidSegmentedControl("))
+        assertTrue(
+            searchSource.contains("allowNativeLabelOverflow = true"),
+            "关闭液态玻璃后 MD3 下划线必须完整显示 直播间 / UP主 等标签",
+        )
+        assertTrue(searchSource.contains("miuixBackdrop = searchChromeBackdrop"))
+        assertTrue(searchSource.contains(".layerBackdrop(searchChromeBackdrop)"))
+        assertTrue(searchSource.contains("externalPagerMotionEffectsEnabled = true"))
+        val filterBar = searchSource.substringAfter("fun SearchFilterBar(")
+        assertTrue(filterBar.contains("isMiuixNonGlassEnabled()"))
+        assertTrue(filterBar.contains("9.dp"))
+        assertTrue(filterBar.contains("AppSpacingTokens.Large"))
+        assertTrue(searchSource.contains("indicatorPositionProvider = {"))
+        assertTrue(searchSource.contains("pagerState.currentPage + pagerState.currentPageOffsetFraction"))
+        val typeTabRowBody = searchSource
+            .substringAfter("private fun SearchResultTypeTabRow(")
+            .substringBefore("private fun rememberSearchHighlightedTitle(")
+        assertTrue(typeTabRowBody.contains("shouldScrollSearchTypeTabs("))
+        assertTrue(typeTabRowBody.contains("resolveSearchTypeTabAdaptiveItemWidthDp("))
+        assertTrue(typeTabRowBody.contains(".liquidDockViewport()"))
+        assertTrue(typeTabRowBody.contains(".horizontalScroll(scrollState)"))
+        assertTrue(typeTabRowBody.contains("KeepScrollableTabSelectionVisible("))
+        assertTrue(typeTabRowBody.contains("onIndicatorPositionChanged = { position ->"))
+        assertTrue(typeTabRowBody.contains("resolveSearchTypeTabDragScrollDeltaPx("))
+        assertFalse(searchSource.contains("androidx.compose.material3.ScrollableTabRow("))
+        assertFalse(searchSource.contains("tabIndicatorOffset("))
+        // Top bar uses native BasicTextField + TextFieldValue (not AppSearchField wrapper).
+        assertTrue(searchSource.contains("SearchTopBarInputField("))
+        assertTrue(searchSource.contains("TextFieldValue("))
+        assertFalse(searchSource.contains("AppSearchField("))
+        // Video filters use neutral AppFilterChip; host follows the stage-3 contract
+        // (MIUIX → OverlayBottomSheet, MATERIAL3 → AppModalBottomSheet).
+        assertTrue(filterSheetSource.contains("AppFilterChip("))
+        assertTrue(filterSheetSource.contains("AppModalBottomSheet("))
+        assertTrue(filterSheetSource.contains("OverlayBottomSheet("))
+        assertTrue(
+            filterSheetSource.contains("BottomBarLiquidSegmentedControl(") ||
+                filterSheetSource.contains("AppThemeAdaptiveTabRow("),
+            "视频排序应使用负责选中项和标签完整显示的标签栏",
+        )
+        // History chips use the neutral AppInputChip (visuals follow the theme layer).
+        assertTrue(searchSource.contains("AppInputChip("))
+        assertFalse(searchSource.contains("androidx.compose.material3.InputChip("))
+        assertFalse(searchSource.contains("SearchPagerTabIndicator("))
+        assertFalse(searchSource.contains("val showStableFilterBar = !searchPagerState.isScrollInProgress"))
+        // Exiting results must not reopen IME.
+        assertTrue(searchSource.contains("exitResultsToLanding("))
+        assertTrue(searchSource.contains("dismissSearchKeyboardAndFocus("))
+    }
+
+    @Test
+    fun searchTopBar_inputUsesFixedHeightNotFillMaxSize() {
+        val searchSource = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt")
+        val topBar = searchSource
+            .substringAfter("fun SearchTopBar(")
+            .substringBefore("private fun SearchTopBarIconButton(")
+        // 回归：fillMaxSize 会让输入框在 Column 剩余高度里变成竖向长胶囊
+        assertFalse(topBar.contains("Modifier = Modifier.fillMaxSize()"))
+        assertTrue(topBar.contains(".height(chromeSpec.inputHeightDp.dp)"))
+        assertTrue(topBar.contains(".fillMaxWidth()"))
+        assertTrue(topBar.contains("TextFieldValue("))
+        assertTrue(topBar.contains("resolveSearchInputShape(topChromePolicy)"))
+        assertFalse(topBar.contains("RoundedCornerShape("))
+        assertFalse(topBar.contains("searchTopChromeGlass(dockShape)"))
+        assertTrue(topBar.contains("searchTopChromeGlass(inputShape, chromeSpec.inputHeightDp)"))
+        assertTrue(topBar.contains("searchTopChromeGlass(actionShape, chromeSpec.submitActionSizeDp)"))
+        assertEquals(2, Regex("searchTopChromeGlass\\(actionShape, chromeSpec.clearActionSizeDp\\)").findAll(topBar).count())
+        assertTrue(topBar.contains("resolveHomeTopEdgeButtonShape(topChromePolicy)"))
+        assertTrue(topBar.contains("liquidGlassEnabled"))
+        assertTrue(topBar.contains("homeTopBottomBarMatchedSurface("))
+        assertTrue(topBar.contains("drawShellLens = true"))
+        assertTrue(topBar.contains("resolveFloatingDockGeometryScale(controlHeightDp.toFloat())"))
     }
 
     @Test
@@ -349,6 +572,26 @@ class SearchScreenPolicyTest {
         assertEquals(1f, reducedSpec.initialAlpha)
         assertEquals(1f, reducedSpec.initialScale)
         assertEquals(0f, reducedSpec.initialTranslationYDp)
+    }
+
+    @Test
+    fun searchExitMotion_returnsControlTowardBottomSearchSlot() {
+        val entry = resolveSearchEntryMotionSpec(
+            source = SearchEntryMotionSource.BOTTOM_BAR,
+            reducedMotionBudget = false,
+        )
+
+        val exit = requireNotNull(
+            resolveSearchExitMotionSpec(
+                entrySpec = entry,
+                screenHeightDp = 900,
+            )
+        )
+
+        assertEquals(300, exit.durationMillis)
+        assertEquals(764f, exit.initialTranslationYDp)
+        assertEquals(0.74f, exit.initialScale)
+        assertEquals(0.88f, exit.transformOriginPivotX)
     }
 
     private fun loadSource(path: String): String {

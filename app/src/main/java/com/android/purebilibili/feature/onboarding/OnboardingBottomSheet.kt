@@ -1,5 +1,8 @@
 // 文件路径: feature/onboarding/OnboardingBottomSheet.kt
 package com.android.purebilibili.feature.onboarding
+import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
+import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
@@ -29,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.platform.LocalUriHandler
@@ -37,29 +39,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 //  Lottie 动画
 import com.airbnb.lottie.compose.*
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.LottieUrls
-import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.ui.bottomSheetContentEnterTransition
-import com.android.purebilibili.core.ui.bottomSheetContentExitTransition
-import com.android.purebilibili.core.ui.bottomSheetScrimEnterTransition
-import com.android.purebilibili.core.ui.bottomSheetScrimExitTransition
-import com.android.purebilibili.core.ui.resolveAdaptiveBottomSheetMotionSpec
+import com.android.purebilibili.core.ui.rememberAppBottomSheetMotion
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
+import com.android.purebilibili.core.theme.opaqueCompositeOver
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  *  iOS 风格新手引导底部弹窗
@@ -80,8 +80,7 @@ fun OnboardingBottomSheet(
 ) {
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
-    val uiPreset = LocalUiPreset.current
-    val motionSpec = remember(uiPreset) { resolveAdaptiveBottomSheetMotionSpec(uiPreset) }
+    val sheetMotion = rememberAppBottomSheetMotion()
     
     // 3 页引导
     val pagerState = rememberPagerState(pageCount = { 3 })
@@ -92,8 +91,8 @@ fun OnboardingBottomSheet(
     //  控制进出场动画
     androidx.compose.animation.AnimatedVisibility(
         visible = visible,
-        enter = bottomSheetScrimEnterTransition(motionSpec),
-        exit = bottomSheetScrimExitTransition(motionSpec)
+        enter = sheetMotion.scrimEnter,
+        exit = sheetMotion.scrimExit
     ) {
         //  1. 半透明遮罩层 (点击关闭)
         Box(
@@ -110,39 +109,31 @@ fun OnboardingBottomSheet(
 
     androidx.compose.animation.AnimatedVisibility(
         visible = visible,
-        enter = bottomSheetContentEnterTransition(motionSpec),
-        exit = bottomSheetContentExitTransition(motionSpec)
+        enter = sheetMotion.contentEnter,
+        exit = sheetMotion.contentExit
     ) {
         //  2. 内容层 (点击透传)
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter
         ) {
-            //  iOS 风格毛玻璃效果
-            // 使用多层渐变 + 高透明度模拟真实的毛玻璃质感
-            val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-            
+            val sheetShape = AppShapes.container(ContainerLevel.Sheet)
+            val sheetTopColor = AppSurfaceTokens.cardContainer()
+            val sheetBottomColor = AppSurfaceTokens.groupedListContainer()
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.85f) //  占 85% 屏幕高度
-                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                    //  [新方案] 多层背景模拟毛玻璃
+                    .clip(sheetShape)
                     .background(
                         brush = Brush.verticalGradient(
-                            colors = if (isDark) {
-                                listOf(
-                                    Color(0xFF2C2C2E).copy(alpha = 0.95f),  // 深色主体
-                                    Color(0xFF1C1C1E).copy(alpha = 0.98f)   // 底部更深
-                                )
-                            } else {
-                                listOf(
-                                    Color(0xFFF2F2F7).copy(alpha = 0.95f),  // iOS 浅灰
-                                    Color(0xFFFFFFFF).copy(alpha = 0.98f)   // 底部更白
-                                )
-                            }
+                            colors = listOf(
+                                sheetTopColor,
+                                sheetBottomColor,
+                            )
                         ),
-                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+                        shape = sheetShape
                     )
                     // 防止点击穿透到遮罩层
                     .clickable(
@@ -163,7 +154,7 @@ fun OnboardingBottomSheet(
                         modifier = Modifier
                             .padding(top = 12.dp, bottom = 8.dp)
                             .size(width = 40.dp, height = 4.dp)
-                            .clip(RoundedCornerShape(2.dp))
+                            .clip(AppShapes.container(ContainerLevel.Tag))
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
                     )
                     
@@ -204,7 +195,7 @@ fun OnboardingBottomSheet(
                                 modifier = Modifier
                                     .padding(horizontal = 4.dp)
                                     .size(width = width.dp, height = 8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
+                                    .clip(AppShapes.container(ContainerLevel.Tag))
                                     .background(
                                         if (isSelected) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
@@ -224,10 +215,10 @@ fun OnboardingBottomSheet(
                     ) {
                         if (pagerState.currentPage < 2) {
                             // 跳过按钮
-                            OutlinedButton(
+                            AppOutlinedButton(
                                 onClick = onDismiss,
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = AppShapes.container(ContainerLevel.Card),
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = MaterialTheme.colorScheme.onSurface
                                 ),
@@ -236,53 +227,51 @@ fun OnboardingBottomSheet(
                                     MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                                 )
                             ) {
-                                Text("跳过", fontWeight = FontWeight.Medium)
+                                AppText("跳过", fontWeight = FontWeight.Medium)
                             }
                             
                             // 下一步按钮
-                            Button(
+                            AppButton(
                                 onClick = {
                                     scope.launch {
                                         pagerState.animateScrollToPage(pagerState.currentPage + 1)
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = AppShapes.container(ContainerLevel.Card),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
+                                    containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
+
+                                    contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
                                 )
                             ) {
-                                Text("下一步", fontWeight = FontWeight.SemiBold)
+                                AppText("下一步", fontWeight = FontWeight.SemiBold)
                             }
                         } else {
                             // 最后一页：开始使用
-                            Button(
+                            AppButton(
                                 onClick = onDismiss,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = AppShapes.container(ContainerLevel.Card),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
+                                    containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
+
+                                    contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
                                 )
                             ) {
-                                Text(
+                                AppText(
                                     "开始探索 BiliPai",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
+                                    style = MaterialTheme.typography.labelLarge
                                 )
                             }
                         }
                     }
                     
                     //  GitHub 链接
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "GitHub",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -293,17 +282,13 @@ fun OnboardingBottomSheet(
                             title = "官方",
                             path = "jay3-yy/BiliPai",
                             modifier = Modifier.weight(1f),
-                            onClick = {
-                                uriHandler.openUri("https://github.com/jay3-yy/BiliPai")
-                            }
+                            onClick = { uriHandler.openUri("https://github.com/jay3-yy/BiliPai") },
                         )
                         GithubLinkCard(
                             title = "Focus",
                             path = BuildConfig.FOCUS_REPOSITORY_PATH,
                             modifier = Modifier.weight(1f),
-                            onClick = {
-                                uriHandler.openUri(BuildConfig.FOCUS_REPOSITORY_URL)
-                            }
+                            onClick = { uriHandler.openUri(BuildConfig.FOCUS_REPOSITORY_URL) },
                         )
                     }
                 }
@@ -317,30 +302,29 @@ private fun GithubLinkCard(
     title: String,
     path: String,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        tonalElevation = 1.dp
+        tonalElevation = 1.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(
+            AppText(
                 text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            Text(
+            AppText(
                 text = "github.com/$path",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.88f)
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.88f),
             )
         }
     }
@@ -396,11 +380,11 @@ private fun WelcomePage(hazeState: HazeState) {
         ) {
             // 主 Logo
             AsyncImage(
-                model = R.mipmap.ic_launcher,
+                model = R.mipmap.ic_launcher_3d,
                 contentDescription = "BiliPai Logo",
                 modifier = Modifier
                     .size(80.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(AppShapes.container(ContainerLevel.Floating))
             )
             //  Lottie 装饰动画 (环绕效果)
             LottieAnimation(
@@ -410,12 +394,12 @@ private fun WelcomePage(hazeState: HazeState) {
             )
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraLarge))
         
         // 标题 - 动画项 1
-        Text(
+        AppText(
             "欢迎使用 BiliPai",
-            fontSize = 28.sp,
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.graphicsLayer {
@@ -424,12 +408,12 @@ private fun WelcomePage(hazeState: HazeState) {
             }
         )
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
         
         // 副标题 - 动画项 2
-        Text(
+        AppText(
             "简洁 · 流畅 · 开源",
-            fontSize = 16.sp,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             letterSpacing = 3.sp,
             modifier = Modifier.graphicsLayer {
@@ -438,7 +422,7 @@ private fun WelcomePage(hazeState: HazeState) {
             }
         )
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.DoubleExtraLarge))
         
         // 特性标签 - 动画项 3, 4, 5
         Row(
@@ -464,24 +448,33 @@ private fun WelcomePage(hazeState: HazeState) {
             )
         }
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.DoubleExtraLarge))
         
+        val disclaimerColors = resolveAccessibleContainerColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            backgroundColor = MaterialTheme.colorScheme.surface,
+            fallbackContentColors = listOf(
+                MaterialTheme.colorScheme.onSurface,
+                MaterialTheme.colorScheme.onBackground,
+            ),
+        )
+
         // 免责声明
-        Surface(
-            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
-            shape = RoundedCornerShape(12.dp),
+        AppSurface(
+            color = disclaimerColors.containerColor,
+            shape = AppShapes.container(ContainerLevel.Card),
             modifier = Modifier.graphicsLayer {
                 alpha = animatedItems[5].value
                 translationY = (1f - animatedItems[5].value) * 20f
             }
         ) {
-            Text(
-                "本应用仅供学习交流，所有内容版权归 Bilibili 及原作者",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+            AppText(
+                "本应用仅供学习交流，所有内容版权归 Bilibili 及原作者。",
+                style = MaterialTheme.typography.bodySmall,
+                color = disclaimerColors.contentColor,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(12.dp),
-                lineHeight = 16.sp
+                modifier = Modifier.padding(AppSpacingTokens.Medium)
             )
         }
     }
@@ -555,12 +548,12 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
             )
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraLarge))
         
         // 标题 - 动画项 1
-        Text(
+        AppText(
             "个性化外观",
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.graphicsLayer {
@@ -569,12 +562,12 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
             }
         )
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
         
         // 副标题 - 动画项 2
-        Text(
+        AppText(
             "打造专属于你的界面风格",
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.graphicsLayer {
                 alpha = animatedItems[2].value
@@ -582,7 +575,7 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
             }
         )
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.DoubleExtraLarge))
         
         // 功能列表 - 动画项 3, 4, 5, 6
         FeatureListItem(
@@ -693,12 +686,12 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
             )
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraLarge))
         
         // 标题 - 动画项 1
-        Text(
+        AppText(
             "智能播放体验",
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.graphicsLayer {
@@ -707,12 +700,12 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
             }
         )
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
         
         // 副标题 - 动画项 2
-        Text(
+        AppText(
             "流畅观看，省流省电",
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.graphicsLayer {
                 alpha = animatedItems[2].value
@@ -720,7 +713,7 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
             }
         )
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(AppSpacingTokens.DoubleExtraLarge))
         
         // 功能列表 - 动画项 3, 4, 5, 6
         FeatureListItem(
@@ -824,18 +817,21 @@ private fun FeatureBadge(
                         scaleY = badgeScale
                     }
                     .background(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                        color = opaqueCompositeOver(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                            MaterialTheme.colorScheme.surface,
+                        ),
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(emoji, fontSize = 24.sp)
+                AppText(emoji, style = MaterialTheme.typography.titleLarge)
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
+        Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+        AppText(
             label,
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -854,9 +850,9 @@ private fun FeatureListItem(
     hazeState: HazeState? = null
 ) {
     //  真正的毛玻璃卡片效果
-    Surface(
+    AppSurface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(16.dp),
+        shape = AppShapes.container(ContainerLevel.Card),
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer {
@@ -874,7 +870,7 @@ private fun FeatureListItem(
             )
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(AppSpacingTokens.Large),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -882,27 +878,26 @@ private fun FeatureListItem(
                     .size(44.dp)
                     .background(
                         color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = AppShapes.container(ContainerLevel.Card)
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(icon, fontSize = 20.sp)
+                AppText(icon, style = MaterialTheme.typography.titleMedium)
             }
             
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     title,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
+                AppText(
                     description,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 16.sp
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

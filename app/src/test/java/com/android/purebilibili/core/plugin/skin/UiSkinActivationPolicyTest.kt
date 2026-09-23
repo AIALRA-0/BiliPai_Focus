@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.plugin.skin
 
-import com.android.purebilibili.core.store.BottomBarLiquidGlassPreset
+
 import com.android.purebilibili.core.store.HomeSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -112,8 +112,7 @@ class UiSkinActivationPolicyTest {
             version = "1.0.0"
         )
         val homeSettings = HomeSettings(
-            isBottomBarLiquidGlassEnabled = true,
-            bottomBarLiquidGlassPreset = BottomBarLiquidGlassPreset.BILIPAI_TUNED
+            isBottomBarLiquidGlassEnabled = true
         )
         val state = resolveUiSkinState(
             selection = UiSkinSelection(
@@ -130,7 +129,6 @@ class UiSkinActivationPolicyTest {
 
         assertEquals(homeSettings, resolved)
         assertTrue(resolved.isBottomBarLiquidGlassEnabled)
-        assertEquals(BottomBarLiquidGlassPreset.BILIPAI_TUNED, resolved.bottomBarLiquidGlassPreset)
     }
 
     private fun installedSkin(

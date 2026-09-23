@@ -1,6 +1,16 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+
+import coil3.request.crossfade
+import coil3.request.transformations
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+
 import android.content.Intent
+import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -18,12 +28,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,9 +48,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.imageLoader
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Size
+import coil3.transform.Transformation
+import coil3.imageLoader
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.calculateContrastRatio
@@ -64,17 +75,24 @@ import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlacement
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewCommentContext
+import com.android.purebilibili.feature.dynamic.components.ImageDecodeTarget
 import com.android.purebilibili.feature.dynamic.components.resolveCommentImageOriginalSizeLabel
+import com.android.purebilibili.feature.dynamic.components.resolveImageDecodeSize
 import androidx.compose.ui.layout.ContentScale
-import com.android.purebilibili.core.ui.common.CopySelectionDialog
-import com.android.purebilibili.core.ui.common.copyOnLongPress
+import com.android.purebilibili.core.ui.common.TextSelectionBottomSheet
+import com.android.purebilibili.core.ui.common.TextSelectionPolicy
+import com.android.purebilibili.core.ui.common.detectTapWithSelectionFriendly
 import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.OfficialVerifyBadge
 import com.android.purebilibili.core.ui.OfficialVerifyBadgeSpec
 import com.android.purebilibili.core.ui.OfficialVerifyBadgeTone
+import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
-import com.android.purebilibili.core.ui.rememberAppLikeIcon
+import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
 import com.android.purebilibili.core.ui.resolveOfficialVerifyBadge
+import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSurface
 import androidx.compose.foundation.text.selection.SelectionContainer
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -84,6 +102,8 @@ import java.util.concurrent.ConcurrentHashMap
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.ui.components.UserUpBadge
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 private val EMOTE_TOKEN_PATTERN = """\[(.*?)\]""".toRegex()
 private const val COMMENT_INLINE_UP_BADGE_ID = "comment_inline_up_badge"
@@ -110,6 +130,42 @@ const val COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX = "comment_view_all_replies_"
 
 private val replyVideoTitleCache = ConcurrentHashMap<String, String>()
 
+/**
+ * 官方 cardbg 经常是 972×162 的透明画布，实际角色图案只占其中一小部分。
+ * 在解码线程裁掉全透明边缘，才能以官方预期的视觉尺寸显示内容而不裁掉图案。
+ */
+internal object TransparentBoundsCropTransformation : Transformation() {
+    override val cacheKey: String = "comment_transparent_bounds_crop_v1"
+
+    override suspend fun transform(input: Bitmap, size: Size): Bitmap {
+        if (!input.hasAlpha()) return input
+
+        var left = input.width
+        var top = input.height
+        var right = -1
+        var bottom = -1
+        for (y in 0 until input.height) {
+            for (x in 0 until input.width) {
+                if ((input.getPixel(x, y) ushr 24) > 4) {
+                    left = minOf(left, x)
+                    top = minOf(top, y)
+                    right = maxOf(right, x)
+                    bottom = maxOf(bottom, y)
+                }
+            }
+        }
+        if (right < left || bottom < top) return input
+
+        val cropWidth = right - left + 1
+        val cropHeight = bottom - top + 1
+        return if (cropWidth == input.width && cropHeight == input.height) {
+            input
+        } else {
+            Bitmap.createBitmap(input, left, top, cropWidth, cropHeight)
+        }
+    }
+}
+
 internal data class ReplyItemLayoutPolicy(
     val horizontalPaddingDp: Int,
     val avatarSizeDp: Int,
@@ -132,18 +188,28 @@ internal fun resolveReplyItemLayoutPolicy(): ReplyItemLayoutPolicy {
         avatarSizeDp = 36,
         avatarContentSpacingDp = 8,
         actionButtonSizeDp = 40,
-        decorationWidthReserveDp = 78,
-        decorationImageWidthDp = 64,
-        decorationImageHeightDp = 46,
-        decorationMinWidthDp = 78
+        decorationWidthReserveDp = 64,
+        decorationImageWidthDp = 44,
+        decorationImageHeightDp = 36,
+        decorationMinWidthDp = 64
     )
 }
 
+/**
+ * B站头像框素材按「外框画布 > 脸部圆形」绘制：框铺满外层，脸居中缩小，
+ * 否则框与脸同尺寸会挤在边缘、前后层看起来错位。
+ */
+internal const val REPLY_AVATAR_FACE_FRACTION_WITH_PENDANT = 0.72f
+
+internal fun resolveReplyAvatarFaceFraction(hasPendant: Boolean): Float {
+    return if (hasPendant) REPLY_AVATAR_FACE_FRACTION_WITH_PENDANT else 1f
+}
+
 internal fun resolveReplyItemHeaderEndPaddingDp(
-    hasPiliPlusDecoration: Boolean,
+    hasBiliPaiDecoration: Boolean,
     policy: ReplyItemLayoutPolicy = resolveReplyItemLayoutPolicy()
 ): Int {
-    return policy.actionButtonSizeDp + if (hasPiliPlusDecoration) policy.decorationWidthReserveDp else 0
+    return policy.actionButtonSizeDp + if (hasBiliPaiDecoration) policy.decorationWidthReserveDp else 0
 }
 
 internal fun resolveReplyItemContentStartPaddingDp(
@@ -216,15 +282,15 @@ internal fun collectRenderableEmoteKeys(
 }
 
 internal fun shouldEnableRichCommentSelection(
-    hasRenderableEmotes: Boolean,
-    hasInteractiveAnnotations: Boolean
-): Boolean {
-    return !hasRenderableEmotes && !hasInteractiveAnnotations
-}
+    hasRenderableEmotes: Boolean = false,
+    hasInteractiveAnnotations: Boolean = false
+): Boolean = true
 
-internal fun shouldShowReplyAncillaryDecorations(
+// 纯 Text 标签渲染成本低；滚动/播放期间保持稳定显示，对齐底栏 dragFloor 不因 motion 切换可见性。
+@Suppress("UNUSED_PARAMETER")
+internal fun shouldShowReplySpecialLabel(
     lightweightMode: Boolean
-): Boolean = !lightweightMode
+): Boolean = true
 
 internal fun shouldShowReplyIdentityDecorations(enabled: Boolean): Boolean = enabled
 
@@ -345,6 +411,10 @@ internal fun resolveSubReplyPreviewSummaryLabel(
     }
 }
 
+internal fun resolveSubReplyOpenTargetId(rootReplyId: Long, clickedReplyId: Long): Long {
+    return clickedReplyId.takeIf { it > 0L && it != rootReplyId } ?: 0L
+}
+
 internal fun resolveReplyCommentShareUrl(item: ReplyItem): String {
     val rootId = if (item.root > 0L) item.root else item.rpid
     return buildString {
@@ -385,11 +455,14 @@ internal fun shouldSupportReplyShare(item: ReplyItem): Boolean {
 internal enum class ReplyActionSheetAction {
     COPY_ALL,
     FREE_COPY,
+    COPY_USERNAME,
+    QUERY_AUTHOR_HISTORY,
     SAVE,
     SHARE,
     REPLY,
     BLOCK_USER,
     REPORT,
+    CHECK_FRAUD,
     TOGGLE_TOP,
     DELETE
 }
@@ -399,11 +472,17 @@ internal fun buildReplyActionSheetActions(
     canReport: Boolean,
     canShare: Boolean,
     canBlockUser: Boolean,
-    topActionLabel: String? = null
+    topActionLabel: String? = null,
+    canCopyUsername: Boolean = true,
+    canQueryAuthorHistory: Boolean = false,
 ): List<ReplyActionSheetAction> {
     return buildList {
         add(ReplyActionSheetAction.COPY_ALL)
         add(ReplyActionSheetAction.FREE_COPY)
+        if (canCopyUsername) {
+            add(ReplyActionSheetAction.COPY_USERNAME)
+        }
+        if (canQueryAuthorHistory) add(ReplyActionSheetAction.QUERY_AUTHOR_HISTORY)
         add(ReplyActionSheetAction.SAVE)
         if (canShare) {
             add(ReplyActionSheetAction.SHARE)
@@ -414,6 +493,9 @@ internal fun buildReplyActionSheetActions(
         }
         if (canReport) {
             add(ReplyActionSheetAction.REPORT)
+        }
+        if (canDelete) {
+            add(ReplyActionSheetAction.CHECK_FRAUD)
         }
         if (!topActionLabel.isNullOrBlank()) {
             add(ReplyActionSheetAction.TOGGLE_TOP)
@@ -431,11 +513,14 @@ private fun resolveReplyActionSheetLabel(
     return when (action) {
         ReplyActionSheetAction.COPY_ALL -> "复制全部"
         ReplyActionSheetAction.FREE_COPY -> "自由复制"
+        ReplyActionSheetAction.COPY_USERNAME -> "复制用户名"
+        ReplyActionSheetAction.QUERY_AUTHOR_HISTORY -> "查询作者历史"
         ReplyActionSheetAction.SAVE -> "保存评论"
         ReplyActionSheetAction.SHARE -> "分享评论"
         ReplyActionSheetAction.REPLY -> "回复"
         ReplyActionSheetAction.BLOCK_USER -> "屏蔽用户"
         ReplyActionSheetAction.REPORT -> "举报"
+        ReplyActionSheetAction.CHECK_FRAUD -> "检测评论状态"
         ReplyActionSheetAction.TOGGLE_TOP -> topActionLabel.orEmpty()
         ReplyActionSheetAction.DELETE -> "删除"
     }
@@ -816,8 +901,8 @@ internal fun resolveVisibleSubReplies(
 }
 
 internal fun resolveInitialSubReplyPreviewExpanded(
-    previewReplyCount: Int
-): Boolean = previewReplyCount > 0
+    @Suppress("UNUSED_PARAMETER") previewReplyCount: Int
+): Boolean = false
 
 internal fun shouldShowInlineSubReplyToggle(
     previewReplyCount: Int,
@@ -855,6 +940,27 @@ internal fun resolveFanGroupDecorationCardBgs(member: ReplyMember): List<ReplySa
     )
 }
 
+/**
+ * 评论接口会同时携带传统 [ReplyMember.pendant] 与 user_sailing 的新挂件。
+ * 优先使用 v2 的增强帧，能保留官方透明挂件的完整轮廓；旧字段作为兼容回退。
+ */
+internal fun resolveReplyMemberPendantImage(member: ReplyMember): String? {
+    return sequenceOf(
+        member.userSailingV2?.pendant,
+        member.userSailing?.pendant,
+        member.pendant
+    )
+        .flatMap { pendant ->
+            sequenceOf(
+                pendant?.imageEnhanceFrame,
+                pendant?.imageEnhance,
+                pendant?.image
+            )
+        }
+        .map(::normalizeHttpImageUrl)
+        .firstOrNull { it.isNotBlank() }
+}
+
 internal fun resolveFanGroupTagVisual(
     fan: ReplySailingFan?,
     cardBgImage: String?,
@@ -876,6 +982,11 @@ internal fun resolveFanGroupLabelText(fanNumber: String): String {
     val digits = fanNumber.filter(Char::isDigit)
     if (digits.isBlank()) return ""
     return "CO.${digits.padStart(6, '0')}"
+}
+
+internal fun resolveFanGroupNumberText(fanNumber: String): String {
+    val digits = fanNumber.filter(Char::isDigit)
+    return digits.takeIf { it.isNotBlank() }?.padStart(6, '0').orEmpty()
 }
 
 internal fun resolveFanGroupLabelTextColor(
@@ -966,16 +1077,15 @@ fun ReplyHeader(count: Int) {
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
+        AppText(
             text = "评论",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(
+        AppText(
             text = FormatUtils.formatStat(count.toLong()),
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -991,14 +1101,17 @@ fun ReplyItemView(
     lightweightMode: Boolean = false,
     showIdentityDecorations: Boolean = true,
     onClick: () -> Unit,
-    onSubClick: (ReplyItem) -> Unit,
+    onSubClick: (ReplyItem, Long) -> Unit,
     onTimestampClick: ((Long) -> Unit)? = null,
     onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null,
     isLiked: Boolean = item.action == 1,
     onLikeClick: (() -> Unit)? = null,
+    isHated: Boolean = item.action == 2,
+    onHateClick: (() -> Unit)? = null,
     onReplyClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onDeleteClick: (() -> Unit)? = null,
+    onCheckFraudClick: (() -> Unit)? = null,
     onReportClick: ((Int) -> Unit)? = null,
     canToggleTop: Boolean = false,
     onToggleTopClick: (() -> Unit)? = null,
@@ -1012,7 +1125,6 @@ fun ReplyItemView(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val isUpComment = upMid > 0 && item.mid == upMid
-    val showAncillaryDecorations = shouldShowReplyAncillaryDecorations(lightweightMode)
     val showResolvedIdentityDecorations = shouldShowReplyIdentityDecorations(showIdentityDecorations)
     val showSubPreview = shouldShowReplySubPreview(
         hideSubPreview = hideSubPreview,
@@ -1055,8 +1167,8 @@ fun ReplyItemView(
             }
         }
     }
-    val specialLabelText = remember(item.cardLabels, showUpFlag, item.upAction, showAncillaryDecorations) {
-        if (!showAncillaryDecorations) return@remember null
+    val specialLabelText = remember(item.cardLabels, showUpFlag, item.upAction) {
+        if (!shouldShowReplySpecialLabel(lightweightMode)) return@remember null
         resolveReplySpecialLabelText(
             cardLabels = item.cardLabels,
             showUpFlag = showUpFlag,
@@ -1093,7 +1205,7 @@ fun ReplyItemView(
     } else {
         null
     }
-    val piliPlusDecoration = fanGroupVisual
+    val biliPaiDecoration = fanGroupVisual
     val replyOfficialBadge = remember(item.member.officialVerify) {
         resolveOfficialVerifyBadge(
             type = item.member.officialVerify.type,
@@ -1142,6 +1254,13 @@ fun ReplyItemView(
     var showFreeCopyDialog by remember(item.rpid) { mutableStateOf(false) }
     var showReportDialog by remember(item.rpid) { mutableStateOf(false) }
     var pendingSaveReply by remember(item.rpid) { mutableStateOf<ReplyItem?>(null) }
+    // [新增] 评论翻译状态
+    val canTranslate = item.replyControl?.translationSwitch == 2
+    var translatedMessage by remember(item.rpid) { mutableStateOf<String?>(null) }
+    var isTranslating by remember(item.rpid) { mutableStateOf(false) }
+    val displayMessage = remember(translatedMessage, item.content.message) {
+        translatedMessage ?: item.content.message
+    }
     val copyText = remember(item.content.message) { item.content.message.trim() }
     val replyMemberMid = remember(item.member.mid, item.mid) { resolveReplyMemberMid(item) }
     fun launchSaveReplyCommentImage(reply: ReplyItem) {
@@ -1191,10 +1310,12 @@ fun ReplyItemView(
 
     if (showActionSheet) {
         ReplyActionSheet(
+            queryAuthorUid = replyMemberMid,
             canDelete = onDeleteClick != null,
             canReport = onReportClick != null,
             canShare = shouldSupportReplyShare(item),
             canBlockUser = replyMemberMid > 0L,
+            canCopyUsername = item.member.uname.isNotBlank(),
             topActionLabel = if (canToggleTop) resolveReplyTopActionLabel(showTopBadge) else null,
             onDismiss = { showActionSheet = false },
             onCopyAll = {
@@ -1203,6 +1324,9 @@ fun ReplyItemView(
             onFreeCopy = {
                 showFreeCopyDialog = true
             },
+            onCopyUsername = {
+                copyToClipboard(item.member.uname, "用户名")
+            },
             onSave = {
                 requestSaveReplyCommentImage()
             },
@@ -1210,7 +1334,7 @@ fun ReplyItemView(
                 shareReplyComment()
             },
             onReply = {
-                onReplyClick?.invoke() ?: onSubClick(item)
+                onReplyClick?.invoke() ?: onSubClick(item, 0L)
             },
             onBlockUser = {
                 blockReplyUser()
@@ -1221,6 +1345,9 @@ fun ReplyItemView(
             onToggleTop = {
                 onToggleTopClick?.invoke()
             },
+            onCheckFraud = {
+                onCheckFraudClick?.invoke()
+            },
             onDelete = {
                 onDeleteClick?.invoke()
             }
@@ -1228,7 +1355,7 @@ fun ReplyItemView(
     }
 
     if (showFreeCopyDialog) {
-        CopySelectionDialog(
+        TextSelectionBottomSheet(
             text = copyText,
             title = "选择评论内容",
             onDismiss = { showFreeCopyDialog = false }
@@ -1251,7 +1378,7 @@ fun ReplyItemView(
             .combinedClickable(
                 onClick = {
                     if (openThreadFromRootClick) {
-                        onSubClick(item)
+                        onSubClick(item, 0L)
                     } else {
                         onClick()
                     }
@@ -1273,7 +1400,7 @@ fun ReplyItemView(
                 )
         ) {
             val headerEndPadding = resolveReplyItemHeaderEndPaddingDp(
-                hasPiliPlusDecoration = piliPlusDecoration != null,
+                hasBiliPaiDecoration = biliPaiDecoration != null,
                 policy = layoutPolicy
             ).dp
             val startPadding = resolveReplyItemContentStartPaddingDp(
@@ -1284,18 +1411,12 @@ fun ReplyItemView(
             Column(modifier = Modifier.fillMaxWidth()) {
                 // User Info Header
                 Row() {
-                    // Avatar
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(FormatUtils.fixImageUrl(item.member.avatar))
-                            .crossfade(!lightweightMode)
-                            .build(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(layoutPolicy.avatarSizeDp.dp)
-                            .clip(CircleShape)
-                            .background(appearance.placeholderColor)
-                            .clickable { onAvatarClick(item.member.mid) }
+                    ReplyMemberAvatar(
+                        member = item.member,
+                        placeholderColor = appearance.placeholderColor,
+                        lightweightMode = lightweightMode,
+                        modifier = Modifier.size(layoutPolicy.avatarSizeDp.dp),
+                        onClick = { onAvatarClick(item.member.mid) }
                     )
 
                     Spacer(modifier = Modifier.width(layoutPolicy.avatarContentSpacingDp.dp))
@@ -1310,9 +1431,11 @@ fun ReplyItemView(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
+                            // 用户名不挂长按复制：列表滑动时易误触连复制多个用户名。
+                            // 需要时用评论长按菜单「复制用户名」。
+                            AppText(
                                 text = item.member.uname,
-                                fontSize = 13.sp,
+                                fontSize = VideoCommentTypographyTokens.author,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (item.member.vip?.vipStatus == 1) {
                                     appearance.accentColor
@@ -1321,9 +1444,7 @@ fun ReplyItemView(
                                 },
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f, fill = false)
-                                    .copyOnLongPress(item.member.uname, "用户名")
+                                modifier = Modifier.weight(1f, fill = false)
                             )
 
                             if (replyOfficialBadge != null) {
@@ -1353,9 +1474,9 @@ fun ReplyItemView(
                             }
                         }
 
-                        Text(
+                        AppText(
                             text = metadataText,
-                            fontSize = 12.sp,
+                            fontSize = VideoCommentTypographyTokens.metadata,
                             lineHeight = 16.sp,
                             color = appearance.secondaryTextColor
                         )
@@ -1371,8 +1492,8 @@ fun ReplyItemView(
                         .padding(start = startPadding)
                 ) {
                     ReplyMessageText(
-                        text = item.content.message,
-                        fontSize = 15.sp,
+                        text = displayMessage,
+                        fontSize = VideoCommentTypographyTokens.body,
                         color = appearance.primaryTextColor,
                         emoteMap = localEmoteMap,
                         content = item.content,
@@ -1385,7 +1506,7 @@ fun ReplyItemView(
                         noteCvidStr = item.noteCvidStr,
                         prefix = contentPrefix,
                         onPlainTextClick = if (openThreadFromRootClick) {
-                            { onSubClick(item) }
+                            { onSubClick(item, 0L) }
                         } else {
                             null
                         }
@@ -1417,8 +1538,62 @@ fun ReplyItemView(
                     ReplyTextAction(
                         label = "回复",
                         appearance = appearance,
-                        onClick = { onReplyClick?.invoke() ?: onSubClick(item) }
+                        onClick = { onReplyClick?.invoke() ?: onSubClick(item, 0L) }
                     )
+
+                    // [新增] 翻译按钮 (胶囊样式)
+                    if (canTranslate) {
+                        val isTranslated = translatedMessage != null
+                        val translateLabel = if (isTranslating) "翻译中" else if (isTranslated) "原文" else "翻译"
+                        AppSurface(
+                            shape = AppShapes.container(ContainerLevel.Pill),
+                            color = if (isTranslated) appearance.accentColor.copy(alpha = 0.14f) else appearance.actionTint.copy(alpha = 0.10f),
+                            modifier = Modifier
+                                .clickable(enabled = !isTranslating) {
+                                    if (isTranslated) {
+                                        translatedMessage = null
+                                    } else {
+                                        scope.launch {
+                                            isTranslating = true
+                                            val result = com.android.purebilibili.data.repository.CommentGrpcRepository.translateReply(
+                                                type = item.replyType.toLong(),
+                                                oid = item.oid,
+                                                rpid = item.rpid
+                                            )
+                                            result.onSuccess { translated ->
+                                                if (!translated.isNullOrBlank()) {
+                                                    translatedMessage = translated
+                                                } else {
+                                                    Toast.makeText(context, "翻译结果为空", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }.onFailure { e ->
+                                                Toast.makeText(context, "${e.javaClass.simpleName}: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                            isTranslating = false
+                                        }
+                                    }
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                AppIcon(
+                                    imageVector = Icons.Outlined.Translate,
+                                    contentDescription = null,
+                                    tint = if (isTranslated) appearance.accentColor else appearance.actionTint,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                AppText(
+                                    text = translateLabel,
+                                    fontSize = VideoCommentTypographyTokens.action,
+                                    color = if (isTranslated) appearance.accentColor else appearance.actionTint
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
 
                     if (!specialLabelText.isNullOrEmpty()) {
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1427,7 +1602,6 @@ fun ReplyItemView(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    val likeIcon = rememberAppLikeIcon()
                     val likeFilledIcon = rememberAppLikeFilledIcon()
 
                     // Like
@@ -1437,33 +1611,46 @@ fun ReplyItemView(
                             .clickable(enabled = onLikeClick != null) { onLikeClick?.invoke() }
                             .padding(4.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isLiked) likeFilledIcon else likeIcon,
+                        AppIcon(
+                            imageVector = likeFilledIcon,
                             contentDescription = "Like",
                             tint = if (isLiked) appearance.accentColor else appearance.actionTint,
                             modifier = Modifier.size(16.dp)
                         )
                         if (displayLikeCount > 0) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(
+                            AppText(
                                 text = FormatUtils.formatStat(displayLikeCount.toLong()),
-                                fontSize = 12.sp,
+                                fontSize = VideoCommentTypographyTokens.actionCount,
                                 color = if (isLiked) appearance.accentColor else appearance.actionTint
                             )
                         }
                     }
 
+                    Spacer(modifier = Modifier.width(8.dp))
+                    AppIconButton(
+                        onClick = { onHateClick?.invoke() },
+                        enabled = onHateClick != null
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Filled.ThumbDown,
+                            contentDescription = if (isHated) "取消点踩" else "点踩评论",
+                            tint = if (isHated) MaterialTheme.colorScheme.error else appearance.actionTint,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
                     // [新增] 删除按钮 (仅显示给本人)
                     if (onDeleteClick != null) {
                         Spacer(modifier = Modifier.width(16.dp))
-                        Icon(
-                            imageVector = CupertinoIcons.Default.Trash,
-                            contentDescription = "Delete",
-                            tint = appearance.actionTint,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { onDeleteClick() }
-                        )
+                        AppIconButton(onClick = onDeleteClick) {
+                            AppIcon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = "删除",
+                                tint = appearance.actionTint,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                 }
 
@@ -1474,7 +1661,7 @@ fun ReplyItemView(
                         modifier = Modifier
                             .fillMaxWidth()
                             .animateContentSize(animationSpec = tween(durationMillis = 180))
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(AppShapes.container(ContainerLevel.Chip))
                             .background(appearance.composerHintBackgroundColor)
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -1554,7 +1741,12 @@ fun ReplyItemView(
                                     .fillMaxWidth()
                                     .testTag("$COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX${subReply.rpid}")
                                     .combinedClickable(
-                                        onClick = { onSubClick(item) },
+                                        onClick = {
+                                            onSubClick(
+                                                item,
+                                                resolveSubReplyOpenTargetId(item.rpid, subReply.rpid)
+                                            )
+                                        },
                                         onLongClick = {
                                             copyToClipboard(
                                                 subReply.content.message,
@@ -1565,7 +1757,7 @@ fun ReplyItemView(
                             ) {
                                 ReplyMessageText(
                                     text = subReply.content.message,
-                                    fontSize = 13.sp,
+                                    fontSize = VideoCommentTypographyTokens.subReply,
                                     color = appearance.primaryTextColor.copy(alpha = 0.8f),
                                     emoteMap = subEmoteMap,
                                     content = subReply.content,
@@ -1578,15 +1770,20 @@ fun ReplyItemView(
                                     onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
                                     noteCvidStr = subReply.noteCvidStr,
                                     prefix = prefix,
-                                    onPlainTextClick = { onSubClick(item) }
+                                    onPlainTextClick = {
+                                        onSubClick(
+                                            item,
+                                            resolveSubReplyOpenTargetId(item.rpid, subReply.rpid)
+                                        )
+                                    }
                                 )
                             }
                         }
 
                         if (showInlineSubReplyToggle) {
-                            Text(
+                            AppText(
                                 text = resolveInlineSubReplyToggleLabel(expanded = isSubPreviewExpanded),
-                                fontSize = 13.sp,
+                                fontSize = VideoCommentTypographyTokens.subReply,
                                 color = appearance.accentColor,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
@@ -1600,12 +1797,12 @@ fun ReplyItemView(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
-                                    .clickable { onSubClick(item) },
+                                    .clickable { onSubClick(item, 0L) },
                                 contentAlignment = Alignment.CenterStart
                             ) {
-                                Text(
+                                AppText(
                                     text = subReplySummaryLabel,
-                                    fontSize = 13.sp,
+                                    fontSize = VideoCommentTypographyTokens.subReply,
                                     color = appearance.accentColor,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -1617,9 +1814,9 @@ fun ReplyItemView(
             }
         }
 
-        if (piliPlusDecoration != null) {
+        if (biliPaiDecoration != null) {
             FanGroupDecorationBadge(
-                visual = piliPlusDecoration,
+                visual = biliPaiDecoration,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(
@@ -1629,14 +1826,14 @@ fun ReplyItemView(
             )
         }
 
-        IconButton(
+        AppIconButton(
             onClick = { showActionSheet = true },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .size(layoutPolicy.actionButtonSizeDp.dp)
                 .testTag("$COMMENT_ACTION_BUTTON_TAG_PREFIX${item.rpid}")
         ) {
-            Icon(
+            AppIcon(
                 imageVector = Icons.Filled.MoreVert,
                 contentDescription = "评论操作",
                 tint = appearance.actionTint,
@@ -1644,7 +1841,7 @@ fun ReplyItemView(
             )
         }
         
-        HorizontalDivider(
+        AppHorizontalDivider(
             modifier = Modifier.padding(start = layoutPolicy.dividerStartPaddingDp.dp),
             thickness = 0.5.dp,
             color = appearance.dividerColor.copy(alpha = 0.25f)
@@ -1771,13 +1968,13 @@ private fun ReplyVideoReferenceText(
         )
     }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-    var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
+    var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
     val modifier = if (onUrlClick != null) {
         Modifier.pointerInput(annotatedString, url) {
             detectTapGestures(
                 onLongPress = {
                     if (copyText.isNotEmpty()) {
-                        showCopySelectionDialog = true
+                        showTextSelectionSheet = true
                     }
                 },
                 onTap = { offset ->
@@ -1798,7 +1995,7 @@ private fun ReplyVideoReferenceText(
         Modifier
     }
 
-    Text(
+    AppText(
         text = annotatedString,
         inlineContent = inlineContent,
         fontSize = fontSize,
@@ -1809,11 +2006,11 @@ private fun ReplyVideoReferenceText(
         modifier = modifier
     )
 
-    if (showCopySelectionDialog) {
-        CopySelectionDialog(
+    if (showTextSelectionSheet) {
+        TextSelectionBottomSheet(
             text = copyText,
             title = "选择评论内容",
-            onDismiss = { showCopySelectionDialog = false }
+            onDismiss = { showTextSelectionSheet = false }
         )
     }
 }
@@ -1957,89 +2154,74 @@ fun RichCommentText(
         )
     }
     val copyText = remember(text) { text.trim() }
-    var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
+    var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
 
     val content: @Composable () -> Unit = {
         //  使用 Text + pointerInput 实现带表情的可点击文本
         var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-        val textModifier = when {
-            hasTapHandler -> Modifier.pointerInput(annotatedString, text, onPlainTextClick) {
-                detectTapGestures(
-                    onLongPress = {
-                        if (copyText.isNotEmpty()) {
-                            showCopySelectionDialog = true
+        val textModifier = if (hasTapHandler) {
+            Modifier.pointerInput(annotatedString, text, onPlainTextClick) {
+                detectTapWithSelectionFriendly { offset ->
+                    textLayoutResult?.let { layoutResult ->
+                        val position = layoutResult.getOffsetForPosition(offset)
+                        val searchStart = maxOf(0, position - 1)
+                        val searchEnd = minOf(annotatedString.length, position + 1)
+
+                        annotatedString.getStringAnnotations(
+                            tag = COMMENT_URL_TAG,
+                            start = searchStart,
+                            end = searchEnd
+                        ).firstOrNull()?.let { annotation ->
+                            onUrlClick?.invoke(annotation.item)
+                            return@detectTapWithSelectionFriendly
                         }
-                    },
-                    onTap = { offset ->
-                        textLayoutResult?.let { layoutResult ->
-                            val position = layoutResult.getOffsetForPosition(offset)
-                            val searchStart = maxOf(0, position - 1)
-                            val searchEnd = minOf(annotatedString.length, position + 1)
 
-                            annotatedString.getStringAnnotations(
-                                tag = COMMENT_URL_TAG,
-                                start = searchStart,
-                                end = searchEnd
-                            ).firstOrNull()?.let { annotation ->
-                                onUrlClick?.invoke(annotation.item)
-                                return@detectTapGestures
-                            }
-
-                            annotatedString.getStringAnnotations(
-                                tag = COMMENT_USER_TAG,
-                                start = searchStart,
-                                end = searchEnd
-                            ).firstOrNull()?.let { annotation ->
-                                annotation.item.toLongOrNull()?.let { onUserClick?.invoke(it) }
-                                return@detectTapGestures
-                            }
-
-                            annotatedString.getStringAnnotations(
-                                tag = COMMENT_TOPIC_TAG,
-                                start = searchStart,
-                                end = searchEnd
-                            ).firstOrNull()?.let { annotation ->
-                                onTopicClick?.invoke(annotation.item)
-                                return@detectTapGestures
-                            }
-
-                            annotatedString.getStringAnnotations(
-                                tag = COMMENT_VOTE_TAG,
-                                start = searchStart,
-                                end = searchEnd
-                            ).firstOrNull()?.let { annotation ->
-                                annotation.item.toLongOrNull()?.let { onVoteClick?.invoke(it) }
-                                return@detectTapGestures
-                            }
-
-                            annotatedString.getStringAnnotations(
-                                tag = COMMENT_TIMESTAMP_TAG,
-                                start = searchStart,
-                                end = searchEnd
-                            )
-                            .firstOrNull()?.let { annotation ->
-                                val secondsValue = annotation.item.toLongOrNull() ?: 0L
-                                onTimestampClick?.invoke(secondsValue * 1000)
-                                return@detectTapGestures
-                            }
+                        annotatedString.getStringAnnotations(
+                            tag = COMMENT_USER_TAG,
+                            start = searchStart,
+                            end = searchEnd
+                        ).firstOrNull()?.let { annotation ->
+                            annotation.item.toLongOrNull()?.let { onUserClick?.invoke(it) }
+                            return@detectTapWithSelectionFriendly
                         }
-                        onPlainTextClick?.invoke()
-                    }
-                )
-            }
-            !selectionEnabled -> Modifier.pointerInput(copyText) {
-                detectTapGestures(
-                    onLongPress = {
-                        if (copyText.isNotEmpty()) {
-                            showCopySelectionDialog = true
+
+                        annotatedString.getStringAnnotations(
+                            tag = COMMENT_TOPIC_TAG,
+                            start = searchStart,
+                            end = searchEnd
+                        ).firstOrNull()?.let { annotation ->
+                            onTopicClick?.invoke(annotation.item)
+                            return@detectTapWithSelectionFriendly
+                        }
+
+                        annotatedString.getStringAnnotations(
+                            tag = COMMENT_VOTE_TAG,
+                            start = searchStart,
+                            end = searchEnd
+                        ).firstOrNull()?.let { annotation ->
+                            annotation.item.toLongOrNull()?.let { onVoteClick?.invoke(it) }
+                            return@detectTapWithSelectionFriendly
+                        }
+
+                        annotatedString.getStringAnnotations(
+                            tag = COMMENT_TIMESTAMP_TAG,
+                            start = searchStart,
+                            end = searchEnd
+                        )
+                        .firstOrNull()?.let { annotation ->
+                            val secondsValue = annotation.item.toLongOrNull() ?: 0L
+                            onTimestampClick?.invoke(secondsValue * 1000)
+                            return@detectTapWithSelectionFriendly
                         }
                     }
-                )
+                    onPlainTextClick?.invoke()
+                }
             }
-            else -> Modifier
+        } else {
+            Modifier
         }
 
-        Text(
+        AppText(
             text = annotatedString,
             inlineContent = inlineContent,
             fontSize = fontSize,
@@ -2051,19 +2233,15 @@ fun RichCommentText(
         )
     }
 
-    if (selectionEnabled) {
-        SelectionContainer {
-            content()
-        }
-    } else {
+    SelectionContainer {
         content()
     }
 
-    if (showCopySelectionDialog) {
-        CopySelectionDialog(
+    if (showTextSelectionSheet) {
+        TextSelectionBottomSheet(
             text = copyText,
             title = "选择评论内容",
-            onDismiss = { showCopySelectionDialog = false }
+            onDismiss = { showTextSelectionSheet = false }
         )
     }
 }
@@ -2162,7 +2340,7 @@ fun EmojiText(
     )
 }
 
-//  评论等级标签（PiliPlus pixel badge with text fallback）
+//  评论等级标签（BiliPai pixel badge with text fallback）
 @Composable
 fun LevelTag(level: Int, isSeniorMember: Boolean = false) {
     UserLevelBadge(
@@ -2177,17 +2355,17 @@ private fun FansMedalTag(detail: ReplyFansDetail) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(RoundedCornerShape(3.dp))
+            .clip(AppShapes.container(ContainerLevel.Tag))
             .border(
                 width = 0.8.dp,
                 color = accentColor.copy(alpha = 0.75f),
-                shape = RoundedCornerShape(3.dp)
+                shape = AppShapes.container(ContainerLevel.Tag)
             )
             .background(accentColor.copy(alpha = 0.14f))
     ) {
-        Text(
+        AppText(
             text = detail.medalName,
-            fontSize = 9.sp,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
             color = accentColor.copy(alpha = 0.95f),
             maxLines = 1,
@@ -2199,9 +2377,9 @@ private fun FansMedalTag(detail: ReplyFansDetail) {
                 .padding(horizontal = 3.dp, vertical = 1.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(
+            AppText(
                 text = detail.level.toString(),
-                fontSize = 9.sp,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
@@ -2219,8 +2397,61 @@ private fun NameplateTag(imageUrl: String) {
         contentDescription = "Nameplate",
         modifier = Modifier
             .size(width = 20.dp, height = 12.dp)
-            .clip(RoundedCornerShape(2.dp))
+            .clip(AppShapes.container(ContainerLevel.Tag))
     )
+}
+
+@Composable
+internal fun ReplyMemberAvatar(
+    member: ReplyMember,
+    placeholderColor: Color,
+    lightweightMode: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val pendantImageUrl = remember(member) { resolveReplyMemberPendantImage(member) }
+    val hasPendant = !pendantImageUrl.isNullOrBlank()
+    val faceFraction = resolveReplyAvatarFaceFraction(hasPendant)
+    Box(
+        modifier = modifier.then(
+            if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+        ),
+        contentAlignment = Alignment.Center
+    ) {
+        // Face first (under), slightly smaller when a frame is present.
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(FormatUtils.fixImageUrl(member.avatar))
+                .crossfade(!lightweightMode)
+                .build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize(faceFraction)
+                .clip(CircleShape)
+                .background(placeholderColor)
+        )
+        // Frame/pendant on top so the ring sits around the face.
+        if (hasPendant) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(pendantImageUrl)
+                    .crossfade(!lightweightMode)
+                    .build(),
+                contentDescription = "Avatar pendant",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        UserAvatarCornerMarkBadge(
+            mark = resolveUserAvatarCornerMark(
+                officialType = member.officialVerify.type,
+                vipStatus = member.vip?.vipStatus,
+            ),
+            modifier = Modifier.align(Alignment.BottomEnd),
+            badgeSize = 14.dp,
+        )
+    }
 }
 
 @Composable
@@ -2229,69 +2460,72 @@ internal fun FanGroupDecorationBadge(
     modifier: Modifier = Modifier
 ) {
     val layoutPolicy = remember { resolveReplyItemLayoutPolicy() }
-    val fallbackImageUrl = normalizeHttpImageUrl(visual.cardBgImageUrl)
     val primaryImageUrl = resolveDecorationImageUrl(visual.cardBgImageUrl)
-    var imageUrl by remember(primaryImageUrl, fallbackImageUrl) {
-        mutableStateOf(primaryImageUrl)
-    }
 
-    val labelText = remember(visual.fanNumber) { resolveFanGroupLabelText(visual.fanNumber) }
-    if (labelText.isBlank() && primaryImageUrl.isBlank()) return
-    val textColor = resolveFanGroupLabelTextColor(
-        fanColorHex = visual.fanColorHex,
-        backgroundColor = MaterialTheme.colorScheme.surface,
-        fallbackColor = MaterialTheme.colorScheme.onSurface
-    )
+    val fanNumberText = remember(visual.fanNumber) { resolveFanGroupNumberText(visual.fanNumber) }
+    if (fanNumberText.isBlank() && primaryImageUrl.isBlank()) return
     Row(
         modifier = modifier.widthIn(min = layoutPolicy.decorationMinWidthDp.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.End)
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         if (primaryImageUrl.isNotBlank()) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .listener(
-                        onError = { _, _ ->
-                            if (fallbackImageUrl.isNotBlank() && imageUrl != fallbackImageUrl) {
-                                imageUrl = fallbackImageUrl
-                            }
-                        }
-                    )
+                    .data(primaryImageUrl)
+                    // 先保留原始像素，再裁透明边缘；否则裁剪后的主体会被放大而发糊。
+                    .size(Size.ORIGINAL)
+                    .transformations(TransparentBoundsCropTransformation)
                     .crossfade(true)
                     .build(),
                 contentDescription = "Fan group decoration",
-                contentScale = ContentScale.Crop,
+                // cardbg 是包含编号与角色图案的透明整图，裁剪会截掉官方素材边缘。
+                contentScale = ContentScale.Fit,
                 alignment = Alignment.Center,
                 modifier = Modifier
                     .size(
                         width = layoutPolicy.decorationImageWidthDp.dp,
                         height = layoutPolicy.decorationImageHeightDp.dp
                     )
-                    .clip(RoundedCornerShape(2.dp))
             )
         }
-        Surface(
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-            shape = RoundedCornerShape(5.dp),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
-        ) {
-            Text(
-                text = labelText,
-                fontSize = 12.sp,
-                lineHeight = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = textColor,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+        if (fanNumberText.isNotBlank()) {
+            val textColor = resolveFanGroupLabelTextColor(
+                fanColorHex = visual.fanColorHex,
+                backgroundColor = MaterialTheme.colorScheme.surface,
+                fallbackColor = MaterialTheme.colorScheme.onSurface
             )
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                AppText(
+                    text = "NO.",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 7.sp,
+                        lineHeight = 8.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = textColor,
+                    maxLines = 1
+                )
+                AppText(
+                    text = fanNumberText,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 8.sp,
+                        lineHeight = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = textColor,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun PiliPlusGarbCardDecoration(
+private fun BiliPaiGarbCardDecoration(
     visual: FanGroupTagVisual,
     modifier: Modifier = Modifier
 ) {
@@ -2348,10 +2582,9 @@ fun formatTime(timestamp: Long): String {
 
 @Composable
 internal fun ReplySpecialLabelChip(text: String) {
-    Text(
+    AppText(
         text = text,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
         color = MaterialTheme.colorScheme.primary
     )
 }
@@ -2369,16 +2602,16 @@ private fun ReplyTextAction(
             .clickable { onClick() }
             .padding(end = 8.dp)
     ) {
-        Icon(
+        AppIcon(
             imageVector = Icons.AutoMirrored.Outlined.Reply,
             contentDescription = null,
             tint = appearance.actionTint,
             modifier = Modifier.size(17.dp)
         )
         Spacer(modifier = Modifier.width(3.dp))
-        Text(
+        AppText(
             text = label,
-            fontSize = 13.sp,
+            fontSize = VideoCommentTypographyTokens.action,
             color = appearance.actionTint
         )
     }
@@ -2387,32 +2620,48 @@ private fun ReplyTextAction(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReplyActionSheet(
+    queryAuthorUid: Long = 0L,
     canDelete: Boolean,
     canReport: Boolean,
     canShare: Boolean = true,
     canBlockUser: Boolean = false,
+    canCopyUsername: Boolean = true,
     topActionLabel: String? = null,
     onDismiss: () -> Unit,
     onCopyAll: () -> Unit,
     onFreeCopy: () -> Unit,
+    onCopyUsername: () -> Unit = {},
     onSave: () -> Unit,
     onShare: () -> Unit = {},
     onReply: () -> Unit,
     onBlockUser: () -> Unit = {},
     onReport: () -> Unit,
+    onCheckFraud: () -> Unit = {},
     onToggleTop: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val actions = remember(canDelete, canReport, canShare, canBlockUser, topActionLabel) {
+    val queryAicu = com.android.purebilibili.feature.aicu.LocalAicuNavigation.current
+    val canQueryAuthorHistory = queryAicu != null && queryAuthorUid > 0
+    val actions = remember(
+        canQueryAuthorHistory,
+        canDelete,
+        canReport,
+        canShare,
+        canBlockUser,
+        canCopyUsername,
+        topActionLabel,
+    ) {
         buildReplyActionSheetActions(
             canDelete = canDelete,
             canReport = canReport,
             canShare = canShare,
             canBlockUser = canBlockUser,
-            topActionLabel = topActionLabel
+            topActionLabel = topActionLabel,
+            canCopyUsername = canCopyUsername,
+            canQueryAuthorHistory = canQueryAuthorHistory,
         )
     }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    AppModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2427,11 +2676,14 @@ internal fun ReplyActionSheet(
                         when (action) {
                             ReplyActionSheetAction.COPY_ALL -> onCopyAll()
                             ReplyActionSheetAction.FREE_COPY -> onFreeCopy()
+                            ReplyActionSheetAction.COPY_USERNAME -> onCopyUsername()
+                            ReplyActionSheetAction.QUERY_AUTHOR_HISTORY -> queryAicu?.invoke(queryAuthorUid)
                             ReplyActionSheetAction.SAVE -> onSave()
                             ReplyActionSheetAction.SHARE -> onShare()
                             ReplyActionSheetAction.REPLY -> onReply()
                             ReplyActionSheetAction.BLOCK_USER -> onBlockUser()
                             ReplyActionSheetAction.REPORT -> onReport()
+                            ReplyActionSheetAction.CHECK_FRAUD -> onCheckFraud()
                             ReplyActionSheetAction.TOGGLE_TOP -> onToggleTop()
                             ReplyActionSheetAction.DELETE -> onDelete()
                         }
@@ -2449,9 +2701,9 @@ private fun ReplyActionSheetItem(
     isDestructive: Boolean = false,
     onClick: () -> Unit
 ) {
-    Text(
+    AppText(
         text = label,
-        fontSize = 16.sp,
+        style = MaterialTheme.typography.bodyLarge,
         color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
             .fillMaxWidth()
@@ -2460,7 +2712,7 @@ private fun ReplyActionSheetItem(
     )
 }
 
-//  UP 标签 - PiliPlus small badge style
+//  UP 标签 - BiliPai small badge style
 @Composable
 fun UpTag() {
     UserUpBadge()
@@ -2470,18 +2722,17 @@ fun UpTag() {
 fun TopTag() {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(3.dp))
+            .clip(AppShapes.container(ContainerLevel.Tag))
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(3.dp)
+                shape = AppShapes.container(ContainerLevel.Tag)
             )
             .padding(horizontal = 3.dp, vertical = 2.dp),
     ) {
-        Text(
+        AppText(
             text = "TOP",
-            fontSize = 9.sp,
-            lineHeight = 9.sp,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
@@ -2515,6 +2766,9 @@ fun CommentPictures(
     }
     val context = LocalContext.current
     val totalCount = pictures.size  //  [优化] 保存总图片数用于角标显示
+    val thumbnailDecodeSize = remember {
+        resolveImageDecodeSize(ImageDecodeTarget.COMMENT_THUMBNAIL)
+    }
     
     //  GIF 图片加载器
     val gifImageLoader = context.imageLoader
@@ -2541,7 +2795,7 @@ fun CommentPictures(
                     .heightIn(max = 220.dp)
                     .testTag("${testTagPrefix}0")
                     .aspectRatio(aspectRatio)
-                    .clip(RoundedCornerShape(12.dp))  //  [优化] 更大圆角 8dp → 12dp
+                    .clip(AppShapes.container(ContainerLevel.Card))  //  [优化] 更大圆角 8dp → 12dp
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .onGloballyPositioned { coordinates ->
                         imageRect = coordinates.boundsInWindow()
@@ -2551,8 +2805,8 @@ fun CommentPictures(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(imageUrls[0])
-                        .size(coil.size.Size.ORIGINAL)  //  强制加载原图，避免模糊
-                        .addHeader("Referer", "https://www.bilibili.com/")  //  必需
+                        .size(thumbnailDecodeSize.widthPx, thumbnailDecodeSize.heightPx)
+                        .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())  //  必需
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -2581,7 +2835,7 @@ fun CommentPictures(
                                 modifier = Modifier
                                     .size(85.dp)  //  [优化] 增大尺寸 80dp → 85dp
                                     .testTag("${testTagPrefix}$globalIndex")
-                                    .clip(RoundedCornerShape(10.dp))  //  [优化] 更大圆角 6dp → 10dp
+                                    .clip(AppShapes.container(ContainerLevel.Field))  //  [优化] 更大圆角 6dp → 10dp
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .onGloballyPositioned { coordinates ->
                                         imageRect = coordinates.boundsInWindow()
@@ -2592,8 +2846,8 @@ fun CommentPictures(
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(imageUrls[globalIndex])
-                                        .size(coil.size.Size.ORIGINAL)  //  强制加载原图，避免模糊
-                                        .addHeader("Referer", "https://www.bilibili.com/")  //  必需
+                                        .size(thumbnailDecodeSize.widthPx, thumbnailDecodeSize.heightPx)
+                                        .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())  //  必需
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = null,
@@ -2610,11 +2864,10 @@ fun CommentPictures(
                                             .background(Color.Black.copy(alpha = 0.5f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
+                                        AppText(
                                             "+${totalCount - 9}",
                                             color = Color.White,
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold
+                                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                                         )
                                     }
                                 }

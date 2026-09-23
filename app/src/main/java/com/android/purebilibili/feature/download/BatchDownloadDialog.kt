@@ -16,17 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppCheckbox
+import com.android.purebilibili.core.ui.components.AppFilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppRadioButton
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,6 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.android.purebilibili.core.ui.appContentDialogWidth
+import com.android.purebilibili.core.ui.resolveAppExpandedContentDialogLayoutPolicy
+import com.android.purebilibili.core.ui.resolveAppContentDialogProperties
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppPopupSurface
+import com.android.purebilibili.core.ui.AppPopupSurfaceType
+import com.android.purebilibili.core.ui.ContainerLevel
 
 @Composable
 internal fun BatchDownloadDialog(
@@ -53,12 +57,16 @@ internal fun BatchDownloadDialog(
     var workingCandidates by remember(candidates) { mutableStateOf(candidates) }
     var selectedQuality by remember(currentQuality) { mutableIntStateOf(currentQuality) }
     var includeDanmaku by remember { mutableStateOf(true) }
+    val dialogLayout = remember { resolveAppExpandedContentDialogLayoutPolicy() }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = resolveAppContentDialogProperties(
+            usePlatformDefaultWidth = dialogLayout.usePlatformDefaultWidth,
+        ),
+    ) {
         BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.appContentDialogWidth(policy = dialogLayout, wrapHeight = false),
         ) {
             val screenHeightDp = maxHeight.value.toInt().coerceAtLeast(1)
             val dialogMaxHeight = resolveBatchDownloadDialogMaxHeight(screenHeightDp).dp
@@ -67,14 +75,13 @@ internal fun BatchDownloadDialog(
                 qualityOptionCount = qualityOptions.size
             ).dp
 
-            Card(
+            AppPopupSurface(
+                type = AppPopupSurfaceType.DIALOG,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = dialogMaxHeight),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                shape = AppShapes.container(ContainerLevel.Floating),
+                containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 Column(
                     modifier = Modifier
@@ -82,13 +89,13 @@ internal fun BatchDownloadDialog(
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp)
                 ) {
-                    Text(
+                    AppText(
                         text = "批量缓存",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
+                    AppText(
                         text = title,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -102,21 +109,21 @@ internal fun BatchDownloadDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        FilterChip(
+                        AppFilterChip(
                             selected = false,
                             onClick = {
                                 workingCandidates = selectAllBatchDownloadCandidates(workingCandidates)
                             },
-                            label = { Text("全选") }
+                            label = { AppText("全选") }
                         )
-                        FilterChip(
+                        AppFilterChip(
                             selected = false,
                             onClick = {
                                 workingCandidates = invertBatchDownloadCandidateSelection(workingCandidates)
                             },
-                            label = { Text("反选") }
+                            label = { AppText("反选") }
                         )
-                        FilterChip(
+                        AppFilterChip(
                             selected = false,
                             onClick = {
                                 workingCandidates = selectOnlyUndownloadedBatchCandidates(
@@ -124,13 +131,13 @@ internal fun BatchDownloadDialog(
                                     downloadedIds = downloadedIds
                                 )
                             },
-                            label = { Text("仅未下载") }
+                            label = { AppText("仅未下载") }
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
+                    AppText(
                         text = "选择条目",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
@@ -154,7 +161,7 @@ internal fun BatchDownloadDialog(
                                     .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Checkbox(
+                                AppCheckbox(
                                     checked = candidate.selected,
                                     onCheckedChange = { checked ->
                                         workingCandidates = workingCandidates.map {
@@ -165,13 +172,13 @@ internal fun BatchDownloadDialog(
                                 Column(
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text(
+                                    AppText(
                                         text = candidate.label,
                                         style = MaterialTheme.typography.bodyLarge,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    Text(
+                                    AppText(
                                         text = candidate.title,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -183,15 +190,15 @@ internal fun BatchDownloadDialog(
                                     Box(
                                         modifier = Modifier
                                             .background(
-                                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                                shape = RoundedCornerShape(999.dp)
+                                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                shape = AppShapes.container(ContainerLevel.Pill)
                                             )
                                             .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
-                                        Text(
+                                        AppText(
                                             text = "已存在",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -208,11 +215,11 @@ internal fun BatchDownloadDialog(
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
+                        AppCheckbox(
                             checked = includeDanmaku,
                             onCheckedChange = { includeDanmaku = it }
                         )
-                        Text(
+                        AppText(
                             text = "同时缓存弹幕",
                             style = MaterialTheme.typography.bodyLarge
                         )
@@ -220,7 +227,7 @@ internal fun BatchDownloadDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
+                    AppText(
                         text = "统一画质",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
@@ -235,11 +242,11 @@ internal fun BatchDownloadDialog(
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(
+                            AppRadioButton(
                                 selected = selectedQuality == qualityId,
                                 onClick = { selectedQuality = qualityId }
                             )
-                            Text(
+                            AppText(
                                 text = qualityLabel,
                                 style = MaterialTheme.typography.bodyLarge
                             )
@@ -252,13 +259,13 @@ internal fun BatchDownloadDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        OutlinedButton(
+                        AppOutlinedButton(
                             onClick = onDismiss,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("取消")
+                            AppText("取消")
                         }
-                        Button(
+                        AppButton(
                             onClick = {
                                 onConfirm(
                                     selectedQuality,
@@ -269,7 +276,7 @@ internal fun BatchDownloadDialog(
                             modifier = Modifier.weight(1f),
                             enabled = canConfirmBatchDownload(workingCandidates)
                         ) {
-                            Text("加入下载")
+                            AppText("加入下载")
                         }
                     }
                 }

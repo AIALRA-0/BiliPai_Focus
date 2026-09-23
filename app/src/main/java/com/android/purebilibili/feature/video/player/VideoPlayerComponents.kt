@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.video.player
 
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,10 +11,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,9 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.android.purebilibili.core.theme.BiliPink
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.bouncyClickable
@@ -40,10 +43,14 @@ import com.android.purebilibili.core.theme.ActionFavoriteDark
 import com.android.purebilibili.core.theme.ActionShareDark
 import com.android.purebilibili.core.theme.ActionCommentDark
 import com.android.purebilibili.core.ui.components.UserUpBadge
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
 import com.android.purebilibili.core.ui.rememberAppCoinIcon
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText
 
 //  [重构] 视频标题区域 (官方B站样式：紧凑布局)
 @Composable
@@ -65,10 +72,9 @@ fun VideoTitleSection(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            Text(
+            AppText(
                 text = info.title,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 16.sp,
                     lineHeight = 22.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
@@ -80,8 +86,8 @@ fun VideoTitleSection(
                     .animateContentSize()
             )
             Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
+            AppIcon(
+                imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(18.dp)
@@ -91,9 +97,9 @@ fun VideoTitleSection(
         Spacer(Modifier.height(2.dp))
         
         // 统计行 (官方样式：播放量 • 弹幕 • 日期)
-        Text(
+        AppText(
             text = "${FormatUtils.formatStat(info.stat.view.toLong())}  •  ${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕  •  ${FormatUtils.formatPublishTime(info.pubdate)}",
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             maxLines = 1
         )
@@ -119,11 +125,10 @@ fun VideoTitleWithDesc(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            Text(
+            AppText(
                 text = info.title,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 15.sp,
-                    lineHeight = 21.sp,
+                    lineHeight = 22.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
                 maxLines = if (expanded) Int.MAX_VALUE else 1,
@@ -134,8 +139,8 @@ fun VideoTitleWithDesc(
                     .animateContentSize()
             )
             Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
+            AppIcon(
+                imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(16.dp)
@@ -148,9 +153,9 @@ fun VideoTitleWithDesc(
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
+            AppText(
                 text = "${FormatUtils.formatStat(info.stat.view.toLong())}播放  •  ${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕  •  ${FormatUtils.formatPublishTime(info.pubdate)}",
-                fontSize = 11.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 maxLines = 1
             )
@@ -159,12 +164,9 @@ fun VideoTitleWithDesc(
         //  描述（动态）- 紧接在统计后面
         if (info.desc.isNotBlank()) {
             Spacer(Modifier.height(4.dp))  //  紧凑布局
-            Text(
+            AppText(
                 text = info.desc,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp
-                ),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 maxLines = if (expanded) Int.MAX_VALUE else 2,
                 overflow = TextOverflow.Ellipsis,
@@ -191,16 +193,13 @@ fun UpInfoSection(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 头像
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(info.owner.face))
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            modifier = Modifier
-                .size(36.dp)  //  紧凑布局：稍微缩小头像
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+        com.android.purebilibili.feature.video.ui.section.OwnerDecoratedAvatar(
+            faceUrl = info.owner.face,
+            ownerMid = info.owner.mid,
+            modifier = Modifier.size(36.dp),
+            badgeSize = 12.dp,
+            fallbackOfficialType = info.staff.firstOrNull { it.mid == info.owner.mid }?.official?.type,
+            fallbackVipStatus = info.staff.firstOrNull { it.mid == info.owner.mid }?.vip?.status,
         )
         
         Spacer(Modifier.width(10.dp))
@@ -210,10 +209,9 @@ fun UpInfoSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 UserUpBadge()
                 Spacer(Modifier.width(4.dp))
-                Text(
+                AppText(
                     text = info.owner.name,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -222,10 +220,10 @@ fun UpInfoSection(
         }
         
         // 关注按钮
-        Surface(
+        AppSurface(
             onClick = onFollowClick,
-            color = if (isFollowing) MaterialTheme.colorScheme.surfaceVariant else BiliPink,
-            shape = RoundedCornerShape(16.dp),
+            color = if (isFollowing) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+            shape = AppShapes.container(ContainerLevel.Card),
             modifier = Modifier.height(32.dp)
         ) {
             Row(
@@ -233,19 +231,18 @@ fun UpInfoSection(
                 modifier = Modifier.padding(horizontal = 14.dp)
             ) {
                 if (!isFollowing) {
-                    Icon(
-                        CupertinoIcons.Default.Plus,
+                    AppIcon(
+                        Icons.Outlined.Add,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(2.dp))
                 }
-                Text(
+                AppText(
                     text = if (isFollowing) "已关注" else "关注",
-                    fontSize = 13.sp,
-                    color = if (isFollowing) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                    color = if (isFollowing) MaterialTheme.colorScheme.onSurfaceVariant else Color.White
                 )
             }
         }
@@ -284,7 +281,7 @@ fun ActionButtonsRow(
             icon = if (isLiked) likeFilledIcon else likeIcon,
             text = FormatUtils.formatStat(info.stat.like.toLong()),
             isActive = isLiked,
-            activeColor = BiliPink,
+            activeColor = MaterialTheme.colorScheme.primary,
             onClick = onLikeClick
         )
 
@@ -376,18 +373,17 @@ private fun BiliActionButton(
             ) { onClick() }
             .padding(horizontal = 4.dp, vertical = 2.dp)
     ) {
-        Icon(
+        AppIcon(
             imageVector = icon,
             contentDescription = null,
             tint = iconColor,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
-        Text(
+        AppText(
             text = text,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = textColor,
-            fontWeight = FontWeight.Normal,
             maxLines = 1
         )
     }
@@ -464,7 +460,7 @@ fun ActionButton(
                 .background(iconColor.copy(alpha = if (isDark) 0.15f else 0.1f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
+            AppIcon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconColor,
@@ -472,11 +468,10 @@ fun ActionButton(
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        AppText(
             text = text,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Normal,
             maxLines = 1
         )
     }
@@ -489,7 +484,7 @@ fun DescriptionSection(desc: String) {
 
     if (desc.isBlank()) return
 
-    Surface(
+    AppSurface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.background
     ) {
@@ -499,12 +494,9 @@ fun DescriptionSection(desc: String) {
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .animateContentSize()
         ) {
-            Text(
+            AppText(
                 text = desc,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                ),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
                 maxLines = if (expanded) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Ellipsis
@@ -519,15 +511,14 @@ fun DescriptionSection(desc: String) {
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
+                    AppText(
                         text = if (expanded) "收起" else "展开更多",
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
                     )
                     Spacer(modifier = Modifier.width(2.dp))
-                    Icon(
-                        imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
+                    AppIcon(
+                        imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
@@ -541,7 +532,7 @@ fun DescriptionSection(desc: String) {
 //  4. 推荐视频列表头部
 @Composable
 fun RelatedVideosHeader() {
-    Surface(
+    AppSurface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.background
     ) {
@@ -551,10 +542,9 @@ fun RelatedVideosHeader() {
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
+            AppText(
                 text = "更多推荐",
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
                 color = MaterialTheme.colorScheme.onBackground
@@ -579,7 +569,7 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
         label = "cardScale"
     )
     
-    Surface(
+    AppSurface(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer {
@@ -602,7 +592,7 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                 modifier = Modifier
                     .width(150.dp)
                     .height(94.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(AppShapes.container(ContainerLevel.Card))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
@@ -614,21 +604,12 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                // 时长标签
-                Surface(
+                VideoCardCoverDurationText(
+                    text = FormatUtils.formatDuration(video.duration),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp),
-                    color = Color.Black.copy(alpha = 0.7f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = FormatUtils.formatDuration(video.duration),
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
+                )
                 
                 //  播放量遮罩
                 Box(
@@ -650,17 +631,17 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                         .padding(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        CupertinoIcons.Default.Play,
+                    AppIcon(
+                        Icons.Outlined.PlayArrow,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.9f),
                         modifier = Modifier.size(12.dp)
                     )
                     Spacer(modifier = Modifier.width(2.dp))
-                    Text(
+                    AppText(
                         text = FormatUtils.formatStat(video.stat.view.toLong()),
                         color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 10.sp
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
             }
@@ -675,10 +656,9 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // 标题
-                Text(
+                AppText(
                     text = video.title,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 14.sp,
                         lineHeight = 19.sp,
                         fontWeight = FontWeight.Medium
                     ),
@@ -694,11 +674,10 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                     ) {
                         UserUpBadge()
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(
+                        AppText(
                             text = video.owner.name,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -710,28 +689,28 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            CupertinoIcons.Default.Play,
+                        AppIcon(
+                            Icons.Outlined.PlayArrow,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
-                        Text(
+                        AppText(
                             text = FormatUtils.formatStat(video.stat.view.toLong()),
-                            fontSize = 11.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
+                        AppText(
                             text = "·",
-                            fontSize = 11.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
+                        AppText(
                             text = "${FormatUtils.formatStat(video.stat.danmaku.toLong())}弹幕",
-                            fontSize = 11.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                     }
@@ -769,18 +748,17 @@ fun PagesSelector(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
+                AppText(
                     text = "选集",
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
+                AppText(
                     text = "(${pages.size}P)",
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
@@ -792,14 +770,13 @@ fun PagesSelector(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
+                AppText(
                     text = if (isExpanded) "收起" else "展开",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.primary
                 )
-                Icon(
-                    imageVector = if (isExpanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
+                AppIcon(
+                    imageVector = if (isExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
@@ -829,25 +806,24 @@ fun PagesSelector(
                             val actualIndex = rowIndex * columns + colIndex
                             val isSelected = actualIndex == currentPageIndex
                             
-                            Surface(
+                            AppSurface(
                                 onClick = { onPageSelect(actualIndex) },
                                 color = if (isSelected) selectedColors.backgroundColor else MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = AppShapes.container(ContainerLevel.Chip),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
                                 ) {
-                                    Text(
+                                    AppText(
                                         text = "P${page.page}",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                         color = if (isSelected) selectedColors.contentColor else MaterialTheme.colorScheme.primary
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
+                                    AppText(
                                         text = page.part.ifEmpty { "第${page.page}P" },
-                                        fontSize = 12.sp,
+                                        style = MaterialTheme.typography.bodySmall,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (isSelected) selectedColors.contentColor.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -873,25 +849,24 @@ fun PagesSelector(
                     val page = pages[index]
                     val isSelected = index == currentPageIndex
                     
-                    Surface(
+                    AppSurface(
                         onClick = { onPageSelect(index) },
                         color = if (isSelected) selectedColors.backgroundColor else MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = AppShapes.container(ContainerLevel.Chip),
                         modifier = Modifier.width(120.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                         ) {
-                            Text(
+                            AppText(
                                 text = "P${page.page}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = if (isSelected) selectedColors.contentColor else MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
+                            AppText(
                                 text = page.part.ifEmpty { "第${page.page}P" },
-                                fontSize = 13.sp,
+                                style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 color = if (isSelected) selectedColors.contentColor.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant

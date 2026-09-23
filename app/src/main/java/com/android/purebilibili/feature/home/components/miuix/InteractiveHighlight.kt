@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.util.fastCoerceIn
+import com.android.purebilibili.feature.home.components.DOCK_HIGHLIGHT_COMPACT_RADIUS_FACTOR
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.intellij.lang.annotations.Language
@@ -23,13 +24,12 @@ import org.intellij.lang.annotations.Language
 @SuppressLint("NewApi")
 class InteractiveHighlight(
     val animationScope: CoroutineScope,
-    val position: (size: Size, offset: Offset) -> Offset = { _, offset -> offset }
+    val position: (size: Size, offset: Offset) -> Offset = { _, offset -> offset },
+    val radius: (size: Size) -> Float = { size -> size.minDimension * DOCK_HIGHLIGHT_COMPACT_RADIUS_FACTOR },
 ) {
 
-    private val pressProgressAnimationSpec =
-        spring(0.5f, 300f, 0.001f)
-    private val positionAnimationSpec =
-        spring(0.5f, 300f, Offset.VisibilityThreshold)
+    private val pressProgressAnimationSpec = interactiveHighlightPressSpec()
+    private val positionAnimationSpec = interactiveHighlightPositionSpec()
 
     private val pressProgressAnimation =
         Animatable(0f, 0.001f)
@@ -38,6 +38,15 @@ class InteractiveHighlight(
 
     private var startPosition = Offset.Zero
     val offset: Offset get() = positionAnimation.value - startPosition
+
+    fun setPressed(pressed: Boolean) {
+        animationScope.launch {
+            pressProgressAnimation.animateTo(
+                if (pressed) 1f else 0f,
+                pressProgressAnimationSpec,
+            )
+        }
+    }
 
     @Language("AGSL")
     private val shader =
@@ -60,14 +69,17 @@ class InteractiveHighlight(
             val progress = pressProgressAnimation.value
             if (progress > 0f) {
                 drawRect(
-                    Color.White.copy(0.06f * progress),
+                    InteractiveHighlightPalette.Content.copy(0.06f * progress),
                     blendMode = BlendMode.Plus
                 )
                 shader.apply {
                     val position = position(size, positionAnimation.value)
                     setFloatUniform("size", size.width, size.height)
-                    setColorUniform("color", Color.White.copy(0.12f * progress).toArgb())
-                    setFloatUniform("radius", size.minDimension * 1.2f)
+                    setColorUniform(
+                        "color",
+                        InteractiveHighlightPalette.Content.copy(0.12f * progress).toArgb(),
+                    )
+                    setFloatUniform("radius", radius(size))
                     setFloatUniform(
                         "position",
                         position.x.fastCoerceIn(0f, size.width),

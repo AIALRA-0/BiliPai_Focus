@@ -1,10 +1,19 @@
 package com.android.purebilibili.core.plugin
 
 import com.android.purebilibili.data.model.response.VideoItem
+import kotlinx.serialization.Serializable
 
+@Serializable
 enum class RecommendationMode {
     RELAX,
     LEARN
+}
+
+@Serializable
+enum class RecommendationStrategy {
+    BALANCED,
+    AFFINITY,
+    EXPLORE
 }
 
 data class RecommendationCreatorSignal(
@@ -34,7 +43,8 @@ data class RecommendationRequest(
     val sceneSignals: RecommendationSceneSignals = RecommendationSceneSignals(eyeCareNightActive = false),
     val mode: RecommendationMode,
     val queueLimit: Int,
-    val groupLimit: Int
+    val groupLimit: Int,
+    val strategy: RecommendationStrategy = RecommendationStrategy.BALANCED
 )
 
 data class RecommendedVideo(
@@ -61,7 +71,8 @@ data class RecommendationGroupItem(
     val id: String,
     val title: String,
     val subtitle: String? = null,
-    val score: Double? = null
+    val score: Double? = null,
+    val watchCount: Int? = null
 )
 
 data class RecommendationResult(

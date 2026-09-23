@@ -19,3 +19,16 @@ internal fun selectPreferredAppUpdateAsset(
         )
         .firstOrNull()
 }
+
+/** Prefer the checksum published with the asset, then fall back to release build metadata. */
+internal fun resolveAppUpdateExpectedSha256(
+    asset: AppUpdateAsset,
+    buildMetadata: AppReleaseBuildMetadata?
+): String? {
+    return asset.sha256Digest ?: buildMetadata
+        ?.artifacts
+        ?.firstOrNull { it.name.equals(asset.name, ignoreCase = true) }
+        ?.sha256
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+}

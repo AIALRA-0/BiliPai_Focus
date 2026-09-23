@@ -10,15 +10,23 @@ import kotlin.test.assertTrue
 class LoginEntryPolicyTest {
 
     @Test
-    fun `login methods should only expose qr code entry`() {
-        assertEquals(listOf(LoginMethod.QR_CODE), resolveAvailableLoginMethods())
+    fun `login methods hide the temporary Bilibili scan entry`() {
+        assertEquals(
+            listOf(
+                LoginMethod.TV_QR,
+                LoginMethod.PASSWORD,
+                LoginMethod.SMS,
+                LoginMethod.COOKIE_IMPORT
+            ),
+            resolveAvailableLoginMethods()
+        )
     }
 
     @Test
-    fun `qr login reason should explain why scan is required`() {
+    fun `qr login reason should explain its high quality benefit`() {
         val reason = resolveQrLoginReason()
 
-        assertTrue(reason.contains("当前仅保留扫码登录"))
+        assertTrue(reason.contains("推荐使用 TV 扫码登录"))
         assertTrue(reason.contains("高画质"))
     }
 

@@ -1,0 +1,53 @@
+name: 错误反馈
+description:
+  报告错误。
+labels: bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请确认在你提交之前你使用的是最新版本，你可以在软件的设置页内通过检测更新获取最新版本。
+        请确认你询问的不是插件相关的问题。如果你询问插件相关问题，我们会直接关闭。
+        为了提高解决问题的效率，我们建议你仔细描述错误。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 在发布提问之前...
+      options:
+      - label: 我已经阅读了上方的内容。
+        required: true
+      - label: 我明白我询问的不是插件相关的问题。
+        required: true
+      - label: 我已经搜索了现有的 issues，没有重复提交。
+  - type: input
+    id: BiliPai-version
+    attributes:
+      label: 软件版本
+      description: |
+        请输入你正在使用的BiliPai版本。
+      placeholder: 例如1.0.1
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 设备信息
+      description: |
+        请输入你遇到错误的设备的信息。
+      placeholder: 例如：OPPO Find X3 Pro, Android 13, arm64。
+    validations:
+      required: true
+  - type: textarea
+    id: bug-report
+    attributes:
+      label: 问题描述
+      description: |
+        请尽可能详细地描述问题，特别是你是如何遇到这个bug的。
+    validations:
+      required: true
+  - type: textarea
+    id: crash-report
+    attributes:
+      label: 崩溃报告
+      description: |
+        如果有崩溃报告，请在下面上传(文件)。

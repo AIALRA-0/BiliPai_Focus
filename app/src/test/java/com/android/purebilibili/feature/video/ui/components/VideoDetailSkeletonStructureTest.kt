@@ -29,9 +29,10 @@ class VideoDetailSkeletonStructureTest {
         assertTrue(source.contains("VideoDetailTabBarSkeleton()"))
         assertTrue(source.contains("VideoDetailUpInfoSkeleton()"))
         assertTrue(source.contains("VideoDetailActionButtonsSkeleton()"))
-        assertTrue(source.contains("val relatedCoverWidth = 130.dp"))
-        assertTrue(source.contains("relatedCoverWidth / VIDEO_SHARED_COVER_ASPECT_RATIO"))
-        assertTrue(source.contains(".padding(5.dp)"))
+        assertTrue(source.contains("HorizontalVideoCardFrame("))
+        assertTrue(source.contains("HORIZONTAL_VIDEO_CARD_COVER_ASPECT_RATIO"))
+        assertTrue(source.contains("coverAspectRatio = cardLayout.coverAspectRatio"))
+        assertTrue(source.contains("cardLayout.outerPaddingDp.dp"))
         assertTrue(source.contains("RoundedCornerShape(12.dp)"))
     }
 

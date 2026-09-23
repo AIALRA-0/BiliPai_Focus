@@ -13,6 +13,16 @@ internal fun shouldHoldPlaybackTransitionPosition(
     return abs(playerPositionMs - targetPositionMs) > toleranceMs
 }
 
+internal fun shouldHoldPlaybackResumeTransitionPosition(
+    playerPositionMs: Long,
+    transitionPositionMs: Long?,
+    toleranceMs: Long = PLAYBACK_TRANSITION_POSITION_TOLERANCE_MS
+): Boolean {
+    val targetPositionMs = transitionPositionMs ?: return false
+    // 媒体源恢复后只会向前播放，越过目标点也必须释放覆盖进度。
+    return playerPositionMs < targetPositionMs - toleranceMs
+}
+
 internal fun resolveDisplayedPlaybackTransitionPosition(
     playerPositionMs: Long,
     transitionPositionMs: Long?

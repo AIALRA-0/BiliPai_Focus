@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.rounded.ThumbUp
-import androidx.compose.material3.Icon
+import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,6 +36,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.AppIcons
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
+import com.android.purebilibili.core.plugin.skin.UiSkinAnimatedAsset
+import com.android.purebilibili.core.plugin.skin.UiSkinSurface
+import com.android.purebilibili.core.plugin.skin.assetPath
 import com.android.purebilibili.feature.video.ui.feedback.resolveTripleActionMotionSpec
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -47,6 +51,24 @@ fun LikeBurstAnimation(
     onAnimationEnd: () -> Unit = {}
 ) {
     if (!visible) return
+
+    val uiSkinState = LocalUiSkinState.current
+    val skinLikeEffectPath = uiSkinState.assetPath(UiSkinSurface.LIKE_EFFECT) {
+        it.likeEffectAnimation ?: it.likeEffectPreview
+    }
+    if (skinLikeEffectPath != null) {
+        LaunchedEffect(skinLikeEffectPath, visible) {
+            delay(if (reducedMotion) 300 else 800)
+            onAnimationEnd()
+        }
+        UiSkinAnimatedAsset(
+            path = skinLikeEffectPath,
+            size = if (reducedMotion) 72.dp else 88.dp,
+            iterations = 1,
+            contentDescription = null,
+        )
+        return
+    }
 
     val progress = remember { Animatable(0f) }
     val durationMillis = if (reducedMotion) 260 else 420
@@ -96,7 +118,7 @@ fun LikeBurstAnimation(
             )
         }
 
-        Icon(
+        AppIcon(
             imageVector = Icons.Rounded.ThumbUp,
             contentDescription = null,
             tint = primary.copy(alpha = 0.98f),
@@ -275,7 +297,7 @@ fun TripleSuccessAnimation(
             },
             contentAlignment = Alignment.Center
         ) {
-            Icon(
+            AppIcon(
                 imageVector = Icons.Rounded.ThumbUp,
                 contentDescription = null,
                 tint = primary,
@@ -283,7 +305,7 @@ fun TripleSuccessAnimation(
             )
         }
 
-        Text(
+        AppText(
             text = "三连完成!",
             color = accent.copy(alpha = badgeAlpha),
             fontSize = if (isCompact) 22.sp else 26.sp,
@@ -296,7 +318,7 @@ fun TripleSuccessAnimation(
                     translationY = (1f - resolutionProgress).coerceIn(0f, 1f) * 18f
                 }
         )
-        Text(
+        AppText(
             text = "点赞  投币  收藏",
             color = accent.copy(alpha = badgeAlpha * 0.9f),
             fontSize = if (isCompact) 12.sp else 14.sp,
@@ -328,7 +350,7 @@ private fun BoxScope.TripleActionIcon(
     val alpha = (activationProgress * (1f - dissolveProgress * 0.85f)).coerceIn(0f, 1f)
     val scale = 0.78f + (activationProgress * 0.24f) - (convergenceProgress * 0.06f)
 
-    Icon(
+    AppIcon(
         imageVector = image,
         contentDescription = null,
         tint = tint.copy(alpha = alpha),
@@ -382,7 +404,7 @@ fun CoinSuccessAnimation(
         modifier = Modifier.size(80.dp),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
+        AppIcon(
             imageVector = AppIcons.BiliCoin,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary.copy(alpha = 1f - progress * 0.12f),

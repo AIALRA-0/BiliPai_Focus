@@ -88,6 +88,58 @@ class SearchModelsParsingTest {
     }
 
     @Test
+    fun searchVideoItem_preservesHighlightedTitleForUi() {
+        val item = SearchVideoItem(
+            id = 1L,
+            bvid = "BV1",
+            title = "这是<em class=\"keyword\">关键词</em>视频",
+            pic = "",
+            author = "tester"
+        )
+
+        val video = item.toVideoItem()
+
+        assertEquals("这是关键词视频", video.title)
+        assertEquals("这是<em class=\"keyword\">关键词</em>视频", video.searchHighlightedTitle)
+    }
+
+    @Test
+    fun decodeSearchResponse_preservesClassroomNavigationFields() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "result": [
+                  {
+                    "result_type": "video",
+                    "data": [
+                      {
+                        "type": "ketang",
+                        "id": 37632,
+                        "bvid": "",
+                        "arcurl": "https://www.bilibili.com/cheese/play/ss37632",
+                        "title": "系统课程"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val video = json.decodeFromString<SearchResponse>(payload)
+            .data
+            ?.result
+            ?.first()
+            ?.data
+            ?.first()
+            ?.toVideoItem()
+
+        assertEquals("ketang", video?.contentType)
+        assertEquals("https://www.bilibili.com/cheese/play/ss37632", video?.navigationUrl)
+    }
+
+    @Test
     fun decodeSearchArticleResponse_cleansHtmlAndProtocolRelativeImages() {
         val payload = """
             {

@@ -12,5 +12,10 @@ data class HomeVideoClickRequest(
     val cid: Long = 0L,
     val coverUrl: String = "",
     val isVerticalVideo: Boolean = false,
-    val source: HomeVideoClickSource = HomeVideoClickSource.GRID
+    val source: HomeVideoClickSource = HomeVideoClickSource.GRID,
+    val sourceRoute: String? = null
 )
+
+fun resolveHomeCategoryVideoSourceRoute(category: HomeCategory): String {
+    return "home?category=${category.name}"
+}

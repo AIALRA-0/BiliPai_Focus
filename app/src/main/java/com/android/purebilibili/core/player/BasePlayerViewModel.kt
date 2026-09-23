@@ -1,13 +1,20 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.android.purebilibili.core.player
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.source.ConcatenatingMediaSource
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.android.purebilibili.core.network.NetworkModule
@@ -21,11 +28,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
+import java.security.MessageDigest
 
 /**
  * 播放器基类 ViewModel
  * 
- * 提供 PlayerViewModel 和 BangumiPlayerViewModel 共用的功能：
+ * 提供 VideoPlaybackViewModel 和 BangumiPlayerViewModel 共用的功能：
  * 1. ExoPlayer 管理
  * 2. 空降助手 (SponsorBlock) 逻辑
  * 3. DASH 视频播放
@@ -41,7 +50,7 @@ abstract class BasePlayerViewModel : ViewModel() {
      */
     open fun attachPlayer(player: ExoPlayer) {
         this.exoPlayer = player
-        player.volume = 1.0f
+        PlayerVolumeController.applyPreferredVolume(player)
     }
     
     /**
@@ -188,7 +197,8 @@ abstract class BasePlayerViewModel : ViewModel() {
         audioUrl: String?, 
         seekToMs: Long = 0L,
         resetPlayer: Boolean = true,
-        referer: String = "https://www.bilibili.com"
+        referer: String = "https://www.bilibili.com",
+        dashManifest: String? = null
     ) {
         val player = exoPlayer
         if (player == null) {
@@ -197,17 +207,21 @@ abstract class BasePlayerViewModel : ViewModel() {
         }
         Logger.d(TAG, "▶️ playDashVideo: referer=$referer, seekTo=${seekToMs}ms, reset=$resetPlayer, video=${videoUrl.take(50)}...")
         
-        player.volume = 1.0f
+        PlayerVolumeController.applyPreferredVolume(player)
         
         val mediaSourceFactory = buildProgressiveMediaSourceFactory(referer)
-        
-        val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(videoUrl))
-        
-        val finalSource = if (!audioUrl.isNullOrEmpty()) {
-            val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUrl))
-            MergingMediaSource(videoSource, audioSource)
-        } else {
-            videoSource
+
+        val finalSource = createDashMediaSource(
+            manifest = dashManifest,
+            referer = referer
+        ) ?: run {
+            val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(videoUrl))
+            if (!audioUrl.isNullOrEmpty()) {
+                val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUrl))
+                MergingMediaSource(videoSource, audioSource)
+            } else {
+                videoSource
+            }
         }
         
         //  [修复] 使用 resetPosition=false 减少切换时的闪烁
@@ -218,6 +232,49 @@ abstract class BasePlayerViewModel : ViewModel() {
         }
         player.playWhenReady = true
         Logger.d(TAG, "✅ playDashVideo: Player prepared and started, playWhenReady=true")
+    }
+
+    /**
+     * Media3 cannot infer the initialization/index ranges of Bilibili's standalone m4s URLs
+     * from a pair of progressive sources. When the API gives us a complete DASH description,
+     * use a small local MPD so Media3 requests the fMP4 byte ranges correctly.
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun createDashMediaSource(
+        manifest: String?,
+        referer: String
+    ): MediaSource? {
+        if (manifest.isNullOrBlank()) return null
+        val context = NetworkModule.appContext ?: return null
+        val manifestUri = writeDashManifest(context, manifest) ?: return null
+        val headers = mapOf(
+            "Referer" to referer,
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
+        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
+            .setDefaultRequestProperties(headers)
+        val cachedFactory = PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
+        val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(context, cachedFactory)
+        val mediaItem = MediaItem.Builder()
+            .setUri(manifestUri)
+            .setMimeType(MimeTypes.APPLICATION_MPD)
+            .build()
+        return DashMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+    }
+
+    private fun writeDashManifest(context: Context, manifest: String): Uri? {
+        return runCatching {
+            val digest = MessageDigest.getInstance("SHA-256")
+                .digest(manifest.toByteArray())
+                .take(12)
+                .joinToString(separator = "") { byte -> "%02x".format(byte) }
+            val directory = File(context.cacheDir, "bangumi_dash_manifests").apply { mkdirs() }
+            val file = File(directory, "dash_$digest.mpd")
+            if (!file.exists()) file.writeText(manifest)
+            Uri.fromFile(file)
+        }.onFailure { error ->
+            Logger.w(TAG, "⚠️ 无法写入课程 DASH manifest: ${error.message}")
+        }.getOrNull()
     }
 
     /**
@@ -245,7 +302,7 @@ abstract class BasePlayerViewModel : ViewModel() {
             return
         }
 
-        player.volume = 1.0f
+        PlayerVolumeController.applyPreferredVolume(player)
         val mediaSourceFactory = buildProgressiveMediaSourceFactory(referer)
         val concatenated = ConcatenatingMediaSource().apply {
             cleanUrls.forEach { url ->
@@ -290,7 +347,7 @@ abstract class BasePlayerViewModel : ViewModel() {
         val player = exoPlayer ?: return
         Logger.d(TAG, " playVideo: seekTo=${seekToMs}ms, url=${url.take(50)}...")
         
-        player.volume = 1.0f
+        PlayerVolumeController.applyPreferredVolume(player)
         
         val mediaSource = buildProgressiveMediaSourceFactory("https://www.bilibili.com")
             .createMediaSource(MediaItem.fromUri(url))

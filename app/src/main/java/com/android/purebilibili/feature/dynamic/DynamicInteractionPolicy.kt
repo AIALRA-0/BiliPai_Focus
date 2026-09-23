@@ -2,11 +2,23 @@ package com.android.purebilibili.feature.dynamic
 
 import com.android.purebilibili.data.model.response.DynamicBasic
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 
 internal data class DynamicCommentTarget(
     val oid: Long,
     val type: Int
 )
+
+internal fun shouldApplyDynamicCommentPageResult(
+    activeRequestId: Long,
+    requestId: Long,
+    activeTarget: DynamicCommentTarget?,
+    requestTarget: DynamicCommentTarget,
+    activeSortMode: CommentSortMode,
+    requestSortMode: CommentSortMode,
+): Boolean = activeRequestId == requestId &&
+    activeTarget == requestTarget &&
+    activeSortMode == requestSortMode
 
 private val DESKTOP_DYNAMIC_COMMENT_TYPES = setOf(
     "DYNAMIC_TYPE_WORD",
@@ -41,11 +53,16 @@ internal fun shouldIncludeDynamicItemInVideoTab(item: DynamicItem): Boolean {
 }
 
 internal fun shouldIncludeDynamicItemInPgcTab(item: DynamicItem): Boolean {
-    return when (item.type.trim()) {
-        "DYNAMIC_TYPE_PGC",
-        "DYNAMIC_TYPE_PGC_UNION" -> true
-        else -> false
+    if (item.type.trim() in setOf(
+            "DYNAMIC_TYPE_PGC",
+            "DYNAMIC_TYPE_PGC_UNION"
+        )
+    ) {
+        return true
     }
+
+    val major = item.modules.module_dynamic?.major
+    return major?.type == "MAJOR_TYPE_PGC" || major?.pgc != null
 }
 
 internal fun shouldIncludeDynamicItemInArticleTab(item: DynamicItem): Boolean {
@@ -55,7 +72,7 @@ internal fun shouldIncludeDynamicItemInArticleTab(item: DynamicItem): Boolean {
         "DYNAMIC_TYPE_WORD" -> true
         else -> {
             val major = item.modules.module_dynamic?.major
-            major?.opus != null || major?.draw != null
+            major?.opus != null || major?.draw != null || major?.article != null
         }
     }
 }
@@ -67,6 +84,17 @@ internal fun shouldIncludeDynamicItemInUpTab(item: DynamicItem): Boolean {
 }
 
 internal fun resolveDynamicCommentTarget(item: DynamicItem): DynamicCommentTarget? {
+    if (item.type.trim() == "DYNAMIC_TYPE_FORWARD") {
+        item.id_str.toPositiveLongOrNull()?.let {
+            return DynamicCommentTarget(oid = it, type = 17)
+        }
+    }
+
+    // The dynamic API explicitly supplies the reply subject as basic.comment_id_str +
+    // basic.comment_type. Prefer it over display-shape inference (for example OPUS),
+    // because an image dynamic may render as OPUS while still using reply type 11.
+    resolveCommentTargetFromBasic(item.basic)?.let { return it }
+
     val major = item.modules.module_dynamic?.major
     when (major?.type.orEmpty()) {
         "MAJOR_TYPE_OPUS" -> {
@@ -91,58 +119,45 @@ internal fun resolveDynamicCommentTarget(item: DynamicItem): DynamicCommentTarge
         }
     }
 
-    val basic = item.basic
     return when (item.type.trim()) {
         "DYNAMIC_TYPE_AV",
         "DYNAMIC_TYPE_PGC",
         "DYNAMIC_TYPE_PGC_UNION",
         "DYNAMIC_TYPE_UGC_SEASON" -> {
-            val oid = resolveCommentTargetFromBasic(basic)?.takeIf { it.type == 1 }?.oid
-                ?: major?.archive?.aid?.toPositiveLongOrNull()
+            val oid = major?.archive?.aid?.toPositiveLongOrNull()
                 ?: major?.pgc?.aid?.toPositiveLongOrNull()
                 ?: major?.ugc_season?.aid?.takeIf { it > 0L }
                 ?: return null
             DynamicCommentTarget(oid = oid, type = 1)
         }
         "DYNAMIC_TYPE_DRAW" -> {
-            resolveCommentTargetFromBasic(basic)?.let { target ->
-                if (target.type == 11) return target
-            }
             val drawId = major?.draw?.id?.takeIf { it > 0L } ?: return item.id_str.toPositiveLongOrNull()
                 ?.let { DynamicCommentTarget(oid = it, type = 17) }
             DynamicCommentTarget(oid = drawId, type = 11)
         }
+        "DYNAMIC_TYPE_FORWARD" -> {
+            val oid = item.id_str.toPositiveLongOrNull() ?: return null
+            DynamicCommentTarget(oid = oid, type = 17)
+        }
         "DYNAMIC_TYPE_WORD",
-        "DYNAMIC_TYPE_FORWARD",
         "DYNAMIC_TYPE_LIVE_RCMD",
         "DYNAMIC_TYPE_COMMON_SQUARE",
         "DYNAMIC_TYPE_COMMON_VERTICAL" -> {
             val oid = item.id_str.toPositiveLongOrNull()
-                ?: resolveCommentTargetFromBasic(basic)?.oid
                 ?: return null
             DynamicCommentTarget(oid = oid, type = 17)
         }
         "DYNAMIC_TYPE_ARTICLE" -> {
-            resolveCommentTargetFromBasic(basic)?.let { target ->
-                if (target.type == 12) return target
-            }
             return null
         }
         "DYNAMIC_TYPE_MUSIC" -> {
-            resolveCommentTargetFromBasic(basic)?.let { target ->
-                if (target.type == 14) return target
-            }
             return null
         }
         "DYNAMIC_TYPE_MEDIALIST" -> {
-            resolveCommentTargetFromBasic(basic)?.let { target ->
-                if (target.type == 19) return target
-            }
             return null
         }
         else -> {
             val oid = item.id_str.toPositiveLongOrNull()
-                ?: resolveCommentTargetFromBasic(basic)?.oid
                 ?: return null
             DynamicCommentTarget(oid = oid, type = 17)
         }
@@ -151,6 +166,13 @@ internal fun resolveDynamicCommentTarget(item: DynamicItem): DynamicCommentTarge
 
 internal fun resolveDynamicCommentTargets(item: DynamicItem): List<DynamicCommentTarget> {
     val targets = linkedSetOf<DynamicCommentTarget>()
+
+    if (item.type.trim() == "DYNAMIC_TYPE_FORWARD") {
+        item.id_str.toPositiveLongOrNull()?.let {
+            targets += DynamicCommentTarget(oid = it, type = 17)
+        }
+    }
+
     val primary = resolveDynamicCommentTarget(item)
     if (primary != null) targets += primary
 
@@ -165,8 +187,9 @@ internal fun resolveDynamicCommentTargets(item: DynamicItem): List<DynamicCommen
         ?.let { DynamicCommentTarget(oid = it, type = 17) }
     if (desktopDynamicTarget != null) targets += desktopDynamicTarget
 
-    if (targets.isEmpty()) {
-        item.orig?.let { return resolveDynamicCommentTargets(it) }
+    item.orig?.let { origItem ->
+        targets += resolveDynamicCommentTargets(origItem)
     }
+
     return targets.toList()
 }

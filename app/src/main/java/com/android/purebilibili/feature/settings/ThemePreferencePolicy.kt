@@ -90,6 +90,14 @@ internal fun normalizeMd3CustomColorHex(
     }
 }
 
+internal fun isValidMd3CustomColorHex(rawValue: String?): Boolean {
+    val rawHex = rawValue
+        ?.trim()
+        ?.removePrefix("#")
+        ?: return false
+    return rawHex.length == 6 && rawHex.all(Char::isHexDigit)
+}
+
 private fun Char.isHexDigit(): Boolean {
     return this in '0'..'9' || this in 'A'..'F' || this in 'a'..'f'
 }

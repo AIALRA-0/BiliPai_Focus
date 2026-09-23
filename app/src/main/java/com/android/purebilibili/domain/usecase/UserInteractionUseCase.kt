@@ -23,7 +23,7 @@ data class TripleActionResult(
  * 4. 处理关注/取关
  * 5. 处理一键三连
  * 
- * 将用户交互逻辑从 PlayerViewModel 中抽离
+ * 将用户交互逻辑从 VideoPlaybackViewModel 中抽离
  */
 class UserInteractionUseCase {
     

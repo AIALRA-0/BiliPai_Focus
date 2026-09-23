@@ -385,11 +385,16 @@ class BangumiViewModel : ViewModel() {
     /**
      * 加载番剧详情
      */
-    fun loadSeasonDetail(seasonId: Long, epId: Long = 0) {
+    fun loadSeasonDetail(seasonId: Long, epId: Long = 0, mediaId: Long = 0) {
         viewModelScope.launch {
             _detailState.value = BangumiDetailState.Loading
             
-            BangumiRepository.getSeasonDetail(seasonId, epId).fold(
+            val detailResult = if (mediaId > 0L && seasonId <= 0L && epId <= 0L) {
+                BangumiRepository.getSeasonDetailByMediaId(mediaId)
+            } else {
+                BangumiRepository.getSeasonDetail(seasonId, epId)
+            }
+            detailResult.fold(
                 onSuccess = { detail ->
                     //  获取真实的 seasonId (如果传入的是 0 或错误的 ID，这里会纠正)
                     val realSeasonId = detail.seasonId

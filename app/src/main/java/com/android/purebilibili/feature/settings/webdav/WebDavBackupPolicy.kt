@@ -33,6 +33,40 @@ internal fun ensureWebDavCollectionUrl(url: String): String {
     return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
 }
 
+/**
+ * 目录创建决策:多数 WebDAV 服务器对「已存在目录」的 MKCOL 返回 405,
+ * 但部分实现(409/412/403 等)会让无条件 MKCOL 直接失败。因此创建前先
+ * PROPFIND(Depth: 0)探测:已存在则跳过,404 才创建,探测异常时回退
+ * 幂等 MKCOL 并再次确认。
+ */
+internal enum class WebDavDirectoryAction {
+    /** 探测确认已存在,无需创建。 */
+    EXISTS,
+
+    /** 探测为 404,需要 MKCOL 创建。 */
+    CREATE,
+
+    /** 探测异常(非 404 非成功),回退幂等 MKCOL 并再次确认。 */
+    CREATE_OR_VERIFY,
+}
+
+internal fun resolveWebDavDirectoryAction(
+    probeStatus: Int?,
+): WebDavDirectoryAction = when (probeStatus) {
+    in setOf(200, 207) -> WebDavDirectoryAction.EXISTS
+    404 -> WebDavDirectoryAction.CREATE
+    else -> WebDavDirectoryAction.CREATE_OR_VERIFY
+}
+
+internal fun resolveWebDavDirectoryProbeError(
+    probeStatus: Int,
+    url: String,
+): String = when (probeStatus) {
+    401 -> "WebDAV 认证失败(401),请检查用户名/密码: $url"
+    403 -> "WebDAV 无权限访问该目录(403): $url"
+    else -> "无法访问 WebDAV 目录: HTTP $probeStatus ($url)"
+}
+
 internal fun buildWebDavPropfindBody(): String {
     return """
         <?xml version="1.0" encoding="utf-8"?>

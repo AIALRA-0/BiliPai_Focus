@@ -43,7 +43,12 @@ class SpaceAggregatedModelMappingTest {
                     sex = "女",
                     attention = 28,
                     fans = 46,
-                    officialVerify = SpaceOfficial(type = 0, title = "认证", desc = "官方认证"),
+                    officialVerify = SpaceOfficial(
+                        type = 0,
+                        title = "认证",
+                        spliceTitle = "bilibili 知名游戏UP主",
+                        desc = "官方认证"
+                    ),
                     vip = SpaceVip(status = 1, type = 2, label = SpaceVipLabel(text = "年度大会员")),
                     levelInfo = SpaceAggregateLevelInfo(currentLevel = 5),
                     likes = SpaceAggregateLikes(likeNum = 422L),
@@ -186,6 +191,7 @@ class SpaceAggregatedModelMappingTest {
         )
 
         assertNotNull(seed)
+        assertEquals("bilibili 知名游戏UP主", seed.userInfo.official.spliceTitle)
         assertEquals(42L, seed.userInfo.mid)
         assertEquals("不不不加点糖", seed.userInfo.name)
         assertEquals("https://i0.hdslb.com/bfs/space/cover.jpg", seed.userInfo.topPhoto)
@@ -202,9 +208,9 @@ class SpaceAggregatedModelMappingTest {
         assertEquals("BVlike1", seed.homeLikeVideos.single().bvid)
         assertEquals("5566", seed.homeBangumiItems.single().param)
         assertEquals("7788", seed.homeComicItems.single().param)
-        assertEquals(SpaceMainTab.CONTRIBUTION, seed.defaultMainTab)
+        assertEquals(SpaceMainTab.HOME, seed.defaultMainTab)
         assertEquals(SpaceSubTab.VIDEO, seed.defaultSubTab)
-        assertEquals(listOf("主页", "动态", "投稿"), seed.mainTabs.map { it.title })
+        assertEquals(listOf("主页", "动态", "投稿", "收藏", "追番"), seed.mainTabs.map { it.title })
         assertEquals(listOf("视频", "图文", "赛季合集"), seed.contributionTabs.map { it.title })
         assertEquals(88L, seed.contributionTabs.last().seasonId)
     }

@@ -11,14 +11,37 @@ internal sealed interface SpaceDynamicClickAction {
     data class OpenVideo(val bvid: String) : SpaceDynamicClickAction
     data class OpenArticle(val articleId: Long, val title: String) : SpaceDynamicClickAction
     data class OpenDynamicDetail(val dynamicId: String) : SpaceDynamicClickAction
+    data class OpenUser(val mid: Long) : SpaceDynamicClickAction
     data object None : SpaceDynamicClickAction
 }
 
+/**
+ * Prefer the forward post itself when opening from the outer card; nested [orig]
+ * media still resolves via DynamicCard's own handlers.
+ */
 internal fun resolveSpaceDynamicClickAction(dynamic: SpaceDynamicItem): SpaceDynamicClickAction {
-    return when (val action = resolveDynamicCardPrimaryAction(resolveSpaceDynamicCardItem(dynamic))) {
+    val mapped = resolveSpaceDynamicCardItem(dynamic)
+    val action = resolveDynamicCardPrimaryAction(mapped)
+    return when (action) {
         is DynamicCardPrimaryAction.OpenVideo -> SpaceDynamicClickAction.OpenVideo(action.bvid)
-        is DynamicCardPrimaryAction.OpenArticle -> SpaceDynamicClickAction.OpenArticle(action.articleId, action.title)
-        is DynamicCardPrimaryAction.OpenDynamicDetail -> SpaceDynamicClickAction.OpenDynamicDetail(action.dynamicId)
+        is DynamicCardPrimaryAction.OpenArticle ->
+            SpaceDynamicClickAction.OpenArticle(action.articleId, action.title)
+        is DynamicCardPrimaryAction.OpenDynamicDetail -> {
+            // Primary action for FORWARD often targets orig.id; for space list entry keep
+            // the outer dynamic id so the repost itself opens when requested.
+            val outerId = dynamic.id_str.trim()
+            if (
+                dynamic.type.equals("DYNAMIC_TYPE_FORWARD", ignoreCase = true) &&
+                outerId.isNotEmpty()
+            ) {
+                SpaceDynamicClickAction.OpenDynamicDetail(outerId)
+            } else {
+                SpaceDynamicClickAction.OpenDynamicDetail(action.dynamicId)
+            }
+        }
+        is DynamicCardPrimaryAction.OpenUser ->
+            SpaceDynamicClickAction.OpenUser(action.mid).takeIf { action.mid > 0L }
+                ?: SpaceDynamicClickAction.None
         else -> SpaceDynamicClickAction.None
     }
 }

@@ -115,4 +115,23 @@ class WebDavBackupPolicyTest {
             url
         )
     }
+
+    @Test
+    fun `directory action skips existing dirs and only creates missing ones`() {
+        assertEquals(WebDavDirectoryAction.EXISTS, resolveWebDavDirectoryAction(200))
+        assertEquals(WebDavDirectoryAction.EXISTS, resolveWebDavDirectoryAction(207))
+        assertEquals(WebDavDirectoryAction.CREATE, resolveWebDavDirectoryAction(404))
+        // 认证/权限错误或探测异常:回退幂等 MKCOL + 再确认
+        assertEquals(WebDavDirectoryAction.CREATE_OR_VERIFY, resolveWebDavDirectoryAction(401))
+        assertEquals(WebDavDirectoryAction.CREATE_OR_VERIFY, resolveWebDavDirectoryAction(403))
+        assertEquals(WebDavDirectoryAction.CREATE_OR_VERIFY, resolveWebDavDirectoryAction(null))
+        assertEquals(WebDavDirectoryAction.CREATE_OR_VERIFY, resolveWebDavDirectoryAction(0))
+    }
+
+    @Test
+    fun `directory probe error message is actionable`() {
+        assertTrue(resolveWebDavDirectoryProbeError(401, "https://dav.example.com/x").contains("认证失败"))
+        assertTrue(resolveWebDavDirectoryProbeError(403, "https://dav.example.com/x").contains("无权限"))
+        assertTrue(resolveWebDavDirectoryProbeError(500, "https://dav.example.com/x").contains("HTTP 500"))
+    }
 }

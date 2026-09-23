@@ -1,30 +1,22 @@
 package com.android.purebilibili.feature.video.screen
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class VideoFavoriteActionPolicyTest {
 
     @Test
-    fun `fullscreen overlay favorite tap should toggle immediately`() {
+    fun favoriteEntries_openFolderPickerSoUserCanChooseOwnFolders() {
         assertEquals(
-            VideoFavoriteAction.ToggleFavorite,
+            VideoFavoriteAction.OpenFavoriteFolders,
             resolveVideoFavoriteAction(VideoFavoriteEntryPoint.FullscreenOverlay)
         )
-    }
-
-    @Test
-    fun `detail action row favorite tap should toggle immediately`() {
         assertEquals(
-            VideoFavoriteAction.ToggleFavorite,
+            VideoFavoriteAction.OpenFavoriteFolders,
             resolveVideoFavoriteAction(VideoFavoriteEntryPoint.DetailActionRow)
         )
-    }
-
-    @Test
-    fun `bottom input bar favorite tap should toggle immediately`() {
         assertEquals(
-            VideoFavoriteAction.ToggleFavorite,
+            VideoFavoriteAction.OpenFavoriteFolders,
             resolveVideoFavoriteAction(VideoFavoriteEntryPoint.BottomInputBar)
         )
     }

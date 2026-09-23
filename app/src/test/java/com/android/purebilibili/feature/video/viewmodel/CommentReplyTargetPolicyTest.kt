@@ -34,4 +34,28 @@ class CommentReplyTargetPolicyTest {
         assertEquals(0L, root)
         assertEquals(0L, parent)
     }
+
+    @Test
+    fun `sub-reply message includes PiliPlus compatible reply prefix`() {
+        assertEquals(
+            " 回复 @Alice : 你好",
+            resolveCommentReplyMessage(
+                message = "  你好  ",
+                replyName = "Alice",
+                replyRoot = 1001L
+            )
+        )
+    }
+
+    @Test
+    fun `top-level reply keeps plain message because api targets root comment directly`() {
+        assertEquals(
+            "你好",
+            resolveCommentReplyMessage(
+                message = "  你好  ",
+                replyName = "Alice",
+                replyRoot = 0L
+            )
+        )
+    }
 }

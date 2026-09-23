@@ -1,5 +1,9 @@
 // 文件路径: feature/bangumi/ui/detail/BangumiDetailComponents.kt
 package com.android.purebilibili.feature.bangumi.ui.detail
+import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
+import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +12,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppSurface
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,13 +26,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.Star
-import io.github.alexzhirkevich.cupertino.icons.outlined.Ellipsis
-import io.github.alexzhirkevich.cupertino.icons.outlined.Plus
-import io.github.alexzhirkevich.cupertino.icons.outlined.Checkmark
+import coil3.compose.AsyncImage
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Star
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.theme.resolveAdaptiveTertiaryAccentColors
 import com.android.purebilibili.core.theme.iOSYellow
@@ -93,10 +99,10 @@ fun BangumiDetailHeader(
             
             // 标题和信息
             Column(modifier = Modifier.weight(1f)) {
-                Text(
+                AppText(
                     text = detail.title,
                     color = Color.White,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2
                 )
@@ -114,10 +120,10 @@ fun BangumiDetailHeader(
                 
                 // 更新状态
                 detail.newEp?.desc?.let { desc ->
-                    Text(
+                    AppText(
                         text = desc,
                         color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 12.sp
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
                 
@@ -125,10 +131,10 @@ fun BangumiDetailHeader(
                 
                 // 播放量
                 detail.stat?.let { stat ->
-                    Text(
+                    AppText(
                         text = "${FormatUtils.formatStat(stat.views)}播放 · ${FormatUtils.formatStat(stat.favorites)}追番",
                         color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 12.sp
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -149,22 +155,22 @@ fun RatingRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
     ) {
-        Icon(
-            CupertinoIcons.Default.Star,
+        AppIcon(
+            Icons.Outlined.Star,
             contentDescription = null,
             tint = iOSYellow,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text(
+        AppText(
             text = String.format("%.1f", score),
             color = iOSYellow,
             fontWeight = FontWeight.Bold
         )
-        Text(
+        AppText(
             text = " (${count}人评分)",
             color = Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
@@ -180,7 +186,7 @@ fun FollowButton(
     filled: Boolean = true
 ) {
     if (isFollowing) {
-        OutlinedButton(
+        AppOutlinedButton(
             onClick = onToggle,
             colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = MaterialTheme.colorScheme.primary
@@ -191,29 +197,31 @@ fun FollowButton(
             ),
             modifier = modifier
         ) {
-            Icon(
-                CupertinoIcons.Default.Checkmark,
+            AppIcon(
+                Icons.Outlined.Check,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
-            Text("已追番")
+            AppText("已追番")
         }
     } else {
-        Button(
+        AppButton(
             onClick = onToggle,
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
+
+                contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
             ),
             modifier = modifier
         ) {
-            Icon(
-                CupertinoIcons.Default.Plus,
+            AppIcon(
+                Icons.Outlined.Add,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
-            Text("追番")
+            AppText("追番")
         }
     }
 }
@@ -231,11 +239,11 @@ fun SeasonSelector(
     if (seasons.size <= 1) return
     
     Column(modifier = modifier) {
-        Text(
+        AppText(
             text = "相关季度",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
         )
         
         LazyRow(
@@ -244,7 +252,7 @@ fun SeasonSelector(
         ) {
             items(seasons, key = { it.seasonId }) { season ->
                 val isCurrentSeason = season.seasonId == currentSeasonId
-                Surface(
+                AppSurface(
                     modifier = Modifier.clickable {
                         if (!isCurrentSeason) {
                             onSeasonClick(season.seasonId)
@@ -257,10 +265,10 @@ fun SeasonSelector(
                         MaterialTheme.colorScheme.surfaceVariant
                     }
                 ) {
-                    Text(
+                    AppText(
                         text = season.seasonTitle.ifEmpty { season.title },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        fontSize = 14.sp,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = if (isCurrentSeason) {
                             MaterialTheme.colorScheme.onPrimary
                         } else {
@@ -283,7 +291,7 @@ fun EpisodeChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    AppSurface(
         onClick = onClick,
         modifier = modifier
             .width(140.dp)
@@ -319,17 +327,17 @@ fun EpisodeChip(
                 } else {
                     resolveAdaptiveTertiaryAccentColors(MaterialTheme.colorScheme)
                 }
-                Surface(
+                AppSurface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(4.dp),
                     color = badgeColors.backgroundColor,
                     shape = AppShapes.container(ContainerLevel.Tag)
                 ) {
-                    Text(
+                    AppText(
                         text = episode.badge,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        fontSize = 9.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         color = badgeColors.contentColor
                     )
                 }
@@ -341,19 +349,19 @@ fun EpisodeChip(
                     .align(Alignment.BottomStart)
                     .padding(8.dp)
             ) {
-                Text(
+                AppText(
                     text = episode.title.ifEmpty { "第${episode.id}话" },
                     color = Color.White,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (episode.longTitle.isNotEmpty() && episode.longTitle != episode.title) {
-                    Text(
+                    AppText(
                         text = episode.longTitle,
                         color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -391,7 +399,7 @@ fun EpisodePreviewRow(
         // 更多按钮
         if (episodes.size > maxPreviewCount) {
             item {
-                Surface(
+                AppSurface(
                     onClick = onShowAll,
                     modifier = Modifier
                         .width(80.dp)
@@ -401,14 +409,14 @@ fun EpisodePreviewRow(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                CupertinoIcons.Default.Ellipsis,
+                            AppIcon(
+                                Icons.Outlined.MoreHoriz,
                                 contentDescription = "更多",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
+                            AppText(
                                 text = "全部${episodes.size}集",
-                                fontSize = 10.sp,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

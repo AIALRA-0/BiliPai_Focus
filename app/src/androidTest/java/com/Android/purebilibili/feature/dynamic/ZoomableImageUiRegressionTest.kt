@@ -10,8 +10,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import coil.ImageLoader
-import coil.imageLoader
+import coil3.ImageLoader
+import coil3.imageLoader
 import com.android.purebilibili.feature.dynamic.components.ZOOMABLE_IMAGE_TAG
 import com.android.purebilibili.feature.dynamic.components.ZoomableImage
 import org.junit.Assert.assertTrue

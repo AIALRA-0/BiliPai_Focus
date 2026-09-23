@@ -31,9 +31,21 @@ data class PlayerInfoData(
     @SerialName("online_count")
     val onlineCount: Int = 0,
     val subtitle: SubtitleInfo? = null,
+    @SerialName("dm_mask")
+    val dmMask: DanmakuMaskInfo? = null,
     val interaction: PlayerInteractionInfo? = null,
     @SerialName("bgm_info")
     val bgmInfo: BgmInfo? = null
+)
+
+@Serializable
+data class DanmakuMaskInfo(
+    val cid: Long = 0L,
+    val plat: Int = 0,
+    val fps: Int = 0,
+    val time: Long = 0L,
+    @SerialName("mask_url")
+    val maskUrl: String = ""
 )
 
 @Serializable

@@ -1,10 +1,21 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class VideoCommentAppearancePolicyTest {
+
+    @Test
+    fun `shared comment typography matches video detail scale`() {
+        assertEquals(13.sp, VideoCommentTypographyTokens.author)
+        assertEquals(12.sp, VideoCommentTypographyTokens.metadata)
+        assertEquals(15.sp, VideoCommentTypographyTokens.body)
+        assertEquals(13.sp, VideoCommentTypographyTokens.action)
+        assertEquals(12.sp, VideoCommentTypographyTokens.actionCount)
+        assertEquals(13.sp, VideoCommentTypographyTokens.subReply)
+    }
 
     @Test
     fun `light comment appearance should derive every slot from active theme`() {

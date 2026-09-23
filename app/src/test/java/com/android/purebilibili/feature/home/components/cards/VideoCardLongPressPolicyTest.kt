@@ -28,6 +28,11 @@ class VideoCardLongPressPolicyTest {
     }
 
     @Test
+    fun defaultVideoCardLongPressActionEnabled_isFalse() {
+        assertFalse(com.android.purebilibili.core.store.HomeSettings().videoCardLongPressActionEnabled)
+    }
+
+    @Test
     fun resolveVideoCardMenuOffset_usesLongPressPositionWithinCardRoot() {
         val result = resolveVideoCardMenuOffset(
             rootBoundsInRoot = Rect(left = 24f, top = 120f, right = 384f, bottom = 480f),

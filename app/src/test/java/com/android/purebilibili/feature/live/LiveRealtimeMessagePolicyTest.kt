@@ -181,9 +181,11 @@ class LiveRealtimeMessagePolicyTest {
             )
         )
 
-        val chat = assertIs<LiveRealtimeAction.EmitChat>(action)
-        assertEquals("投票：投票｜赞成 50% / 弃权 50%｜剩余 60s", chat.item.text)
-        assertEquals("投票", chat.item.uname)
+        val vote = assertIs<LiveRealtimeAction.UpdateVote>(action)
+        assertEquals("投票", vote.vote.question)
+        assertEquals(listOf("赞成", "弃权"), vote.vote.options.map { it.description })
+        assertEquals(60_000L, vote.vote.remainingMillis)
+        assertEquals("投票：投票｜赞成 50% / 弃权 50%｜剩余 60s", vote.announcement.text)
     }
 
     @Test

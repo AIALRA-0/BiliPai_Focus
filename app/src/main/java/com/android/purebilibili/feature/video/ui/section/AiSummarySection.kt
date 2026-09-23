@@ -1,30 +1,56 @@
 package com.android.purebilibili.feature.video.ui.section
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppContentCard
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.data.model.response.AiSummaryData
+import com.android.purebilibili.feature.video.ui.VideoDetailShapes
 import com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState
 import com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptTone
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import top.yukonga.miuix.kmp.anim.folmeSpring
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
 
 /**
- * AI Video Summary Card
+ * AI Video Summary Card — adaptive native card (M3 Card / Miuix Card).
  */
 @Composable
 fun AiSummaryCard(
@@ -40,117 +66,197 @@ fun AiSummaryCard(
         modelResult.summary.takeIf { it.isNotBlank() } ?: "查看分段总结和时间点"
     }
     var expanded by remember { mutableStateOf(false) }
+    val useMiuix = LocalAppUiStyle.current == AppUiStyle.MIUIX
+    val horizontalPadding = if (useMiuix) 12.dp else 16.dp
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
 
-    Surface(
+    AppContentCard(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .animateContentSize(),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (expanded) 0.46f else 0.32f),
-        shape = RoundedCornerShape(18.dp)
+            .padding(horizontal = horizontalPadding, vertical = 6.dp)
+            // The Miuix expansion owns its height animation; do not animate it twice.
+            .then(if (useMiuix) Modifier else Modifier.animateContentSize()),
+        containerColor = containerColor,
     ) {
-        Column {
+        if (useMiuix) {
+            MiuixAiSummaryHeader(
+                preview = collapsedPreview,
+                expanded = expanded,
+                onToggle = { expanded = !expanded }
+            )
+        } else {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
+                LeadingIconBadge(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                 ) {
-                    Icon(
-                        imageVector = CupertinoIcons.Default.Sparkles,
+                    AppIcon(
+                        imageVector = Icons.Filled.AutoAwesome,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
-                Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    AppText(
                         text = "AI 总结",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
-                    Text(
+                    Spacer(modifier = Modifier.height(2.dp))
+                    AppText(
                         text = collapsedPreview,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = if (expanded) 2 else 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(modifier = Modifier.width(10.dp))
-                Icon(
-                    imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
-                    contentDescription = null,
+                AppIcon(
+                    imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (expanded) "收起" else "展开",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
+        }
 
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)
-                ) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(bottom = 12.dp)
+        AnimatedVisibility(
+            visible = expanded,
+            enter = if (useMiuix) {
+                expandVertically(
+                    animationSpec = folmeSpring(damping = 1f, response = 0.35f),
+                    expandFrom = Alignment.Top
+                ) + fadeIn(animationSpec = folmeSpring(damping = 1f, response = 0.25f))
+            } else {
+                fadeIn() + expandVertically()
+            },
+            exit = if (useMiuix) {
+                shrinkVertically(
+                    animationSpec = folmeSpring(damping = 1f, response = 0.35f),
+                    shrinkTowards = Alignment.Top
+                ) + fadeOut(animationSpec = folmeSpring(damping = 1f, response = 0.25f))
+            } else {
+                fadeOut() + shrinkVertically()
+            }
+        ) {
+            Column(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+            ) {
+                AppHorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+
+                if (modelResult.summary.isNotBlank()) {
+                    AppText(
+                        text = modelResult.summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(
+                            bottom = if (modelResult.outline.isNotEmpty()) 12.dp else 0.dp
+                        ),
                     )
+                }
 
-                    if (modelResult.summary.isNotBlank()) {
-                        Text(
-                            text = modelResult.summary,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = if (modelResult.outline.isNotEmpty()) 12.dp else 0.dp)
+                if (modelResult.outline.isNotEmpty()) {
+                    modelResult.outline.forEach { outlineItem ->
+                        OutlineItemRow(
+                            title = outlineItem.title,
+                            timestamp = outlineItem.timestamp,
+                            onClick = { onTimestampClick?.invoke(outlineItem.timestamp * 1000L) },
                         )
-                    }
-
-                    if (modelResult.outline.isNotEmpty()) {
-                        modelResult.outline.forEach { outlineItem ->
+                        outlineItem.partOutline.forEach { part ->
                             OutlineItemRow(
-                                title = outlineItem.title,
-                                timestamp = outlineItem.timestamp,
-                                onClick = { onTimestampClick?.invoke(outlineItem.timestamp * 1000L) }
+                                title = part.content,
+                                timestamp = part.timestamp,
+                                isSubItem = true,
+                                onClick = { onTimestampClick?.invoke(part.timestamp * 1000L) },
                             )
-
-                            outlineItem.partOutline.forEach { part ->
-                                OutlineItemRow(
-                                    title = part.content,
-                                    timestamp = part.timestamp,
-                                    isSubItem = true,
-                                    onClick = { onTimestampClick?.invoke(part.timestamp * 1000L) }
-                                )
-                            }
                         }
                     }
+                }
 
-                    if (onCreateNoteDraftClick != null) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedButton(
-                            onClick = onCreateNoteDraftClick,
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Default.Sparkles,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("生成笔记草稿")
-                        }
+                if (onCreateNoteDraftClick != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    VideoDetailSecondaryButton(
+                        onClick = onCreateNoteDraftClick,
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        AppText("生成笔记草稿")
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MiuixAiSummaryHeader(
+    preview: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val arrowRotation = animateFloatAsState(
+        targetValue = if (expanded) 270f else 90f,
+        animationSpec = folmeSpring(damping = 1f, response = 0.35f),
+        label = "ai-summary-expand-arrow"
+    )
+    // BasicComponent supplies Miuix's native row layout, touch target and indication.
+    // Body content stays outside its clickable area so timestamps do not collapse it.
+    BasicComponent(
+        modifier = modifier.semantics { stateDescription = if (expanded) "已展开" else "已收起" },
+        onClick = onToggle,
+        onClickLabel = if (expanded) "收起 AI 总结" else "展开 AI 总结",
+        role = Role.Button,
+        startAction = {
+            LeadingIconBadge(containerColor = AppSurfaceTokens.primary().copy(alpha = 0.12f)) {
+                AppIcon(
+                    imageVector = Icons.Filled.AutoAwesome,
+                    contentDescription = null,
+                    tint = AppSurfaceTokens.primary(),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        },
+        endActions = {
+            AppIcon(
+                imageVector = MiuixIcons.Basic.ArrowRight,
+                contentDescription = null,
+                tint = AppSurfaceTokens.onSurfaceVariantActions(),
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = arrowRotation.value }
+            )
+        }
+    ) {
+        MiuixText(
+            text = "AI 总结",
+            style = MiuixTheme.textStyles.headline1,
+            fontWeight = FontWeight.Medium,
+            color = AppSurfaceTokens.onSurface()
+        )
+        MiuixText(
+            text = preview,
+            style = MiuixTheme.textStyles.body2,
+            color = AppSurfaceTokens.onSurfaceVariantSummary(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -161,9 +267,9 @@ fun AiSummaryPromptCard(
     modifier: Modifier = Modifier
 ) {
     val containerColor = when (promptState.tone) {
-        AiSummaryPromptTone.INFO -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-        AiSummaryPromptTone.MUTED -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
-        AiSummaryPromptTone.WARNING -> MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
+        AiSummaryPromptTone.INFO -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        AiSummaryPromptTone.MUTED -> MaterialTheme.colorScheme.surfaceContainerLow
+        AiSummaryPromptTone.WARNING -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
     }
     val accentColor = when (promptState.tone) {
         AiSummaryPromptTone.INFO -> MaterialTheme.colorScheme.primary
@@ -171,73 +277,86 @@ fun AiSummaryPromptCard(
         AiSummaryPromptTone.WARNING -> MaterialTheme.colorScheme.error
     }
 
-    Surface(
+    AppContentCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        color = containerColor,
-        shape = RoundedCornerShape(18.dp)
+        containerColor = containerColor,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accentColor.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (promptState.tone == AiSummaryPromptTone.INFO) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = accentColor
-                        )
-                    } else {
-                        Icon(
-                            imageVector = if (promptState.tone == AiSummaryPromptTone.WARNING) {
-                                CupertinoIcons.Default.ExclamationmarkCircle
-                            } else {
-                                CupertinoIcons.Default.InfoCircle
-                            },
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = promptState.title,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
+            LeadingIconBadge(containerColor = accentColor.copy(alpha = 0.12f)) {
+                if (promptState.tone == AiSummaryPromptTone.INFO) {
+                    AdaptiveLoadingIndicator(
+                        size = 16.dp,
+                        strokeWidth = 2.dp,
+                        color = accentColor,
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = promptState.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    AppIcon(
+                        imageVector = if (promptState.tone == AiSummaryPromptTone.WARNING) {
+                            Icons.Outlined.ErrorOutline
+                        } else {
+                            Icons.Outlined.Info
+                        },
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
+            Column(modifier = Modifier.weight(1f)) {
+                AppText(
+                    text = promptState.title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                AppText(
+                    text = promptState.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
-            if (!promptState.actionLabel.isNullOrBlank() && onActionClick != null) {
-                Spacer(modifier = Modifier.height(10.dp))
-                TextButton(
-                    onClick = onActionClick,
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text(promptState.actionLabel)
-                }
+        if (!promptState.actionLabel.isNullOrBlank() && onActionClick != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            AppTextButton(
+                onClick = onActionClick,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                AppText(promptState.actionLabel)
             }
         }
     }
 }
+
+@Composable
+private fun LeadingIconBadge(
+    containerColor: Color,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(VideoDetailShapes.leadingIcon())
+            .background(containerColor),
+        contentAlignment = Alignment.Center,
+        content = { content() },
+    )
+}
+
+/** 主条目圆点 + 间距；子条目与标题列左缘对齐。 */
+internal val OutlineBulletSlotWidth = 18.dp
+/**
+ * 时间戳列固定宽。芯片必须 [fillMaxWidth]，否则比例数字会让时钟图标左右参差
+ * （右缘对齐时左缘仍不齐）。
+ */
+internal val OutlineTimestampColumnWidth = 76.dp
 
 @Composable
 private fun OutlineItemRow(
@@ -250,58 +369,70 @@ private fun OutlineItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp, horizontal = if (isSubItem) 16.dp else 4.dp),
-        verticalAlignment = Alignment.Top
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        if (!isSubItem) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .size(6.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-        } else {
-             Spacer(modifier = Modifier.width(4.dp)) // Indent for sub items aligned with bullet?
-        }
-        
-        Column(
+        // 固定前导槽：主条目标圆点，子条目留白，标题列左缘一致。
+        Box(
             modifier = Modifier
-                .weight(1f)
-                .padding(end = 12.dp)
+                .width(OutlineBulletSlotWidth)
+                .padding(top = 6.dp),
+            contentAlignment = Alignment.TopStart,
         ) {
-             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            if (!isSubItem) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
         }
 
+        AppText(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp),
+        )
+
+        // 固定列宽 + 满宽芯片 + 表内居中，时钟图标与 mm:ss 形成垂直列。
         Box(
-            modifier = Modifier.widthIn(min = 72.dp),
-            contentAlignment = Alignment.CenterEnd
+            modifier = Modifier
+                .width(OutlineTimestampColumnWidth)
+                .padding(top = 2.dp),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            Surface(
+            AppSurface(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(4.dp),
-                modifier = Modifier.clickable(onClick = onClick)
+                shape = AppShapes.container(ContainerLevel.Tag),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
                 ) {
-                    Icon(
-                        imageVector = CupertinoIcons.Outlined.Clock,
+                    AppIcon(
+                        imageVector = Icons.Outlined.Schedule,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(12.dp),
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = formatTimestamp(timestamp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                    Spacer(modifier = Modifier.width(3.dp))
+                    AppText(
+                        text = formatAiSummaryTimestamp(timestamp),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFeatureSettings = "tnum",
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
                     )
                 }
             }
@@ -309,8 +440,10 @@ private fun OutlineItemRow(
     }
 }
 
-private fun formatTimestamp(seconds: Long): String {
-    val m = seconds / 60
-    val s = seconds % 60
+/** mm:ss，秒级时间点；使用等宽数字特性减少视觉漂移。 */
+internal fun formatAiSummaryTimestamp(seconds: Long): String {
+    val safe = seconds.coerceAtLeast(0L)
+    val m = safe / 60
+    val s = safe % 60
     return "%02d:%02d".format(m, s)
 }

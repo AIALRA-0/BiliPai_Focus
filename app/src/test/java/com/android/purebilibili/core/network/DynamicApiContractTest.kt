@@ -148,14 +148,32 @@ class DynamicApiContractTest {
     }
 
     @Test
-    fun getDynamicDetail_usesDesktopDetailEndpointAndIdQuery() {
+    fun favoriteFolderDynamicRequest_usesBiliPaiResourcePayload() {
+        val request = buildFavoriteFolderDynamicRequest(
+            mediaId = 12345L,
+            content = "分享收藏夹",
+        )
+
+        assertEquals(5, request.dyn_req.scene)
+        assertEquals(null, request.web_repost_src.dyn_id_str)
+        assertEquals(4300, request.web_repost_src.revs_id?.dyn_type)
+        assertEquals(12345L, request.web_repost_src.revs_id?.rid)
+        assertEquals("分享收藏夹", request.dyn_req.content.contents.single().raw_text)
+    }
+
+    @Test
+    fun getDynamicDetail_usesWebDetailEndpointAndIdQuery() {
         val method = DynamicApi::class.java.methods.first { it.name == "getDynamicDetail" }
         val get = method.getAnnotation(GET::class.java)
-        assertEquals("x/polymer/web-dynamic/desktop/v1/detail", get?.value)
+        assertEquals("x/polymer/web-dynamic/v1/detail", get?.value)
 
-        val firstParamAnnotations = method.parameterAnnotations[0].toList()
-        val idQuery = firstParamAnnotations.filterIsInstance<Query>().firstOrNull()
-        assertEquals("id", idQuery?.value)
+        val queryNames = method.parameterAnnotations
+            .flatMap { annotations -> annotations.filterIsInstance<Query>().map { it.value } }
+        assertTrue(queryNames.contains("id"))
+        assertTrue(queryNames.contains("rid"))
+        assertTrue(queryNames.contains("type"))
+        assertTrue(queryNames.contains("gaia_source"))
+        assertTrue(queryNames.contains("web_location"))
     }
 
     @Test
@@ -167,10 +185,17 @@ class DynamicApiContractTest {
     }
 
     @Test
-    fun getDynamicDetailFallback_usesLegacyDetailEndpointAndIdQuery() {
+    fun dynamicFeedFeatures_includeChargingVideoCardFromApiDocs() {
+        assertTrue(DYNAMIC_FEED_FEATURES.contains("listOnlyfans"))
+        assertTrue(DYNAMIC_FEED_FEATURES.contains("onlyfansAssetsV2"))
+        assertTrue(DYNAMIC_FEED_FEATURES.contains("onlyfansQaCard"))
+    }
+
+    @Test
+    fun getDynamicDetailFallback_usesDesktopDetailEndpointAndIdQuery() {
         val method = DynamicApi::class.java.methods.first { it.name == "getDynamicDetailFallback" }
         val get = method.getAnnotation(GET::class.java)
-        assertEquals("x/polymer/web-dynamic/v1/detail", get?.value)
+        assertEquals("x/polymer/web-dynamic/desktop/v1/detail", get?.value)
 
         val firstParamAnnotations = method.parameterAnnotations[0].toList()
         val idQuery = firstParamAnnotations.filterIsInstance<Query>().firstOrNull()
@@ -178,21 +203,21 @@ class DynamicApiContractTest {
     }
 
     @Test
-    fun getOpusDetail_usesDocumentedOpusDetailEndpointAndIdQuery() {
+    fun getOpusDetail_usesDocumentedOpusDetailEndpointAndQueryMap() {
         val method = DynamicApi::class.java.methods.first { it.name == "getOpusDetail" }
         val get = method.getAnnotation(GET::class.java)
         assertEquals("x/polymer/web-dynamic/v1/opus/detail", get?.value)
 
         val firstParamAnnotations = method.parameterAnnotations[0].toList()
-        val idQuery = firstParamAnnotations.filterIsInstance<Query>().firstOrNull()
-        assertEquals("id", idQuery?.value)
+        assertTrue(firstParamAnnotations.any { it is QueryMap })
+        assertEquals("htmlNewStyle", OPUS_DETAIL_FEATURES)
     }
 
     @Test
-    fun getSpaceArticleList_usesDocumentedOpusSpaceFeedEndpointAndQueryMap() {
+    fun getSpaceArticleList_usesDocumentedSpaceArticleEndpointAndQueryMap() {
         val method = SpaceApi::class.java.methods.first { it.name == "getSpaceArticleList" }
         val get = method.getAnnotation(GET::class.java)
-        assertEquals("x/polymer/web-dynamic/v1/opus/feed/space", get?.value)
+        assertEquals("x/space/wbi/article", get?.value)
 
         val firstParamAnnotations = method.parameterAnnotations[0].toList()
         assertTrue(firstParamAnnotations.any { it is QueryMap })
@@ -213,16 +238,43 @@ class DynamicApiContractTest {
         assertTrue(SPACE_DYNAMIC_FEATURES.contains("itemOpusStyle"))
         assertTrue(SPACE_DYNAMIC_FEATURES.contains("opusBigCover"))
         assertTrue(SPACE_DYNAMIC_FEATURES.contains("commentsNewVersion"))
+        assertTrue(SPACE_DYNAMIC_FEATURES.contains("onlyfansQaCard"))
     }
 
     @Test
-    fun getUserDynamicFeed_usesDynamicFeedAllEndpointAndQueryMap() {
+    fun getUserDynamicFeed_usesDocumentedSpaceFeedEndpointAndQueryMap() {
         val method = DynamicApi::class.java.methods.first { it.name == "getUserDynamicFeed" }
         val get = method.getAnnotation(GET::class.java)
-        assertEquals("x/polymer/web-dynamic/v1/feed/all", get?.value)
+        assertEquals("x/polymer/web-dynamic/v1/feed/space", get?.value)
 
         val firstParamAnnotations = method.parameterAnnotations[0].toList()
         assertTrue(firstParamAnnotations.any { it is QueryMap })
+    }
+
+    @Test
+    fun createDynamic_usesVcMultipartFormWithDefaults() {
+        val method = DynamicApi::class.java.methods.first { it.name == "createDynamic" }
+        val post = method.getAnnotation(POST::class.java)
+        assertEquals("https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/create", post?.value)
+
+        val fields = method.parameterAnnotations
+            .mapNotNull { annotations ->
+                annotations.filterIsInstance<retrofit2.http.Part>().firstOrNull()?.value
+            }
+        assertTrue("dynamic_id" in fields)
+        assertTrue("type" in fields)
+        assertTrue("content" in fields)
+        assertTrue("csrf" in fields)
+    }
+
+    @Test
+    fun getDynamicUplist_usesVcUplistEndpoint() {
+        val method = DynamicApi::class.java.methods.first { it.name == "getDynamicUplist" }
+        val get = method.getAnnotation(GET::class.java)
+        assertEquals(
+            "https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/w_dyn_uplist",
+            get?.value
+        )
     }
 
     @Test

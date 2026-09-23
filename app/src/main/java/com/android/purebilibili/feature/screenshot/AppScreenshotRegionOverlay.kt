@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import com.android.purebilibili.core.ui.components.AppButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +39,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 
 @Composable
 fun AppScreenshotRegionOverlay(
@@ -145,16 +147,16 @@ fun AppScreenshotRegionOverlay(
             }
         }
 
-        Surface(
+        AppSurface(
             color = Color.Black.copy(alpha = 0.54f),
             contentColor = Color.White,
-            shape = RoundedCornerShape(18.dp),
+            shape = AppShapes.container(ContainerLevel.Card),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Text(
+            AppText(
                 text = "拖拽选择截图区域",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
@@ -169,7 +171,7 @@ fun AppScreenshotRegionOverlay(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedButton(
+            AppOutlinedButton(
                 onClick = onCancel,
                 enabled = !saving,
                 modifier = Modifier.weight(1f),
@@ -177,17 +179,17 @@ fun AppScreenshotRegionOverlay(
                     contentColor = Color.White
                 )
             ) {
-                Text("取消")
+                AppText("取消")
             }
             Spacer(modifier = Modifier.weight(0.08f))
-            Button(
+            AppButton(
                 onClick = {
                     cropRect?.let(onSaveRegion)
                 },
                 enabled = cropRect != null && !saving,
                 modifier = Modifier.weight(1f)
             ) {
-                Text(if (saving) "保存中" else "保存")
+                AppText(if (saving) "保存中" else "保存")
             }
         }
     }

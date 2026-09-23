@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components.cards
 
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.home.HomeCoverRequestSpec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -54,5 +55,16 @@ class VideoCardCoverCacheKeyPolicyTest {
         )
 
         assertEquals("cover_fallback_99_777_${"fallback".hashCode()}_s", key)
+    }
+
+    @Test
+    fun `cache key includes the exact home request tier`() {
+        val key = resolveVideoCardCoverCacheKey(
+            video = VideoItem(bvid = "BV1ab411"),
+            useLowQualityCover = false,
+            requestSpec = HomeCoverRequestSpec(widthPx = 960, heightPx = 600),
+        )
+
+        assertEquals("cover_BV1ab411_n_960x600", key)
     }
 }

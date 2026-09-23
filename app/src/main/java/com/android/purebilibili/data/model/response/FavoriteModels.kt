@@ -2,6 +2,7 @@
 package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 /**
  * 收藏夹和稍后再看相关数据模型
@@ -46,7 +47,11 @@ data class FavoriteInfo(
     val mid: Long = 0,
     val title: String = "",
     val cover: String = "",
-    val media_count: Int = 0
+    val intro: String = "",
+    val media_count: Int = 0,
+    val attr: Int = 0,
+    val fav_state: Int = 0,
+    val upper: Upper? = null
 )
 
 @Serializable
@@ -62,7 +67,9 @@ data class FavFolder(
     val mid: Long = 0,
     val title: String = "",
     val cover: String = "",
+    val intro: String = "",
     val media_count: Int = 0,
+    val attr: Int = 0,
     val fav_state: Int = 0,
     val type: Int = 0,
     val upper: Upper? = null,
@@ -124,14 +131,19 @@ data class FavoriteData(
             stat = Stat(view = cnt_info?.play ?: 0, danmaku = cnt_info?.danmaku ?: 0),
             duration = duration,
             progress = progress,
-            view_at = view_at
+            view_at = view_at,
+            isVertical = resolveFavoriteVideoVertical(
+                dimension = ugc?.dimension,
+                coverUrl = cover
+            )
         )
     }
 }
 
 @Serializable
 data class FavoriteUgc(
-    val first_cid: Long = 0
+    val first_cid: Long = 0,
+    val dimension: Dimension? = null
 )
 
 @Serializable
@@ -173,7 +185,21 @@ data class WatchLaterItem(
     val progress: Int? = null,
     val pubdate: Long? = null,
     val owner: WatchLaterOwner? = null,
-    val stat: WatchLaterStat? = null
+    val stat: WatchLaterStat? = null,
+    @SerialName("redirect_url") val redirectUrl: String? = null,
+    @SerialName("is_pgc") val isPgc: Boolean? = null,
+    @SerialName("pgc_label") val pgcLabel: String? = null,
+    @SerialName("is_pugv") val isPugv: Boolean? = null,
+    @SerialName("charging_pay") val chargingPay: WatchLaterChargingPay? = null,
+    val rights: WatchLaterRights? = null,
+)
+
+@Serializable
+data class WatchLaterChargingPay(val level: Int? = null)
+
+@Serializable
+data class WatchLaterRights(
+    @SerialName("is_cooperation") val isCooperation: Int? = null,
 )
 
 @Serializable

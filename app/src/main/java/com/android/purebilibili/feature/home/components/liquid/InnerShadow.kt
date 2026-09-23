@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.home.components.liquid
 
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
+import com.android.purebilibili.core.ui.OpticalContrastPalette
+
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Modifier
@@ -28,9 +32,9 @@ import androidx.compose.ui.unit.dp
 
 @Immutable
 data class InnerShadow(
-    val radius: Dp = 24.dp,
-    val offset: DpOffset = DpOffset(0.dp, radius),
-    val color: Color = Color.Black.copy(alpha = 0.15f),
+    val radius: Dp = AppSpacingTokens.ExtraLarge,
+    val offset: DpOffset = DpOffset(AppSpacingTokens.None, radius),
+    val color: Color = OpticalContrastPalette.Shadow.copy(alpha = 0.15f),
     val alpha: Float = 1f,
     val blendMode: BlendMode = DrawScope.DefaultBlendMode,
 ) {

@@ -1,12 +1,14 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+import com.android.purebilibili.core.store.PortraitDanmakuDisplayAreaMode
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
 import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
-import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
+import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -175,6 +177,25 @@ class PortraitVideoPagerPolicyTest {
     @Test
     fun portraitPager_defaultViewportPolicy_doesNotForceFillContainer() {
         assertFalse(resolvePortraitPagerFillContainer())
+        assertFalse(
+            resolvePortraitPagerFillContainer(
+                aspectRatio = VideoAspectRatio.FIT,
+                isVerticalContent = true
+            )
+        )
+        assertTrue(
+            resolvePortraitPagerFillContainer(
+                aspectRatio = VideoAspectRatio.FILL,
+                isVerticalContent = true
+            )
+        )
+        // Stretch is coerced to Fit for vertical content, so do not fill-deform.
+        assertFalse(
+            resolvePortraitPagerFillContainer(
+                aspectRatio = VideoAspectRatio.STRETCH,
+                isVerticalContent = true
+            )
+        )
     }
 
     @Test
@@ -182,6 +203,55 @@ class PortraitVideoPagerPolicyTest {
         assertEquals(
             AspectRatioFrameLayout.RESIZE_MODE_FIT,
             resolvePortraitPagerResizeMode()
+        )
+        assertEquals(
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
+            resolvePortraitPagerResizeMode(
+                aspectRatio = VideoAspectRatio.FILL,
+                isVerticalContent = true
+            )
+        )
+        assertEquals(
+            AspectRatioFrameLayout.RESIZE_MODE_FIT,
+            resolvePortraitPagerResizeMode(
+                aspectRatio = VideoAspectRatio.STRETCH,
+                isVerticalContent = true
+            )
+        )
+        assertEquals(
+            AspectRatioFrameLayout.RESIZE_MODE_FIT,
+            resolvePortraitPagerResizeMode(
+                aspectRatio = VideoAspectRatio.RATIO_16_9,
+                isVerticalContent = true
+            )
+        )
+    }
+
+    @Test
+    fun portraitPager_fixedRatioUsesTargetViewportAspect() {
+        assertEquals(
+            16f / 9f,
+            resolvePortraitPagerViewportAspect(
+                aspectRatio = VideoAspectRatio.RATIO_16_9,
+                currentVideoAspect = 9f / 16f,
+                isVerticalContent = true
+            )
+        )
+        assertEquals(
+            4f / 3f,
+            resolvePortraitPagerViewportAspect(
+                aspectRatio = VideoAspectRatio.RATIO_4_3,
+                currentVideoAspect = 9f / 16f,
+                isVerticalContent = true
+            )
+        )
+        assertEquals(
+            9f / 16f,
+            resolvePortraitPagerViewportAspect(
+                aspectRatio = VideoAspectRatio.FIT,
+                currentVideoAspect = 9f / 16f,
+                isVerticalContent = true
+            )
         )
     }
 
@@ -205,6 +275,12 @@ class PortraitVideoPagerPolicyTest {
                 showDetailSheet = false
             )
         )
+    }
+
+    @Test
+    fun portraitOverlayTap_togglesFromCurrentVisibility() {
+        assertFalse(resolvePortraitOverlayVisibilityAfterTap(currentlyVisible = true))
+        assertTrue(resolvePortraitOverlayVisibilityAfterTap(currentlyVisible = false))
     }
 
     @Test
@@ -233,15 +309,21 @@ class PortraitVideoPagerPolicyTest {
     fun portraitDanmakuSurface_usesVideoViewportSoDisplayAreaMatchesVideoHeight() {
         assertEquals(
             PortraitDanmakuSurfaceMode.VideoViewport,
-            resolvePortraitDanmakuSurfaceMode(currentVideoAspect = 16f / 9f)
+            resolvePortraitDanmakuSurfaceMode(
+                currentVideoAspect = 16f / 9f,
+                displayAreaMode = PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT
+            )
         )
     }
 
     @Test
-    fun portraitDanmakuSurface_usesVideoViewportForPortraitVideoToo() {
+    fun portraitDanmakuSurface_usesPageTopWhenDisplayAreaModeRequestsScreenTop() {
         assertEquals(
-            PortraitDanmakuSurfaceMode.VideoViewport,
-            resolvePortraitDanmakuSurfaceMode(currentVideoAspect = 9f / 16f)
+            PortraitDanmakuSurfaceMode.Page,
+            resolvePortraitDanmakuSurfaceMode(
+                currentVideoAspect = 9f / 16f,
+                displayAreaMode = PortraitDanmakuDisplayAreaMode.SCREEN_TOP
+            )
         )
     }
 
@@ -288,12 +370,44 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun portraitDanmakuTopInset_keepsHiddenBarsAndCutoutSafeArea() {
+        assertEquals(
+            84,
+            resolvePortraitDanmakuTopInsetPx(
+                visibleStatusBarTopPx = 0,
+                statusBarsIgnoringVisibilityTopPx = 48,
+                displayCutoutTopPx = 84,
+            )
+        )
+        assertEquals(
+            48,
+            resolvePortraitDanmakuTopInsetPx(
+                visibleStatusBarTopPx = 48,
+                statusBarsIgnoringVisibilityTopPx = 0,
+                displayCutoutTopPx = 0,
+            )
+        )
+    }
+
+    @Test
     fun landscapeVideoViewport_isLiftedSlightlyInFitMode() {
         assertEquals(
             -48,
             resolvePortraitVideoViewportVerticalOffsetDp(
                 currentVideoAspect = 16f / 9f,
                 fillContainer = false
+            )
+        )
+    }
+
+    @Test
+    fun landscapeContainer_doesNotLiftVideoViewport() {
+        assertEquals(
+            0,
+            resolvePortraitVideoViewportVerticalOffsetDp(
+                currentVideoAspect = 16f / 9f,
+                fillContainer = false,
+                isLandscape = true
             )
         )
     }
@@ -345,6 +459,38 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun portraitActiveAid_prefersLoadedVideoIdentityWhenPlayerIsReady() {
+        assertEquals(
+            2002L,
+            resolvePortraitActiveAid(
+                isPlayerReadyForThisVideo = true,
+                itemAid = 1001L,
+                currentPlayingAid = 2002L
+            )
+        )
+    }
+
+    @Test
+    fun portraitActiveAid_fallsBackToItemIdentityOnlyBeforePlayerTargetsPage() {
+        assertEquals(
+            1001L,
+            resolvePortraitActiveAid(
+                isPlayerReadyForThisVideo = false,
+                itemAid = 1001L,
+                currentPlayingAid = 2002L
+            )
+        )
+        assertEquals(
+            0L,
+            resolvePortraitActiveAid(
+                isPlayerReadyForThisVideo = true,
+                itemAid = 1001L,
+                currentPlayingAid = 0L
+            )
+        )
+    }
+
+    @Test
     fun portraitFavoriteTap_opensFavoriteFoldersInsteadOfImmediateDefaultFavorite() {
         assertEquals(
             PortraitFavoriteAction.OpenFavoriteFolders,
@@ -354,7 +500,7 @@ class PortraitVideoPagerPolicyTest {
 
     @Test
     fun portraitInteractionUi_prefersLocalOverrideWhenSharedPlayerStateBelongsToAnotherVideo() {
-        val sharedState = PlayerUiState.Success(
+        val sharedState = VideoPlaybackUiState.Success(
             info = ViewInfo(
                 bvid = "BV_PREV",
                 aid = 1001L,
@@ -442,5 +588,146 @@ class PortraitVideoPagerPolicyTest {
         assertTrue(source.contains("portraitOverlayVisible = portraitOverlayVisible"))
         assertTrue(source.contains("onPortraitOverlayVisibleChange = { visible ->"))
         assertFalse(source.contains("var isOverlayVisible by remember"))
+    }
+
+    @Test
+    fun portraitVideoSwitch_cancelsPendingDanmakuLoadBeforeNewMediaLoads() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt").readText()
+
+        assertTrue(source.contains("danmakuManager.clearForVideoChange()"))
+        assertFalse(source.contains("danmakuManager.clear()\n                isLoading = true"))
+    }
+
+    @Test
+    fun portraitPager_isolatesDanmakuAndCommentStateFromUnderlyingDetailPage() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt").readText()
+        val pagerSignature = source
+            .substringAfter("fun PortraitVideoPager(")
+            .substringBefore(") {")
+
+        assertTrue(source.contains("rememberIsolatedDanmakuManager("))
+        assertTrue(source.contains("key = \"portrait_comments_\$initialBvid\""))
+        assertTrue(source.contains("commentViewModel.clearForVideoChange()"))
+        assertTrue(pagerSignature.contains("viewModel: VideoPlaybackViewModel,"))
+        assertTrue(pagerSignature.contains("engagementViewModel: VideoEngagementViewModel,"))
+        assertTrue(pagerSignature.contains("sharedPlayer: ExoPlayer?"))
+        assertTrue(pagerSignature.contains("useTextureSurfaceForNavigation: Boolean = false"))
+        assertFalse(pagerSignature.contains("commentViewModel: VideoCommentViewModel"))
+    }
+
+    @Test
+    fun navigationReturn_usesTexturePlayerViewForLivePortraitFrameMorph() {
+        val pagerSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt"
+        ).readText()
+        val adapterSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPortraitOverlayAdapter.kt"
+        ).readText()
+        val holderSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt"
+        ).readText()
+
+        assertTrue(pagerSource.contains("navigationTransformEnabled = useTextureSurfaceForNavigation"))
+        assertTrue(pagerSource.contains("R.layout.view_player_texture"))
+        assertTrue(adapterSource.contains("useTextureSurfaceForNavigation = useTextureSurfaceForNavigation"))
+        assertTrue(holderSource.contains("useTextureSurfaceForNavigation = useTextureSurfaceForNavigation"))
+        assertTrue(holderSource.contains("resolveNavigationLiveSurfaceTextureEnabled("))
+    }
+
+    @Test
+    fun letterboxAmbientCapture_requiresCurrentReadyPageAndSettings() {
+        assertTrue(
+            shouldCapturePortraitLetterboxAmbientFrame(
+                isCurrentPage = true,
+                letterboxAmbientHazeEnabled = true,
+                letterboxBarHeightPx = 40,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+        assertFalse(
+            shouldCapturePortraitLetterboxAmbientFrame(
+                isCurrentPage = false,
+                letterboxAmbientHazeEnabled = true,
+                letterboxBarHeightPx = 40,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+        assertFalse(
+            shouldCapturePortraitLetterboxAmbientFrame(
+                isCurrentPage = true,
+                letterboxAmbientHazeEnabled = false,
+                letterboxBarHeightPx = 40,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+        assertFalse(
+            shouldCapturePortraitLetterboxAmbientFrame(
+                isCurrentPage = true,
+                letterboxAmbientHazeEnabled = true,
+                letterboxBarHeightPx = 0,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+        assertFalse(
+            shouldCapturePortraitLetterboxAmbientFrame(
+                isCurrentPage = true,
+                letterboxAmbientHazeEnabled = true,
+                letterboxBarHeightPx = 40,
+                isPlayerReadyForThisVideo = false,
+            )
+        )
+    }
+
+    @Test
+    fun portraitDanmakuOverlay_composesOnlyForActiveMatchingSurface() {
+        assertTrue(
+            shouldComposePortraitDanmakuOverlay(
+                danmakuEnabled = true,
+                surfaceMode = PortraitDanmakuSurfaceMode.Page,
+                expectedMode = PortraitDanmakuSurfaceMode.Page,
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+        assertFalse(
+            shouldComposePortraitDanmakuOverlay(
+                danmakuEnabled = true,
+                surfaceMode = PortraitDanmakuSurfaceMode.VideoViewport,
+                expectedMode = PortraitDanmakuSurfaceMode.Page,
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+        assertFalse(
+            shouldComposePortraitDanmakuOverlay(
+                danmakuEnabled = false,
+                surfaceMode = PortraitDanmakuSurfaceMode.Page,
+                expectedMode = PortraitDanmakuSurfaceMode.Page,
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+        assertFalse(
+            shouldComposePortraitDanmakuOverlay(
+                danmakuEnabled = true,
+                surfaceMode = PortraitDanmakuSurfaceMode.Page,
+                expectedMode = PortraitDanmakuSurfaceMode.Page,
+                isCurrentPage = false,
+                isPlayerReadyForThisVideo = true,
+            )
+        )
+    }
+
+    @Test
+    fun portraitPager_sourcesUseThrottledProgressAndLetterboxPolicies() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt"
+        ).readText()
+
+        assertTrue(source.contains("shouldCommitPortraitProgressToDetailState("))
+        assertTrue(source.contains("shouldCapturePortraitLetterboxAmbientFrame("))
+        assertTrue(source.contains("shouldComposePortraitDanmakuOverlay("))
+        assertFalse(source.contains("if (false && danmakuEnabled"))
+        assertFalse(source.contains("val shouldCaptureLetterboxAmbient = false &&"))
     }
 }
