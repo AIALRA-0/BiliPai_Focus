@@ -158,7 +158,44 @@ class DynamicFocusFollowGroupPolicyTest {
                 visibleItemCount = 1,
                 hasMore = true,
                 filterEnabled = true,
-                extraPagesFetched = 24
+                extraPagesFetched = MAX_FOCUS_DYNAMIC_PREFETCH_PAGES
+            )
+        )
+        assertEquals(4, MAX_FOCUS_DYNAMIC_PREFETCH_PAGES)
+    }
+
+    @Test
+    fun focusAutoFillPausesWithManualContinuationWhenTheBoundIsReached() {
+        assertEquals(
+            true,
+            shouldPauseFocusDynamicAutoFill(
+                visibleItemCount = 2,
+                hasMore = true,
+                filterEnabled = true,
+            )
+        )
+        assertEquals(
+            false,
+            shouldPauseFocusDynamicAutoFill(
+                visibleItemCount = 16,
+                hasMore = true,
+                filterEnabled = true,
+            )
+        )
+        assertEquals(
+            false,
+            shouldPauseFocusDynamicAutoFill(
+                visibleItemCount = 0,
+                hasMore = false,
+                filterEnabled = true,
+            )
+        )
+        assertEquals(
+            false,
+            shouldPauseFocusDynamicAutoFill(
+                visibleItemCount = 0,
+                hasMore = true,
+                filterEnabled = false,
             )
         )
     }

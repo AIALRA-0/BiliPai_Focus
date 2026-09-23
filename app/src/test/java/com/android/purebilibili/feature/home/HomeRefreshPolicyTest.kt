@@ -373,8 +373,7 @@ class HomeRefreshPolicyTest {
             shouldAdvanceRecommendFeedRequestIndex(
                 category = HomeCategory.RECOMMEND,
                 isLoadMore = false,
-                currentRefreshIndex = 9,
-                lastSuccessfulRequestIndex = 2,
+                isManualRefresh = true,
                 validVideoCount = 8
             )
         )

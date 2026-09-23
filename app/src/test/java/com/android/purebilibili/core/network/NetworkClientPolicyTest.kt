@@ -91,6 +91,8 @@ class NetworkClientPolicyTest {
         val applied = applyForcedCookieHeader(request)
         assertEquals("SESSDATA=imported; bili_jct=csrf", applied.header("Cookie"))
         assertNull(applied.header(FORCE_COOKIE_HEADER))
-        assertEquals(request, applyForcedCookieHeader(request.newBuilder().removeHeader(FORCE_COOKIE_HEADER).build()))
+        val withoutForcedCookie = request.newBuilder().removeHeader(FORCE_COOKIE_HEADER).build()
+        assertEquals(withoutForcedCookie, applyForcedCookieHeader(withoutForcedCookie))
+        assertEquals("buvid3=from-jar", withoutForcedCookie.header("Cookie"))
     }
 }

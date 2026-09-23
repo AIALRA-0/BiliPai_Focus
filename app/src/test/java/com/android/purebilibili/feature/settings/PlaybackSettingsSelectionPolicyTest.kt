@@ -73,7 +73,7 @@ class PlaybackSettingsSelectionPolicyTest {
         val fullscreenBlock = source
             .substringAfter("private fun PlaybackFullscreenGestureSettingsSection(")
 
-        listOf("评论回复预览", "评论发送检测", "评论区个性装扮", "图片长按保存").forEach { title ->
+        listOf("评论回复预览", "评论发送检测", "评论区个性装扮", "图片长按操作").forEach { title ->
             assertTrue(interactionBlock.contains(title))
             assertFalse(fullscreenBlock.contains(title))
         }
@@ -90,7 +90,12 @@ class PlaybackSettingsSelectionPolicyTest {
             .substringBefore("private fun PlaybackInteractionSettingsSection(")
 
         assertTrue(source.contains("private fun PlaybackFullscreenGestureSettingsSection(\n    context: Context"))
-        assertTrue(contentBlock.contains("PlaybackFullscreenGestureSettingsSection(context = context)"))
+        val sectionCall = contentBlock
+            .substringAfter("PlaybackFullscreenGestureSettingsSection(")
+            .substringBefore(")")
+        assertTrue(sectionCall.contains("context = context"))
+        assertTrue(sectionCall.contains("state = state"))
+        assertTrue(sectionCall.contains("viewModel = viewModel"))
         assertFalse(contentBlock.contains("getFullscreenMode(context)"))
         assertFalse(contentBlock.contains("getAppGestureScreenshotEnabled(context)"))
         assertFalse(contentBlock.contains("getPortraitPlayerCollapseMode(context)"))

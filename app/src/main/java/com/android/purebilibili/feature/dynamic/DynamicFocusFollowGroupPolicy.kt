@@ -5,7 +5,7 @@ import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.data.model.response.DynamicItem
 
 private const val MIN_VISIBLE_DYNAMIC_ITEMS_AFTER_FOCUS_FILTER = 16
-private const val MAX_FOCUS_DYNAMIC_PREFETCH_PAGES = 24
+internal const val MAX_FOCUS_DYNAMIC_PREFETCH_PAGES = 4
 
 internal fun filterDynamicItemsByFocusFollowGroups(
     items: List<DynamicItem>,
@@ -61,4 +61,13 @@ internal fun shouldPrefetchMoreFocusDynamicItems(
     if (!hasMore) return false
     if (visibleItemCount >= minVisibleCount.coerceAtLeast(1)) return false
     return extraPagesFetched < maxExtraPages.coerceAtLeast(0)
+}
+
+internal fun shouldPauseFocusDynamicAutoFill(
+    visibleItemCount: Int,
+    hasMore: Boolean,
+    filterEnabled: Boolean,
+    minVisibleCount: Int = MIN_VISIBLE_DYNAMIC_ITEMS_AFTER_FOCUS_FILTER
+): Boolean {
+    return filterEnabled && hasMore && visibleItemCount < minVisibleCount.coerceAtLeast(1)
 }

@@ -62,9 +62,14 @@ internal fun resolvePlayModeAfterRepeatToggle(mode: PlayMode): PlayMode = when (
 }
 
 internal fun resolveRepeatModeAfterToggle(mode: PlayMode): PlayMode =
-    resolvePlayModeAfterRepeatToggle(
-        if (mode == PlayMode.SHUFFLE) PlayMode.REPEAT_ALL else mode
-    )
+    if (mode == PlayMode.SHUFFLE) {
+        // Shuffle is tracked independently from repeat mode in the current player
+        // state. Tapping repeat while shuffle is active should enter Repeat One
+        // without turning the repeat glyph off for one cycle.
+        PlayMode.REPEAT_ONE
+    } else {
+        resolvePlayModeAfterRepeatToggle(mode)
+    }
 
 internal fun resolveMusicLyricsBlurEnabled(
     sdkInt: Int,

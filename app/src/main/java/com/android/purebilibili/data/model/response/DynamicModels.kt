@@ -326,14 +326,17 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
                     ?.get("words")
                     ?.jsonPrimitive
                     ?.contentOrNull
+                    ?.takeIf(String::isNotBlank)
                     ?: (nodeObject["rich"] as? JsonObject)
                         ?.get("text")
                         ?.jsonPrimitive
                         ?.contentOrNull
+                        ?.takeIf(String::isNotBlank)
                     ?: (nodeObject["rich"] as? JsonObject)
                         ?.get("orig_text")
                         ?.jsonPrimitive
                         ?.contentOrNull
+                        ?.takeIf(String::isNotBlank)
                     ?: ((nodeObject["rich"] as? JsonObject)?.get("emoji") as? JsonObject)
                         ?.get("text")
                         ?.jsonPrimitive

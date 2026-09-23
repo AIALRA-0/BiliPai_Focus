@@ -7,7 +7,7 @@ import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.settings.Md3ColorSource
-import java.io.File
+import com.android.purebilibili.testutil.readProjectSource
 import kotlin.test.Test
 import kotlin.test.assertNotEquals
 import kotlin.test.assertEquals
@@ -136,9 +136,9 @@ class ThemeDynamicColorPolicyTest {
 
     @Test
     fun `wallpaper changes refresh AndroidX dynamic schemes immediately and on resume`() {
-        val source = File(
+        val source = readProjectSource(
             "app/src/main/java/com/android/purebilibili/core/theme/Theme.kt"
-        ).readText()
+        )
         val observer = source
             .substringAfter("private fun rememberSystemWallpaperRefreshToken(")
             .substringBefore("private const val SYSTEM_WALLPAPER_PALETTE_SETTLE_DELAY_MS")

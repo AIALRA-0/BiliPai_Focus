@@ -7,6 +7,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RenderEffect as ComposeRenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
@@ -164,29 +165,62 @@ private class PredictiveBackBlurFrameCache {
     }
 }
 
+/** Reuses the platform blur when quantized gesture progress keeps the same radius. */
+internal class RadiusKeyedBlurEffectCache<T : Any> {
+    private var lastBlurRadiusPx = Float.NaN
+    private var cachedEffect: T? = null
+
+    fun resolve(radiusPx: Float, createEffect: (Float) -> T): T? {
+        if (radiusPx <= 0.01f) {
+            clear()
+            return null
+        }
+        if (radiusPx != lastBlurRadiusPx) {
+            lastBlurRadiusPx = radiusPx
+            cachedEffect = createEffect(radiusPx)
+        }
+        return cachedEffect
+    }
+
+    fun clear() {
+        lastBlurRadiusPx = Float.NaN
+        cachedEffect = null
+    }
+}
+
+/** One-entry cache: radius is quantized, and transitions only need the current effect. */
+internal class PredictiveBackBlurRenderEffectCache {
+    private val cache = RadiusKeyedBlurEffectCache<ComposeRenderEffect>()
+
+    fun resolve(radiusPx: Float): ComposeRenderEffect? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            cache.clear()
+            return null
+        }
+        return cache.resolve(radiusPx) { radius ->
+            RenderEffect.createBlurEffect(
+                radius,
+                radius,
+                Shader.TileMode.CLAMP,
+            ).asComposeRenderEffect()
+        }
+    }
+}
+
 internal fun Modifier.predictiveBackBackgroundEffect(
     progressProvider: () -> Float,
     motionTierProvider: () -> MotionTier = { MotionTier.Normal },
     isLightBackgroundProvider: () -> Boolean = { false },
 ): Modifier {
     val frameCache = PredictiveBackBlurFrameCache()
+    val effectCache = PredictiveBackBlurRenderEffectCache()
     return graphicsLayer {
         val frame = frameCache.resolve(
             progressProvider(),
             motionTierProvider(),
             isLightBackgroundProvider(),
         )
-        renderEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && frame.blurRadiusPx > 0.01f) {
-            RenderEffect
-                .createBlurEffect(
-                    frame.blurRadiusPx,
-                    frame.blurRadiusPx,
-                    Shader.TileMode.CLAMP,
-                )
-                .asComposeRenderEffect()
-        } else {
-            null
-        }
+        renderEffect = effectCache.resolve(frame.blurRadiusPx)
     }.drawWithContent {
         drawContent()
         val frame = frameCache.resolve(

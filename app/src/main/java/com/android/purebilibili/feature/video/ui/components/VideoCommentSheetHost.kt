@@ -1,8 +1,5 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -12,7 +9,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,6 +69,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
 import com.android.purebilibili.core.ui.rememberAppBottomSheetMotion
 import androidx.compose.ui.graphics.graphicsLayer
+import com.android.purebilibili.core.ui.transition.PredictiveBackBlurRenderEffectCache
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.NavigationEventTransitionState
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -359,6 +356,7 @@ fun VideoCommentSheetHost(
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val predictiveBackBlurEffectCache = remember { PredictiveBackBlurRenderEffectCache() }
     val uriHandler = LocalUriHandler.current
     val commentState by commentViewModel.commentState.collectAsStateWithLifecycle()
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
@@ -766,23 +764,14 @@ fun VideoCommentSheetHost(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        renderEffect = null
-                                        if (coveredBlurProgress > 0f &&
-                                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                                        ) {
-                                            val blurFrame = resolvePredictiveBackBlurFrame(
+                                        val blurRadiusPx = if (coveredBlurProgress > 0f) {
+                                            resolvePredictiveBackBlurFrame(
                                                 progress = coveredBlurProgress,
-                                            )
-                                            renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                                AndroidRenderEffect.createBlurEffect(
-                                                    blurFrame.blurRadiusPx,
-                                                    blurFrame.blurRadiusPx,
-                                                    Shader.TileMode.CLAMP,
-                                                ).asComposeRenderEffect()
-                                            } else {
-                                                null
-                                            }
+                                            ).blurRadiusPx
+                                        } else {
+                                            0f
                                         }
+                                        renderEffect = predictiveBackBlurEffectCache.resolve(blurRadiusPx)
                                     },
                             ) {
                                 VideoCommentMainList(

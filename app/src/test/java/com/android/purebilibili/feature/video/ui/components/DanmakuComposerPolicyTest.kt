@@ -40,7 +40,9 @@ class DanmakuComposerPolicyTest {
     @Test
     fun compactDanmakuSend_shownOnTabletInlinePlayer() {
         assertTrue(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 800))
-        assertTrue(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 600))
+        // Split-screen tablet widths keep the control bar clear; a dedicated send
+        // action remains in the UP information section below the player.
+        assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 600))
         assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 411))
     }
 

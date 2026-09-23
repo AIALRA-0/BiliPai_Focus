@@ -1,11 +1,11 @@
 package com.android.purebilibili.feature.login
 
-import android.util.Base64
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.KeyFactory
 import java.security.spec.X509EncodedKeySpec
+import java.util.Base64
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -73,16 +73,16 @@ object BiliPaiTransferCodec {
     }
 
     private fun publicKey(value: String): PublicKey = KeyFactory.getInstance("RSA")
-        .generatePublic(X509EncodedKeySpec(Base64.decode(value, Base64.NO_WRAP or Base64.URL_SAFE)))
+        .generatePublic(X509EncodedKeySpec(Base64.getUrlDecoder().decode(value)))
 
-    private fun PublicKey.fingerprint(): String = Base64.encodeToString(
-        MessageDigest.getInstance("SHA-256").digest(encoded), Base64.NO_WRAP or Base64.URL_SAFE)
+    private fun PublicKey.fingerprint(): String = Base64.getUrlEncoder().encodeToString(
+        MessageDigest.getInstance("SHA-256").digest(encoded))
 
-    private fun encode(value: String): String = Base64.encodeToString(
-        value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP or Base64.URL_SAFE)
+    private fun encode(value: String): String = Base64.getUrlEncoder().encodeToString(
+        value.toByteArray(StandardCharsets.UTF_8))
 
     private fun decode(value: String): String = String(
-        Base64.decode(value, Base64.NO_WRAP or Base64.URL_SAFE), StandardCharsets.UTF_8)
+        Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8)
 
     private const val MAX_QR_CHARS = 100_000
 }

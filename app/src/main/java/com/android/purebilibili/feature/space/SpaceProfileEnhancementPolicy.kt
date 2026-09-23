@@ -273,9 +273,9 @@ internal fun resolveSpaceMainTabs(tab2: List<SpaceAggregateTab>): List<SpaceMain
         resolved.firstOrNull { it.tab == default.tab } ?: default
     }.toMutableList()
 
-    resolved.firstOrNull { it.tab == SpaceMainTab.CHEESE }?.let {
-        result.add(it)
-    }
+    val defaultTabs = defaults.mapTo(mutableSetOf()) { it.tab }
+    result.addAll(resolved.filter { it.tab !in defaultTabs && it.tab != SpaceMainTab.CHEESE })
+    resolved.firstOrNull { it.tab == SpaceMainTab.CHEESE }?.let(result::add)
 
     return result
 }

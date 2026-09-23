@@ -3,7 +3,7 @@ package com.android.purebilibili.core.ui.components
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.AppUiStyle
-import java.io.File
+import com.android.purebilibili.testutil.readProjectSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,9 +12,9 @@ import kotlin.test.assertTrue
 class AppThemeAdaptiveTabRowStructureTest {
     @Test
     fun `global tab row uses native theme renderer when liquid glass is disabled`() {
-        val source = File(
+        val source = readProjectSource(
             "app/src/main/java/com/android/purebilibili/core/ui/components/AppLiquidAwareTabRow.kt"
-        ).readText()
+        )
         val adaptiveEntry = source
             .substringAfter("fun <T> AppThemeAdaptiveTabRow(")
             .substringBefore("fun <T> AppLiquidAwareTabRow(")

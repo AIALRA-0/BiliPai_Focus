@@ -560,8 +560,9 @@ fun DynamicScreen(
         isSelectedUserTabActive,
         selectedUserContentFilter,
         filteredItems.size,
+        activePresentation.focusAutoFillPaused,
     ) {
-        shouldAutoLoadMoreForUserContentFilter(
+        !activePresentation.focusAutoFillPaused && shouldAutoLoadMoreForUserContentFilter(
             isSelectedUserFeed = isSelectedUserTabActive,
             filter = selectedUserContentFilter,
             visibleItemCount = filteredItems.size,
@@ -609,6 +610,7 @@ fun DynamicScreen(
                 allowAutomaticLoadMore = allowAutomaticLoadMore,
                 isLoading = activeLoading,
                 hasMore = currentHasMore,
+                focusAutoFillPaused = activePresentation.focusAutoFillPaused,
             )
         }
     }
@@ -913,6 +915,8 @@ fun DynamicScreen(
                                         activeLoading = pagePresentation.isLoading,
                                         activeError = pagePresentation.error,
                                         hasMore = pagePresentation.hasMore,
+                                        focusAutoFillPaused = pagePresentation.focusAutoFillPaused,
+                                        onContinueFocusAutoFill = viewModel::continueFocusDynamicAutoFill,
                                         selectedTab = tab.logicalIndex,
                                         isSelectedUserTabActive = pagePresentation.isSelectedUserFeed,
                                         selectedUserName = selectedUserName,
@@ -1119,6 +1123,8 @@ fun DynamicScreen(
                                     activeLoading = pagePresentation.isLoading,
                                     activeError = pagePresentation.error,
                                     hasMore = pagePresentation.hasMore,
+                                    focusAutoFillPaused = pagePresentation.focusAutoFillPaused,
+                                    onContinueFocusAutoFill = viewModel::continueFocusDynamicAutoFill,
                                     selectedTab = tab.logicalIndex,
                                     isSelectedUserTabActive = pagePresentation.isSelectedUserFeed,
                                     selectedUserName = selectedUserName,
@@ -1473,6 +1479,8 @@ private fun DynamicList(
     activeLoading: Boolean,
     activeError: String?,
     hasMore: Boolean,
+    focusAutoFillPaused: Boolean,
+    onContinueFocusAutoFill: () -> Unit,
     selectedTab: Int,
     isSelectedUserTabActive: Boolean,
     selectedUserName: String,
@@ -1635,6 +1643,7 @@ private fun DynamicList(
             ) {
                 DynamicEmptyState(
                     title = when {
+                        focusAutoFillPaused -> "当前分组暂无更多匹配动态"
                         selectedTab == 4 && !isSelectedUserTabActive -> "选择一个 UP 查看动态"
                         isSelectedUserTabActive &&
                             selectedUserContentFilter != DynamicUserContentFilter.ALL &&
@@ -1645,6 +1654,7 @@ private fun DynamicList(
                         else -> "暂无动态"
                     },
                     subtitle = when {
+                        focusAutoFillPaused -> "自动加载已暂停。可以继续加载，或调整关注分组。"
                         selectedTab == 4 && !isSelectedUserTabActive ->
                             "从左侧或顶部的 UP 列表中选择一个用户"
                         isSelectedUserTabActive &&
@@ -1655,6 +1665,8 @@ private fun DynamicList(
                         isSelectedUserTabActive -> "该用户暂时没有可显示的公开动态"
                         else -> "登录后即可查看关注 UP 主的最新动态"
                     },
+                    continueLabel = if (focusAutoFillPaused && hasMore) "继续加载" else null,
+                    onContinue = onContinueFocusAutoFill,
                     modifier = Modifier.height(AppSpacingTokens.TripleExtraLarge * 6 + AppSpacingTokens.Medium)
                 )
             }
@@ -1693,6 +1705,26 @@ private fun DynamicList(
                 contentType = { "dynamic_card" }
             ) { index ->
                 dynamicCard(filteredItems[index])
+            }
+        }
+
+        if (focusAutoFillPaused && hasMore && filteredItems.isNotEmpty()) {
+            item(
+                key = "dynamic_focus_auto_fill_paused",
+                contentType = "dynamic_focus_auto_fill_paused",
+                span = StaggeredGridItemSpan.FullLine,
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(AppSpacingTokens.Medium),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    com.android.purebilibili.core.ui.components.AppTextButton(
+                        onClick = onContinueFocusAutoFill,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        AppText("继续加载动态")
+                    }
+                }
             }
         }
 
@@ -1780,6 +1812,8 @@ private fun DynamicSelectedUserFeedHeader(
 private fun DynamicEmptyState(
     title: String,
     subtitle: String,
+    continueLabel: String? = null,
+    onContinue: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -1816,6 +1850,15 @@ private fun DynamicEmptyState(
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             color = AppSurfaceTokens.onSurfaceVariantActions(),
         )
+        if (continueLabel != null) {
+            Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
+            com.android.purebilibili.core.ui.components.AppTextButton(
+                onClick = onContinue,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                AppText(continueLabel)
+            }
+        }
     }
 }
 

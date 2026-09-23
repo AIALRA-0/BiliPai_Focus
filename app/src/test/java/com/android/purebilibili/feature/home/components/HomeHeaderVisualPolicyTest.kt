@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.RectangleShape
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.HomeTopRightAction
+import com.android.purebilibili.core.ui.AppTopTabPresentation
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.feature.home.HomeGlassResolvedColors
 import com.android.purebilibili.core.ui.blur.BlurIntensity
@@ -237,19 +238,19 @@ class HomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `home header trims top chrome heights for better content density`() {
+    fun `home header reserves the shared reference height for both dock modes`() {
         assertEquals(48.dp, resolveHomeTopSearchBarHeight())
         assertEquals(48.dp, resolveHomeTopSearchBarHeight(UiPreset.MD3))
-        assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = true))
-        assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = true, uiPreset = UiPreset.MD3))
-        assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = false))
-        assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = false, uiPreset = UiPreset.MD3))
+        assertEquals(64.dp, resolveHomeTopTabRowHeight(isTabFloating = true))
+        assertEquals(64.dp, resolveHomeTopTabRowHeight(isTabFloating = true, uiPreset = UiPreset.MD3))
+        assertEquals(64.dp, resolveHomeTopTabRowHeight(isTabFloating = false))
+        assertEquals(64.dp, resolveHomeTopTabRowHeight(isTabFloating = false, uiPreset = UiPreset.MD3))
     }
 
     @Test
     fun `md3 home header expands top tab row for icon plus text`() {
         assertEquals(
-            56.dp,
+            64.dp,
             resolveHomeTopTabRowHeight(
                 isTabFloating = false,
                 uiPreset = UiPreset.MD3,
@@ -257,7 +258,7 @@ class HomeHeaderVisualPolicyTest {
             )
         )
         assertEquals(
-            56.dp,
+            64.dp,
             resolveHomeTopTabRowHeight(
                 isTabFloating = true,
                 uiPreset = UiPreset.MD3,
@@ -269,7 +270,7 @@ class HomeHeaderVisualPolicyTest {
     @Test
     fun `ios home header expands docked top tab row for icon plus text`() {
         assertEquals(
-            56.dp,
+            64.dp,
             resolveHomeTopTabRowHeight(
                 isTabFloating = false,
                 uiPreset = UiPreset.IOS,
@@ -277,7 +278,7 @@ class HomeHeaderVisualPolicyTest {
             )
         )
         assertEquals(
-            56.dp,
+            64.dp,
             resolveHomeTopTabRowHeight(
                 isTabFloating = true,
                 uiPreset = UiPreset.IOS,
@@ -570,13 +571,13 @@ class HomeHeaderVisualPolicyTest {
 
     @Test
     fun `home header trims horizontal spacing without cramping controls`() {
-        assertEquals(14.dp, resolveHomeTopSearchRowHorizontalPadding())
+        assertEquals(16.dp, resolveHomeTopSearchRowHorizontalPadding())
         assertEquals(16.dp, resolveHomeTopSearchRowHorizontalPadding(UiPreset.MD3))
         // 两主题统一：搜索胶囊与头像、设置按钮同高（36dp）。
         assertEquals(36.dp, resolveHomeTopSearchPillHeight())
         assertEquals(36.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
         // 分栏轨道与搜索行共用同一水平内边距，保证左右对齐。
-        assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
+        assertEquals(16.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
         assertEquals(16.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true, uiPreset = UiPreset.MD3))
         assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing())
         assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing(UiPreset.MD3))
@@ -588,28 +589,30 @@ class HomeHeaderVisualPolicyTest {
     fun `tab dock max width reuses top controls combined width`() {
         val material3Policy = resolveAppTopChromePolicy(AppUiStyle.MATERIAL3)
         val miuixPolicy = resolveAppTopChromePolicy(AppUiStyle.MIUIX)
-        // 三控件合计宽度 = 容器宽度 − 2×搜索行水平内边距（M3 16 / Miuix 14）。
+        // 当前 M3 / Miuix 共用 16dp 搜索行内边距。
         assertEquals(328.dp, resolveHomeTopControlsContentWidthDp(360.dp, material3Policy))
-        assertEquals(332.dp, resolveHomeTopControlsContentWidthDp(360.dp, miuixPolicy))
+        assertEquals(328.dp, resolveHomeTopControlsContentWidthDp(360.dp, miuixPolicy))
         // 容器宽度小于行内边距时封底为 0。
         assertEquals(0.dp, resolveHomeTopControlsContentWidthDp(20.dp, material3Policy))
     }
 
     @Test
-    fun `home header keeps ios and miuix tabs in detached dock`() {
+    fun `home header uses the unified panel and current material tab renderer`() {
         assertTrue(shouldUseUnifiedHomeTopPanel(UiPreset.IOS))
         assertTrue(shouldUseUnifiedHomeTopPanel(UiPreset.MD3))
-        assertTrue(shouldUseDetachedHomeTopTabDock(UiPreset.IOS))
+        assertFalse(
+            shouldUseDetachedHomeTopTabDock(UiPreset.IOS)
+        )
         assertFalse(
             shouldUseDetachedHomeTopTabDock(
                 UiPreset.MD3,
-                AndroidNativeVariant.MATERIAL3
+                AndroidNativeVariant.MIUIX
             )
         )
         assertTrue(
             shouldUseDetachedHomeTopTabDock(
-                UiPreset.MD3,
-                AndroidNativeVariant.MIUIX
+                presentation = AppTopTabPresentation.MOVING_CAPSULE,
+                liquidGlassEnabled = true,
             )
         )
         assertFalse(
@@ -618,14 +621,14 @@ class HomeHeaderVisualPolicyTest {
                 liquidGlassEnabled = false,
             )
         )
-        assertFalse(shouldShowUnifiedHomeTopPanelDivider(UiPreset.IOS))
+        assertTrue(shouldShowUnifiedHomeTopPanelDivider(UiPreset.IOS))
         assertTrue(
             shouldShowUnifiedHomeTopPanelDivider(
                 UiPreset.MD3,
                 AndroidNativeVariant.MATERIAL3
             )
         )
-        assertFalse(
+        assertTrue(
             shouldShowUnifiedHomeTopPanelDivider(
                 UiPreset.MD3,
                 AndroidNativeVariant.MIUIX
@@ -633,18 +636,18 @@ class HomeHeaderVisualPolicyTest {
         )
         assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding())
         assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding(UiPreset.MD3))
-        assertEquals(9.dp, resolveHomeTopUnifiedPanelInnerPadding()) // 2B 迁移：iOS 输入并入 MIUIX
+        assertEquals(10.dp, resolveHomeTopUnifiedPanelInnerPadding())
         assertEquals(10.dp, resolveHomeTopUnifiedPanelInnerPadding(UiPreset.MD3))
-        assertEquals(18.dp, resolveHomeTopUnifiedPanelCornerRadius()) // 2B 迁移：iOS 输入并入 MIUIX
+        assertEquals(0.dp, resolveHomeTopUnifiedPanelCornerRadius())
         assertEquals(0.dp, resolveHomeTopUnifiedPanelCornerRadius(UiPreset.MD3))
         assertEquals(
-            18.dp,
+            0.dp,
             resolveHomeTopUnifiedPanelCornerRadius(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
-        assertEquals(14.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
+        assertEquals(16.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
         assertEquals(16.dp, resolveHomeTopEmbeddedTabHorizontalPadding(UiPreset.MD3))
     }
 
@@ -657,18 +660,18 @@ class HomeHeaderVisualPolicyTest {
         assertEquals(48.dp, ios.searchBarHeight)
         assertEquals(48.dp, material3.searchBarHeight)
         assertEquals(48.dp, miuix.searchBarHeight)
-        assertEquals(18.dp, ios.unifiedPanelCornerRadius) // 2B 迁移：iOS 输入并入 MIUIX
+        assertEquals(0.dp, ios.unifiedPanelCornerRadius)
         assertEquals(0.dp, material3.unifiedPanelCornerRadius)
-        assertEquals(18.dp, miuix.unifiedPanelCornerRadius)
+        assertEquals(0.dp, miuix.unifiedPanelCornerRadius)
         assertEquals(6.dp, ios.searchToTabsSpacing)
         assertEquals(6.dp, material3.searchToTabsSpacing)
         assertEquals(6.dp, miuix.searchToTabsSpacing)
         assertEquals(6.dp, ios.tabsToContentSpacing)
         assertEquals(6.dp, material3.tabsToContentSpacing)
         assertEquals(6.dp, miuix.tabsToContentSpacing)
-        assertFalse(ios.showUnifiedPanelDivider)
+        assertTrue(ios.showUnifiedPanelDivider)
         assertTrue(material3.showUnifiedPanelDivider)
-        assertFalse(miuix.showUnifiedPanelDivider)
+        assertTrue(miuix.showUnifiedPanelDivider)
     }
 
     @Test
@@ -709,9 +712,9 @@ class HomeHeaderVisualPolicyTest {
     @Test
     fun `home list top padding reserves full unified header height without underlapping md3 tabs`() {
         // status + search + tabs + panelInner*2 + searchToTabs + tabsToContent (+ floating lift)
-        // iOS docked（迁移后并入 MIUIX）: 44+48+56+18+6+6 = 178
+        // iOS legacy preset resolves to current MIUIX policy: 44+48+56+20+6+6 = 180
         assertEquals(
-            178.dp,
+            180.dp,
             resolveHomeTopReservedListPadding(
                 statusBarHeight = 44.dp,
                 searchBarHeight = 48.dp,
@@ -729,9 +732,9 @@ class HomeHeaderVisualPolicyTest {
                 uiPreset = UiPreset.MD3
             )
         )
-        // MIUIX docked: 44+50+48+18+6+6 = 172
+        // MIUIX docked: 44+50+48+20+6+6 = 174
         assertEquals(
-            172.dp,
+            174.dp,
             resolveHomeTopReservedListPadding(
                 statusBarHeight = 44.dp,
                 searchBarHeight = 50.dp,
@@ -740,9 +743,9 @@ class HomeHeaderVisualPolicyTest {
                 androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
-        // Floating iOS（迁移后并入 MIUIX）: same chrome + tabsToContent(6) + yOffset(-2) = 176
+        // Floating iOS legacy preset uses the same chrome and applies the -2dp dock lift: 178.
         assertEquals(
-            176.dp,
+            178.dp,
             resolveHomeTopReservedListPadding(
                 statusBarHeight = 44.dp,
                 searchBarHeight = 48.dp,
@@ -761,7 +764,7 @@ class HomeHeaderVisualPolicyTest {
         // 两主题统一：设置按钮、搜索胶囊与头像同高（36dp）。
         assertEquals(36.dp, resolveHomeTopSettingsButtonSize())
         assertEquals(18.dp, resolveHomeTopSettingsIconSize())
-        assertEquals(7.dp, resolveHomeTopEdgeControlGap())
+        assertEquals(8.dp, resolveHomeTopEdgeControlGap())
         assertEquals(8.dp, resolveHomeTopEdgeControlGap(UiPreset.MD3))
     }
 
@@ -833,7 +836,7 @@ class HomeHeaderVisualPolicyTest {
             )
         )
         assertEquals(
-            7.dp,
+            8.dp,
             resolveHomeTopEdgeControlGap(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
@@ -844,14 +847,14 @@ class HomeHeaderVisualPolicyTest {
     @Test
     fun `android native miuix home header keeps unified panel compact with softer radius`() {
         assertEquals(
-            9.dp,
+            10.dp,
             resolveHomeTopUnifiedPanelInnerPadding(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
         assertEquals(
-            18.dp,
+            0.dp,
             resolveHomeTopUnifiedPanelCornerRadius(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
@@ -1020,7 +1023,7 @@ class HomeHeaderVisualPolicyTest {
 
         assertTrue(appearance.isFloating)
         assertTrue(appearance.blurEnabled)
-        assertFalse(appearance.liquidGlassEnabled)
+        assertTrue(appearance.liquidGlassEnabled)
     }
 
     @Test
@@ -1956,7 +1959,7 @@ class HomeHeaderVisualPolicyTest {
         assertFalse(headerSource.contains("resolveHomeSkinAtmospherePinnedHeight("))
         assertFalse(headerSource.contains("modifier = Modifier.matchParentSize()"))
         assertTrue(headerSource.contains("skinTint = uiSkinDecoration?.searchCapsuleTint"))
-        assertTrue(headerSource.contains("uiSkinDecoration?.topAtmosphereTint"))
+        assertTrue(homeScreenSource.contains("homeUiSkinDecoration?.topAtmosphereTint?.luminance()"))
     }
 
     @Test
@@ -2026,7 +2029,10 @@ class HomeHeaderVisualPolicyTest {
 
         assertTrue(headerSource.contains("val topRightActionButtonSize = resolveHomeTopSettingsButtonSize(topChromePolicy)"))
         assertTrue(headerSource.contains(".size(topRightActionButtonSize)"))
-        assertTrue(headerSource.contains("modifier = Modifier.size(resolveHomeTopSettingsIconSize(topChromePolicy))"))
+        assertTrue(
+            Regex("Modifier\\.size\\(\\s*resolveHomeTopSettingsIconSize\\(topChromePolicy\\)\\s*\\)")
+                .containsMatchIn(headerSource)
+        )
         assertFalse(headerSource.contains(".size(resolveHomeTopSettingsButtonSize())"))
     }
 

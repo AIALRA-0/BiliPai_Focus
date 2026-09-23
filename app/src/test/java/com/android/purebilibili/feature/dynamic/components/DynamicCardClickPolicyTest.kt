@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.dynamic.components
 import com.android.purebilibili.data.model.response.ArchiveMajor
 import com.android.purebilibili.data.model.response.ArticleMajor
 import com.android.purebilibili.data.model.response.DynamicContentModule
+import com.android.purebilibili.data.model.response.DynamicAuthorModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicMajor
 import com.android.purebilibili.data.model.response.DynamicModules
@@ -15,6 +16,7 @@ import com.android.purebilibili.data.model.response.OpusPic
 import com.android.purebilibili.data.model.response.UgcSeasonMajor
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DynamicCardClickPolicyTest {

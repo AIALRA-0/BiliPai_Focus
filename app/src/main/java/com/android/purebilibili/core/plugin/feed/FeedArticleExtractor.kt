@@ -42,7 +42,12 @@ fun extractArticleBody(pageHtml: String): String? {
     markers.forEach { marker ->
         val index = withoutNoise.indexOf(marker)
         if (index >= 0) {
-            sliceHtmlElement(withoutNoise, index)?.takeIf { feedPlainText(it).length > 80 }?.let { return it }
+            // A named article-body container is strong structural evidence. Short
+            // posts are valid articles too, so do not discard them with the generic
+            // fallback's long-body threshold.
+            sliceHtmlElement(withoutNoise, index)
+                ?.takeIf { feedPlainText(it).isNotBlank() }
+                ?.let { return it }
         }
     }
     val articleStart = Regex("""(?i)<article\b""").find(withoutNoise)?.range?.first

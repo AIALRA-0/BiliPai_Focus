@@ -18,7 +18,7 @@ class DynamicFocusPrefetchStructureTest {
         assertTrue(loadSource.contains("filterDynamicItemsForTimelineRequestType("))
         assertTrue(loadSource.contains("shouldPrefetchMoreFocusDynamicItems("))
         assertTrue(loadSource.contains("refresh = false"))
-        assertTrue(loadSource.contains("prependDistinctByKey("))
+        assertTrue(loadSource.contains("appendDistinctByKey("))
     }
 
     @Test

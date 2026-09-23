@@ -67,10 +67,10 @@ class FloatingBottomBarStructureTest {
         assertTrue(body.contains("padding = maxOf("))
         assertTrue(body.contains("refractionHeight = shellRefractionHeightPx"))
         assertTrue(body.contains("refractionAmount = shellRefractionAmountPx"))
-        assertTrue(body.contains("baseHighlight.copy(alpha = 0.75f)"))
+        assertTrue(body.contains("baseHighlight?.value?.copy(alpha = 0.75f)"))
 
         assertTrue(body.contains(".alpha(0f)"))
-        assertTrue(body.contains(".then(tabsBackdropSource.modifier)"))
+        assertTrue(body.contains(".then(tabsBackdropSource?.modifier ?: Modifier)"))
         assertTrue(body.contains("rememberChromeBackdropSource()"))
 
         assertTrue(body.contains("rememberCombinedBackdrop(backdrop, tabsBackdrop)"))
@@ -136,7 +136,8 @@ class FloatingBottomBarStructureTest {
         assertFalse(baseRow.contains("interactiveHighlight.gestureModifier"))
         assertFalse(baseRow.contains(".then(dampedDragAnimation.modifier)"))
         assertTrue(movingIndicator.contains("interactiveHighlight?.gestureModifier"))
-        assertTrue(movingIndicator.contains(".then(dampedDragAnimation.modifier)"))
+        assertTrue(movingIndicator.contains("(dragSelectionEnabled || longPressDragSelectionEnabled) && safeTabsCount > 1"))
+        assertTrue(movingIndicator.contains("dampedDragAnimation.modifier"))
         assertTrue(body.contains("offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))"))
         val dragRememberKeys = body
             .substringAfter("val dampedDragAnimation = remember(")
@@ -148,7 +149,11 @@ class FloatingBottomBarStructureTest {
         assertTrue(dragPort.contains("releaseJob?.cancel()"))
         // 照搬 HyperIsland：release 直接接管放大动画，不等待 pressJob 跑完，
         // 否则缩放会先到峰值再停住、之后才缩回（放大 → 停顿 → 缩小）。
-        assertFalse(dragPort.contains("pressJob?.join()"))
+        assertFalse(
+            dragPort.lineSequence()
+                .map { it.substringBefore("//") }
+                .any { it.contains("pressJob?.join()") }
+        )
         assertFalse(dragPort.contains("isInside && wasInside"))
         assertTrue(body.contains("resolveFloatingDockIndicatorLayerScaleX("))
         assertTrue(body.contains("LocalFloatingBottomBarIndicatorStretchX provides indicatorStretchXProvider"))
@@ -196,11 +201,14 @@ class FloatingBottomBarStructureTest {
     fun `gravity highlight rubber band and InteractiveHighlight are wired together`() {
         val source = loadFloatingBottomBarSource()
 
-        assertTrue(source.contains("fun rememberGravityRotatedHighlight("))
-        assertTrue(source.contains("rememberDeviceTilt()"))
-        assertTrue(source.contains("LIGHT_REF_X = 0.5f"))
-        assertTrue(source.contains("LIGHT_REF_Y = 0.7f"))
-        assertTrue(source.contains("GRAVITY_DIR_THRESHOLD_SQ = 0.01f"))
+        val chromeSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/FloatingDockChrome.kt"
+        )
+        assertTrue(chromeSource.contains("fun rememberBiliPaiGravityHighlight("))
+        assertTrue(chromeSource.contains("rememberDeviceTilt()"))
+        assertTrue(chromeSource.contains("LIGHT_REF_X = 0.5f"))
+        assertTrue(chromeSource.contains("LIGHT_REF_Y = 0.7f"))
+        assertTrue(chromeSource.contains("GRAVITY_DIR_THRESHOLD_SQ = 0.01f"))
         assertTrue(source.contains("extraDegrees = -45f"))
         assertTrue(source.contains("extraDegrees = 90f"))
         assertTrue(source.contains("val offsetAnimation = remember { Animatable(0f) }"))
@@ -211,7 +219,8 @@ class FloatingBottomBarStructureTest {
         assertTrue(source.contains("resolveDockInteractiveHighlightRadiusPx("))
         assertTrue(source.contains("resolveDockPillHighlightWidthDp("))
         assertTrue(source.contains("Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU"))
-        assertTrue(source.contains("selectedIndexLatest.value().coerceIn(0, maxTabIndex) to"))
+        assertTrue(source.contains("pagerFollowGate.ownedTargetIndex = resolveIndicatorOwnedTargetOnDragStop("))
+        assertTrue(source.contains("if (targetIndex != selected)"))
         assertTrue(source.contains("onSelectedLatest.value(targetIndex)"))
         assertFalse(source.contains("pendingUserSelectedIndex"))
     }
@@ -241,7 +250,8 @@ class FloatingBottomBarStructureTest {
         val indicatorSource = source.substringAfter("if (tabWidthPx > 0f)")
 
         assertTrue(source.contains("onReselected: () -> Unit = {}"))
-        assertTrue(indicatorSource.contains(".then(dampedDragAnimation.modifier)"))
+        assertTrue(indicatorSource.contains("(dragSelectionEnabled || longPressDragSelectionEnabled) && safeTabsCount > 1"))
+        assertTrue(indicatorSource.contains("dampedDragAnimation.modifier"))
         assertTrue(indicatorSource.contains("onClick = onReselected"))
         assertTrue(indicatorSource.contains(".clearAndSetSemantics {}"))
     }
@@ -254,7 +264,7 @@ class FloatingBottomBarStructureTest {
             "Keep pointer input in the logical tab slot"
         )
 
-        assertTrue(hitTarget.contains("val slotOffsetPx = dampedDragAnimation.value * tabWidthPx"))
+        assertTrue(hitTarget.contains("val slotOffsetPx = visualIndicatorPositionProvider() * tabWidthPx"))
         assertTrue(hitTarget.contains(".width(tabWidthDp)"))
         assertTrue(hitTarget.contains("onClick = onReselected"))
         assertFalse(
@@ -270,17 +280,13 @@ class FloatingBottomBarStructureTest {
         val alignmentProvider = source
             .substringAfter("val itemAlignmentOffsetProvider")
             .substringBefore("LaunchedEffect(dampedDragAnimation, maxTabIndex, isLiquidGlassMode)")
-        val nonLiquidIndicator = source
-            .substringAfter("if (isLiquidGlassMode && combinedBackdrop != null)")
-            .substringBefore("// The selected capsule can be wider than its tab")
-            .substringAfterLast("} else {")
-
         assertTrue(alignmentProvider.contains("resolveFloatingDockIndicatorContentAlignmentPx("))
         assertFalse(alignmentProvider.contains("!isLiquidGlassMode"))
+        assertTrue(source.contains("LocalFloatingBottomBarItemAlignmentOffset provides itemAlignmentOffsetProvider"))
         assertTrue(
-            nonLiquidIndicator.contains(
-                "LocalFloatingBottomBarItemAlignmentOffset provides itemAlignmentOffsetProvider"
-            )
+            Regex("LocalFloatingBottomBarItemAlignmentOffset provides itemAlignmentOffsetProvider")
+                .findAll(source)
+                .count() >= 2
         )
     }
 
@@ -301,11 +307,8 @@ class FloatingBottomBarStructureTest {
     fun `all indicator materials keep animated settling`() {
         val source = loadFloatingBottomBarSource()
         val selectionSync = source
-            .substringAfter("shouldAnimateIndicatorToSelectedIndex(")
-            .substringBefore(
-                "LaunchedEffect(dampedDragAnimation, maxTabIndex)",
-                missingDelimiterValue = ""
-            )
+            .substringAfter("LaunchedEffect(dampedDragAnimation, maxTabIndex) {")
+            .substringBefore("    LaunchedEffect(dampedDragAnimation, maxTabIndex) {")
 
         assertTrue(selectionSync.contains("dampedDragAnimation.animateToValue(index.toFloat())"))
         assertFalse(selectionSync.contains("dampedDragAnimation.snapTo(index.toFloat())"))
@@ -357,7 +360,7 @@ class FloatingBottomBarStructureTest {
         val source = loadFloatingBottomBarSource()
         val body = source.substringAfter("fun FloatingBottomBar(")
 
-        assertTrue(body.contains("modifier = modifier,"))
+        assertTrue(Regex("Box\\s*\\(\\s*modifier = modifier(?:\\s|$)").containsMatchIn(body))
         assertFalse(body.contains("modifier = modifier.width(IntrinsicSize.Min)"))
     }
 
@@ -382,7 +385,7 @@ class FloatingBottomBarStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/home/components/BottomBarFloatingSegmentedControl.kt"
         )
 
-        assertTrue(video.contains("BottomBarLiquidSegmentedControl("))
+        assertTrue(video.contains("AppThemeAdaptiveTabRow("))
         assertTrue(video.contains("pagerState.currentPage + pagerState.currentPageOffsetFraction"))
         assertTrue(search.contains("BottomBarLiquidSegmentedControl("))
         assertTrue(search.contains("pagerState.currentPage + pagerState.currentPageOffsetFraction"))

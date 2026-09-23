@@ -119,6 +119,21 @@ internal fun resolveDynamicStartupRetryDelayMs(attempt: Int): Long {
     }
 }
 
+internal fun shouldApplyCachedDynamicTimeline(
+    cacheReadRevision: Long,
+    latestFreshTimelineRevision: Long,
+    currentPage: DynamicTimelinePageState
+): Boolean {
+    return cacheReadRevision == latestFreshTimelineRevision &&
+        currentPage.items.isEmpty() &&
+        !currentPage.isCachePlaceholder
+}
+
+private data class DynamicFeedRoundCompletion(
+    val feedResult: DynamicFeedFetchResult,
+    val focusAutoFillPaused: Boolean
+)
+
 internal fun hasLoadedAllDynamicFollowings(
     pageSize: Int,
     accumulatedCount: Int,
@@ -150,6 +165,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var followingsFullyLoaded: Boolean = false
     private var completeFollowingsLoadRequested: Boolean = false
     private var cacheSaveJob: Job? = null
+    private var allTimelineFreshResultRevision = 0L
     private var startupFollowingsHydrationScheduled: Boolean = false
     private var startupLoadsActivated: Boolean = false
 
@@ -209,12 +225,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             FocusFollowGroupStore.getConfig(appContext).collect { config ->
                 focusFollowGroupConfig = config
+                clearFocusDynamicAutoFillPause()
                 requestFocusDynamicPrefetchIfSparse()
             }
         }
         viewModelScope.launch {
             SettingsManager.getFocusFollowGroupFilteringEnabled(appContext).collect { enabled ->
                 focusFollowGroupFilteringEnabled = enabled
+                clearFocusDynamicAutoFillPause()
                 requestFocusDynamicPrefetchIfSparse()
             }
         }
@@ -303,23 +321,41 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun loadCachedDynamics() {
-        val cachedJson = cachePrefs.getString(KEY_DYNAMIC_CACHE, null) ?: return
-        runCatching { json.decodeFromString<List<DynamicItem>>(cachedJson) }
-            .onSuccess { items ->
-                if (items.isNotEmpty()) {
-                    _uiState.value = updateDynamicTimelinePage(
-                        currentState = _uiState.value,
-                        requestType = "all"
-                    ) { page ->
-                        page.copy(
-                            items = items.toImmutableList(),
-                            isLoading = false,
-                            error = null,
-                            isCachePlaceholder = true
-                        )
-                    }
+        val cacheReadRevision = allTimelineFreshResultRevision
+        viewModelScope.launch {
+            val cachedJson = withContext(Dispatchers.IO) {
+                cachePrefs.getString(KEY_DYNAMIC_CACHE, null)
+            } ?: return@launch
+            val items = withContext(Dispatchers.Default) {
+                runCatching { json.decodeFromString<List<DynamicItem>>(cachedJson) }.getOrNull()
+            }?.takeIf { it.isNotEmpty() } ?: return@launch
+            val currentPage = _uiState.value.timelinePage("all")
+            if (!shouldApplyCachedDynamicTimeline(
+                    cacheReadRevision = cacheReadRevision,
+                    latestFreshTimelineRevision = allTimelineFreshResultRevision,
+                    currentPage = currentPage
+                )
+            ) return@launch
+
+            _uiState.value = updateDynamicTimelinePage(
+                currentState = _uiState.value,
+                requestType = "all"
+            ) { page ->
+                if (!shouldApplyCachedDynamicTimeline(
+                        cacheReadRevision = cacheReadRevision,
+                        latestFreshTimelineRevision = allTimelineFreshResultRevision,
+                        currentPage = page
+                    )
+                ) {
+                    page
+                } else {
+                    page.copy(
+                        items = items.toImmutableList(),
+                        isCachePlaceholder = true
+                    )
                 }
             }
+        }
     }
 
     private fun saveDynamicCache(items: List<DynamicItem>) {
@@ -877,7 +913,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             // [新增] 检查登录状态
             if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
                 val failedPage = resolveDynamicTimelinePageAfterFailure(
-                    currentPage = requestPage,
+                    currentPage = _uiState.value.timelinePage(requestType),
                     errorMessage = "未登录，请先登录",
                     refresh = refresh
                 )
@@ -902,23 +938,27 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     ) {
                         return@fold
                     }
+                    if (requestType == "all") {
+                        allTimelineFreshResultRevision += 1
+                    }
+                    val currentPage = _uiState.value.timelinePage(requestType)
                     var successPage = resolveDynamicTimelinePageAfterSuccess(
-                        currentPage = requestPage,
-                        incomingItems = feedResult.items,
+                        currentPage = currentPage,
+                        incomingItems = feedResult.feedResult.items,
                         isRefresh = refresh,
                         incrementalRefreshEnabled = incrementalTimelineRefreshEnabled,
-                        hasMore = feedResult.hasMore
-                    )
+                        hasMore = feedResult.feedResult.hasMore
+                    ).copy(focusAutoFillPaused = feedResult.focusAutoFillPaused)
                     if (refresh && successPage.incrementalPrependedCount == 0) {
-                        if (feedResult.nextOffset.isNotBlank()) {
+                        if (feedResult.feedResult.nextOffset.isNotBlank()) {
                             DynamicRepository.syncPaginationAfterRefresh(
                                 scope = DynamicFeedScope.DYNAMIC_SCREEN,
                                 type = requestType,
-                                offset = feedResult.nextOffset,
-                                hasMore = feedResult.hasMore
+                                offset = feedResult.feedResult.nextOffset,
+                                hasMore = feedResult.feedResult.hasMore
                             )
                         }
-                        successPage = successPage.copy(hasMore = feedResult.hasMore)
+                        successPage = successPage.copy(hasMore = feedResult.feedResult.hasMore)
                     }
                     _uiState.value = updateDynamicTimelinePage(_uiState.value, requestType) { successPage }
                     if (requestType == "all") {
@@ -936,7 +976,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         return@fold
                     }
                     val failedPage = resolveDynamicTimelinePageAfterFailure(
-                        currentPage = requestPage,
+                        currentPage = _uiState.value.timelinePage(requestType),
                         errorMessage = error.message ?: "加载失败",
                         refresh = refresh
                     )
@@ -953,7 +993,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         requestType: String,
         baselineItems: List<DynamicItem>,
         incrementalRefresh: Boolean,
-    ): Result<DynamicFeedFetchResult> {
+    ): Result<DynamicFeedRoundCompletion> {
         val firstResult = DynamicRepository.getDynamicFeed(
             refresh = refresh,
             scope = DynamicFeedScope.DYNAMIC_SCREEN,
@@ -993,6 +1033,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN, requestType),
                 filterEnabled = requestFocusFilteringEnabled,
                 extraPagesFetched = extraPagesFetched,
+                maxExtraPages = MAX_FOCUS_DYNAMIC_PREFETCH_PAGES,
             )
         ) {
             val extraPage = DynamicRepository.getDynamicFeed(
@@ -1010,11 +1051,19 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             extraPagesFetched += 1
         }
 
+        val hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN, requestType)
         return Result.success(
-            firstPage.copy(
-                items = accumulatedItems,
-                nextOffset = lastPage.nextOffset,
-                hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN, requestType),
+            DynamicFeedRoundCompletion(
+                feedResult = firstPage.copy(
+                    items = accumulatedItems,
+                    nextOffset = lastPage.nextOffset,
+                    hasMore = hasMore,
+                ),
+                focusAutoFillPaused = shouldPauseFocusDynamicAutoFill(
+                    visibleItemCount = visibleItemCountAfterFocusFilter(),
+                    hasMore = hasMore,
+                    filterEnabled = requestFocusFilteringEnabled,
+                )
             )
         )
     }
@@ -1052,11 +1101,29 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     type = requestType
                 ),
                 filterEnabled = true,
-                extraPagesFetched = 0
+                extraPagesFetched = 0,
+                maxExtraPages = MAX_FOCUS_DYNAMIC_PREFETCH_PAGES,
             )
         ) {
             loadDynamicFeed(refresh = false)
         }
+    }
+
+    private fun clearFocusDynamicAutoFillPause() {
+        val requestType = resolveDynamicFeedRequestType(_selectedTab.value)
+        _uiState.value = updateDynamicTimelinePage(_uiState.value, requestType) { page ->
+            if (page.focusAutoFillPaused) page.copy(focusAutoFillPaused = false) else page
+        }
+    }
+
+    fun continueFocusDynamicAutoFill() {
+        val requestType = resolveDynamicFeedRequestType(_selectedTab.value)
+        val page = _uiState.value.timelinePage(requestType)
+        if (!page.focusAutoFillPaused || !page.hasMore) return
+        _uiState.value = updateDynamicTimelinePage(_uiState.value, requestType) {
+            it.copy(focusAutoFillPaused = false)
+        }
+        loadDynamicFeed(refresh = false, requestType = requestType)
     }
 
     fun refresh(selectedTab: Int = _selectedTab.value) {
@@ -2479,5 +2546,6 @@ data class DynamicTimelinePageState(
     val incrementalRefreshBoundaryKey: String? = null,
     val incrementalPrependedCount: Int = 0,
     val errorSource: DynamicFeedErrorSource = DynamicFeedErrorSource.NONE,
-    val isCachePlaceholder: Boolean = false
+    val isCachePlaceholder: Boolean = false,
+    val focusAutoFillPaused: Boolean = false
 )

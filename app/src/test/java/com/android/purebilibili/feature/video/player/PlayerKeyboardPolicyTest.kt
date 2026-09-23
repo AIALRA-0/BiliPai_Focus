@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.player
 
 import android.view.KeyEvent as AndroidKeyEvent
-import androidx.compose.ui.input.key.KeyEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -12,16 +11,14 @@ class PlayerKeyboardPolicyTest {
         keyCode: Int,
         action: Int = AndroidKeyEvent.ACTION_DOWN,
         metaState: Int = 0,
-    ): KeyEvent {
-        return KeyEvent(
-            AndroidKeyEvent(
-                0L,
-                0L,
-                action,
-                keyCode,
-                0,
-                metaState
-            )
+    ): PlayerKeyInput {
+        return PlayerKeyInput(
+            keyCode = keyCode,
+            isKeyDown = action == AndroidKeyEvent.ACTION_DOWN,
+            isCtrlPressed = (metaState and AndroidKeyEvent.META_CTRL_ON) != 0,
+            isAltPressed = (metaState and AndroidKeyEvent.META_ALT_ON) != 0,
+            isMetaPressed = (metaState and AndroidKeyEvent.META_META_ON) != 0,
+            isShiftPressed = (metaState and AndroidKeyEvent.META_SHIFT_ON) != 0,
         )
     }
 

@@ -64,15 +64,15 @@ internal fun parseBottomBarItemLabels(raw: String): Map<String, String> {
 
 object NavigationSettingsStore {
     private val keyTabletUseSidebar = booleanPreferencesKey("tablet_use_sidebar")
-    private val keySidebarExpanded = booleanPreferencesKey("sidebar_expanded")
+    internal val keySidebarExpanded = booleanPreferencesKey("sidebar_expanded")
     private val keySidebarAccountSwitcherEnabled =
         booleanPreferencesKey("sidebar_account_switcher_enabled")
     private val keyPredictiveBackEnabled = booleanPreferencesKey("predictive_back_enabled")
     private val keyPredictiveBackAnimationStyle = stringPreferencesKey("predictive_back_animation_style")
     private val keyPredictiveBackExitDirection = stringPreferencesKey("predictive_back_exit_direction")
-    private val keyMiuixTransitionBlurEnabled =
+    internal val keyMiuixTransitionBlurEnabled =
         booleanPreferencesKey("miuix_transition_blur_enabled")
-    private val keyVideoSharedReturnGestureFollowEnabled =
+    internal val keyVideoSharedReturnGestureFollowEnabled =
         booleanPreferencesKey("video_shared_return_gesture_follow_enabled")
     private val keyFullScreenSwipeBackEnabled =
         booleanPreferencesKey("full_screen_swipe_back_enabled")

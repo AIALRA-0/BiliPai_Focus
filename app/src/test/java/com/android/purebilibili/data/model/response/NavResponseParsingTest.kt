@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class NavResponseParsingTest {
 
@@ -84,8 +85,8 @@ class NavResponseParsingTest {
         )
 
         val data = assertNotNull(response.data)
-        assertEquals(0, data.level_info.current_min)
-        assertEquals(0, data.level_info.current_exp)
-        assertEquals(0, data.level_info.next_exp)
+        assertNull(data.level_info.current_min)
+        assertNull(data.level_info.current_exp)
+        assertNull(data.level_info.next_exp)
     }
 }

@@ -959,7 +959,7 @@ fun PlaybackSettingsContent(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_HIGHEST_QUALITY),
                             title = "自动最高画质",
                             subtitle = if (autoHighestQualityEnabled) {
-                                "每个视频都会自动选择当前账号和设备可播放的最高画质"
+                                "每个视频都会自动选择当前账号和设备可播放的最高画质；视频本身无更高档不打断播放"
                             } else {
                                 "关闭后按下方的无线网络和移动网络默认画质播放"
                             },

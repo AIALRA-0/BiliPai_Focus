@@ -1039,16 +1039,14 @@ private fun VideoPlayerSectionContent(
     var twoFingerFeedbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var hasShownHiResCompatHintLocally by remember {
         mutableStateOf(
-            com.android.purebilibili.core.store.SettingsManager
-                .getHiResLongPressCompatHintShownSync(context)
+            playerInteractionSettings.hiResLongPressCompatHintShown
         )
     }
     val hasShownHiResCompatHint = hiResCompatHintShownPersisted || hasShownHiResCompatHintLocally
     val longPressSpeedLockHintShownPersisted = playerInteractionSettings.longPressSpeedLockHintShown
     var hasShownLongPressSpeedLockHintLocally by remember {
         mutableStateOf(
-            com.android.purebilibili.core.store.SettingsManager
-                .getLongPressSpeedLockHintShownSync(context)
+            playerInteractionSettings.longPressSpeedLockHintShown
         )
     }
     val hasShownLongPressSpeedLockHint =

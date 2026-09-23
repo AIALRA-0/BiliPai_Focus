@@ -44,6 +44,7 @@ import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import kotlin.coroutines.EmptyCoroutineContext
 import coil3.size.Size
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -452,7 +453,7 @@ private fun SeekPreviewImage(
         contentScale = ContentScale.Crop
     )
 
-    val currentPainterState by painter.state.collectAsState()
+    val currentPainterState by painter.state.collectAsState(context = EmptyCoroutineContext)
     when (val painterState = currentPainterState) {
         is AsyncImagePainter.State.Loading -> {
             Box(

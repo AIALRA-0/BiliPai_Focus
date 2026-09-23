@@ -225,6 +225,13 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
+    fun `focus filtered follow completion has a small per round request budget`() {
+        assertTrue(hasHomeFollowFocusCompletionBudget(3))
+        assertFalse(hasHomeFollowFocusCompletionBudget(4))
+        assertFalse(hasHomeFollowFocusCompletionBudget(0, maxExtraFetches = 0))
+    }
+
+    @Test
     fun `refresh completion should stop once cached pool already satisfies first sixteen cards`() {
         assertEquals(
             0,

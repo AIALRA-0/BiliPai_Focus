@@ -40,7 +40,7 @@ class PlaybackCoordinatorTest {
 
         val action = coordinator.resolvePlaybackEnded(
             behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
-            autoPlayEnabled = false,
+            autoPlayEnabled = true,
             isExternalPlaylist = false,
             externalPlaylistAutoContinueEnabled = false,
             externalPlaylistSource = ExternalPlaylistSource.NONE,

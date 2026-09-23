@@ -30,7 +30,8 @@ internal data class DynamicPagePresentation(
     val hasMore: Boolean,
     val isSelectedUserFeed: Boolean,
     val incrementalRefreshBoundaryKey: String?,
-    val incrementalPrependedCount: Int
+    val incrementalPrependedCount: Int,
+    val focusAutoFillPaused: Boolean = false
 )
 
 internal fun resolveDynamicPagePresentation(
@@ -81,7 +82,8 @@ internal fun resolveDynamicPagePresentation(
         hasMore = page.hasMore,
         isSelectedUserFeed = false,
         incrementalRefreshBoundaryKey = page.incrementalRefreshBoundaryKey,
-        incrementalPrependedCount = page.incrementalPrependedCount
+        incrementalPrependedCount = page.incrementalPrependedCount,
+        focusAutoFillPaused = page.focusAutoFillPaused
     )
 }
 
@@ -297,8 +299,9 @@ internal fun shouldLoadMoreDynamicFeed(
     isLoading: Boolean,
     hasMore: Boolean,
     prefetchDistance: Int = 3,
+    focusAutoFillPaused: Boolean = false,
 ): Boolean {
-    if (!allowAutomaticLoadMore || isLoading || !hasMore || totalItemsCount <= 0) return false
+    if (!allowAutomaticLoadMore || isLoading || !hasMore || focusAutoFillPaused || totalItemsCount <= 0) return false
     val visibleIndex = furthestVisibleItemIndex ?: return false
     return visibleIndex >= totalItemsCount - prefetchDistance.coerceAtLeast(1)
 }
@@ -566,7 +569,8 @@ internal fun resolveDynamicTimelinePageForLoadStart(
 ): DynamicTimelinePageState {
     val basePage = currentPage.copy(
         error = null,
-        errorSource = DynamicFeedErrorSource.NONE
+        errorSource = DynamicFeedErrorSource.NONE,
+        focusAutoFillPaused = if (refresh) false else currentPage.focusAutoFillPaused
     )
     return when {
         refresh && showLoading -> basePage.copy(isLoading = true)

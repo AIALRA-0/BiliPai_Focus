@@ -47,8 +47,8 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.isBottomBarSearchEnabled)
         assertEquals(BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP, result.bottomBarSearchAutoExpandMode)
         assertEquals(BottomBarSearchLayoutMode.FULL_DOCK, result.bottomBarSearchLayoutMode)
-        assertTrue(result.androidNativeLiquidGlassEnabled)
-        assertTrue(result.isLiquidGlassEnabled)
+        assertFalse(result.androidNativeLiquidGlassEnabled)
+        assertFalse(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.SUKISU, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
         assertEquals(0.52f, result.liquidGlassStrength)
@@ -158,7 +158,7 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(BottomBarSearchAutoExpandMode.DISABLED, result.bottomBarSearchAutoExpandMode)
         assertEquals(BottomBarSearchLayoutMode.HOME_AND_SEARCH, result.bottomBarSearchLayoutMode)
         assertTrue(result.androidNativeLiquidGlassEnabled)
-        assertFalse(result.isLiquidGlassEnabled)
+        assertTrue(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.IOS26, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.CLEAR, result.liquidGlassMode)
         assertEquals(0.42f, result.liquidGlassStrength)
@@ -455,7 +455,10 @@ class HomeSettingsMappingPolicyTest {
 
         val result = mapHomeSettingsFromPreferences(prefs)
 
-        assertEquals(0.5f, result.liquidGlassProgress)
+        assertEquals(
+            resolveStoredLiquidGlassProgress(null, null, null, null),
+            result.liquidGlassProgress
+        )
     }
 
     @Test
@@ -481,7 +484,7 @@ class HomeSettingsMappingPolicyTest {
 
         assertFalse(result.isTopBarLiquidGlassEnabled)
         assertTrue(result.isBottomBarLiquidGlassEnabled)
-        assertTrue(result.isLiquidGlassEnabled)
+        assertFalse(result.isLiquidGlassEnabled)
     }
 
     @Test

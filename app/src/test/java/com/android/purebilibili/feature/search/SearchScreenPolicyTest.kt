@@ -362,7 +362,7 @@ class SearchScreenPolicyTest {
             resolveSearchPagerPageForType(SearchType.LIVE)
         )
         assertEquals(
-            0,
+            8,
             resolveSearchPagerPageForType(SearchType.PHOTO)
         )
     }

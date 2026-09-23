@@ -14,6 +14,7 @@ import com.android.purebilibili.core.plugin.skin.UiSkinSurface
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PluginsScreenPolicyTest {

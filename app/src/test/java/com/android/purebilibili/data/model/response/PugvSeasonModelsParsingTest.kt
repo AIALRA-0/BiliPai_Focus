@@ -3,7 +3,7 @@ package com.android.purebilibili.data.model.response
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import kotlin.test.assertNotNull
 import org.junit.Test
 
 class PugvSeasonModelsParsingTest {
@@ -92,7 +92,7 @@ class PugvSeasonModelsParsingTest {
         assertEquals("精品课程：Kotlin Compose 架构演进", detail.title)
         assertEquals(10, detail.seasonType)
         assertEquals("课堂", detail.seasonTypeName)
-        assertEquals("本课程从基础原理到实战深度拆解", detail.evaluate)
+        assertEquals("系统化学习 Compose 进阶与调优", detail.evaluate)
         assertEquals(88888L, detail.stat?.views)
         assertEquals(9999L, detail.stat?.favorites)
         assertEquals(666L, detail.stat?.reply)

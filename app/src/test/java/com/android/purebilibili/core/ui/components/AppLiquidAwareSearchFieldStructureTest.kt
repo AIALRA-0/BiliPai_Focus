@@ -1,15 +1,15 @@
 package com.android.purebilibili.core.ui.components
 
-import java.io.File
+import com.android.purebilibili.testutil.readProjectSource
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 class AppLiquidAwareSearchFieldStructureTest {
     @Test
     fun `liquid search matches shared dock geometry and keeps native fallback`() {
-        val source = File(
+        val source = readProjectSource(
             "app/src/main/java/com/android/purebilibili/core/ui/components/AppLiquidAwareSearchField.kt"
-        ).readText()
+        )
 
         assertTrue(source.contains("BottomBarMatchedReusableLiquidDock("))
         assertTrue(source.contains("shape = CircleShape"))
@@ -25,9 +25,9 @@ class AppLiquidAwareSearchFieldStructureTest {
 
     @Test
     fun `comment search uses dock indicators and one shared popup surface`() {
-        val source = File(
+        val source = readProjectSource(
             "app/src/main/java/com/android/purebilibili/feature/video/ui/components/CommentSearchSheet.kt"
-        ).readText()
+        )
 
         assertTrue(source.contains("AppLiquidAwareSearchField("))
         assertTrue(source.contains("leadingIconHorizontalOffset = 8.dp"))
@@ -42,13 +42,13 @@ class AppLiquidAwareSearchFieldStructureTest {
 
     @Test
     fun `popup renderer receives the page backdrop before dialog windows open`() {
-        val navigation = File(
+        val navigation = readProjectSource(
             "app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"
-        ).readText()
-        val renderer = File(
+        )
+        val renderer = readProjectSource(
             "app/src/main/java/com/android/purebilibili/core/ui/components/" +
                 "BiliPaiPopupSurfaceRenderer.kt"
-        ).readText()
+        )
 
         assertTrue(navigation.contains("LocalAppPopupSurfaceRenderer provides"))
         assertTrue(navigation.contains("LocalFloatingChromeBackdrop provides"))

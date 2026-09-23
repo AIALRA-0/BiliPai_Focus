@@ -1762,6 +1762,7 @@ object SettingsManager {
             ),
             androidNativeLiquidGlassEnabled =
                 preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED]
+                    ?: preferences[KEY_LEGACY_ANDROID_NATIVE_TOP_TAB_LIQUID_GLASS_ENABLED]
                     ?: false,
             liquidGlassStyle = legacyLiquidGlassStyle,
             liquidGlassMode = liquidGlassMode,
@@ -4181,7 +4182,8 @@ object SettingsManager {
         context.settingsDataStore.data
             .map { preferences ->
                 preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED]
-                    ?: true
+                    ?: preferences[KEY_LEGACY_ANDROID_NATIVE_TOP_TAB_LIQUID_GLASS_ENABLED]
+                    ?: false
             }
 
     suspend fun setAndroidNativeLiquidGlassEnabled(context: Context, value: Boolean) {
@@ -7314,16 +7316,15 @@ object SettingsManager {
     // ========== 📱 平板导航模式 ==========
     
     private val KEY_TABLET_NAVIGATION_MODE = booleanPreferencesKey("tablet_use_sidebar")
-    private val KEY_SIDEBAR_EXPANDED = booleanPreferencesKey("sidebar_expanded")
+    private val KEY_SIDEBAR_EXPANDED = NavigationSettingsStore.keySidebarExpanded
     private val KEY_SIDEBAR_ACCOUNT_SWITCHER_ENABLED =
         booleanPreferencesKey("sidebar_account_switcher_enabled")
     private val KEY_PREDICTIVE_BACK_ENABLED = booleanPreferencesKey("predictive_back_enabled")
     private val KEY_PREDICTIVE_BACK_ANIMATION_STYLE = stringPreferencesKey("predictive_back_animation_style")
     private val KEY_PREDICTIVE_BACK_EXIT_DIRECTION = stringPreferencesKey("predictive_back_exit_direction")
-    private val KEY_MIUIX_TRANSITION_BLUR_ENABLED =
-        booleanPreferencesKey("miuix_transition_blur_enabled")
+    private val KEY_MIUIX_TRANSITION_BLUR_ENABLED = NavigationSettingsStore.keyMiuixTransitionBlurEnabled
     private val KEY_VIDEO_SHARED_RETURN_GESTURE_FOLLOW_ENABLED =
-        booleanPreferencesKey("video_shared_return_gesture_follow_enabled")
+        NavigationSettingsStore.keyVideoSharedReturnGestureFollowEnabled
     
     /**
      *  平板导航模式
@@ -8054,7 +8055,9 @@ object SettingsManager {
         )
         return linkedMapOf(
             KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED.name to JsonPrimitive(
-                preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED] ?: true
+                preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED]
+                    ?: preferences[KEY_LEGACY_ANDROID_NATIVE_TOP_TAB_LIQUID_GLASS_ENABLED]
+                    ?: false
             ),
             KEY_LIQUID_GLASS_ENABLED.name to JsonPrimitive(bottomBarEnabled),
             KEY_TOP_BAR_LIQUID_GLASS_ENABLED.name to JsonPrimitive(topBarEnabled),

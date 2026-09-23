@@ -79,6 +79,23 @@ class PredictiveBackBackgroundPolicyTest {
     }
 
     @Test
+    fun blurEffectCacheReusesAnUnchangedRadiusAndDropsTheEffectWhenCleared() {
+        val cache = RadiusKeyedBlurEffectCache<Int>()
+        var creations = 0
+        val create: (Float) -> Int = { ++creations }
+
+        assertEquals(1, cache.resolve(8f, create))
+        assertEquals(1, cache.resolve(8f, create))
+        assertEquals(1, creations)
+
+        assertEquals(2, cache.resolve(12f, create))
+        assertEquals(2, creations)
+        assertEquals(null, cache.resolve(0f, create))
+        assertEquals(3, cache.resolve(8f, create))
+        assertEquals(3, creations)
+    }
+
+    @Test
     fun lightSeparationTintScalesWithGestureProgress() {
         assertEquals(0f, resolvePredictiveBackSeparationTintAlpha(0f, isLightBackground = true))
         assertEquals(0.025f, resolvePredictiveBackSeparationTintAlpha(0.5f, isLightBackground = true))

@@ -59,14 +59,112 @@ internal object StyleLintSupport {
         return offenders
     }
 
-    private fun findMatches(file: File, relativePath: String, pattern: Regex): List<String> {
-        val source = file.readText()
-        return pattern.findAll(source).map { match ->
+    private fun findMatches(file: File, relativePath: String, pattern: Regex): List<String> =
+        findMatches(file.readText(), relativePath, pattern)
+
+    internal fun findMatches(source: String, relativePath: String, pattern: Regex): List<String> {
+        val scannedSource = source.withoutComments()
+        return pattern.findAll(scannedSource).map { match ->
             val lineNumber = source.substring(0, match.range.first).count { it == '\n' }
             val lineStart = source.lastIndexOf('\n', match.range.first - 1) + 1
             val lineEnd = source.indexOf('\n', match.range.last + 1).let { if (it == -1) source.length else it }
             "$relativePath:${lineNumber + 1}: ${source.substring(lineStart, lineEnd).trim()}"
         }.toList()
+    }
+
+    /**
+     * Replace Kotlin line and nested block comments with spaces while preserving offsets.
+     * Style guards should describe executable source; code examples in KDoc must not count as
+     * new UI usages. Strings and character literals are preserved so comment markers inside
+     * literals do not hide subsequent source.
+     */
+    private fun String.withoutComments(): String {
+        val result = toCharArray()
+        var index = 0
+        var blockCommentDepth = 0
+        var inLineComment = false
+        var inString = false
+        var inRawString = false
+        var inCharacter = false
+        var escaped = false
+
+        while (index < length) {
+            val current = this[index]
+            val next = getOrNull(index + 1)
+
+            when {
+                inLineComment -> {
+                    if (current == '\n' || current == '\r') {
+                        inLineComment = false
+                    } else {
+                        result[index] = ' '
+                    }
+                }
+
+                blockCommentDepth > 0 -> {
+                    when {
+                        current == '/' && next == '*' -> {
+                            result[index] = ' '
+                            result[index + 1] = ' '
+                            blockCommentDepth++
+                            index++
+                        }
+
+                        current == '*' && next == '/' -> {
+                            result[index] = ' '
+                            result[index + 1] = ' '
+                            blockCommentDepth--
+                            index++
+                        }
+
+                        current != '\n' && current != '\r' -> result[index] = ' '
+                    }
+                }
+
+                inRawString -> {
+                    if (current == '"' && getOrNull(index + 1) == '"' && getOrNull(index + 2) == '"') {
+                        inRawString = false
+                        index += 2
+                    }
+                }
+
+                inString || inCharacter -> {
+                    if (escaped) {
+                        escaped = false
+                    } else if (current == '\\') {
+                        escaped = true
+                    } else if ((inString && current == '"') || (inCharacter && current == '\'')) {
+                        inString = false
+                        inCharacter = false
+                    }
+                }
+
+                current == '/' && next == '/' -> {
+                    result[index] = ' '
+                    result[index + 1] = ' '
+                    inLineComment = true
+                    index++
+                }
+
+                current == '/' && next == '*' -> {
+                    result[index] = ' '
+                    result[index + 1] = ' '
+                    blockCommentDepth = 1
+                    index++
+                }
+
+                current == '"' && next == '"' && getOrNull(index + 2) == '"' -> {
+                    inRawString = true
+                    index += 2
+                }
+
+                current == '"' -> inString = true
+                current == '\'' -> inCharacter = true
+            }
+            index++
+        }
+
+        return String(result)
     }
 
     private fun isTestedNamedTokenException(file: File, relativePath: String): Boolean {

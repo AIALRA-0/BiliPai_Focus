@@ -186,10 +186,13 @@ class FrameBudgetLintTest {
     private companion object {
         val COMPOSED = Regex("""=\s*composed\s*[({]""")
         val OFFSCREEN = Regex("""CompositingStrategy\.Offscreen""")
-        val HAZE_SOURCE = Regex("""\.hazeSourceCompat\(""")
+        // Exclude the extension declaration itself; only registrations consume frame budget.
+        val HAZE_SOURCE = Regex("""(?<!fun Modifier)\.hazeSourceCompat\(""")
         val RUN_BLOCKING = Regex("""\brunBlocking\s*[({]""")
         val BLUR_EFFECT = Regex("""createBlurEffect\s*\(""")
-        val RADIUS_GUARD = Regex("""last\w*(Blur)?Radius""")
+        val RADIUS_GUARD = Regex(
+            """(?:last\w*(?:Blur)?Radius|cached\w*Radius|effects\.getOrPut\(radiusKey\)|\w*BlurEffectCache\.resolve\()""",
+        )
         val INFINITE_TRANSITION = Regex("""rememberInfiniteTransition\s*\(""")
 
         // 限定第一个实参是 context/ctx/this，这正是 SettingsManager 的 *Sync 约定。

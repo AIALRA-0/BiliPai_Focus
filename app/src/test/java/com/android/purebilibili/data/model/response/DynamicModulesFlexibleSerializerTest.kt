@@ -721,8 +721,12 @@ class DynamicModulesFlexibleSerializerTest {
                     )
                 )
             ),
-            opus?.contentBlocks
+            opus?.contentBlocks?.map { block ->
+                if (block is OpusContentBlock.Text) block.copy(richTextNodes = emptyList()) else block
+            }
         )
+        assertEquals("第一段正文[表情]", (opus?.contentBlocks?.first() as? OpusContentBlock.Text)
+            ?.richTextNodes?.joinToString("") { it.text })
     }
 
     @Test
@@ -793,8 +797,12 @@ class DynamicModulesFlexibleSerializerTest {
                 OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/card.jpg", width = 800, height = 600)),
                 OpusContentBlock.Text("ATK=3000 答题解析")
             ),
-            opus?.contentBlocks
+            opus?.contentBlocks?.map { block ->
+                if (block is OpusContentBlock.Text) block.copy(richTextNodes = emptyList()) else block
+            }
         )
+        assertEquals("ATK=3000 答题解析", (opus?.contentBlocks?.last() as? OpusContentBlock.Text)
+            ?.richTextNodes?.joinToString("") { it.text })
     }
 
     @Test
@@ -954,7 +962,7 @@ class DynamicModulesFlexibleSerializerTest {
             opus?.pics?.map { it.url }
         )
         assertEquals(9, opus?.contentBlocks?.size)
-        assertEquals(OpusContentBlock.Text("正文开头"), opus?.contentBlocks?.get(0))
+        assertEquals("正文开头", (opus?.contentBlocks?.get(0) as? OpusContentBlock.Text)?.text)
         assertEquals(
             OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/single.jpg", width = 640, height = 360)),
             opus?.contentBlocks?.get(1)

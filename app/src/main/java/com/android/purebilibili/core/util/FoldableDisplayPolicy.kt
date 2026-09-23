@@ -136,6 +136,22 @@ internal fun resolveDisplayNaturalOrientation(
     displayModeWidthPx: Int? = null,
     displayModeHeightPx: Int? = null,
 ): AppDisplayNaturalOrientation {
+    // Physical mode dimensions describe the panel, while Configuration can describe a
+    // letterboxed activity window on a foldable cover display.
+    if (
+        displayModeWidthPx != null &&
+        displayModeHeightPx != null &&
+        displayModeWidthPx > 0 &&
+        displayModeHeightPx > 0 &&
+        displayModeWidthPx != displayModeHeightPx
+    ) {
+        return if (displayModeWidthPx > displayModeHeightPx) {
+            AppDisplayNaturalOrientation.Landscape
+        } else {
+            AppDisplayNaturalOrientation.Portrait
+        }
+    }
+
     val fromRotation = when (displayRotation) {
         Surface.ROTATION_0,
         Surface.ROTATION_180 -> when (configurationOrientation) {
@@ -156,20 +172,6 @@ internal fun resolveDisplayNaturalOrientation(
 
     if (fromRotation != AppDisplayNaturalOrientation.Unknown) {
         return fromRotation
-    }
-
-    if (
-        displayModeWidthPx != null &&
-        displayModeHeightPx != null &&
-        displayModeWidthPx > 0 &&
-        displayModeHeightPx > 0 &&
-        displayModeWidthPx != displayModeHeightPx
-    ) {
-        return if (displayModeWidthPx > displayModeHeightPx) {
-            AppDisplayNaturalOrientation.Landscape
-        } else {
-            AppDisplayNaturalOrientation.Portrait
-        }
     }
 
     return AppDisplayNaturalOrientation.Unknown

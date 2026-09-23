@@ -1,12 +1,11 @@
 package com.android.purebilibili.feature.video.screen
 
 import android.content.Context
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
 import android.os.Build
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.remember
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
+import com.android.purebilibili.core.ui.transition.PredictiveBackBlurRenderEffectCache
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -116,6 +115,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     commentThreadCoveredBlurProgress: Float = 0f,
 ) {
     val engagementSuccess = success.withEngagementUiState(engagementState)
+    val predictiveBackBlurEffectCache = remember { PredictiveBackBlurRenderEffectCache() }
     val danmakuManager = rememberDanmakuManager(success.info.bvid)
     // Android 16 ART 曾拒绝校验 VideoDetailScreen 中捕获过多状态的匿名 Compose lambda。
     // 保持这个成功态为命名边界，避免 R8/Compose 再生成单个超大内容块。
@@ -204,23 +204,14 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                 )
                                 .hazeSourceCompat(hazeState)
                                 .graphicsLayer {
-                                    renderEffect = null
-                                    if (coveredBlurProgress > 0f &&
-                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                                    ) {
-                                        val blurFrame = resolvePredictiveBackBlurFrame(
+                                    val blurRadiusPx = if (coveredBlurProgress > 0f) {
+                                        resolvePredictiveBackBlurFrame(
                                             progress = coveredBlurProgress,
-                                        )
-                                        renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                            AndroidRenderEffect.createBlurEffect(
-                                                blurFrame.blurRadiusPx,
-                                                blurFrame.blurRadiusPx,
-                                                Shader.TileMode.CLAMP,
-                                            ).asComposeRenderEffect()
-                                        } else {
-                                            null
-                                        }
+                                        ).blurRadiusPx
+                                    } else {
+                                        0f
                                     }
+                                    renderEffect = predictiveBackBlurEffectCache.resolve(blurRadiusPx)
                                 }
                         ) {
                             VideoContentSection(

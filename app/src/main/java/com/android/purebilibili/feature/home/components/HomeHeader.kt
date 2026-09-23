@@ -512,9 +512,8 @@ internal fun resolveHomeTopTabRowHeight(
     chromePolicy: AppTopChromePolicy,
     labelMode: Int = com.android.purebilibili.core.store.SettingsManager.TopTabLabelMode.TEXT_ONLY
 ): Dp {
-    if (isTabFloating) return FloatingBottomBarDefaultShellHeight
     val style = resolveHomeTopPresetStyle(chromePolicy, labelMode)
-    return style.tabRowHeightDocked
+    return if (isTabFloating) style.tabRowHeightFloating else style.tabRowHeightDocked
 }
 
 internal fun resolveHomeTopSearchRowHorizontalPadding(

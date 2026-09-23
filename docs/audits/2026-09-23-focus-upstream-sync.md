@@ -4,7 +4,7 @@
 
 - 调查日期：2026-09-23
 - Focus 起点：`f4c052a1f42c687480a0311bb4b9351b443e73f3`，`9.1.1-focus.4`，`versionCode 226`
-- 上游目标：`29700cdf343a3929c8d97e0d5e2644557785fd22`，主线 `0.2.3-beta.46`，`versionCode 384`
+- 初次合并的上游目标：`29700cdf343a3929c8d97e0d5e2644557785fd22`，主线 `0.2.3-beta.46`，`versionCode 384`。审计期间主线新增 `0ed40f8a62b81f68a2a510a4c854ea0aacdca790`；发布前还须合入并重新验证。
 - 历史首次分叉：共同父提交 `7f0bc8cd4fdb11190c8b056f2c673c0ec18d29fa`，双方随后分别提交 3.3.2
 - 当前合并基点：`b15e464e989c6f328dfa6a780a8c76cc84812fdc`，上游 9.1.1；Focus 在 `230f2b88` 最后合入此提交
 - 自当前基点分叉：Focus 372 个提交，上游 3056 个提交；同名本地标签和上游标签有冲突，版本判断以远端分支与 Release 为准
@@ -61,6 +61,9 @@
 - 首次声明和引导已完成，首页显示关注、首页、动态、历史和个人入口；未登录关注页显示登录提示
 - 起点执行 `:app:compileDebugKotlin --no-daemon --no-configuration-cache` 通过，59 个任务中 57 个执行、2 个命中缓存；首次构建耗时 10 分 52 秒
 - `git merge-tree --write-tree HEAD upstream/main` 预演报告 44 条冲突；这是文件级冲突数量，不能代替功能级审计
+- 首次融合提交 `42a2e2d9b` 后，`:app:compileDebugKotlin` 在固定 Miuix 源码依赖下通过；`:app:testDebugUnitTest` 首轮在上游 API 变更后出现测试源码编译错误，修复测试迁移后运行 8,272 项、352 项失败。失败含结构断言过期与真实功能/性能问题，不能作为发布通过。
+- 第二轮定向单测编译通过，运行 239 项、8 项失败；动态正文解析、Focus 列表补页、播放器键盘映射、启动与模糊缓存相关定向测试通过。8 项集中于 Home 布局/结构断言 6 项和性能棘轮 2 项；修复正在复验。日志保存在本地 `.local/targeted-tests-3.log`，该目录不纳入版本库。
+- 首次 CI 的 Build 工作流在旧 `setup-android@v3` 请求已移除的 `tools` SDK 包时失败；工作流已改为 `setup-android@v4` 和 `platform-tools`，需推送后以新 CI 运行确认。
 
 ## 发布链路约束
 
@@ -77,7 +80,7 @@
 | 历史与版本调查 | 已核实 |
 | 特色功能代码基线 | 已登记，待逐项运行验证 |
 | 上游版本差异审计 | 进行中 |
-| 合并与语义冲突处理 | 44 个文件冲突已解除并暂存，编译及运行验证中 |
-| 新版 Debug、Release、单测与 Lint | 编译因 MIUIX GitHub Packages 401 转为固定源码构建，正在验证 |
+| 合并与语义冲突处理 | 44 个文件冲突已语义融合并提交，尚须合入审计期间的新增上游提交 |
+| 新版 Debug、Release、单测与 Lint | Debug Kotlin 编译通过；单测仍有失败；Release、Lint 尚未完成 |
 | 旧版升级、完整客户端更新链路 | 未开始 |
 | 正式 Release 发布 | 未开始 |

@@ -1,13 +1,13 @@
 package com.android.purebilibili.core.ui.components
 
-import java.io.File
+import com.android.purebilibili.testutil.projectSourceFile
 import kotlin.test.Test
 import kotlin.test.assertFalse
 
 class AppTabThemeConsistencyStructureTest {
     @Test
     fun `feature tabs cannot bypass the theme adaptive renderer`() {
-        val sourceRoot = File("app/src/main/java/com/android/purebilibili/feature")
+        val sourceRoot = projectSourceFile("app/src/main/java/com/android/purebilibili/feature")
         require(sourceRoot.isDirectory) { "Cannot locate ${sourceRoot.path}" }
 
         val forbiddenCalls = listOf(

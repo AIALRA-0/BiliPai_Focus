@@ -177,7 +177,7 @@ class StyleLintAllowlistRatchetTest {
         const val MIGRATED_PREFIXES_SHA256 =
             "9eb8920bc5953589f037ba610fc3a1ec74c98a8a6ce69bb3286f8a31e0501a16"
         const val SHAPE_HITS_SHA256 =
-            "aaa828f33ef8722244a70faa3602e25546f0e680db06a94503a7a0ec4b174f82"
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         const val MOTION_HITS_SHA256 =
             "eb883a77a6e9e2f94733b73408f83d02a551b475b0cfbe119f5ee432a4df4925"
         const val SURFACE_HITS_SHA256 =

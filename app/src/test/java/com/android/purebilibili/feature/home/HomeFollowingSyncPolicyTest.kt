@@ -82,4 +82,44 @@ class HomeFollowingSyncPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `following page count is derived from reported total and has a hard ceiling`() {
+        assertEquals(1, resolveHomeFollowingPageLimit(reportedTotal = 50))
+        assertEquals(2, resolveHomeFollowingPageLimit(reportedTotal = 51))
+        assertEquals(HOME_FOLLOWING_MAX_PAGE_COUNT, resolveHomeFollowingPageLimit(reportedTotal = 0))
+        assertEquals(HOME_FOLLOWING_MAX_PAGE_COUNT, resolveHomeFollowingPageLimit(reportedTotal = 5_001))
+    }
+
+    @Test
+    fun `following fetch is complete only after reported total or an unknown total short page`() {
+        assertFalse(
+            isHomeFollowingFetchComplete(
+                reportedTotal = 120,
+                fetchedItemCount = 70,
+                lastPageItemCount = 20,
+            )
+        )
+        assertTrue(
+            isHomeFollowingFetchComplete(
+                reportedTotal = 120,
+                fetchedItemCount = 120,
+                lastPageItemCount = 20,
+            )
+        )
+        assertFalse(
+            isHomeFollowingFetchComplete(
+                reportedTotal = 0,
+                fetchedItemCount = 50,
+                lastPageItemCount = HOME_FOLLOWING_PAGE_SIZE,
+            )
+        )
+        assertTrue(
+            isHomeFollowingFetchComplete(
+                reportedTotal = 0,
+                fetchedItemCount = 75,
+                lastPageItemCount = 25,
+            )
+        )
+    }
 }

@@ -14,6 +14,7 @@ class HomeFollowFocusCompletionStructureTest {
             .substringBefore("private fun videoItemKey")
 
         assertTrue(followFeedSource.contains("resolveHomeFollowRequiredVisibleIncrement("))
+        assertTrue(followFeedSource.contains("hasHomeFollowFocusCompletionBudget(continuationFetches)"))
         assertTrue(followFeedSource.contains("shouldContinueHomeFollowFetchAfterFocusFilter("))
         assertTrue(followFeedSource.contains("DynamicRepository.getDynamicFeed("))
         assertTrue(followFeedSource.contains("refresh = false"))
@@ -27,8 +28,8 @@ class HomeFollowFocusCompletionStructureTest {
             .substringAfter("private suspend fun fetchFollowFeed")
             .substringBefore("private fun videoItemKey")
 
-        assertTrue(followFeedSource.contains("requestBaselineRawVideos"))
-        assertTrue(followFeedSource.contains("focusFollowGroupFilteringEnabled"))
+        assertTrue(followFeedSource.contains("baselineRawVideos"))
+        assertTrue(followFeedSource.contains("focusFilteringForRequest"))
         assertTrue(followFeedSource.contains("resolveHomeFollowPresentedRawVideos("))
     }
 

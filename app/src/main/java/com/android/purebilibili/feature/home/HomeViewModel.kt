@@ -68,6 +68,46 @@ import kotlinx.collections.immutable.toImmutableSet
 
 // 状态类已移至 HomeUiState.kt
 
+internal const val HOME_FOLLOWING_PAGE_SIZE = 50
+internal const val HOME_FOLLOWING_MAX_PAGE_COUNT = 100
+private const val HOME_FOLLOWING_CACHE_VALIDITY_MS = 60 * 60 * 1000L
+internal const val HOME_FOLLOW_FOCUS_COMPLETION_MAX_EXTRA_FETCHES = 4
+
+internal fun resolveHomeFollowingPageLimit(
+    reportedTotal: Int,
+    pageSize: Int = HOME_FOLLOWING_PAGE_SIZE,
+    maxPages: Int = HOME_FOLLOWING_MAX_PAGE_COUNT,
+): Int {
+    val normalizedPageSize = pageSize.coerceAtLeast(1)
+    val normalizedMaxPages = maxPages.coerceAtLeast(1)
+    if (reportedTotal <= 0) return normalizedMaxPages
+    val reportedPages = (reportedTotal.toLong() + normalizedPageSize - 1) / normalizedPageSize
+    return reportedPages.coerceIn(1L, normalizedMaxPages.toLong()).toInt()
+}
+
+internal fun isHomeFollowingFetchComplete(
+    reportedTotal: Int,
+    fetchedItemCount: Int,
+    lastPageItemCount: Int,
+    pageSize: Int = HOME_FOLLOWING_PAGE_SIZE,
+): Boolean {
+    return if (reportedTotal > 0) {
+        fetchedItemCount >= reportedTotal
+    } else {
+        lastPageItemCount < pageSize.coerceAtLeast(1)
+    }
+}
+
+internal fun hasHomeFollowFocusCompletionBudget(
+    continuationFetches: Int,
+    maxExtraFetches: Int = HOME_FOLLOW_FOCUS_COMPLETION_MAX_EXTRA_FETCHES,
+): Boolean = continuationFetches >= 0 && continuationFetches < maxExtraFetches.coerceAtLeast(0)
+
+private data class HomeFollowingFetchSnapshot(
+    val mids: Set<Long>,
+    val isComplete: Boolean,
+)
+
 internal fun trimIncrementalRefreshVideosToEvenCount(videos: List<VideoItem>): List<VideoItem> {
     val size = videos.size
     if (size <= 1 || size % 2 == 0) return videos
@@ -2046,15 +2086,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return if (isLoadMore || forceFullReplace) visibleCount
             else (visibleCount - cachedVisibleCount).coerceAtLeast(0)
         }
-        while (isCurrentFocusSnapshot() && focusFilteringForRequest && shouldContinueHomeFollowFetchAfterFocusFilter(
-                visibleIncrement = visibleIncrementAfterFocusFilter(),
-                hasMore = DynamicRepository.hasMoreData(followScope, followType),
-                continuationFetches = continuationFetches,
-                isLoadMore = isLoadMore,
-                requiredVisibleIncrement = if (forceFullReplace) {
-                    resolveHomeFollowRequiredVisibleIncrement(isLoadMore = false, cachedVisibleCount = 0)
-                } else requiredVisibleIncrement,
-            )
+        while (
+            isCurrentFocusSnapshot() &&
+                focusFilteringForRequest &&
+                hasHomeFollowFocusCompletionBudget(continuationFetches) &&
+                shouldContinueHomeFollowFetchAfterFocusFilter(
+                    visibleIncrement = visibleIncrementAfterFocusFilter(),
+                    hasMore = DynamicRepository.hasMoreData(followScope, followType),
+                    continuationFetches = continuationFetches,
+                    isLoadMore = isLoadMore,
+                    requiredVisibleIncrement = if (forceFullReplace) {
+                        resolveHomeFollowRequiredVisibleIncrement(isLoadMore = false, cachedVisibleCount = 0)
+                    } else requiredVisibleIncrement,
+                )
         ) {
             val extraResult = DynamicRepository.getDynamicFeed(
                 refresh = false,
@@ -2305,65 +2349,94 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    //  获取关注列表（并行分页获取，支持更多关注，带本地缓存）
+    // 获取关注列表，使用接口总数分页并且只缓存完整快照。
     private suspend fun fetchFollowingList(mid: Long) {
         val context = getApplication<android.app.Application>()
         val prefs = context.getSharedPreferences("following_cache", android.content.Context.MODE_PRIVATE)
         val cacheKey = "following_mids_$mid"
         val cacheTimeKey = "following_time_$mid"
 
-        //  检查缓存（1小时内有效）
-        val cachedTime = prefs.getLong(cacheTimeKey, 0)
-        val cacheValidDuration = 60 * 60 * 1000L  // 1小时
-        if (System.currentTimeMillis() - cachedTime < cacheValidDuration) {
-            val cachedMids = prefs.getStringSet(cacheKey, null)
-            if (!cachedMids.isNullOrEmpty()) {
-                val mids = cachedMids.mapNotNull { it.toLongOrNull() }.toSet()
-                _uiState.value = _uiState.value.copy(followingMids = mids.toImmutableSet())
-                com.android.purebilibili.core.util.Logger.d("HomeVM", " Loaded ${mids.size} following mids from cache")
-                return
-            }
-        }
-
-        //  动态获取所有关注列表（无上限）
         try {
-            val allMids = mutableSetOf<Long>()
-
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                var page = 1
-                while (true) {  //  无限循环，直到获取完所有关注
-                    try {
-                        val result = com.android.purebilibili.core.network.NetworkModule.api.getFollowings(mid, page, 50)
-                        if (result.code == 0 && result.data != null) {
-                            val list = result.data.list ?: break
-                            if (list.isEmpty()) break
-
-                            list.forEach { user -> allMids.add(user.mid) }
-
-                            // 如果这一页不满50，说明已经获取完所有关注
-                            if (list.size < 50) {
-                                com.android.purebilibili.core.util.Logger.d("HomeVM", " Reached end at page $page, total: ${allMids.size}")
-                                break
-                            }
-                            page++
-                        } else {
-                            break
-                        }
-                    } catch (e: Exception) {
-                        com.android.purebilibili.core.util.Logger.e("HomeVM", " Error at page $page", e)
-                        break
-                    }
+            val cachedMids = withContext(Dispatchers.IO) {
+                val cachedTime = prefs.getLong(cacheTimeKey, 0)
+                val isCacheFresh = System.currentTimeMillis() - cachedTime < HOME_FOLLOWING_CACHE_VALIDITY_MS
+                if (isCacheFresh) {
+                    prefs.getStringSet(cacheKey, null)
+                        ?.mapNotNull { it.toLongOrNull() }
+                        ?.toSet()
+                } else {
+                    null
                 }
             }
+            if (cachedMids != null) {
+                _uiState.value = _uiState.value.copy(followingMids = cachedMids.toImmutableSet())
+                com.android.purebilibili.core.util.Logger.d("HomeVM", " Loaded ${cachedMids.size} following mids from cache")
+                return
+            }
 
-            //  保存到本地缓存
-            prefs.edit()
-                .putStringSet(cacheKey, allMids.map { it.toString() }.toSet())
-                .putLong(cacheTimeKey, System.currentTimeMillis())
-                .apply()
+            val snapshot = withContext(Dispatchers.IO) {
+                val allMids = linkedSetOf<Long>()
+                var fetchedItemCount = 0
+                var reportedTotal = 0
+                var pageLimit = HOME_FOLLOWING_MAX_PAGE_COUNT
+                var page = 1
+                var isComplete = false
 
-            _uiState.value = _uiState.value.copy(followingMids = allMids.toImmutableSet())
-            com.android.purebilibili.core.util.Logger.d("HomeVM", " Total following mids fetched and cached: ${allMids.size}")
+                while (page <= pageLimit) {
+                    currentCoroutineContext().ensureActive()
+                    val response = com.android.purebilibili.core.network.NetworkModule.api
+                        .getFollowings(mid, page, HOME_FOLLOWING_PAGE_SIZE)
+                    val data = response.data
+                    if (response.code != 0 || data == null) {
+                        throw IllegalStateException(
+                            "Followings request failed on page $page (code=${response.code})"
+                        )
+                    }
+                    val users = data.list ?: throw IllegalStateException(
+                        "Followings response did not include a list on page $page"
+                    )
+                    if (data.total > 0) {
+                        reportedTotal = data.total
+                        pageLimit = resolveHomeFollowingPageLimit(reportedTotal)
+                    }
+
+                    users.forEach { user -> allMids += user.mid }
+                    fetchedItemCount += users.size
+                    isComplete = isHomeFollowingFetchComplete(
+                        reportedTotal = reportedTotal,
+                        fetchedItemCount = fetchedItemCount,
+                        lastPageItemCount = users.size,
+                    )
+                    if (isComplete) break
+                    if (users.size < HOME_FOLLOWING_PAGE_SIZE) {
+                        throw IllegalStateException(
+                            "Followings pagination ended before the reported total was fetched"
+                        )
+                    }
+                    page += 1
+                }
+
+                HomeFollowingFetchSnapshot(mids = allMids, isComplete = isComplete)
+            }
+
+            if (!snapshot.isComplete) {
+                com.android.purebilibili.core.util.Logger.w(
+                    "HomeVM",
+                    " Following list exceeded the bounded page limit; keeping the previous cache"
+                )
+                return
+            }
+
+            withContext(Dispatchers.IO) {
+                prefs.edit()
+                    .putStringSet(cacheKey, snapshot.mids.map { it.toString() }.toSet())
+                    .putLong(cacheTimeKey, System.currentTimeMillis())
+                    .apply()
+            }
+            _uiState.value = _uiState.value.copy(followingMids = snapshot.mids.toImmutableSet())
+            com.android.purebilibili.core.util.Logger.d("HomeVM", " Total following mids fetched and cached: ${snapshot.mids.size}")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("HomeVM", " Error fetching following list", e)
         }

@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.plugin.skin
 
-import java.io.File
+import com.android.purebilibili.testutil.projectSourceFile
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -37,8 +37,6 @@ class UiSkinEffectHostStructureTest {
     }
 
     private fun loadSource(path: String): String {
-        val sourceFile = File(path)
-        require(sourceFile.exists()) { "Cannot locate $path from ${File(".").absolutePath}" }
-        return sourceFile.readText()
+        return projectSourceFile(path).readText()
     }
 }

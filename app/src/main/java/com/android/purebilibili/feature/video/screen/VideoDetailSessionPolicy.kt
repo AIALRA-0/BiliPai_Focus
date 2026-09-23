@@ -388,7 +388,6 @@ internal fun resolveVideoPlayerSectionTarget(
         resolvedBvid == normalizedRouteBvid && normalizedRouteCover.isNotEmpty() ->
             normalizedRouteCover
         normalizedSwitchedCover.isNotEmpty() -> normalizedSwitchedCover
-        normalizedRouteCover.isNotEmpty() -> normalizedRouteCover
         else -> ""
     }
     val sharedElementBvid = normalizedRouteBvid.ifBlank { resolvedBvid }

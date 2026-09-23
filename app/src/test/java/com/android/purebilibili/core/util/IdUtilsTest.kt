@@ -8,14 +8,15 @@ class IdUtilsTest {
     @Test
     fun av2bv_convertsKnownAidsCorrectly() {
         assertEquals("BV17x411w7KC", IdUtils.av2bv(170001L))
-        assertEquals("BV1xx411c7m9", IdUtils.av2bv(2L))
+        assertEquals("BV1xx411c7mD", IdUtils.av2bv(2L))
         assertEquals("BV17f4y1R7YS", IdUtils.av2bv(286347735L))
     }
 
     @Test
     fun bv2av_convertsKnownBvidsCorrectly() {
         assertEquals(170001L, IdUtils.bv2av("BV17x411w7KC"))
-        assertEquals(2L, IdUtils.bv2av("BV1xx411c7m9"))
+        assertEquals(2L, IdUtils.bv2av("BV1xx411c7mD"))
+        assertEquals(7L, IdUtils.bv2av("BV1xx411c7m9"))
         assertEquals(286347735L, IdUtils.bv2av("BV17f4y1R7YS"))
     }
 

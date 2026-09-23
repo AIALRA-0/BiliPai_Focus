@@ -495,10 +495,7 @@ class VideoContentTabBarPolicyTest {
         assertEquals(66, resolveVideoContentTabBarDockItemWidthDp(labelFontSizeSp = 13))
         assertEquals(
             136,
-            resolveVideoContentTabBarControlWidthDp(
-                itemWidthDp = spec.itemWidthDp ?: 0,
-                itemCount = 2,
-            ),
+            resolveVideoContentTabBarDockItemWidthDp(spec.labelFontSizeSp) * 2,
         )
         assertEquals(
             0,

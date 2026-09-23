@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.ui.components
 
-import java.io.File
+import com.android.purebilibili.testutil.readProjectSource
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -18,7 +18,7 @@ class LegacyTabChipMigrationStructureTest {
         )
 
         migratedScreens.forEach { path ->
-            val source = File(path).readText()
+            val source = readProjectSource(path)
             assertTrue(source.contains("AppThemeAdaptiveTabRow("), path)
             assertFalse(source.contains("AppFilterChip("), path)
         }

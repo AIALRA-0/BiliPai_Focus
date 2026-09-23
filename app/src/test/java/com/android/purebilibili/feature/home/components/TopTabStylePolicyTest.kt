@@ -13,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -220,7 +219,8 @@ class TopTabStylePolicyTest {
 
         assertEquals(ios.searchBarHeight, material3.searchBarHeight)
         assertEquals(material3.searchBarHeight, miuix.searchBarHeight)
-        assertNotEquals(material3.unifiedPanelCornerRadius, miuix.unifiedPanelCornerRadius)
+        assertEquals(material3.unifiedPanelCornerRadius, miuix.unifiedPanelCornerRadius)
+        assertEquals(miuix.unifiedPanelCornerRadius, ios.unifiedPanelCornerRadius)
         // 2B 迁移：iOS 输入并入 MIUIX，与 miuix 呈现一致。
         assertEquals(AppTopTabPresentation.MATERIAL_UNDERLINE, ios.presentation)
         assertEquals(AppTopTabPresentation.MATERIAL_UNDERLINE, material3.presentation)
@@ -235,10 +235,10 @@ class TopTabStylePolicyTest {
         val iconAndText = topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX, labelMode = 0)
 
         assertEquals(AppTopTabPresentation.MATERIAL_UNDERLINE, iconAndText.presentation)
-        assertEquals(56.dp, iconAndText.tabRowHeightDocked)
-        assertEquals(56.dp, iconAndText.tabRowHeightFloating)
+        assertEquals(64.dp, iconAndText.tabRowHeightDocked)
+        assertEquals(64.dp, iconAndText.tabRowHeightFloating)
         assertEquals(30.dp, iconAndText.md3VisualSpec.selectedCapsuleHeight)
-        assertEquals(44.dp, iconAndText.actionButtonSizeDocked)
+        assertEquals(42.dp, iconAndText.actionButtonSizeDocked)
     }
 
     @Test
@@ -247,12 +247,12 @@ class TopTabStylePolicyTest {
         val material3 = topStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3)
         val miuix = topStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX)
 
-        // 2B 迁移：iOS 输入并入 MIUIX 预留 12dp 内容底部间隙。
-        assertEquals(12.dp, ios.reservedContentBottomGap)
+        // The current Material row has no additional panel gap in any migrated preset.
+        assertEquals(0.dp, ios.reservedContentBottomGap)
         assertEquals(0.dp, material3.reservedContentBottomGap)
-        assertEquals(12.dp, miuix.reservedContentBottomGap)
+        assertEquals(0.dp, miuix.reservedContentBottomGap)
         assertEquals(
-            12.dp,
+            0.dp,
             resolveHomeTopReservedContentBottomGap(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
@@ -501,8 +501,9 @@ class TopTabStylePolicyTest {
                 innerOwnsFloatingDock = true,
             )
         )
-        assertEquals(56.dp, FloatingBottomBarDefaultShellHeight)
-        assertEquals(52.dp, FloatingBottomBarIndicatorHeight)
+        val dockHeight = resolveBiliPaiBottomBarDockHeight(searchExpanded = false)
+        assertEquals(64.dp, dockHeight)
+        assertEquals(56.dp, resolveBiliPaiBottomBarIndicatorHeight(dockHeight))
         assertEquals(
             resolveBiliPaiFloatingBottomBarWidth(
                 containerWidth = 360.dp,
@@ -538,9 +539,10 @@ class TopTabStylePolicyTest {
         assertTrue(header.contains("includeTabInBlur = true"))
         assertTrue(
             header.contains(
-                "tabHorizontalPadding = if (topTabInnerOwnsFloatingDockShell)"
+                "tabVerticalPadding = if (embedTopTabsInUnifiedPanel || topTabInnerOwnsFloatingDockShell)"
             )
         )
+        assertTrue(header.contains("isTabFloating = if (embedTopTabsInUnifiedPanel) false else isTabFloating"))
     }
 
     @Test
@@ -578,9 +580,10 @@ class TopTabStylePolicyTest {
         assertEquals(bottomIndicatorColor.green, capsuleColor.green, 0.001f)
         assertEquals(bottomIndicatorColor.blue, capsuleColor.blue, 0.001f)
         assertEquals(0.28f, capsuleColor.alpha, 0.002f)
+        assertEquals(colorScheme.onSurface, resolveIosTopTabSelectedContentColor(colorScheme))
         assertEquals(
             colorScheme.primary,
-            resolveIosTopTabSelectedContentColor(colorScheme)
+            resolveIosTopTabSelectedContentColor(colorScheme, AppUiStyle.MATERIAL3)
         )
         assertFalse(capsuleColor == colorScheme.primary.copy(alpha = 0.10f))
     }
@@ -964,7 +967,13 @@ class TopTabStylePolicyTest {
         assertTrue(rowCallSource.contains("resolveTopTabSkinPartitionIconSize()"))
         assertTrue(rowCallSource.contains("resolveTopTabSkinStickerRowHeight("))
         // 纯色 wash 胶囊仅限 skin 主题兜底；常规主题始终由移动胶囊负责。
-        assertTrue(rowCallSource.contains("if (effectivePresentation == AppTopTabPresentation.MATERIAL_UNDERLINE && !hasSkinStickerIcons && skinPlainStyle)"))
+        val indicatorRoutingSource = source
+            .substringAfter("val shouldUseMovingIosCapsule =")
+            .substringBefore("val shouldPrimeTopTabLiquidGlassCapture =")
+        assertTrue(indicatorRoutingSource.contains("val shouldUseMd3LiquidCapsule ="))
+        assertTrue(indicatorRoutingSource.contains("val shouldUseMd3DockBackedCapsule ="))
+        assertTrue(indicatorRoutingSource.contains("val shouldUseMd3NativeUnderline ="))
+        assertTrue(indicatorRoutingSource.contains("!hasSkinStickerIcons"))
         assertTrue(itemSource.contains("resolveTopTabSkinStickerItemVerticalPadding(showText = showText)"))
         assertTrue(itemSource.contains("resolveTopTabSkinStickerIndicatorWidth()"))
         assertTrue(itemSource.contains("alpha(selectionFraction)"))

@@ -63,4 +63,29 @@ class DynamicTimelineRequestPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `late cache hydration cannot replace a fresh empty feed result`() {
+        assertTrue(
+            shouldApplyCachedDynamicTimeline(
+                cacheReadRevision = 3L,
+                latestFreshTimelineRevision = 3L,
+                currentPage = DynamicTimelinePageState(),
+            )
+        )
+        assertFalse(
+            shouldApplyCachedDynamicTimeline(
+                cacheReadRevision = 2L,
+                latestFreshTimelineRevision = 3L,
+                currentPage = DynamicTimelinePageState(),
+            )
+        )
+        assertFalse(
+            shouldApplyCachedDynamicTimeline(
+                cacheReadRevision = 3L,
+                latestFreshTimelineRevision = 3L,
+                currentPage = DynamicTimelinePageState(isCachePlaceholder = true),
+            )
+        )
+    }
 }

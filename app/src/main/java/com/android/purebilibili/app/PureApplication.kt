@@ -63,9 +63,7 @@ import com.android.purebilibili.feature.plugin.SponsorBlockPlugin
 import com.android.purebilibili.feature.plugin.dlna.DlnaCastPlugin
 import com.android.purebilibili.feature.plugin.googlecast.GoogleCastPlugin
 import com.android.purebilibili.feature.plugin.TodayWatchPlugin
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -164,11 +162,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
 
         //  [关键] 必须在 super.onCreate() 之前设置！
         // 这样系统在初始化时就能读取到正确的夜间模式配置
-        // 新用户默认设置必须先于主题读取应用，避免首屏短暂显示旧默认值。
-        runBlocking(Dispatchers.IO) {
-            com.android.purebilibili.feature.settings.share.SettingsShareService(this@PureApplication)
-                .applyBundledDefaultIfNeeded()
-        }
+        // 默认配置在 IO scope 异步导入；启动夜间模式和语言仍从轻量 theme_cache 同步读取。
+        applyBundledDefaultSettingsAsync()
         applyThemePreference()
         
         super.onCreate()
@@ -191,19 +186,32 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             CacheUtils.clearCacheAutomaticallyIfDue(this@PureApplication)
         }
 
-        // 启动即确保首页视觉默认值生效：底栏悬浮 + 液态玻璃 + 顶部模糊
-        // 冷启动路径不阻塞主线程，迁移改为后台执行。
-        if (PureApplicationRuntimeConfig.shouldBlockStartupForHomeVisualDefaultsMigration()) {
-            runBlocking(Dispatchers.IO) {
-                SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
-            }
-        } else {
-            AppScope.ioScope.launch {
-                SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
-            }
-        }
+        // Bundled profile and home defaults are initialized in order by one IO job.
         startupOrchestrator.runImmediate(::runStartupTask)
         startupOrchestrator.scheduleDeferred(::runStartupTask)
+    }
+
+    private fun applyBundledDefaultSettingsAsync() {
+        AppScope.ioScope.launch {
+            com.android.purebilibili.feature.settings.share.SettingsShareService(this@PureApplication)
+                .applyBundledDefaultIfNeeded()
+                .onSuccess { applied ->
+                    if (applied) {
+                        Logger.d(
+                            PureApplicationRuntimeConfig.TAG,
+                            "Bundled default settings initialized"
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    Logger.e(
+                        PureApplicationRuntimeConfig.TAG,
+                        "Bundled default settings initialization failed",
+                        throwable
+                    )
+                }
+            SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
+        }
     }
 
     /**

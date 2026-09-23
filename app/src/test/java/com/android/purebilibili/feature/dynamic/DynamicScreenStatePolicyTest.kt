@@ -4,6 +4,7 @@ import com.android.purebilibili.data.model.response.DynamicAuthorModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicModules
 import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -237,6 +238,37 @@ class DynamicScreenStatePolicyTest {
                 hasMore = true,
             )
         )
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = 0,
+                totalItemsCount = 1,
+                allowAutomaticLoadMore = true,
+                isLoading = false,
+                hasMore = true,
+                focusAutoFillPaused = true,
+            )
+        )
+    }
+
+    @Test
+    fun `focus auto-fill pause reaches the active page presentation`() {
+        val state = DynamicUiState(
+            timelinePages = persistentMapOf(
+                "all" to DynamicTimelinePageState(
+                    hasMore = true,
+                    focusAutoFillPaused = true,
+                )
+            )
+        )
+
+        val presentation = resolveDynamicPagePresentation(
+            state = state,
+            logicalTab = 0,
+            selectedUserId = null,
+        )
+
+        assertTrue(presentation.focusAutoFillPaused)
+        assertTrue(presentation.hasMore)
     }
 
     @Test

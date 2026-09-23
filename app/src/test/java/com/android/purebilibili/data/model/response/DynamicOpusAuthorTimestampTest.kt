@@ -91,7 +91,7 @@ class DynamicOpusAuthorTimestampTest {
                 ),
                 OpusContentBlock.Text("图片后的正文也必须保留")
             ),
-            item?.modules?.module_dynamic?.major?.opus?.contentBlocks
+            item?.modules?.module_dynamic?.major?.opus?.contentBlocks?.withoutRichTextMetadata()
         )
     }
 
@@ -212,8 +212,13 @@ class DynamicOpusAuthorTimestampTest {
                 ),
                 OpusContentBlock.Text("图片后的富文本")
             ),
-            opus?.contentBlocks
+            opus?.contentBlocks?.withoutRichTextMetadata()
         )
         assertEquals(52, item?.modules?.module_stat?.comment?.count)
     }
+
+    private fun List<OpusContentBlock>.withoutRichTextMetadata(): List<OpusContentBlock> =
+        map { block ->
+            if (block is OpusContentBlock.Text) block.copy(richTextNodes = emptyList()) else block
+        }
 }

@@ -227,14 +227,21 @@ class NativeThemeMigrationBoundaryTest {
     fun appNativeCardCallsStayWithinTheExactMd3PreviewException() {
         val directCalls = kotlinFiles("app/src/main/java")
             .flatMap { file ->
+                val material3CardNames = file.material3CardImportNames()
+                if (material3CardNames.isEmpty()) return@flatMap emptyList()
+
                 var enclosingFunction = "<top-level>"
                 buildList {
                     file.readLines().forEach { line ->
                         FUNCTION_DECLARATION.find(line)?.groupValues?.get(1)?.let {
                             enclosingFunction = it
                         }
-                        DIRECT_NATIVE_CARD_CALL.findAll(line).forEach { match ->
-                            add("${repoRelativePath(file)}#$enclosingFunction#${match.value.removeSuffix("(")}")
+                        material3CardNames.forEach { cardName ->
+                            Regex("(?<![A-Za-z0-9_])${Regex.escape(cardName)}\\(")
+                                .findAll(line)
+                                .forEach {
+                                    add("${repoRelativePath(file)}#$enclosingFunction#$cardName")
+                                }
                         }
                     }
                 }
@@ -333,6 +340,18 @@ class NativeThemeMigrationBoundaryTest {
         lines.any { line -> prefixes.any(line::startsWith) }
     }
 
+    /** Direct Card calls are only a bypass of the adaptive facade when resolved to Material3. */
+    private fun File.material3CardImportNames(): Set<String> = readLines().mapNotNull { line ->
+        val match = MATERIAL3_CARD_IMPORT.matchEntire(line) ?: return@mapNotNull null
+        match.groupValues[2].ifEmpty { match.groupValues[1] }
+    }.toSet().let { imports ->
+        if (readLines().any { it == MATERIAL3_WILDCARD_IMPORT }) {
+            imports + setOf("Card", "ElevatedCard", "OutlinedCard")
+        } else {
+            imports
+        }
+    }
+
     private fun File.callHeaders(callName: String): List<Pair<Int, String>> {
         val marker = "$callName("
         var startLine = -1
@@ -407,6 +426,10 @@ class NativeThemeMigrationBoundaryTest {
         const val MIUIX_VENDOR_IMPORT = "import top.yukonga.miuix."
         const val MIUIX_ICON_IMPORT = "import top.yukonga.miuix.kmp.icon."
         const val MIUIX_NAVIGATION_IMPORT = "import top.yukonga.miuix.kmp.nav."
+        const val MATERIAL3_WILDCARD_IMPORT = "import androidx.compose.material3.*"
+        val MATERIAL3_CARD_IMPORT = Regex(
+            "^import androidx\\.compose\\.material3\\.(Card|ElevatedCard|OutlinedCard)(?:\\s+as\\s+(\\w+))?$",
+        )
 
         val MIUIX_COMPONENT_IMPORTS = listOf(
             "import top.yukonga.miuix.kmp.basic.",
@@ -441,8 +464,6 @@ class NativeThemeMigrationBoundaryTest {
         )
         val DIRECT_PROGRESS_INDICATOR_CALL =
             Regex("(?<!App)(?:Circular|Linear)ProgressIndicator\\(")
-        val DIRECT_NATIVE_CARD_CALL =
-            Regex("(?<![A-Za-z0-9_])(?:Card|ElevatedCard|OutlinedCard)\\(")
         val FUNCTION_DECLARATION = Regex("\\bfun\\s+([A-Za-z0-9_]+)\\s*\\(")
 
         val MD3_CARD_PREVIEW_EXCEPTIONS = listOf(

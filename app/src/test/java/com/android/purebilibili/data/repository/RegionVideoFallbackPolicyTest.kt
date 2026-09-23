@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.android.purebilibili.testutil.readProjectSource
 
 class RegionVideoFallbackPolicyTest {
 
@@ -72,9 +73,9 @@ class RegionVideoFallbackPolicyTest {
 
     @Test
     fun `info region has a legacy feed fallback`() {
-        val source = java.io.File(
-            "app/src/main/java/com/android/purebilibili/data/repository/VideoRepository.kt"
-        ).readText()
+        val source = readProjectSource(
+            "src/main/java/com/android/purebilibili/data/repository/VideoRepository.kt"
+        )
         assertTrue(source.contains("getLegacyRegionVideos(rid = tid"))
     }
 }

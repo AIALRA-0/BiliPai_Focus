@@ -127,7 +127,7 @@ fun LiveDanmakuOverlay(
                 while (pendingItemsBeforeStart.isNotEmpty()) {
                     pendingItems.addLast(
                         createLiveDanmakuItem(
-                            item = pendingItemsBeforeStart.removeFirst(),
+                            item = pendingItemsBeforeStart.remove(),
                             currentTime = currentTime,
                             context = context,
                             engine = currentEngine,
@@ -141,7 +141,7 @@ fun LiveDanmakuOverlay(
                 if (pendingItems.isNotEmpty()) {
                     val batch = ArrayList<DanmakuItem>(pendingItems.size)
                     while (pendingItems.isNotEmpty()) {
-                        pendingItems.removeFirst().also {
+                        pendingItems.remove().also {
                             batch += it
                             activeItems.addLast(it)
                         }
@@ -153,7 +153,7 @@ fun LiveDanmakuOverlay(
                 while (activeItems.isNotEmpty() &&
                     (activeItems.first.showAtTime < trimBefore || activeItems.size > MAX_ACTIVE_LIVE_DANMAKU)
                 ) {
-                    val removed = activeItems.removeFirst()
+                    val removed = activeItems.remove()
                     trimBefore = maxOf(trimBefore, removed.showAtTime + 1L)
                 }
                 currentEngine.trimBefore(trimBefore)
@@ -185,7 +185,7 @@ fun LiveDanmakuOverlay(
             val currentEngine = engine
             if (!isStarted || currentEngine == null || startTime == 0L) {
                 if (pendingItemsBeforeStart.size >= MAX_PENDING_ITEMS_BEFORE_START) {
-                    pendingItemsBeforeStart.removeFirst()
+                    pendingItemsBeforeStart.remove()
                 }
                 pendingItemsBeforeStart.addLast(item)
                 return@collect
@@ -204,7 +204,7 @@ fun LiveDanmakuOverlay(
             )
             if (pendingItems.size >= MAX_PENDING_LIVE_DANMAKU) {
                 releaseLiveDanmakuItem(
-                    pendingItems.removeFirst(),
+                    pendingItems.remove(),
                     LiveDanmakuBitmapOwnership.APP_QUEUE_ONLY
                 )
             }

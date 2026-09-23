@@ -1,13 +1,13 @@
 package com.android.purebilibili.core.theme
 
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
 import com.materialkolor.dynamiccolor.ColorSpec
+import com.android.purebilibili.testutil.readProjectSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -20,7 +20,6 @@ class ThemeColorSchemeCompletenessTest {
 
     private val seed = Color(0xFF007AFF)
     private val lightBaseline = lightColorScheme()
-    private val darkBaseline = darkColorScheme()
 
     private fun ColorScheme.roles(): List<Pair<String, Color>> = listOf(
         "primary" to primary,
@@ -63,23 +62,49 @@ class ThemeColorSchemeCompletenessTest {
 
     private fun assertAllRolesExplicit(
         scheme: ColorScheme,
-        baseline: ColorScheme,
         label: String,
         expectedError: List<Color>,
     ) {
-        val missing = scheme.roles().filter { (role, value) ->
-            val isErrorRole = role.startsWith("error")
-            if (isErrorRole) {
-                value != expectedError[listOf("error", "onError", "errorContainer", "onErrorContainer").indexOf(role)]
-            } else {
-                value == baseline.roles().first { it.first == role }.second
-            }
-        }.map { it.first }
+        val roles = scheme.roles().toMap()
+        val missing = roles.filterValues { it == Color.Unspecified }.keys
+        assertTrue(missing.isEmpty(), "$label has unspecified color roles: $missing")
+        listOf("error", "onError", "errorContainer", "onErrorContainer")
+            .zip(expectedError)
+            .forEach { (role, expected) -> assertEquals(expected, roles[role], "$label $role") }
+    }
 
-        assertTrue(
-            missing.isEmpty(),
-            "$label 仍有角色落在 Compose 默认 baseline:$missing"
+    private fun assertStaticMd3SchemesDeclareEveryRole() {
+        val source = readProjectSource(
+            "app/src/main/java/com/android/purebilibili/core/theme/Theme.kt"
         )
+        val functionStart = source.indexOf("internal fun createStaticMd3ColorScheme(")
+        assertTrue(functionStart >= 0)
+        for (factory in listOf("darkColorScheme", "lightColorScheme")) {
+            val callStart = source.indexOf("$factory(", functionStart)
+            assertTrue(callStart >= 0, "$factory call is missing")
+            val open = source.indexOf('(', callStart)
+            var depth = 0
+            var close = -1
+            for (index in open until source.length) {
+                when (source[index]) {
+                    '(' -> depth++
+                    ')' -> {
+                        depth--
+                        if (depth == 0) {
+                            close = index
+                            break
+                        }
+                    }
+                }
+            }
+            assertTrue(close > open, "$factory arguments are incomplete")
+            val assignments = Regex("(?m)^\\s*([A-Za-z][A-Za-z0-9]*)\\s*=")
+                .findAll(source.substring(open + 1, close))
+                .map { it.groupValues[1] }
+                .toSet()
+            val missing = lightBaseline.roles().map { it.first }.filterNot(assignments::contains)
+            assertTrue(missing.isEmpty(), "$factory omits ColorScheme roles: $missing")
+        }
     }
 
     private fun assertSurfaceContainerOrdered(scheme: ColorScheme, label: String) {
@@ -100,9 +125,10 @@ class ThemeColorSchemeCompletenessTest {
 
     @Test
     fun `static md3 light scheme explicitly sets all roles`() {
+        assertStaticMd3SchemesDeclareEveryRole()
         val scheme = createStaticMd3ColorScheme(seed, darkTheme = false, amoledDarkTheme = false)
         assertAllRolesExplicit(
-            scheme, lightBaseline, "静态 MD3 light",
+            scheme, "静态 MD3 light",
             expectedError = listOf(
                 Color(0xFFB3261E), Color(0xFFFFFFFF), Color(0xFFF9DEDC), Color(0xFF410E0B)
             )
@@ -114,9 +140,10 @@ class ThemeColorSchemeCompletenessTest {
 
     @Test
     fun `static md3 dark scheme explicitly sets all roles`() {
+        assertStaticMd3SchemesDeclareEveryRole()
         val scheme = createStaticMd3ColorScheme(seed, darkTheme = true, amoledDarkTheme = false)
         assertAllRolesExplicit(
-            scheme, darkBaseline, "静态 MD3 dark",
+            scheme, "静态 MD3 dark",
             expectedError = listOf(
                 Color(0xFFF2B8B5), Color(0xFF601410), Color(0xFF8C1D18), Color(0xFFF9DEDC)
             )
@@ -127,9 +154,10 @@ class ThemeColorSchemeCompletenessTest {
 
     @Test
     fun `static md3 amoled scheme explicitly sets all roles`() {
+        assertStaticMd3SchemesDeclareEveryRole()
         val scheme = createStaticMd3ColorScheme(seed, darkTheme = true, amoledDarkTheme = true)
         assertAllRolesExplicit(
-            scheme, darkBaseline, "静态 MD3 amoled",
+            scheme, "静态 MD3 amoled",
             expectedError = listOf(
                 Color(0xFFF2B8B5), Color(0xFF601410), Color(0xFF8C1D18), Color(0xFFF9DEDC)
             )
@@ -165,8 +193,8 @@ class ThemeColorSchemeCompletenessTest {
             darkTheme = true,
         )
 
-        assertAllRolesExplicit(light, lightBaseline, "materialkolor light", expectedError = light.roles().filter { it.first.startsWith("error") }.map { it.second })
-        assertAllRolesExplicit(dark, darkBaseline, "materialkolor dark", expectedError = dark.roles().filter { it.first.startsWith("error") }.map { it.second })
+        assertAllRolesExplicit(light, "materialkolor light", expectedError = listOf(light.error, light.onError, light.errorContainer, light.onErrorContainer))
+        assertAllRolesExplicit(dark, "materialkolor dark", expectedError = listOf(dark.error, dark.onError, dark.errorContainer, dark.onErrorContainer))
         assertSurfaceContainerOrdered(light, "materialkolor light")
         assertSurfaceContainerOrdered(dark, "materialkolor dark")
         assertEquals(Color.Black, light.scrim)

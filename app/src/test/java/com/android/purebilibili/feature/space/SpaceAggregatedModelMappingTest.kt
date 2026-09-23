@@ -185,7 +185,9 @@ class SpaceAggregatedModelMappingTest {
                             SpaceAggregateTabItem(title = "图文", param = "article"),
                             SpaceAggregateTabItem(title = "赛季合集", param = "season_video", seasonId = 88L)
                         )
-                    )
+                    ),
+                    SpaceAggregateTab(title = "收藏", param = "favorite"),
+                    SpaceAggregateTab(title = "追番", param = "bangumi")
                 )
             )
         )

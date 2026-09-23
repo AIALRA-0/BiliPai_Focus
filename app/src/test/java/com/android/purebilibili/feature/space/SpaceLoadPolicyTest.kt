@@ -793,6 +793,8 @@ class SpaceLoadPolicyTest {
             data = SpaceAggregateData(
                 card = SpaceAggregateCard(
                     mid = "42",
+                    name = "UP",
+                    face = "https://i0.hdslb.com/bfs/face/demo.jpg",
                     spaceTag = listOf(
                         SpaceTagItem(type = "location", title = "IP属地：广东"),
                         SpaceTagItem(type = "real_name", title = "已实名认证"),
@@ -1015,7 +1017,11 @@ class SpaceLoadPolicyTest {
     fun `resolveSpaceInitialSeedFromAggregate detects cheese tab in tab2`() {
         val seed = resolveSpaceInitialSeedFromAggregate(
             data = SpaceAggregateData(
-                card = SpaceAggregateCard(mid = "123", name = "Teacher"),
+                card = SpaceAggregateCard(
+                    mid = "123",
+                    name = "Teacher",
+                    face = "https://i0.hdslb.com/bfs/face/teacher.jpg"
+                ),
                 tab2 = listOf(
                     SpaceAggregateTab(title = "主页", param = "home"),
                     SpaceAggregateTab(title = "课堂", param = "cheese")

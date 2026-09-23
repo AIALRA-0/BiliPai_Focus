@@ -33,7 +33,7 @@ class DownloadCleanupPolicyTest {
             taskDirectoryPath = directory.path
         )
 
-        assertEquals(directory.absolutePath, targets.taskDirectoryPath)
+        assertEquals(directory.path.trimEnd('/', '\\'), targets.taskDirectoryPath)
         assertTrue(File(directory, "${task.id}_video.m4s").absolutePath in targets.filePaths)
         assertTrue(File(directory, "${task.id}_audio.m4s").absolutePath in targets.filePaths)
         assertTrue(File(directory, "${task.id}.mp4").absolutePath in targets.filePaths)
