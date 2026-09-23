@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout
 import com.android.purebilibili.core.util.BilibiliUrlParser
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
@@ -225,6 +226,76 @@ internal fun shouldRenderDynamicOpusBlocksAsFullBody(
 
 internal fun resolveDynamicOpusPreviewImageLimit(isDetail: Boolean): Int? {
     return if (isDetail) null else DYNAMIC_FEED_PREVIEW_MAX_IMAGES
+}
+
+internal fun shouldExpandDynamicOpusDetailImages(
+    imageLayout: DynamicDetailImageLayout,
+): Boolean {
+    return imageLayout == DynamicDetailImageLayout.EXPANDED
+}
+
+internal fun toggleDynamicDetailImageLayout(
+    current: DynamicDetailImageLayout,
+): DynamicDetailImageLayout {
+    return when (current) {
+        DynamicDetailImageLayout.EXPANDED -> DynamicDetailImageLayout.THUMBNAIL
+        DynamicDetailImageLayout.THUMBNAIL -> DynamicDetailImageLayout.EXPANDED
+    }
+}
+
+/** 详情页缩略图模式：把 Opus 正文里的图片/带图分割线收成九宫格素材。 */
+internal fun resolveOpusThumbnailDrawItems(
+    blocks: List<OpusContentBlock>,
+): List<DrawItem> {
+    return buildList {
+        blocks.forEach { block ->
+            when (block) {
+                is OpusContentBlock.Image -> add(block.pic.toDrawItem())
+                is OpusContentBlock.Divider -> block.pic?.let { add(it.toDrawItem()) }
+                else -> Unit
+            }
+        }
+    }
+}
+
+internal fun isOpusImageContentBlock(block: OpusContentBlock): Boolean {
+    return block is OpusContentBlock.Image ||
+        (block is OpusContentBlock.Divider && block.pic != null)
+}
+
+/**
+ * 缩略图网格插在第一张图块位置，使图后的 LinkCard/横幅仍落在网格下面。
+ */
+internal fun shouldEmitOpusThumbnailGridAtBlock(
+    block: OpusContentBlock,
+    thumbnailGridEmitted: Boolean,
+    hasThumbnailItems: Boolean,
+    expandImages: Boolean,
+): Boolean {
+    if (expandImages || thumbnailGridEmitted || !hasThumbnailItems) return false
+    return isOpusImageContentBlock(block)
+}
+
+private fun OpusPic.toDrawItem(): DrawItem {
+    return DrawItem(
+        src = url,
+        width = width,
+        height = height,
+        live_url = live_url,
+    )
+}
+
+internal fun shouldShowDynamicDetailImageLayoutToggle(
+    item: DynamicItem,
+): Boolean {
+    val major = item.modules.module_dynamic?.major
+    if (major?.draw?.items?.isNotEmpty() == true) return true
+    if (major?.opus?.pics?.isNotEmpty() == true) return true
+    val blocks = major?.opus?.contentBlocks.orEmpty()
+    return blocks.any { block ->
+        block is OpusContentBlock.Image ||
+            (block is OpusContentBlock.Divider && block.pic != null)
+    }
 }
 
 internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLinkCardAction {

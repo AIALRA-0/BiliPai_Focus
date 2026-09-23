@@ -193,6 +193,16 @@ class BiliPaiFeedFilterPluginTest {
         assertFalse(show(cfgOn, video(duration = 10), kind = FeedKind.HOME_RANK))
     }
 
+    // ==================== 启动等待(插件标识一致性) ====================
+
+    @Test
+    fun `plugin id matches the startup await constant`() {
+        // HomeViewModel 通过 awaitPluginReady(BILIPAI_FEED_FILTER_PLUGIN_ID) 等本插件的
+        // 启用态与配置回填完成后再重过滤首页。若常量与插件实际 id 不一致, 该等待永远不会
+        // 完成, 首页将不再自动重过滤(只能手动刷新)。此处锁定二者一致。
+        assertEquals(BILIPAI_FEED_FILTER_PLUGIN_ID, BiliPaiFeedFilterPlugin().id)
+    }
+
     // ==================== 工具函数 ====================
 
     @Test

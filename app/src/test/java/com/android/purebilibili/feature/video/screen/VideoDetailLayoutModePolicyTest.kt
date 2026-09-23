@@ -406,46 +406,6 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
-    fun highRefreshMode_prefersHighestRefreshWithinCurrentResolution() {
-        val selected = resolvePreferredHighRefreshModeId(
-            currentModeId = 1,
-            supportedModes = listOf(
-                RefreshModeCandidate(modeId = 1, refreshRate = 60f, width = 2400, height = 1080),
-                RefreshModeCandidate(modeId = 2, refreshRate = 120f, width = 1920, height = 1080),
-                RefreshModeCandidate(modeId = 3, refreshRate = 120f, width = 2400, height = 1080)
-            )
-        )
-
-        assertEquals(3, selected)
-    }
-
-    @Test
-    fun highRefreshMode_doesNotSwitchResolutionForHighRefresh() {
-        val selected = resolvePreferredHighRefreshModeId(
-            currentModeId = 1,
-            supportedModes = listOf(
-                RefreshModeCandidate(modeId = 1, refreshRate = 60f, width = 960, height = 2142),
-                RefreshModeCandidate(modeId = 2, refreshRate = 120f, width = 1280, height = 2856)
-            )
-        )
-
-        assertEquals(null, selected)
-    }
-
-    @Test
-    fun highRefreshMode_returnsNullWhenNoEligibleHighRefresh() {
-        val selected = resolvePreferredHighRefreshModeId(
-            currentModeId = 1,
-            supportedModes = listOf(
-                RefreshModeCandidate(modeId = 1, refreshRate = 60f, width = 2400, height = 1080),
-                RefreshModeCandidate(modeId = 2, refreshRate = 75f, width = 2400, height = 1080)
-            )
-        )
-
-        assertEquals(null, selected)
-    }
-
-    @Test
     fun largeScreenAutoRotate_usesFullSensorWithoutEnteringFullscreen() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,

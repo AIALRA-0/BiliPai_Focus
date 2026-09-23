@@ -415,11 +415,19 @@ class AppNavigationNavigation3BridgeStructureTest {
     fun appNavigationUsesNavDisplayAsSingleMainChain() {
         val source = appNavigationSource()
         val buildFile = appBuildGradleSource()
+        val navHost = navigation3Source()
+        val navHostCall = source
+            .substringAfter("BiliPaiNavDisplayHost(")
+            .substringBefore(") { key ->")
 
         assertTrue(source.contains("BiliPaiNavDisplayHost("))
-        assertTrue(source.contains("SharedTransitionLayout(modifier = Modifier.fillMaxSize())"))
-        assertTrue(source.contains("LocalSharedTransitionScope provides"))
-        assertTrue(source.contains("LocalOfficialVideoSharedTransition provides realVideoSharedTransition"))
+        assertTrue(navHostCall.contains("cardTransitionEnabled ="))
+        assertTrue(navHostCall.contains("resolveVideoCardTransitionEnabledForSource("))
+        assertTrue(navHost.contains("NavDisplay("))
+        assertTrue(navHost.contains("miuixVideoCardNavTransition("))
+        assertTrue(navHost.contains("LocalMiuixVideoCardTransitionState provides miuixCardTransitionState"))
+        assertFalse(source.contains("SharedTransitionLayout("))
+        assertFalse(source.contains("LocalOfficialVideoSharedTransition"))
         assertTrue(source.contains("resolveBiliPaiNavEntryContentRole"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.HOME ->"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.DYNAMIC ->"))
@@ -480,6 +488,37 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertFalse(source.contains("DEFERRED_LEGACY_ROUTE"))
         assertFalse(source.contains("NavHost("))
         assertFalse(buildFile.contains("navigation-compose"))
+    }
+
+    @Test
+    fun videoReturnPrefetchIsIdempotentAcrossPredictiveProgressAndCommit() {
+        val source = appNavigationSource()
+        val prefetchBlock = source
+            .substringAfter("val homeCoverPrefetchTriggered = remember(currentNavigation3Key)")
+            .substringBefore("val predictiveBackAnimationStyle =")
+        val navHostCall = source
+            .substringAfter("BiliPaiNavDisplayHost(")
+            .substringBefore(") { key ->")
+        val committedReturnBlock = navHostCall
+            .substringAfter("onPrepareVideoCardSharedReturn = {")
+            .substringBefore("onPredictiveBackCancelled =")
+
+        assertTrue(source.contains("val homeCoverPrefetchTriggered = remember(currentNavigation3Key)"))
+        assertTrue(prefetchBlock.contains("if (homeCoverPrefetchTriggered.value) return"))
+        assertTrue(prefetchBlock.contains("homeCoverPrefetchTriggered.value = true"))
+        assertTrue(prefetchBlock.contains("sourceBvid = (currentNavigation3Key as? BiliPaiNavKey.VideoDetail)?.bvid"))
+        assertTrue(prefetchBlock.contains("HomeCoverReturnPrefetchRegistry.snapshot()"))
+        assertTrue(prefetchBlock.contains("resolveHomeCoverReturnPrefetchCandidates("))
+        assertTrue(prefetchBlock.contains("prefetchHomeCoverImages(context = context, entries = candidates)"))
+        assertTrue(navHostCall.contains("onNativeVideoBackProgress = { _, _, progress ->"))
+        assertTrue(navHostCall.contains("if (progress > 0f)"))
+        assertTrue(navHostCall.contains("onPrepareVideoCardSharedReturn = {"))
+        assertTrue(committedReturnBlock.contains("maybePrefetchHomeCoversForVideoReturn()"))
+        assertTrue(
+            committedReturnBlock.indexOf("maybePrefetchHomeCoversForVideoReturn()") <
+                committedReturnBlock.indexOf("markNavigation3VideoReturnBeforeBackAction")
+        )
+        assertTrue(navHostCall.contains("onPredictiveBackCancelled = { _, _ ->"))
     }
 
     @Test

@@ -68,6 +68,8 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppGridLayoutIcon
+import com.android.purebilibili.core.ui.rememberAppListLayoutIcon
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
@@ -78,6 +80,8 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardPresentati
 import com.android.purebilibili.feature.dynamic.components.DynamicManageAction
 import com.android.purebilibili.feature.dynamic.components.dispatchDynamicManageAction
 import com.android.purebilibili.feature.dynamic.components.DynamicPublishComposer
+import com.android.purebilibili.feature.dynamic.components.shouldShowDynamicDetailImageLayoutToggle
+import com.android.purebilibili.feature.dynamic.components.toggleDynamicDetailImageLayout
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicReportReasons
 import com.android.purebilibili.feature.dynamic.components.saveDynamicImageToGallery
 import com.android.purebilibili.feature.dynamic.components.DynamicShareToMessageDialog
@@ -161,6 +165,19 @@ fun DynamicDetailScreen(
     // overlays, matching video detail and preventing a RenderNode backdrop cycle.
     val detailCommentBackdrop = if (liquidGlassEnabled) rememberLayerBackdrop() else null
     val gifImageLoader = context.imageLoader
+    val defaultDetailImageLayout by SettingsManager.getDynamicDetailImageLayout(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DynamicDetailImageLayout.EXPANDED
+        )
+    var detailImageLayoutOverrideName by rememberSaveable(dynamicId) { mutableStateOf<String?>(null) }
+    val effectiveDetailImageLayout = remember(
+        detailImageLayoutOverrideName,
+        defaultDetailImageLayout,
+    ) {
+        detailImageLayoutOverrideName
+            ?.let { name -> SettingsManager.DynamicDetailImageLayout.entries.firstOrNull { it.name == name } }
+            ?: defaultDetailImageLayout
+    }
     val likedDynamics by interactionViewModel.likedDynamics.collectAsStateWithLifecycle()
     val likeOverrides by interactionViewModel.likeOverrides.collectAsStateWithLifecycle()
     val comments by interactionViewModel.comments.collectAsStateWithLifecycle()
@@ -189,11 +206,34 @@ fun DynamicDetailScreen(
     AppScaffold(
         blurContentReady = uiState !is DynamicDetailUiState.Loading,
         topBar = {
+            val canToggleImageLayout = (uiState as? DynamicDetailUiState.Success)
+                ?.let { shouldShowDynamicDetailImageLayoutToggle(it.item) } == true
             AppTopBar(
                 title = screenTitle,
                 navigationIcon = {
                     AppIconButton(onClick = onBack) {
                         AppIcon(rememberAppBackIcon(), contentDescription = backLabel)
+                    }
+                },
+                actions = {
+                    if (canToggleImageLayout) {
+                        val nextImageLayout = toggleDynamicDetailImageLayout(effectiveDetailImageLayout)
+                        AppIconButton(
+                            onClick = {
+                                detailImageLayoutOverrideName = nextImageLayout.name
+                            }
+                        ) {
+                            AppIcon(
+                                imageVector = if (effectiveDetailImageLayout ==
+                                    SettingsManager.DynamicDetailImageLayout.EXPANDED
+                                ) {
+                                    rememberAppGridLayoutIcon()
+                                } else {
+                                    rememberAppListLayoutIcon()
+                                },
+                                contentDescription = "切换图片展示（当前：${effectiveDetailImageLayout.label}）",
+                            )
+                        }
                     }
                 }
             )
@@ -371,6 +411,7 @@ fun DynamicDetailScreen(
                                 isLiked = likedDynamics.contains(state.item.id_str),
                                 likeOverride = likeOverrides[state.item.id_str],
                                 forwardCountDelta = forwardCountDelta,
+                                detailImageLayout = effectiveDetailImageLayout,
                             ),
                         )
                     }

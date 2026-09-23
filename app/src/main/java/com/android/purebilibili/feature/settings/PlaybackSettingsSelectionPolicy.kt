@@ -9,6 +9,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
 import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
 import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppTagChipSize
 import com.android.purebilibili.feature.screenshot.AppScreenshotCaptureMode
 import com.android.purebilibili.feature.screenshot.AppScreenshotGestureMode
 
@@ -153,6 +154,14 @@ internal fun resolveTabletCommentPanelWidthSegmentOptions(): List<AppSegmentOpti
         AppSegmentOption(TabletCommentPanelWidthPreset.STANDARD, "标准"),
         AppSegmentOption(TabletCommentPanelWidthPreset.WIDE, "宽"),
         AppSegmentOption(TabletCommentPanelWidthPreset.ULTRA_WIDE, "超宽")
+    )
+}
+
+internal fun resolveVideoTagSizeSegmentOptions(): List<AppSegmentOption<AppTagChipSize>> {
+    return listOf(
+        AppSegmentOption(AppTagChipSize.STANDARD, "标准"),
+        AppSegmentOption(AppTagChipSize.COMPACT, "紧凑"),
+        AppSegmentOption(AppTagChipSize.SMALL, "更小")
     )
 }
 

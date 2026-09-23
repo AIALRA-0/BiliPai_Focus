@@ -28,8 +28,8 @@ class MusicPlayerContentStructureTest {
         assertTrue(!compactBranch.contains("forceLiquidChrome = true"))
         assertTrue(!compactBranch.contains("containerColorOverride"))
         assertTrue(!compactBranch.contains("indicatorIdleSurfaceColorOverride"))
-        assertTrue(compactBranch.contains("selectedTextColorOverride = MusicContentColor"))
-        assertTrue(compactBranch.contains("unselectedTextColorOverride = MusicContentColor"))
+        assertTrue(compactBranch.contains("selectedTextColorOverride = MaterialTheme.colorScheme.onSurface"))
+        assertTrue(compactBranch.contains("unselectedTextColorOverride = MaterialTheme.colorScheme.onSurface"))
     }
 
     @Test

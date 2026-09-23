@@ -25,55 +25,6 @@ import com.android.purebilibili.feature.video.player.buildPipPlaybackRemoteActio
 import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
 
 @Composable
-internal fun VideoDetailHighRefreshRateEffect(
-    activity: Activity?,
-    isScreenActive: Boolean,
-) {
-    DisposableEffect(activity, isScreenActive) {
-        if (!isScreenActive || activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            onDispose { }
-        } else {
-            val hostWindow = activity.window
-            val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                activity.display
-            } else {
-                @Suppress("DEPRECATION")
-                activity.windowManager.defaultDisplay
-            }
-            if (display == null) {
-                onDispose { }
-            } else {
-                val originalModeId = hostWindow.attributes.preferredDisplayModeId
-                val currentModeId = display.mode.modeId
-                val preferredModeId = resolvePreferredHighRefreshModeId(
-                    currentModeId = currentModeId,
-                    supportedModes = display.supportedModes.map { mode ->
-                        RefreshModeCandidate(
-                            modeId = mode.modeId,
-                            refreshRate = mode.refreshRate,
-                            width = mode.physicalWidth,
-                            height = mode.physicalHeight,
-                        )
-                    },
-                )
-                if (preferredModeId != null && preferredModeId != originalModeId) {
-                    hostWindow.attributes = hostWindow.attributes.apply {
-                        preferredDisplayModeId = preferredModeId
-                    }
-                }
-                onDispose {
-                    if (hostWindow.attributes.preferredDisplayModeId != originalModeId) {
-                        hostWindow.attributes = hostWindow.attributes.apply {
-                            preferredDisplayModeId = originalModeId
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 internal fun VideoDetailPipParamsEffect(
     context: Context,
     activity: Activity?,

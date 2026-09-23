@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.audio.screen
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.theme.calculateContrastRatio
 import kotlin.test.Test
@@ -49,9 +50,32 @@ class MusicPlayerContentColorPolicyTest {
     }
 
     @Test
-    fun accentColorUsesThemePrimary() {
-        val primary = Color(0xFFFF2D55)
-        assertEquals(primary, resolveMusicPlayerAccentColor(primary))
+    fun accentUsesTheReadableThemeVariantOnTheImmersiveFloor() {
+        val primary = Color(0xFF503077)
+        val inversePrimary = Color(0xFFD7C6F4)
+        val accent = resolveMusicPlayerAccentColor(primary, inversePrimary)
+
+        assertEquals(inversePrimary, accent)
+        assertTrue(calculateContrastRatio(accent, Color(0xFF4D4D4D)) >= 4.5f)
+    }
+
+    @Test
+    fun accentFallsBackToWhiteWhenBothThemeVariantsAreMuted() {
+        assertEquals(
+            Color.White,
+            resolveMusicPlayerAccentColor(Color(0xFF777777), Color(0xFF888888)),
+        )
+    }
+
+    @Test
+    fun artworkScrimKeepsWhiteTextLegibleOverBrightArtwork() {
+        val top = MusicArtworkScrimColors.first().compositeOver(Color.White)
+        val middle = MusicArtworkScrimColors[1].compositeOver(Color.White)
+        val bottom = MusicArtworkScrimColors.last().compositeOver(Color.White)
+
+        assertTrue(calculateContrastRatio(Color.White, top) >= 4.5f)
+        assertTrue(calculateContrastRatio(Color.White.copy(alpha = 0.78f).compositeOver(middle), middle) >= 4.5f)
+        assertTrue(calculateContrastRatio(Color.White.copy(alpha = 0.72f).compositeOver(bottom), bottom) >= 4.5f)
     }
 
     @Test

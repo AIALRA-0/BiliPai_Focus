@@ -18,12 +18,14 @@ fun cleanFeedSummary(text: String): String {
 
 fun feedBodyNeedsRemoteFetch(item: ParsedFeedItem): Boolean {
     if (!isHttpFeedUrl(item.link)) return false
-    val plain = cleanFeedSummary(item.summary.ifBlank { feedPlainText(item.htmlContent) })
-    val html = item.htmlContent
-    if (html.contains("查看全文") || html.contains("阅读全文") || html.contains("Read more", ignoreCase = true)) {
-        return true
-    }
-    return plain.length < 360
+    val htmlText = feedPlainText(item.htmlContent)
+    val summary = cleanFeedSummary(item.summary)
+    val cue = Regex("""(查看全文|阅读全文|阅读更多|继续阅读|read more|continue reading|全文链接)""", RegexOption.IGNORE_CASE)
+    if (cue.containsMatchIn(item.htmlContent) || cue.containsMatchIn(item.summary)) return true
+    if (item.htmlContent.isBlank()) return true
+    if (htmlText.length >= 180 && htmlText.length > summary.length + 80) return false
+    return htmlText.trimEnd().endsWith("…") || htmlText.trimEnd().endsWith("...") ||
+        (htmlText.length < 120 && summary.length > htmlText.length + 80)
 }
 
 fun extractArticleBody(pageHtml: String): String? {
@@ -38,6 +40,10 @@ fun extractArticleBody(pageHtml: String): String? {
         "article-content",
         "rich_media_content",
         "markdown-body",
+        "articleBody",
+        "story-body",
+        "post__content",
+        "content-body",
     )
     markers.forEach { marker ->
         val index = withoutNoise.indexOf(marker)
@@ -52,7 +58,19 @@ fun extractArticleBody(pageHtml: String): String? {
     }
     val articleStart = Regex("""(?i)<article\b""").find(withoutNoise)?.range?.first
     if (articleStart != null) {
-        sliceHtmlElement(withoutNoise, articleStart)?.takeIf { feedPlainText(it).length > 80 }?.let { return it }
+        sliceHtmlElement(withoutNoise, articleStart)?.takeIf { feedPlainText(it).length > 20 }?.let { return it }
+    }
+    val mainStart = Regex("""(?i)<main\b""").find(withoutNoise)?.range?.first
+    if (mainStart != null) {
+        sliceHtmlElement(withoutNoise, mainStart)?.takeIf { feedPlainText(it).length > 40 }?.let { return it }
+    }
+    val bodyStart = Regex("""(?i)<body\b""").find(withoutNoise)?.range?.first
+    if (bodyStart != null) {
+        sliceHtmlElement(withoutNoise, bodyStart)?.takeIf { body ->
+            val length = feedPlainText(body).length
+            val paragraphs = Regex("""(?i)<p\b""").findAll(body).count()
+            length > 80 || (paragraphs >= 2 && length > 30)
+        }?.let { return it }
     }
     return null
 }

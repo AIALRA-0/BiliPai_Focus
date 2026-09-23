@@ -233,6 +233,7 @@ internal data class SettingsRootCategoryActions(
     val onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
     val onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
     val onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
+    val onDynamicDetailImageLayoutChange: (com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout) -> Unit,
     val onDynamicAllTabHorizontalUserListVisibleChange: (Boolean) -> Unit,
     val onDynamicTopBarCollapseOnScrollChange: (Boolean) -> Unit,
     val onDynamicFeedLayoutModeChange: (com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode) -> Unit,
@@ -272,6 +273,7 @@ internal data class SettingsRootCategoryState(
     val feedApiType: com.android.purebilibili.core.store.SettingsManager.FeedApiType,
     val incrementalTimelineRefreshEnabled: Boolean,
     val dynamicImagePreviewTextVisible: Boolean,
+    val dynamicDetailImageLayout: com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout,
     val dynamicAllTabHorizontalUserListVisible: Boolean,
     val dynamicTopBarCollapseOnScroll: Boolean,
     val dynamicFeedLayoutMode: com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode,
@@ -736,6 +738,8 @@ internal fun SettingsRootCategoryContent(
                             onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
                             dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
                             onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
+                            dynamicDetailImageLayout = state.dynamicDetailImageLayout,
+                            onDynamicDetailImageLayoutChange = actions.onDynamicDetailImageLayoutChange,
                             dynamicAllTabHorizontalUserListVisible = state.dynamicAllTabHorizontalUserListVisible,
                             onDynamicAllTabHorizontalUserListVisibleChange =
                                 actions.onDynamicAllTabHorizontalUserListVisibleChange,
@@ -945,6 +949,8 @@ internal fun SettingsRootCategoryContent(
                             onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
                             dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
                             onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
+                            dynamicDetailImageLayout = state.dynamicDetailImageLayout,
+                            onDynamicDetailImageLayoutChange = actions.onDynamicDetailImageLayoutChange,
                             dynamicAllTabHorizontalUserListVisible = state.dynamicAllTabHorizontalUserListVisible,
                             onDynamicAllTabHorizontalUserListVisibleChange =
                                 actions.onDynamicAllTabHorizontalUserListVisibleChange,
@@ -1308,6 +1314,8 @@ fun FeedApiSection(
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
     dynamicImagePreviewTextVisible: Boolean,
     onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
+    dynamicDetailImageLayout: com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout,
+    onDynamicDetailImageLayoutChange: (com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout) -> Unit,
     dynamicAllTabHorizontalUserListVisible: Boolean,
     onDynamicAllTabHorizontalUserListVisibleChange: (Boolean) -> Unit,
     dynamicTopBarCollapseOnScroll: Boolean,
@@ -1319,11 +1327,12 @@ fun FeedApiSection(
     homeRefreshCount: Int,
     onHomeRefreshCountChange: (Int) -> Unit
 ) {
-    val siblingTints = remember { resolveSettingsSiblingIconTints(8, paletteOffset = 1) }
+    val siblingTints = remember { resolveSettingsSiblingIconTints(9, paletteOffset = 1) }
     val feedIcon = rememberSettingsSemanticIcon(SettingsIconRole.FEED_API)
     val refreshIcon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_COUNT)
     val visibilityIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_TAB_VISIBILITY)
     val previewTextIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_PREVIEW_TEXT)
+    val imageLayoutIcon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_COLUMNS)
     val topBarCollapseIcon = rememberSettingsSemanticIcon(SettingsIconRole.NAVIGATION)
     SettingsCardGroup {
         SettingsSingleChoicePreference(
@@ -1354,13 +1363,28 @@ fun FeedApiSection(
             iconTint = siblingTints[2]
         )
         SettingsAdaptiveDivider()
+        SettingsSingleChoicePreference(
+            title = "动态详情图片展示",
+            subtitle = "缩略图可更快看到评论；详情页右上角可临时切换",
+            options = com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout.entries.map { layout ->
+                com.android.purebilibili.core.ui.components.AppSegmentOption(
+                    value = layout,
+                    label = layout.label
+                )
+            },
+            selectedValue = dynamicDetailImageLayout,
+            icon = imageLayoutIcon,
+            iconTint = siblingTints[3],
+            onSelectionChange = onDynamicDetailImageLayoutChange,
+        )
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = visibilityIcon,
             title = "“全部”页显示关注用户栏",
             subtitle = "关闭后隐藏顶部横向用户列表，“UP主”页仍可选择关注用户",
             checked = dynamicAllTabHorizontalUserListVisible,
             onCheckedChange = onDynamicAllTabHorizontalUserListVisibleChange,
-            iconTint = siblingTints[3]
+            iconTint = siblingTints[4]
         )
         SettingsAdaptiveDivider()
         SettingSwitchItem(
@@ -1373,7 +1397,7 @@ fun FeedApiSection(
             },
             checked = dynamicTopBarCollapseOnScroll,
             onCheckedChange = onDynamicTopBarCollapseOnScrollChange,
-            iconTint = siblingTints[4]
+            iconTint = siblingTints[5]
         )
         SettingsAdaptiveDivider()
         SettingsSingleChoicePreference(
@@ -1387,7 +1411,7 @@ fun FeedApiSection(
             },
             selectedValue = dynamicFeedLayoutMode,
             icon = feedIcon,
-            iconTint = siblingTints[5],
+            iconTint = siblingTints[6],
             onSelectionChange = onDynamicFeedLayoutModeChange,
         )
         SettingsAdaptiveDivider()
@@ -1395,7 +1419,7 @@ fun FeedApiSection(
             icon = visibilityIcon,
             visibleTabIds = dynamicVisibleTabIds,
             onTabVisibilityChange = onDynamicTabVisibilityChange,
-            iconTint = siblingTints[6]
+            iconTint = siblingTints[7]
         )
         SettingsAdaptiveDivider()
         SettingSliderItem(
@@ -1407,7 +1431,7 @@ fun FeedApiSection(
             valueRange = resolveHomeRefreshSliderRange(),
             steps = resolveHomeRefreshSliderSteps(),
             valueFormatter = { value -> value.roundToInt().toString() },
-            iconTint = siblingTints[7]
+            iconTint = siblingTints[8]
         )
     }
 }

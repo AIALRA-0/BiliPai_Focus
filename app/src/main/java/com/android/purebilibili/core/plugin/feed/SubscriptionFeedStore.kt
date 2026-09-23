@@ -64,7 +64,16 @@ object SubscriptionFeedStore {
     }
 
     fun remove(context: Context, id: String) {
-        write(context, list(context).filterNot { it.id == id })
+        removeAll(context, setOf(id))
+    }
+
+    fun removeAll(context: Context, ids: Set<String>): Int {
+        if (ids.isEmpty()) return 0
+        val current = list(context)
+        val remaining = current.filterNot { it.id in ids }
+        val removed = current.size - remaining.size
+        if (removed > 0) write(context, remaining)
+        return removed
     }
 
     fun setEnabled(context: Context, id: String, enabled: Boolean) {

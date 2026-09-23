@@ -1,5 +1,7 @@
 package com.android.purebilibili.core.plugin.feed
 
+import kotlinx.serialization.Serializable
+
 data class FeedSource(
     val id: String,
     val title: String,
@@ -11,6 +13,7 @@ data class ParsedFeed(
     val items: List<ParsedFeedItem>,
 )
 
+@Serializable
 data class ParsedFeedItem(
     val id: String,
     val sourceId: String,
@@ -46,6 +49,7 @@ sealed interface FeedBlock {
     data class Code(val text: String) : FeedBlock
     data class BulletList(val items: List<List<FeedInline>>) : FeedBlock
     data class NumberedList(val items: List<List<FeedInline>>) : FeedBlock
+    data class EmbeddedLink(val title: String, val url: String) : FeedBlock
 }
 
 data class FeedLoadSnapshot(

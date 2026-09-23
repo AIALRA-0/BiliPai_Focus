@@ -1400,6 +1400,24 @@ private fun PlaybackInteractionSettingsSection(
             iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
         AppPreferenceDivider()
+        val videoTagSizePreset by com.android.purebilibili.core.store.SettingsManager
+            .getVideoTagSizePreset(context)
+            .collectAsStateWithLifecycle(
+                initialValue = com.android.purebilibili.core.ui.components.AppTagChipSize.STANDARD
+            )
+        SettingsSingleChoicePreference(
+            title = "视频标签大小：${videoTagSizePreset.label}",
+            subtitle = "调整视频简介区标签的字号与间距",
+            options = resolveVideoTagSizeSegmentOptions(),
+            selectedValue = videoTagSizePreset,
+            onSelectionChange = { size ->
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setVideoTagSizePreset(context, size)
+                }
+            }
+        )
+        AppPreferenceDivider()
         AppSwitchPreference(
             icon = rememberSettingsSemanticIcon(SettingsIconRole.AI_SUMMARY),
             title = "显示 AI 总结入口",

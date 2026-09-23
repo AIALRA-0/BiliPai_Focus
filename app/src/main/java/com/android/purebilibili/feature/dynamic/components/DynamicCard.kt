@@ -82,6 +82,7 @@ import com.android.purebilibili.core.ui.rememberAppHistoryIcon
 import com.android.purebilibili.core.ui.rememberAppDeleteIcon
 import com.android.purebilibili.core.ui.rememberAppLinkIcon
 import com.android.purebilibili.data.model.response.DynamicDesc
+import com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DrawItem
 import com.android.purebilibili.data.model.response.ReplyInteractionData
@@ -144,6 +145,7 @@ data class DynamicCardPresentation(
     val isLiked: Boolean = false,
     val likeOverride: Boolean? = null,
     val forwardCountDelta: Int = 0,
+    val detailImageLayout: DynamicDetailImageLayout = DynamicDetailImageLayout.EXPANDED,
 )
 
 /**
@@ -186,6 +188,7 @@ fun DynamicCardV2(
     val isLiked = presentation.isLiked
     val likeOverride = presentation.likeOverride
     val forwardCountDelta = presentation.forwardCountDelta
+    val detailImageLayout = presentation.detailImageLayout
 
     if (!item.visible) return
     val openDynamicDetail = remember(item, onDynamicDetailClick) {
@@ -1054,6 +1057,7 @@ fun DynamicCardV2(
             
             // 显示图片 (转换为 DrawItem 格式复用现有组件)
             if (hasFullOpusDetailContent) {
+                val expandOpusDetailImages = shouldExpandDynamicOpusDetailImages(detailImageLayout)
                 val previewImages = remember(renderableOpusPics) {
                     renderableOpusPics.map { it.url }
                 }
@@ -1068,7 +1072,40 @@ fun DynamicCardV2(
                         .associateBy { it.url }
                 }
                 var fullContentSelectedImageIndex by remember { mutableIntStateOf(-1) }
+                var thumbnailSourceRect by remember {
+                    mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+                }
+                val thumbnailItems = remember(renderableOpusPics) {
+                    renderableOpusPics.map { pic ->
+                        DrawItem(
+                            src = pic.url,
+                            width = pic.width,
+                            height = pic.height,
+                            live_url = pic.live_url,
+                        )
+                    }
+                }
+                var thumbnailGridEmitted = false
                 fullOpusContentBlocks.forEach { block ->
+                    if (shouldEmitOpusThumbnailGridAtBlock(
+                            block = block,
+                            thumbnailGridEmitted = thumbnailGridEmitted,
+                            hasThumbnailItems = thumbnailItems.isNotEmpty(),
+                            expandImages = expandOpusDetailImages,
+                        )
+                    ) {
+                        thumbnailGridEmitted = true
+                        DrawGridV2(
+                            items = thumbnailItems,
+                            gifImageLoader = gifImageLoader,
+                            maxDisplayImages = resolveDynamicOpusPreviewImageLimit(isDetail),
+                            onImageClick = { index, rect ->
+                                fullContentSelectedImageIndex = index
+                                thumbnailSourceRect = rect
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
+                    }
                     when (block) {
                         is OpusContentBlock.Text -> {
                             val richBlockDesc = resolveDynamicOpusTextBlockRichDesc(
@@ -1198,17 +1235,19 @@ fun DynamicCardV2(
                                         .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
                                         .build()
                                 }
-                                AsyncImage(
-                                    model = dividerRequest,
-                                    contentDescription = "分割线",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .then(
-                                            Modifier.aspectRatio(dividerAspectRatio)
-                                        )
-                                        .padding(vertical = AppSpacingTokens.Small),
-                                    contentScale = ContentScale.FillWidth,
-                                )
+                                if (expandOpusDetailImages) {
+                                    AsyncImage(
+                                        model = dividerRequest,
+                                        contentDescription = "分割线",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .then(
+                                                Modifier.aspectRatio(dividerAspectRatio)
+                                            )
+                                            .padding(vertical = AppSpacingTokens.Small),
+                                        contentScale = ContentScale.FillWidth,
+                                    )
+                                }
                             } else {
                                 AppHorizontalDivider(
                                     modifier = Modifier.padding(vertical = AppSpacingTokens.Medium),
@@ -1240,25 +1279,27 @@ fun DynamicCardV2(
                                     .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
                                     .build()
                             }
-                            AsyncImage(
-                                model = imageRequest,
-                                contentDescription = opus.title.orEmpty(),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(
-                                        if (aspectRatio > 0f) {
-                                            Modifier.aspectRatio(aspectRatio)
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
-                                    .clip(AppShapes.container(ContainerLevel.Card))
-                                    .clickable(enabled = currentImageIndex in previewImages.indices) {
-                                        fullContentSelectedImageIndex = currentImageIndex
-                                    },
-                                contentScale = ContentScale.FillWidth
-                            )
-                            Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
+                            if (expandOpusDetailImages) {
+                                AsyncImage(
+                                    model = imageRequest,
+                                    contentDescription = opus.title.orEmpty(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(
+                                            if (aspectRatio > 0f) {
+                                                Modifier.aspectRatio(aspectRatio)
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                        .clip(AppShapes.container(ContainerLevel.Card))
+                                        .clickable(enabled = currentImageIndex in previewImages.indices) {
+                                            fullContentSelectedImageIndex = currentImageIndex
+                                        },
+                                    contentScale = ContentScale.FillWidth
+                                )
+                                Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
+                            }
                         }
                         is OpusContentBlock.LinkCard -> {
                             DynamicOpusLinkCard(
@@ -1296,6 +1337,20 @@ fun DynamicCardV2(
                     }
                 }
 
+                if (!expandOpusDetailImages && !thumbnailGridEmitted && thumbnailItems.isNotEmpty()) {
+                    thumbnailGridEmitted = true
+                    DrawGridV2(
+                        items = thumbnailItems,
+                        gifImageLoader = gifImageLoader,
+                        maxDisplayImages = resolveDynamicOpusPreviewImageLimit(isDetail),
+                        onImageClick = { index, rect ->
+                            fullContentSelectedImageIndex = index
+                            thumbnailSourceRect = rect
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
+                }
+
                 if (fullContentSelectedImageIndex >= 0) {
                     ImagePreviewDialog(
                         livePhotoVideos = buildMap {
@@ -1314,6 +1369,7 @@ fun DynamicCardV2(
                         },
                         images = previewImages,
                         initialIndex = fullContentSelectedImageIndex,
+                        sourceRect = if (expandOpusDetailImages) null else thumbnailSourceRect,
                         textContent = opusPreviewText,
                         defaultTextVisible = dynamicPreviewTextVisible,
                         onDismiss = { fullContentSelectedImageIndex = -1 }

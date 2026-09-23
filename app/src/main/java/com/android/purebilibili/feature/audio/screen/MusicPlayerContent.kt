@@ -67,7 +67,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -320,8 +319,21 @@ internal fun resolveMusicGlassBorderColor(
         .copy(alpha = if (isDark) 0.30f else 0.22f)
 }
 
-/** 听视频强调色：直接使用应用主题 primary，与播放器一致。 */
-internal fun resolveMusicPlayerAccentColor(primary: Color): Color = primary
+/** Pick a theme accent that remains readable in the player controls and lyrics area. */
+internal fun resolveMusicPlayerAccentColor(primary: Color, inversePrimary: Color): Color {
+    val brightestFloor = Color(0xFF4D4D4D)
+    return listOf(primary, inversePrimary, Color.White)
+        .firstOrNull { calculateContrastRatio(it, brightestFloor) >= 4.5f }
+        ?: Color.White
+}
+
+// The blurred artwork can contain bright patches anywhere, regardless of its dominant swatch.
+// Keep the entire reading surface dark enough for white controls and secondary text.
+internal val MusicArtworkScrimColors = listOf(
+    Color.Black.copy(alpha = 0.58f),
+    Color.Black.copy(alpha = 0.72f),
+    Color.Black.copy(alpha = 0.82f),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -452,41 +464,19 @@ internal fun MusicPlayerContent(
         coverStyle = coverStyle
     )
     val pageBackground = backgroundColor
-    val (themeOnLight, themeOnDark) = resolveMusicPlayerThemeContentColors()
-    val resolvedContentColor = resolveMusicPlayerContentColor(
-        backgroundColor = backgroundColor,
-        onLightBackground = themeOnLight,
-        onDarkBackground = themeOnDark,
+    val resolvedContentColor = Color.White
+    val resolvedAccentColor = resolveMusicPlayerAccentColor(
+        MaterialTheme.colorScheme.primary,
+        MaterialTheme.colorScheme.inversePrimary,
     )
-    val resolvedAccentColor = resolveMusicPlayerAccentColor(MaterialTheme.colorScheme.primary)
-    val isSystemDark = isSystemInDarkTheme()
-    val isDarkEnvironment = remember(backgroundColor, isSystemDark) {
-        if (backgroundColor != Color.Unspecified) {
-            backgroundColor.luminance() < 0.48f
-        } else {
-            isSystemDark
-        }
-    }
+    val isDarkEnvironment = true
     val materialMode = when {
         glassEnabled -> MusicGlassMaterialMode.LIQUID
         musicBackdrop != null -> MusicGlassMaterialMode.FROSTED
         else -> MusicGlassMaterialMode.SURFACE
     }
-    val materialSurfaceTarget = if (isDarkEnvironment) {
-        MaterialTheme.colorScheme.surfaceBright
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
-    val materialSurfaceColor = lerp(
-        backgroundColor,
-        materialSurfaceTarget,
-        if (isDarkEnvironment) 0.24f else 0.40f,
-    ).copy(alpha = if (isDarkEnvironment) 0.28f else 0.42f)
-    val materialBorderColor = lerp(
-        backgroundColor,
-        if (isDarkEnvironment) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
-        if (isDarkEnvironment) 0.42f else 0.28f,
-    ).copy(alpha = if (isDarkEnvironment) 0.30f else 0.22f)
+    val materialSurfaceColor = Color.Black.copy(alpha = 0.42f)
+    val materialBorderColor = Color.White.copy(alpha = 0.28f)
     val musicMaterial = MusicPlayerMaterial(
         mode = materialMode,
         backdropColor = backgroundColor,
@@ -551,8 +541,6 @@ internal fun MusicPlayerContent(
                 MusicArtworkBackground(
                     coverUrl = state.coverUrl,
                     bitmap = artworkBitmap,
-                    backgroundColor = backgroundColor,
-                    immersive = true
                 )
             }
         }
@@ -822,8 +810,8 @@ internal fun MusicPlayerContent(
                         height = 48.dp,
                         indicatorHeight = 36.dp,
                         containerVerticalPadding = 6.dp,
-                        selectedTextColorOverride = MusicContentColor,
-                        unselectedTextColorOverride = MusicContentColor.copy(alpha = 0.65f),
+                        selectedTextColorOverride = MaterialTheme.colorScheme.onSurface,
+                        unselectedTextColorOverride = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                         liquidGlassEffectsEnabled = liquidGlassEffectsEnabled,
                         preferInlineContentStyle = false,
                         miuixBackdrop = musicBackdrop,
@@ -1568,8 +1556,6 @@ private fun ImmersiveBottomQueueShelf(
 private fun MusicArtworkBackground(
     coverUrl: String,
     bitmap: ImageBitmap? = null,
-    backgroundColor: Color,
-    immersive: Boolean
 ) {
     Box(Modifier.fillMaxSize()) {
         if (bitmap != null || coverUrl.isNotBlank()) {
@@ -1580,15 +1566,12 @@ private fun MusicArtworkBackground(
                     scaleY = 1.55f
                 }
                 .blur(80.dp)
-            val alpha = if (immersive) 1.0f else 0.85f
-
             if (bitmap != null) {
                 androidx.compose.foundation.Image(
                     bitmap = bitmap,
                     contentDescription = null,
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
-                    alpha = alpha
                 )
             } else {
                 AsyncImage(
@@ -1596,37 +1579,14 @@ private fun MusicArtworkBackground(
                     contentDescription = null,
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
-                    alpha = alpha
                 )
             }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.12f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.22f)
-                            )
-                        )
-                    )
-            )
-        } else {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.35f),
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f)
-                            )
-                        )
-                    )
-            )
         }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(MusicArtworkScrimColors))
+        )
     }
 }
 
@@ -1761,7 +1721,7 @@ private fun PlayerPage(
                     ) {
                         AppText(
                             text = state.artist.ifBlank { "未知艺术家" },
-                            color = MusicContentColor.copy(alpha = 0.68f),
+                            color = MusicContentColor.copy(alpha = 0.82f),
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -2383,13 +2343,13 @@ private fun PlayerLyricsPreview(
                     AppIcon(
                         Icons.Outlined.MusicNote,
                         contentDescription = null,
-                        tint = MusicContentColor.copy(alpha = 0.45f),
+                        tint = MusicContentColor.copy(alpha = 0.78f),
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(6.dp))
                     AppText(
                         text = "轻点查看完整歌词",
-                        color = MusicContentColor.copy(alpha = 0.45f),
+                        color = MusicContentColor.copy(alpha = 0.78f),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }

@@ -376,7 +376,7 @@ private fun FloatingLiquidBottomInputBar(
                         modifier = Modifier.size(20.dp),
                     )
                     AppText(
-                        text = if (showActionButtons) "写评论" else "发一条友善的评论…",
+                        text = "发评论",
                         color = inputTextColor,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
@@ -469,7 +469,7 @@ private fun BottomInputBarContentRow(
                     modifier = Modifier.size(18.dp)
                 )
                 AppText(
-                    text = "发一条友善的评论…",
+                    text = "发评论",
                     color = inputTextColor,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,

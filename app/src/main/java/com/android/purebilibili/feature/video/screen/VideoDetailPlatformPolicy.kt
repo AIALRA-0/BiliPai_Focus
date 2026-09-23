@@ -1081,32 +1081,5 @@ internal fun shouldShowVideoDetailActionButtons(): Boolean {
     return true
 }
 
-internal data class RefreshModeCandidate(
-    val modeId: Int,
-    val refreshRate: Float,
-    val width: Int,
-    val height: Int
-)
-
-internal fun resolvePreferredHighRefreshModeId(
-    currentModeId: Int,
-    supportedModes: List<RefreshModeCandidate>,
-    minRefreshRate: Float = 90f
-): Int? {
-    if (supportedModes.isEmpty()) return null
-    val currentMode = supportedModes.firstOrNull { it.modeId == currentModeId } ?: return null
-    val candidates = supportedModes.filter {
-        it.refreshRate >= minRefreshRate &&
-            it.width == currentMode.width &&
-            it.height == currentMode.height
-    }
-    if (candidates.isEmpty()) return null
-
-    return candidates.maxWithOrNull(
-        compareBy<RefreshModeCandidate> { it.refreshRate }
-            .thenBy { if (it.modeId == currentModeId) 1 else 0 }
-    )?.modeId
-}
-
 // VideoContentSection 已提取到 VideoContentSection.kt
 // VideoTagsRow 和 VideoTagChip 也已提取到 VideoContentSection.kt

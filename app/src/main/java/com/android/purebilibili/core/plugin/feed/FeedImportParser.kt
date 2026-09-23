@@ -19,9 +19,16 @@ fun parseSubscriptionImport(text: String): List<ImportedSubscription> {
     }
     return trimmed.lineSequence()
         .map { it.trim() }
-        .filter { isHttpFeedUrl(it) }
-        .distinct()
-        .map { url -> ImportedSubscription(title = url, url = url) }
+        .mapNotNull { line ->
+            if (isHttpFeedUrl(line)) return@mapNotNull ImportedSubscription(title = line, url = line)
+            val cells = line.trim('|').split('|').map(String::trim)
+            if (cells.size < 2) return@mapNotNull null
+            val url = Regex("""https?://[^\s)\]>|]+""").find(cells[1])?.value ?: return@mapNotNull null
+            if (!isHttpFeedUrl(url)) return@mapNotNull null
+            val name = cells[0].replace(Regex("""[*_`\[\]]"""), "").trim()
+            ImportedSubscription(title = name.ifBlank { url }, url = url)
+        }
+        .distinctBy { it.url }
         .toList()
 }
 
@@ -30,6 +37,10 @@ fun parseOpmlSubscriptions(xml: String): List<ImportedSubscription> {
     factory.isNamespaceAware = false
     runCatching { factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
     runCatching { factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+    runCatching { factory.setFeature("http://xml.org/sax/features/external-general-entities", false) }
+    runCatching { factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+    factory.isExpandEntityReferences = false
+    runCatching { factory.isXIncludeAware = false }
     val document = factory.newDocumentBuilder()
         .parse(ByteArrayInputStream(xml.toByteArray(Charsets.UTF_8)))
     val found = linkedMapOf<String, ImportedSubscription>()

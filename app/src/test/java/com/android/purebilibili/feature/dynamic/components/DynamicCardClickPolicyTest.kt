@@ -2,8 +2,8 @@ package com.android.purebilibili.feature.dynamic.components
 
 import com.android.purebilibili.data.model.response.ArchiveMajor
 import com.android.purebilibili.data.model.response.ArticleMajor
-import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicAuthorModule
+import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicMajor
 import com.android.purebilibili.data.model.response.DynamicModules
@@ -13,9 +13,11 @@ import com.android.purebilibili.data.model.response.OpusContentBlock
 import com.android.purebilibili.data.model.response.OpusLinkCard
 import com.android.purebilibili.data.model.response.OpusMajor
 import com.android.purebilibili.data.model.response.OpusPic
+import com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout
 import com.android.purebilibili.data.model.response.UgcSeasonMajor
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -698,6 +700,144 @@ class DynamicCardClickPolicyTest {
         )
 
         assertNull(resolveDynamicAuthorClickMid(item))
+    }
+
+    @Test
+    fun shouldExpandDynamicOpusDetailImages_onlyForExpandedLayout() {
+        assertTrue(shouldExpandDynamicOpusDetailImages(DynamicDetailImageLayout.EXPANDED))
+        assertFalse(shouldExpandDynamicOpusDetailImages(DynamicDetailImageLayout.THUMBNAIL))
+    }
+
+    @Test
+    fun toggleDynamicDetailImageLayout_flipsBetweenExpandedAndThumbnail() {
+        assertEquals(
+            DynamicDetailImageLayout.THUMBNAIL,
+            toggleDynamicDetailImageLayout(DynamicDetailImageLayout.EXPANDED)
+        )
+        assertEquals(
+            DynamicDetailImageLayout.EXPANDED,
+            toggleDynamicDetailImageLayout(DynamicDetailImageLayout.THUMBNAIL)
+        )
+    }
+
+    @Test
+    fun shouldEmitOpusThumbnailGridAtBlock_atFirstImageOnly() {
+        val imageBlock = OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/a.jpg"))
+        val textBlock = OpusContentBlock.Text("正文")
+        val linkCard = OpusContentBlock.LinkCard(
+            OpusLinkCard(title = "横幅", jumpUrl = "https://www.bilibili.com/")
+        )
+
+        assertTrue(
+            shouldEmitOpusThumbnailGridAtBlock(
+                block = imageBlock,
+                thumbnailGridEmitted = false,
+                hasThumbnailItems = true,
+                expandImages = false,
+            )
+        )
+        assertFalse(
+            shouldEmitOpusThumbnailGridAtBlock(
+                block = imageBlock,
+                thumbnailGridEmitted = true,
+                hasThumbnailItems = true,
+                expandImages = false,
+            )
+        )
+        assertFalse(
+            shouldEmitOpusThumbnailGridAtBlock(
+                block = linkCard,
+                thumbnailGridEmitted = false,
+                hasThumbnailItems = true,
+                expandImages = false,
+            )
+        )
+        assertFalse(
+            shouldEmitOpusThumbnailGridAtBlock(
+                block = textBlock,
+                thumbnailGridEmitted = false,
+                hasThumbnailItems = true,
+                expandImages = false,
+            )
+        )
+        assertFalse(
+            shouldEmitOpusThumbnailGridAtBlock(
+                block = imageBlock,
+                thumbnailGridEmitted = false,
+                hasThumbnailItems = true,
+                expandImages = true,
+            )
+        )
+        assertFalse(
+            shouldEmitOpusThumbnailGridAtBlock(
+                block = imageBlock,
+                thumbnailGridEmitted = false,
+                hasThumbnailItems = false,
+                expandImages = false,
+            )
+        )
+    }
+
+    @Test
+    fun resolveOpusThumbnailDrawItems_collectsImagesAndDividerPics() {
+        val items = resolveOpusThumbnailDrawItems(
+            listOf(
+                OpusContentBlock.Text("正文"),
+                OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/a.jpg", width = 1, height = 2)),
+                OpusContentBlock.Divider(pic = OpusPic(url = "https://i0.hdslb.com/b.jpg")),
+                OpusContentBlock.Divider(pic = null),
+                OpusContentBlock.Heading("标题"),
+            )
+        )
+
+        assertEquals(
+            listOf(
+                DrawItem(src = "https://i0.hdslb.com/a.jpg", width = 1, height = 2),
+                DrawItem(src = "https://i0.hdslb.com/b.jpg"),
+            ),
+            items
+        )
+    }
+
+    @Test
+    fun shouldShowDynamicDetailImageLayoutToggle_whenMediaExists() {
+        val withDraw = DynamicItem(
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        draw = DrawMajor(items = listOf(DrawItem(src = "https://i0.hdslb.com/a.jpg")))
+                    )
+                )
+            )
+        )
+        val withOpusImageBlock = DynamicItem(
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        opus = OpusMajor(
+                            contentBlocks = listOf(
+                                OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/a.jpg"))
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        val textOnly = DynamicItem(
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        opus = OpusMajor(
+                            contentBlocks = listOf(OpusContentBlock.Text("仅文字"))
+                        )
+                    )
+                )
+            )
+        )
+
+        assertTrue(shouldShowDynamicDetailImageLayoutToggle(withDraw))
+        assertTrue(shouldShowDynamicDetailImageLayoutToggle(withOpusImageBlock))
+        assertFalse(shouldShowDynamicDetailImageLayoutToggle(textOnly))
     }
 
     @Test

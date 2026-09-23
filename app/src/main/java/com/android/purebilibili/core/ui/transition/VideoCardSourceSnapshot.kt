@@ -99,7 +99,6 @@ internal data class VideoCardSourceChromeSnapshot(
     /** Coil `size(w,h)` from list HomeCoverRequestSpec; 0 = omit size(). */
     val coverDecodeWidthPx: Int = 0,
     val coverDecodeHeightPx: Int = 0,
-    val isNowPlayingBar: Boolean = false,
 )
 
 /** Freeze the measured source-cover decode size together with the click-time snapshot. */

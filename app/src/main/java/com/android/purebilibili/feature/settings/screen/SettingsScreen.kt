@@ -160,6 +160,8 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
     val dynamicImagePreviewTextVisible by SettingsManager.getDynamicImagePreviewTextVisible(context)
         .collectAsStateWithLifecycle(initialValue = true)
+    val dynamicDetailImageLayout by SettingsManager.getDynamicDetailImageLayout(context)
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.DynamicDetailImageLayout.EXPANDED)
     val dynamicAllTabHorizontalUserListVisible by SettingsManager
         .getDynamicAllTabHorizontalUserListVisible(context)
         .collectAsStateWithLifecycle(initialValue = false)
@@ -1101,6 +1103,12 @@ fun SettingsScreen(
                             SettingsManager.setDynamicImagePreviewTextVisible(context, visible)
                         }
                     },
+                    dynamicDetailImageLayout = dynamicDetailImageLayout,
+                    onDynamicDetailImageLayoutChange = { layout ->
+                        scope.launch {
+                            SettingsManager.setDynamicDetailImageLayout(context, layout)
+                        }
+                    },
                     dynamicAllTabHorizontalUserListVisible = dynamicAllTabHorizontalUserListVisible,
                     onDynamicAllTabHorizontalUserListVisibleChange = { visible ->
                         scope.launch {
@@ -1248,6 +1256,8 @@ private fun MobileSettingsNavLayout(
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
     dynamicImagePreviewTextVisible: Boolean,
     onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
+    dynamicDetailImageLayout: SettingsManager.DynamicDetailImageLayout,
+    onDynamicDetailImageLayoutChange: (SettingsManager.DynamicDetailImageLayout) -> Unit,
     dynamicAllTabHorizontalUserListVisible: Boolean,
     onDynamicAllTabHorizontalUserListVisibleChange: (Boolean) -> Unit,
     dynamicTopBarCollapseOnScroll: Boolean,
@@ -1319,6 +1329,7 @@ private fun MobileSettingsNavLayout(
         onFeedApiTypeChange = onFeedApiTypeChange,
         onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
         onDynamicImagePreviewTextVisibleChange = onDynamicImagePreviewTextVisibleChange,
+        onDynamicDetailImageLayoutChange = onDynamicDetailImageLayoutChange,
         onDynamicAllTabHorizontalUserListVisibleChange = onDynamicAllTabHorizontalUserListVisibleChange,
         onDynamicTopBarCollapseOnScrollChange = onDynamicTopBarCollapseOnScrollChange,
         onDynamicFeedLayoutModeChange = onDynamicFeedLayoutModeChange,
@@ -1357,6 +1368,7 @@ private fun MobileSettingsNavLayout(
         feedApiType = feedApiType,
         incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
         dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
+        dynamicDetailImageLayout = dynamicDetailImageLayout,
         dynamicAllTabHorizontalUserListVisible = dynamicAllTabHorizontalUserListVisible,
         dynamicTopBarCollapseOnScroll = dynamicTopBarCollapseOnScroll,
         dynamicFeedLayoutMode = dynamicFeedLayoutMode,

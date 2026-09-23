@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-    <sub>Last updated: 2026-09-23 · Focus sync baseline: 9.1.1-focus.5 (versionCode 385), upstream BiliPai 0.2.3-beta.46</sub>
+    <sub>Last updated: 2026-09-23 · Focus sync baseline: 9.1.1-focus.5 (versionCode 387), upstream BiliPai 0.2.3-alpha.1</sub>
   </p>
 
   <p align="center">
@@ -436,10 +436,10 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Focus sync baseline (v9.1.1-focus.5 · versionCode 385)
+### Focus sync baseline (v9.1.1-focus.5 · versionCode 387)
 
 - Based on upstream `0.2.3-beta.46`, including the current architecture, build system, plugin SDK, dynamic plugin downloads, and release metadata support.
-- Keeps the Focus `9.x` version epoch and advances the Focus suffix so older clients comparing version names detect `9.1.1-focus.5` after `9.1.1-focus.4`; Android `versionCode` advances monotonically to `385`.
+- Keeps the Focus `9.x` version epoch and advances the Focus suffix so older clients comparing version names detect `9.1.1-focus.5` after `9.1.1-focus.4`; Android `versionCode` advances monotonically to `387`.
 - Preserves the Focus application ID, Focus Release update source, and existing release signing identity.
 - Fixed home recommendation manual refresh being stuck at the old pagination tail: pull-to-refresh now requests the fresh feed, bypasses startup preload cache, and resets the recommendation cursor after success.
 - Focus search settings now use positive "show" semantics: `Show hot searches`, `Show search discovery`, and `Show search history`; switching them on shows the full section, switching them off fully hides it.

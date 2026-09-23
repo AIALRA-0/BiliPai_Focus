@@ -2297,33 +2297,35 @@ private fun PluginDetailScreen(
         bottomContentPadding = bottomContentPadding + 16.dp,
         scrollHost = SettingsPageScrollHost.LazyColumn,
         lazyListContent = {
-            item {
-                AppSurface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
-                    shape = AppShapes.container(ContainerLevel.Card),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        AppText(
-                            text = plugin.description,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        if (plugin.author != "Unknown") {
+            if (plugin.id != com.android.purebilibili.feature.plugin.SubscriptionFeedPlugin.PLUGIN_ID) {
+                item {
+                    AppSurface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                        shape = AppShapes.container(ContainerLevel.Card),
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             AppText(
-                                text = "${plugin.author} · v${plugin.version}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 4.dp),
+                                text = plugin.description,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (plugin.author != "Unknown") {
+                                AppText(
+                                    text = "${plugin.author} · v${plugin.version}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
+                            PluginCapabilityDetailSection(
+                                capabilities = plugin.capabilityManifest.capabilities,
+                                showAuthorizationLabels = false,
+                                modifier = Modifier.padding(top = 12.dp),
                             )
                         }
-                        PluginCapabilityDetailSection(
-                            capabilities = plugin.capabilityManifest.capabilities,
-                            showAuthorizationLabels = false,
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
                     }
                 }
             }

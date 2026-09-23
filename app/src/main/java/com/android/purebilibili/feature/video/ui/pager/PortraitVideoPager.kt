@@ -1529,7 +1529,53 @@ fun PortraitVideoPager(
             pendingUserSpaceNavigation = true
             onUserClick(mid)
         }
-        
+        val jumpToPortraitPageForVideo: (String, Long, UgcSeason?) -> Unit =
+            jump@{ targetBvid, targetCid, collectionContext ->
+                val normalizedBvid = targetBvid.trim()
+                if (normalizedBvid.isEmpty()) return@jump
+                val targetIndex = resolvePortraitCollectionPageIndex(
+                    pageItems = pageItems,
+                    targetBvid = normalizedBvid,
+                    targetCid = targetCid
+                )
+                if (targetIndex >= 0) {
+                    pageItems[targetIndex] = buildPortraitCollectionPageItem(
+                        existing = pageItems[targetIndex],
+                        targetBvid = normalizedBvid,
+                        targetCid = targetCid,
+                        collectionContext = collectionContext,
+                    )
+                    scope.launch {
+                        pagerState.animateScrollToPage(targetIndex)
+                    }
+                    return@jump
+                }
+                // Not yet in the pager list: insert as a dedicated page after current, then jump.
+                val insertAt = (pagerState.currentPage + 1).coerceIn(0, pageItems.size)
+                val inserted = buildPortraitCollectionPageItem(
+                    existing = null,
+                    targetBvid = normalizedBvid,
+                    targetCid = targetCid,
+                    collectionContext = collectionContext,
+                )
+                val itemIdentity = resolvePortraitPagePlaybackIdentity(inserted) ?: return@jump
+                val key = portraitCollectionIdentityKey(itemIdentity.bvid, itemIdentity.cid)
+                val exists = pageItems.any { candidate ->
+                    val identity = resolvePortraitPagePlaybackIdentity(candidate) ?: return@any false
+                    portraitCollectionIdentityKey(identity.bvid, identity.cid) == key
+                }
+                if (!exists && itemIdentity.bvid.isNotBlank()) {
+                    com.android.purebilibili.core.util.Logger.d(
+                        "PortraitVideoPager",
+                        "Insert missing portrait page for requested video: $normalizedBvid"
+                    )
+                    pageItems.add(insertAt, inserted)
+                    scope.launch {
+                        pagerState.animateScrollToPage(insertAt)
+                    }
+                }
+            }
+
         if (item != null) {
             val itemBvid = when (item) {
                 is ViewInfo -> item.bvid
@@ -1640,59 +1686,13 @@ fun PortraitVideoPager(
                     portraitOverlayVisible = visible
                 },
                 onRequestVideoChange = { targetBvid ->
-                    val targetIndex = pageItems.indexOfFirst { candidate ->
-                        when (candidate) {
-                            is ViewInfo -> candidate.bvid == targetBvid
-                            is RelatedVideo -> candidate.bvid == targetBvid
-                            else -> false
-                        }
-                    }
-                    if (targetIndex >= 0) {
-                        scope.launch {
-                            pagerState.animateScrollToPage(targetIndex)
-                        }
-                    }
+                    val normalizedBvid = targetBvid.trim()
+                    if (normalizedBvid.isEmpty()) return@VideoPageItem
+                    // UpPreview / detail picks may sit outside the current portrait pager.
+                    // jumpToPortraitPageForVideo scrolls when present and inserts when missing.
+                    jumpToPortraitPageForVideo(normalizedBvid, 0L, null)
                 },
-                onRequestCollectionItem = { targetBvid, targetCid, collectionContext ->
-                    val targetIndex = resolvePortraitCollectionPageIndex(
-                        pageItems = pageItems,
-                        targetBvid = targetBvid,
-                        targetCid = targetCid
-                    )
-                    if (targetIndex >= 0) {
-                        pageItems[targetIndex] = buildPortraitCollectionPageItem(
-                            existing = pageItems[targetIndex],
-                            targetBvid = targetBvid,
-                            targetCid = targetCid,
-                            collectionContext = collectionContext,
-                        )
-                        scope.launch {
-                            pagerState.animateScrollToPage(targetIndex)
-                        }
-                        return@VideoPageItem
-                    }
-                    // Not yet in the pager list: insert as a dedicated page after current, then jump.
-                    val insertAt = (pagerState.currentPage + 1).coerceIn(0, pageItems.size)
-                    val item = buildPortraitCollectionPageItem(
-                        existing = null,
-                        targetBvid = targetBvid,
-                        targetCid = targetCid,
-                        collectionContext = collectionContext,
-                    )
-                    val itemIdentity = resolvePortraitPagePlaybackIdentity(item)
-                        ?: return@VideoPageItem
-                    val key = portraitCollectionIdentityKey(itemIdentity.bvid, itemIdentity.cid)
-                    val exists = pageItems.any { candidate ->
-                        val identity = resolvePortraitPagePlaybackIdentity(candidate) ?: return@any false
-                        portraitCollectionIdentityKey(identity.bvid, identity.cid) == key
-                    }
-                    if (!exists && itemIdentity.bvid.isNotBlank()) {
-                        pageItems.add(insertAt, item)
-                        scope.launch {
-                            pagerState.animateScrollToPage(insertAt)
-                        }
-                    }
-                }
+                onRequestCollectionItem = jumpToPortraitPageForVideo
             )
         }
     }

@@ -208,8 +208,8 @@ android {
         applicationId = "com.android.purebilibili.focus"
         minSdk = 26
         targetSdk = 37
-        // Advance both counters so existing Focus installs can upgrade by name or versionCode.
-        versionCode = 385
+        // Keep Focus's semantic X.Y.Z-focus.N identity and a versionCode above upstream alpha.1.
+        versionCode = 387
         versionName = "9.1.1-focus.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

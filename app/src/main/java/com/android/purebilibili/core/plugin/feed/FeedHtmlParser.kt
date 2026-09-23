@@ -1,167 +1,205 @@
 package com.android.purebilibili.core.plugin.feed
 
-private val dangerousBlock = Regex(
-    """<(script|style|iframe|object)\b[^>]*>.*?</\1>""",
-    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-)
+import java.net.URI
 
-fun feedPlainText(html: String): String {
-    return parseFeedHtml(html)
-        .flatMap { block ->
-            when (block) {
-                is FeedBlock.Heading -> block.inlines
-                is FeedBlock.Paragraph -> block.inlines
-                is FeedBlock.Quote -> block.inlines
-                is FeedBlock.BulletList -> block.items.flatten()
-                is FeedBlock.NumberedList -> block.items.flatten()
-                is FeedBlock.Code -> listOf(FeedInline.Text(block.text))
-                is FeedBlock.Image -> emptyList()
-            }
-        }
-        .joinToString("") { inline ->
-            when (inline) {
-                is FeedInline.Text -> inline.text
-                is FeedInline.Link -> inline.text
-            }
-        }
-        .replace(Regex("\\s+"), " ")
-        .trim()
+private sealed interface HtmlNode {
+    data class Text(val value: String) : HtmlNode
+    data class Element(
+        val tag: String,
+        val attrs: Map<String, String>,
+        val children: MutableList<HtmlNode> = mutableListOf(),
+    ) : HtmlNode
 }
 
-fun parseFeedHtml(html: String): List<FeedBlock> {
-    val cleaned = dangerousBlock.replace(decodeFeedEntities(html), " ")
+private val htmlToken = Regex("""(?s)<!--.*?-->|<![^>]*>|<[^>]+>""")
+private val htmlAttribute = Regex("""([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""")
+private val voidTags = setOf("img", "br", "hr", "meta", "link", "input", "source", "wbr")
+private val ignoredTags = setOf("script", "style", "noscript", "nav", "header", "footer", "aside", "form")
+private val boundaryTags = setOf("p", "div", "section", "article", "figure", "li")
+
+fun feedPlainText(html: String): String = parseFeedHtml(html)
+    .joinToString(" ") { block ->
+        when (block) {
+            is FeedBlock.Heading -> plain(block.inlines)
+            is FeedBlock.Paragraph -> plain(block.inlines)
+            is FeedBlock.Quote -> plain(block.inlines)
+            is FeedBlock.BulletList -> block.items.joinToString(" ", transform = ::plain)
+            is FeedBlock.NumberedList -> block.items.joinToString(" ", transform = ::plain)
+            is FeedBlock.Code -> block.text
+            is FeedBlock.Image -> block.alt
+            is FeedBlock.EmbeddedLink -> block.title
+        }
+    }.replace(Regex("\\s+"), " ").trim()
+
+fun parseFeedHtml(html: String, baseUrl: String? = null): List<FeedBlock> {
     val blocks = mutableListOf<FeedBlock>()
-    var cursor = 0
-    val blockTag = Regex(
-        """<(p|h1|h2|h3|blockquote|pre|ul|ol|img)\b([^>]*)>(.*?)</\1>|<img\b([^>]*)/?>""",
-        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-    )
-    blockTag.findAll(cleaned).forEach { match ->
-        appendLooseParagraph(cleaned.substring(cursor, match.range.first), blocks)
-        val name = match.groupValues[1].lowercase()
-        when {
-            match.groupValues[4].isNotBlank() || name == "img" -> {
-                val attrs = match.groupValues[4].ifBlank { match.groupValues[2] }
-                imageBlock(attrs)?.let(blocks::add)
-            }
-            name == "ul" || name == "ol" -> {
-                val items = Regex("""<li\b[^>]*>(.*?)</li>""", RegexOption.IGNORE_CASE)
-                    .findAll(match.groupValues[3])
-                    .map { parseInlines(it.groupValues[1]) }
-                    .filter { it.isNotEmpty() }
-                    .toList()
-                if (items.isNotEmpty()) {
-                    blocks += if (name == "ol") FeedBlock.NumberedList(items) else FeedBlock.BulletList(items)
+    val pending = mutableListOf<FeedInline>()
+    fun flush() {
+        val content = trimInlines(pending)
+        if (content.isNotEmpty()) blocks += FeedBlock.Paragraph(content)
+        pending.clear()
+    }
+    fun visit(node: HtmlNode) {
+        when (node) {
+            is HtmlNode.Text -> pending += FeedInline.Text(decodeFeedEntities(node.value).replace(Regex("[\\t\\r\\n ]+"), " "))
+            is HtmlNode.Element -> {
+                if (node.tag in ignoredTags) return
+                when (node.tag) {
+                    "img" -> { flush(); imageBlock(node, baseUrl)?.let(blocks::add) }
+                    "br" -> pending += FeedInline.Text("\n")
+                    "h1", "h2", "h3", "h4", "h5", "h6" -> {
+                        flush()
+                        trimInlines(inlines(node.children, baseUrl)).takeIf { it.isNotEmpty() }
+                            ?.let { blocks += FeedBlock.Heading(node.tag.drop(1).toInt(), it) }
+                    }
+                    "blockquote" -> {
+                        flush()
+                        trimInlines(inlines(node.children, baseUrl)).takeIf { it.isNotEmpty() }
+                            ?.let { blocks += FeedBlock.Quote(it) }
+                    }
+                    "pre" -> {
+                        flush()
+                        nodeText(node).trim('\n', ' ', '\t').takeIf { it.isNotEmpty() }
+                            ?.let { blocks += FeedBlock.Code(it) }
+                    }
+                    "ul", "ol" -> {
+                        flush()
+                        val lines = node.children.filterIsInstance<HtmlNode.Element>()
+                            .filter { it.tag == "li" }
+                            .map { trimInlines(inlines(it.children, baseUrl)) }
+                            .filter { it.isNotEmpty() }
+                        if (lines.isNotEmpty()) blocks += if (node.tag == "ol") FeedBlock.NumberedList(lines) else FeedBlock.BulletList(lines)
+                    }
+                    "iframe", "video", "audio" -> {
+                        flush()
+                        resolveFeedUrl(node.attrs["src"] ?: node.attrs["href"], baseUrl)
+                            ?.let { blocks += FeedBlock.EmbeddedLink("打开嵌入内容", it) }
+                    }
+                    "a", "b", "strong", "i", "em", "span", "small", "code" ->
+                        pending += inlines(listOf(node), baseUrl)
+                    else -> {
+                        val boundary = node.tag in boundaryTags
+                        if (boundary) flush()
+                        node.children.forEach(::visit)
+                        if (boundary) flush()
+                    }
                 }
             }
-            name == "pre" -> {
-                val text = feedPlainText(match.groupValues[3])
-                if (text.isNotBlank()) blocks += FeedBlock.Code(text)
-            }
-            name == "blockquote" -> appendTextualBlock(match.groupValues[3], blocks) { FeedBlock.Quote(it) }
-            name.startsWith("h") -> appendTextualBlock(match.groupValues[3], blocks) { inlines ->
-                FeedBlock.Heading(level = name.removePrefix("h").toIntOrNull() ?: 2, inlines = inlines)
-            }
-            else -> appendTextualBlock(match.groupValues[3], blocks) { FeedBlock.Paragraph(it) }
         }
-        cursor = match.range.last + 1
     }
-    appendLooseParagraph(cleaned.substring(cursor), blocks)
+    parseHtmlTree(html).children.forEach(::visit)
+    flush()
     return blocks
 }
 
-private fun appendTextualBlock(
-    raw: String,
-    blocks: MutableList<FeedBlock>,
-    block: (List<FeedInline>) -> FeedBlock,
-) {
-    Regex("""<img\b[^>]*/?>""", RegexOption.IGNORE_CASE).findAll(raw).forEach { image ->
-        imageBlock(image.value)?.let(blocks::add)
-    }
-    val inlines = parseInlines(raw)
-    if (inlines.isNotEmpty()) blocks += block(inlines)
-}
-
-private fun appendLooseParagraph(raw: String, blocks: MutableList<FeedBlock>) {
-    val inlines = parseInlines(raw)
-    if (inlines.isNotEmpty()) blocks += FeedBlock.Paragraph(inlines)
-}
-
-private fun imageBlock(attrs: String): FeedBlock.Image? {
-    val src = Regex("""\bsrc\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-        .find(attrs)
-        ?.groupValues
-        ?.getOrNull(1)
-        .orEmpty()
-    if (!isHttpFeedUrl(src)) return null
-    val alt = Regex("""\balt\s*=\s*["']([^"']*)["']""", RegexOption.IGNORE_CASE)
-        .find(attrs)
-        ?.groupValues
-        ?.getOrNull(1)
-        .orEmpty()
-    return FeedBlock.Image(url = src, alt = alt)
-}
-
-private fun parseInlines(html: String): List<FeedInline> {
-    val withoutImages = Regex("""<img\b[^>]*/?>""", RegexOption.IGNORE_CASE).replace(html, " ")
-    val normalized = withoutImages
-        .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-        .replace(Regex("""</?(div|p)\b[^>]*>""", RegexOption.IGNORE_CASE), " ")
-    val inlines = mutableListOf<FeedInline>()
+private fun parseHtmlTree(html: String): HtmlNode.Element {
+    val root = HtmlNode.Element("root", emptyMap())
+    val stack = mutableListOf(root)
     var cursor = 0
-    val token = Regex(
-        """<(a|strong|b|em|i)\b([^>]*)>(.*?)</\1>""",
-        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-    )
-    token.findAll(normalized).forEach { match ->
-        appendText(normalized.substring(cursor, match.range.first), inlines)
-        val body = stripTags(match.groupValues[3])
-        if (body.isNotBlank()) {
-            val tag = match.groupValues[1].lowercase()
-            if (tag == "a") {
-                val href = Regex("""\bhref\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-                    .find(match.groupValues[2])
-                    ?.groupValues
-                    ?.getOrNull(1)
-                    .orEmpty()
-                if (isHttpFeedUrl(href)) {
-                    inlines += FeedInline.Link(text = body, url = href)
-                } else {
-                    inlines += FeedInline.Text(body)
+    htmlToken.findAll(html).forEach { match ->
+        if (match.range.first > cursor) stack.last().children += HtmlNode.Text(html.substring(cursor, match.range.first))
+        val token = match.value
+        when {
+            token.startsWith("<!") -> Unit
+            token.startsWith("</") -> {
+                val tag = token.drop(2).takeWhile { it.isLetterOrDigit() }.lowercase()
+                val index = stack.indexOfLast { it.tag == tag }
+                if (index > 0) repeat(stack.size - index) { stack.removeAt(stack.lastIndex) }
+            }
+            else -> {
+                val tag = token.drop(1).takeWhile { it.isLetterOrDigit() }.lowercase()
+                if (tag.isNotEmpty()) {
+                    val attrs = htmlAttribute.findAll(token).associate { attribute ->
+                        attribute.groupValues[1].lowercase() to
+                            decodeFeedEntities(attribute.groupValues.drop(2).firstOrNull { it.isNotEmpty() }.orEmpty())
+                    }
+                    val element = HtmlNode.Element(tag, attrs)
+                    stack.last().children += element
+                    if (tag !in voidTags && !token.endsWith("/>") && stack.size < 128) stack += element
                 }
-            } else {
-                inlines += FeedInline.Text(
-                    text = body,
-                    bold = tag == "strong" || tag == "b",
-                    italic = tag == "em" || tag == "i",
-                )
             }
         }
         cursor = match.range.last + 1
     }
-    appendText(normalized.substring(cursor), inlines)
-    return inlines
+    if (cursor < html.length) stack.last().children += HtmlNode.Text(html.substring(cursor))
+    return root
 }
 
-private fun appendText(raw: String, inlines: MutableList<FeedInline>) {
-    val text = stripTags(raw)
-    if (text.isNotBlank()) inlines += FeedInline.Text(text)
+private fun inlines(
+    nodes: List<HtmlNode>, baseUrl: String?, bold: Boolean = false,
+    italic: Boolean = false, link: String? = null,
+): List<FeedInline> = buildList {
+    nodes.forEach { node ->
+        when (node) {
+            is HtmlNode.Text -> {
+                val value = decodeFeedEntities(node.value).replace(Regex("[\\t\\r\\n ]+"), " ")
+                if (value.isNotEmpty()) add(if (link != null) FeedInline.Link(value, link) else FeedInline.Text(value, bold, italic))
+            }
+            is HtmlNode.Element -> {
+                if (node.tag in ignoredTags || node.tag == "img") return@forEach
+                if (node.tag == "br") add(FeedInline.Text("\n", bold, italic))
+                else {
+                    addAll(inlines(
+                        node.children, baseUrl,
+                        bold || node.tag == "b" || node.tag == "strong",
+                        italic || node.tag == "i" || node.tag == "em",
+                        if (node.tag == "a") resolveFeedUrl(node.attrs["href"], baseUrl) else link,
+                    ))
+                    if (node.tag in boundaryTags) add(FeedInline.Text(" "))
+                }
+            }
+        }
+    }
 }
 
-private fun stripTags(raw: String): String {
-    return decodeFeedEntities(raw.replace(Regex("<[^>]+>"), " "))
-        .replace(Regex("[\\t\\x0B\\f\\r ]+"), " ")
-        .replace(Regex(" *\\n *"), "\n")
-        .trim()
+private fun trimInlines(input: List<FeedInline>): List<FeedInline> {
+    val output = input.toMutableList()
+    if (output.firstOrNull() is FeedInline.Text) {
+        val first = output.first() as FeedInline.Text
+        output[0] = first.copy(text = first.text.trimStart())
+    }
+    if (output.lastOrNull() is FeedInline.Text) {
+        val last = output.last() as FeedInline.Text
+        output[output.lastIndex] = last.copy(text = last.text.trimEnd())
+    }
+    return output.filter { when (it) { is FeedInline.Text -> it.text.isNotEmpty(); is FeedInline.Link -> it.text.isNotEmpty() } }
 }
 
-internal fun decodeFeedEntities(raw: String): String {
-    return raw
-        .replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&apos;", "'")
+private fun imageBlock(node: HtmlNode.Element, baseUrl: String?): FeedBlock.Image? {
+    val source = sequenceOf("data-src", "data-original", "data-lazy-src", "src")
+        .mapNotNull { node.attrs[it] }.mapNotNull { resolveFeedUrl(it, baseUrl) }.firstOrNull()
+        ?: node.attrs["srcset"]?.substringBefore(',')?.trim()?.substringBefore(' ')
+            ?.let { resolveFeedUrl(it, baseUrl) }
+    return source?.let { FeedBlock.Image(it, node.attrs["alt"].orEmpty()) }
+}
+
+private fun nodeText(node: HtmlNode): String = when (node) {
+    is HtmlNode.Text -> decodeFeedEntities(node.value)
+    is HtmlNode.Element -> node.children.joinToString("") { nodeText(it) }
+}
+
+private fun plain(inlines: List<FeedInline>): String = inlines.joinToString("") {
+    when (it) { is FeedInline.Text -> it.text; is FeedInline.Link -> it.text }
+}
+
+internal fun resolveFeedUrl(raw: String?, baseUrl: String?): String? {
+    val candidate = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return runCatching {
+        val resolved = if (baseUrl.isNullOrBlank()) URI(candidate) else URI(baseUrl).resolve(candidate)
+        resolved.toString().takeIf(::isHttpFeedUrl)
+    }.getOrNull()
+}
+
+internal fun decodeFeedEntities(raw: String): String = Regex("&(#(?:x[0-9a-fA-F]+|[0-9]+)|[a-zA-Z]+);").replace(raw) { match ->
+    when (val entity = match.groupValues[1]) {
+        "nbsp" -> " "; "amp" -> "&"; "lt" -> "<"; "gt" -> ">"; "quot" -> "\""
+        "apos", "#39" -> "'"; "hellip" -> "…"; "mdash" -> "—"; "ndash" -> "–"
+        else -> if (entity.startsWith('#')) {
+            val code = runCatching {
+                if (entity.startsWith("#x", true)) entity.drop(2).toInt(16) else entity.drop(1).toInt()
+            }.getOrNull()
+            code?.takeIf { it in 1..0x10FFFF && it !in 0xD800..0xDFFF }
+                ?.let { String(Character.toChars(it)) } ?: match.value
+        } else match.value
+    }
 }

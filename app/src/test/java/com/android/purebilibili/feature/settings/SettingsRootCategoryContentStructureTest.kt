@@ -78,6 +78,8 @@ class SettingsRootCategoryContentStructureTest {
         assertTrue(feedApiBlock.contains("SettingsAdaptiveDivider()"))
         assertTrue(feedApiBlock.contains("浏览动态时收起顶部栏"))
         assertTrue(feedApiBlock.contains("dynamicTopBarCollapseOnScroll"))
+        assertTrue(feedApiBlock.contains("动态详情图片展示"))
+        assertTrue(feedApiBlock.contains("dynamicDetailImageLayout"))
         assertFalse(feedApiBlock.contains("private fun FeedSwitchItem("))
     }
 

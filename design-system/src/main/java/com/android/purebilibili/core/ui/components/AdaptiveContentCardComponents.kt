@@ -3,6 +3,8 @@ package com.android.purebilibili.core.ui.components
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -14,7 +16,10 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppShapes
@@ -106,6 +111,59 @@ fun AppContentCard(
 }
 
 /**
+ * Density preset for [AppTagChip]. [STANDARD] preserves the historical look.
+ */
+enum class AppTagChipSize(
+    val value: Int,
+    val label: String,
+) {
+    STANDARD(0, "标准"),
+    COMPACT(1, "紧凑"),
+    SMALL(2, "更小");
+
+    companion object {
+        fun fromValue(value: Int): AppTagChipSize =
+            entries.find { it.value == value } ?: STANDARD
+    }
+}
+
+data class AppTagChipMetrics(
+    val fontScale: Float,
+    val horizontalPadding: Dp,
+    val verticalPadding: Dp,
+    val itemSpacingHorizontal: Dp,
+    val itemSpacingVertical: Dp,
+    val chipHeight: Dp?,
+)
+
+fun resolveAppTagChipMetrics(size: AppTagChipSize): AppTagChipMetrics = when (size) {
+    AppTagChipSize.STANDARD -> AppTagChipMetrics(
+        fontScale = 1.00f,
+        horizontalPadding = 12.dp,
+        verticalPadding = 7.dp,
+        itemSpacingHorizontal = 8.dp,
+        itemSpacingVertical = 4.dp,
+        chipHeight = null,
+    )
+    AppTagChipSize.COMPACT -> AppTagChipMetrics(
+        fontScale = 0.90f,
+        horizontalPadding = 8.dp,
+        verticalPadding = 4.dp,
+        itemSpacingHorizontal = 6.dp,
+        itemSpacingVertical = 4.dp,
+        chipHeight = 28.dp,
+    )
+    AppTagChipSize.SMALL -> AppTagChipMetrics(
+        fontScale = 0.82f,
+        horizontalPadding = 6.dp,
+        verticalPadding = 2.dp,
+        itemSpacingHorizontal = 4.dp,
+        itemSpacingVertical = 3.dp,
+        chipHeight = 24.dp,
+    )
+}
+
+/**
  * Compact tag / keyword chip:
  * - Material 3 → [AssistChip]
  * - Miuix → themed [Surface] with [ContainerLevel.Chip] / pill-scale corners
@@ -116,21 +174,45 @@ fun AppTagChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    size: AppTagChipSize = AppTagChipSize.STANDARD,
 ) {
+    val metrics = resolveAppTagChipMetrics(size)
+    val sizeModifier = if (metrics.chipHeight != null) {
+        Modifier.defaultMinSize(minHeight = 0.dp).height(metrics.chipHeight)
+    } else {
+        Modifier
+    }
+    val baseLabelStyle = MaterialTheme.typography.labelLarge
+    val labelStyle = baseLabelStyle.copy(
+        fontSize = baseLabelStyle.fontSize * metrics.fontScale,
+    )
+    val miuixLabelStyle = baseLabelStyle.copy(
+        fontSize = baseLabelStyle.fontSize * metrics.fontScale,
+        lineHeight = if (baseLabelStyle.lineHeight.isSpecified) {
+            baseLabelStyle.lineHeight * metrics.fontScale
+        } else {
+            baseLabelStyle.lineHeight
+        },
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+    )
     val colorScheme = MaterialTheme.colorScheme
     when (LocalAppUiStyle.current) {
         AppUiStyle.MATERIAL3 -> {
             AssistChip(
                 onClick = onClick,
                 enabled = enabled,
-                modifier = modifier,
+                modifier = modifier.then(sizeModifier),
                 label = {
                     AppText(
                         text = label,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = labelStyle,
                         maxLines = 1,
                     )
                 },
+                contentPadding = PaddingValues(
+                    horizontal = metrics.horizontalPadding,
+                    vertical = metrics.verticalPadding,
+                ),
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = colorScheme.surfaceContainerHighest,
                     labelColor = colorScheme.onSurfaceVariant,
@@ -142,16 +224,19 @@ fun AppTagChip(
             Surface(
                 onClick = onClick,
                 enabled = enabled,
-                modifier = modifier,
+                modifier = modifier.then(sizeModifier),
                 shape = AppShapes.container(ContainerLevel.Chip),
                 color = colorScheme.surfaceContainerHighest,
                 contentColor = colorScheme.onSurfaceVariant,
             ) {
                 AppText(
                     text = label,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = miuixLabelStyle,
                     maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    modifier = Modifier.padding(
+                        horizontal = metrics.horizontalPadding,
+                        vertical = metrics.verticalPadding,
+                    ),
                 )
             }
         }

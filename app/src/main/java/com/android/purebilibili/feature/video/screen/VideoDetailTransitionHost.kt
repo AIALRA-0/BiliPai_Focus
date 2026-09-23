@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
-import com.android.purebilibili.navigation3.LocalOfficialVideoSharedTransition
 import com.android.purebilibili.core.ui.transition.LocalVideoCardMorphProgressReporter
 import com.android.purebilibili.core.ui.transition.LocalMiuixVideoCardTransitionState
 import com.android.purebilibili.core.ui.transition.LocalVideoCardTransitionBackgroundState
@@ -69,7 +68,6 @@ internal fun rememberVideoDetailTransitionState(
 ): VideoDetailTransitionState {
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
-    val officialVideoTransitionActive = LocalOfficialVideoSharedTransition.current != null
     val videoCardClock = LocalVideoCardTransitionClock.current
     val miuixCardTransition = LocalMiuixVideoCardTransitionState.current
     val transitionBackgroundState = LocalVideoCardTransitionBackgroundState.current
@@ -158,8 +156,7 @@ internal fun rememberVideoDetailTransitionState(
     // 不可重启，若在这里读会把每帧重组放大到整个详情 StateHolder，
     // morph 期间掉帧直接表现为进场/返回画面抖动。
     ReportVideoDetailMorphProgressToClock(
-        enabled = detailShellSharedBoundsEnabled && !entryMiuixTransitionEnabled &&
-            !officialVideoTransitionActive,
+        enabled = detailShellSharedBoundsEnabled && !entryMiuixTransitionEnabled,
         progress = progress,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,

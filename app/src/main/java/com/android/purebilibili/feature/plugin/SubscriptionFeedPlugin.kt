@@ -5,24 +5,32 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.purebilibili.core.plugin.Plugin
 import com.android.purebilibili.core.plugin.feed.SubscriptionFeedStore
+import com.android.purebilibili.core.plugin.feed.resolveSubscriptionTitle
+import com.android.purebilibili.core.plugin.feed.resolveImportedSubscriptionTitles
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppCheckbox
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
@@ -32,7 +40,7 @@ import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 class SubscriptionFeedPlugin : Plugin {
     override val id: String = PLUGIN_ID
     override val name: String = "订阅"
-    override val description: String = "添加 RSS 或 Atom 地址。启用并保存后，首页会出现「订阅」标签。"
+    override val description: String = "关注喜欢的网站，在首页集中阅读更新；支持 RSS、Atom 和 OPML 导入。"
     override val version: String = "1.0.0"
     override val author: String = "BiliPai"
     override val capabilityManifest: PluginCapabilityManifest = PluginCapabilityManifest(
@@ -50,7 +58,7 @@ class SubscriptionFeedPlugin : Plugin {
 
     @Composable
     override fun SettingsContent() {
-        SubscriptionFeedSettings(Modifier.fillMaxWidth())
+        SubscriptionFeedSettings(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
     }
 
     @Composable
@@ -63,51 +71,54 @@ class SubscriptionFeedPlugin : Plugin {
     }
 }
 
-private const val SUBSCRIPTION_DISCLAIMER =
-    "免责声明：订阅内容来自你自行添加的第三方地址，由本应用在本地请求和排版。应用不托管、不审核这些内容。源站打不开、超时、摘要不全或正文缺失，都由源站决定。请只导入你信任的地址。"
-
 @Composable
 private fun SubscriptionFeedSettings(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var revision by remember { mutableIntStateOf(0) }
+    val revision by SubscriptionFeedStore.revision.collectAsStateWithLifecycle()
     var title by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     var importText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var adding by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
+    var selecting by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var confirmBatchDelete by remember { mutableStateOf(false) }
     val feeds = remember(revision) { SubscriptionFeedStore.list(context) }
+    LaunchedEffect(feeds) {
+        selectedIds = selectedIds.intersect(feeds.map { it.id }.toSet())
+        if (feeds.isEmpty()) selecting = false
+    }
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch(Dispatchers.IO) {
-            val text = runCatching {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    decodeSubscriptionFile(input.readBytes())
-                }.orEmpty()
-            }.getOrElse { "" }
-            withContext(Dispatchers.Main) {
-                applySubscriptionImport(context, text) { message, added ->
-                    error = message
-                    if (added) revision += 1
+        scope.launch {
+            importing = true
+            try {
+                val text = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            decodeSubscriptionFile(input.readBytes())
+                        }.orEmpty()
+                    }.getOrElse { "" }
                 }
+                applySubscriptionImport(context, text) { message, _ ->
+                    error = message
+                }
+            } catch (failure: Exception) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                error = "导入失败，请检查文件内容"
+            } finally {
+                importing = false
             }
         }
     }
     Column(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier.padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        AppText(SUBSCRIPTION_DISCLAIMER)
-        AppText("添加单个 http 或 https 地址，或一次导入 OPML 和每行一个地址的列表。首页标签设置里可以隐藏「订阅」。")
-        AppOutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { AppText("名称") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
         AppOutlinedTextField(
             value = url,
             onValueChange = { url = it },
@@ -115,25 +126,45 @@ private fun SubscriptionFeedSettings(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
+        AppOutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { AppText("名称（可选，留空自动获取）") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
         AppButton(
             onClick = {
-                SubscriptionFeedStore.add(context, title, url)
-                    .onSuccess {
-                        title = ""
-                        url = ""
-                        error = null
-                        revision += 1
+                adding = true
+                scope.launch {
+                    try {
+                        val result = withContext(Dispatchers.IO) {
+                            resolveSubscriptionTitle(url, title).mapCatching { resolvedTitle ->
+                                SubscriptionFeedStore.add(context, resolvedTitle, url).getOrThrow()
+                            }
+                        }
+                        result.onSuccess {
+                            title = ""
+                            url = ""
+                            error = null
+                        }.onFailure { error = it.message }
+                    } catch (failure: Exception) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure
+                        error = "添加失败，请稍后重试"
+                    } finally {
+                        adding = false
                     }
-                    .onFailure { error = it.message }
+                }
             },
+            enabled = !adding,
             modifier = Modifier.align(Alignment.End),
         ) {
-            AppText("添加")
+            AppText(if (adding) "正在获取名称" else "添加")
         }
         AppOutlinedTextField(
             value = importText,
             onValueChange = { importText = it },
-            label = { AppText("OPML 或地址列表") },
+            label = { AppText("批量导入：OPML、地址列表或 RSS 表格") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 4,
         )
@@ -151,17 +182,22 @@ private fun SubscriptionFeedSettings(modifier: Modifier = Modifier) {
                 onClick = {
                     importing = true
                     scope.launch {
-                        val resolved = withContext(Dispatchers.IO) {
-                            resolveImportPayload(importText)
-                        }
-                        applySubscriptionImport(context, resolved) { message, added ->
-                            error = message
-                            if (added) {
-                                importText = ""
-                                revision += 1
+                        try {
+                            val resolved = withContext(Dispatchers.IO) {
+                                resolveImportPayload(importText)
                             }
+                            applySubscriptionImport(context, resolved) { message, added ->
+                                error = message
+                                if (added) {
+                                    importText = ""
+                                }
+                            }
+                        } catch (failure: Exception) {
+                            if (failure is kotlinx.coroutines.CancellationException) throw failure
+                            error = "导入失败，请检查文件或地址"
+                        } finally {
+                            importing = false
                         }
-                        importing = false
                     }
                 },
                 enabled = !importing,
@@ -171,14 +207,59 @@ private fun SubscriptionFeedSettings(modifier: Modifier = Modifier) {
         }
         error?.let { AppText(it) }
         if (feeds.isNotEmpty()) {
-            AppText("已添加 ${feeds.size} 个", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        feeds.forEach { feed ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                AppText(
+                    if (selecting) "已选 ${selectedIds.size} / ${feeds.size} 个" else "已添加 ${feeds.size} 个",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AppTextButton(onClick = {
+                    selecting = !selecting
+                    selectedIds = emptySet()
+                }) { AppText(if (selecting) "取消" else "批量管理") }
+            }
+            if (selecting) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppTextButton(onClick = {
+                        selectedIds = if (selectedIds.size == feeds.size) {
+                            emptySet()
+                        } else {
+                            feeds.map { it.id }.toSet()
+                        }
+                    }) { AppText(if (selectedIds.size == feeds.size) "取消全选" else "全选") }
+                    AppButton(
+                        onClick = { confirmBatchDelete = true },
+                        enabled = selectedIds.isNotEmpty(),
+                    ) { AppText("删除所选（${selectedIds.size}）") }
+                }
+            }
+        }
+        feeds.forEach { feed ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (selecting) Modifier.toggleable(
+                            value = feed.id in selectedIds,
+                            role = Role.Checkbox,
+                            onValueChange = { checked ->
+                                selectedIds = if (checked) selectedIds + feed.id else selectedIds - feed.id
+                            },
+                        ) else Modifier
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (selecting) {
+                    AppCheckbox(checked = feed.id in selectedIds, onCheckedChange = null)
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     AppText(
                         text = feed.title,
@@ -193,14 +274,33 @@ private fun SubscriptionFeedSettings(modifier: Modifier = Modifier) {
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                AppTextButton(onClick = {
-                    SubscriptionFeedStore.remove(context, feed.id)
-                    revision += 1
-                }) {
-                    AppText("删除")
+                if (!selecting) {
+                    AppTextButton(onClick = {
+                        SubscriptionFeedStore.remove(context, feed.id)
+                    }) {
+                        AppText("删除")
+                    }
                 }
             }
         }
+    }
+    if (confirmBatchDelete) {
+        AppAlertDialog(
+            onDismissRequest = { confirmBatchDelete = false },
+            title = { AppText("删除所选订阅？") },
+            text = { AppText("将删除 ${selectedIds.size} 个订阅来源。") },
+            confirmButton = {
+                AppDialogAction(onClick = {
+                    SubscriptionFeedStore.removeAll(context, selectedIds)
+                    selectedIds = emptySet()
+                    selecting = false
+                    confirmBatchDelete = false
+                }) { AppText("删除") }
+            },
+            dismissButton = {
+                AppDialogAction(onClick = { confirmBatchDelete = false }) { AppText("取消") }
+            },
+        )
     }
 }
 
@@ -232,19 +332,32 @@ private suspend fun resolveImportPayload(raw: String): String {
     return text
 }
 
-private fun applySubscriptionImport(
+private suspend fun applySubscriptionImport(
     context: android.content.Context,
     text: String,
     onResult: (String?, Boolean) -> Unit,
 ) {
-    val imported = com.android.purebilibili.core.plugin.feed.parseSubscriptionImport(text)
+    val imported = withContext(Dispatchers.IO) {
+        com.android.purebilibili.core.plugin.feed.parseSubscriptionImport(text)
+    }
     if (imported.isEmpty()) {
         onResult("没有解析到订阅地址", false)
         return
     }
-    val added = SubscriptionFeedStore.addAll(context, imported)
+    val resolved = resolveImportedSubscriptionTitles(imported)
+    if (resolved.isEmpty()) {
+        onResult("没有可识别的 RSS 或 Atom 地址", false)
+        return
+    }
+    val added = withContext(Dispatchers.IO) { SubscriptionFeedStore.addAll(context, resolved) }
+    val skipped = imported.size - resolved.size
     onResult(
-        if (added == 0) "这 ${imported.size} 个地址都已经在列表里" else "已导入 $added 个订阅，共解析 ${imported.size} 个",
+        when {
+            added == 0 && skipped > 0 -> "没有新增订阅：${resolved.size} 个已存在，$skipped 个地址无法识别"
+            added == 0 -> "这 ${resolved.size} 个地址都已经在列表里"
+            skipped > 0 -> "已导入 $added 个订阅，跳过 $skipped 个无法识别的地址"
+            else -> "已导入 $added 个订阅"
+        },
         added > 0,
     )
 }

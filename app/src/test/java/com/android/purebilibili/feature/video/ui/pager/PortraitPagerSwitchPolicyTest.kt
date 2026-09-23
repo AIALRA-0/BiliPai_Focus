@@ -749,4 +749,29 @@ class PortraitPagerSwitchPolicyTest {
         assertEquals(related.stat.view, info.stat.view)
         assertEquals(65L, info.pages.firstOrNull()?.duration)
     }
+
+    @Test
+    fun requestVideoChange_insertsMissingPortraitPageInsteadOfNoOp() {
+        val source = java.io.File(
+            "app/src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt"
+        ).takeIf { it.exists() }
+            ?: java.io.File("src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt")
+        val text = source.readText()
+
+        assertTrue(
+            text.contains("val jumpToPortraitPageForVideo: (String, Long, UgcSeason?) -> Unit"),
+            "竖屏点视频应复用 insert-or-scroll 跳转 helper。"
+        )
+        assertTrue(
+            text.contains("onRequestVideoChange = { targetBvid ->"),
+        )
+        assertTrue(
+            text.contains("jumpToPortraitPageForVideo(normalizedBvid, 0L, null)"),
+            "Up 预览点视频必须走 jumpToPortraitPageForVideo，不能静默 no-op。"
+        )
+        assertTrue(
+            text.contains("onRequestCollectionItem = jumpToPortraitPageForVideo"),
+            "合集点击与 Up 预览点击共用同一 insert-or-scroll 路径。"
+        )
+    }
 }

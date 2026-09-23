@@ -137,19 +137,22 @@ class AppNavigationAppearancePolicyTest {
     }
 
     @Test
-    fun appNavigationProvidesGlobalSharedTransitionSwitch() {
+    fun appNavigationPassesGlobalCardTransitionSwitchToMiuixHost() {
         val navigationSource = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
         val activitySource = loadSource("app/src/main/java/com/android/purebilibili/MainActivity.kt")
+        val navHostSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt"
+        )
 
         assertTrue(navigationSource.contains("val sharedVideoCardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion"))
-        assertTrue(navigationSource.contains("val officialVideoSharedBoundsEnabled ="))
-        assertTrue(navigationSource.contains("sharedVideoCardTransitionEnabled && !liveSurfaceCardTransitionEnabled"))
-        assertTrue(navigationSource.contains("SharedTransitionLayout(modifier = Modifier.fillMaxSize())"))
-        assertTrue(navigationSource.contains("LocalSharedTransitionScope provides"))
-        assertTrue(navigationSource.contains("this.takeIf { officialVideoSharedBoundsEnabled }"))
-        assertTrue(navigationSource.contains("LocalOfficialVideoSharedTransition provides realVideoSharedTransition"))
         assertTrue(navigationSource.contains("cardTransitionEnabled = sharedVideoCardTransitionEnabled"))
         assertTrue(navigationSource.contains("cardTransitionEnabled && !systemReduceMotion"))
+        assertTrue(navHostSource.contains("biliPaiMiuixNavTransition("))
+        assertTrue(navHostSource.contains("miuixVideoCardNavTransition("))
+        assertTrue(navHostSource.contains("LocalMiuixVideoCardTransitionState provides miuixCardTransitionState"))
+        assertTrue(navHostSource.contains("LocalSharedTransitionEnabled provides cardTransitionEnabled"))
+        assertFalse(navigationSource.contains("SharedTransitionLayout("))
+        assertFalse(navigationSource.contains("LocalOfficialVideoSharedTransition"))
         assertTrue(
             navigationSource.contains(
                 "VideoCardTransitionVisualTimeline.REDUCED_MOTION_DURATION_MILLIS"

@@ -33,16 +33,19 @@ class BiliPaiNavDisplayHostStructureTest {
     }
 
     @Test
-    fun navDisplayHostOwnsNavigation3RenderingAndSharedTransitionScope() {
+    fun navDisplayHostOwnsNavigation3RenderingAndMiuixVideoCardTransition() {
         val source = navDisplayHostSource()
 
         assertTrue(source.contains("NavDisplay("))
         assertTrue(source.contains("biliPaiNavEntries("))
-        assertTrue(source.contains("LocalOfficialVideoSharedTransition.current"))
-        assertTrue(source.contains("realSharedTransition.AnimatedVisibility("))
-        assertTrue(source.contains("LocalAnimatedVisibilityScope provides this"))
+        assertTrue(source.contains("remember(sourceMetadata.sourceKey) { MiuixVideoCardTransitionProgress() }"))
+        assertTrue(source.contains("miuixVideoCardNavTransition("))
+        assertTrue(source.contains("MiuixVideoCardTransitionState("))
+        assertTrue(source.contains("LocalMiuixVideoCardTransitionState provides miuixCardTransitionState"))
         assertTrue(source.contains("LocalVideoCardSharedElementSourceRoute provides key.toLegacyRoute()"))
-        assertTrue(source.contains("LocalOfficialVideoSharedTransition"))
+        assertTrue(source.contains("LocalSharedTransitionEnabled provides cardTransitionEnabled"))
+        assertFalse(source.contains("LocalOfficialVideoSharedTransition"))
+        assertFalse(source.contains("realSharedTransition.AnimatedVisibility("))
         assertFalse(source.contains("VideoSharedTransitionBackdropHost("))
         assertFalse(source.contains("videoCardTransitionController"))
         assertFalse(source.contains("LocalVideoCardTransitionSession"))

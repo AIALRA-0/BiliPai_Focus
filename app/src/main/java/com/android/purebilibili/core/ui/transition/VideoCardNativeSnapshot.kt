@@ -8,8 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
-import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import com.android.purebilibili.core.util.CardPositionManager
 import kotlinx.coroutines.launch
@@ -79,8 +77,7 @@ internal fun isNativeVideoCardLayerDrawable(widthPx: Int, heightPx: Int): Boolea
  * The recorded layer can be drawn directly for ordinary cards via hardware-accelerated drawLayer.
  * Sources that leave composition, such as the now-playing bar, additionally freeze this layer
  * to a stable bitmap at click time.
- * The live transition path hides the stationary source under its flying layer. When the real
- * composables share bounds, Compose owns that visibility and the source stays drawable.
+ * While the flying overlay covers this card, skip drawing at the list coordinates.
  */
 @Composable
 internal fun Modifier.recordNativeVideoCardLayer(
@@ -92,8 +89,6 @@ internal fun Modifier.recordNativeVideoCardLayer(
 ): Modifier {
     if (!enabled) return this
     val bgState = LocalVideoCardTransitionBackgroundState.current
-    val realSharedBoundsOwnsSource =
-        LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null
     return drawWithContent {
         // Read the latch in draw. Waiting for recomposition after a click can otherwise
         // overwrite the frozen first-click card after OPENING has hidden its info band.
@@ -102,7 +97,7 @@ internal fun Modifier.recordNativeVideoCardLayer(
                 this@drawWithContent.drawContent()
             }
         }
-        val hide = !realSharedBoundsOwnsSource && shouldHideStationarySourceCard(
+        val hide = shouldHideStationarySourceCard(
             isSharedMorphSourceCard = isRecordedNativeCardSource(
                 bvid = bvid,
                 sourceRoute = sourceRoute,
@@ -168,14 +163,13 @@ internal class NativeVideoCardSnapshotController(
 internal fun rememberNativeVideoCardSnapshotController(
     key: Any,
     enabled: Boolean = true,
-    sourceRouteOverride: String? = null,
 ): NativeVideoCardSnapshotController {
     val layer = rememberNativeVideoCardLayer()
     val coverOverlayLayer = rememberNativeVideoCardLayer()
     val captureScope = rememberCoroutineScope()
     val freezeState = remember(key) { mutableStateOf(false) }
     val bvid = (key as? String).orEmpty()
-    val sourceRoute = sourceRouteOverride ?: LocalVideoCardSharedElementSourceRoute.current
+    val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
     return NativeVideoCardSnapshotController(
         modifier = Modifier.recordNativeVideoCardLayer(
             layer = layer,

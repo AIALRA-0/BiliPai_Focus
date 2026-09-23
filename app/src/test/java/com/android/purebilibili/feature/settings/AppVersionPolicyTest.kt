@@ -13,9 +13,14 @@ class AppVersionPolicyTest {
             File("build.gradle.kts")
         ).first { it.exists() }.readText()
 
-        assertTrue(buildFile.contains("versionCode = 385"))
+        assertTrue(buildFile.contains("versionCode = 387"))
         assertTrue(buildFile.contains("versionName = \"9.1.1-focus.5\""))
-        // Existing Focus clients compare this bridge version by versionName.
+        // Keep Focus release identity and advance beyond both existing Focus and upstream codes.
+        assertTrue(
+            buildFile.contains("语义化") ||
+                buildFile.contains("MAJOR.MINOR.PATCH") ||
+                buildFile.contains("X.Y.Z")
+        )
         assertTrue(!buildFile.contains("versionName = \"26."))
         assertTrue(!buildFile.contains("versionName = \"2026."))
     }
