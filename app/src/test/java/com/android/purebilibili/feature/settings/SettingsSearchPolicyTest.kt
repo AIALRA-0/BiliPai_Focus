@@ -138,6 +138,15 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun queryByRefreshRate_focusesAppearanceDisplayMode() {
+        val result = resolveSettingsSearchResults("刷新率").firstOrNull()
+
+        assertEquals("屏幕帧率", result?.title)
+        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
+        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+    }
+
+    @Test
     fun queryByClearBottomBarGlass_noLongerFocusesBottomBarPreset() {
         val results = resolveSettingsSearchResults("通透玻璃")
 

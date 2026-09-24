@@ -20,7 +20,7 @@ BiliPai Focus 基于 BiliPai `v0.2.3-alpha.2`（上游 `versionCode 387`）同�
 
 [修复] 修复合并推荐流 App 半边误带登录 Cookie 取流的问题，已登录时改为 access_key @qyo123oyq
 
-[更改] 修正刷新率异常偏高的问题
+[修复] 移除主界面与独立播放页的全局触摸刷新率控制，交由系统自动选择显示模式
 
 ---
 

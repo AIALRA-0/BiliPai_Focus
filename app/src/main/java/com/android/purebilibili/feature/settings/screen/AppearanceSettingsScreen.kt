@@ -70,6 +70,11 @@ import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.blur.resolveHomeChromeLiquidGlassEnabled
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
+import com.android.purebilibili.core.ui.performance.SYSTEM_AUTO_DISPLAY_MODE_ID
+import com.android.purebilibili.core.ui.performance.applyPreferredDisplayMode
+import com.android.purebilibili.core.ui.performance.displayModePreferenceLabel
+import com.android.purebilibili.core.ui.performance.normalizePreferredDisplayModeId
+import com.android.purebilibili.core.ui.performance.supportedAppDisplayModes
 import com.android.purebilibili.core.ui.getWindowNavigationBarColor
 import com.android.purebilibili.core.ui.rememberAppSparklesIcon
 import com.android.purebilibili.core.ui.setWindowNavigationBarColor
@@ -229,6 +234,29 @@ fun AppearanceSettingsContent(
     context: android.content.Context,
     onAppLanguageChange: (AppLanguage) -> Unit
 ) {
+    val activity = context as? android.app.Activity
+    val supportedDisplayModes = remember(activity) {
+        activity?.supportedAppDisplayModes().orEmpty()
+    }
+    val storedScreenDisplayModeId by SettingsManager
+        .getScreenDisplayModeId(context)
+        .collectAsStateWithLifecycle(initialValue = SYSTEM_AUTO_DISPLAY_MODE_ID)
+    val selectedScreenDisplayModeId = remember(storedScreenDisplayModeId, supportedDisplayModes) {
+        normalizePreferredDisplayModeId(
+            preferredModeId = storedScreenDisplayModeId,
+            supportedModes = supportedDisplayModes,
+        )
+    }
+    val screenDisplayModeOptions = remember(supportedDisplayModes) {
+        listOf(AppSegmentOption(SYSTEM_AUTO_DISPLAY_MODE_ID, "自动（系统）")) +
+            supportedDisplayModes.map { mode ->
+                AppSegmentOption(mode.modeId, displayModePreferenceLabel(mode))
+            }
+    }
+    val selectedScreenDisplayModeLabel = screenDisplayModeOptions
+        .firstOrNull { option -> option.value == selectedScreenDisplayModeId }
+        ?.label
+        ?: "自动（系统）"
     val singleChoicePresentation by SettingsManager
         .getSingleChoicePresentation(context)
         .collectAsStateWithLifecycle(AppSingleChoicePresentation.WINDOW_POPUP)
@@ -560,6 +588,24 @@ fun AppearanceSettingsContent(
                             title = uiPresetDescription.title,
                             summary = uiPresetDescription.summary
                         )
+
+                        Column(modifier = Modifier.padding(top = 16.dp)) {
+                            AppPreferenceDivider()
+                            Spacer(modifier = Modifier.height(8.dp))
+                            SettingsSingleChoicePreference(
+                                title = "屏幕帧率：$selectedScreenDisplayModeLabel",
+                                subtitle = "默认交给系统自动调节；手动选择时固定为对应显示模式",
+                                options = screenDisplayModeOptions,
+                                selectedValue = selectedScreenDisplayModeId,
+                                enabled = activity != null && supportedDisplayModes.isNotEmpty(),
+                                onSelectionChange = { modeId ->
+                                    scope.launch {
+                                        SettingsManager.setScreenDisplayModeId(context, modeId)
+                                        activity?.applyPreferredDisplayMode(modeId)
+                                    }
+                                },
+                            )
+                        }
 
                         Column(modifier = Modifier.padding(top = 16.dp)) {
                             AppPreferenceDivider()

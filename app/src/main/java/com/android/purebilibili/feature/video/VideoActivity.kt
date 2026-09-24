@@ -17,7 +17,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
-import android.view.MotionEvent
 import com.android.purebilibili.core.util.Logger
 import android.util.Rational
 import androidx.activity.ComponentActivity
@@ -33,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.metrics.performance.JankStats
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppThemeConfig
@@ -41,8 +41,8 @@ import com.android.purebilibili.core.ui.AppWindowSystemUiController
 import com.android.purebilibili.core.ui.ProvideAppThemeConfig
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.performance.AppRuntimeVisualGuardTracker
-import com.android.purebilibili.core.ui.performance.InteractionRefreshRateController
 import com.android.purebilibili.core.ui.performance.ProvideRuntimeVisualGuard
+import com.android.purebilibili.core.ui.performance.applyPreferredDisplayMode
 import com.android.purebilibili.core.ui.adaptive.toAdaptiveFoldPosture
 import com.android.purebilibili.core.ui.transition.LocalVideoTransitionAdaptiveInfo
 import com.android.purebilibili.core.ui.transition.VideoTransitionAdaptiveInfo
@@ -59,6 +59,8 @@ import androidx.window.layout.WindowMetricsCalculator
 // Imports for moved classes
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 
 private const val TAG = "BiliPlayerActivity"
@@ -73,7 +75,6 @@ private const val CONTROL_TYPE_PAUSE = 2
 class VideoActivity : ComponentActivity() {
 
     private val viewModel: VideoPlaybackViewModel by viewModels()
-    private val interactionRefreshRateController by lazy { InteractionRefreshRateController(this) }
     private var isFullscreen by mutableStateOf(false)
     private var isInPipMode by mutableStateOf(false)
     private var runtimeJankStats: JankStats? = null
@@ -106,6 +107,9 @@ class VideoActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            applyPreferredDisplayMode(SettingsManager.getScreenDisplayModeId(this@VideoActivity).first())
+        }
         enableEdgeToEdge()
         AppWindowSystemUiController.configureEdgeToEdgeHost(this)
         val entryDisplayContext = resolveAppDisplayContext()
@@ -316,33 +320,6 @@ class VideoActivity : ComponentActivity() {
             return true
         }
         return super.dispatchKeyEvent(event)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        interactionRefreshRateController.onResume()
-    }
-
-    override fun onPause() {
-        interactionRefreshRateController.onPause()
-        super.onPause()
-    }
-
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        interactionRefreshRateController.onTouchEvent(ev)
-        return super.dispatchTouchEvent(ev)
-    }
-
-    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
-        if (ev.actionMasked == MotionEvent.ACTION_SCROLL) {
-            interactionRefreshRateController.onOtherInteraction()
-        }
-        return super.dispatchGenericMotionEvent(ev)
-    }
-
-    override fun onUserInteraction() {
-        super.onUserInteraction()
-        interactionRefreshRateController.onOtherInteraction()
     }
 
     override fun onStop() {

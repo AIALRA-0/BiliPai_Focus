@@ -990,7 +990,7 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `fan group decoration image fits complete official transparent asset`() {
+    fun `fan group decoration image is bounded before fitting transparent asset`() {
         val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/ReplyComponents.kt")
             .readText()
             .replace("\r\n", "\n")
@@ -1000,7 +1000,13 @@ class ReplyComponentsPolicyTest {
 
         assertTrue(decorationSource.contains("contentScale = ContentScale.Fit"))
         assertFalse(decorationSource.contains("contentScale = ContentScale.Crop"))
-        assertTrue(decorationSource.contains(".size(Size.ORIGINAL)"))
+        assertFalse(decorationSource.contains(".size(Size.ORIGINAL)"))
+        assertTrue(
+            decorationSource.contains(
+                ".size(COMMENT_DECORATION_DECODE_MAX_PX, COMMENT_DECORATION_DECODE_MAX_PX)"
+            )
+        )
+        assertTrue(COMMENT_DECORATION_DECODE_MAX_PX <= 512)
         assertTrue(decorationSource.contains(".transformations(TransparentBoundsCropTransformation)"))
         assertTrue(decorationSource.contains("text = \"NO.\""))
         assertTrue(decorationSource.contains("layoutPolicy.decorationImageWidthDp.dp"))

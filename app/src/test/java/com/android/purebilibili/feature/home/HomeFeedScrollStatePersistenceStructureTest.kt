@@ -75,14 +75,16 @@ class HomeFeedScrollStatePersistenceStructureTest {
     }
 
     @Test
-    fun `home double tap does not restart an active scroll to top`() {
+    fun `home double tap is coalesced before scroll to top starts`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
         val scrollCollectorSource = source
             .substringAfter("LaunchedEffect(scrollChannel)")
             .substringBefore("TrackJankStateFlag(")
 
-        assertTrue(scrollCollectorSource.contains("receiveAsFlow()?.collect { request ->"))
-        assertFalse(scrollCollectorSource.contains("receiveAsFlow()?.collectLatest { request ->"))
+        assertTrue(scrollCollectorSource.contains("for (initialRequest in channel)"))
+        assertTrue(scrollCollectorSource.contains("withTimeoutOrNull(HOME_RESELECT_DOUBLE_TAP_WINDOW_MS)"))
+        assertTrue(scrollCollectorSource.contains("mergeHomeScrollRequests(initialRequest, followUp)"))
+        assertFalse(scrollCollectorSource.contains("collectLatest"))
     }
 
     @Test

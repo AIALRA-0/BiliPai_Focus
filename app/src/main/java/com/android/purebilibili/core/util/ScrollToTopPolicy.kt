@@ -13,8 +13,9 @@ data class ScrollToTopPlan(
  * 长列表回顶策略：
  * - 近距离直接平滑到顶部
  * - 已知当前视口容量时，远距离先定位到约两屏外，再平滑到顶部
- * - fast = true 时（如底栏点击/重选回顶/双击回顶），定位到紧邻顶部的紧凑窗口（≤2项），
- *   消除长步长弹簧在多段搜索与长尾衰减中的拖沓停滞，让远距离回顶敏捷迅速且动画平滑连贯
+ * - fast = true 时（如底栏点击/重选回顶/双击回顶），先定位到约一个视口外，
+ *   再完成最后一屏动画。窗口按实际可见项数计算，避免大屏多列时固定 2 项落在同一行，
+ *   看起来只有一次硬跳和一小段卡顿动画
  * - 未提供视口容量的旧调用继续使用固定分段策略
  */
 fun resolveScrollToTopPlan(
@@ -25,7 +26,7 @@ fun resolveScrollToTopPlan(
     val index = firstVisibleItemIndex.coerceAtLeast(0)
     val measuredViewportItems = visibleItemCount?.takeIf { it > 0 }
     val preJump = if (fast) {
-        val fastWindow = measuredViewportItems?.let { minOf(2, it).coerceAtLeast(1) } ?: 2
+        val fastWindow = measuredViewportItems?.coerceIn(4, 12) ?: 4
         fastWindow.takeIf { index > fastWindow }
     } else if (measuredViewportItems != null) {
         val viewportItems = measuredViewportItems.coerceIn(4, 16)

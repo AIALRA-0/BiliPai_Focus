@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
+
 /**
  * Large-screen video geometry for the current application window.
  * Landscape uses a left player column and a 280–425dp side pane.
@@ -167,6 +169,8 @@ internal fun resolveIncludeRelatedTabInSecondary(mode: LargeScreenVideoLayoutMod
     return mode != LargeScreenVideoLayoutMode.AlmostSquare
 }
 
-internal fun resolveRelatedTabFirstInSecondary(mode: LargeScreenVideoLayoutMode): Boolean {
-    return mode == LargeScreenVideoLayoutMode.Landscape || mode == LargeScreenVideoLayoutMode.Split
-}
+internal fun resolveRelatedTabFirstInSecondary(
+    mode: LargeScreenVideoLayoutMode,
+    defaultTab: TabletSecondaryDefaultTab,
+): Boolean = resolveIncludeRelatedTabInSecondary(mode) &&
+    defaultTab == TabletSecondaryDefaultTab.RELATED

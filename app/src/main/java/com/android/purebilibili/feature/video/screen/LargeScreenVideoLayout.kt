@@ -20,11 +20,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
@@ -107,6 +112,10 @@ internal fun LargeScreenVideoLayout(
 ) {
     val pageColor = AppSurfaceTokens.chromeBackground()
     val danmakuChrome = rememberTabletDanmakuChromeState(bvid)
+    val context = LocalContext.current
+    val secondaryDefaultTab by SettingsManager
+        .getTabletSecondaryDefaultTab(context)
+        .collectAsStateWithLifecycle(initialValue = TabletSecondaryDefaultTab.RELATED)
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -125,7 +134,10 @@ internal fun LargeScreenVideoLayout(
         val applySideStatusBarPadding =
             metrics.mode != LargeScreenVideoLayoutMode.AlmostSquare
         val showRelatedInIntro = focusRelatedVideosVisible && resolveShowRelatedInIntro(metrics.mode)
-        val relatedTabFirst = resolveRelatedTabFirstInSecondary(metrics.mode)
+        val relatedTabFirst = resolveRelatedTabFirstInSecondary(
+            mode = metrics.mode,
+            defaultTab = secondaryDefaultTab,
+        )
         val includeRelatedTab = focusRelatedVideosVisible &&
             resolveIncludeRelatedTabInSecondary(metrics.mode)
         val success = uiState as? VideoPlaybackUiState.Success

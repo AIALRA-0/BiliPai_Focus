@@ -112,6 +112,12 @@ import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import dev.chrisbanes.haze.HazeState
 
 private const val MESSAGE_LARGE_VIDEO_COVER_ASPECT_RATIO = 4f / 3f
+private val CHAT_INPUT_DOCK_HEIGHT = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small
+private val CHAT_INPUT_VERTICAL_PADDING = AppSpacingTokens.Small
+private val CHAT_MESSAGE_LIST_BOTTOM_PADDING = CHAT_INPUT_DOCK_HEIGHT +
+    CHAT_INPUT_VERTICAL_PADDING +
+    CHAT_INPUT_VERTICAL_PADDING +
+    AppSpacingTokens.Small
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -231,6 +237,7 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
         ) {
             Box(
                 modifier = Modifier
@@ -266,7 +273,12 @@ fun ChatScreen(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                top = 8.dp,
+                                end = 16.dp,
+                                bottom = CHAT_MESSAGE_LIST_BOTTOM_PADDING,
+                            ),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             // 加载更多按钮
@@ -569,8 +581,7 @@ fun ChatInputBar(
 
     val liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
     val dockShape = resolveSharedBottomBarCapsuleShape()
-    val inputHeight = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small
-    val shellLensIntensity = resolveFloatingDockGeometryScale(inputHeight.value)
+    val shellLensIntensity = resolveFloatingDockGeometryScale(CHAT_INPUT_DOCK_HEIGHT.value)
     val panelColor = com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor(
         AppSurfaceTokens.surface()
     )
@@ -581,7 +592,7 @@ fun ChatInputBar(
         modifier = modifier
             .fillMaxWidth()
             .imePadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = CHAT_INPUT_VERTICAL_PADDING),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -589,7 +600,7 @@ fun ChatInputBar(
             shape = dockShape,
             modifier = Modifier
                 .weight(1f)
-                .height(inputHeight)
+                .height(CHAT_INPUT_DOCK_HEIGHT)
                 .then(
                     if (!liquidGlassEnabled) {
                         Modifier
@@ -650,7 +661,7 @@ fun ChatInputBar(
         BottomBarMatchedReusableLiquidDock(
             shape = CircleShape,
             modifier = Modifier
-                .size(inputHeight)
+                .size(CHAT_INPUT_DOCK_HEIGHT)
                 .then(
                     if (!liquidGlassEnabled) {
                         Modifier

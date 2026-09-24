@@ -80,7 +80,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import coil3.size.Size
 import com.android.purebilibili.core.ui.common.TextSelectionBottomSheet
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.rememberStoragePermissionState
@@ -1500,7 +1499,7 @@ private fun SubReplyAuxiliaryBadge(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(resolveDecorationImageUrl(decoration.imageUrl))
-                    .size(Size.ORIGINAL)
+                    .size(COMMENT_DECORATION_DECODE_MAX_PX, COMMENT_DECORATION_DECODE_MAX_PX)
                     .transformations(TransparentBoundsCropTransformation)
                     .crossfade(true)
                     .build(),

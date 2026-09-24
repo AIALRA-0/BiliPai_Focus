@@ -476,14 +476,19 @@ class SubReplyDetailPresentationPolicyTest {
     }
 
     @Test
-    fun `thread auxiliary decoration crops transparent canvas before fitting`() {
+    fun `thread auxiliary decoration bounds and crops transparent canvas before fitting`() {
         val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailComponents.kt")
             .readText()
         val badgeSource = source
             .substringAfter("private fun SubReplyAuxiliaryBadge(")
             .substringBefore("private fun SubReplyTextAction(")
 
-        assertTrue(badgeSource.contains(".size(Size.ORIGINAL)"))
+        assertFalse(badgeSource.contains(".size(Size.ORIGINAL)"))
+        assertTrue(
+            badgeSource.contains(
+                ".size(COMMENT_DECORATION_DECODE_MAX_PX, COMMENT_DECORATION_DECODE_MAX_PX)"
+            )
+        )
         assertTrue(badgeSource.contains(".transformations(TransparentBoundsCropTransformation)"))
         assertTrue(badgeSource.contains("contentScale = ContentScale.Fit"))
     }

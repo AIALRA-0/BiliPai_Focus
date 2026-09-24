@@ -527,6 +527,14 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.APPEARANCE,
+        title = "屏幕帧率",
+        subtitle = "跟随系统自动调节，或手动选择设备支持的显示模式",
+        section = "外观设置",
+        aliases = listOf("刷新率", "高刷新率", "高刷", "帧率", "显示模式", "自动帧率"),
+        focusId = SettingsSearchFocusIds.APPEARANCE_THEME
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.APPEARANCE,
         title = "字体与显示大小",
         subtitle = "分别调整文字大小、界面缩放和精细显示比例",
         section = "外观设置",

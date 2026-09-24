@@ -21,7 +21,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Rational
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.animation.PathInterpolator
@@ -89,7 +88,7 @@ import com.android.purebilibili.core.theme.PureBiliBiliTheme
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.performance.AppRuntimeVisualGuardTracker
-import com.android.purebilibili.core.ui.performance.InteractionRefreshRateController
+import com.android.purebilibili.core.ui.performance.applyPreferredDisplayMode
 import com.android.purebilibili.core.ui.wallpaper.SplashWallpaperLayout
 import com.android.purebilibili.core.ui.wallpaper.resolveSplashWallpaperLayout
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
@@ -853,7 +852,6 @@ internal fun shouldRefreshMainActivitySystemThemeSnapshot(
 
 @OptIn(UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
 open class MainActivity : AppCompatActivity() {
-    private val interactionRefreshRateController by lazy { InteractionRefreshRateController(this) }
     private var startupRecoveryRedirected = false
     
     //  PiP 状态
@@ -1044,6 +1042,9 @@ open class MainActivity : AppCompatActivity() {
         VideoRepository.preloadHomeData()
         
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            applyPreferredDisplayMode(SettingsManager.getScreenDisplayModeId(this@MainActivity).first())
+        }
         //  初始调用，后续会根据主题动态更新
         enableEdgeToEdge()
         AppWindowSystemUiController.configureEdgeToEdgeHost(this)
@@ -2285,7 +2286,6 @@ open class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (startupRecoveryRedirected) return
-        interactionRefreshRateController.onResume()
         refreshAndroid17HandoffAvailability()
         refreshSystemThemeSnapshot(reason = "resume")
         miniPlayerManager.clearUserLeaveHint()
@@ -2314,30 +2314,12 @@ open class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        interactionRefreshRateController.onPause()
         if (!startupRecoveryRedirected) {
             StartupRecovery.onMainPaused(this)
         }
         super.onPause()
     }
 
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        interactionRefreshRateController.onTouchEvent(ev)
-        return super.dispatchTouchEvent(ev)
-    }
-
-    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
-        if (ev.actionMasked == MotionEvent.ACTION_SCROLL) {
-            interactionRefreshRateController.onOtherInteraction()
-        }
-        return super.dispatchGenericMotionEvent(ev)
-    }
-
-    override fun onUserInteraction() {
-        super.onUserInteraction()
-        interactionRefreshRateController.onOtherInteraction()
-    }
-    
     //  用户按 Home 键或切换应用时触发
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()

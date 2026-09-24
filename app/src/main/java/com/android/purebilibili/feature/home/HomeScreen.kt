@@ -183,6 +183,7 @@ import kotlinx.coroutines.flow.map as mapFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
@@ -190,7 +191,6 @@ import com.android.purebilibili.core.ui.LocalBottomBarVisible
 import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
 
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.receiveAsFlow
 import com.android.purebilibili.data.model.response.VideoItem // [Fix] Import VideoItem
 import com.android.purebilibili.feature.home.components.VideoPreviewDialog // [Fix] Import VideoPreviewDialog
 import com.android.purebilibili.feature.home.components.HomeNotInterestedReasonSheet
@@ -201,6 +201,21 @@ enum class HomeScrollRequest {
     SCROLL_TO_TOP,
     SCROLL_TO_TOP_OR_REFRESH,
     SCROLL_TO_TOP_AND_REFRESH,
+}
+
+private const val HOME_RESELECT_DOUBLE_TAP_WINDOW_MS = 300L
+
+internal fun mergeHomeScrollRequests(
+    first: HomeScrollRequest,
+    followUp: HomeScrollRequest,
+): HomeScrollRequest = when {
+    first == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
+        followUp == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ->
+        HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH
+    first == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH ||
+        followUp == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH ->
+        HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH
+    else -> HomeScrollRequest.SCROLL_TO_TOP
 }
 
 // 首页只有一个可见消费者；Channel 保证底栏重选/双击事件不会在暂停采集时丢失。
@@ -515,10 +530,19 @@ fun HomeScreen(
     val latestHomePagerPage by rememberUpdatedState(pagerState.currentPage)
     val latestHomeTopTabEntries by rememberUpdatedState(topTabEntries)
     LaunchedEffect(scrollChannel) {
-        // A double tap first emits the normal Home reselect, then the stronger refresh request.
-        // Process them sequentially so the second event cannot cancel and restart an active
-        // animateScrollToItem, which otherwise produces a visible stepped return-to-top.
-        scrollChannel?.receiveAsFlow()?.collect { request ->
+        val channel = scrollChannel ?: return@LaunchedEffect
+        for (initialRequest in channel) {
+            // 双击首先会发出普通重选，随后再发出“回顶并刷新”。
+            // 在双击窗口内将它们升级为一个语义事务，避免先回顶、再回顶刷新的两段滚动。
+            val request = if (initialRequest == HomeScrollRequest.SCROLL_TO_TOP) {
+                withTimeoutOrNull(HOME_RESELECT_DOUBLE_TAP_WINDOW_MS) {
+                    channel.receive()
+                }?.let { followUp ->
+                    mergeHomeScrollRequests(initialRequest, followUp)
+                } ?: initialRequest
+            } else {
+                initialRequest
+            }
             withHomeScrollToTopLock {
                 val entry = resolveHomeTopTabEntryOrNull(
                     latestHomeTopTabEntries,
@@ -2343,7 +2367,8 @@ fun HomeScreen(
                                      onDissolveComplete = onDissolveCompleteCallback,
                                      longPressCallback = onLongPressCallback, // [Feature] Pass callback
                                      displayMode = displayMode,
-                                     cardAnimationEnabled = cardAnimationEnabled,
+                                     // 刷新数据换位时不再同时启动整屏卡片 placement spring。
+                                     cardAnimationEnabled = cardAnimationEnabled && !isPageRefreshing,
                                      cardMotionTier = cardMotionTier,
                                      cardTransitionEnabled = cardTransitionEnabled,
                                      isReturningFromVideoDetail = isReturningFromVideoDetail,

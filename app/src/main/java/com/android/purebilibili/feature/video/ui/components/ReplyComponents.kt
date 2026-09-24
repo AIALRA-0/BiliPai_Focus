@@ -127,6 +127,7 @@ const val COMMENT_PICTURE_TAG_PREFIX = "comment_picture_"
 const val COMMENT_ACTION_BUTTON_TAG_PREFIX = "comment_action_button_"
 const val COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX = "comment_sub_reply_preview_"
 const val COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX = "comment_view_all_replies_"
+internal const val COMMENT_DECORATION_DECODE_MAX_PX = 512
 
 private val replyVideoTitleCache = ConcurrentHashMap<String, String>()
 
@@ -2472,8 +2473,8 @@ internal fun FanGroupDecorationBadge(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(primaryImageUrl)
-                    // 先保留原始像素，再裁透明边缘；否则裁剪后的主体会被放大而发糊。
-                    .size(Size.ORIGINAL)
+                    // 身份装扮只在小尺寸区域显示；限制解码大小，避免异常原图在 Canvas 绘制时崩溃。
+                    .size(COMMENT_DECORATION_DECODE_MAX_PX, COMMENT_DECORATION_DECODE_MAX_PX)
                     .transformations(TransparentBoundsCropTransformation)
                     .crossfade(true)
                     .build(),

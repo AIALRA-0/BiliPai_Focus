@@ -283,6 +283,8 @@ object SettingsManager {
     private val KEY_BLUR_INTENSITY = stringPreferencesKey("blur_intensity")
     //  [合并] 首页展示模式 (0=Grid, 1=Story, 2=Glass)
     private val KEY_DISPLAY_MODE = intPreferencesKey("display_mode")
+    // 屏幕显示模式：0 表示交还系统自动选择，其余值对应 Display.Mode.modeId。
+    private val KEY_SCREEN_DISPLAY_MODE_ID = intPreferencesKey("screen_display_mode_id")
     //  [新增] 网格列数 (0=Auto)
     private val KEY_GRID_COLUMN_COUNT = intPreferencesKey("grid_column_count")
     private val KEY_PINCH_TO_CHANGE_GRID_COLUMNS_ENABLED =
@@ -1707,6 +1709,15 @@ object SettingsManager {
     suspend fun setDisplayMode(context: Context, mode: Int) {
         context.settingsDataStore.edit { preferences -> 
             preferences[KEY_DISPLAY_MODE] = mode
+        }
+    }
+
+    fun getScreenDisplayModeId(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SCREEN_DISPLAY_MODE_ID] ?: 0 }
+
+    suspend fun setScreenDisplayModeId(context: Context, modeId: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SCREEN_DISPLAY_MODE_ID] = modeId.coerceAtLeast(0)
         }
     }
 

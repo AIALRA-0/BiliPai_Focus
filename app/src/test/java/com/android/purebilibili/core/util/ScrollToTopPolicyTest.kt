@@ -37,15 +37,14 @@ class ScrollToTopPolicyTest {
     }
 
     @Test
-    fun resolveFastScrollToTopPlan_limitsAnimatedWindowToSmallBatch() {
+    fun resolveFastScrollToTopPlan_usesOneViewportForFinalAnimation() {
         assertNull(resolveFastScrollToTopPlan(firstVisibleItemIndex = 1).preJumpIndex)
-        assertNull(resolveFastScrollToTopPlan(firstVisibleItemIndex = 2).preJumpIndex)
-        assertEquals(2, resolveFastScrollToTopPlan(firstVisibleItemIndex = 3).preJumpIndex)
-        assertEquals(2, resolveFastScrollToTopPlan(firstVisibleItemIndex = 4).preJumpIndex)
-        assertEquals(2, resolveFastScrollToTopPlan(firstVisibleItemIndex = 5).preJumpIndex)
-        assertEquals(2, resolveFastScrollToTopPlan(firstVisibleItemIndex = 50).preJumpIndex)
-        assertEquals(2, resolveFastScrollToTopPlan(firstVisibleItemIndex = 100, visibleItemCount = 8).preJumpIndex)
-        assertEquals(1, resolveFastScrollToTopPlan(firstVisibleItemIndex = 100, visibleItemCount = 1).preJumpIndex)
+        assertNull(resolveFastScrollToTopPlan(firstVisibleItemIndex = 4).preJumpIndex)
+        assertEquals(4, resolveFastScrollToTopPlan(firstVisibleItemIndex = 5).preJumpIndex)
+        assertEquals(4, resolveFastScrollToTopPlan(firstVisibleItemIndex = 50).preJumpIndex)
+        assertEquals(8, resolveFastScrollToTopPlan(firstVisibleItemIndex = 100, visibleItemCount = 8).preJumpIndex)
+        assertEquals(4, resolveFastScrollToTopPlan(firstVisibleItemIndex = 100, visibleItemCount = 1).preJumpIndex)
+        assertEquals(12, resolveFastScrollToTopPlan(firstVisibleItemIndex = 100, visibleItemCount = 30).preJumpIndex)
     }
 
     @Test
