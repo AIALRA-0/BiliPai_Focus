@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -20,13 +21,43 @@ class LargeScreenVideoLayoutPolicyTest {
         ).takeIf { it.exists() } ?: java.io.File(
             "src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt"
         )
-        val text = source.readText()
-        assertTrue(text.contains("includeRelatedTab = resolveIncludeRelatedTabInSecondary(metrics.mode)"))
+        val text = source.readText().replace(Regex("\\s+"), " ")
+        assertTrue(
+            text.contains(
+                "focusRelatedVideosVisible && resolveIncludeRelatedTabInSecondary(metrics.mode)"
+            )
+        )
+        assertTrue(
+            text.contains(
+                "focusRelatedVideosVisible && resolveShowRelatedInIntro(metrics.mode)"
+            )
+        )
         assertTrue(text.contains("relatedTabFirst = resolveRelatedTabFirstInSecondary(metrics.mode)"))
         assertTrue(text.contains("includeOwnerUploadsTab = true"))
         assertTrue(text.contains("showRelatedVideos = showRelatedInIntro"))
+        assertTrue(text.contains("focusRelatedVideosVisible = focusRelatedVideosVisible"))
         assertTrue(text.contains("LargeScreenVideoLayoutMode.AlmostSquare"))
         assertFalse(text.contains("fixedTab = TabletSecondaryTab.COLLECTION"))
+    }
+
+    @Test
+    fun focusRelatedVisibilityIsPassedToBothAdaptiveLayoutBranches() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt"
+        ).readText().replace(Regex("\\s+"), " ")
+
+        assertTrue(
+            source.contains(
+                "TabletVideoLayout( playerState = playerState, uiState = uiState, " +
+                    "focusRelatedVideosVisible = focusRelatedVideosVisible,"
+            )
+        )
+        assertTrue(
+            source.contains(
+                "LargeScreenVideoLayout( playerState = playerState, uiState = uiState, " +
+                    "focusRelatedVideosVisible = focusRelatedVideosVisible,"
+            )
+        )
     }
 
     @Test

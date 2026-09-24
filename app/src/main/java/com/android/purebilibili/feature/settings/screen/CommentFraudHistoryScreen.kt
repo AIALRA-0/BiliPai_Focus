@@ -26,6 +26,7 @@ import com.android.purebilibili.core.database.entity.CommentFraudRecord
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.animation.EntranceGroup
@@ -277,7 +278,7 @@ private fun CommentFraudItemCard(
             .fillMaxWidth()
             .animateContentSize(), // 👈 手风琴平滑展开折叠动画
         shape = AppCardShape.Semantic(ContainerLevel.Card),
-        colors = AppCardDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = AppCardDefaults.colors(containerColor = AppSurfaceTokens.surface()),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             

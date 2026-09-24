@@ -1199,6 +1199,11 @@ private fun CinemaCommentsPane(
     onOpenBilibiliLink: ((String) -> Unit)?
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
+    val collapsedSubReplyPreviewLimit by SettingsManager
+        .getCommentCollapsedReplyPreviewLimit(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
+        )
     val listState = rememberLazyListState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -1324,6 +1329,7 @@ private fun CinemaCommentsPane(
             ) { reply ->
                 ReplyItemView(
                     item = reply,
+                    collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
                     upMid = success.info.owner.mid,
                     showUpFlag = commentState.showUpFlag,
                     showIdentityDecorations = showIdentityDecorations,

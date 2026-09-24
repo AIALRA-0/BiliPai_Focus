@@ -61,11 +61,14 @@ import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.repository.resolveVideoPlaybackAuthState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.video.VideoActivity
@@ -778,7 +781,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     // --- 协程作用域 ---
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val preferredPlaybackSpeed = CompletableDeferred<Float>()
+    private var cachedPreferredPlaybackSpeed: Float? = null
     private val backgroundPlaybackUseCase = VideoPlaybackUseCase()
+    private var preferredPlaybackSpeedReady = true
+    private var pendingPreferredSpeedPrepare = false
     private var backgroundSkipJob: kotlinx.coroutines.Job? = null
     private var notificationMetadataJob: kotlinx.coroutines.Job? = null
     
@@ -830,6 +837,22 @@ class MiniPlayerManager private constructor(private val context: Context) :
     
     init {
         backgroundPlaybackUseCase.initWithContext(context)
+        scope.launch {
+            try {
+                SettingsManager.getPreferredPlaybackSpeed(context).collect { speed ->
+                    cachedPreferredPlaybackSpeed = speed
+                    preferredPlaybackSpeed.complete(speed)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Logger.e(TAG, "Failed to read preferred playback speed; using 1x", error)
+                if (!preferredPlaybackSpeed.isCompleted) {
+                    cachedPreferredPlaybackSpeed = 1.0f
+                    preferredPlaybackSpeed.complete(1.0f)
+                }
+            }
+        }
         //  注册媒体控制广播接收器
         val filter = android.content.IntentFilter(ACTION_MEDIA_CONTROL)
         androidx.core.content.ContextCompat.registerReceiver(
@@ -1038,7 +1061,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             currentPlayer.mediaItemCount > 0 &&
             currentPlayer.playbackState == Player.STATE_IDLE
         if (shouldPrepareForegroundPlayback || shouldPrepareAfterIdleRelease) {
-            currentPlayer.prepare()
+            preparePlayerWhenPreferredSpeedReady(currentPlayer)
         }
         if (shouldKickPlaybackAfterForegroundTrackRestore(
                 hadSavedTrackParams = hadSavedTrackParams,
@@ -1050,7 +1073,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             || shouldPrepareForegroundPlayback
         ) {
             currentPlayer.playWhenReady = true
-            currentPlayer.play()
+            playPlayerWhenPreferredSpeedReady(currentPlayer)
             foregroundResumeIntent = false
             Logger.d(TAG, "▶️ 前台模式：恢复视频轨道后主动唤醒渲染链路")
         } else if (shouldResumePlaybackOnEnterForeground(
@@ -1060,7 +1083,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             )
         ) {
             currentPlayer.playWhenReady = true
-            currentPlayer.play()
+            playPlayerWhenPreferredSpeedReady(currentPlayer)
             foregroundResumeIntent = false
             Logger.d(TAG, "▶️ 前台模式：恢复卡在 READY 的播放会话")
         }
@@ -1317,6 +1340,19 @@ class MiniPlayerManager private constructor(private val context: Context) :
     private inner class QueueAwareSessionPlayer(
         private val delegatePlayer: Player
     ) : ForwardingPlayer(delegatePlayer), SessionPlayerBindingHandle {
+
+        override fun play() {
+            val managerPlayer = _player
+            if (
+                managerPlayer != null &&
+                managerPlayer === delegatePlayer &&
+                !preferredPlaybackSpeedReady
+            ) {
+                playPlayerWhenPreferredSpeedReady(managerPlayer)
+            } else {
+                super.play()
+            }
+        }
 
         override val boundPlayer: Any?
             get() = delegatePlayer
@@ -1799,6 +1835,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     fun ensurePlayer(): ExoPlayer {
         if (_player == null) {
             Logger.d(TAG) { "Creating new ExoPlayer instance" }
+            val initialPreferredSpeed = cachedPreferredPlaybackSpeed
             
             val headers = mapOf(
                 "Referer" to "https://www.bilibili.com",
@@ -1842,9 +1879,25 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     //  [修复] 确保音量正常
                     volume = com.android.purebilibili.core.player.PlayerVolumeController
                         .preferredVolumeSync()
-                    setPlaybackSpeed(SettingsManager.getPreferredPlaybackSpeedSync(context))
-                    prepare()
+                    initialPreferredSpeed?.let { setPlaybackSpeed(it) }
                 }
+            preferredPlaybackSpeedReady = initialPreferredSpeed != null
+            pendingPreferredSpeedPrepare = false
+            val initializingPlayer = _player!!
+            if (initialPreferredSpeed == null) {
+                scope.launch {
+                    preferredPlaybackSpeed.await()
+                    if (_player !== initializingPlayer) return@launch
+
+                    // The new player is still idle here. Defer any requested prepare/play until
+                    // this value is installed, so a slow DataStore read cannot expose a 1x first
+                    // frame.
+                    applyInitialPreferredSpeed(
+                        initializingPlayer,
+                        cachedPreferredPlaybackSpeed ?: 1.0f
+                    )
+                }
+            }
             
             // Follow the currently enabled launcher alias. Targeting MainActivity directly can
             // create a second activity instance when the selected app icon uses a splash alias.
@@ -1860,6 +1913,47 @@ class MiniPlayerManager private constructor(private val context: Context) :
             mediaSessionNavigationAvailability = resolveSessionNavigationAvailability()
         }
         return _player!!
+    }
+
+    private fun preparePlayerWhenPreferredSpeedReady(player: ExoPlayer) {
+        if (_player === player && !preferredPlaybackSpeedReady) {
+            pendingPreferredSpeedPrepare = true
+            return
+        }
+        player.prepare()
+    }
+
+    suspend fun awaitPreferredPlaybackSpeedBeforePrepare(player: ExoPlayer) {
+        if (_player !== player || preferredPlaybackSpeedReady) return
+        preferredPlaybackSpeed.await()
+        applyInitialPreferredSpeed(player, cachedPreferredPlaybackSpeed ?: 1.0f)
+    }
+
+    private fun applyInitialPreferredSpeed(player: ExoPlayer, speed: Float) {
+        if (_player !== player || preferredPlaybackSpeedReady) return
+        player.setPlaybackSpeed(speed)
+        preferredPlaybackSpeedReady = true
+        if (pendingPreferredSpeedPrepare) {
+            pendingPreferredSpeedPrepare = false
+            if (
+                player.mediaItemCount > 0 &&
+                player.playbackState == Player.STATE_IDLE
+            ) {
+                player.prepare()
+                if (player.playWhenReady) {
+                    player.play()
+                }
+            }
+        }
+    }
+
+    private fun playPlayerWhenPreferredSpeedReady(player: ExoPlayer) {
+        player.playWhenReady = true
+        if (_player === player && !preferredPlaybackSpeedReady) {
+            pendingPreferredSpeedPrepare = true
+            return
+        }
+        player.play()
     }
 
 
@@ -1918,8 +2012,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
         _player?.let {
             com.android.purebilibili.core.player.PlayerVolumeController.applyPreferredVolume(it)
         }
-        _player?.prepare()
-        _player?.playWhenReady = true
+        _player?.let { currentPlayer ->
+            preparePlayerWhenPreferredSpeedReady(currentPlayer)
+            currentPlayer.playWhenReady = true
+        }
         requestForegroundServiceIfNeeded()
 
         // 更新媒体元数据
@@ -1979,9 +2075,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
         audioPlayer.setMediaItem(mediaItem)
         PlayerVolumeController.applyPreferredVolume(audioPlayer)
-        audioPlayer.prepare()
+        preparePlayerWhenPreferredSpeedReady(audioPlayer)
         audioPlayer.playWhenReady = true
-        audioPlayer.play()
+        playPlayerWhenPreferredSpeedReady(audioPlayer)
         updateMediaSession(audioPlayer)
         updateMediaMetadata(title, artist, cover)
         return audioPlayer
@@ -2019,8 +2115,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // Detail-session handoff may have muted the shared player; always restore for mini window.
         currentPlayer?.let(PlayerVolumeController::applyPreferredVolume)
         if (shouldResumePlayback && currentPlayer != null) {
-            currentPlayer.playWhenReady = true
-            currentPlayer.play()
+            playPlayerWhenPreferredSpeedReady(currentPlayer)
             isPlaying = true
         }
         
@@ -2316,7 +2411,17 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     // Shared detail player may still be at volume 0 after session-inactive mute.
                     PlayerVolumeController.applyPreferredVolume(currentPlayer)
                 }
-                if (applyPlaybackMediaControlToPlayer(currentPlayer, controlType)) {
+                val applied = if (
+                    willPlay &&
+                    currentPlayer === _player &&
+                    !preferredPlaybackSpeedReady
+                ) {
+                    playPlayerWhenPreferredSpeedReady(currentPlayer)
+                    true
+                } else {
+                    applyPlaybackMediaControlToPlayer(currentPlayer, controlType)
+                }
+                if (applied) {
                     isPlaying = resolvePlayingStateAfterMediaControl(
                         controlType = controlType,
                         playerIsPlaying = previousIsPlaying
@@ -2613,6 +2718,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
         _player?.removeListener(playerListener)
         _player?.release()
         _player = null
+        preferredPlaybackSpeedReady = true
+        pendingPreferredSpeedPrepare = false
         scope.cancel()
         INSTANCE = null
     }

@@ -37,6 +37,11 @@ import com.android.purebilibili.core.plugin.skin.UiSkinColorTokens
 import com.android.purebilibili.core.plugin.skin.UiSkinManifest
 import java.io.File
 
+// Preserve existing local corner geometry across theme migrations.
+private object SkinPreviewShapeSpec {
+    const val Radius28Dp = 28
+}
+
 /**
  * 真实合成预览的数据模型。从已安装皮肤或临时预览资源构造，不可变。
  *
@@ -128,7 +133,7 @@ fun UiSkinCompositionPreview(
     showLiquidGlass: Boolean = true
 ) {
     val layers = resolveUiSkinCompositionLayers(data)
-    val dockShape: Shape = RoundedCornerShape(28.dp)
+    val dockShape: Shape = RoundedCornerShape(SkinPreviewShapeSpec.Radius28Dp.dp)
     val dockHeight = previewDockHeight()
     val iconSize = previewDockIconSize()
 

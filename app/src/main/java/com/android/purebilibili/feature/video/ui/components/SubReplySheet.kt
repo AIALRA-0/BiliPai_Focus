@@ -9,7 +9,7 @@ import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.core.ui.CommentWindowNavigation
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.NavigationEventTransitionState
@@ -55,7 +55,9 @@ fun SubReplySheet(
         val transition = backState.transitionState as? NavigationEventTransitionState.InProgress
         val backProgress by animateFloatAsState(
             targetValue = transition?.latestEvent?.progress ?: 0f,
-            animationSpec = if (transition != null) snap() else tween(180),
+            animationSpec = if (transition != null) snap() else {
+                AppMotionTokens.fastOutSlowInTweenSpec(durationMillis = 180)
+            },
             label = "standalone_comment_predictive_back",
         )
         val threadDrag = rememberCommentThreadDrag(

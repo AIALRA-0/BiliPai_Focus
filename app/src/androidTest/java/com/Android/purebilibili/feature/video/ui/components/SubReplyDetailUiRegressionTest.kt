@@ -10,10 +10,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -26,6 +28,7 @@ import com.android.purebilibili.data.model.response.ReplyContent
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyPicture
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.video.ui.components.COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX
 import com.android.purebilibili.feature.video.ui.components.COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
@@ -171,6 +174,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 ReplyItemView(
                     item = buildReplyWithPreview(),
+                    collapsedSubReplyPreviewLimit = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
                     emoteMap = emptyMap(),
                     onClick = {},
                     onSubClick = { reply, _ -> openedReplyId = reply.rpid },
@@ -196,6 +200,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 ReplyItemView(
                     item = buildReplyWithPreview(),
+                    collapsedSubReplyPreviewLimit = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
                     emoteMap = emptyMap(),
                     onClick = {},
                     onSubClick = { reply, _ -> openedReplyId = reply.rpid },
@@ -221,6 +226,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 ReplyItemView(
                     item = buildReplyWithPreview(),
+                    collapsedSubReplyPreviewLimit = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
                     emoteMap = emptyMap(),
                     onClick = {},
                     onSubClick = { reply, _ -> openedReplyId = reply.rpid },
@@ -248,6 +254,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 ReplyItemView(
                     item = buildReplyWithPreview(),
+                    collapsedSubReplyPreviewLimit = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
                     emoteMap = emptyMap(),
                     onClick = {},
                     onSubClick = { reply, _ -> openedReplyId = reply.rpid },
@@ -275,6 +282,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 ReplyItemView(
                     item = buildReplyWithPreview(),
+                    collapsedSubReplyPreviewLimit = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
                     emoteMap = emptyMap(),
                     onClick = {},
                     onSubClick = { reply, _ -> openedReplyId = reply.rpid },
@@ -305,6 +313,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 ReplyItemView(
                     item = buildReplyWithPreview(),
+                    collapsedSubReplyPreviewLimit = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
                     emoteMap = emptyMap(),
                     onClick = {},
                     onSubClick = { _, _ -> },
@@ -327,6 +336,38 @@ class SubReplyDetailUiRegressionTest {
                 ?.toString()
             assertEquals("preview child reply", firstItem)
         }
+    }
+
+    @Test
+    fun collapsedSubReplyPreviewUsesPassedLimit() {
+        val reply = buildReplyWithPreview().copy(
+            replies = buildReplyWithPreview().replies.orEmpty() + ReplyItem(
+                rpid = 302L,
+                mid = 31L,
+                root = 100L,
+                member = ReplyMember(mid = "31", uname = "SecondPreviewReply"),
+                content = ReplyContent(message = "second child reply")
+            )
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyItemView(
+                    item = reply,
+                    collapsedSubReplyPreviewLimit = 1,
+                    onClick = {},
+                    onSubClick = { _, _ -> },
+                    onAvatarClick = {}
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}301")
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}302")
+            .assertCountEquals(0)
     }
 
     private fun buildSubReplyState(): SubReplyUiState {

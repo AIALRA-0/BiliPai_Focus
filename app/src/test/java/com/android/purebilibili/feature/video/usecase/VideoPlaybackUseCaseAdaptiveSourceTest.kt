@@ -69,7 +69,9 @@ class VideoPlaybackUseCaseAdaptiveSourceTest {
             videoSecondCodecPreference = "avc1",
             playbackQualityMode = PlaybackQualityMode.AUTO,
             isHevcSupported = true,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertNotNull(selection)

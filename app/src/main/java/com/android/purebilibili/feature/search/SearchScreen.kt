@@ -320,6 +320,12 @@ internal fun resolveSearchChromeVisualSpec(
     val inputShapeLevel = ContainerLevel.Pill
     val actionShapeLevel = ContainerLevel.Pill
     val suggestionShapeLevel = ContainerLevel.Card
+    // Keep both icon actions at the shared accessibility target while retaining the
+    // compact visual metrics used by each chrome preset.
+    val actionTargetSizeDp = maxOf(
+        AppChromeSizeTokens.MinimumTouchTarget.value.toInt(),
+        compactChrome.secondaryButtonSizeDp,
+    )
     val chipShapeLevel = ContainerLevel.Pill
     return if (chromePolicy.tabPresentation == AppTopTabPresentation.TONAL_CAPSULE) {
         SearchChromeVisualSpec(
@@ -328,8 +334,8 @@ internal fun resolveSearchChromeVisualSpec(
             actionShapeLevel = actionShapeLevel,
             useFilledSearchAction = true,
             suggestionShapeLevel = suggestionShapeLevel,
-            clearActionSizeDp = compactChrome.secondaryButtonSizeDp,
-            submitActionSizeDp = compactChrome.secondaryButtonSizeDp,
+            clearActionSizeDp = actionTargetSizeDp,
+            submitActionSizeDp = actionTargetSizeDp,
             actionIconSizeDp = compactChrome.iconSizeDp,
             horizontalGapDp = compactChrome.standardGapDp,
             inputHorizontalPaddingDp = compactChrome.inputHorizontalPaddingDp,
@@ -345,8 +351,8 @@ internal fun resolveSearchChromeVisualSpec(
             actionShapeLevel = actionShapeLevel,
             useFilledSearchAction = true,
             suggestionShapeLevel = suggestionShapeLevel,
-            clearActionSizeDp = compactChrome.secondaryButtonSizeDp,
-            submitActionSizeDp = compactChrome.secondaryButtonSizeDp,
+            clearActionSizeDp = actionTargetSizeDp,
+            submitActionSizeDp = actionTargetSizeDp,
             actionIconSizeDp = compactChrome.iconSizeDp,
             horizontalGapDp = compactChrome.standardGapDp,
             inputHorizontalPaddingDp = compactChrome.inputHorizontalPaddingDp,
@@ -362,8 +368,8 @@ internal fun resolveSearchChromeVisualSpec(
             actionShapeLevel = actionShapeLevel,
             useFilledSearchAction = false,
             suggestionShapeLevel = suggestionShapeLevel,
-            clearActionSizeDp = compactChrome.secondaryButtonSizeDp,
-            submitActionSizeDp = compactChrome.secondaryButtonSizeDp,
+            clearActionSizeDp = actionTargetSizeDp,
+            submitActionSizeDp = actionTargetSizeDp,
             actionIconSizeDp = compactChrome.iconSizeDp,
             horizontalGapDp = compactChrome.standardGapDp,
             inputHorizontalPaddingDp = compactChrome.inputHorizontalPaddingDp,

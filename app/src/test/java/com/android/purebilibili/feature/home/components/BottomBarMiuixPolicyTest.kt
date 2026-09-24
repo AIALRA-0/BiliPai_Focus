@@ -209,7 +209,8 @@ class BottomBarMiuixPolicyTest {
 
         assertTrue(floating.contains("rememberCombinedBackdrop(backdrop, tabsBackdrop)"))
         assertTrue(floating.contains(".then(tabsBackdropSource?.modifier ?: Modifier)"))
-        assertTrue(floating.contains("FloatingBottomBarIndicatorHeight: Dp = 56.dp"))
+        assertTrue(floating.contains("const val IndicatorHeightDp = 56f"))
+        assertTrue(floating.contains("FloatingBottomBarIndicatorHeight: Dp = FloatingBottomBarLayoutSpec.IndicatorHeightDp.dp"))
         assertTrue(renderer.contains("FloatingBottomBar("))
         assertTrue(renderer.contains("indicatorHeight = resolveBiliPaiBottomBarIndicatorHeight(dockHeight)"))
         assertTrue(

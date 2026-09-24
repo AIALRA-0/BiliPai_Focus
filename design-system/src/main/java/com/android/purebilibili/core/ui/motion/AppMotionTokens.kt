@@ -169,6 +169,46 @@ object AppMotionTokens {
         visibilityThreshold = 0.5f,
     )
 
+    /** Spring-following value used by the floating dock's damped drag kernel. */
+    fun floatingDockDampedValueSpring(visibilityThreshold: Float): SpringSpec<Float> = spring(
+        dampingRatio = 1f,
+        stiffness = 1_000f,
+        visibilityThreshold = visibilityThreshold,
+    )
+
+    /** Smooths sampled drag velocity before it drives floating dock deformation. */
+    fun floatingDockDampedVelocitySpring(visibilityThreshold: Float): SpringSpec<Float> = spring(
+        dampingRatio = 0.5f,
+        stiffness = 300f,
+        visibilityThreshold = visibilityThreshold,
+    )
+
+    /** Settles the dock's pressed feedback without changing its existing response. */
+    fun floatingDockPressProgressSpring(): SpringSpec<Float> = spring(
+        dampingRatio = 1f,
+        stiffness = 1_000f,
+        visibilityThreshold = 0.001f,
+    )
+
+    /** Expands and contracts the floating indicator's drag progress. */
+    fun floatingDockIndicatorProgressSpring(): SpringSpec<Float> = floatingDockIndicatorPrimarySpring()
+
+    /** X-axis indicator stretch used by the floating dock's HyperIsland motion. */
+    fun floatingDockIndicatorScaleXSpring(): SpringSpec<Float> = floatingDockIndicatorPrimarySpring()
+
+    /** Y-axis indicator stretch used by the floating dock's HyperIsland motion. */
+    fun floatingDockIndicatorScaleYSpring(): SpringSpec<Float> = spring(
+        dampingRatio = 0.7f,
+        stiffness = 250f,
+        visibilityThreshold = 0.001f,
+    )
+
+    private fun floatingDockIndicatorPrimarySpring(): SpringSpec<Float> = spring(
+        dampingRatio = 0.6f,
+        stiffness = 250f,
+        visibilityThreshold = 0.001f,
+    )
+
     /** Constant-speed pulse used for live-status indicators. */
     fun <T> livePulseSpec(): TweenSpec<T> = linearTweenSpec(durationMillis = 1_200)
 

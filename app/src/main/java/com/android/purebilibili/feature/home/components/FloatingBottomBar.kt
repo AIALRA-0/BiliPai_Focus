@@ -82,6 +82,7 @@ import com.android.purebilibili.feature.home.components.liquid.rememberCombinedB
 import com.android.purebilibili.feature.home.components.liquid.vibrancy
 import com.android.purebilibili.core.store.LiquidGlassReadabilityMode
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorGeometry
 import com.android.purebilibili.feature.home.HomeVisualPalette
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
@@ -91,7 +92,6 @@ import com.android.purebilibili.feature.home.components.miuix.InteractiveHighlig
 import kotlin.math.abs
 import kotlin.math.sign
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -102,6 +102,15 @@ import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.material3.LocalContentColor as M3LocalContentColor
 import top.yukonga.miuix.kmp.theme.LocalContentColor as MiuixLocalContentColor
+
+private object FloatingBottomBarLayoutSpec {
+    const val IndicatorHeightDp = 56f
+    const val DefaultShellHeightDp = 56f
+    const val ItemContentGapDp = 1f
+    const val RubberBandDistanceDp = 4f
+    const val DockShadowRadiusDp = 10f
+    const val FallbackBlurRadiusDp = 25f
+}
 
 val LocalFloatingBottomBarContentColor = staticCompositionLocalOf { Color.Unspecified }
 
@@ -179,10 +188,14 @@ fun PlainMiuixFloatingBottomBar(
         modifier = modifier
             .dropShadow(
                 shape = shape,
-                shadow = Shadow(radius = 10.dp, color = HomeVisualPalette.GlassDark, alpha = 0.12f),
+                shadow = Shadow(
+                    radius = FloatingBottomBarLayoutSpec.DockShadowRadiusDp.dp,
+                    color = HomeVisualPalette.GlassDark,
+                    alpha = 0.12f,
+                ),
             )
             .background(colors.containerColor, shape)
-            .padding(4.dp),
+            .padding(AppSpacingTokens.ExtraSmall),
     ) {
         val itemWidth = maxWidth / safeCount
         val itemWidthPx = with(density) { itemWidth.toPx() }
@@ -258,9 +271,9 @@ fun PlainMiuixFloatingBottomBar(
 }
 
 /** Flatter resting indicator; the shell and indicator retain the same capsule shape. */
-val FloatingBottomBarIndicatorHeight: Dp = 56.dp
+val FloatingBottomBarIndicatorHeight: Dp = FloatingBottomBarLayoutSpec.IndicatorHeightDp.dp
 
-val FloatingBottomBarDefaultShellHeight: Dp = 56.dp
+val FloatingBottomBarDefaultShellHeight: Dp = FloatingBottomBarLayoutSpec.DefaultShellHeightDp.dp
 
 const val FloatingBottomBarPressedScale: Float =
     com.android.purebilibili.core.ui.BottomBarReferencePressedScale
@@ -422,7 +435,10 @@ fun RowScope.FloatingBottomBarItem(
                 // Keep badge pixels outside the item bounds.
                 clip = false
             },
-        verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(
+            FloatingBottomBarLayoutSpec.ItemContentGapDp.dp,
+            Alignment.CenterVertically,
+        ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         val columnScope = this
@@ -449,11 +465,11 @@ fun FloatingBottomBar(
     shellHeight: Dp = FloatingBottomBarDefaultShellHeight,
     indicatorHeight: Dp = FloatingBottomBarIndicatorHeight,
     indicatorWidth: Dp? = null,
-    minimumIndicatorWidth: Dp = 0.dp,
+    minimumIndicatorWidth: Dp = AppSpacingTokens.None,
     proportionalIndicatorReferenceWidth: Dp? = null,
     geometryMode: FloatingBottomBarGeometryMode = FloatingBottomBarGeometryMode.Dock,
-    contentHorizontalPadding: Dp = 4.dp,
-    contentVerticalPadding: Dp = 4.dp,
+    contentHorizontalPadding: Dp = AppSpacingTokens.ExtraSmall,
+    contentVerticalPadding: Dp = AppSpacingTokens.ExtraSmall,
     tapPressRefractionEnabled: Boolean = true,
     indicatorIdleSurfaceColorOverride: Color? = null,
     indicatorPositionProvider: (() -> Float)? = null,
@@ -472,8 +488,11 @@ fun FloatingBottomBar(
     val isLiquidGlassMode = mode == FloatingBottomBarMode.LiquidGlass
     val segmentedGeometry = geometryMode != FloatingBottomBarGeometryMode.Dock
     val allowOverflow = isLiquidGlassMode || !segmentedGeometry
-    val horizontalPadding = contentHorizontalPadding.coerceAtLeast(0.dp)
-    val verticalPadding = contentVerticalPadding.coerceIn(0.dp, shellHeight.coerceAtLeast(0.dp) / 2)
+    val horizontalPadding = contentHorizontalPadding.coerceAtLeast(AppSpacingTokens.None)
+    val verticalPadding = contentVerticalPadding.coerceIn(
+        AppSpacingTokens.None,
+        shellHeight.coerceAtLeast(AppSpacingTokens.None) / 2,
+    )
     val horizontalPaddingLatest = rememberUpdatedState(horizontalPadding)
     val pillShape = remember { resolveSharedBottomBarCapsuleShape() }
     val isBlurMode = mode == FloatingBottomBarMode.Blur
@@ -600,7 +619,7 @@ fun FloatingBottomBar(
 
     val offsetAnimation = remember { Animatable(0f) }
     val offsetJobHolder = remember { object { var job: Job? = null } }
-    val rubberBandPx = with(density) { 4.dp.toPx() }
+    val rubberBandPx = with(density) { FloatingBottomBarLayoutSpec.RubberBandDistanceDp.dp.toPx() }
     val panelOffset by remember(rubberBandPx) {
         derivedStateOf {
             if (totalWidthPx == 0f) {
@@ -721,7 +740,6 @@ fun FloatingBottomBar(
     }
     LaunchedEffect(dampedDragAnimation) {
         snapshotFlow { dampedDragAnimation.value }
-            .drop(1)
             .collect { position -> onIndicatorPositionChangedLatest.value?.invoke(position) }
     }
     val itemAlignmentOffsetProvider: (Int) -> Float = { itemIndex ->
@@ -888,7 +906,7 @@ fun FloatingBottomBar(
                     .dropShadow(
                         shape = pillShape,
                         shadow = Shadow(
-                            radius = 10.dp,
+                            radius = FloatingBottomBarLayoutSpec.DockShadowRadiusDp.dp,
                             color = HomeVisualPalette.GlassDark,
                             alpha = if (isInDark) 0.2f else 0.1f,
                         ),
@@ -949,7 +967,10 @@ fun FloatingBottomBar(
                                     backdrop = backdrop,
                                     shape = { pillShape },
                                     effects = {
-                                        blur(25.dp.toPx(), 25.dp.toPx())
+                                        blur(
+                                            FloatingBottomBarLayoutSpec.FallbackBlurRadiusDp.dp.toPx(),
+                                            FloatingBottomBarLayoutSpec.FallbackBlurRadiusDp.dp.toPx(),
+                                        )
                                     },
                                     onDrawSurface = {
                                         drawRect(containerColor.copy(alpha = 0.65f))

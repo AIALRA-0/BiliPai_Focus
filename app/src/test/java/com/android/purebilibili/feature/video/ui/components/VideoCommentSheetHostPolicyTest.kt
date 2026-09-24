@@ -101,6 +101,20 @@ class VideoCommentSheetHostPolicyTest {
                 forceInitialize = false
             )
         )
+        assertFalse(
+            shouldInitializeVideoCommentSheetHost(
+                mainSheetVisible = false,
+                forceInitialize = true,
+                sortPreferenceLoaded = false
+            )
+        )
+        assertTrue(
+            shouldInitializeVideoCommentSheetHost(
+                mainSheetVisible = false,
+                forceInitialize = true,
+                sortPreferenceLoaded = true
+            )
+        )
     }
 
     @Test

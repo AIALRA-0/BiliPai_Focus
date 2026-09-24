@@ -586,6 +586,8 @@ class VideoPlaybackUseCase(
                     val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
                     val isAv1Supported = isAv1SupportedOverride
                         ?: com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+                    val dolbyAudioCapabilities =
+                        com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
 
                     val selection = resolvePlaybackSelection(
                         playUrlData = playData,
@@ -595,7 +597,9 @@ class VideoPlaybackUseCase(
                         videoCodecPreference = videoCodecPreference,
                         videoSecondCodecPreference = videoSecondCodecPreference,
                         isHevcSupported = isHevcSupported,
-                        isAv1Supported = isAv1Supported
+                        isAv1Supported = isAv1Supported,
+                        isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                        isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
                     )
 
                     if (selection == null) {
@@ -853,10 +857,8 @@ class VideoPlaybackUseCase(
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
         isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
-        isDolbyAudioSupported: Boolean =
-            com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
-        isDolbyAudioSoftwareDecoded: Boolean =
-            com.android.purebilibili.core.util.MediaUtils.isDolbySoftwareAudioDecoderRequired(),
+        isDolbyAudioSupported: Boolean,
+        isDolbyAudioSoftwareDecoded: Boolean,
         playWhenReady: Boolean = true
     ): QualitySwitchResult? {
         if (cachedVideos.isEmpty()) {
@@ -976,10 +978,6 @@ class VideoPlaybackUseCase(
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
         isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
-        isDolbyAudioSupported: Boolean =
-            com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
-        isDolbyAudioSoftwareDecoded: Boolean =
-            com.android.purebilibili.core.util.MediaUtils.isDolbySoftwareAudioDecoderRequired(),
         playWhenReady: Boolean = true
     ): QualitySwitchResult? {
         Logger.d("VideoPlaybackUseCase", " changeQualityFromApi: bvid=$bvid, cid=$cid, target=$qualityId")
@@ -1002,6 +1000,8 @@ class VideoPlaybackUseCase(
         val dashVideoIds = playUrlData.dash?.video?.map { it.id }?.distinct()?.sortedDescending()
         Logger.d("VideoPlaybackUseCase", " API returned: quality=$returnedQuality, accept_quality=$acceptQualities")
         Logger.d("VideoPlaybackUseCase", " DASH videos available: $dashVideoIds")
+        val dolbyAudioCapabilities =
+            com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
 
         val selection = resolvePlaybackSelection(
             playUrlData = playUrlData,
@@ -1013,8 +1013,8 @@ class VideoPlaybackUseCase(
             playbackQualityMode = effectivePlaybackQualityMode,
             isHevcSupported = isHevcSupported,
             isAv1Supported = isAv1Supported,
-            isDolbyAudioSupported = isDolbyAudioSupported,
-            isDolbyAudioSoftwareDecoded = isDolbyAudioSoftwareDecoded
+            isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+            isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
         ) ?: run {
             Logger.d("VideoPlaybackUseCase", " Video URL is empty")
             return null
@@ -1098,10 +1098,8 @@ class VideoPlaybackUseCase(
         playbackQualityMode: PlaybackQualityMode = PlaybackQualityMode.AUTO,
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
         isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
-        isDolbyAudioSupported: Boolean =
-            com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
-        isDolbyAudioSoftwareDecoded: Boolean =
-            com.android.purebilibili.core.util.MediaUtils.isDolbySoftwareAudioDecoderRequired()
+        isDolbyAudioSupported: Boolean,
+        isDolbyAudioSoftwareDecoded: Boolean
     ): PlaybackSelectionResult? {
         val dashVideo = playUrlData.dash?.getBestVideo(
             targetQuality,

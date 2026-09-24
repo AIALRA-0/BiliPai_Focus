@@ -5,7 +5,7 @@ import com.android.purebilibili.data.model.response.VideoItem
 /**
  * 「首页推荐流 App+Web 合并」策略。
  *
- * 移植自 BiliPai 首页推荐流合并模式：同时请求 web 端与 app 端两个推荐接口，
+ * 移植自 PiliNara 首页推荐流合并模式：同时请求 web 端与 app 端两个推荐接口，
  * 将两者交错合并、按视频去重，从而让首页获得两平台推荐的整体并集。
  *
  * 纯函数、无副作用，便于单元测试。

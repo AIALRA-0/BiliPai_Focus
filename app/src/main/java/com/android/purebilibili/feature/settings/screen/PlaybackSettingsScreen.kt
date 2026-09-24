@@ -78,6 +78,9 @@ import com.android.purebilibili.core.ui.animation.entrance
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  *  播放设置二级页面
@@ -165,9 +168,10 @@ fun PlaybackSettingsContent(
     val playerDiagnosticLoggingEnabled by com.android.purebilibili.core.store.SettingsManager
         .getPlayerDiagnosticLoggingEnabled(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED)
-    val playerInsightMode by SettingsManager
-        .getPlayerInsightMode(context)
-        .collectAsStateWithLifecycle(initialValue = SettingsManager.getPlayerInsightModeSync(context))
+    val playerInsightModeFlow: Flow<PlayerSettingsStore.PlayerInsightMode?> = remember(context) {
+        SettingsManager.getPlayerInsightMode(context).map { it }
+    }
+    val playerInsightMode by playerInsightModeFlow.collectAsStateWithLifecycle(initialValue = null)
     val dashSegmentRequestsEnabled by com.android.purebilibili.core.store.SettingsManager
         .getDashSegmentRequestsEnabled(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED)
@@ -732,27 +736,45 @@ fun PlaybackSettingsContent(
                 Box(modifier = Modifier.entrance()) {
                     val scope = rememberCoroutineScope()
                     AppPreferenceGroup {
-	                        SettingsSingleChoicePreference(
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_STATS),
-                            title = "屏幕显示播放状态",
-                            subtitle = when (playerInsightMode) {
-                                PlayerSettingsStore.PlayerInsightMode.OFF -> "不显示播放状态信息"
-                                PlayerSettingsStore.PlayerInsightMode.SMART -> "打开控制栏时显示；发生掉帧或软件解码时保持可见"
-                                PlayerSettingsStore.PlayerInsightMode.ALWAYS -> "始终显示编码、码率、掉帧等播放信息"
-                            },
-                            options = listOf(
-                                AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.OFF, "关闭"),
-                                AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.SMART, "智能显示"),
-                                AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.ALWAYS, "始终显示"),
-                            ),
-                            selectedValue = playerInsightMode,
-                            onSelectionChange = { mode ->
-                                playbackInsightScope.launch {
-                                    SettingsManager.setPlayerInsightMode(context, mode)
-                                }
-                            },
-                            iconTint = iOSSystemGray,
-                        )
+                        val playerStatsIcon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_STATS)
+                        if (playerInsightMode == null) {
+                            AppPreference(
+                                icon = playerStatsIcon,
+                                title = "屏幕显示播放状态",
+                                subtitle = "正在读取设置",
+                                showChevron = false,
+                                iconTint = iOSSystemGray,
+                                trailingContent = {
+                                    AppCircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                },
+                            )
+                        } else {
+                            SettingsSingleChoicePreference(
+                                icon = playerStatsIcon,
+                                title = "屏幕显示播放状态",
+                                subtitle = when (playerInsightMode) {
+                                    PlayerSettingsStore.PlayerInsightMode.OFF -> "不显示播放状态信息"
+                                    PlayerSettingsStore.PlayerInsightMode.SMART -> "打开控制栏时显示；发生掉帧或软件解码时保持可见"
+                                    PlayerSettingsStore.PlayerInsightMode.ALWAYS -> "始终显示编码、码率、掉帧等播放信息"
+                                    null -> error("Player insight mode is resolved before rendering the selector")
+                                },
+                                options = listOf(
+                                    AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.OFF, "关闭"),
+                                    AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.SMART, "智能显示"),
+                                    AppSegmentOption(PlayerSettingsStore.PlayerInsightMode.ALWAYS, "始终显示"),
+                                ),
+                                selectedValue = checkNotNull(playerInsightMode),
+                                onSelectionChange = { mode ->
+                                    playbackInsightScope.launch {
+                                        SettingsManager.setPlayerInsightMode(context, mode)
+                                    }
+                                },
+                                iconTint = iOSSystemGray,
+                            )
+                        }
                         AppPreferenceDivider()
 	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_DIAGNOSTIC_LOGS),

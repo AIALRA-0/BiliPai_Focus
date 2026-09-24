@@ -175,7 +175,7 @@ fun BangumiReviewScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .layerBackdrop(reviewChromeBackdrop)
-                    .background(MaterialTheme.colorScheme.background),
+                    .background(AppSurfaceTokens.background()),
             )
             Column(modifier = Modifier.fillMaxSize()) {
             Row(

@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 
@@ -189,6 +190,7 @@ enum class HapticType {
 @Composable
 fun rememberHapticFeedback(): (HapticType) -> Unit {
     val view = LocalView.current
+    val hapticFeedbackEnabled = rememberUpdatedState(LocalAppThemeConfig.current.hapticFeedbackEnabled)
     return remember(view) {
         { type: HapticType ->
             val feedbackConstant = when (type) {
@@ -215,8 +217,7 @@ fun rememberHapticFeedback(): (HapticType) -> Unit {
                     }
                 }
             }
-            // [新增] 全局触感反馈开关检查
-            if (com.android.purebilibili.core.store.SettingsManager.isHapticFeedbackEnabledSync(view.context)) {
+            if (hapticFeedbackEnabled.value) {
                 view.performHapticFeedback(feedbackConstant)
             }
         }

@@ -6,6 +6,7 @@ import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.network.policy.HomeFeedAnonymizerRuntime
 import com.android.purebilibili.core.network.policy.resolveHardcodedDnsFallback
 import com.android.purebilibili.core.network.policy.resolveHomeFeedCookieAnonymizerDecision
+import com.android.purebilibili.core.network.policy.shouldStripMergedAppFeedCookies
 import com.android.purebilibili.core.network.policy.shouldEnableTrustAllCertificates
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.AccountSessionStore
@@ -36,6 +37,12 @@ import javax.net.ssl.X509TrustManager
 internal const val BANGUMI_PLAY_URL_PATH = "pgc/player/web/v2/playurl"
 internal const val BANGUMI_PLAY_URL_LEGACY_PATH = "pgc/player/web/playurl"
 internal const val FORCE_COOKIE_HEADER = "X-BiliPai-Force-Cookie"
+
+//  合并模式 App 半边身份头取值 — 对齐 PiliNara 原版 app 端点请求头
+//  (原版 fp_local/fp_remote 使用同一组固定值, session_id 为固定占位)
+private const val MERGED_APP_FEED_FP =
+    "1111111111111111111111111111111111111111111111111111111111111111"
+private const val MERGED_APP_FEED_SESSION_ID = "11111111"
 
 internal fun applyForcedCookieHeader(request: okhttp3.Request): okhttp3.Request {
     val forcedCookie = request.header(FORCE_COOKIE_HEADER) ?: return request
@@ -75,17 +82,27 @@ private class AppSessionCookieJar : okhttp3.CookieJar {
             return emptyList()
         }
 
+        //  合并模式 App 半边: 对齐 PiliNara 原版(app 端点不注入 cookie, 由身份头 + access_key + 签名承担)
+        if (shouldStripMergedAppFeedCookies(
+                host = url.host,
+                encodedPath = url.encodedPath,
+                mobiApp = url.queryParameter("mobi_app")
+            )
+        ) {
+            com.android.purebilibili.core.util.Logger.d(
+                "CookieJar",
+                " 合并模式 App 半边匿名取流: ${url.encodedPath}, clearCookieHeader=true"
+            )
+            return emptyList()
+        }
+
         val cookies = mutableListOf<okhttp3.Cookie>()
 
         synchronized(cookieLock) {
             cookieStore[url.host]?.let { cookies.addAll(it) }
         }
 
-        var buvid3 = TokenManager.buvid3Cache
-        if (buvid3.isNullOrEmpty()) {
-            buvid3 = UUID.randomUUID().toString() + "infoc"
-            TokenManager.buvid3Cache = buvid3
-        }
+        val buvid3 = TokenManager.getOrCreateBuvid3()
         if (cookies.none { it.name == "buvid3" }) {
             cookies.add(
                 okhttp3.Cookie.Builder()
@@ -2908,7 +2925,11 @@ object NetworkModule {
             .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             //  [性能优化] HTTP 磁盘缓存 - 10MB，减少重复请求
             .cache(okhttp3.Cache(
-                directory = java.io.File(appContext?.cacheDir ?: java.io.File("/tmp"), "okhttp_cache"),
+                // cacheDir 会在首次访问时检查/创建目录；客户端可能在主线程初始化。
+                // 应用私有缓存目录与 Context.cacheDir 相同，实际磁盘初始化交给 OkHttp 请求线程。
+                directory = appContext?.applicationInfo?.dataDir
+                    ?.let { java.io.File(it, "cache/okhttp_cache") }
+                    ?: java.io.File("/tmp/okhttp_cache"),
                 maxSize = resolveApiHttpCacheBudgetBytes()
             ))
             //  [性能优化] 连接池优化 - 保持更多空闲连接
@@ -3034,8 +3055,16 @@ object NetworkModule {
                 val loginBuvid = original.header("X-BiliPai-Login-Buvid")
                 //  合并模式 App 半边(匿名 android_hd 取流)同样需要 HD 身份头(UA/app-key/buvid),
                 //  仅当请求带 mobi_app=android_hd 时命中, 不影响原 TV 取流(mobi_app=android)
-                val isHdFeedRequest = url.encodedPath == "/x/v2/feed/index" &&
-                    url.queryParameter("mobi_app") == "android_hd"
+                val isHdFeedRequest = shouldStripMergedAppFeedCookies(
+                    host = url.host,
+                    encodedPath = url.encodedPath,
+                    mobiApp = url.queryParameter("mobi_app"),
+                )
+                val requestBuvid = if (isHdFeedRequest) {
+                    loginBuvid?.takeIf { it.isNotBlank() } ?: TokenManager.getOrCreateBuvid3()
+                } else {
+                    loginBuvid ?: TokenManager.buvid3Cache.orEmpty()
+                }
                 val isAndroidHdLoginEndpoint = androidHdLoginAppKeyHeader != null || isHdFeedRequest
                 val isSpaceAppRequest = url.host == "app.bilibili.com" &&
                     (url.encodedPath == "/x/v2/space" || url.encodedPath == "/x/v2/space/likearc")
@@ -3058,7 +3087,7 @@ object NetworkModule {
                 if (androidHdLoginAppKeyHeader != null || isHdFeedRequest) {
                     builder
                         .header("app-key", androidHdLoginAppKeyHeader ?: "android_hd")
-                        .header("buvid", loginBuvid ?: TokenManager.buvid3Cache.orEmpty())
+                        .header("buvid", requestBuvid)
                         .removeHeader("X-BiliPai-Login-Buvid")
                         .header("bili-http-engine", "cronet")
                         .header("env", "prod")
@@ -3074,6 +3103,16 @@ object NetworkModule {
                         .header("env", "prod")
                         .header("app-key", "android64")
                         .header("x-bili-aurora-zone", "sh001")
+                }
+                if (isHdFeedRequest) {
+                    //  合并模式 App 半边: 补齐 PiliNara 原版 app 端点身份头
+                    //  (该端点由 CookieJar 剥离 cookie, 身份完全由此处请求头承担)
+                    builder
+                        .header("fp_local", MERGED_APP_FEED_FP)
+                        .header("fp_remote", MERGED_APP_FEED_FP)
+                        .header("session_id", MERGED_APP_FEED_SESSION_ID)
+                        .header("x-bili-aurora-eid", "")
+                        .header("x-bili-aurora-zone", "")
                 }
                 if (androidHdLoginAppKeyHeader != null) {
                     // Match PiliPlus LoginHttp.headers exactly for Passport App requests.

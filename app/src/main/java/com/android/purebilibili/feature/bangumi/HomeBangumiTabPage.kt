@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppLiquidAwareTabRow
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.feature.download.DownloadManager
@@ -80,7 +80,7 @@ fun HomeBangumiTabPage(
         Box(
             modifier = Modifier.fillMaxSize()
                 .then(chromeSource?.modifier ?: Modifier)
-                .globalWallpaperAwareBackground(MaterialTheme.colorScheme.background),
+                .globalWallpaperAwareBackground(AppSurfaceTokens.background()),
         ) {
             BangumiHubContent(
                 state = state,

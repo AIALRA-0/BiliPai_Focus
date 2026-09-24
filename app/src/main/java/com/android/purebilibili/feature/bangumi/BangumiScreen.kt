@@ -261,7 +261,7 @@ fun BangumiScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(chromeSource?.modifier ?: Modifier)
-                    .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
+                    .then(if (hazeReady && hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
                     .globalWallpaperAwareBackground(MaterialTheme.colorScheme.background),
             ) {
                 Box(modifier = Modifier.fillMaxSize().responsiveContentWidth()) {

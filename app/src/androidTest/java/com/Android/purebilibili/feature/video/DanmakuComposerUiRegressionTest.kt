@@ -28,6 +28,13 @@ class DanmakuComposerUiRegressionTest {
             }
         }
 
+        // The dialog requests focus after its window has attached; wait for that
+        // asynchronous request before checking the resulting focus state.
+        composeTestRule.waitUntil(2_000) {
+            runCatching {
+                composeTestRule.onNodeWithTag("danmaku_compact_input").assertIsFocused()
+            }.isSuccess
+        }
         composeTestRule.onNodeWithTag("danmaku_compact_input").assertIsFocused()
         composeTestRule.onNodeWithText("未发送草稿").assertIsDisplayed()
         composeTestRule.onNodeWithText("颜色").assertDoesNotExist()

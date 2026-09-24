@@ -81,7 +81,7 @@ import com.android.purebilibili.core.store.AppNavigationSettings
 import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
 
 import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
-import com.android.purebilibili.core.plugin.skin.rememberUiSkinState
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
 //  从 components 包导入拆分后的组件
 import com.android.purebilibili.feature.home.components.BottomNavItem
 import com.android.purebilibili.feature.home.components.FluidHomeTopBar
@@ -181,6 +181,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止�
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map as mapFlow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
@@ -301,7 +303,7 @@ fun HomeScreen(
     val undoAvailable by viewModel.undoAvailable.collectAsStateWithLifecycle()
 // val pullRefreshState = rememberPullToRefreshState() // [Removed] Moved inside HorizontalPager
     val context = LocalContext.current
-    val uiSkinState by rememberUiSkinState(context)
+    val uiSkinState = LocalUiSkinState.current
     val homeUiSkinDecoration = rememberHomeUiSkinDecoration(uiSkinState)
     val overlayMotionSpec = remember { resolveHomeOverlayMotionSpec() }
     //  [Refactor] Use a map of grid states for each category to support HorizontalPager
@@ -444,17 +446,20 @@ fun HomeScreen(
     val isSubscriptionPluginPersistedEnabled by com.android.purebilibili.core.plugin.PluginStore
         .isEnabledFlow(context, com.android.purebilibili.feature.plugin.SubscriptionFeedPlugin.PLUGIN_ID)
         .collectAsStateWithLifecycle(initialValue = false)
-    val subscriptionFeedsEnabled = remember(
+    val subscriptionFeedsEnabled by produceState(
+        false,
         subscriptionRevision,
         installedPlugins,
         isSubscriptionPluginPersistedEnabled,
-        homeTopTabSettings,
+        context,
     ) {
-        com.android.purebilibili.core.plugin.feed.isSubscriptionPluginOrFeedEnabled(
-            context = context,
-            installedPlugins = installedPlugins,
-            isPluginPersistedEnabled = isSubscriptionPluginPersistedEnabled,
-        )
+        value = withContext(Dispatchers.IO) {
+            com.android.purebilibili.core.plugin.feed.isSubscriptionPluginOrFeedEnabled(
+                context = context,
+                installedPlugins = installedPlugins,
+                isPluginPersistedEnabled = isSubscriptionPluginPersistedEnabled,
+            )
+        }
     }
     val topTabEntries = remember(homeTopTabSettings, focusSettings, subscriptionFeedsEnabled) {
         val configuredEntries = resolveHomeTopTabEntries(
@@ -2258,10 +2263,13 @@ fun HomeScreen(
                                  val categoryError = categoryState.error
                                  if (categoryError != null && categoryState.videos.isEmpty()) {
                                  // Error State per page
+                                 val followingNeedsLogin = category == HomeCategory.FOLLOW && !user.isLogin
                                  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                      ModernErrorState(
                                          message = categoryError,
-                                         onRetry = { viewModel.refresh() }
+                                          onRetry = if (followingNeedsLogin) onProfileClick else ({ viewModel.refresh() }),
+                                         actionLabel = if (followingNeedsLogin) "去登录" else "点击重试",
+                                         enableEasterEgg = !followingNeedsLogin,
                                      )
                                  }
                                  } else {

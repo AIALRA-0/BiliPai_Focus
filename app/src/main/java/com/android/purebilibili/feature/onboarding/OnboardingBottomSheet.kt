@@ -61,6 +61,11 @@ import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 
+// Preserve existing local corner geometry across theme migrations.
+private object OnboardingShapeSpec {
+    const val Radius16Dp = 16
+}
+
 /**
  *  iOS 风格新手引导底部弹窗
  * 
@@ -306,7 +311,7 @@ private fun GithubLinkCard(
 ) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(OnboardingShapeSpec.Radius16Dp.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         tonalElevation = 1.dp,
     ) {

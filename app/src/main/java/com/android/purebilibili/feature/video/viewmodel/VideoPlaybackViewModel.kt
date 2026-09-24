@@ -1501,6 +1501,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
             sessionBlockedCodecs = sessionBlockedCodecs
         )
+        val dolbyAudioCapabilities =
+            com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
         val result = playbackUseCase.changeQualityFromCache(
             qualityId = current.currentQuality,
             cachedVideos = current.cachedDashVideos,
@@ -1514,6 +1516,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             videoSecondCodecPreference = videoSecondCodecPreference,
             isHevcSupported = isHevcSupported,
             isAv1Supported = isAv1Supported,
+            isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+            isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded,
             playWhenReady = playWhenReady
         ) ?: playbackUseCase.changeQualityFromApi(
             bvid = currentBvid,
@@ -3726,7 +3730,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
      * Preserves current position and play/pause state.
      * Reuses the existing [playResolvedPlayback] infrastructure.
      */
-    private fun applyHdrUpgrade(playbackKey: String, hdrData: PlayUrlData) {
+    private suspend fun applyHdrUpgrade(playbackKey: String, hdrData: PlayUrlData) {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
         val currentPos = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
         val wasPlaying = exoPlayer?.isPlaying ?: false
@@ -3745,6 +3749,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val videoSecondCodecPreference = _videoSecondCodecPreference.value
         val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
         val isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+        val dolbyAudioCapabilities =
+            com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
         val audioQualityPreference = current.requestedAudioQuality
         val hdrPlaybackQualityMode = PlaybackQualityMode.LOCKED(125)
 
@@ -3757,7 +3763,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             videoSecondCodecPreference = videoSecondCodecPreference,
             playbackQualityMode = hdrPlaybackQualityMode,
             isHevcSupported = isHevcSupported,
-            isAv1Supported = isAv1Supported
+            isAv1Supported = isAv1Supported,
+            isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+            isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
         ) ?: run {
             Logger.d(
                 "PlayerVM",
@@ -6891,6 +6899,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
         val currentDashVideo = current.cachedDashVideos.find { it.id == qualityId }
         val currentDashAudio = current.cachedDashAudios.firstOrNull()
+        val dolbyAudioCapabilities =
+            com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
 
         val directVideoUrl = when {
             isCurrentTarget && qualityId == current.currentQuality -> current.playUrl
@@ -6910,7 +6920,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             val selection = playUrlData?.let {
                 playbackUseCase.resolvePlaybackSelection(
                     playUrlData = it,
-                    targetQuality = qualityId
+                    targetQuality = qualityId,
+                    isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                    isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
                 )
             }
             val videoUrl = selection?.videoUrl.orEmpty()
@@ -7207,6 +7219,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
                     sessionBlockedCodecs = sessionBlockedCodecs
                 )
+                val dolbyAudioCapabilities =
+                    com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
 
                 val result = playbackUseCase.changeQualityFromCache(
                     qualityId = qualityId,
@@ -7221,6 +7235,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     videoSecondCodecPreference = videoSecondCodecPreference,
                     isHevcSupported = isHevcSupported,
                     isAv1Supported = isAv1Supported,
+                    isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                    isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded,
                     playWhenReady = playWhenReadyAfterSwitch
                 ) ?: playbackUseCase.changeQualityFromApi(
                     bvid = currentBvid,
@@ -7374,6 +7390,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
                         sessionBlockedCodecs = sessionBlockedCodecs
                     )
+                    val dolbyAudioCapabilities =
+                        com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
                     
                     val selection = playbackUseCase.resolvePlaybackSelection(
                         playUrlData = playUrlData,
@@ -7383,7 +7401,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         videoSecondCodecPreference = videoSecondCodecPreference,
                         playbackQualityMode = current.playbackQualityMode,
                         isHevcSupported = isHevcSupported,
-                        isAv1Supported = isAv1Supported
+                        isAv1Supported = isAv1Supported,
+                        isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                        isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
                     )
                     val restoredPosition = resolvePageSwitchStartPositionMs(
                         cachedPositionMs = playbackUseCase.getCachedPosition(targetBvid, page.cid),
@@ -7590,6 +7610,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
                 sessionBlockedCodecs = sessionBlockedCodecs
             )
+            val dolbyAudioCapabilities =
+                com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
 
             val selection = playbackUseCase.resolvePlaybackSelection(
                 playUrlData = playUrlData,
@@ -7599,7 +7621,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 videoSecondCodecPreference = videoSecondCodecPreference,
                 playbackQualityMode = current.playbackQualityMode,
                 isHevcSupported = isHevcSupported,
-                isAv1Supported = isAv1Supported
+                isAv1Supported = isAv1Supported,
+                isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
             ) ?: return false
 
             val cdnSelection = resolvePlaybackCdnCandidateSelection(

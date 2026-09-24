@@ -55,6 +55,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 internal fun LargeScreenVideoLayout(
     playerState: VideoPlayerState,
     uiState: VideoPlaybackUiState,
+    focusRelatedVideosVisible: Boolean,
     commentState: CommentUiState,
     engagementState: VideoEngagementUiState,
     subReplyState: SubReplyUiState,
@@ -123,9 +124,10 @@ internal fun LargeScreenVideoLayout(
         }
         val applySideStatusBarPadding =
             metrics.mode != LargeScreenVideoLayoutMode.AlmostSquare
-        val showRelatedInIntro = resolveShowRelatedInIntro(metrics.mode)
+        val showRelatedInIntro = focusRelatedVideosVisible && resolveShowRelatedInIntro(metrics.mode)
         val relatedTabFirst = resolveRelatedTabFirstInSecondary(metrics.mode)
-        val includeRelatedTab = resolveIncludeRelatedTabInSecondary(metrics.mode)
+        val includeRelatedTab = focusRelatedVideosVisible &&
+            resolveIncludeRelatedTabInSecondary(metrics.mode)
         val success = uiState as? VideoPlaybackUiState.Success
         val player: @Composable (Modifier) -> Unit = { modifier ->
             LargeScreenPlayerHost(
@@ -220,6 +222,7 @@ internal fun LargeScreenVideoLayout(
                     },
                     applyStatusBarPadding = applySideStatusBarPadding,
                     includeRelatedTab = includeRelatedTab,
+                    focusRelatedVideosVisible = focusRelatedVideosVisible,
                     includeOwnerUploadsTab = true,
                     relatedTabFirst = relatedTabFirst,
                 )

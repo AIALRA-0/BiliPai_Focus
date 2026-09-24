@@ -28,6 +28,11 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 
+// Keep this component's established pixel geometry across theme migrations.
+private object DynamicVoteLayoutSpec {
+    const val OptionWidthDp = 66
+}
+
 @Composable
 fun DynamicCreateVoteDialog(
     onDismiss: () -> Unit,
@@ -81,7 +86,7 @@ fun DynamicCreateVoteDialog(
                         items = choiceLabels,
                         selectedIndex = if (choiceCount == 1) 0 else 1,
                         onSelected = { index -> choiceCount = if (index == 0) 1 else 2 },
-                        itemWidth = 66.dp,
+                        itemWidth = DynamicVoteLayoutSpec.OptionWidthDp.dp,
                         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
                         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
                         labelFontSize = DynamicTypographyPolicy.segmentedControlLabelFontSize,
@@ -92,7 +97,7 @@ fun DynamicCreateVoteDialog(
                         items = durationLabels,
                         selectedIndex = when (durationDays) { 3 -> 1; 7 -> 2; else -> 0 },
                         onSelected = { index -> durationDays = listOf(1, 3, 7).getOrElse(index) { 1 } },
-                        itemWidth = 66.dp,
+                        itemWidth = DynamicVoteLayoutSpec.OptionWidthDp.dp,
                         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
                         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
                         labelFontSize = DynamicTypographyPolicy.segmentedControlLabelFontSize,

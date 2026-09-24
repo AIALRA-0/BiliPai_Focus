@@ -34,7 +34,9 @@ import com.android.purebilibili.feature.home.components.miuix.DampedDragTracking
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.Flow
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
 
 /**
  * Reuse wrapper around [FloatingBottomBar]. No local drawBackdrop / lens / vibrancy.
@@ -76,10 +78,10 @@ internal fun BottomBarFloatingSegmentedControl(
     if (items.isEmpty()) return
 
     val context = LocalContext.current
-    val homeSettings by SettingsManager
-        .getHomeSettings(context)
-        .map { it as HomeSettings? }
-        .collectAsStateWithLifecycle(
+    val homeSettingsFlow: Flow<HomeSettings?> = remember(context) {
+        SettingsManager.getHomeSettings(context)
+    }
+    val homeSettings by homeSettingsFlow.collectAsStateWithLifecycle(
             // Do not render provisional chrome while the persisted setting is loading.
             initialValue = null
         )
@@ -141,10 +143,10 @@ internal fun BottomBarFloatingSegmentedControl(
     } else {
         FloatingBottomBarMode.None
     }
-    val effectiveHeight = height.coerceAtLeast(0.dp)
-    val effectiveItemWidth = itemWidth?.coerceAtLeast(48.dp)
-    val horizontalPadding = containerHorizontalPadding.coerceAtLeast(0.dp)
-    val verticalPadding = containerVerticalPadding.coerceIn(0.dp, effectiveHeight / 2)
+    val effectiveHeight = height.coerceAtLeast(AppSpacingTokens.None)
+    val effectiveItemWidth = itemWidth?.coerceAtLeast(AppChromeSizeTokens.MinimumTouchTarget)
+    val horizontalPadding = containerHorizontalPadding.coerceAtLeast(AppSpacingTokens.None)
+    val verticalPadding = containerVerticalPadding.coerceIn(AppSpacingTokens.None, effectiveHeight / 2)
     val contentWidth = effectiveItemWidth?.let { it * itemCount + horizontalPadding * 2 }
     val rootModifier = if (scrollState == null && contentWidth != null) {
         modifier.width(contentWidth)

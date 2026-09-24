@@ -63,6 +63,11 @@ private const val LIVE_DANMAKU_DEFAULT_MODE = 1
 /** 颜色选择器最多展示的色块数量 */
 private const val LIVE_DANMAKU_MAX_COLOR_SWATCHES = 8
 
+private object LiveSendDanmakuSheetLayoutSpec {
+    const val SheetMaxWidthDp = 640f
+    const val DanmakuModeMinTabWidthDp = 72f
+}
+
 /**
  * 发送直播弹幕弹窗
  *
@@ -92,7 +97,7 @@ fun LiveSendDanmakuSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 640.dp)
+                .widthIn(max = LiveSendDanmakuSheetLayoutSpec.SheetMaxWidthDp.dp)
                 .align(Alignment.CenterHorizontally)
                 .padding(
                     horizontal = AppSpacingTokens.ExtraLarge,
@@ -284,7 +289,7 @@ private fun DanmakuModeSelector(
             selectedValue = selectedMode,
             onSelectionChange = onModeSelected,
             scrollable = true,
-            minTabWidth = 72.dp,
+            minTabWidth = LiveSendDanmakuSheetLayoutSpec.DanmakuModeMinTabWidthDp.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentWidth(Alignment.CenterHorizontally),

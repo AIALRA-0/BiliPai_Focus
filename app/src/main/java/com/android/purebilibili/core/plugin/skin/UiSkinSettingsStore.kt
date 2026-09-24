@@ -3,11 +3,17 @@ package com.android.purebilibili.core.plugin.skin
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 
 private const val UI_SKIN_PREFS = "ui_skin_settings"
 private const val KEY_ENABLED = "enabled"
@@ -20,32 +26,37 @@ object UiSkinSettingsStore {
         val appContext = context.applicationContext
         return callbackFlow {
             val prefs = appContext.getSharedPreferences(UI_SKIN_PREFS, Context.MODE_PRIVATE)
-            fun sendLatest() {
-                trySend(readState(appContext))
-            }
             val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
                 if (key == KEY_ENABLED || key == KEY_SELECTED_SKIN_ID || key == KEY_SELECTED_INSTALL_ID) {
-                    sendLatest()
+                    // Preference callbacks can arrive on the main thread. Only invalidate here;
+                    // the snapshot and installed-package scan run in the IO flow context below.
+                    trySend(Unit)
                 }
             }
-            sendLatest()
             prefs.registerOnSharedPreferenceChangeListener(listener)
+            trySend(Unit)
             awaitClose {
                 prefs.unregisterOnSharedPreferenceChangeListener(listener)
             }
-        }.distinctUntilChanged()
+        }
+            .buffer(Channel.CONFLATED)
+            .map { readState(appContext) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.IO)
     }
 
-    fun readState(context: Context): UiSkinState {
-        val prefs = context.applicationContext.getSharedPreferences(UI_SKIN_PREFS, Context.MODE_PRIVATE)
+    private fun readState(context: Context): UiSkinState {
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences(UI_SKIN_PREFS, Context.MODE_PRIVATE)
         val selection = UiSkinSelection(
             enabled = prefs.getBoolean(KEY_ENABLED, false),
             selectedSkinId = prefs.getString(KEY_SELECTED_SKIN_ID, null),
             selectedInstallId = prefs.getString(KEY_SELECTED_INSTALL_ID, null)
         )
+        if (!selection.enabled) return UiSkinState()
         return resolveUiSkinState(
             selection = selection,
-            installedSkins = UiSkinInstallStore.createDefault(context).listInstalledPackages()
+            installedSkins = UiSkinInstallStore.createDefault(appContext).listInstalledPackages()
         )
     }
 
@@ -65,5 +76,7 @@ object UiSkinSettingsStore {
 
 @Composable
 fun rememberUiSkinState(context: Context): State<UiSkinState> {
-    return UiSkinSettingsStore.observe(context).collectAsStateWithLifecycle(initialValue = UiSkinState())
+    val appContext = context.applicationContext
+    val stateFlow = remember(appContext) { UiSkinSettingsStore.observe(appContext) }
+    return stateFlow.collectAsStateWithLifecycle(initialValue = UiSkinState())
 }

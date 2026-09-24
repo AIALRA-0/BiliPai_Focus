@@ -1335,15 +1335,6 @@ object SettingsManager {
 
     suspend fun setHapticFeedbackEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_HAPTIC_FEEDBACK_ENABLED] = value }
-        // 同步到 SharedPreferences，供同步读取 (例如 modifier 中)
-        context.getSharedPreferences("haptic_cache", Context.MODE_PRIVATE)
-            .edit().putBoolean("enabled", value).apply()
-    }
-
-    fun isHapticFeedbackEnabledSync(context: Context): Boolean {
-        // 优先读取缓存
-        return context.getSharedPreferences("haptic_cache", Context.MODE_PRIVATE)
-            .getBoolean("enabled", true)
     }
 
     fun getGlobalTextTapCopyEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data

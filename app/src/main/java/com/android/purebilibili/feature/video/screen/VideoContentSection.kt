@@ -1439,6 +1439,12 @@ internal fun VideoCommentTab(
     onSearchClick: (() -> Unit)? = null,
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
+    val context = LocalContext.current
+    val collapsedSubReplyPreviewLimit by SettingsManager
+        .getCommentCollapsedReplyPreviewLimit(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
+        )
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     val shouldLoadMore by remember(
         listState,
@@ -1529,6 +1535,7 @@ internal fun VideoCommentTab(
                         ReplyItemView(
                             showUpFlag = showUpFlag,
                             item = reply,
+                            collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
                             upMid = info.owner.mid,
                             emoteMap = emoteMap,
                             lightweightMode = lightweightCommentRendering,

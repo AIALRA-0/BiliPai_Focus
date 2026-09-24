@@ -44,10 +44,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import com.android.purebilibili.core.ui.components.AppListItem
 import com.android.purebilibili.core.ui.components.AppRadioButton
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.feature.dynamic.components.DynamicPublishComposer
 import com.android.purebilibili.feature.dynamic.components.saveDynamicImageToGallery
 import com.android.purebilibili.feature.dynamic.components.DynamicShareToMessageDialog
@@ -146,6 +147,16 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 val LocalDynamicScrollChannel = compositionLocalOf<Channel<DynamicScrollRequest>?> { null }
+
+private object DynamicScreenLayoutSpec {
+    const val RefreshDividerButtonHorizontalPaddingDp = 14f
+    const val RefreshDividerBackToTopClearanceDp = 76f
+    const val SelectedUserFilterItemWidthDp = 96f
+    const val SelectedUserFilterIndicatorHeightDp = 42f
+    const val SelectedUserFilterRowWidthDp = 304f
+    const val HorizontalUserNameMaxWidthDp = 128f
+    const val OldContentDividerTonalElevationDp = 1f
+}
 
 /**
  *  动态页面 - 支持两种布局模式
@@ -877,9 +888,20 @@ fun DynamicScreen(
                                     tab.logicalIndex,
                                     selectedUserId,
                                     selectedUserContentFilter,
+                                    focusFollowGroupConfig,
+                                    focusFollowGroupFilteringEnabled,
                                 ) {
-                                    resolveDynamicPagePresentation(state, tab.logicalIndex, selectedUserId)
+                                    val userFiltered = resolveDynamicPagePresentation(
+                                        state,
+                                        tab.logicalIndex,
+                                        selectedUserId,
+                                    )
                                         .withUserContentFilter(selectedUserContentFilter)
+                                    userFiltered.copy(items = filterDynamicItemsByFocusFollowGroups(
+                                        items = userFiltered.items,
+                                        config = focusFollowGroupConfig,
+                                        filterEnabled = focusFollowGroupFilteringEnabled,
+                                    ))
                                 }
                                 val pageDividerIndex = remember(pagePresentation) {
                                     if (pagePresentation.isSelectedUserFeed) {
@@ -1024,7 +1046,7 @@ fun DynamicScreen(
                                     onClick = { viewModel.toggleSidebar() },
                                     modifier = Modifier
                                         .align(if (sidebarOnRight) Alignment.CenterEnd else Alignment.CenterStart)
-                                        .padding(8.dp)
+                                        .padding(AppSpacingTokens.Small)
                                 ) {
                                     AppText(
                                         text = if (sidebarOnRight) "‹" else "›",
@@ -1285,21 +1307,27 @@ fun DynamicScreen(
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
-                        bottom = dynamicListBottomPadding + AppSpacingTokens.Medium + 76.dp,
+                        bottom = dynamicListBottomPadding + AppSpacingTokens.Medium +
+                            DynamicScreenLayoutSpec.RefreshDividerBackToTopClearanceDp.dp,
                     ),
                 enter = fadeIn() + scaleIn(initialScale = 0.92f),
                 exit = fadeOut() + scaleOut(targetScale = 0.92f),
             ) {
-                Button(
+                AppButton(
                     onClick = {
                         val gridIndex = resolveDynamicRefreshDividerGridIndex(oldContentDividerIndex)
                         if (gridIndex >= 0) {
                             scope.launch { activeListState?.animateScrollToItem(gridIndex) }
                         }
                     },
-                    modifier = Modifier.heightIn(min = 48.dp),
+                    modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
                     shape = RoundedCornerShape(DynamicScreenShapePolicy.refreshDividerLocatorButtonCornerRadiusDp.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(),
+                    elevation = ButtonDefaults.buttonElevation(),
+                    contentPadding = PaddingValues(
+                        horizontal = DynamicScreenLayoutSpec.RefreshDividerButtonHorizontalPaddingDp.dp,
+                        vertical = AppSpacingTokens.Small,
+                    ),
                 ) {
                     AppText("定位上次刷新")
                 }
@@ -1720,7 +1748,7 @@ private fun DynamicList(
                 ) {
                     com.android.purebilibili.core.ui.components.AppTextButton(
                         onClick = onContinueFocusAutoFill,
-                        modifier = Modifier.heightIn(min = 48.dp),
+                        modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
                     ) {
                         AppText("继续加载动态")
                     }
@@ -1799,11 +1827,11 @@ private fun DynamicSelectedUserFeedHeader(
             items = filters.map(DynamicUserContentFilter::label),
             selectedIndex = filters.indexOf(selectedFilter).coerceAtLeast(0),
             onSelected = { index -> filters.getOrNull(index)?.let(onFilterSelected) },
-            itemWidth = 96.dp,
+            itemWidth = DynamicScreenLayoutSpec.SelectedUserFilterItemWidthDp.dp,
             height = AppChromeSizeTokens.MinimumTouchTarget,
-            indicatorHeight = 42.dp,
+            indicatorHeight = DynamicScreenLayoutSpec.SelectedUserFilterIndicatorHeightDp.dp,
             labelFontSize = MaterialTheme.typography.labelLarge.fontSize,
-            modifier = Modifier.width(304.dp),
+            modifier = Modifier.width(DynamicScreenLayoutSpec.SelectedUserFilterRowWidthDp.dp),
         )
     }
 }
@@ -1854,7 +1882,7 @@ private fun DynamicEmptyState(
             Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
             com.android.purebilibili.core.ui.components.AppTextButton(
                 onClick = onContinue,
-                modifier = Modifier.heightIn(min = 48.dp),
+                modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
             ) {
                 AppText(continueLabel)
             }
@@ -1871,7 +1899,7 @@ private fun OldContentDivider(label: String) {
         shape = RoundedCornerShape(DynamicScreenShapePolicy.oldContentDividerCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        tonalElevation = 1.dp,
+        tonalElevation = DynamicScreenLayoutSpec.OldContentDividerTonalElevationDp.dp,
     ) {
         Column(
             modifier = Modifier
@@ -2037,7 +2065,7 @@ private fun HorizontalUserList(
                             // LazyRow 仍会在屏幕边缘自然裁切超出视口的内容。
                             modifier = Modifier.widthIn(
                                 min = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large,
-                                max = 128.dp,
+                                max = DynamicScreenLayoutSpec.HorizontalUserNameMaxWidthDp.dp,
                             )
                         )
                     }

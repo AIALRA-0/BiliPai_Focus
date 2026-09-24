@@ -15,6 +15,11 @@ class AppNavigationStartupRouteStructureTest {
         assertTrue(navigation.contains("produceState<Boolean?>"))
         assertTrue(navigation.contains("resolvedPortraitStartupRoute ?: return"))
         assertTrue(navigation.contains("resolveLaunchToPortraitFeedOnStartup(context)"))
+        assertTrue(
+            Regex("withContext\\(Dispatchers\\.IO\\)\\s*\\{\\s*SettingsManager\\.resolveLaunchToPortraitFeedOnStartup\\(context\\)")
+                .containsMatchIn(navigation)
+        )
+        assertFalse(navigation.contains("SettingsManager.getCachedLaunchToPortraitFeedOnStartup(context)"))
         assertFalse(navigation.contains("isLaunchToPortraitFeedOnStartupSync(context)"))
 
         val resolver = settings

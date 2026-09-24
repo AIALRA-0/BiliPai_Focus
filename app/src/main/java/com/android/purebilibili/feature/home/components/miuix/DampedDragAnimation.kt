@@ -4,7 +4,6 @@ package com.android.purebilibili.feature.home.components.miuix
 
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.getValue
@@ -16,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.IntSize
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -51,16 +51,16 @@ class DampedDragAnimation(
 ) {
 
     private val valueAnimationSpec =
-        spring(1f, 1000f, visibilityThreshold)
+        AppMotionTokens.floatingDockDampedValueSpring(visibilityThreshold)
     private val velocityAnimationSpec =
-        spring(0.5f, 300f, visibilityThreshold * 10f)
+        AppMotionTokens.floatingDockDampedVelocitySpring(visibilityThreshold * 10f)
     private val pressProgressAnimationSpec =
-        spring(1f, 1000f, 0.001f)
+        AppMotionTokens.floatingDockPressProgressSpring()
     // Motion tuning copied from HyperIsland's LiquidGlassNavigationBar.
     private val scaleXAnimationSpec =
-        spring(0.6f, 250f, 0.001f)
+        AppMotionTokens.floatingDockIndicatorScaleXSpring()
     private val scaleYAnimationSpec =
-        spring(0.7f, 250f, 0.001f)
+        AppMotionTokens.floatingDockIndicatorScaleYSpring()
 
     private val valueAnimation =
         Animatable(initialValue, visibilityThreshold)

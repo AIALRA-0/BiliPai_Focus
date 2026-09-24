@@ -20,7 +20,6 @@ import android.content.Context
 import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.Shader
 import android.os.Build
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -52,6 +51,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
@@ -110,11 +110,13 @@ import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.store.SettingsManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.components.AppTextField
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
@@ -125,6 +127,12 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.delay
+
+private const val COMMENT_THREAD_BACK_SETTLE_DURATION_MILLIS = 180
+private const val COMMENT_THREAD_DETAIL_FADE_IN_DURATION_MILLIS = 220
+private const val COMMENT_THREAD_DETAIL_SLIDE_IN_DURATION_MILLIS = 260
+private const val COMMENT_THREAD_DETAIL_FADE_OUT_DURATION_MILLIS = 200
+private const val COMMENT_THREAD_DETAIL_SLIDE_OUT_DURATION_MILLIS = 240
 
 @Composable
 fun DynamicCommentOverlayHost(
@@ -254,6 +262,12 @@ fun DynamicCommentSheet(
     onThreadCommentDelete: (Long) -> Unit = {},
     onThreadCommentReport: (Long, Int) -> Unit = { _, _ -> },
 ) {
+    val context = LocalContext.current
+    val collapsedSubReplyPreviewLimit by SettingsManager
+        .getCommentCollapsedReplyPreviewLimit(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
+        )
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var commentText by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
@@ -343,7 +357,7 @@ fun DynamicCommentSheet(
                 animationSpec = if (commentBackState.transitionState is NavigationEventTransitionState.InProgress) {
                     androidx.compose.animation.core.snap()
                 } else {
-                    tween(180)
+                    AppMotionTokens.fastOutSlowInTweenSpec(COMMENT_THREAD_BACK_SETTLE_DURATION_MILLIS)
                 },
                 label = "comment_thread_predictive_back",
             )
@@ -525,6 +539,7 @@ fun DynamicCommentSheet(
                         items(comments, key = { it.rpid }) { reply ->
                             ReplyItemView(
                                 item = reply,
+                                collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
                                 onClick = { onViewReplies(reply) },
                                 onSubClick = { root, _ -> onViewReplies(root) },
                                 onReplyClick = { onReply(reply) },
@@ -562,10 +577,24 @@ fun DynamicCommentSheet(
                 androidx.compose.animation.AnimatedVisibility(
                     visible = hostContent == DynamicCommentSheetHostContent.THREAD_DETAIL &&
                         subReplyState.rootReply != null,
-                    enter = fadeIn(animationSpec = tween(220)) +
-                        slideInVertically(animationSpec = tween(260)) { height -> height },
-                    exit = if (threadBackCompleted) androidx.compose.animation.ExitTransition.None else fadeOut(animationSpec = tween(200)) +
-                        slideOutVertically(animationSpec = tween(240)) { height -> height },
+                    enter = fadeIn(
+                        animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(
+                            COMMENT_THREAD_DETAIL_FADE_IN_DURATION_MILLIS
+                        )
+                    ) + slideInVertically(
+                        animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(
+                            COMMENT_THREAD_DETAIL_SLIDE_IN_DURATION_MILLIS
+                        )
+                    ) { height -> height },
+                    exit = if (threadBackCompleted) androidx.compose.animation.ExitTransition.None else fadeOut(
+                        animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(
+                            COMMENT_THREAD_DETAIL_FADE_OUT_DURATION_MILLIS
+                        )
+                    ) + slideOutVertically(
+                        animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(
+                            COMMENT_THREAD_DETAIL_SLIDE_OUT_DURATION_MILLIS
+                        )
+                    ) { height -> height },
                 ) {
                     val rootReply = subReplyState.rootReply
                     if (rootReply != null) {
@@ -746,6 +775,7 @@ fun DynamicInlineCommentHeader(
 
 fun LazyListScope.dynamicInlineCommentItems(
     comments: List<ReplyItem>,
+    collapsedSubReplyPreviewLimit: Int,
     isLoading: Boolean,
     isLoadingMore: Boolean,
     onViewReplies: (ReplyItem) -> Unit,
@@ -781,6 +811,7 @@ fun LazyListScope.dynamicInlineCommentItems(
         else -> items(comments, key = { it.rpid }) { reply ->
             ReplyItemView(
                 item = reply,
+                collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
                 onClick = { onViewReplies(reply) },
                 onSubClick = { root, _ -> onViewReplies(root) },
                 onReplyClick = { onReply(reply) },

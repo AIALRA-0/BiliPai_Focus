@@ -12,15 +12,28 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MiniPlayerManagerLeakCleanupTest {
+
+    @BeforeTest
+    fun setUp() {
+        Dispatchers.setMain(StandardTestDispatcher())
+    }
 
     @AfterTest
     fun tearDown() {
         unmockkAll()
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -38,6 +51,7 @@ class MiniPlayerManagerLeakCleanupTest {
 
             verify(exactly = 1) { mediaSession.release() }
         } finally {
+            manager.release()
             BackgroundManager.removeListener(manager)
         }
     }

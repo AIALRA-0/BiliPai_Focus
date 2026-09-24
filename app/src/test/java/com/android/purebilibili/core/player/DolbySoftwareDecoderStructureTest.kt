@@ -55,11 +55,10 @@ class DolbySoftwareDecoderStructureTest {
         )
 
         assertTrue(mediaUtils.contains("FfmpegLibrary.supportsFormat(MimeTypes.AUDIO_E_AC3)"))
-        assertTrue(
-            mediaUtils.contains(
-                "!isPlatformDolbyAudioDecoderSupported() && isDolbySoftwareAudioDecoderSupported()"
-            )
-        )
+        assertTrue(mediaUtils.contains("CachedAsyncBooleanProbe(Dispatchers.IO)"))
+        assertTrue(mediaUtils.contains("suspend fun awaitDolbyAudioCapabilities()"))
+        assertTrue(mediaUtils.contains("isDolbyAudioSoftwareDecoded = !platformSupported && softwareSupported"))
+        assertFalse(mediaUtils.contains("fun isDolbyAtmosAudioSupported()"))
         assertTrue(audioPolicy.contains("\"杜比音频\" else \"杜比全景声\""))
     }
 

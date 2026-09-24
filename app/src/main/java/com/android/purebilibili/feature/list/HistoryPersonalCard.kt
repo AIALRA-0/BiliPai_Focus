@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -98,6 +99,11 @@ internal fun resolveHistoryProgressLabel(progress: Int, duration: Int): String =
 internal fun canAddHistoryToWatchLater(item: HistoryItem): Boolean =
     item.business == HistoryBusiness.ARCHIVE && item.videoItem.id > 0L
 
+private object HistoryPersonalCardLayoutSpec {
+    const val CardVerticalPaddingDp = 5f
+    const val ActionGlyphSizeDp = 18f
+}
+
 @Composable
 internal fun HistoryPersonalCardSkeleton(
     modifier: Modifier = Modifier,
@@ -110,7 +116,10 @@ internal fun HistoryPersonalCardSkeleton(
     HorizontalVideoCardFrame(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp),
+            .padding(
+                horizontal = AppSpacingTokens.Medium,
+                vertical = HistoryPersonalCardLayoutSpec.CardVerticalPaddingDp.dp,
+            ),
         coverContent = {
             ContentSkeletonBlock(
                 color = color,
@@ -123,28 +132,28 @@ internal fun HistoryPersonalCardSkeleton(
                 color = color,
                 modifier = Modifier
                     .fillMaxWidth(0.92f)
-                    .height(16.dp),
+                    .height(AppSpacingTokens.Large),
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(AppSpacingTokens.Medium / 2f))
             ContentSkeletonBlock(
                 color = color,
                 modifier = Modifier
                     .fillMaxWidth(0.68f)
-                    .height(16.dp),
+                    .height(AppSpacingTokens.Large),
             )
             Spacer(modifier = Modifier.weight(1f))
             ContentSkeletonBlock(
                 color = color,
                 modifier = Modifier
                     .fillMaxWidth(0.48f)
-                    .height(12.dp),
+                    .height(AppSpacingTokens.Medium),
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
             ContentSkeletonBlock(
                 color = color,
                 modifier = Modifier
                     .fillMaxWidth(0.34f)
-                    .height(12.dp),
+                    .height(AppSpacingTokens.Medium),
             )
         },
         trailingContent = {
@@ -152,8 +161,8 @@ internal fun HistoryPersonalCardSkeleton(
                 color = color,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp)
-                    .size(24.dp),
+                    .padding(end = AppSpacingTokens.Small)
+                    .size(AppSpacingTokens.ExtraLarge),
             )
         },
     )
@@ -280,8 +289,8 @@ internal fun HistoryPersonalCard(
         if (!batchMode) {
             Box(
                 modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .width(48.dp),
+                    .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)
+                    .width(AppChromeSizeTokens.MinimumTouchTarget),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 AppWindowActionMenu(
@@ -311,13 +320,13 @@ internal fun HistoryPersonalCard(
                             ),
                         ),
                     ),
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(AppChromeSizeTokens.MinimumTouchTarget),
                 ) {
                     AppIcon(
                         Icons.Outlined.MoreVert,
                         contentDescription = "历史记录操作",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(HistoryPersonalCardLayoutSpec.ActionGlyphSizeDp.dp),
                     )
                 }
             }
@@ -358,7 +367,8 @@ internal fun HistoryPersonalCard(
                     text = resolveHistoryProgressLabel(item.progress, video.duration),
                     color = MediaContrastPalette.Foreground,
                     style = contentTypography.coverBadge.merge(coverOverlayTextStyle),
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                        .padding(AppSpacingTokens.Medium / 2f),
                 )
                 if (progressState.showProgressBar) {
                     AppLinearProgressIndicator(progress = { progressState.progressFraction },
@@ -375,7 +385,10 @@ internal fun HistoryPersonalCard(
     HorizontalVideoCardFrame(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
+            .padding(
+                horizontal = AppSpacingTokens.Medium,
+                vertical = HistoryPersonalCardLayoutSpec.CardVerticalPaddingDp.dp,
+            )
             .videoCardShellSharedBoundsOrEmpty(
                 enabled = useSharedBounds,
                 sharedTransitionScope = sharedTransitionScope,
@@ -427,7 +440,11 @@ internal fun HistoryPersonalCard(
                 tapToCopyEnabled = false,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(start = 6.dp, end = 6.dp, bottom = 8.dp),
+                    .padding(
+                        start = AppSpacingTokens.Medium / 2f,
+                        end = AppSpacingTokens.Medium / 2f,
+                        bottom = AppSpacingTokens.Small,
+                    ),
             )
             if (progressState.showProgressBar) {
                 AppLinearProgressIndicator(

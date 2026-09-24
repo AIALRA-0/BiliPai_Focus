@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.Color
 internal fun resolveDynamicLikedColor(colorScheme: ColorScheme): Color = colorScheme.tertiary
 
 internal object DynamicStatusPalette {
+    val MediaContent = Color.White
+
     @Composable
     fun liked(): Color = resolveDynamicLikedColor(MaterialTheme.colorScheme)
 }

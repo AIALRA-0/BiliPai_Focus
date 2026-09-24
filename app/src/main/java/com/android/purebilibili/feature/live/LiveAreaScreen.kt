@@ -300,7 +300,11 @@ private fun LiveAreaParentTabRow(
         areas.mapIndexed { index, area -> AppSegmentOption(index, area.name) }
     }
     val uiStyle = LocalAppUiStyle.current
-    val effectiveHorizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3) 0.dp else horizontalPadding
+    val effectiveHorizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3) {
+        AppSpacingTokens.None
+    } else {
+        horizontalPadding
+    }
     AppThemeAdaptiveTabRow(
         options = options,
         selectedValue = safeSelectedTab,

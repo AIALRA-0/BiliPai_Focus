@@ -13,7 +13,8 @@ import java.io.FileInputStream
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
 
-    private val packageName = "com.android.purebilibili"
+    private val packageName: String
+        get() = InstrumentationRegistry.getInstrumentation().targetContext.packageName
 
     private fun runShell(command: String): String {
         val pfd = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
@@ -35,7 +36,7 @@ class StartupBenchmark {
         prepareHomeEntry()
         runShell("input keyevent 3")
 
-        val output = runShell("am start -W -n $packageName/.MainActivity")
+        val output = runShell("am start -W -n $packageName/com.android.purebilibili.MainActivity")
         val totalTime = Regex("TotalTime:\\s*(\\d+)").find(output)?.groupValues?.get(1)?.toLongOrNull() ?: -1L
         val waitTime = Regex("WaitTime:\\s*(\\d+)").find(output)?.groupValues?.get(1)?.toLongOrNull() ?: -1L
 

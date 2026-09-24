@@ -17,6 +17,15 @@ internal data class HomeFollowingSnapshotChange(
     val kind: HomeFollowingSnapshotChangeKind
 )
 
+internal fun resolveHomeFollowingMidsAfterChange(
+    followingMids: Set<Long>,
+    changedMid: Long,
+    isFollowing: Boolean
+): Set<Long> {
+    if (changedMid <= 0L) return followingMids
+    return if (isFollowing) followingMids + changedMid else followingMids - changedMid
+}
+
 internal fun resolveHomeFollowingSnapshotChange(
     previousFollowingMids: Set<Long>,
     nextFollowingMids: Set<Long>,

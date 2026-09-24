@@ -110,12 +110,13 @@ class BottomBarMiuixStructureTest {
         assertTrue(floating.contains("canDrag = { offset ->"))
         assertTrue(floating.contains("snapshotFlow { dampedDragAnimation.value }"))
         assertTrue(floating.contains("selectedIndexLatest.value().coerceIn(0, maxTabIndex)"))
-        assertTrue(floating.contains("snapshotFlow { dampedDragAnimation.value }\n            .drop(1)"))
-        assertTrue(floating.contains("onSelected(index)"))
+        assertFalse(floating.contains(".drop(1)"))
+        assertTrue(floating.contains("onSelectedLatest.value(targetIndex)"))
         assertFalse(floating.contains("horizontalDragGesture"))
         assertFalse(floating.contains("rememberDampedDragAnimationState"))
         assertTrue(floating.contains("resolveLiquidGlassIndicatorChromaticAberration("))
-        assertTrue(floating.contains("rememberGravityRotatedHighlight("))
+        assertTrue(floating.contains("rememberBiliPaiGravityHighlight(extraDegrees = -45f)"))
+        assertTrue(floating.contains("val pillHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight("))
 
         // Host must not re-implement the three-layer drawBackdrop path.
         assertFalse(host.contains("miuixDrawBackdrop("))

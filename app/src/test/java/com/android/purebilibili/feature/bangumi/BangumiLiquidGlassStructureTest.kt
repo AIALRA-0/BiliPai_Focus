@@ -83,6 +83,15 @@ class BangumiLiquidGlassStructureTest {
     }
 
     @Test
+    fun `haze source only mounts while its consumer is ready`() {
+        val source = sourceOf("BangumiScreen.kt")
+        assertTrue(
+            source.contains("if (hazeReady && hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier"),
+            "Do not record the Bangumi content subtree when the top chrome has fallen back from haze.",
+        )
+    }
+
+    @Test
     fun `follow grid scrolls behind both fixed chrome rows`() {
         val screen = sourceOf("BangumiScreen.kt")
         val content = sourceOf("BangumiHubContent.kt")

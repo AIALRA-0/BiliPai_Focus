@@ -253,7 +253,7 @@ fun LiveChatSection(
                             imageVector = Icons.Outlined.KeyboardArrowDown,
                             contentDescription = null,
                             tint = if (darkOverlay) LiveStatusPalette.MediaContent else palette.primaryText,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(AppSpacingTokens.Large)
                         )
                         Spacer(Modifier.width(AppSpacingTokens.ExtraSmall))
                         AppText(

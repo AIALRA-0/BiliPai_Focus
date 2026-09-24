@@ -72,7 +72,7 @@ import com.android.purebilibili.core.ui.rememberAppSemanticVisualPolicy
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.input.pointer.pointerInput
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.Flow
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import com.android.purebilibili.core.ui.animation.DampedDragAnimationState
 import com.android.purebilibili.core.ui.animation.DampedDragTrackingMode
@@ -97,6 +97,11 @@ import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sign
+
+private object NativeUnderlinedSegmentedControlMotion {
+    const val IndicatorDurationMillis = 250
+    val IndicatorEasing = EaseOut
+}
 
 internal fun resolveSegmentedControlLiquidGlassEnabled(
     storedLiquidGlassEnabled: Boolean,
@@ -436,10 +441,10 @@ fun BottomBarLiquidSegmentedControl(
 
     val context = LocalContext.current
     val visualPolicy = rememberAppSemanticVisualPolicy()
-    val homeSettings by SettingsManager
-        .getHomeSettings(context)
-        .map { it as HomeSettings? }
-        .collectAsStateWithLifecycle(
+    val homeSettingsFlow: Flow<HomeSettings?> = remember(context) {
+        SettingsManager.getHomeSettings(context)
+    }
+    val homeSettings by homeSettingsFlow.collectAsStateWithLifecycle(
             // Do not render a provisional chrome: either choice would visibly switch when
             // DataStore emits the persisted setting.
             initialValue = null,
@@ -458,7 +463,7 @@ fun BottomBarLiquidSegmentedControl(
         val nativeModifier = if (itemWidth != null) {
             nativeScrollModifier.width(
                 itemWidth.coerceAtLeast(AppChromeSizeTokens.MinimumTouchTarget) * items.size +
-                    containerHorizontalPadding.coerceAtLeast(0.dp) * 2
+                    containerHorizontalPadding.coerceAtLeast(AppSpacingTokens.None) * 2
             )
         } else {
             nativeScrollModifier
@@ -572,7 +577,10 @@ internal fun AndroidNativeUnderlinedSegmentedControl(
     }
     val animatedSelectedIndex by animateFloatAsState(
         targetValue = safeSelectedIndex.toFloat(),
-        animationSpec = tween(durationMillis = 250, easing = EaseOut),
+        animationSpec = tween(
+            durationMillis = NativeUnderlinedSegmentedControlMotion.IndicatorDurationMillis,
+            easing = NativeUnderlinedSegmentedControlMotion.IndicatorEasing,
+        ),
         label = "nativeUnderlinePosition",
     )
     val indicatorPosition = resolveSegmentedControlIndicatorPosition(

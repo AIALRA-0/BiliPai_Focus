@@ -475,6 +475,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             aid = episode.aid,
             isCourse = isCourse
         )
+        val dolbyAudioCapabilities = MediaUtils.awaitDolbyAudioCapabilities()
         
         playUrlResult.onSuccess { playData ->
             com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "📡 PlayUrl success: quality=${playData.quality}, hasDash=${playData.dash != null}, hasDurl=${!playData.durl.isNullOrEmpty()}")
@@ -490,8 +491,8 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                     dash = dash,
                     requestedAudioQuality = requestedAudioQuality,
                     playbackSpeed = exoPlayer?.playbackParameters?.speed ?: 1.0f,
-                    isDolbyAudioSupported = MediaUtils.isDolbyAtmosAudioSupported(),
-                    isDolbyAudioSoftwareDecoded = MediaUtils.isDolbySoftwareAudioDecoderRequired()
+                    isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                    isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
                 )
             }
             
@@ -850,6 +851,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 aid = currentState.currentEpisode.aid,
                 isCourse = isCourse
             )
+            val dolbyAudioCapabilities = MediaUtils.awaitDolbyAudioCapabilities()
             
             playUrlResult.onSuccess { playData ->
                 val videoUrl: String?
@@ -862,8 +864,8 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                         dash = it,
                         requestedAudioQuality = currentState.requestedAudioQuality,
                         playbackSpeed = exoPlayer?.playbackParameters?.speed ?: 1.0f,
-                        isDolbyAudioSupported = MediaUtils.isDolbyAtmosAudioSupported(),
-                        isDolbyAudioSoftwareDecoded = MediaUtils.isDolbySoftwareAudioDecoderRequired()
+                        isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                        isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
                     )
                 }
                 
@@ -986,17 +988,18 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
         }
     }
 
-    private fun switchAudioQuality(audioQuality: Int): Boolean {
+    private suspend fun switchAudioQuality(audioQuality: Int): Boolean {
         val currentState = _uiState.value as? BangumiPlayerState.Success ?: return false
         val player = exoPlayer ?: return false
         val dash = currentState.cachedDash ?: return false
         val videoUrl = currentState.playUrl?.takeIf { it.isNotBlank() } ?: return false
+        val dolbyAudioCapabilities = MediaUtils.awaitDolbyAudioCapabilities()
         val selection = resolveAudioStreamSelection(
             dash = dash,
             requestedAudioQuality = audioQuality,
             playbackSpeed = player.playbackParameters.speed,
-            isDolbyAudioSupported = MediaUtils.isDolbyAtmosAudioSupported(),
-            isDolbyAudioSoftwareDecoded = MediaUtils.isDolbySoftwareAudioDecoderRequired()
+            isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+            isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
         )
         val audioUrl = selection.selected?.track?.getValidUrl()
             ?.takeIf { it.isNotBlank() }

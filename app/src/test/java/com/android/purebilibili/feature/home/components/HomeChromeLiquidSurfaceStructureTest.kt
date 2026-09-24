@@ -127,8 +127,8 @@ class HomeChromeLiquidSurfaceStructureTest {
                 topHeaderSource.contains("HomeTopUnreadBadge(")
         )
         val searchLayerIndex = topHeaderSource.indexOf(".height(currentSearchHeight)")
-        val tabsThenSearchIndex = topHeaderSource.indexOf("if (topLayoutOrder == HomeTopLayoutOrder.TABS_THEN_SEARCH)")
-        val searchThenTabsIndex = topHeaderSource.indexOf("if (topLayoutOrder == HomeTopLayoutOrder.SEARCH_THEN_TABS)")
+        val tabsThenSearchIndex = topHeaderSource.indexOf("topLayoutOrder == HomeTopLayoutOrder.TABS_THEN_SEARCH")
+        val searchThenTabsIndex = topHeaderSource.indexOf("topLayoutOrder == HomeTopLayoutOrder.SEARCH_THEN_TABS")
         assertTrue(
             "search-first mode should render top tabs after the search layer",
             searchLayerIndex in 0 until searchThenTabsIndex &&
@@ -136,7 +136,8 @@ class HomeChromeLiquidSurfaceStructureTest {
         )
         assertTrue(
             "an independently rendered liquid dock must not inherit the collapsing search panel clip",
-            topHeaderSource.contains("if (drawUnifiedTopPanelChrome) {\n                                        Modifier.clip(unifiedPanelShape)")
+            Regex("""if \(drawUnifiedTopPanelChrome\)\s*\{\s*Modifier\.clip\(unifiedPanelShape\)""")
+                .containsMatchIn(topHeaderSource)
         )
         assertTrue(
             "tabs-first mode should keep its explicit branch before the search layer",
@@ -192,11 +193,9 @@ class HomeChromeLiquidSurfaceStructureTest {
         assertTrue(
             "MD3 top tab indicator should be a single moving layer tied to pager offset",
             topBarSource.contains("resolveMd3TopTabIndicatorTranslationPx(") &&
-                (
-                    topBarSource.contains("translationX = md3IndicatorTranslationXPx") ||
-                        topBarSource.contains("translationX = md3LiquidCapsuleTranslationXPx") ||
-                        topBarSource.contains("md3LiquidCapsuleTranslationXPx")
-                    )
+                topBarSource.contains("translationXPx = md3IndicatorTranslationXPx") &&
+                topBarSource.contains("!hasOuterChromeSurface") &&
+                topBarSource.contains("hasOuterChromeSurface")
         )
         val lightweightTopTabItemSource = topBarSource
             .substringAfter("private fun LightweightTopTabItem(")
@@ -234,10 +233,14 @@ class HomeChromeLiquidSurfaceStructureTest {
                 topBarSource.contains("resolveSharedLiquidExportMonochromeColor(") &&
                 topBarSource.contains("resolveTopTabIndicatorBackdropPolicy(") &&
                 !topBarSource.contains("topTabIndicatorDrag(") &&
-                topBarSource.contains("topTabListScrollOffsetPx") &&
-                topBarSource.contains("One shared shift for export") &&
-                topBarSource.contains("indicatorPanelOffsetPx = 0f") &&
-                topBarSource.contains("!shouldUseMd3DockBackedCapsule && !shouldUseMd3LiquidCapsule") &&
+                Regex("""topTabHorizontalPaddingPx\s*-\s*topTabListScrollOffsetPxProvider\(\)""")
+                    .findAll(topBarSource).count() == 2 &&
+                topBarSource.contains("val topTabIndicatorPanelOffsetPx =") &&
+                topBarSource.contains("if (shouldUseLiquidGlassIndicator) topTabPanelOffsetPx else 0f") &&
+                topBarSource.contains("panelOffsetPx = topTabIndicatorPanelOffsetPx") &&
+                topBarSource.contains("val shouldUseMd3NativeUnderline = effectivePresentation == AppTopTabPresentation.MATERIAL_UNDERLINE") &&
+                topBarSource.contains("!shouldUseMd3DockBackedCapsule") &&
+                topBarSource.contains("!shouldUseMd3LiquidCapsule") &&
                 !sharedChromeSource.contains("BiliPaiBottomBarIndicatorLayer(")
         )
         assertFalse(
@@ -259,7 +262,8 @@ class HomeChromeLiquidSurfaceStructureTest {
             "Miuix dock surface should use vibrancy, blur, and soft-scalable shell lens like the floating bottom bar",
             bottomBar.readText().contains("internal fun Modifier.biliPaiMiuixFloatingDockSurface(") &&
                 !bottomBar.readText().contains("internal fun Modifier.biliPaiFloatingDockSurface(") &&
-                bottomBar.readText().contains("miuixVibrancy()") &&
+                bottomBar.readText().contains("miuixVibrancy(liquidGlassTuning.saturation)") &&
+                bottomBar.readText().contains("miuixBlur(resolvedBlurRadius.toPx(), resolvedBlurRadius.toPx())") &&
                 bottomBar.readText().contains("drawShellLens: Boolean = true") &&
                 bottomBar.readText().contains("shellLensIntensity: Float = 1f") &&
                 bottomBar.readText().contains("effectiveShellLensIntensity") &&

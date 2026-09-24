@@ -10,15 +10,11 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -29,6 +25,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.ContainerLevel
 
@@ -62,7 +63,7 @@ internal fun Material3AppUpdateDialog(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                IconButton(
+                AppIconButton(
                     onClick = actions.onDismissRequest,
                     modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                 ) {
@@ -78,9 +79,11 @@ internal fun Material3AppUpdateDialog(
         },
         confirmButton = {
             if (!state.showReleaseNotesOnly) {
-                Button(
+                AppButton(
                     onClick = actions.onPrimaryAction,
                     enabled = !state.downloadState.isActiveDownload(),
+                    colors = ButtonDefaults.buttonColors(),
+                    elevation = ButtonDefaults.buttonElevation(),
                 ) {
                     Text(
                         text = appUpdatePrimaryLabel(state.downloadState, state.hasAsset),
@@ -94,7 +97,7 @@ internal fun Material3AppUpdateDialog(
             null
         } else {
             {
-                TextButton(
+                AppTextButton(
                     onClick = if (state.downloadState.isActiveDownload()) {
                         actions.onCancelDownload
                     } else {
@@ -241,12 +244,12 @@ private fun Material3DownloadStatus(
             )
             if (state.isActiveDownload()) {
                 if (state.totalBytes > 0L) {
-                    LinearProgressIndicator(
+                    AppLinearProgressIndicator(
                         progress = { state.progress },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
             if (state.status == AppUpdateDownloadStatus.COMPLETED) {
@@ -325,7 +328,7 @@ private fun Material3DownloadChannels(
                 .widthIn(max = 320.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(
+            AppOutlinedButton(
                 onClick = actions.onOpenRelease,
                 modifier = Modifier
                     .weight(1f)
@@ -333,7 +336,7 @@ private fun Material3DownloadChannels(
             ) {
                 Text("正式版下载", maxLines = 1, softWrap = false)
             }
-            OutlinedButton(
+            AppOutlinedButton(
                 onClick = actions.onOpenTestRelease,
                 modifier = Modifier
                     .weight(1f)

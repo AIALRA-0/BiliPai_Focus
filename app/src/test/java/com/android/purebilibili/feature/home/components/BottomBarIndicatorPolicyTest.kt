@@ -591,10 +591,16 @@ class BottomBarIndicatorPolicyTest {
             java.io.File("app/src/main/java/com/android/purebilibili/feature/home/components/FloatingBottomBar.kt"),
             java.io.File("src/main/java/com/android/purebilibili/feature/home/components/FloatingBottomBar.kt")
         ).first { it.exists() }.readText()
+        val renderer = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+        ).first { it.exists() }.readText()
 
         // Blur mode uses pure blur without lens/vibrancy; LiquidGlass uses vibrancy+blur+lens.
         assertTrue(floating.contains("isBlurMode = mode == FloatingBottomBarMode.Blur"))
-        assertTrue(floating.contains("blur(25.dp.toPx(), 25.dp.toPx())"))
+        assertTrue(renderer.contains("const val FallbackBlurRadiusDp = 25f"))
+        assertTrue(renderer.contains("BottomBarBackdropLayoutSpec.FallbackBlurRadiusDp.dp"))
+        assertTrue(renderer.contains("miuixBlur(radiusPx, radiusPx)"))
         assertTrue(floating.contains("vibrancy(liquidGlassTuning.saturation)"))
         assertTrue(floating.contains("liquidGlassTuning.backdropBlurRadius.dp.toPx()"))
     }

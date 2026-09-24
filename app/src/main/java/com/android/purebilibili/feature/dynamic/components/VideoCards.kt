@@ -358,7 +358,7 @@ private fun VideoCardLargeCover(
                     imageVector = resolveAppTvIcon(),
                     contentDescription = "播放视频",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(AppSpacingTokens.DoubleExtraLarge),
                 )
             }
         }

@@ -28,6 +28,12 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.CrashReporter
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.ui.AppSpacingTokens
+
+// Keep this component's established pixel geometry across theme migrations.
+private object CrashConsentLayoutSpec {
+    const val IconSizeDp = 28
+}
 
 /**
  * First-launch crash-tracking consent.
@@ -68,7 +74,7 @@ fun CrashTrackingConsentDialog(
                 imageVector = Icons.Outlined.BugReport,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(CrashConsentLayoutSpec.IconSizeDp.dp),
             )
         },
         title = {
@@ -87,7 +93,7 @@ fun CrashTrackingConsentDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
                 AppListItem(
                     headlineContent = {
                         AppText(

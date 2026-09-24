@@ -35,7 +35,10 @@ class VideoDetailScreenMethodSizeStructureTest {
                 // This is a user presentation preference, not business state from a ViewModel.
                 assertTrue(source.contains("SettingsManager"))
                 assertTrue(source.contains(".getTabletSecondaryDefaultTab(context)"))
-                assertEquals(1, source.split("collectAsStateWithLifecycle").size - 1)
+                assertTrue(source.contains(".getCommentCollapsedReplyPreviewLimit(context)"))
+                assertEquals(2, Regex("\\.collectAsStateWithLifecycle\\s*\\(")
+                    .findAll(source)
+                    .count())
             } else {
                 assertFalse(source.contains("collectAsStateWithLifecycle"), "$name must not collect business state")
             }

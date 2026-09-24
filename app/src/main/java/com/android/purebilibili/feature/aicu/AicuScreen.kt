@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.DataStoreAicuConsentStore
+import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -50,7 +51,7 @@ import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.AicuRepository
 import com.android.purebilibili.feature.video.ui.components.RichCommentText
 import com.android.purebilibili.navigation3.BiliPaiNavKey
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -80,9 +81,10 @@ internal fun AicuRoute(
     val renderEmoteMap = remember(emoteMap) {
         emoteMap.mapValues { (_, url) -> FormatUtils.fixImageUrl(url) }
     }
-    val settings by SettingsManager.getHomeSettings(context)
-        .map { it as com.android.purebilibili.core.store.HomeSettings? }
-        .collectAsStateWithLifecycle(initialValue = null)
+    val settingsFlow: Flow<HomeSettings?> = remember(context) {
+        SettingsManager.getHomeSettings(context)
+    }
+    val settings by settingsFlow.collectAsStateWithLifecycle(initialValue = null)
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(model, uid, initialCategory) { model.initialize(uid, initialCategory) }
     LaunchedEffect(state.consent) {

@@ -17,6 +17,7 @@ import androidx.window.layout.FoldingFeature.State.Companion.HALF_OPENED
 import androidx.window.testing.layout.FoldingFeature
 import androidx.window.testing.layout.TestWindowLayoutInfo
 import androidx.window.testing.layout.WindowLayoutInfoPublisherRule
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -109,24 +110,23 @@ class FoldableAdaptiveInfoInstrumentedTest {
     @Test
     fun publishedOccludingAndMultipleHinges_exposeInnerPostureWithoutCrossingTheHinge() {
         setAdaptiveInfoContent()
+        val firstOccludingHinge = FoldingFeature(
+            activity = composeRule.activity,
+            state = FLAT,
+            orientation = VERTICAL,
+            size = 24,
+        )
+        val secondOccludingHinge = FoldingFeature(
+            activity = composeRule.activity,
+            state = FLAT,
+            orientation = VERTICAL,
+            size = 24,
+        )
+        assertEquals(FULL, firstOccludingHinge.occlusionType)
+        assertEquals(FULL, secondOccludingHinge.occlusionType)
         windowLayoutInfoPublisherRule.overrideWindowLayoutInfo(
             TestWindowLayoutInfo(
-                listOf(
-                    FoldingFeature(
-                        activity = composeRule.activity,
-                        state = FLAT,
-                        orientation = VERTICAL,
-                        size = 24,
-                        occlusionType = FULL,
-                    ),
-                    FoldingFeature(
-                        activity = composeRule.activity,
-                        state = FLAT,
-                        orientation = VERTICAL,
-                        size = 24,
-                        occlusionType = FULL,
-                    ),
-                )
+                listOf(firstOccludingHinge, secondOccludingHinge)
             )
         )
         composeRule.waitForIdle()

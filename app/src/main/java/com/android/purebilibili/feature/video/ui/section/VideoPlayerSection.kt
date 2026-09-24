@@ -895,34 +895,21 @@ private fun VideoPlayerSectionContent(
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val settingsScope = rememberCoroutineScope()
 
-    val playerInsightMode by com.android.purebilibili.core.store.SettingsManager
-        .getPlayerInsightMode(context)
-        .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager.getPlayerInsightModeSync(context),
-            lifecycle = lifecycleOwner.lifecycle
-        )
+    val playerInsightModeFlow = remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getPlayerInsightMode(context)
+    }
+    val playerInsightMode by playerInsightModeFlow.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.player.PlayerSettingsStore.PlayerInsightMode.OFF,
+        lifecycle = lifecycleOwner.lifecycle
+    )
 
-    val playerInteractionSettings by com.android.purebilibili.core.store.SettingsManager
-        .getPlayerInteractionSettings(context)
-        .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings(
-                longPressSpeedLockEnabled = com.android.purebilibili.core.store.SettingsManager
-                    .getLongPressSpeedLockEnabledSync(context),
-                longPressSpeedLockHintShown = com.android.purebilibili.core.store.SettingsManager
-                    .getLongPressSpeedLockHintShownSync(context),
-                longPressSpeedHintCloseEnabled = com.android.purebilibili.core.store.SettingsManager
-                    .getLongPressSpeedHintCloseEnabledSync(context),
-                longPressSpeedHintHidden = com.android.purebilibili.core.store.SettingsManager
-                    .getLongPressSpeedHintHiddenSync(context),
-                longPressSpeedHintScale = com.android.purebilibili.core.store.SettingsManager
-                    .getLongPressSpeedHintScaleSync(context),
-                longPressSpeedHintAlpha = com.android.purebilibili.core.store.SettingsManager
-                    .getLongPressSpeedHintAlphaSync(context),
-                hiResLongPressCompatHintShown = com.android.purebilibili.core.store.SettingsManager
-                    .getHiResLongPressCompatHintShownSync(context)
-            ),
-            lifecycle = lifecycleOwner.lifecycle
-        )
+    val playerInteractionSettingsFlow = remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getPlayerInteractionSettings(context)
+    }
+    val playerInteractionSettings by playerInteractionSettingsFlow.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings(),
+        lifecycle = lifecycleOwner.lifecycle
+    )
 
     val gestureSensitivity = playerInteractionSettings.gestureSensitivity
     val longPressSpeedHintScale = playerInteractionSettings.longPressSpeedHintScale
@@ -1335,7 +1322,7 @@ private fun VideoPlayerSectionContent(
     val statusBarHazeEnabled by SettingsManager
         .getHideVideoPageStatusBar(context)
         .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getHideVideoPageStatusBarSync(context),
+            initialValue = false,
         )
     val shouldCaptureStatusBarAmbientFrame = shouldCaptureInlineStatusBarAmbientFrame(
         contentTopInsetPx = contentTopInset.value,

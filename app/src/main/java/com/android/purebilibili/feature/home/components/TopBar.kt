@@ -135,6 +135,11 @@ private const val IOS_TOP_TAB_CONTENT_PADDING_DP = 2f
 private const val TOP_TAB_WIDE_CENTER_BREAKPOINT_DP = 600f
 private const val TOP_TAB_INDICATOR_SETTLE_TIMEOUT_MILLIS = 1_500L
 
+private object HomeTopBarLayoutSpec {
+    const val IosFloatingIconAndTextRowHeightDp = 60f
+    const val IosFixedIconAndTextRowHeightDp = 56f
+}
+
 // 指示器拖动释放后允许 spring 飞掷动画 settle 的兜底时长；
 // 超过此时长仍未收到 onSettled 回调则强制解除 engaged，避免位置竞争。
 
@@ -748,9 +753,17 @@ internal fun resolveIosTopTabRowHeight(
 ): Dp {
     val iconAndText = normalizeTopTabLabelMode(labelMode) == 0
     return if (isFloatingStyle) {
-        if (iconAndText) 60.dp else AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Small
+        if (iconAndText) {
+            HomeTopBarLayoutSpec.IosFloatingIconAndTextRowHeightDp.dp
+        } else {
+            AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Small
+        }
     } else {
-        if (iconAndText) 56.dp else AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.ExtraSmall
+        if (iconAndText) {
+            HomeTopBarLayoutSpec.IosFixedIconAndTextRowHeightDp.dp
+        } else {
+            AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.ExtraSmall
+        }
     }
 }
 
@@ -1020,7 +1033,7 @@ internal fun Modifier.homeTopBottomBarMatchedSurface(
         // Miuix blur does not dim its sampled backdrop in dark mode. Add a
         // restrained scrim above the material to reduce bright background bleed.
         if (isDarkTheme) {
-            Modifier.background(Color.Black.copy(alpha = 0.10f), shape)
+            Modifier.background(HomeVisualPalette.GlassDark.copy(alpha = 0.10f), shape)
         } else {
             Modifier
         }
@@ -1363,12 +1376,12 @@ private fun LightweightHomeTopTabs(
                         ).size.width.toDp()
                     }
                 } else {
-                    0.dp
+                    AppSpacingTokens.None
                 }
                 val iconWidth = if (showIcon) {
                     resolveTopTabIconSizeDp(normalizedLabelMode).dp
                 } else {
-                    0.dp
+                    AppSpacingTokens.None
                 }
                 maxOf(textWidth, iconWidth) + AppSpacingTokens.ExtraSmall * 2
             }

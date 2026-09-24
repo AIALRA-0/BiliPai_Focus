@@ -5,6 +5,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicDisplayMode
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.DynamicDeleteRequest
@@ -25,6 +26,7 @@ import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyInteractionData
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.repository.ActionRepository
+import com.android.purebilibili.data.repository.shouldApplyFollowStateChangeForAccount
 import com.android.purebilibili.data.repository.BlockedUpRepository
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.DynamicCreateRepository
@@ -48,6 +50,7 @@ import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -81,6 +84,16 @@ internal data class DynamicStartupLoadPlan(
     val loadFollowingsImmediately: Boolean,
     val followingsHydrationDelayMs: Long,
     val initialFollowingsPageLimit: Int
+)
+
+private data class DynamicPersistedPreferencesSnapshot(
+    val cachePrefs: SharedPreferences,
+    val userPrefs: SharedPreferences,
+    val pinnedUserIds: Set<Long>,
+    val hiddenUserIds: Set<Long>,
+    val displayMode: DynamicDisplayMode,
+    val selectedTab: Int,
+    val notInterestedDynamicIds: Set<String>,
 )
 
 internal fun resolveDynamicStartupLoadPlan(): DynamicStartupLoadPlan {
@@ -150,8 +163,11 @@ internal fun hasLoadedAllDynamicFollowings(
 class DynamicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContext = getApplication<Application>()
-    private val cachePrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_CACHE, Context.MODE_PRIVATE)
-    private val userPrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_USERS, Context.MODE_PRIVATE)
+    private lateinit var cachePrefs: SharedPreferences
+    private lateinit var userPrefs: SharedPreferences
+    private val persistedPreferencesReady = CompletableDeferred<Unit>()
+    private val pendingPersistedPreferenceActions = mutableListOf<() -> Unit>()
+    private var arePersistedPreferencesReady = false
     private val json = Json { ignoreUnknownKeys = true }
     private val blockedUpRepository = BlockedUpRepository(appContext)
 
@@ -168,6 +184,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var allTimelineFreshResultRevision = 0L
     private var startupFollowingsHydrationScheduled: Boolean = false
     private var startupLoadsActivated: Boolean = false
+    private var startupLoadsActivationRequested: Boolean = false
 
     private val _uiState = MutableStateFlow(DynamicUiState())
     val uiState: StateFlow<DynamicUiState> = _uiState.asStateFlow()
@@ -236,26 +253,63 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 requestFocusDynamicPrefetchIfSparse()
             }
         }
-        loadUserPreferences()
-        loadNotInterestedDynamicIds()
-        loadCachedDynamics()
-        rebuildFollowedUsers()
+        viewModelScope.launch {
+            try {
+                val restoredPreferences = withContext(Dispatchers.IO) {
+                    readPersistedPreferencesSnapshot()
+                }
+                cachePrefs = restoredPreferences.cachePrefs
+                userPrefs = restoredPreferences.userPrefs
+                _pinnedUserIds.value = restoredPreferences.pinnedUserIds
+                _hiddenUserIds.value = restoredPreferences.hiddenUserIds
+                _displayMode.value = restoredPreferences.displayMode
+                _selectedTab.value = restoredPreferences.selectedTab
+                _uiState.value = _uiState.value.copy(
+                    tempBannedDynamicIds = restoredPreferences.notInterestedDynamicIds.toImmutableSet()
+                )
+
+                arePersistedPreferencesReady = true
+                val pendingActions = pendingPersistedPreferenceActions.toList()
+                pendingPersistedPreferenceActions.clear()
+                pendingActions.forEach { it() }
+                rebuildFollowedUsers()
+                loadCachedDynamics()
+                persistedPreferencesReady.complete(Unit)
+            } catch (cancellation: CancellationException) {
+                persistedPreferencesReady.cancel(cancellation)
+                throw cancellation
+            } catch (failure: Throwable) {
+                persistedPreferencesReady.completeExceptionally(failure)
+                throw failure
+            }
+        }
         observeFollowStateChanges()
         loadUplistUpdates()
     }
 
     fun activateStartupLoads() {
-        if (startupLoadsActivated) return
-        startupLoadsActivated = true
-        refreshInBackground(resolveDynamicStartupLoadPlan())
-        if (_selectedTab.value == 4) {
-            requestCompleteFollowingsLoad()
+        if (startupLoadsActivationRequested || startupLoadsActivated) return
+        startupLoadsActivationRequested = true
+        viewModelScope.launch {
+            persistedPreferencesReady.await()
+            if (startupLoadsActivated) return@launch
+            startupLoadsActivated = true
+            refreshInBackground(resolveDynamicStartupLoadPlan())
+            if (_selectedTab.value == 4) {
+                requestCompleteFollowingsLoad()
+            }
         }
     }
 
     private fun observeFollowStateChanges() {
         viewModelScope.launch {
             ActionRepository.followStateChanges.collect { change ->
+                if (!shouldApplyFollowStateChangeForAccount(
+                        change = change,
+                        activeAccountMid = TokenManager.midCache,
+                        isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty()
+                    )
+                ) return@collect
                 if (change.isFollowing) {
                     followingsFullyLoaded = false
                     lastFollowingsLoadMs = 0L
@@ -267,19 +321,17 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun loadUserPreferences() {
+    private fun readPersistedPreferencesSnapshot(): DynamicPersistedPreferencesSnapshot {
+        val cachePrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_CACHE, Context.MODE_PRIVATE)
+        val userPrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_USERS, Context.MODE_PRIVATE)
         val pinned = userPrefs.getStringSet(KEY_PINNED_USERS, emptySet()).orEmpty()
             .mapNotNull { it.toLongOrNull() }
             .toSet()
         val hidden = userPrefs.getStringSet(KEY_HIDDEN_USERS, emptySet()).orEmpty()
             .mapNotNull { it.toLongOrNull() }
             .toSet()
-        _pinnedUserIds.value = pinned
-        _hiddenUserIds.value = hidden
-
-        // 加载显示模式
         val modeName = userPrefs.getString(KEY_DISPLAY_MODE, DynamicDisplayMode.SIDEBAR.name)
-        _displayMode.value = try {
+        val displayMode = try {
             DynamicDisplayMode.valueOf(modeName ?: DynamicDisplayMode.SIDEBAR.name)
         } catch (e: Exception) {
             DynamicDisplayMode.SIDEBAR
@@ -289,27 +341,37 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         } else {
             null
         }
-        _selectedTab.value = resolveDynamicSelectedTab(
+        val selectedTab = resolveDynamicSelectedTab(
             savedTab = savedSelectedTab,
-            tabCount = DYNAMIC_TOP_TAB_COUNT
+            tabCount = DYNAMIC_TOP_TAB_COUNT,
         )
-    }
-
-    private fun loadNotInterestedDynamicIds() {
         val ids = normalizeDynamicNotInterestedIds(
             cachePrefs.getStringSet(KEY_NOT_INTERESTED_DYNAMIC_IDS, emptySet()).orEmpty(),
             MAX_NOT_INTERESTED_DYNAMIC_IDS,
         )
-            .toImmutableSet()
-        _uiState.value = _uiState.value.copy(tempBannedDynamicIds = ids)
+        return DynamicPersistedPreferencesSnapshot(
+            cachePrefs = cachePrefs,
+            userPrefs = userPrefs,
+            pinnedUserIds = pinned,
+            hiddenUserIds = hidden,
+            displayMode = displayMode,
+            selectedTab = selectedTab,
+            notInterestedDynamicIds = ids,
+        )
+    }
+
+    private fun runAfterPersistedPreferencesReady(action: () -> Unit) {
+        if (arePersistedPreferencesReady) {
+            action()
+        } else {
+            pendingPersistedPreferenceActions += action
+        }
     }
 
     private fun persistNotInterestedDynamicIds(ids: Set<String>) {
+        val normalizedIds = normalizeDynamicNotInterestedIds(ids, MAX_NOT_INTERESTED_DYNAMIC_IDS)
         cachePrefs.edit()
-            .putStringSet(
-                KEY_NOT_INTERESTED_DYNAMIC_IDS,
-                normalizeDynamicNotInterestedIds(ids, MAX_NOT_INTERESTED_DYNAMIC_IDS),
-            )
+            .putStringSet(KEY_NOT_INTERESTED_DYNAMIC_IDS, normalizedIds)
             .apply()
     }
 
@@ -318,6 +380,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             .putStringSet(KEY_PINNED_USERS, pinned.map { it.toString() }.toSet())
             .putStringSet(KEY_HIDDEN_USERS, hidden.map { it.toString() }.toSet())
             .apply()
+    }
+
+    private fun persistUserPreference(update: (SharedPreferences.Editor) -> Unit) {
+        val editor = userPrefs.edit()
+        update(editor)
+        editor.apply()
     }
 
     private fun loadCachedDynamics() {
@@ -361,16 +429,19 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private fun saveDynamicCache(items: List<DynamicItem>) {
         if (items.isEmpty()) {
             cacheSaveJob?.cancel()
-            cachePrefs.edit()
-                .remove(KEY_DYNAMIC_CACHE)
-                .remove(KEY_DYNAMIC_CACHE_TIME)
-                .apply()
+            runAfterPersistedPreferencesReady {
+                cachePrefs.edit()
+                    .remove(KEY_DYNAMIC_CACHE)
+                    .remove(KEY_DYNAMIC_CACHE_TIME)
+                    .apply()
+            }
             return
         }
         val snapshot = items.take(MAX_CACHE_ITEMS)
         cacheSaveJob?.cancel()
         cacheSaveJob = viewModelScope.launch(Dispatchers.Default) {
             val payload = json.encodeToString(snapshot)
+            persistedPreferencesReady.await()
             withContext(Dispatchers.IO) {
                 cachePrefs.edit()
                     .putString(KEY_DYNAMIC_CACHE, payload)
@@ -790,6 +861,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun togglePinUser(uid: Long) {
+        if (!arePersistedPreferencesReady) {
+            runAfterPersistedPreferencesReady { togglePinUser(uid) }
+            return
+        }
         val pinned = _pinnedUserIds.value.toMutableSet()
         if (pinned.contains(uid)) {
             pinned.remove(uid)
@@ -802,6 +877,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun toggleHiddenUser(uid: Long) {
+        if (!arePersistedPreferencesReady) {
+            runAfterPersistedPreferencesReady { toggleHiddenUser(uid) }
+            return
+        }
         val hidden = _hiddenUserIds.value.toMutableSet()
         val pinned = _pinnedUserIds.value.toMutableSet()
         val isNowHidden = if (hidden.contains(uid)) {
@@ -839,13 +918,19 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
      *  [新增] 切换显示模式并保存
      */
     fun setDisplayMode(mode: DynamicDisplayMode) {
+        if (!arePersistedPreferencesReady) {
+            runAfterPersistedPreferencesReady { setDisplayMode(mode) }
+            return
+        }
         _displayMode.value = mode
-        userPrefs.edit()
-            .putString(KEY_DISPLAY_MODE, mode.name)
-            .apply()
+        persistUserPreference { it.putString(KEY_DISPLAY_MODE, mode.name) }
     }
 
     fun setSelectedTab(tab: Int) {
+        if (!arePersistedPreferencesReady) {
+            runAfterPersistedPreferencesReady { setSelectedTab(tab) }
+            return
+        }
         val resolvedTab = resolveDynamicSelectedTab(
             savedTab = tab,
             tabCount = DYNAMIC_TOP_TAB_COUNT
@@ -855,7 +940,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             selectedTab = resolvedTab,
             selectedUserId = previousSelectedUserId
         )
-        if (resolvedTab == 4) {
+        if (resolvedTab == 4 && (!startupLoadsActivationRequested || startupLoadsActivated)) {
             requestCompleteFollowingsLoad()
         }
         if (_selectedTab.value == resolvedTab && previousSelectedUserId == nextSelectedUserId) return
@@ -865,15 +950,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         _selectedTab.value = resolvedTab
         val requestType = resolveDynamicFeedRequestType(resolvedTab)
         _uiState.value = _uiState.value.selectTimelinePage(requestType)
-        userPrefs.edit()
-            .putInt(KEY_SELECTED_TAB, resolvedTab)
-            .apply()
+        persistUserPreference { it.putInt(KEY_SELECTED_TAB, resolvedTab) }
         if (nextSelectedUserId == null) {
             DynamicRepository.resetPagination(
                 scope = DynamicFeedScope.DYNAMIC_SCREEN,
                 type = requestType
             )
-            loadDynamicFeed(refresh = true, requestType = requestType)
+            if (!startupLoadsActivationRequested || startupLoadsActivated) {
+                loadDynamicFeed(refresh = true, requestType = requestType)
+            }
         }
     }
 
@@ -2282,14 +2367,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 if (action.dynamicId.isBlank()) {
                     onResult(false, "无法识别该动态")
                 } else {
-                    val updatedIds = normalizeDynamicNotInterestedIds(
-                        _uiState.value.tempBannedDynamicIds + action.dynamicId,
-                        MAX_NOT_INTERESTED_DYNAMIC_IDS,
-                    )
-                        .toImmutableSet()
-                    _uiState.value = _uiState.value.copy(tempBannedDynamicIds = updatedIds)
-                    persistNotInterestedDynamicIds(updatedIds)
-                    onResult(true, "已标记为不感兴趣")
+                    runAfterPersistedPreferencesReady {
+                        val updatedIds = normalizeDynamicNotInterestedIds(
+                            _uiState.value.tempBannedDynamicIds + action.dynamicId,
+                            MAX_NOT_INTERESTED_DYNAMIC_IDS,
+                        ).toImmutableSet()
+                        _uiState.value = _uiState.value.copy(tempBannedDynamicIds = updatedIds)
+                        persistNotInterestedDynamicIds(updatedIds)
+                        onResult(true, "已标记为不感兴趣")
+                    }
                 }
             }
             is DynamicManageAction.ToggleTop -> toggleDynamicTop(action, onResult)

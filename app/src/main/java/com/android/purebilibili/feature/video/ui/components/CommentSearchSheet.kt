@@ -151,7 +151,7 @@ fun CommentSearchSheet(
     val glassActive = liquidGlassEnabled && !isLowBlurBudgetForced()
     AppModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = AppSurfaceTokens.surface(),
         modifier = modifier,
     ) {
         Column(

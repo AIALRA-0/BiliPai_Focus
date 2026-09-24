@@ -43,10 +43,10 @@ import com.android.purebilibili.core.plugin.skin.UiSkinImportPackageResolver
 import com.android.purebilibili.core.plugin.skin.UiSkinImportMode
 import com.android.purebilibili.core.plugin.skin.InstalledUiSkinPackage
 import com.android.purebilibili.core.plugin.skin.UiSkinInstallStore
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
 import com.android.purebilibili.core.plugin.skin.UiSkinPackagePreview
 import com.android.purebilibili.core.plugin.skin.UiSkinSelection
 import com.android.purebilibili.core.plugin.skin.UiSkinSettingsStore
-import com.android.purebilibili.core.plugin.skin.rememberUiSkinState
 import com.android.purebilibili.core.plugin.PluginInfo
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
@@ -315,9 +315,12 @@ fun PluginsContent(
     val uiSkinStore = remember(context) {
         UiSkinInstallStore.createDefault(context)
     }
-    val uiSkinState by rememberUiSkinState(context)
-    var installedUiSkins by remember {
-        mutableStateOf(uiSkinStore.listInstalledPackages())
+    val uiSkinState = LocalUiSkinState.current
+    var installedUiSkins by remember { mutableStateOf(emptyList<InstalledUiSkinPackage>()) }
+    LaunchedEffect(uiSkinStore) {
+        installedUiSkins = withContext(Dispatchers.IO) {
+            uiSkinStore.listInstalledPackages()
+        }
     }
     var uiSkinPreview by remember { mutableStateOf<UiSkinPackagePreview?>(null) }
     var uiSkinPackageBytes by remember { mutableStateOf<ByteArray?>(null) }
@@ -1798,38 +1801,45 @@ fun PluginsContent(
                 AppTextButton(
                     onClick = {
                         val bytes = uiSkinPackageBytes ?: return@AppTextButton
-                        val result = runCatching {
-                            val packageToInstall = when (uiSkinImportMode) {
-                                UiSkinImportMode.FULL_SKIN -> bytes
-                                UiSkinImportMode.PERSONAL_BACKGROUND_ONLY ->
-                                    UiSkinImportPackageResolver.restrictToPersonalBackground(bytes).getOrThrow()
+                        val importMode = uiSkinImportMode
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    val packageToInstall = when (importMode) {
+                                        UiSkinImportMode.FULL_SKIN -> bytes
+                                        UiSkinImportMode.PERSONAL_BACKGROUND_ONLY ->
+                                            UiSkinImportPackageResolver.restrictToPersonalBackground(bytes).getOrThrow()
+                                    }
+                                    val installPreview = uiSkinStore.previewPackage(packageToInstall).getOrThrow()
+                                    uiSkinStore.installPreview(installPreview, packageToInstall).getOrThrow()
+                                }
                             }
-                            val installPreview = uiSkinStore.previewPackage(packageToInstall).getOrThrow()
-                            uiSkinStore.installPreview(installPreview, packageToInstall).getOrThrow()
-                        }
-                        result.onSuccess { installed ->
-                            installedUiSkins = uiSkinStore.listInstalledPackages()
-                            UiSkinSettingsStore.setSelection(
-                                context = context,
-                                selection = UiSkinSelection(
-                                    enabled = true,
-                                    selectedSkinId = installed.skinId,
-                                    selectedInstallId = installed.installId
+                            result.onSuccess { installed ->
+                                installedUiSkins = withContext(Dispatchers.IO) {
+                                    uiSkinStore.listInstalledPackages()
+                                }
+                                UiSkinSettingsStore.setSelection(
+                                    context = context,
+                                    selection = UiSkinSelection(
+                                        enabled = true,
+                                        selectedSkinId = installed.skinId,
+                                        selectedInstallId = installed.installId
+                                    )
                                 )
-                            )
-                            uiSkinPreview = null
-                            uiSkinPackageBytes = null
-                            uiSkinPreviewAssetFiles = emptyMap()
-                            android.widget.Toast.makeText(
-                                context,
-                                "皮肤包已保存并启用",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }.onFailure { error ->
-                            uiSkinImportError = error.message ?: "皮肤包导入失败"
-                            uiSkinPreview = null
-                            uiSkinPackageBytes = null
-                            uiSkinPreviewAssetFiles = emptyMap()
+                                uiSkinPreview = null
+                                uiSkinPackageBytes = null
+                                uiSkinPreviewAssetFiles = emptyMap()
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "皮肤包已保存并启用",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }.onFailure { error ->
+                                uiSkinImportError = error.message ?: "皮肤包导入失败"
+                                uiSkinPreview = null
+                                uiSkinPackageBytes = null
+                                uiSkinPreviewAssetFiles = emptyMap()
+                            }
                         }
                     }
                 ) {
@@ -1947,26 +1957,32 @@ fun PluginsContent(
                     onClick = {
                         val wasActive = uiSkinState.enabled &&
                             uiSkinState.activeSkin?.installId == skin.installId
-                        val result = uiSkinStore.deleteInstalledPackage(skin.installId)
-                        result.onSuccess { deleted ->
-                            if (deleted) {
-                                installedUiSkins = uiSkinStore.listInstalledPackages()
-                                if (wasActive) {
-                                    UiSkinSettingsStore.setSelection(
-                                        context = context,
-                                        selection = UiSkinSelection()
-                                    )
-                                }
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "皮肤已删除",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                uiSkinStore.deleteInstalledPackage(skin.installId)
                             }
-                            uiSkinPendingDelete = null
-                        }.onFailure { error ->
-                            uiSkinPendingDelete = null
-                            uiSkinImportError = error.message ?: "皮肤删除失败"
+                            result.onSuccess { deleted ->
+                                if (deleted) {
+                                    installedUiSkins = withContext(Dispatchers.IO) {
+                                        uiSkinStore.listInstalledPackages()
+                                    }
+                                    if (wasActive) {
+                                        UiSkinSettingsStore.setSelection(
+                                            context = context,
+                                            selection = UiSkinSelection()
+                                        )
+                                    }
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "皮肤已删除",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                uiSkinPendingDelete = null
+                            }.onFailure { error ->
+                                uiSkinPendingDelete = null
+                                uiSkinImportError = error.message ?: "皮肤删除失败"
+                            }
                         }
                     }
                 ) {

@@ -1,6 +1,7 @@
 package com.android.purebilibili.core.ui.perf
 
 import java.io.File
+import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -49,14 +50,20 @@ class FrameBudgetLintTest {
     }
 
     @Test
-    fun hazeSourceRegistrationsDoNotGrow() {
-        val hits = mainSources().sumOf { it.readText().countOf(HAZE_SOURCE) }
-        assertRatchet(
-            actual = hits,
-            limit = MAX_HAZE_SOURCE,
-            what = "hazeSourceCompat(",
-            why = "每注册一个 haze source，对应子树在每帧都要被 record 一次。" +
-                "注册点应当条件挂载——消费方不存在时（例如液态玻璃关闭）根本不该注册。",
+    fun hazeSourceInventoryMatchesReviewedSites() {
+        val actual = mainSources()
+            .mapNotNull { file ->
+                val count = file.readText().countOf(HAZE_SOURCE)
+                if (count == 0) null else file.pureBilibiliRelativePath() to count
+            }
+            .toMap()
+
+        assertEquals(
+            EXPECTED_HAZE_SOURCE_COUNTS,
+            actual,
+            "hazeSourceCompat registrations are an explicitly reviewed 31-site inventory. " +
+                "Each site records its subtree every frame, so changes must update the per-file inventory " +
+                "with a reason; use conditional attachment when its consumer is inactive.",
         )
     }
 
@@ -128,7 +135,7 @@ class FrameBudgetLintTest {
     fun settingsSyncCallSitesDoNotGrow() {
         val hits = mainSources()
             .filterNot { it.invariantPath.contains("/core/store/") }
-            .sumOf { it.readText().countOf(SETTINGS_SYNC_CALL) }
+            .sumOf { SETTINGS_SYNC_CALL.findAll(it.readText().withoutCommentLines()).count() }
 
         assertRatchet(
             actual = hits,
@@ -138,6 +145,18 @@ class FrameBudgetLintTest {
                 "项目里已有这个模式的先例（PlayerSettingsCache、各 *_cache SharedPreferences 影子缓存），" +
                 "推广即可，不需要发明新机制。",
         )
+    }
+
+    @Test
+    fun settingsSyncMatcherOnlyCountsSettingsManagerCalls() {
+        val sample = """
+            SettingsManager.getPrivacyModeSync(context)
+            com.android.purebilibili.core.store.SettingsManager
+                .getPlayerModeSync(this)
+            NetworkProxyStore.getSync(context)
+        """.trimIndent()
+
+        assertEquals(2, SETTINGS_SYNC_CALL.findAll(sample).count())
     }
 
     /**
@@ -178,10 +197,26 @@ class FrameBudgetLintTest {
             }
             .sumOf { pattern.findAll(it).count() }
 
+    private fun String.withoutCommentLines(): String =
+        lineSequence()
+            .filterNot { line ->
+                val trimmed = line.trimStart()
+                trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")
+            }
+            .joinToString("\n")
+
     private fun mainSources(): List<File> = cachedMain
 
     private fun storeSources(): List<File> =
         cachedMain.filter { it.invariantPath.contains("/core/store/") }
+
+    private fun File.pureBilibiliRelativePath(): String {
+        val path = invariantPath
+        val marker = "com/android/purebilibili/"
+        val markerIndex = path.lastIndexOf(marker)
+        require(markerIndex >= 0) { "Unexpected main source path: $path" }
+        return path.substring(markerIndex + marker.length)
+    }
 
     private companion object {
         val COMPOSED = Regex("""=\s*composed\s*[({]""")
@@ -195,16 +230,41 @@ class FrameBudgetLintTest {
         )
         val INFINITE_TRANSITION = Regex("""rememberInfiniteTransition\s*\(""")
 
-        // 限定第一个实参是 context/ctx/this，这正是 SettingsManager 的 *Sync 约定。
-        // 不加这个限定的话会误伤 queueDanmakuCloudSync / startDriftSync /
-        // blockUpWithBilibiliSync 这类与设置读取无关的方法（实测多 75 处噪声）。
-        val SETTINGS_SYNC_CALL = Regex("""\w+Sync\((context|ctx|this)""")
+        // 限定接收者为 SettingsManager，且首个实参是 context/ctx/this，避免误计
+        // NetworkProxyStore.getSync 这类其他设置存储 API。
+        val SETTINGS_SYNC_CALL = Regex(
+            """\bSettingsManager\s*\.\s*\w+Sync\s*\(\s*(context|ctx|this)\b""",
+        )
 
         // ── 冻结于接入棘轮时的实测值，只能调小 ──────────────────────────
         const val MAX_COMPOSED = 23
         const val MAX_OFFSCREEN = 2
-        const val MAX_HAZE_SOURCE = 28
         const val MAX_RUN_BLOCKING_IN_STORE = 1
+
+        // Reviewed haze source registrations, recorded by file so a reduction in one module
+        // cannot silently mask a new per-frame recording site elsewhere.
+        val EXPECTED_HAZE_SOURCE_COUNTS = mapOf(
+            "core/ui/ImmersiveAppScaffold.kt" to 1,
+            "feature/bangumi/BangumiScreen.kt" to 1,
+            "feature/dynamic/DynamicScreen.kt" to 2,
+            "feature/dynamic/components/DynamicSidebar.kt" to 1,
+            "feature/home/HomeScreen.kt" to 1,
+            "feature/list/CommonListScreen.kt" to 1,
+            "feature/live/LivePlayerScreen.kt" to 1,
+            "feature/message/ChatScreen.kt" to 1,
+            "feature/profile/ProfileScreen.kt" to 3,
+            "feature/search/SearchScreen.kt" to 9,
+            "feature/settings/screen/SettingsScreen.kt" to 1,
+            "feature/settings/screen/SettingsTabletShell.kt" to 1,
+            "feature/settings/ui/SettingsPageScaffold.kt" to 1,
+            "feature/space/SpaceScreen.kt" to 1,
+            "feature/video/screen/VideoDetailPhoneContent.kt" to 1,
+            "feature/video/ui/overlay/FullscreenPlayerOverlay.kt" to 1,
+            "feature/video/ui/overlay/ImmersiveStatusBarBackdrop.kt" to 1,
+            "feature/video/ui/section/VideoPlayerSection.kt" to 1,
+            "feature/watchlater/WatchLaterScreen.kt" to 1,
+            "navigation/AppNavigation.kt" to 1,
+        )
         // 17 → 15：删掉 LottieComponents 里两个零调用点的设置页动画头部
         // （含一个 tween(2000) Reverse 无限动画）后的实测值。
         // 15 → 16：骨架屏同步呼吸光（HomeFeedSkeletonCard / ProfileLoadingSkeleton /

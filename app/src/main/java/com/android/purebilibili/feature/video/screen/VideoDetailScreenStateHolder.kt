@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.screen
 
 import coil3.request.crossfade
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
@@ -295,7 +296,7 @@ private fun CollapsedPlayerNavigationBar(
         val useMiuixNonGlassChrome = isMiuixNonGlassEnabled()
         val mediaScrimAlpha = resolveCollapsedPlayerMediaScrimAlpha(scrollRatio)
         val toolbarAlpha = resolveCollapsedPlayerToolbarAlpha(scrollRatio)
-        val toolbarSurface = MaterialTheme.colorScheme.surface
+        val toolbarSurface = AppSurfaceTokens.surface()
         Box(
             modifier = modifier.drawBehind {
                 drawRect(
@@ -339,7 +340,7 @@ private fun CollapsedPlayerNavigationBar(
                                 )
                             }
                         } else {
-                            IconButton(onClick = onBack, modifier = Modifier.size(width = 42.dp, height = 34.dp)) {
+                            AppIconButton(onClick = onBack, modifier = Modifier.size(width = 42.dp, height = 34.dp)) {
                                 Icon(
                                     Icons.Filled.ArrowBack,
                                     contentDescription = "返回",
@@ -359,7 +360,7 @@ private fun CollapsedPlayerNavigationBar(
                                 )
                             }
                         } else {
-                            IconButton(onClick = onHomeClick, modifier = Modifier.size(width = 42.dp, height = 34.dp)) {
+                            AppIconButton(onClick = onHomeClick, modifier = Modifier.size(width = 42.dp, height = 34.dp)) {
                                 Icon(
                                     Icons.Filled.Home,
                                     contentDescription = "首页",
@@ -403,7 +404,7 @@ private fun CollapsedPlayerNavigationBar(
                             )
                         }
                     } else {
-                        IconButton(
+                        AppIconButton(
                             onClick = onMoreClick,
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
@@ -1147,12 +1148,17 @@ internal fun VideoDetailScreenStateHolder(
             }
         }
     }
-    val commentDefaultSortMode by com.android.purebilibili.core.store.SettingsManager
-        .getCommentDefaultSortMode(context)
+    val commentDefaultSortState by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager
+            .getCommentDefaultSortMode(context)
+            .map { mode -> mode to true }
+    }
         .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context),
+            initialValue = CommentSortMode.HOT.apiMode to false,
             lifecycle = lifecycleOwner.lifecycle
         )
+    val commentDefaultSortMode = commentDefaultSortState.first
+    val commentSortPreferenceLoaded = commentDefaultSortState.second
     val commentFraudDetectionEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCommentFraudDetectionEnabled(context)
         .collectAsStateWithLifecycle(
@@ -1234,8 +1240,7 @@ internal fun VideoDetailScreenStateHolder(
     val immersiveVideoPageStatusBar by com.android.purebilibili.core.store.SettingsManager
         .getHideVideoPageStatusBar(context)
         .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager
-                .getHideVideoPageStatusBarSync(context),
+            initialValue = false,
             lifecycle = lifecycleOwner.lifecycle
         )
     val useTabletLayout = horizontalAdaptationEnabled && (
@@ -3012,19 +3017,22 @@ internal fun VideoDetailScreenStateHolder(
     // 🔧 [性能优化] 记录上次缓存的 bvid，避免重复缓存 MiniPlayer 信息
     var lastCachedMiniPlayerBvid by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(uiState, isVisible, commentSortPreferenceLoaded) {
+        if (!commentSortPreferenceLoaded) return@LaunchedEffect
+        val info = (uiState as? VideoPlaybackUiState.Success)?.info ?: return@LaunchedEffect
+        commentViewModel.init(
+            aid = info.aid,
+            upMid = info.owner.mid,
+            preferredSortMode = preferredCommentSortMode,
+            expectedReplyCount = info.stat.reply
+        )
+    }
+
     //  核心修改：初始化评论 & 媒体中心信息
     LaunchedEffect(uiState, isVisible) {
         if (uiState is VideoPlaybackUiState.Success) {
             val info = (uiState as VideoPlaybackUiState.Success).info
             val success = uiState as VideoPlaybackUiState.Success
-
-            // 初始化评论（传入 UP 主 mid 用于筛选）- 保持在主线程
-            commentViewModel.init(
-                aid = info.aid,
-                upMid = info.owner.mid,
-                preferredSortMode = preferredCommentSortMode,
-                expectedReplyCount = info.stat.reply
-            )
 
             if (openCommentRootRpidFromRoute > 0L) {
                 selectedVideoContentTabIndex = 1
@@ -3759,6 +3767,7 @@ internal fun VideoDetailScreenStateHolder(
                             TabletVideoLayout(
                                 playerState = playerState,
                                 uiState = uiState,
+                                focusRelatedVideosVisible = focusRelatedVideosVisible,
                                 commentState = commentState,
                                 engagementState = engagementState,
                                 subReplyState = subReplyState,
@@ -3826,6 +3835,7 @@ internal fun VideoDetailScreenStateHolder(
                             LargeScreenVideoLayout(
                             playerState = playerState,
                             uiState = uiState,
+                            focusRelatedVideosVisible = focusRelatedVideosVisible,
                             commentState = commentState,
                             engagementState = engagementState,
                             subReplyState = subReplyState,

@@ -72,6 +72,13 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.feature.live.LiveDanmakuItem
 import com.android.purebilibili.feature.live.resolveLiveSheetVisualSpec
 
+private object LiveInteractionSheetLayoutSpec {
+    const val EmoticonEmptyStateHeightDp = 200f
+    const val EmoticonTabDividerThicknessDp = 0.5f
+    const val DeleteKeywordActionIconSizeDp = 14f
+    const val ShieldedUserIconSizeDp = 18f
+}
+
 @Composable
 fun LiveReportDialog(
     target: LiveDanmakuItem,
@@ -139,7 +146,7 @@ fun LiveEmoticonSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
+                        .height(LiveInteractionSheetLayoutSpec.EmoticonEmptyStateHeightDp.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     AppText(
@@ -164,7 +171,7 @@ fun LiveEmoticonSheet(
                     )
                     AppHorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                        thickness = 0.5.dp
+                        thickness = LiveInteractionSheetLayoutSpec.EmoticonTabDividerThicknessDp.dp
                     )
                 }
 
@@ -175,7 +182,7 @@ fun LiveEmoticonSheet(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
+                            .height(LiveInteractionSheetLayoutSpec.EmoticonEmptyStateHeightDp.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         AppText(
@@ -394,13 +401,15 @@ private fun LiveKeywordSection(
                             AppIconButton(
                                 onClick = { if (enabled) onDeleteKeyword(item.keyword) },
                                 enabled = enabled,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(AppSpacingTokens.ExtraLarge)
                             ) {
                                 AppIcon(
                                     clearIcon,
                                     contentDescription = "删除屏蔽词",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(
+                                        LiveInteractionSheetLayoutSpec.DeleteKeywordActionIconSizeDp.dp,
+                                    )
                                 )
                             }
                         }
@@ -446,7 +455,9 @@ private fun LiveShieldUserSection(
                                 Icons.Outlined.Block,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(
+                                    LiveInteractionSheetLayoutSpec.ShieldedUserIconSizeDp.dp,
+                                )
                             )
                             AppText(
                                 text = user.uname.ifBlank { user.uid.toString() },

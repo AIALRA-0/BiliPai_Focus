@@ -230,10 +230,11 @@ object CacheUtils {
             if (CacheClearTarget.TEMP_FILES_AND_LOGS in targets) {
                 val excludePatterns = buildList {
                     if (CacheClearTarget.IMAGE_PREVIEW !in targets) add("image_cache")
+                    // PlaybackMediaCache owns deletion and may defer it while a media source is open.
+                    add("playback_media_cache")
                     if (CacheClearTarget.NETWORK !in targets) {
                         add("okhttp")
                         add("http_cache")
-                        add("playback_media_cache")
                     }
                 }
                 context.cacheDir?.let { cacheDir ->

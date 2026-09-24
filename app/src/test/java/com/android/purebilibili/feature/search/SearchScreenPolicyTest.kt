@@ -462,7 +462,7 @@ class SearchScreenPolicyTest {
         assertTrue(typeTabRowBody.contains("onIndicatorPositionChanged = { position ->"))
         assertTrue(typeTabRowBody.contains("resolveSearchTypeTabDragScrollDeltaPx("))
         val segmentedControl = loadSource(
-            "feature/home/components/BottomBarLiquidSegmentedControl.kt"
+            "src/main/java/com/android/purebilibili/feature/home/components/BottomBarLiquidSegmentedControl.kt"
         )
         assertTrue(segmentedControl.contains("modifier.horizontalScroll(scrollState)"))
         assertFalse(searchSource.contains("androidx.compose.material3.ScrollableTabRow("))
@@ -486,9 +486,18 @@ class SearchScreenPolicyTest {
         assertFalse(searchSource.contains("androidx.compose.material3.InputChip("))
         assertFalse(searchSource.contains("SearchPagerTabIndicator("))
         assertFalse(searchSource.contains("val showStableFilterBar = !searchPagerState.isScrollInProgress"))
-        // Exiting results must not reopen IME.
-        assertTrue(searchSource.contains("exitResultsToLanding("))
-        assertTrue(searchSource.contains("dismissSearchKeyboardAndFocus("))
+        // Leaving search hides the keyboard and clears focus before navigation.
+        val dismissSearch = searchSource
+            .substringAfter("val dismissSearchKeyboardAndFocus = {")
+            .substringBefore("val handleSearchBack = {")
+        val backHandler = searchSource
+            .substringAfter("val handleSearchBack = {")
+            .substringBefore("BackHandler(onBack = handleSearchBack)")
+        assertTrue(dismissSearch.contains("keyboardController?.hide()"))
+        assertTrue(dismissSearch.contains("focusManager.clearFocus(force = true)"))
+        assertTrue(backHandler.contains("SearchBackAction.LEAVE_SEARCH ->"))
+        assertTrue(backHandler.contains("dismissSearchKeyboardAndFocus()"))
+        assertTrue(backHandler.contains("onBack()"))
     }
 
     @Test

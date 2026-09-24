@@ -1038,7 +1038,7 @@ fun VideoPlayerOverlay(
     val immersiveVideoPageStatusBar by SettingsManager
         .getHideVideoPageStatusBar(context)
         .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getHideVideoPageStatusBarSync(context),
+            initialValue = false,
         )
     val playerChromeStatusBarVisible = !resolveVideoDetailSystemBarsVisibilityPolicy(
         isFullscreenMode = isFullscreen,

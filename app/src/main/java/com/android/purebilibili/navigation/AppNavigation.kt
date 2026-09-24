@@ -5,6 +5,8 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.SystemClock
 import android.widget.Toast
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue //  新增
 import androidx.compose.runtime.LaunchedEffect // 新增
@@ -100,6 +103,7 @@ import com.android.purebilibili.feature.video.screen.VideoDetailScreen
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.dynamic.DynamicScreen
 import com.android.purebilibili.feature.dynamic.DynamicScrollRequest
 import com.android.purebilibili.feature.dynamic.LocalDynamicScrollChannel
@@ -355,6 +359,15 @@ private fun BiliPaiNavKey.toPrivacyNavigationTarget(): PrivacyNavigationTarget {
     }
 }
 
+internal fun resolveGlobalWallpaperDataSaverActive(
+    mode: SettingsManager.DataSaverMode,
+    isCellularNetwork: Boolean,
+): Boolean = when (mode) {
+    SettingsManager.DataSaverMode.OFF -> false
+    SettingsManager.DataSaverMode.ALWAYS -> true
+    SettingsManager.DataSaverMode.MOBILE_ONLY -> isCellularNetwork
+}
+
 @androidx.media3.common.util.UnstableApi
 // @OptIn(ExperimentalMaterial3WindowSizeClassApi::class) (Removed)
 @Composable
@@ -500,24 +513,21 @@ fun AppNavigation(
     val agreementRequired = isUserAgreementRequired(userAgreementAcked)
     val startDestination =
         if (agreementRequired) ScreenRoutes.Onboarding.route else ScreenRoutes.Home.route
-    val cachedPortraitStartupRoute = remember(context) {
-        SettingsManager.getCachedLaunchToPortraitFeedOnStartup(context)
-    }
     val resolvedPortraitStartupRoute by produceState<Boolean?>(
-        initialValue = cachedPortraitStartupRoute,
+        initialValue = null,
         key1 = context,
     ) {
-        if (value == null) {
-            value = try {
+        value = try {
+            withContext(Dispatchers.IO) {
                 SettingsManager.resolveLaunchToPortraitFeedOnStartup(context)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                false
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
         }
     }
-    // 缓存缺失时等待 DataStore 首值；先用 false 建栈会让恢复备份后的本次启动进错首页。
+    // 等待后台读取缓存或 DataStore 的首值；先用 false 建栈会让恢复备份后的本次启动进错首页。
     val launchToPortraitFeedOnStartupAtInit = resolvedPortraitStartupRoute ?: return
 
     val videoSharedTransitionSpeedSettings = remember(
@@ -619,9 +629,27 @@ fun AppNavigation(
         }
         val backgroundColor = MaterialTheme.colorScheme.background
         val isLightBackground = remember(backgroundColor) { backgroundColor.luminance() > 0.5f }
-        val isDataSaverActiveForGlobalWallpaper = remember(context) {
-            SettingsManager.isDataSaverActive(context)
+        val dataSaverModeFlow = remember(context) {
+            SettingsManager.getDataSaverMode(context)
         }
+        val dataSaverMode by dataSaverModeFlow.collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DataSaverMode.MOBILE_ONLY,
+        )
+        val isCellularNetwork = remember(context, dataSaverMode == SettingsManager.DataSaverMode.MOBILE_ONLY) {
+            if (dataSaverMode != SettingsManager.DataSaverMode.MOBILE_ONLY) {
+                false
+            } else {
+                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                    as? ConnectivityManager
+                val activeNetwork = connectivityManager?.activeNetwork
+                activeNetwork != null && connectivityManager?.getNetworkCapabilities(activeNetwork)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+            }
+        }
+        val isDataSaverActiveForGlobalWallpaper = resolveGlobalWallpaperDataSaverActive(
+            mode = dataSaverMode,
+            isCellularNetwork = isCellularNetwork,
+        )
         var previousRouteForStopPolicy by remember { mutableStateOf<String?>(null) }
         var previousVideoBvidForStopPolicy by remember { mutableStateOf<String?>(null) }
         val currentVideoBvidForStopPolicy = (currentNavigation3Key as? BiliPaiNavKey.VideoDetail)?.bvid
@@ -3619,6 +3647,12 @@ fun AppNavigation(
                                     } else {
                                         viewModel()
                                     }
+                                val playbackUiState = viewModel.uiState.collectAsStateWithLifecycle()
+                                val audioModeHasDisplayState by remember(playbackUiState) {
+                                    derivedStateOf {
+                                        playbackUiState.value is VideoPlaybackUiState.Success
+                                    }
+                                }
                                 DisposableEffect(Unit) {
                                     onAudioModeEnter()
                                     onDispose {
@@ -3627,9 +3661,7 @@ fun AppNavigation(
                                 }
                                 val initialLoadRequest = resolveAudioModeInitialLoadRequest(
                                     key = audioModeKey,
-                                    hasDisplayState =
-                                        viewModel.uiState.value is
-                                            com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState.Success
+                                    hasDisplayState = audioModeHasDisplayState
                                 )
                                 com.android.purebilibili.feature.video.screen.AudioModeScreen(
                                     viewModel = viewModel,

@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.video
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
@@ -15,6 +16,8 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.KeyEvent
+import android.view.MotionEvent
 import com.android.purebilibili.core.util.Logger
 import android.util.Rational
 import androidx.activity.ComponentActivity
@@ -38,6 +41,7 @@ import com.android.purebilibili.core.ui.AppWindowSystemUiController
 import com.android.purebilibili.core.ui.ProvideAppThemeConfig
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.performance.AppRuntimeVisualGuardTracker
+import com.android.purebilibili.core.ui.performance.InteractionRefreshRateController
 import com.android.purebilibili.core.ui.performance.ProvideRuntimeVisualGuard
 import com.android.purebilibili.core.ui.adaptive.toAdaptiveFoldPosture
 import com.android.purebilibili.core.ui.transition.LocalVideoTransitionAdaptiveInfo
@@ -69,6 +73,7 @@ private const val CONTROL_TYPE_PAUSE = 2
 class VideoActivity : ComponentActivity() {
 
     private val viewModel: VideoPlaybackViewModel by viewModels()
+    private val interactionRefreshRateController by lazy { InteractionRefreshRateController(this) }
     private var isFullscreen by mutableStateOf(false)
     private var isInPipMode by mutableStateOf(false)
     private var runtimeJankStats: JankStats? = null
@@ -298,17 +303,46 @@ class VideoActivity : ComponentActivity() {
         }
     }
 
-    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+    // Intercept before Compose key handlers so plain Escape always exits this video route.
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (
-            event.keyCode == android.view.KeyEvent.KEYCODE_ESCAPE &&
+            event.keyCode == KeyEvent.KEYCODE_ESCAPE &&
             !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed
         ) {
-            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 onBackPressedDispatcher.onBackPressed()
             }
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        interactionRefreshRateController.onResume()
+    }
+
+    override fun onPause() {
+        interactionRefreshRateController.onPause()
+        super.onPause()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        interactionRefreshRateController.onTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_SCROLL) {
+            interactionRefreshRateController.onOtherInteraction()
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        interactionRefreshRateController.onOtherInteraction()
     }
 
     override fun onStop() {

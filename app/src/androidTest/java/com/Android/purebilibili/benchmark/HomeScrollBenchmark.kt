@@ -13,7 +13,8 @@ import java.io.FileInputStream
 @RunWith(AndroidJUnit4::class)
 class HomeScrollBenchmark {
 
-    private val packageName = "com.android.purebilibili"
+    private val packageName: String
+        get() = InstrumentationRegistry.getInstrumentation().targetContext.packageName
 
     private fun runShell(command: String): String {
         val pfd = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
@@ -42,7 +43,7 @@ class HomeScrollBenchmark {
     fun homeSwipeScenario_recordsFrameAndPss() {
         prepareHomeEntry()
         runShell("input keyevent 3")
-        runShell("am start -W -n $packageName/.MainActivity")
+        runShell("am start -W -n $packageName/com.android.purebilibili.MainActivity")
         Thread.sleep(10_000)
 
         runShell("dumpsys gfxinfo $packageName reset")

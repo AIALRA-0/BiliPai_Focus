@@ -65,6 +65,11 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 
+// Preserve existing local corner geometry across theme migrations.
+private object BangumiPlayerShapeSpec {
+    const val Radius4Dp = 4
+}
+
 /**
  * 番剧播放内容区域
  */
@@ -123,7 +128,7 @@ fun BangumiPlayerContent(
             modifier = Modifier
                 .fillMaxSize()
                 .layerBackdrop(selectionBackdrop)
-                .background(MaterialTheme.colorScheme.background),
+                .background(AppSurfaceTokens.background()),
         )
         Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -781,7 +786,7 @@ fun EpisodeChipSelectable(
                                     } else {
                                         MaterialTheme.colorScheme.secondaryContainer
                                     },
-                                    shape = RoundedCornerShape(4.dp)
+                                    shape = RoundedCornerShape(BangumiPlayerShapeSpec.Radius4Dp.dp)
                                 )
                                 .padding(horizontal = 5.dp, vertical = 1.dp)
                         ) {

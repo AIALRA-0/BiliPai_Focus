@@ -122,6 +122,26 @@ internal enum class TabletSecondaryTab(val label: String) {
     OWNER_UPLOADS("UP 投稿")
 }
 
+internal fun resolveTabletSecondaryTabs(
+    fixedTab: TabletSecondaryTab?,
+    relatedTabFirst: Boolean,
+    includeRelatedTab: Boolean,
+    includeIntroTab: Boolean,
+    includeCollectionTab: Boolean,
+    includeOwnerUploadsTab: Boolean,
+    ownerMid: Long,
+): List<TabletSecondaryTab> {
+    if (fixedTab != null) return listOf(fixedTab)
+    return buildList {
+        if (relatedTabFirst && includeRelatedTab) add(TabletSecondaryTab.RELATED)
+        add(TabletSecondaryTab.COMMENTS)
+        if (includeIntroTab) add(TabletSecondaryTab.INTRO)
+        if (!relatedTabFirst && includeRelatedTab) add(TabletSecondaryTab.RELATED)
+        if (includeCollectionTab) add(TabletSecondaryTab.COLLECTION)
+        if (includeOwnerUploadsTab && ownerMid > 0L) add(TabletSecondaryTab.OWNER_UPLOADS)
+    }
+}
+
 
 @Composable
 internal fun TabletSecondaryDanmakuActions(
@@ -221,6 +241,7 @@ internal fun TabletSecondaryLiquidTabRow(
 internal fun TabletVideoLayout(
     playerState: VideoPlayerState,
     uiState: VideoPlaybackUiState,
+    focusRelatedVideosVisible: Boolean,
     commentState: CommentUiState,
     engagementState: VideoEngagementUiState,
     subReplyState: SubReplyUiState,
@@ -529,6 +550,8 @@ internal fun TabletVideoLayout(
                         onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
                         onDanmakuToggle = danmakuChrome.onToggle,
                         fixedTab = if (useThreePaneLayout) TabletSecondaryTab.COMMENTS else null,
+                        includeRelatedTab = focusRelatedVideosVisible,
+                        focusRelatedVideosVisible = focusRelatedVideosVisible,
                         relatedTabFirst = secondaryDefaultTab ==
                             com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED,
                         introContent = if (layoutPolicy.useTabletopLayout) {
@@ -551,6 +574,7 @@ internal fun TabletVideoLayout(
                                     videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                                     videoNoteEnabled = videoNoteEnabled,
                                     videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
+                                    showRelatedVideos = focusRelatedVideosVisible,
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
@@ -559,7 +583,7 @@ internal fun TabletVideoLayout(
                 }
             }
         },
-        tertiaryContent = if (useThreePaneLayout) {
+        tertiaryContent = if (useThreePaneLayout && focusRelatedVideosVisible) {
             {
                 if (uiState is VideoPlaybackUiState.Success) {
                     TabletSecondaryContent(
@@ -582,6 +606,7 @@ internal fun TabletVideoLayout(
                         requestedTabName = null,
                         onRequestedTabConsumed = {},
                         fixedTab = TabletSecondaryTab.RELATED,
+                        focusRelatedVideosVisible = focusRelatedVideosVisible,
                         introContent = null,
                     )
                 }
@@ -726,6 +751,7 @@ internal fun TabletSecondaryContent(
     introContent: (@Composable () -> Unit)? = null,
     applyStatusBarPadding: Boolean = true,
     includeRelatedTab: Boolean = true,
+    focusRelatedVideosVisible: Boolean = true,
     includeOwnerUploadsTab: Boolean = true,
     relatedTabFirst: Boolean = false,
     danmakuEnabled: Boolean = true,
@@ -733,32 +759,33 @@ internal fun TabletSecondaryContent(
     onDanmakuToggle: () -> Unit = {},
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
+    val showRelatedTab = includeRelatedTab && focusRelatedVideosVisible
     val tabs = remember(
         success.info.ugc_season,
         success.info.owner.mid,
         fixedTab,
         introContent != null,
-        includeRelatedTab,
+        showRelatedTab,
         includeOwnerUploadsTab,
         relatedTabFirst,
     ) {
-        if (fixedTab != null) {
-            listOf(requireNotNull(fixedTab))
-        } else {
-            buildList {
-                if (relatedTabFirst && includeRelatedTab) add(TabletSecondaryTab.RELATED)
-                add(TabletSecondaryTab.COMMENTS)
-                if (introContent != null) add(TabletSecondaryTab.INTRO)
-                if (!relatedTabFirst && includeRelatedTab) add(TabletSecondaryTab.RELATED)
-                if (success.info.ugc_season != null) add(TabletSecondaryTab.COLLECTION)
-                if (includeOwnerUploadsTab && success.info.owner.mid > 0L) {
-                    add(TabletSecondaryTab.OWNER_UPLOADS)
-                }
-            }
-        }
+        resolveTabletSecondaryTabs(
+            fixedTab = fixedTab,
+            relatedTabFirst = relatedTabFirst,
+            includeRelatedTab = showRelatedTab,
+            includeIntroTab = introContent != null,
+            includeCollectionTab = success.info.ugc_season != null,
+            includeOwnerUploadsTab = includeOwnerUploadsTab,
+            ownerMid = success.info.owner.mid,
+        )
     }
     val relatedTabIndex = tabs.indexOf(TabletSecondaryTab.RELATED).coerceAtLeast(0)
-    var selectedTab by rememberSaveable(success.info.bvid, fixedTab, relatedTabFirst) {
+    var selectedTab by rememberSaveable(
+        success.info.bvid,
+        fixedTab,
+        relatedTabFirst,
+        focusRelatedVideosVisible,
+    ) {
         mutableIntStateOf(
             if (fixedTab != null) 0 else resolveTabletSecondaryDefaultTabIndex(
                 tabs = tabs,
@@ -779,6 +806,11 @@ internal fun TabletSecondaryContent(
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     
     val context = androidx.compose.ui.platform.LocalContext.current
+    val collapsedSubReplyPreviewLimit by SettingsManager
+        .getCommentCollapsedReplyPreviewLimit(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
+        )
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val latestOnRequestedTabConsumed by rememberUpdatedState(onRequestedTabConsumed)
@@ -1058,6 +1090,7 @@ internal fun TabletSecondaryContent(
                                 ) {
                                     ReplyItemView(
                                         item = reply,
+                                        collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
                                         emoteMap = success.emoteMap,
                                         upMid = success.info.owner.mid,
                                         showUpFlag = commentState.showUpFlag,
@@ -1129,7 +1162,7 @@ internal fun TabletSecondaryContent(
                                     style = MaterialTheme.typography.titleMedium,
                                     color = commentAppearance.secondaryTextColor
                                 )
-                                if (includeRelatedTab) {
+                                if (showRelatedTab) {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     AppText(
                                         text = "先看看相关推荐",

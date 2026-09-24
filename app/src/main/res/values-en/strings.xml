@@ -123,6 +123,8 @@
     <string name="shortcut_search_long">Search Videos</string>
     <string name="shortcut_dynamic_short">Dynamic</string>
     <string name="shortcut_dynamic_long">View Dynamic</string>
+    <string name="shortcut_watch_later_short">Watch Later</string>
+    <string name="shortcut_watch_later_long">Open Watch Later</string>
     <string name="shortcut_favorite_short">Favorites</string>
     <string name="shortcut_favorite_long">My Favorites</string>
     <string name="shortcut_history_short">History</string>

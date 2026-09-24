@@ -2,8 +2,6 @@ package com.android.purebilibili.feature.home.components
 
 import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -12,6 +10,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
@@ -24,10 +25,11 @@ internal const val BILIPAI_PROGRESSIVE_TOP_BLUR_START_FRACTION = 0f
 internal const val BILIPAI_PROGRESSIVE_TOP_BLUR_FALLOFF_CURVE = 1.25f
 private const val BILIPAI_PROGRESSIVE_TOP_BLUR_MIN_EXTENSION_DP = 20f
 private const val BILIPAI_PROGRESSIVE_TOP_BLUR_EXTRA_EXTENSION_DP = 28f
-private val BiliPaiProgressiveTopBlurShape = RoundedCornerShape(
-    bottomStart = 28.dp,
-    bottomEnd = 28.dp,
-)
+private object ProgressiveTopChromeLayoutSpec {
+    const val BlurBottomCornerRadiusDp = 28f
+}
+private val BiliPaiProgressiveTopBlurShape =
+    AppShapes.bottomRounded(ProgressiveTopChromeLayoutSpec.BlurBottomCornerRadiusDp.dp)
 
 /**
  * Shared progressive top blur gradient preset inspired by HyperIsland's top status bar design.
@@ -63,7 +65,7 @@ internal fun resolveProgressiveTopBlurBottomExtension(
             endFraction.coerceIn(0f, 1f) * BILIPAI_PROGRESSIVE_TOP_BLUR_EXTRA_EXTENSION_DP
     ).dp
 } else {
-    0.dp
+    AppSpacingTokens.None
 }
 
 internal fun shouldExtendProgressiveTopBlurBelowTabs(
@@ -145,7 +147,7 @@ internal fun BiliPaiImmersiveTopBar(
     headerBlurActive: Boolean = false,
     liquidGlassActive: Boolean = false,
     modifier: Modifier = Modifier,
-    surfaceColor: Color = MaterialTheme.colorScheme.background,
+    surfaceColor: Color = AppSurfaceTokens.chromeBackground(),
     fadeEnabled: Boolean? = null,
     extendBelowBounds: Boolean = false,
     opaqueBackgroundFallback: Boolean = true,
@@ -163,7 +165,7 @@ internal fun BiliPaiImmersiveTopBar(
     androidx.compose.foundation.layout.Box(
         modifier = Modifier
             .background(
-                if (opaqueBackground) MaterialTheme.colorScheme.background.copy(alpha = 1f)
+                if (opaqueBackground) AppSurfaceTokens.chromeBackground().copy(alpha = 1f)
                 else Color.Transparent
             )
             .then(modifier),

@@ -88,9 +88,35 @@ internal fun buildCollectionSubscriptionRequest(
 }
 
 data class FollowStateChange(
+    val accountMid: Long,
     val mid: Long,
     val isFollowing: Boolean
 )
+
+internal fun createFollowStateChangeIfAccountKnown(
+    accountMid: Long?,
+    mid: Long,
+    isFollowing: Boolean
+): FollowStateChange? {
+    val confirmedAccountMid = accountMid?.takeIf { it > 0L } ?: return null
+    if (mid <= 0L) return null
+    return FollowStateChange(
+        accountMid = confirmedAccountMid,
+        mid = mid,
+        isFollowing = isFollowing
+    )
+}
+
+internal fun shouldApplyFollowStateChangeForAccount(
+    change: FollowStateChange,
+    activeAccountMid: Long?,
+    isLoggedIn: Boolean
+): Boolean {
+    return isLoggedIn &&
+        change.accountMid > 0L &&
+        activeAccountMid != null &&
+        activeAccountMid == change.accountMid
+}
 
 /**
  * 用户操作相关 Repository
@@ -222,6 +248,7 @@ object ActionRepository {
     suspend fun followUser(mid: Long, follow: Boolean): Result<Boolean> {
         return withContext(Dispatchers.IO) {
             try {
+                val initiatingAccountMid = TokenManager.midCache?.takeIf { it > 0L }
                 val csrf = TokenManager.csrfCache ?: ""
                 com.android.purebilibili.core.util.Logger.d("ActionRepository", " followUser: mid=$mid, follow=$follow, csrf.length=${csrf.length}")
                 if (csrf.isEmpty()) {
@@ -235,7 +262,11 @@ object ActionRepository {
                 com.android.purebilibili.core.util.Logger.d("ActionRepository", " Response: code=${response.code}, message=${response.message}")
                 
                 if (response.code == 0) {
-                    _followStateChanges.tryEmit(FollowStateChange(mid = mid, isFollowing = follow))
+                    createFollowStateChangeIfAccountKnown(
+                        accountMid = initiatingAccountMid,
+                        mid = mid,
+                        isFollowing = follow
+                    )?.let { _followStateChanges.tryEmit(it) }
                     Result.success(follow)
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "操作失败: ${response.code}" }))

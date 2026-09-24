@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-    <sub>最后更新：2026-09-23 · Focus 同步基线：9.1.1-focus.5（versionCode 387），上游 BiliPai 0.2.3-alpha.1</sub>
+    <sub>最后更新：2026-09-23 · Focus 同步基线：9.1.1-focus.5（versionCode 388），上游 BiliPai 0.2.3-alpha.2</sub>
   </p>
 
   <p align="center">
@@ -578,10 +578,10 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### Focus 同步基线 (v9.1.1-focus.5 · versionCode 387)
+### Focus 同步基线 (v9.1.1-focus.5 · versionCode 388)
 
-- 基于上游 `0.2.3-beta.46` 同步当前架构、构建系统、插件 SDK、动态插件下载与更新元数据能力。
-- 版本号沿用 Focus `9.x` 版本代际并递增 Focus 序号，旧客户端只比较版本名时也能从 `9.1.1-focus.4` 发现新版本；Android `versionCode` 单调提升至 `387`。
+- 基于上游 `0.2.3-alpha.2` 同步当前架构、构建系统、插件 SDK、动态插件下载与更新元数据能力。
+- 版本号沿用 Focus `9.x` 版本代际并递增 Focus 序号，旧客户端只比较版本名时也能从 `9.1.1-focus.4` 发现新版本；Android `versionCode` 单调提升至 `388`。
 - 应用包名、Focus Release 更新源和既有发布签名保持不变。
 - 修复首页推荐手动刷新卡在旧分页尾部的问题：下拉刷新重新从 fresh feed 请求，跳过启动预加载缓存，并在成功后重置推荐分页游标。
 - Focus 搜索设置改为正向“显示”语义：`显示大家都在搜`、`显示搜索发现`、`显示搜索历史`，开关打开即显示、关闭即完整隐藏。

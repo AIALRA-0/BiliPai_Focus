@@ -635,9 +635,10 @@ object VideoRepository {
                     }
                 }
                 com.android.purebilibili.core.store.SettingsManager.FeedApiType.MERGED -> {
-                    // 合并模式(参数对齐 BiliPai 原版):
-                    // Web 半边用 fresh_type=4/feed_version=V8/brush=idx 等参数;
-                    // App 半边用匿名 android_hd 取流(不依赖登录), 并行请求后交错合并、按视频去重
+                    // 合并模式(参数对齐 PiliNara 原版):
+                    // Web 半边用 fresh_type=4/feed_version=V8/brush=idx 等参数, 携带 cookie;
+                    // App 半边用 android_hd 身份头取流(剥离 cookie, 已登录时带 access_key),
+                    // 并行请求后交错合并、按视频去重
                     return coroutineScope {
                         val webDeferred = async { fetchMergedWebFeed(idx = idx, refreshCount = refreshCount) }
                         val mobileDeferred = async { fetchMergedMobileFeed(idx = idx) }
@@ -762,7 +763,7 @@ object VideoRepository {
         }
     }
     
-    //  [合并模式] Web 端推荐流 - 参数对齐 BiliPai 原版合并模式
+    //  [合并模式] Web 端推荐流 - 参数对齐 PiliNara 原版合并模式(携带 cookie)
     //  (feed_version=V8 常量会话、fresh_type=4、brush=idx、version=1、homepage_ver=1)
     //  仅用于 FeedApiType.MERGED, 不影响 Web 单独模式
     private suspend fun fetchMergedWebFeed(idx: Int, refreshCount: Int): Result<List<VideoItem>> {
@@ -800,15 +801,16 @@ object VideoRepository {
         }
     }
 
-    //  [合并模式] App 端推荐流 - 匿名 android_hd 取流, 参数对齐 BiliPai 原版合并模式
-    //  与 App 单独模式(TV appkey + access_token)无关: 不依赖登录, 靠 buvid 建立会话
+    //  [合并模式] App 端推荐流 - 参数对齐 PiliNara 原版合并模式
+    //  该 app 端点由 CookieJar 剥离 cookie(见 MergedAppFeedCookiePolicy), 身份由 HD 身份头承担;
+    //  已登录时补 access_key。与 App 单独模式(TV appkey + mobi_app=android)完全无关。
     private suspend fun fetchMergedMobileFeed(idx: Int): Result<List<VideoItem>> {
         try {
-            // 匿名 app 取流依赖 buvid 会话, 缺失时先通过 SPI 获取
+            // app 取流依赖 buvid 会话, 缺失时先通过 SPI 获取
             if (TokenManager.buvid3Cache.isNullOrEmpty()) {
                 ensureBuvid3FromSpi()
             }
-            val params = mapOf(
+            val params = mutableMapOf(
                 "build" to "2001100",
                 "c_locale" to "zh_CN",
                 "channel" to "master",
@@ -838,8 +840,12 @@ object VideoRepository {
                 "ts" to AppSignUtils.getTimestamp().toString(),
                 "voice_balance" to "0"
             )
+            // 已登录时补 access_key: 对齐 PiliNara 原版(其对 app 端点补 access_key 后再签名)
+            TokenManager.accessTokenCache
+                ?.takeIf { it.isNotBlank() }
+                ?.let { params["access_key"] = it }
 
-            // BiliPai/BiliPai 风格: key/value percent-encode 后拼接签名,
+            // key/value percent-encode 后拼接签名,
             // 再用 encoded=true 端点原样发送, 保证签名与线上 query 完全一致
             val signedParams = AppSignUtils.signForAndroidHdLogin(params)
             val encodedParams = signedParams.mapValues { (_, value) -> AppSignUtils.percentEncode(value) }

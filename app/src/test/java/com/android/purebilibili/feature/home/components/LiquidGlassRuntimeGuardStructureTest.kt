@@ -29,7 +29,8 @@ class LiquidGlassRuntimeGuardStructureTest {
                 "if (isLiquidGlassMode && !useProgressiveTopBlur && !useProgressiveTopFade)"
             )
         )
-        assertTrue(videoCard.contains("!isLowBlurBudgetForced()"))
+        assertTrue(videoCard.contains("val lowBlurBudgetForced = isLowBlurBudgetForced()"))
+        assertTrue(videoCard.contains("lowBlurBudgetForced = lowBlurBudgetForced"))
     }
 
     private fun source(name: String): String {

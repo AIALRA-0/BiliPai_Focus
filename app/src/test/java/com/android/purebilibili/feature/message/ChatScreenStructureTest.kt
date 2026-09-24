@@ -50,7 +50,7 @@ class ChatScreenStructureTest {
         assertTrue(source.contains("rememberLayerBackdrop()"))
         assertTrue(source.contains("rememberCombinedBackdrop(chatWallpaperBackdrop, chatContentBackdrop)"))
         assertTrue(source.contains("wallpaperBackdrop = chatWallpaperBackdrop"))
-        assertTrue(source.contains("Modifier.layerBackdrop(wallpaperBackdrop)"))
+        assertTrue(source.contains("wallpaperBackdrop?.let { Modifier.layerBackdrop(it) }"))
         assertTrue(source.contains("Modifier.layerBackdrop(it)"))
         assertTrue(source.contains("backdrop = chatInputBackdrop"))
         assertTrue(source.contains("modifier = Modifier.align(Alignment.BottomCenter)"))

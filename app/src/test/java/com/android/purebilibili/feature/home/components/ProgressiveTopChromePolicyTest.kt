@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppShapes
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,7 +19,8 @@ class ProgressiveTopChromePolicyTest {
         assertFalse(shouldUseOpaqueTopChromeBackground(false, false, liquidGlassActive = true))
 
         val source = loadSource("feature/home/components/ProgressiveTopChrome.kt")
-        assertTrue(source.contains("MaterialTheme.colorScheme.background.copy(alpha = 1f)"))
+        assertTrue(source.contains("if (opaqueBackground) AppSurfaceTokens.chromeBackground().copy(alpha = 1f)"))
+        assertTrue(source.contains("else Color.Transparent"))
         assertTrue(source.contains(".then(modifier)"))
     }
 
@@ -30,8 +33,12 @@ class ProgressiveTopChromePolicyTest {
         assertEquals(1.25f, BILIPAI_PROGRESSIVE_TOP_BLUR_DEFAULT_GRADIENT.curve)
         val source = loadSource("feature/home/components/ProgressiveTopChrome.kt")
         assertTrue(source.contains("gradient = ProgressiveBlur.Top"))
-        assertTrue(source.contains("bottomStart = 28.dp"))
-        assertTrue(source.contains("bottomEnd = 28.dp"))
+        assertTrue(source.contains("const val BlurBottomCornerRadiusDp = 28f"))
+        assertTrue(source.contains("AppShapes.bottomRounded(ProgressiveTopChromeLayoutSpec.BlurBottomCornerRadiusDp.dp)"))
+        assertEquals(
+            RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+            AppShapes.bottomRounded(28.dp),
+        )
     }
 
     @Test

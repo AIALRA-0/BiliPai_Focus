@@ -68,13 +68,16 @@ class DynamicScreenStructureTest {
         assertTrue(!topBarSource.contains("copy(backdropBlurRadius = 0f)"))
         assertTrue(topBarSource.contains("unifiedBlur("))
         assertTrue(!source.contains("activeListState?.isScrollInProgress == true ||"))
-        assertTrue(topBarSource.contains("isScrollInProgressProvider = { false }"))
+        assertTrue(source.contains("isScrollInProgressProvider = dynamicTabScrollInProgressProvider"))
+        assertTrue(topBarSource.contains("isScrollInProgressProvider: () -> Boolean = { false }"))
+        assertTrue(topBarSource.contains("isScrollInProgressProvider = isScrollInProgressProvider"))
         val segmentedControlSource = File(
             "src/main/java/com/android/purebilibili/feature/home/components/BottomBarFloatingSegmentedControl.kt"
         ).readText()
-        assertTrue(
-            segmentedControlSource.contains("if (liquidGlassEnabled && miuixBackdrop != null)")
-        )
+        assertTrue(segmentedControlSource.contains("val effectiveBackdrop = if (liquidGlassEnabled)"))
+        assertTrue(segmentedControlSource.contains("miuixBackdrop ?: localBackdrop"))
+        assertTrue(segmentedControlSource.contains("val floatingMode = if (effectiveBackdrop != null)"))
+        assertTrue(segmentedControlSource.contains(".layerBackdrop(localBackdrop)"))
         assertTrue(!source.contains("text = \"全\""))
         val sidebarSource = File(
             "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicSidebar.kt"

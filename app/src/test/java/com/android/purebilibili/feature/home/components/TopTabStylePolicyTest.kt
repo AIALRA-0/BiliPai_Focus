@@ -62,8 +62,10 @@ class TopTabStylePolicyTest {
                 "HomeTopTabFloatingDock.kt"
         )
         assertTrue(topDock.contains("HorizontalFloatingToolbar("))
-        assertTrue(topDock.contains("FilledTonalButton("))
-        assertTrue(topDock.contains("FilledTonalIconButton("))
+        assertTrue(topDock.contains("AppButton("))
+        assertTrue(topDock.contains("ButtonDefaults.filledTonalButtonColors()"))
+        assertTrue(topDock.contains("ButtonDefaults.filledTonalButtonElevation()"))
+        assertTrue(topDock.contains("AppFilledIconButton("))
         val topBar = sourceText("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
         assertTrue(topBar.contains("shouldUseOfficialMiuixHomeTopTabs("))
         assertFalse(topBar.contains("AppNativeTabRow("))

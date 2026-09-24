@@ -24,7 +24,8 @@ class VideoDetailScreenPolicyTest {
         assertTrue(navigationBar.contains("AppIcon("))
         assertTrue(navigationBar.contains("AppText(\"立即播放\""))
         assertTrue(navigationBar.contains("AppChromeSizeTokens.MinimumTouchTarget"))
-        assertTrue(navigationBar.contains("IconButton(onClick = onBack"))
+        assertTrue(navigationBar.contains("AppIconButton(onClick = onBack"))
+        assertTrue(navigationBar.contains("AppIconButton(onClick = onHomeClick"))
         assertTrue(navigationBar.contains("size(width = 42.dp, height = 34.dp)"))
         assertTrue(navigationBar.contains("Text(\"立即播放\""))
     }

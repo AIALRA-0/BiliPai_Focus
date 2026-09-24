@@ -44,6 +44,23 @@ class DynamicFocusPrefetchStructureTest {
     }
 
     @Test
+    fun `sidebar pager filters hidden group items when stored config changes`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt")
+        val sidebarBranch = source
+            .substringAfter("DynamicDisplayMode.SIDEBAR,")
+            .substringBefore("DynamicDisplayMode.HORIZONTAL ->")
+        val pagePresentation = sidebarBranch
+            .substringAfter("val pagePresentation = remember(")
+            .substringBefore("val pageDividerIndex")
+
+        assertTrue(pagePresentation.contains("focusFollowGroupConfig"))
+        assertTrue(pagePresentation.contains("focusFollowGroupFilteringEnabled"))
+        assertTrue(pagePresentation.contains("filterDynamicItemsByFocusFollowGroups("))
+        assertTrue(pagePresentation.contains("filterEnabled = focusFollowGroupFilteringEnabled"))
+        assertTrue(sidebarBranch.contains("filteredItems = pagePresentation.items"))
+    }
+
+    @Test
     fun `focus group sheet uses adaptive sheet image and touch target APIs`() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt"
@@ -52,8 +69,10 @@ class DynamicFocusPrefetchStructureTest {
         assertTrue(source.contains("AppModalBottomSheet(onDismissRequest = onDismissRequest)"))
         assertTrue(source.contains("import coil3.compose.AsyncImage"))
         assertTrue(source.contains("heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)"))
-        assertTrue(source.contains("val actionButtonHeight = 52.dp"))
-        assertTrue(source.contains("val inputHeight = 60.dp"))
+        assertTrue(source.contains("const val ActionButtonHeightDp = 52"))
+        assertTrue(source.contains("val actionButtonHeight = FocusFollowGroupLayoutSpec.ActionButtonHeightDp.dp"))
+        assertTrue(source.contains("const val InputHeightDp = 60"))
+        assertTrue(source.contains("val inputHeight = FocusFollowGroupLayoutSpec.InputHeightDp.dp"))
         assertFalse(source.contains("IOSModalBottomSheet"))
         assertFalse(source.contains("import coil.compose.AsyncImage"))
     }

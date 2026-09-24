@@ -143,6 +143,12 @@ import com.android.purebilibili.feature.video.ui.section.resolveCompactPublishTi
 
 import kotlin.math.roundToInt
 
+// Keep this component's established pixel geometry across theme migrations.
+private object VideoCardBackdropSpec {
+    const val WallpaperBlurRadiusDp = 24
+    const val HairlineWidthDp = 0.5f
+}
+
 internal fun shouldOpenLongPressMenu(
     hasPreviewAction: Boolean,
     hasMenuAction: Boolean
@@ -1562,7 +1568,7 @@ internal fun ElegantVideoCard(
             }
             // Wallpaper-only Miuix blur. The source is attached to the sibling wallpaper layer,
             // so this surface never samples its own cover, text, or the feed content.
-            val wallpaperBlurRadiusPx = with(density) { 24.dp.toPx() }
+            val wallpaperBlurRadiusPx = with(density) { VideoCardBackdropSpec.WallpaperBlurRadiusDp.dp.toPx() }
             val wallpaperBackdropModifier = if (
                 useRealtimeWallpaperBackdrop &&
                 homeWallpaperBackdrop != null
@@ -1642,7 +1648,7 @@ internal fun ElegantVideoCard(
                     }
                 }
                 .border(
-                    width = 0.5.dp,
+                    width = VideoCardBackdropSpec.HairlineWidthDp.dp,
                     color = if (homeCardDynamicTintEnabled && !useRealtimeWallpaperBackdrop) {
                         val borderAlpha = if (isDarkCardTheme) 0.30f else 0.45f
                         val baseBorder = HomeVisualPalette.GlassLight.copy(alpha = borderAlpha)

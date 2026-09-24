@@ -258,8 +258,8 @@ internal fun resolvePortraitPlaybackStreamUrls(
     targetQuality: Int = PORTRAIT_PLAYBACK_TARGET_QUALITY,
     isHevcSupported: Boolean = MediaUtils.isHevcSupported(),
     isAv1Supported: Boolean = MediaUtils.isAv1Supported(),
-    isDolbyAudioSupported: Boolean = MediaUtils.isDolbyAtmosAudioSupported(),
-    isDolbyAudioSoftwareDecoded: Boolean = MediaUtils.isDolbySoftwareAudioDecoderRequired(),
+    isDolbyAudioSupported: Boolean,
+    isDolbyAudioSoftwareDecoded: Boolean,
     requestedAudioQuality: Int = -1,
     playbackSpeed: Float = 1.0f
 ): PortraitPlaybackStreamUrls? {

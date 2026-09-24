@@ -136,7 +136,7 @@ class HomeFeedScrollStatePersistenceStructureTest {
             .substringAfter("HomeHeader(")
             .substringBefore("AnimatedVisibility(")
 
-        assertTrue(source.contains("val uiSkinState by rememberUiSkinState(context)"))
+        assertTrue(source.contains("val uiSkinState = LocalUiSkinState.current"))
         assertTrue(source.contains("val homeUiSkinDecoration = rememberHomeUiSkinDecoration(uiSkinState)"))
         assertTrue(headerCallSource.contains("uiSkinDecoration = homeUiSkinDecoration"))
         assertFalse(source.contains("import com.android.purebilibili.feature.home.components.HomeSkinAtmosphere"))

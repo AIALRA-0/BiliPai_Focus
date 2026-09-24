@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.hardware.input.InputManager
+import android.os.Build
 import android.view.InputDevice
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -366,7 +367,7 @@ private fun Context.hasPrecisePointer(): Boolean {
     val inputManager = getSystemService(InputManager::class.java) ?: return false
     return inputManager.inputDeviceIds.any { deviceId ->
         val device = inputManager.getInputDevice(deviceId) ?: return@any false
-        device.isEnabled && (
+        (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 || device.isEnabled) && (
             device.supportsSource(InputDevice.SOURCE_MOUSE) ||
                 device.supportsSource(InputDevice.SOURCE_MOUSE_RELATIVE) ||
                 device.supportsSource(InputDevice.SOURCE_TOUCHPAD)

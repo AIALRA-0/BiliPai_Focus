@@ -971,9 +971,6 @@ fun rememberVideoPlayerState(
     //  [修复] 添加唯一 key 强制在每次进入时重新创建 player
     // 解决重复打开同一视频时 player 已被释放导致无声音的问题
     val playerCreationKey = remember { System.currentTimeMillis() }
-    val preferredPlaybackSpeed = remember(context) {
-        SettingsManager.getPreferredPlaybackSpeedSync(context)
-    }
     
     val player = remember(context, bvid, playerCreationKey) {
         // 如果小窗有这个视频的 player，直接复用
@@ -1075,7 +1072,8 @@ fun rememberVideoPlayerState(
                         com.android.purebilibili.core.player.PlayerVolumeController
                             .preferredVolumeSync()
                     }
-                    setPlaybackSpeed(preferredPlaybackSpeed)
+                    // Playback speed is loaded asynchronously before this player gets media.
+                    // ExoPlayer defaults to 1x while it is still idle and has no source.
                     //  [重构] 不在此处调用 prepare()，因为还没有媒体源
                     // prepare() 和 playWhenReady 将在 attachPlayer/loadVideo 设置媒体源后调用
                     playWhenReady = !startPaused &&
@@ -1083,6 +1081,9 @@ fun rememberVideoPlayerState(
                         SettingsManager.getClickToPlaySync(context)
                 }
         }
+    }
+    var preferredPlaybackSpeedApplied by remember(player) {
+        mutableStateOf(reuseFromMiniPlayerAtEntry)
     }
     val playbackCompletionBehavior by SettingsManager
         .getPlaybackCompletionBehavior(context)
@@ -1506,6 +1507,19 @@ fun rememberVideoPlayerState(
                 "SUB_DBG defer attach/load until entry transition finished: request=$bvid/$cid"
             )
             return@LaunchedEffect
+        }
+
+        // A new player has no source yet, so resolve the stored speed before attaching it or
+        // allowing loadVideo to create and prepare its first media source. Reused mini players
+        // keep their live speed, matching the existing handoff behavior.
+        if (reuseFromMiniPlayerAtEntry) {
+            miniPlayerManager.awaitPreferredPlaybackSpeedBeforePrepare(player)
+        } else if (!preferredPlaybackSpeedApplied) {
+            val preferredPlaybackSpeed = SettingsManager
+                .getPreferredPlaybackSpeed(context)
+                .first()
+            player.setPlaybackSpeed(preferredPlaybackSpeed)
+            preferredPlaybackSpeedApplied = true
         }
 
         // 1️⃣ 首先绑定 player

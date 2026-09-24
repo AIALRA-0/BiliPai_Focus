@@ -9,8 +9,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.android.purebilibili.core.store.resolvePreferredPlaybackSpeed as resolvePreferredPlaybackSpeedPolicy
 import com.android.purebilibili.core.store.normalizePlaybackSpeed as normalizePlaybackSpeedPolicy
 import com.android.purebilibili.core.store.settingsDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 const val DEFAULT_AUDIO_QUALITY_FOLLOW_LAST = -2
@@ -200,6 +202,7 @@ object PlayerSettingsStore {
                 legacyStatsEnabled = legacyPreferences.getBoolean(legacyShowStatsKey, false)
             )
         }
+        .flowOn(Dispatchers.IO)
 
     suspend fun setPlayerInsightMode(context: Context, mode: PlayerInsightMode) {
         context.settingsDataStore.edit { preferences ->

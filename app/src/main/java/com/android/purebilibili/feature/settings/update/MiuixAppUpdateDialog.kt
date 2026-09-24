@@ -19,13 +19,13 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
+import com.android.purebilibili.core.ui.components.AppIconButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -84,10 +84,8 @@ private fun MiuixUpdateHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(
+        AppIconButton(
             onClick = onDismissRequest,
-            minWidth = 48.dp,
-            minHeight = 48.dp,
         ) {
             Icon(
                 imageVector = MiuixIcons.Basic.Close,
@@ -223,10 +221,14 @@ private fun MiuixDownloadStatus(
             fontWeight = FontWeight.Medium,
         )
         if (state.isActiveDownload()) {
-            LinearProgressIndicator(
-                progress = state.progress.takeIf { state.totalBytes > 0L },
-                modifier = Modifier.padding(top = 12.dp),
-            )
+            if (state.totalBytes > 0L) {
+                AppLinearProgressIndicator(
+                    progress = { state.progress },
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            } else {
+                AppLinearProgressIndicator(modifier = Modifier.padding(top = 12.dp))
+            }
         }
         if (state.status == AppUpdateDownloadStatus.COMPLETED) {
             Text(

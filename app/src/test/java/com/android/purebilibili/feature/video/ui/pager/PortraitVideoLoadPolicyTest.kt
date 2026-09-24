@@ -186,7 +186,9 @@ class PortraitVideoLoadPolicyTest {
             playData = playData,
             targetQuality = 64,
             isHevcSupported = true,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertEquals("https://cdn.example/64.m4s", urls?.videoUrl)
@@ -222,7 +224,9 @@ class PortraitVideoLoadPolicyTest {
             playData = playData,
             targetQuality = 80,
             isHevcSupported = true,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertEquals("https://cdn.example/80.m4s", urls?.videoUrl)
@@ -257,6 +261,8 @@ class PortraitVideoLoadPolicyTest {
 
         val urls = resolvePortraitPlaybackStreamUrls(
             playData = playData,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false,
             requestedAudioQuality = 30251
         )
 
@@ -270,7 +276,9 @@ class PortraitVideoLoadPolicyTest {
         val urls = resolvePortraitPlaybackStreamUrls(
             playData = PlayUrlData(
                 durl = listOf(Durl(url = "https://cdn.example/progressive.mp4"))
-            )
+            ),
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertEquals("https://cdn.example/progressive.mp4", urls?.videoUrl)

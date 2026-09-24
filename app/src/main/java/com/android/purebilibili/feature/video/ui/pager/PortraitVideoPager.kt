@@ -217,6 +217,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
@@ -655,8 +656,10 @@ fun PortraitVideoPager(
                 repeatMode = resolvePortraitPagerRepeatMode()
                 volume = com.android.purebilibili.core.player.PlayerVolumeController
                     .preferredVolumeSync()
-                setPlaybackSpeed(SettingsManager.getPreferredPlaybackSpeedSync(context))
             }
+    }
+    var preferredPlaybackSpeedApplied by remember(exoPlayer, useSharedPlayer) {
+        mutableStateOf(useSharedPlayer)
     }
     LaunchedEffect(exoPlayer, playbackCompletionBehavior) {
         exoPlayer.repeatMode = resolvePlaybackCompletionRepeatMode(playbackCompletionBehavior)
@@ -940,24 +943,27 @@ fun PortraitVideoPager(
         val dash = portraitCachedDash ?: return false
         val videoUrl = portraitCurrentVideoUrl.takeIf { it.isNotBlank() } ?: return false
         val activeBvid = currentPlayingBvid?.takeIf { it.isNotBlank() } ?: return false
-        val result = switchPortraitPlaybackAudioSource(
-            player = exoPlayer,
-            mediaSourceFactory = portraitMediaSourceFactory,
-            dash = dash,
-            currentVideoUrl = videoUrl,
-            requestedAudioQuality = audioQuality,
-            targetVideoQuality = resolvePortraitPlaybackTargetQuality(portraitSelectedQuality),
-            mediaId = resolvePortraitMediaId(activeBvid, currentPlayingCid),
-            cdnPlugin = portraitPlaybackCdnPlugin
-        )
-            ?: return false
-        portraitCurrentVideoUrl = result.videoUrl
-        portraitRequestedAudioQuality = audioQuality
-        portraitSelectedAudioQuality = result.selection.selectedPreferenceId
-        portraitAvailableAudioQualities = result.selection.availableOptions
-        if (persistManualSelection) {
-            portraitRememberedAudioQuality = audioQuality
-            scope.launch {
+        scope.launch {
+            val dolbyAudioCapabilities =
+                com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
+            val result = switchPortraitPlaybackAudioSource(
+                player = exoPlayer,
+                mediaSourceFactory = portraitMediaSourceFactory,
+                dash = dash,
+                currentVideoUrl = videoUrl,
+                requestedAudioQuality = audioQuality,
+                targetVideoQuality = resolvePortraitPlaybackTargetQuality(portraitSelectedQuality),
+                mediaId = resolvePortraitMediaId(activeBvid, currentPlayingCid),
+                cdnPlugin = portraitPlaybackCdnPlugin,
+                isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
+            ) ?: return@launch
+            portraitCurrentVideoUrl = result.videoUrl
+            portraitRequestedAudioQuality = audioQuality
+            portraitSelectedAudioQuality = result.selection.selectedPreferenceId
+            portraitAvailableAudioQualities = result.selection.availableOptions
+            if (persistManualSelection) {
+                portraitRememberedAudioQuality = audioQuality
                 SettingsManager.setAudioQuality(context, audioQuality)
             }
         }
@@ -1039,9 +1045,13 @@ fun PortraitVideoPager(
 
                 result.fold(
                     onSuccess = { (info, playData) ->
+                        val dolbyAudioCapabilities =
+                            com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
                         val streamUrls = resolvePortraitPlaybackStreamUrls(
                             playData = playData,
                             targetQuality = targetQuality,
+                            isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                            isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded,
                             requestedAudioQuality = targetAudioQuality,
                             playbackSpeed = exoPlayer.playbackParameters.speed
                         ) ?: run {
@@ -1109,6 +1119,26 @@ fun PortraitVideoPager(
                                 "Discarded stale video load for $bvid (request=$requestGeneration, active=$activeLoadGeneration, current=$currentPlayingBvid)"
                             )
                             return@fold
+                        }
+
+                        // Standalone pager players have no media until this point. Read the
+                        // preference asynchronously and apply it before the first source is
+                        // installed/prepared. A shared player keeps its current session speed.
+                        if (!preferredPlaybackSpeedApplied) {
+                            val preferredSpeed = SettingsManager
+                                .getPreferredPlaybackSpeed(context)
+                                .first()
+                            if (!shouldApplyLoadResult(
+                                    requestGeneration = requestGeneration,
+                                    activeGeneration = activeLoadGeneration,
+                                    expectedBvid = bvid,
+                                    currentPlayingBvid = currentPlayingBvid
+                                )
+                            ) {
+                                return@fold
+                            }
+                            exoPlayer.setPlaybackSpeed(preferredSpeed)
+                            preferredPlaybackSpeedApplied = true
                         }
 
                         resolveAspectRatioFromDimension(info.dimension)?.let { aspectRatio ->
@@ -1256,9 +1286,13 @@ fun PortraitVideoPager(
                         aid = identity.aid,
                         targetQuality = targetQuality
                     ) ?: error("竖屏预加载未获取到播放地址")
+                    val dolbyAudioCapabilities =
+                        com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
                     val streamUrls = resolvePortraitPlaybackStreamUrls(
                         playData = playData,
-                        targetQuality = targetQuality
+                        targetQuality = targetQuality,
+                        isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                        isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
                     ) ?: error("竖屏预加载未解析到媒体流")
                     prefetchPortraitPlaybackHead(context, streamUrls)
                 }.onFailure { error ->
@@ -1442,9 +1476,13 @@ fun PortraitVideoPager(
                                     aid = target.aid,
                                     targetQuality = targetQuality
                                 ) ?: error("竖屏预加载未获取到播放地址")
+                                val dolbyAudioCapabilities =
+                                    com.android.purebilibili.core.util.MediaUtils.awaitDolbyAudioCapabilities()
                                 val streamUrls = resolvePortraitPlaybackStreamUrls(
                                     playData = playData,
-                                    targetQuality = targetQuality
+                                    targetQuality = targetQuality,
+                                    isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                                    isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
                                 ) ?: error("竖屏预加载未解析到媒体流")
                                 prefetchPortraitPlaybackHead(context, streamUrls)
                             }.onFailure { error ->

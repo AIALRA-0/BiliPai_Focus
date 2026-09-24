@@ -221,7 +221,7 @@ fun ForwardedContent(
                 AppIcon(
                     rememberAppWarningIcon(),
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(AppSpacingTokens.Large),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(AppSpacingTokens.Small))

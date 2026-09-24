@@ -79,6 +79,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -1101,7 +1102,7 @@ private fun BangumiPlayNoticeOverlay(
                     .align(Alignment.TopStart)
                     .padding(16.dp)
             ) {
-                IconButton(onClick = onBack) {
+                AppIconButton(onClick = onBack) {
                     AppIcon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",

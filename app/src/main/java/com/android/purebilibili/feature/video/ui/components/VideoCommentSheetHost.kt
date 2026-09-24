@@ -93,6 +93,7 @@ import com.android.purebilibili.feature.video.ui.pager.shouldOpenPortraitComment
 import com.android.purebilibili.feature.video.ui.pager.shouldOpenPortraitCommentThreadDetail
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -215,9 +216,10 @@ internal fun resolveCommentThreadCoveredBlurProgress(threadBackProgress: Float):
 
 internal fun shouldInitializeVideoCommentSheetHost(
     mainSheetVisible: Boolean,
-    forceInitialize: Boolean
+    forceInitialize: Boolean,
+    sortPreferenceLoaded: Boolean = true
 ): Boolean {
-    return mainSheetVisible || forceInitialize
+    return sortPreferenceLoaded && (mainSheetVisible || forceInitialize)
 }
 
 internal fun shouldDismissVideoCommentSheetHostOnBackdropTap(
@@ -360,11 +362,15 @@ fun VideoCommentSheetHost(
     val uriHandler = LocalUriHandler.current
     val commentState by commentViewModel.commentState.collectAsStateWithLifecycle()
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
-    val defaultSortMode by com.android.purebilibili.core.store.SettingsManager
-        .getCommentDefaultSortMode(context)
-        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context),
-            context = kotlin.coroutines.EmptyCoroutineContext
-        )
+    val defaultSortState by remember(context) {
+        SettingsManager.getCommentDefaultSortMode(context)
+            .map { mode -> mode to true }
+    }.collectAsStateWithLifecycle(
+        initialValue = CommentSortMode.HOT.apiMode to false,
+        context = kotlin.coroutines.EmptyCoroutineContext
+    )
+    val defaultSortMode = defaultSortState.first
+    val sortPreferenceLoaded = defaultSortState.second
     val commentMemberDecorationsEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCommentMemberDecorationsEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false
@@ -566,8 +572,21 @@ fun VideoCommentSheetHost(
         }
     }
 
-    LaunchedEffect(aid, mainSheetVisible, forceInitialize, preferredSortMode, upMid, expectedReplyCount) {
-        if (shouldInitializeVideoCommentSheetHost(mainSheetVisible, forceInitialize)) {
+    LaunchedEffect(
+        aid,
+        mainSheetVisible,
+        forceInitialize,
+        preferredSortMode,
+        sortPreferenceLoaded,
+        upMid,
+        expectedReplyCount
+    ) {
+        if (shouldInitializeVideoCommentSheetHost(
+                mainSheetVisible = mainSheetVisible,
+                forceInitialize = forceInitialize,
+                sortPreferenceLoaded = sortPreferenceLoaded
+            )
+        ) {
             commentViewModel.init(
                 aid = aid,
                 upMid = upMid,
@@ -879,6 +898,11 @@ internal fun VideoCommentMainList(
 ) {
     val state by viewModel.commentState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val collapsedSubReplyPreviewLimit by SettingsManager
+        .getCommentCollapsedReplyPreviewLimit(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
+        )
     val scope = rememberCoroutineScope()
     val appearance = rememberVideoCommentAppearance()
     val commentChromeBackdrop = rememberLayerBackdrop()
@@ -958,6 +982,7 @@ internal fun VideoCommentMainList(
                     ) { reply ->
                         ReplyItemView(
                             item = reply,
+                            collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
                             upMid = state.upMid,
                             showUpFlag = state.showUpFlag,
                             showIdentityDecorations = showIdentityDecorations,

@@ -38,7 +38,9 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             qualityId = 120,
             cachedVideos = cachedVideos,
             cachedAudios = cachedAudios,
-            currentPos = 0L
+            currentPos = 0L,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertNull(result)
@@ -54,7 +56,9 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             cachedAudios = cachedAudios,
             currentPos = 0L,
             durationMs = 120_000L,
-            playbackQualityMode = PlaybackQualityMode.LOCKED(64)
+            playbackQualityMode = PlaybackQualityMode.LOCKED(64),
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertNotNull(result)
@@ -79,7 +83,9 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             videoCodecPreference = "hev1",
             videoSecondCodecPreference = "avc1",
             isHevcSupported = false,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertNotNull(result)
@@ -398,7 +404,9 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             videoCodecPreference = "hev1",
             videoSecondCodecPreference = "avc1",
             isHevcSupported = true,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertNotNull(result)
@@ -434,7 +442,9 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             videoCodecPreference = "hev1",
             videoSecondCodecPreference = "avc1",
             isHevcSupported = true,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertEquals("https://example.com/audio-192.m4s", result?.audioUrl)
@@ -473,7 +483,9 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             videoCodecPreference = "hev1",
             videoSecondCodecPreference = "avc1",
             isHevcSupported = true,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertEquals("https://example.com/audio-hires.m4s", result?.audioUrl)
@@ -524,7 +536,8 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             videoSecondCodecPreference = "avc1",
             isHevcSupported = true,
             isAv1Supported = false,
-            isDolbyAudioSupported = false
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertEquals(standardAudio.getValidUrl(), result?.audioUrl)
@@ -551,7 +564,9 @@ class VideoPlaybackUseCaseQualitySwitchTest {
             videoCodecPreference = "hev1",
             videoSecondCodecPreference = "avc1",
             isHevcSupported = true,
-            isAv1Supported = false
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false
         )
 
         assertNotNull(result)

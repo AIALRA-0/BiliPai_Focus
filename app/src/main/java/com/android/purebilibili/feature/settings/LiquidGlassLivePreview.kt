@@ -83,6 +83,11 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 
+// Preserve existing local corner geometry across theme migrations.
+private object LivePreviewShapeSpec {
+    const val Radius24Dp = 24
+}
+
 @Composable
 internal fun LiquidGlassAdjustmentPanel(
     persistedProgress: Float,
@@ -729,7 +734,7 @@ private fun LiquidGlassHomeSample(
     val tuning = remember(progress, advancedSettings, readabilityMode) {
         resolveLiquidGlassTuning(progress, advancedSettings, readabilityMode)
     }
-    val sampleShape = RoundedCornerShape(24.dp)
+    val sampleShape = RoundedCornerShape(LivePreviewShapeSpec.Radius24Dp.dp)
     val glassColor = MaterialTheme.colorScheme.surfaceContainer
     val contentColor = MaterialTheme.colorScheme.onSurface
     val adaptiveReadabilityEnabled = readabilityMode == LiquidGlassReadabilityMode.ADAPTIVE

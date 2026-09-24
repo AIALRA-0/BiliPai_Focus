@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -320,7 +321,7 @@ private fun SkinCatalogCard(
     AppSurface(
         onClick = onClick,
         shape = AppShapes.container(ContainerLevel.Card),
-        color = MaterialTheme.colorScheme.surface,
+        color = AppSurfaceTokens.surface(),
         tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth()
     ) {

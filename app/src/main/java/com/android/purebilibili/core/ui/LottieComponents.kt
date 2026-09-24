@@ -210,7 +210,8 @@ fun ErrorState(
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
     //  [彩蛋] 是否启用点击彩蛋
-    enableEasterEgg: Boolean = true
+    enableEasterEgg: Boolean = true,
+    actionLabel: String = "点击重试",
 ) {
     //  点击计数器触发彩蛋
     var clickCount by remember { mutableIntStateOf(0) }
@@ -269,10 +270,13 @@ fun ErrorState(
         if (onRetry != null) {
             Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
             Text(
-                text = if (showEncouragement) "冲鸭！" else "点击重试",
+                text = if (showEncouragement) "冲鸭！" else actionLabel,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { onRetry() }
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                    .wrapContentHeight(Alignment.CenterVertically)
+                    .clickable { onRetry() }
             )
         }
     }

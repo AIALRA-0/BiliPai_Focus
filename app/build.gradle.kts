@@ -208,8 +208,9 @@ android {
         applicationId = "com.android.purebilibili.focus"
         minSdk = 26
         targetSdk = 37
-        // Keep Focus's semantic X.Y.Z-focus.N identity and a versionCode above upstream alpha.1.
-        versionCode = 387
+        // Keep Focus's semantic X.Y.Z-focus.N release identity and a monotonically increasing code above upstream alpha.2.
+        // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
+        versionCode = 388
         versionName = "9.1.1-focus.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
 import com.android.purebilibili.core.ui.LocalNavigationBackHandler
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -150,6 +151,17 @@ import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private const val TAG = "LivePlayerScreen"
+
+private object LivePlayerCompactChromeLayoutSpec {
+    const val PortraitOverlayMaxWidthDp = 520f
+    const val AnchorIdentityInsetDp = 3f
+    const val AnchorNameMinWidthDp = 40f
+    const val AnchorNameMaxWidthDp = 110f
+    const val FollowChipHeightDp = 26f
+    const val FollowChipIconSizeDp = 12f
+    const val RankChipHeightDp = 30f
+    const val RankIconSizeDp = 13f
+}
 
 @OptIn(UnstableApi::class, ExperimentalSharedTransitionApi::class)
 @kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -1275,7 +1287,7 @@ fun LivePlayerScreen(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .widthIn(max = 520.dp)
+                            .widthIn(max = LivePlayerCompactChromeLayoutSpec.PortraitOverlayMaxWidthDp.dp)
                             .fillMaxWidth()
                             .navigationBarsPadding()
                             .padding(
@@ -1342,7 +1354,7 @@ fun LivePlayerScreen(
                             .align(Alignment.BottomEnd)
                             .navigationBarsPadding()
                             .padding(AppSpacingTokens.Medium)
-                            .heightIn(min = 48.dp),
+                            .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
                     ) {
                         Box(
                             modifier = Modifier.padding(horizontal = AppSpacingTokens.Large),
@@ -1806,10 +1818,10 @@ private fun LivePortraitOverlayAppBar(
         ) {
             Row(
                 modifier = Modifier.padding(
-                    start = 3.dp,
-                    end = if (!isFollowing) 4.dp else AppSpacingTokens.Small,
-                    top = 3.dp,
-                    bottom = 3.dp
+                    start = LivePlayerCompactChromeLayoutSpec.AnchorIdentityInsetDp.dp,
+                    end = if (!isFollowing) AppSpacingTokens.ExtraSmall else AppSpacingTokens.Small,
+                    top = LivePlayerCompactChromeLayoutSpec.AnchorIdentityInsetDp.dp,
+                    bottom = LivePlayerCompactChromeLayoutSpec.AnchorIdentityInsetDp.dp
                 ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1818,13 +1830,16 @@ private fun LivePortraitOverlayAppBar(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(AppSpacingTokens.DoubleExtraLarge)
                         .clip(CircleShape)
                         .background(roomColorTokens.inputOverlayColor.copy(alpha = 0.18f))
                 )
                 Spacer(Modifier.width(AppSpacingTokens.Small))
                 Column(
-                    modifier = Modifier.widthIn(min = 40.dp, max = 110.dp),
+                    modifier = Modifier.widthIn(
+                        min = LivePlayerCompactChromeLayoutSpec.AnchorNameMinWidthDp.dp,
+                        max = LivePlayerCompactChromeLayoutSpec.AnchorNameMaxWidthDp.dp,
+                    ),
                     verticalArrangement = Arrangement.Center
                 ) {
                     AppText(
@@ -1854,19 +1869,22 @@ private fun LivePortraitOverlayAppBar(
                         color = palette.accent,
                         contentColor = palette.onAccent,
                         modifier = Modifier
-                            .height(26.dp)
+                            .height(LivePlayerCompactChromeLayoutSpec.FollowChipHeightDp.dp)
                             .semantics { contentDescription = "关注主播" }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = 2.dp),
+                            modifier = Modifier.padding(
+                                horizontal = AppSpacingTokens.Small,
+                                vertical = AppSpacingTokens.Micro,
+                            ),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
                         ) {
                             AppIcon(
                                 imageVector = rememberAppProfileAddIcon(),
                                 contentDescription = null,
                                 tint = palette.onAccent,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(LivePlayerCompactChromeLayoutSpec.FollowChipIconSizeDp.dp)
                             )
                             AppText(
                                 text = "关注",
@@ -1886,11 +1904,14 @@ private fun LivePortraitOverlayAppBar(
             color = LiveStatusPalette.MediaScrim.copy(alpha = 0.42f),
             contentColor = roomColorTokens.inputOverlayColor,
             modifier = Modifier
-                .height(30.dp)
+                .height(LivePlayerCompactChromeLayoutSpec.RankChipHeightDp.dp)
                 .semantics { contentDescription = "高能榜" }
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = 4.dp),
+                modifier = Modifier.padding(
+                    horizontal = AppSpacingTokens.Small,
+                    vertical = AppSpacingTokens.ExtraSmall,
+                ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
             ) {
@@ -1898,7 +1919,7 @@ private fun LivePortraitOverlayAppBar(
                     imageVector = rememberAppAnalyticsIcon(),
                     contentDescription = null,
                     tint = roomColorTokens.inputOverlayColor,
-                    modifier = Modifier.size(13.dp)
+                    modifier = Modifier.size(LivePlayerCompactChromeLayoutSpec.RankIconSizeDp.dp)
                 )
                 AppText(
                     text = "高能榜",
@@ -1990,7 +2011,7 @@ private fun LiveRedPocketChip(
     val chipColors = resolveAccessibleContainerColors(
         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f),
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        backgroundColor = MaterialTheme.colorScheme.surface,
+        backgroundColor = AppSurfaceTokens.surface(),
         fallbackContentColors = listOf(
             MaterialTheme.colorScheme.onSurface,
             MaterialTheme.colorScheme.onBackground,
@@ -2100,7 +2121,7 @@ private fun LivePrimaryInteractionPanel(
             modifier = Modifier
                 .fillMaxSize()
                 .layerBackdrop(selectionBackdrop)
-                .background(MaterialTheme.colorScheme.background),
+                .background(AppSurfaceTokens.background()),
         )
         Column(modifier = Modifier.fillMaxSize()) {
         Box(

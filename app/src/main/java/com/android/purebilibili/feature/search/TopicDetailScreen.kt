@@ -72,6 +72,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicFeedSkeletonCa
 import com.android.purebilibili.feature.dynamic.components.rememberDynamicFeedSkeletonPulse
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.rememberAppChromeLiquidGlassEnabled
@@ -81,7 +82,6 @@ import com.android.purebilibili.feature.dynamic.components.DynamicAdaptiveSegmen
 import com.android.purebilibili.feature.dynamic.components.DynamicPublishComposer
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 import com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale
-import top.yukonga.miuix.kmp.basic.Button as MiuixButton
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 
@@ -426,10 +426,10 @@ private fun TopicParticipateButton(
             }
         }
 
-        TopicParticipateChrome.MIUIX_COMPACT_BUTTON -> MiuixButton(
+        TopicParticipateChrome.MIUIX_COMPACT_BUTTON -> AppButton(
             onClick = onClick,
             modifier = buttonModifier,
-            insideMargin = PaddingValues(horizontal = AppSpacingTokens.Medium),
+            contentPadding = PaddingValues(horizontal = AppSpacingTokens.Medium),
         ) {
             AppIcon(
                 painter = topicIcon,

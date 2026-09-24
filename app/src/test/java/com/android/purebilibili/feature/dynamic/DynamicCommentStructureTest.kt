@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.dynamic
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DynamicCommentStructureTest {
@@ -91,7 +92,8 @@ class DynamicCommentStructureTest {
         assertTrue(source.contains(".layerBackdrop(detailCommentBackdrop)"))
         assertTrue(source.contains("bottom = commentContentBottomPadding"))
         assertTrue(source.contains("top = paddingValues.calculateTopPadding()"))
-        assertTrue(source.contains("widthIn(max = 360.dp)"))
+        assertTrue(source.contains("const val CommentComposerMaxWidthDp = 360f"))
+        assertTrue(source.contains("widthIn(max = DynamicDetailScreenLayoutSpec.CommentComposerMaxWidthDp.dp)"))
         assertTrue(!source.contains(".weight(1f)"))
 
         val componentSource = File(
@@ -107,10 +109,13 @@ class DynamicCommentStructureTest {
         assertTrue(!inputComposer.contains("drawShellLens = false"))
         assertTrue(inputComposer.contains("shellLensIntensity = composerLensIntensity"))
         assertTrue(inputComposer.contains("resolveSharedBottomBarCapsuleShape()"))
-        assertTrue(inputComposer.contains("containerColor = Color.Transparent"))
+        assertTrue(inputComposer.contains("val fieldColor = if (liquidChromeActive) Color.Transparent"))
+        assertTrue(inputComposer.contains("focusedContainerColor = fieldColor"))
+        assertTrue(inputComposer.contains("unfocusedContainerColor = fieldColor"))
         assertTrue(inputComposer.contains("fieldTextColor.copy(alpha = 0.82f)"))
         assertTrue(inputComposer.contains("focusedTextColor = fieldTextColor"))
-        assertTrue(inputComposer.contains("disabledContentColor = MaterialTheme.colorScheme.onSurface.copy("))
+        assertEquals(2, Regex("disabledTextColor = fieldTextColor.copy\\(alpha = 0.72f\\)").findAll(inputComposer).count())
+        assertEquals(2, Regex("disabledPlaceholderColor = placeholderColor").findAll(inputComposer).count())
         assertTrue(inputComposer.contains("AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small"))
     }
 

@@ -24,8 +24,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -109,10 +109,19 @@ class AdaptiveTopBarScrollUiRegressionTest {
             afterUp = gridState.firstVisibleItemIndex * 10000 + gridState.firstVisibleItemScrollOffset
             assertTrue("Upward drag must reach the video grid", afterUp > 0)
         }
-        rule.onNodeWithTag("watch-later-grid").performTouchInput { swipeDown() }
+        rule.waitUntil(3_000) { !gridState.isScrollInProgress }
+        // The grid includes the top chrome inset in its bounds. Start inside visible
+        // cards so this gesture tests reverse list scrolling, not the fixed top bar.
+        rule.onNodeWithTag("watch-later-grid").performTouchInput {
+            swipe(
+                start = Offset(center.x, center.y * 1.1f),
+                end = Offset(center.x, center.y * 1.7f),
+                durationMillis = 500L,
+            )
+        }
         rule.runOnIdle {
             val afterDown = gridState.firstVisibleItemIndex * 10000 + gridState.firstVisibleItemScrollOffset
-            assertTrue("Downward drag must reach the video grid", afterDown < afterUp)
+            assertTrue("Downward drag must reach the video grid: before=$afterUp after=$afterDown", afterDown < afterUp)
         }
     }
 

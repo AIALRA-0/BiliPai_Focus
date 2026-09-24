@@ -115,6 +115,10 @@ import com.android.purebilibili.feature.home.homeFeedPinchZoom
 import java.time.Instant
 import java.time.ZoneId
 
+private object SubscriptionFeedContentLayoutSpec {
+    const val ArticleContentMaxWidthDp = 720f
+}
+
 @Composable
 @OptIn(ExperimentalSharedTransitionApi::class)
 fun SubscriptionFeedPage(
@@ -406,7 +410,7 @@ private fun SubscriptionFeedGrid(
             item(span = StaggeredGridItemSpan.FullLine) {
                 AppText(
                     text = errors.take(2).joinToString("；"),
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = AppSpacingTokens.Small),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -582,7 +586,7 @@ private fun SubscriptionArticleScreen(
                     actions = {
                         AppTextButton(
                             onClick = { onReadChange(!isRead) },
-                            modifier = Modifier.heightIn(min = 48.dp),
+                            modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
                         ) {
                             AppText(if (isRead) "标未读" else "标已读")
                         }
@@ -623,8 +627,10 @@ private fun SubscriptionArticleScreen(
             ) {
                 item {
                     Column(
-                        modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.widthIn(
+                            max = SubscriptionFeedContentLayoutSpec.ArticleContentMaxWidthDp.dp,
+                        ).fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
                     ) {
                     AppText(item.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     AppText(
@@ -642,7 +648,11 @@ private fun SubscriptionArticleScreen(
                 }
                 lazyListItems(blocks) { block ->
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Box(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier.widthIn(
+                            max = SubscriptionFeedContentLayoutSpec.ArticleContentMaxWidthDp.dp,
+                        ).fillMaxWidth(),
+                    ) {
                     when (block) {
                         is FeedBlock.Heading -> SelectionContainer {
                             FeedInlineText(
@@ -668,7 +678,7 @@ private fun SubscriptionArticleScreen(
                                 modifier = Modifier.fillMaxWidth()
                                     .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium)
                                     .horizontalScroll(rememberScrollState())
-                                    .padding(12.dp),
+                                    .padding(AppSpacingTokens.Medium),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -706,7 +716,7 @@ private fun SubscriptionArticleScreen(
                                     context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(block.url)))
                                 }
                             },
-                            modifier = Modifier.heightIn(min = 48.dp),
+                            modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
                         ) { AppText(block.title) }
                     }
                     }

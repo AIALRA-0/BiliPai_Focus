@@ -78,11 +78,12 @@ class DynamicNeutralUiStructureTest {
     fun `dynamic native action buttons keep labels in full width touch targets`() {
         val actionSource = File(sourceRoot, "components/ActionButton.kt").readText()
 
-        assertTrue(actionSource.contains("MiuixButton("))
-        assertTrue(actionSource.contains("if (LocalAppUiStyle.current == AppUiStyle.MIUIX)"))
-        assertTrue(actionSource.contains("insideMargin = PaddingValues("))
+        assertTrue(actionSource.contains("AppButton("))
+        assertTrue(actionSource.contains("val isMiuixTheme = LocalAppUiStyle.current == AppUiStyle.MIUIX"))
+        assertTrue(actionSource.contains("Modifier.fillMaxWidth().then("))
+        assertTrue(actionSource.contains("contentPadding = if (isMiuixTheme)"))
         assertTrue(actionSource.contains("horizontal = AppSpacingTokens.Small"))
-        assertTrue(actionSource.contains("if (LocalAppUiStyle.current == AppUiStyle.MATERIAL3)"))
+        assertTrue(actionSource.contains("containerColor = if (isMiuixTheme) containerBgColor else Color.Transparent"))
         assertTrue(actionSource.contains(".heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)"))
         assertTrue(actionSource.contains("DynamicNativeActionText("))
         assertTrue(actionSource.contains("softWrap = false"))

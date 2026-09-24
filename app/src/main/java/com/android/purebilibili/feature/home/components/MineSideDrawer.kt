@@ -62,6 +62,11 @@ import kotlinx.coroutines.launch
 import java.io.File
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 
+// Keep this component's established pixel geometry across theme migrations.
+private object MineDrawerLayoutSpec {
+    const val ItemGapDp = 6
+}
+
 /**
  * 首页侧边栏 - 优化版 (带毛玻璃效果)
  * 采用更紧凑的布局和更现代的视觉风格
@@ -332,7 +337,7 @@ fun MineSideDrawer(
                         if (user.isLogin) {
                             Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(MineDrawerLayoutSpec.ItemGapDp.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 if (user.level > 0) {

@@ -174,7 +174,9 @@ class SettingsMiuixSimplificationStructureTest {
         fun flushGroup() {
             entries
                 .groupBy { it.icon }
-                .filterValues { it.size > 1 }
+                // A setting may render the same icon in exclusive loading and ready branches.
+                // Reusing one icon for different settings in a visible group is the regression.
+                .filterValues { repeated -> repeated.map(SettingIconEntry::title).distinct().size > 1 }
                 .forEach { (icon, repeatedEntries) ->
                     duplicates += "$path:$groupStartLine repeats $icon for ${
                         repeatedEntries.joinToString { "${it.title}@${it.lineNumber}" }

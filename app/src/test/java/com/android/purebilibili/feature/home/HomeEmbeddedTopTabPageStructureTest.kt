@@ -48,7 +48,7 @@ class HomeEmbeddedTopTabPageStructureTest {
 
         assertTrue(source.contains("miuixBackdrop = channelBackdrop"))
         assertTrue(source.contains(".then(chromeSource?.modifier ?: Modifier)"))
-        assertTrue(source.contains(".globalWallpaperAwareBackground(MaterialTheme.colorScheme.background)"))
+        assertTrue(source.contains(".globalWallpaperAwareBackground(AppSurfaceTokens.background())"))
         assertTrue(!source.contains("tabBackdrop = channelBackdrop"))
         assertTrue(source.contains("listTopPadding = channelHeight"))
         assertTrue(source.contains("chromeSource?.takeIf {"))

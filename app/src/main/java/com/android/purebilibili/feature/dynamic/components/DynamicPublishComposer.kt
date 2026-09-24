@@ -59,6 +59,13 @@ import com.android.purebilibili.data.model.response.DynamicPublishMention
 import com.android.purebilibili.data.model.response.DynamicPublishTopic
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+// Keep this component's established pixel geometry across theme migrations.
+private object DynamicPublishLayoutSpec {
+    const val CoverSizeDp = 72
+    const val ControlIconSizeDp = 18
+    const val OptionWidthDp = 88
+}
+
 @Composable
 fun DynamicPublishComposer(
     initialDraft: DynamicPublishDraft,
@@ -159,7 +166,7 @@ fun DynamicPublishComposer(
                                         model = uri,
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(72.dp)
+                                            .size(DynamicPublishLayoutSpec.CoverSizeDp.dp)
                                             .clip(AppShapes.container(ContainerLevel.Chip)),
                                         contentScale = ContentScale.Crop
                                     )
@@ -172,7 +179,7 @@ fun DynamicPublishComposer(
                                         AppIcon(
                                             imageVector = rememberAppDeleteIcon(),
                                             contentDescription = "移除图片",
-                                            modifier = Modifier.size(18.dp),
+                                            modifier = Modifier.size(DynamicPublishLayoutSpec.ControlIconSizeDp.dp),
                                         )
                                     }
                                 }
@@ -235,7 +242,7 @@ fun DynamicPublishComposer(
                             items = visibilityLabels,
                             selectedIndex = if (privatePublish) 1 else 0,
                             onSelected = { index -> privatePublish = index == 1 },
-                            itemWidth = 88.dp,
+                            itemWidth = DynamicPublishLayoutSpec.OptionWidthDp.dp,
                             height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
                             indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
                             labelFontSize = DynamicTypographyPolicy.segmentedControlLabelFontSize,

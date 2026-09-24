@@ -127,6 +127,11 @@ import androidx.compose.material.icons.rounded.Search
 import com.android.purebilibili.core.util.FormatUtils
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+// Keep this component's established pixel geometry across theme migrations.
+private object WatchLaterDialogSpec {
+    const val MaxListHeightDp = 360
+}
+
 // 辅助函数：格式化时长
 private fun formatDuration(seconds: Int): String {
     return FormatUtils.formatDuration(seconds)
@@ -1214,7 +1219,7 @@ fun WatchLaterScreen(
                 if (state.isTransferLoading && state.favoriteFolders.isEmpty()) {
                     AppText("正在加载收藏夹…")
                 } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    LazyColumn(modifier = Modifier.heightIn(max = WatchLaterDialogSpec.MaxListHeightDp.dp)) {
                         items(state.favoriteFolders, key = { it.id }) { folder ->
                             AppSingleChoiceRow(
                                 selected = selectedTransferFolderId == folder.id,

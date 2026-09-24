@@ -8,11 +8,45 @@ import android.os.Build
 import android.view.Display
 import androidx.media3.common.MimeTypes
 import androidx.media3.decoder.ffmpeg.FfmpegLibrary
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+
+data class DolbyAudioCapabilities(
+    val isDolbyAudioSupported: Boolean,
+    val isDolbyAudioSoftwareDecoded: Boolean
+)
+
+internal fun resolveDolbyAudioCapabilities(
+    platformSupported: Boolean,
+    softwareSupported: Boolean
+): DolbyAudioCapabilities = DolbyAudioCapabilities(
+    isDolbyAudioSupported = platformSupported || softwareSupported,
+    isDolbyAudioSoftwareDecoded = !platformSupported && softwareSupported
+)
 
 object MediaUtils {
     // 解码器探测结果缓存：codecInfos 在进程生命周期内不变，避免每次切画质都重新枚举
     private val decoderSupportCache = ConcurrentHashMap<String, Boolean>()
+    private val dolbySoftwareDecoderProbe = CachedAsyncBooleanProbe(Dispatchers.IO) {
+        queryDolbySoftwareDecoderSupport()
+    }
+
+    // FfmpegLibrary 属 media3 unstable API：应用在稳定能力查询封装后消费，opt-in 标记不会扩散到调用方。
+    @SuppressLint("UnsafeOptInUsageError")
+    private fun queryDolbySoftwareDecoderSupport(): Boolean {
+        return runCatching {
+            FfmpegLibrary.supportsFormat(MimeTypes.AUDIO_E_AC3)
+        }.onFailure { error ->
+            Logger.e("MediaUtils", "Failed to load bundled E-AC-3 decoder", error)
+        }.getOrDefault(false)
+    }
+
     /**
      * Check if HEVC (H.265) decoder is supported
      */
@@ -28,30 +62,19 @@ object MediaUtils {
         return hasDecoder("video/av01")
     }
 
-    /** 检查平台或应用内置 FFmpeg 是否能够解码 E-AC-3/JOC 音轨。 */
-    fun isDolbyAtmosAudioSupported(): Boolean {
-        return isPlatformDolbyAudioDecoderSupported() || isDolbySoftwareAudioDecoderSupported()
-    }
-
     /** 平台解码器可用时保留 Dolby JOC/Atmos 渲染链路。 */
-    fun isPlatformDolbyAudioDecoderSupported(): Boolean {
+    private fun isPlatformDolbyAudioDecoderSupported(): Boolean {
         return hasDecoder(MimeTypes.AUDIO_E_AC3) || hasDecoder(MimeTypes.AUDIO_E_AC3_JOC)
     }
 
-    /** 检查应用内置的窄版 FFmpeg 是否包含 E-AC-3 解码器。 */
-    // FfmpegLibrary 属 media3 unstable API：应用在稳定能力查询封装后消费，opt-in 标记会级联污染全部调用方。
-    @SuppressLint("UnsafeOptInUsageError")
-    fun isDolbySoftwareAudioDecoderSupported(): Boolean {
-        return runCatching {
-            FfmpegLibrary.supportsFormat(MimeTypes.AUDIO_E_AC3)
-        }.onFailure { error ->
-            Logger.e("MediaUtils", "Failed to load bundled E-AC-3 decoder", error)
-        }.getOrDefault(false)
-    }
-
-    /** 只有平台不支持而 FFmpeg 可用时，实际播放才属于兼容软解。 */
-    fun isDolbySoftwareAudioDecoderRequired(): Boolean {
-        return !isPlatformDolbyAudioDecoderSupported() && isDolbySoftwareAudioDecoderSupported()
+    /**
+     * Await the device/software Dolby capability snapshot without running decoder discovery on
+     * the caller's dispatcher. The FFmpeg result is shared for the process lifetime.
+     */
+    suspend fun awaitDolbyAudioCapabilities(): DolbyAudioCapabilities = withContext(Dispatchers.IO) {
+        val platformSupported = isPlatformDolbyAudioDecoderSupported()
+        val softwareSupported = dolbySoftwareDecoderProbe.await()
+        resolveDolbyAudioCapabilities(platformSupported, softwareSupported)
     }
 
     /**
@@ -160,5 +183,25 @@ object MediaUtils {
             Logger.e("MediaUtils", "Failed to check decoder support for $mimeType", e)
         }
         return false
+    }
+}
+
+/** Starts one capability probe on its configured dispatcher and shares its result with all awaiters. */
+internal class CachedAsyncBooleanProbe(
+    private val dispatcher: CoroutineDispatcher,
+    private val probe: () -> Boolean
+) {
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    @Volatile
+    private var result: Deferred<Boolean>? = null
+
+    suspend fun await(): Boolean = getOrStart().await()
+
+    private fun getOrStart(): Deferred<Boolean> {
+        result?.let { return it }
+        return synchronized(this) {
+            result ?: scope.async { probe() }.also { result = it }
+        }
     }
 }

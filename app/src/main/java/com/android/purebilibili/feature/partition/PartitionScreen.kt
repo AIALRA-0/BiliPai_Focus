@@ -445,8 +445,8 @@ fun PartitionScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (headerBlurActive) Color.Transparent else MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = if (headerBlurActive) Color.Transparent else MaterialTheme.colorScheme.background
+                    containerColor = if (headerBlurActive) Color.Transparent else AppSurfaceTokens.background(),
+                    scrolledContainerColor = if (headerBlurActive) Color.Transparent else AppSurfaceTokens.background()
                 ),
                 modifier = Modifier.then(
                     if (headerBlurActive) {

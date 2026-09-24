@@ -10,6 +10,59 @@ import kotlin.test.assertTrue
 class TabletVideoLayoutPolicyTest {
 
     @Test
+    fun focusRelatedVisibilityRemovesTheTabAndRestoresTheEnabledLayout() {
+        val enabledTabs = resolveTabletSecondaryTabs(
+            fixedTab = null,
+            relatedTabFirst = true,
+            includeRelatedTab = true,
+            includeIntroTab = true,
+            includeCollectionTab = false,
+            includeOwnerUploadsTab = false,
+            ownerMid = 0L,
+        )
+        val disabledTabs = resolveTabletSecondaryTabs(
+            fixedTab = null,
+            relatedTabFirst = true,
+            includeRelatedTab = false,
+            includeIntroTab = true,
+            includeCollectionTab = false,
+            includeOwnerUploadsTab = false,
+            ownerMid = 0L,
+        )
+
+        // Tab construction is independent of the related response list, so an enabled empty
+        // response keeps the normal related destination available.
+        assertEquals(
+            listOf(TabletSecondaryTab.RELATED, TabletSecondaryTab.COMMENTS, TabletSecondaryTab.INTRO),
+            enabledTabs,
+        )
+        assertEquals(
+            listOf(TabletSecondaryTab.COMMENTS, TabletSecondaryTab.INTRO),
+            disabledTabs,
+        )
+    }
+
+    @Test
+    fun focusRelatedVisibilityGatesTabletPanesAndResetsSavedSelectionKey() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/TabletVideoLayout.kt"
+        ).readText().replace(Regex("\\s+"), " ")
+        val tertiaryBlock = source
+            .substringAfter("tertiaryContent = if (useThreePaneLayout && focusRelatedVideosVisible)")
+            .substringBefore("else null")
+        val saveableKey = source
+            .substringAfter("var selectedTab by rememberSaveable(")
+            .substringBefore(") {")
+
+        assertTrue(source.contains("includeRelatedTab = focusRelatedVideosVisible"))
+        assertTrue(source.contains("showRelatedVideos = focusRelatedVideosVisible"))
+        assertTrue(tertiaryBlock.contains("fixedTab = TabletSecondaryTab.RELATED"))
+        assertTrue(saveableKey.contains("focusRelatedVideosVisible"))
+        assertTrue(source.contains("if (showRelatedTab) {"))
+        assertTrue(source.contains("text = \"先看看相关推荐\""))
+    }
+
+    @Test
     fun secondaryPaneDefaultFindsTheRequestedTabInEitherOrder() {
         assertEquals(
             0,

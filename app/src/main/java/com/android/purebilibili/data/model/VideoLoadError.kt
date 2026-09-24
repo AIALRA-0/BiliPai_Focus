@@ -57,7 +57,7 @@ sealed class VideoLoadError {
     fun toUserMessage(): String = when (this) {
         is NetworkError -> "网络连接失败，请检查网络后重试"
         is Timeout -> "加载超时，请重试"
-        is WbiSignatureError -> "验证失败，正在重试..."
+        is WbiSignatureError -> "请求验证失败，请稍后重试"
         is VideoNotFound -> "视频不存在或已被删除"
         is RegionRestricted -> "该视频在当前地区不可用"
         is VipRequired -> "该视频需要大会员才能观看"

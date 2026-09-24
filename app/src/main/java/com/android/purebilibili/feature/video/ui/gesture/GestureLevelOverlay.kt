@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.android.purebilibili.core.ui.components.AppSlider
+import com.android.purebilibili.core.ui.components.AppSliderDefaults
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -65,8 +67,6 @@ import com.android.purebilibili.feature.video.ui.components.shouldTriggerGesture
 import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
 import com.android.purebilibili.feature.video.ui.section.resolveVideoGestureMotionSpec
 import kotlin.math.roundToInt
-import top.yukonga.miuix.kmp.basic.Slider
-import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -294,13 +294,10 @@ private fun MiuixGestureLevelSlider(
     val standardMotion = AppMotionTokens.standardSpec<Float>()
     val emphasizedMotion = AppMotionTokens.emphasizedSpec<Float>()
     val expressiveMotion = AppMotionTokens.expressiveSpec<Float>()
-    val sliderColors = SliderDefaults.sliderColors(
-        foregroundColor = spec.fillColor,
-        disabledForegroundColor = spec.fillColor,
-        backgroundColor = spec.containerColor,
-        disabledBackgroundColor = spec.containerColor,
+    val sliderColors = AppSliderDefaults.colors(
         thumbColor = spec.iconTint,
-        disabledThumbColor = spec.iconTint
+        activeTrackColor = spec.fillColor,
+        inactiveTrackColor = spec.containerColor,
     )
     Row(
         modifier = Modifier.padding(top = spec.topInsetDp.dp),
@@ -336,7 +333,7 @@ private fun MiuixGestureLevelSlider(
                 )
             }
         }
-        Slider(
+        AppSlider(
             value = progress,
             onValueChange = {},
             modifier = Modifier
@@ -344,7 +341,6 @@ private fun MiuixGestureLevelSlider(
                 .height(spec.railHeightDp.dp)
                 .semantics { contentDescription = resolveGestureLevelLabel(spec.kind) },
             enabled = false,
-            height = spec.railHeightDp.dp,
             colors = sliderColors
         )
     }

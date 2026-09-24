@@ -54,7 +54,6 @@ import coil3.size.Size
 import coil3.transform.Transformation
 import coil3.imageLoader
 //  已改用 MaterialTheme.colorScheme.primary
-import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.calculateContrastRatio
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.BilibiliUrlParser
@@ -1095,6 +1094,7 @@ fun ReplyHeader(count: Int) {
 @Composable
 fun ReplyItemView(
     item: ReplyItem,
+    collapsedSubReplyPreviewLimit: Int,
     upMid: Long = 0,
     showUpFlag: Boolean = false,
     isPinned: Boolean = false,
@@ -1131,9 +1131,6 @@ fun ReplyItemView(
         hideSubPreview = hideSubPreview,
         lightweightMode = lightweightMode
     )
-    val collapsedSubReplyPreviewLimit = remember(context) {
-        SettingsManager.getCommentCollapsedReplyPreviewLimitSync(context)
-    }
     val localEmoteMap = remember(item.content.emote, emoteMap) {
         val inlineEmotes = item.content.emote.orEmpty()
         if (inlineEmotes.isEmpty()) {

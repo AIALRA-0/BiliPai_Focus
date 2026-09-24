@@ -185,6 +185,13 @@ import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 
+// Preserve existing local corner geometry across theme migrations.
+private object MusicPlayerShapeSpec {
+    const val Radius8Dp = 8
+    const val Radius12Dp = 12
+    const val Radius16Dp = 16
+}
+
 internal enum class MusicGlassMaterialMode {
     LIQUID,
     FROSTED,
@@ -295,7 +302,7 @@ internal fun resolveMusicGlassContainerColor(
 ): Color {
     val materialColor = LocalMusicPlayerMaterial.current.surfaceColor
     if (materialColor != Color.Unspecified) return materialColor
-    val base = glassTintColor.takeOrElse { MaterialTheme.colorScheme.surface }
+    val base = glassTintColor.takeOrElse { AppSurfaceTokens.surface() }
     val tonalTarget = if (isDark) {
         MaterialTheme.colorScheme.surfaceBright
     } else {
@@ -313,7 +320,7 @@ internal fun resolveMusicGlassBorderColor(
 ): Color {
     val materialColor = LocalMusicPlayerMaterial.current.borderColor
     if (materialColor != Color.Unspecified) return materialColor
-    val base = glassTintColor.takeOrElse { MaterialTheme.colorScheme.surface }
+    val base = glassTintColor.takeOrElse { AppSurfaceTokens.surface() }
     val edge = if (isDark) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
     return lerp(base, edge, if (isDark) 0.42f else 0.28f)
         .copy(alpha = if (isDark) 0.30f else 0.22f)
@@ -380,7 +387,7 @@ internal fun MusicPlayerContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val themeSurfaceColor = MaterialTheme.colorScheme.surface
+    val themeSurfaceColor = AppSurfaceTokens.surface()
     val adaptiveInfo = LocalAppWindowAdaptiveInfo.current
     val density = LocalDensity.current
     var paletteColor by remember(themeSurfaceColor) { mutableStateOf(themeSurfaceColor) }
@@ -1362,7 +1369,7 @@ private fun ImmersiveBottomQueueShelf(
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     val panelColor = resolveMusicImmersivePanelColor(
         backgroundColor = glassTintColor,
-        surfaceColor = MaterialTheme.colorScheme.surface,
+        surfaceColor = AppSurfaceTokens.surface(),
     ).copy(alpha = 0.92f)
 
     AppSurface(
@@ -1502,7 +1509,7 @@ private fun ImmersiveBottomQueueShelf(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(MusicPlayerShapeSpec.Radius12Dp.dp))
                                 .clickable {
                                     onQueueItemSelected(index)
                                 }
@@ -1514,7 +1521,7 @@ private fun ImmersiveBottomQueueShelf(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
+                                    .clip(RoundedCornerShape(MusicPlayerShapeSpec.Radius8Dp.dp)),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(Modifier.width(12.dp))
@@ -1953,7 +1960,7 @@ private fun MusicArtwork(
     val artworkFallbackBrush = Brush.linearGradient(
         listOf(
             MaterialTheme.colorScheme.surfaceVariant,
-            MaterialTheme.colorScheme.surface,
+            AppSurfaceTokens.surface(),
         )
     )
     if (shape == RectangleShape) {
@@ -2134,7 +2141,7 @@ private fun MusicProgress(
         draggedPosition = null
     }
     val inactiveTrackColor = lerp(
-        glassTintColor.takeOrElse { MaterialTheme.colorScheme.surface },
+        glassTintColor.takeOrElse { AppSurfaceTokens.surface() },
         MaterialTheme.colorScheme.onSurface,
         if (isDarkEnvironment) 0.34f else 0.22f,
     ).copy(alpha = if (isDarkEnvironment) 0.36f else 0.24f)
@@ -2231,7 +2238,7 @@ private fun PlayerLyricsPreview(
 
     AppSurface(
         onClick = onOpenLyrics ?: {},
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(MusicPlayerShapeSpec.Radius16Dp.dp),
         color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
@@ -2658,7 +2665,7 @@ private fun LyricsPrimaryControls(
     )
     val panelColor = resolveMusicImmersivePanelColor(
         glassTintColor,
-        MaterialTheme.colorScheme.surface,
+        AppSurfaceTokens.surface(),
     )
     val (themeOnLight, themeOnDark) = resolveMusicPlayerThemeContentColors()
     val panelContentColor = resolveMusicPlayerContentColor(
@@ -3336,7 +3343,7 @@ private fun ExpandedQueuePane(
     val panelShape = AppShapes.borderedContainer(ContainerLevel.Card)
     val panelColor = resolveMusicImmersivePanelColor(
         glassTintColor,
-        MaterialTheme.colorScheme.surface,
+        AppSurfaceTokens.surface(),
     )
     AppSurface(
         shape = panelShape,
@@ -3455,7 +3462,7 @@ private fun ExpandedQueuePane(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(MusicPlayerShapeSpec.Radius12Dp.dp))
                                 .background(
                                     if (isPlayingItem) MusicAccentColor.copy(alpha = 0.16f) else Color.Transparent
                                 )
@@ -3468,7 +3475,7 @@ private fun ExpandedQueuePane(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(44.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
+                                    .clip(RoundedCornerShape(MusicPlayerShapeSpec.Radius8Dp.dp)),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(Modifier.width(12.dp))

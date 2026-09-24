@@ -114,6 +114,10 @@ private sealed interface DynamicDetailUiState {
     data class Error(val message: String) : DynamicDetailUiState
 }
 
+private object DynamicDetailScreenLayoutSpec {
+    const val CommentComposerMaxWidthDp = 360f
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DynamicDetailScreen(
@@ -158,6 +162,11 @@ fun DynamicDetailScreen(
     }
 
     val context = LocalContext.current
+    val collapsedSubReplyPreviewLimit by SettingsManager
+        .getCommentCollapsedReplyPreviewLimit(context)
+        .collectAsStateWithLifecycle(
+            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
+        )
     val homeSettings by SettingsManager.getHomeSettings(context)
         .collectAsStateWithLifecycle(initialValue = HomeSettings())
     val liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
@@ -426,6 +435,7 @@ fun DynamicDetailScreen(
                     }
                     dynamicInlineCommentItems(
                         comments = comments,
+                        collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
                         isLoading = commentsLoading,
                         isLoadingMore = commentsLoadingMore,
                         onViewReplies = { reply -> interactionViewModel.openSubReply(reply) },
@@ -552,7 +562,7 @@ fun DynamicDetailScreen(
                                         ) {
                                             commentComposer(
                                                 Modifier
-                                                    .widthIn(max = 360.dp)
+                                                    .widthIn(max = DynamicDetailScreenLayoutSpec.CommentComposerMaxWidthDp.dp)
                                                     .fillMaxWidth(),
                                             )
                                         }
@@ -576,8 +586,8 @@ fun DynamicDetailScreen(
                                             AppSurface(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 color = resolveDynamicDetailBottomBarColor(LocalAppUiStyle.current, MaterialTheme.colorScheme),
-                                                tonalElevation = 0.dp,
-                                                shadowElevation = 0.dp,
+                                                tonalElevation = AppSpacingTokens.None,
+                                                shadowElevation = AppSpacingTokens.None,
                                             ) {
                                                 commentComposer(
                                                     Modifier
@@ -629,7 +639,7 @@ fun DynamicDetailScreen(
                                 ) {
                                     commentComposer(
                                         Modifier
-                                            .widthIn(max = 360.dp)
+                                            .widthIn(max = DynamicDetailScreenLayoutSpec.CommentComposerMaxWidthDp.dp)
                                             .fillMaxWidth(),
                                     )
                                 }
@@ -644,8 +654,8 @@ fun DynamicDetailScreen(
                                     AppSurface(
                                         modifier = Modifier.fillMaxWidth(),
                                         color = resolveDynamicDetailBottomBarColor(LocalAppUiStyle.current, MaterialTheme.colorScheme),
-                                        tonalElevation = 0.dp,
-                                        shadowElevation = 0.dp,
+                                        tonalElevation = AppSpacingTokens.None,
+                                        shadowElevation = AppSpacingTokens.None,
                                     ) {
                                         commentComposer(
                                             Modifier

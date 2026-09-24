@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppText
@@ -74,14 +74,14 @@ fun BangumiCollapsedPlayerBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(topInset)
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(AppSurfaceTokens.surface())
                 )
             }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(AppSurfaceTokens.surface())
                     .clickable(onClick = onPlayClick),
             ) {
                 Row(

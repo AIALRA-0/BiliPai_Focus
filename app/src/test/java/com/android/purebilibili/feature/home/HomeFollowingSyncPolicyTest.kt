@@ -11,6 +11,31 @@ import kotlin.test.assertTrue
 class HomeFollowingSyncPolicyTest {
 
     @Test
+    fun `direct follow changes update the following snapshot idempotently`() {
+        val following = setOf(11L, 22L)
+
+        val afterFollow = resolveHomeFollowingMidsAfterChange(
+            followingMids = following,
+            changedMid = 33L,
+            isFollowing = true
+        )
+        val afterDuplicateFollow = resolveHomeFollowingMidsAfterChange(
+            followingMids = afterFollow,
+            changedMid = 33L,
+            isFollowing = true
+        )
+        val afterUnfollow = resolveHomeFollowingMidsAfterChange(
+            followingMids = afterDuplicateFollow,
+            changedMid = 22L,
+            isFollowing = false
+        )
+
+        assertEquals(setOf(11L, 22L, 33L), afterFollow)
+        assertEquals(afterFollow, afterDuplicateFollow)
+        assertEquals(setOf(11L, 33L), afterUnfollow)
+    }
+
+    @Test
     fun `snapshot change should require reload when visible followings are added`() {
         val change = resolveHomeFollowingSnapshotChange(
             previousFollowingMids = setOf(11L, 22L),
@@ -79,6 +104,14 @@ class HomeFollowingSyncPolicyTest {
                 rawFollowFeedCount = 0,
                 displayedFollowFeedCount = 0,
                 currentCategory = HomeCategory.FOLLOW
+            )
+        )
+        assertTrue(
+            shouldRefreshHomeFollowAfterFollowingChange(
+                hasResolvedFollowFeedOnce = true,
+                rawFollowFeedCount = 0,
+                displayedFollowFeedCount = 0,
+                currentCategory = HomeCategory.RECOMMEND
             )
         )
     }

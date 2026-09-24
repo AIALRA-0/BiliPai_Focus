@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.motion.iosMorphTween
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
@@ -40,6 +41,15 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 
 private const val LINKED_DOCK_MERGE_DURATION_MILLIS = 280
 private const val LINKED_DOCK_SEARCH_DURATION_MILLIS = 240
+
+private object LinkedBottomDockLayoutSpec {
+    const val ScrollCollapseThresholdDp = 24f
+    const val MaximumDockWidthDp = 600f
+    const val NavigationButtonSizeDp = 56f
+    const val DockBarHeightDp = 64f
+    const val SearchControlHeightDp = 56f
+    const val NavigationCornerRadiusDp = 32f
+}
 
 typealias LinkedDockNowPlayingSlot = @Composable (
     Modifier,
@@ -107,7 +117,9 @@ internal fun LinkedBottomDock(
     val scroll = LocalHomeScrollOffset.current
     val currentPhase by rememberUpdatedState(phase)
     val scrolling by rememberUpdatedState(isFeedScrollInProgress)
-    val threshold = with(LocalDensity.current) { 24.dp.toPx() }
+    val threshold = with(LocalDensity.current) {
+        LinkedBottomDockLayoutSpec.ScrollCollapseThresholdDp.dp.toPx()
+    }
     LaunchedEffect(currentItem, hasAudio, scroll, threshold, isTopLevelDestination) {
         if (currentItem != BottomNavItem.HOME) return@LaunchedEffect
         var previous = scroll.floatValue
@@ -182,7 +194,7 @@ internal fun LinkedBottomDock(
     // A single audio child is measured and moved between rows. Playback and artwork stay mounted.
     Layout(
         modifier = modifier.fillMaxWidth().imePadding().navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small),
         content = {
             Box(Modifier.graphicsLayer { alpha = (1f - merge.value * 3f).coerceIn(0f, 1f) }
                 .pointerInput(phase) {
@@ -292,20 +304,22 @@ internal fun LinkedBottomDock(
             }
         },
     ) { children, constraints ->
-        val maximumWidth = constraints.maxWidth.coerceAtMost(600.dp.roundToPx())
-        val button = 56.dp.roundToPx()
-        val barHeight = 64.dp.roundToPx()
-        val controlHeight = 56.dp.roundToPx()
+        val maximumWidth = constraints.maxWidth.coerceAtMost(
+            LinkedBottomDockLayoutSpec.MaximumDockWidthDp.dp.roundToPx(),
+        )
+        val button = LinkedBottomDockLayoutSpec.NavigationButtonSizeDp.dp.roundToPx()
+        val barHeight = LinkedBottomDockLayoutSpec.DockBarHeightDp.dp.roundToPx()
+        val controlHeight = LinkedBottomDockLayoutSpec.SearchControlHeightDp.dp.roundToPx()
         // Keep the compact search surface circular; its width starts at [button].
         val searchHeight = button
-        val gap = 8.dp.roundToPx()
+        val gap = AppSpacingTokens.Small.roundToPx()
         val progress = merge.value.coerceIn(0f, 1f)
         val preferredNavigationWidth = resolveBiliPaiFloatingBottomBarWidth(
             containerWidth = maximumWidth.toDp(),
             itemCount = navigationItemCount,
             minEdgePadding = navigationMinEdgePadding,
             labelMode = navigationLabelMode,
-            cornerRadius = 32.dp,
+            cornerRadius = LinkedBottomDockLayoutSpec.NavigationCornerRadiusDp.dp,
         ).roundToPx()
         val reservedSearchWidth = if (searchEnabled) button + gap else 0
         val expandedNavigationWidth = preferredNavigationWidth.coerceAtMost(
@@ -320,7 +334,7 @@ internal fun LinkedBottomDock(
             searchEnabled = searchEnabled,
             mergeProgress = progress,
             searchProgress = search.value,
-            verticalGap = 4.dp.roundToPx(),
+            verticalGap = AppSpacingTokens.ExtraSmall.roundToPx(),
         )
         val top = geometry.top
         val searchWidth = geometry.searchWidth

@@ -529,7 +529,7 @@ internal fun miuixVideoCardNavTransition(
                 floatingCornerPx
             }
             val gestureModifier = if (gestureFollowEnabled) {
-                Modifier.graphicsLayer {
+                this.graphicsLayer {
                     val depth = scope.relativeDepth
                     val gesture = scope.gesture
                     if (depth <= 0f) {
@@ -572,7 +572,7 @@ internal fun miuixVideoCardNavTransition(
                     }
                 }
             } else {
-                Modifier
+                this
             }
             return gestureModifier
                 .graphicsLayer {

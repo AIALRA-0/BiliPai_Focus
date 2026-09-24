@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.Alignment
 import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppFilterChip
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppText
@@ -313,7 +314,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
                 modifier = Modifier
                     .matchParentSize()
                     .layerBackdrop(settingsBackdrop)
-                    .background(MaterialTheme.colorScheme.background),
+                    .background(AppSurfaceTokens.background()),
             )
             Column(
                 modifier = Modifier.fillMaxWidth(),

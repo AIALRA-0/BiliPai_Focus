@@ -65,6 +65,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+// Keep this component's established pixel geometry across theme migrations.
+private object FavoriteCategoryLayoutSpec {
+    const val FilterRowHeightDp = 48
+    const val SelectedActionsHeightDp = 48
+    const val HeaderHeightDp = 84
+}
+
 data class FavoriteCategoryUiState(
     val section: FavoriteSection = FavoriteSection.BANGUMI,
     val items: List<FavoriteCategoryItem> = emptyList(),
@@ -340,8 +347,8 @@ private fun FavoriteCategoryContent(
         state.section == FavoriteSection.CINEMA ||
         state.section == FavoriteSection.NOTE
     val stickyChromeReserve = headerInset +
-        (if (hasFilterRow) 48.dp else AppSpacingTokens.None) +
-        (if (state.selectedIds.isNotEmpty()) 48.dp else AppSpacingTokens.None)
+        (if (hasFilterRow) FavoriteCategoryLayoutSpec.FilterRowHeightDp.dp else AppSpacingTokens.None) +
+        (if (state.selectedIds.isNotEmpty()) FavoriteCategoryLayoutSpec.SelectedActionsHeightDp.dp else AppSpacingTokens.None)
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             state.isLoading && state.items.isEmpty() -> Box(
@@ -440,9 +447,9 @@ private fun FavoriteCategoryFilterRow(
     }
     val uiStyle = LocalAppUiStyle.current
     val isScrollable = labels.size > 4
-    val horizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3 && isScrollable) 0.dp else AppSpacingTokens.Medium
+    val horizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3 && isScrollable) AppSpacingTokens.None else AppSpacingTokens.Medium
     val minTabWidth = if (labels.size <= 3) {
-        84.dp
+        FavoriteCategoryLayoutSpec.HeaderHeightDp.dp
     } else if (uiStyle == AppUiStyle.MATERIAL3) {
         AppChromeSizeTokens.MinimumTouchTarget
     } else {

@@ -117,7 +117,9 @@ class VideoListLayoutControlUiTest {
         rule.onNodeWithContentDescription("切换为单列").performClick()
         rule.mainClock.advanceTimeBy(48)
         rule.onAllNodesWithTag("video-list").assertCountEquals(1)
-        listOf("a", "b", "c", "d").forEach { id ->
+        // LazyVerticalGrid may keep the fourth card outside the 360dp viewport while
+        // the first three cards are still shrinking from their two-column height.
+        listOf("a", "b", "c").forEach { id ->
             rule.onAllNodesWithTag("card-$id").assertCountEquals(1)
         }
         val movingCard = rule.onNodeWithTag("card-b").fetchSemanticsNode().boundsInRoot
@@ -132,5 +134,9 @@ class VideoListLayoutControlUiTest {
         rule.mainClock.advanceTimeBy(1200)
         rule.onNodeWithText("单列内容").assertIsDisplayed()
         rule.onAllNodesWithTag("video-list").assertCountEquals(1)
+        listOf("a", "b", "c", "d").forEach { id ->
+            rule.onAllNodesWithTag("card-$id").assertCountEquals(1)
+        }
+        rule.onNodeWithTag("card-d").assertIsDisplayed()
     }
 }

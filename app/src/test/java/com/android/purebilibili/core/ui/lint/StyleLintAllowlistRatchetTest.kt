@@ -160,8 +160,8 @@ class StyleLintAllowlistRatchetTest {
         // 85 → 86：上游 SearchLandingUi（悬浮建议卡片）带入的存量字面圆角，
         // 同样受 preset 缩放约束（16/10/4dp 无对应 ContainerLevel）；迁移后调小。
         const val MAX_SHAPE_HITS = 0
-        const val MAX_MOTION_HITS = 15
-        const val MAX_SURFACE_HITS = 48
+        const val MAX_MOTION_HITS = 11
+        const val MAX_SURFACE_HITS = 46
 
         // 新增的 color/spacing/typography 豁免棘轮：接入时即收纳全部存量违规，
         // 均为非 4dp 刻度尺寸或深色 SuperChat 品牌色等有像素级理由的豁免。
@@ -179,9 +179,9 @@ class StyleLintAllowlistRatchetTest {
         const val SHAPE_HITS_SHA256 =
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         const val MOTION_HITS_SHA256 =
-            "eb883a77a6e9e2f94733b73408f83d02a551b475b0cfbe119f5ee432a4df4925"
+            "b92cd8cf015c468c50e13b6e066d3482df0f232ed038683be98b05a0938382d5"
         const val SURFACE_HITS_SHA256 =
-            "4655ba41f9fd9c1802650eb2ee526ef9633c9bdb872c0e58a8e90a31306bf6e0"
+            "c6ba14760e3ed7ed6b224bf63e513a51b9fcab30a5a5efc485847642d4b17516"
         const val COLOR_HITS_SHA256 =
             "472bbaea88ea315505d7e5d1cfcc834664bbc0da24b91211bf4c1d3d8f1240d9"
         const val SPACING_HITS_SHA256 =

@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.network.getSpaceAggregate
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.BangumiRepository
 import com.android.purebilibili.data.repository.ActionRepository
+import com.android.purebilibili.data.repository.shouldApplyFollowStateChangeForAccount
 import com.android.purebilibili.data.repository.FavoriteRepository
 import com.android.purebilibili.data.repository.hasDynamicPaginationProgress
 import com.android.purebilibili.data.repository.HistoryRepository
@@ -185,6 +187,12 @@ class SpaceViewModel(
     init {
         viewModelScope.launch {
             ActionRepository.followStateChanges.collect { change ->
+                if (!shouldApplyFollowStateChangeForAccount(
+                        change = change,
+                        activeAccountMid = TokenManager.midCache,
+                        isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty()
+                    )
+                ) return@collect
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@collect
                 if (currentState.userInfo.mid == change.mid && currentState.userInfo.isFollowed != change.isFollowing) {
                     val nextStatus = if (change.isFollowing) 2 else 0

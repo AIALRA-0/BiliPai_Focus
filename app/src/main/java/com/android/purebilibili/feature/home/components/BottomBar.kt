@@ -7,6 +7,7 @@ import com.android.purebilibili.core.ui.rememberResolvedAppIconStyle
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppBottomNavigationHost
 import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.components.AppNavigationBar
 import com.android.purebilibili.core.ui.components.AppNavigationBarItem
 import com.android.purebilibili.core.ui.components.AppPlatformNavigationBadge
@@ -25,7 +26,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -68,17 +68,19 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WatchLater
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppFilledIconButton
+import com.android.purebilibili.core.ui.components.AppIconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.TextButton
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -292,6 +294,10 @@ enum class BottomNavItem(
         listOf("插件中心"),
         ScreenRoutes.PluginsSettings.createRoute()
     )
+}
+
+private object BottomBarBackdropLayoutSpec {
+    const val FallbackBlurRadiusDp = 25f
 }
 
 @Composable
@@ -1155,7 +1161,10 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
                                     )
                                 }
                             } else if (blurEnabled) {
-                                val resolvedBlurRadius = maxOf(blurRadius, 25.dp)
+                                val resolvedBlurRadius = maxOf(
+                                    blurRadius,
+                                    BottomBarBackdropLayoutSpec.FallbackBlurRadiusDp.dp,
+                                )
                                 val radiusPx = resolvedBlurRadius.toPx()
                                 miuixBlur(radiusPx, radiusPx)
                             }
@@ -1183,7 +1192,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
                                 drawRect(containerColor)
                                 if (liquidGlassTuning.contentReadabilityScrimAlpha > 0f) {
                                     drawRect(
-                                        (if (isDarkTheme) Color.Black else Color.White).copy(
+                                        (if (isDarkTheme) HomeVisualPalette.GlassDark else HomeVisualPalette.GlassLight).copy(
                                             alpha = liquidGlassTuning.contentReadabilityScrimAlpha
                                         )
                                     )
@@ -1726,11 +1735,7 @@ internal fun rememberBottomBarIndicatorDragScaleProgress(
     LaunchedEffect(isDragging) {
         progress.animateTo(
             targetValue = if (isDragging) 1f else 0f,
-            animationSpec = spring(
-                dampingRatio = 0.6f,
-                stiffness = 250f,
-                visibilityThreshold = 0.001f
-            )
+            animationSpec = AppMotionTokens.floatingDockIndicatorProgressSpring()
         )
     }
     return progress.value
@@ -1753,8 +1758,8 @@ internal fun rememberBottomBarIndicatorLayerScaleTransform(
     val scaleY = remember { Animatable(1f) }
     LaunchedEffect(active, target) {
         val resolvedTarget = if (active) target.coerceAtLeast(1f) else 1f
-        launch { scaleX.animateTo(resolvedTarget, spring(0.6f, 250f, 0.001f)) }
-        launch { scaleY.animateTo(resolvedTarget, spring(0.7f, 250f, 0.001f)) }
+        launch { scaleX.animateTo(resolvedTarget, AppMotionTokens.floatingDockIndicatorScaleXSpring()) }
+        launch { scaleY.animateTo(resolvedTarget, AppMotionTokens.floatingDockIndicatorScaleYSpring()) }
     }
     return BottomBarIndicatorLayerTransform(scaleX = scaleX.value, scaleY = scaleY.value)
 }
@@ -2804,27 +2809,41 @@ private fun OfficialMd3FloatingToolbarContent(
             }
 
             when {
-                showIcon && showText && selected -> FilledTonalButton(
+                showIcon && showText && selected -> AppButton(
                     onClick = onClick,
-                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    shape = ButtonDefaults.filledTonalShape,
+                    contentPadding = PaddingValues(horizontal = AppSpacingTokens.Large),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    elevation = ButtonDefaults.filledTonalButtonElevation(),
                 ) {
                     icon()
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AppSpacingTokens.Small))
                     AppText(text = label, maxLines = 1)
                 }
-                showIcon && selected -> FilledTonalIconButton(onClick = onClick) { icon() }
-                showIcon -> IconButton(onClick = onClick) { icon() }
-                selected -> FilledTonalButton(onClick = onClick) {
+                showIcon && selected -> AppFilledIconButton(
+                    onClick = onClick,
+                    colors = AppIconButtonDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ),
+                ) { icon() }
+                showIcon -> AppIconButton(onClick = onClick) { icon() }
+                selected -> AppButton(
+                    onClick = onClick,
+                    shape = ButtonDefaults.filledTonalShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    elevation = ButtonDefaults.filledTonalButtonElevation(),
+                ) {
                     AppText(text = label, maxLines = 1)
                 }
-                else -> TextButton(onClick = onClick) {
+                else -> AppTextButton(onClick = onClick) {
                     AppText(text = label, maxLines = 1)
                 }
             }
         }
 
         if (isTablet && onToggleSidebar != null) {
-            IconButton(
+            AppIconButton(
                 onClick = {
                     performMaterialBottomBarTap(haptic = haptic, onClick = onToggleSidebar)
                 },
@@ -3117,7 +3136,7 @@ private fun MiuixBottomBar(
                 defaultColor = MaterialTheme.colorScheme.secondaryContainer,
                 hasUiSkinDecoration = uiSkinDecoration != null,
             )
-        val skinItemColors = resolveBottomBarSkinContentColors(
+            val skinItemColors = resolveBottomBarSkinContentColors(
                 selectedColor = uiSkinDecoration?.bottomSelectedTint
                     ?.takeUnless { it == Color.Unspecified }
                     ?: selectedItemColor,
@@ -3752,7 +3771,7 @@ private fun BiliPaiFloatingBottomBarChrome(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    bottom = if (embeddedDock) 0.dp else AppSpacingTokens.Medium +
+                    bottom = if (embeddedDock) AppSpacingTokens.None else AppSpacingTokens.Medium +
                         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 )
         ) {

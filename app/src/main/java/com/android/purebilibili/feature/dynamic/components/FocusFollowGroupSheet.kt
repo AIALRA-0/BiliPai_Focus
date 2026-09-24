@@ -30,15 +30,12 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -66,6 +63,10 @@ import com.android.purebilibili.core.store.normalizeFocusFollowGroupName
 import com.android.purebilibili.core.store.resolveFocusFollowGroupForUser
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.feature.dynamic.FocusFollowAssignmentSection
 import com.android.purebilibili.feature.dynamic.DynamicTypographyPolicy
@@ -74,12 +75,32 @@ import com.android.purebilibili.feature.dynamic.filterFocusFollowAssignmentSecti
 
 // Component-specific radii preserve the existing Focus group sheet across theme migrations.
 private object FocusFollowGroupShapeSpec {
-    val Small = 14.dp
-    val Medium = 16.dp
-    val Section = 18.dp
-    val Card = 20.dp
-    val Input = 26.dp
-    val Pill = 999.dp
+    const val SmallRadiusDp = 14
+    const val MediumRadiusDp = 16
+    const val SectionRadiusDp = 18
+    const val CardRadiusDp = 20
+    const val InputRadiusDp = 26
+    const val PillRadiusDp = 999
+}
+
+// Nonstandard dimensions stay named by their role instead of being folded into
+// the shared spacing scale. Common layout gaps continue to use AppSpacingTokens.
+private object FocusFollowGroupLayoutSpec {
+    const val InputHeightDp = 60
+    const val ActionButtonHeightDp = 52
+    const val ActionButtonHorizontalPaddingDp = 18
+    const val SortControlHorizontalPaddingDp = 18
+    const val SheetBottomPaddingDp = 28
+    const val SectionSpacingDp = 14
+    const val CompactGapDp = 6
+    const val BadgeHorizontalPaddingDp = 10
+    const val LeadingIconSizeDp = 18
+    const val EmptyStateHorizontalPaddingDp = 14
+    const val EmptyStateVerticalPaddingDp = 14
+    const val MemberRowSpacingDp = 10
+    const val SectionDividerThicknessDp = 1
+    const val SurfaceTonalElevationDp = 1
+    const val AvatarSizeDp = 46
 }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,10 +117,13 @@ fun FocusFollowGroupSheet(
     onSetHomeFeedSortMode: (FocusFollowHomeFeedSortMode) -> Unit,
     onAssignUserToGroup: (Long, String) -> Unit
 ) {
-    val inputHeight = 60.dp
-    val actionButtonHeight = 52.dp
-    val inputShape = RoundedCornerShape(FocusFollowGroupShapeSpec.Input)
-    val actionButtonContentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp)
+    val inputHeight = FocusFollowGroupLayoutSpec.InputHeightDp.dp
+    val actionButtonHeight = FocusFollowGroupLayoutSpec.ActionButtonHeightDp.dp
+    val inputShape = RoundedCornerShape(FocusFollowGroupShapeSpec.InputRadiusDp.dp)
+    val actionButtonContentPadding = PaddingValues(
+        horizontal = FocusFollowGroupLayoutSpec.ActionButtonHorizontalPaddingDp.dp,
+        vertical = AppSpacingTokens.None
+    )
     var newGroupName by rememberSaveable { mutableStateOf("") }
     var followSearchQuery by rememberSaveable { mutableStateOf("") }
     var renameTargetGroup by remember { mutableStateOf<FocusFollowGroup?>(null) }
@@ -126,11 +150,16 @@ fun FocusFollowGroupSheet(
     AppModalBottomSheet(onDismissRequest = onDismissRequest) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(
+                start = AppSpacingTokens.Large,
+                end = AppSpacingTokens.Large,
+                top = AppSpacingTokens.ExtraSmall,
+                bottom = FocusFollowGroupLayoutSpec.SheetBottomPaddingDp.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(FocusFollowGroupLayoutSpec.SectionSpacingDp.dp)
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(FocusFollowGroupLayoutSpec.CompactGapDp.dp)) {
                     Text(
                         text = "关注分组",
                         style = MaterialTheme.typography.headlineSmall,
@@ -147,15 +176,15 @@ fun FocusFollowGroupSheet(
 
             item {
                 Surface(
-                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Card),
-                    tonalElevation = 1.dp,
+                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.CardRadiusDp.dp),
+                    tonalElevation = FocusFollowGroupLayoutSpec.SurfaceTonalElevationDp.dp,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(AppSpacingTokens.Large),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -166,7 +195,7 @@ fun FocusFollowGroupSheet(
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "关注对象同步",
@@ -183,20 +212,22 @@ fun FocusFollowGroupSheet(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            FilledTonalButton(
+                            AppButton(
                                 onClick = onRefreshFollowings,
                                 modifier = Modifier
                                     .align(Alignment.Bottom)
                                     .height(actionButtonHeight),
                                 shape = inputShape,
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                                elevation = ButtonDefaults.filledTonalButtonElevation(),
                                 contentPadding = actionButtonContentPadding
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.Refresh,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(FocusFollowGroupLayoutSpec.LeadingIconSizeDp.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(FocusFollowGroupLayoutSpec.CompactGapDp.dp))
                                 Text("立即重拉")
                             }
                         }
@@ -208,14 +239,14 @@ fun FocusFollowGroupSheet(
                                     .clip(inputShape)
                                     .clickable { sortModeMenuExpanded = true },
                                 shape = inputShape,
-                                tonalElevation = 0.dp,
+                                tonalElevation = AppSpacingTokens.None,
                                 color = com.android.purebilibili.core.ui.AppSurfaceTokens.surface()
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(inputHeight)
-                                        .padding(horizontal = 18.dp),
+                                        .padding(horizontal = FocusFollowGroupLayoutSpec.SortControlHorizontalPaddingDp.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -223,7 +254,7 @@ fun FocusFollowGroupSheet(
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "首页关注排序",
@@ -250,7 +281,7 @@ fun FocusFollowGroupSheet(
                                 FocusFollowHomeFeedSortMode.entries.forEach { sortMode ->
                                     DropdownMenuItem(
                                         text = {
-                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)) {
                                                 Text(resolveFocusFollowHomeFeedSortModeLabel(sortMode))
                                                 Text(
                                                     text = resolveFocusFollowHomeFeedSortModeDescription(sortMode),
@@ -270,7 +301,7 @@ fun FocusFollowGroupSheet(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedTextField(
@@ -284,12 +315,14 @@ fun FocusFollowGroupSheet(
                                 label = { Text("新分组名称") },
                                 placeholder = { Text("例如：高优先、朋友、暂时隐藏") }
                             )
-                            FilledTonalButton(
+                            AppButton(
                                 modifier = Modifier
                                     .align(Alignment.Bottom)
                                     .height(actionButtonHeight),
                                 enabled = canCreateFocusFollowGroup(newGroupName, config.groups),
                                 shape = inputShape,
+                                colors = ButtonDefaults.filledTonalButtonColors(),
+                                elevation = ButtonDefaults.filledTonalButtonElevation(),
                                 contentPadding = actionButtonContentPadding,
                                 onClick = {
                                     onCreateGroup(newGroupName)
@@ -299,9 +332,9 @@ fun FocusFollowGroupSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.Add,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(FocusFollowGroupLayoutSpec.LeadingIconSizeDp.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(FocusFollowGroupLayoutSpec.CompactGapDp.dp))
                                 Text("添加")
                             }
                         }
@@ -324,7 +357,7 @@ fun FocusFollowGroupSheet(
                             },
                             trailingIcon = if (followSearchQuery.isNotBlank()) {
                                 {
-                                    IconButton(onClick = { followSearchQuery = "" }) {
+                                    AppIconButton(onClick = { followSearchQuery = "" }) {
                                         Icon(
                                             imageVector = Icons.Outlined.Close,
                                             contentDescription = "清除搜索"
@@ -350,15 +383,18 @@ fun FocusFollowGroupSheet(
             if (followSearchQuery.isNotBlank() && filteredAssignmentSections.isEmpty()) {
                 item("group_search_empty") {
                     Surface(
-                        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Section),
-                        tonalElevation = 1.dp,
+                        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.SectionRadiusDp.dp),
+                        tonalElevation = FocusFollowGroupLayoutSpec.SurfaceTonalElevationDp.dp,
                         color = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
                         Text(
                             text = "没有找到匹配的关注对象",
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                .padding(
+                                    horizontal = AppSpacingTokens.Large,
+                                    vertical = FocusFollowGroupLayoutSpec.EmptyStateVerticalPaddingDp.dp
+                                ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -405,18 +441,20 @@ fun FocusFollowGroupSheet(
         AlertDialog(
             onDismissRequest = { renameTargetGroup = null },
             confirmButton = {
-                Button(
+                AppButton(
                     enabled = renameDraft.trim().isNotBlank(),
                     onClick = {
                         onRenameGroup(group.id, normalizeFocusFollowGroupName(renameDraft))
                         renameTargetGroup = null
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(),
+                    elevation = ButtonDefaults.buttonElevation(),
                 ) {
                     Text("保存")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { renameTargetGroup = null }) {
+                AppOutlinedButton(onClick = { renameTargetGroup = null }) {
                     Text("取消")
                 }
             },
@@ -426,7 +464,7 @@ fun FocusFollowGroupSheet(
                     value = renameDraft,
                     onValueChange = { renameDraft = it },
                     singleLine = true,
-                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Input),
+                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.InputRadiusDp.dp),
                     label = { Text("分组名称") }
                 )
             }
@@ -439,17 +477,19 @@ fun FocusFollowGroupSheet(
             AlertDialog(
                 onDismissRequest = { deleteTargetGroupId = null },
                 confirmButton = {
-                    Button(
+                    AppButton(
                         onClick = {
                             onDeleteGroup(group.id)
                             deleteTargetGroupId = null
-                        }
+                        },
+                        colors = ButtonDefaults.buttonColors(),
+                        elevation = ButtonDefaults.buttonElevation(),
                     ) {
                         Text("删除")
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { deleteTargetGroupId = null }) {
+                    AppOutlinedButton(onClick = { deleteTargetGroupId = null }) {
                         Text("取消")
                     }
                 },
@@ -495,15 +535,15 @@ private fun FocusFollowGroupManagementCard(
     resolveCurrentGroup: (Long) -> FocusFollowGroup
 ) {
     Surface(
-        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Card),
-        tonalElevation = 1.dp,
+        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.CardRadiusDp.dp),
+        tonalElevation = FocusFollowGroupLayoutSpec.SurfaceTonalElevationDp.dp,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(AppSpacingTokens.Large),
+            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
         ) {
             Row(
                 modifier = Modifier
@@ -514,11 +554,11 @@ private fun FocusFollowGroupManagementCard(
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(FocusFollowGroupLayoutSpec.CompactGapDp.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
                     ) {
                         Text(
                             text = section.group.name,
@@ -528,7 +568,7 @@ private fun FocusFollowGroupManagementCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Surface(
-                            shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Pill),
+                            shape = RoundedCornerShape(FocusFollowGroupShapeSpec.PillRadiusDp.dp),
                             color = if (section.group.visible) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
@@ -537,7 +577,10 @@ private fun FocusFollowGroupManagementCard(
                         ) {
                             Text(
                                 text = if (section.group.visible) "可见" else "隐藏",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(
+                                    horizontal = FocusFollowGroupLayoutSpec.BadgeHorizontalPaddingDp.dp,
+                                    vertical = AppSpacingTokens.ExtraSmall
+                                ),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (section.group.visible) {
                                     MaterialTheme.colorScheme.onPrimaryContainer
@@ -562,7 +605,7 @@ private fun FocusFollowGroupManagementCard(
                     },
                     contentDescription = if (expanded) "收起分组成员" else "展开分组成员",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp, top = 2.dp)
+                    modifier = Modifier.padding(start = AppSpacingTokens.Medium, top = AppSpacingTokens.Micro)
                 )
             }
 
@@ -571,11 +614,16 @@ private fun FocusFollowGroupManagementCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Small),
+                    shape = RoundedCornerShape(FocusFollowGroupShapeSpec.SmallRadiusDp.dp),
                     color = MaterialTheme.colorScheme.surfaceContainer
                 ) {
                     Row(
-                        modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                        modifier = Modifier.padding(
+                            start = AppSpacingTokens.Medium,
+                            end = AppSpacingTokens.Small,
+                            top = FocusFollowGroupLayoutSpec.CompactGapDp.dp,
+                            bottom = FocusFollowGroupLayoutSpec.CompactGapDp.dp
+                        ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -583,7 +631,7 @@ private fun FocusFollowGroupManagementCard(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
                         Switch(
                             checked = section.group.visible,
                             onCheckedChange = onToggleVisible
@@ -592,7 +640,7 @@ private fun FocusFollowGroupManagementCard(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 onRename?.let {
-                    IconButton(onClick = it) {
+                    AppIconButton(onClick = it) {
                         Icon(
                             imageVector = Icons.Outlined.Edit,
                             contentDescription = "重命名分组"
@@ -600,7 +648,7 @@ private fun FocusFollowGroupManagementCard(
                     }
                 }
                 onDelete?.let {
-                    IconButton(onClick = it) {
+                    AppIconButton(onClick = it) {
                         Icon(
                             imageVector = Icons.Outlined.DeleteOutline,
                             contentDescription = "删除分组"
@@ -613,25 +661,28 @@ private fun FocusFollowGroupManagementCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(1.dp)
+                        .height(FocusFollowGroupLayoutSpec.SectionDividerThicknessDp.dp)
                         .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                 )
                 if (section.members.isEmpty()) {
                     Surface(
-                        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Medium),
+                        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.MediumRadiusDp.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer
                     ) {
                         Text(
                             text = "这个分组里还没有关注对象",
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .padding(
+                                    horizontal = FocusFollowGroupLayoutSpec.EmptyStateHorizontalPaddingDp.dp,
+                                    vertical = AppSpacingTokens.Medium
+                                ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(FocusFollowGroupLayoutSpec.MemberRowSpacingDp.dp)) {
                         section.members.forEach { user ->
                             FocusFollowUserAssignmentRow(
                                 user = user,
@@ -659,29 +710,29 @@ private fun FocusFollowUserAssignmentRow(
     var expanded by remember(user.mid) { mutableStateOf(false) }
 
     Surface(
-        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.Card),
-        tonalElevation = 1.dp,
+        shape = RoundedCornerShape(FocusFollowGroupShapeSpec.CardRadiusDp.dp),
+        tonalElevation = FocusFollowGroupLayoutSpec.SurfaceTonalElevationDp.dp,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(AppSpacingTokens.Large),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
                 model = user.face,
                 contentDescription = user.uname,
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(FocusFollowGroupLayoutSpec.AvatarSizeDp.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentScale = ContentScale.Crop
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
             ) {
                 Text(
                     text = user.uname.ifBlank { user.mid.toString() },
@@ -708,7 +759,12 @@ private fun FocusFollowUserAssignmentRow(
                 )
             }
             Box {
-                FilledTonalButton(onClick = { expanded = true }) {
+                AppButton(
+                    onClick = { expanded = true },
+                    shape = ButtonDefaults.filledTonalShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    elevation = ButtonDefaults.filledTonalButtonElevation(),
+                ) {
                     Text(
                         text = currentGroup.name,
                         maxLines = 1,

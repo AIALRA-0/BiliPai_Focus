@@ -41,8 +41,18 @@ import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.danmaku.engine.DanmakuItem
+
+// Preserve existing local corner geometry across theme migrations.
+private object DanmakuPoolShapeSpec {
+    const val Radius3Dp = 3
+    const val Radius4Dp = 4
+    const val Radius6Dp = 6
+    const val Radius8Dp = 8
+    const val Radius12Dp = 12
+}
 
 private enum class DanmakuPoolSortMode(val label: String) {
     TIME("时间"),
@@ -123,7 +133,7 @@ fun DanmakuPoolSheet(
                     // 排序切换按钮
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(DanmakuPoolShapeSpec.Radius8Dp.dp))
                             .background(AppSurfaceTokens.surfaceContainerHigh())
                             .padding(2.dp),
                     ) {
@@ -131,7 +141,7 @@ fun DanmakuPoolSheet(
                             val isSelected = mode == sortMode
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(DanmakuPoolShapeSpec.Radius6Dp.dp))
                                     .background(
                                         if (isSelected) MaterialTheme.colorScheme.primary
                                         else Color.Transparent
@@ -354,7 +364,7 @@ fun DanmakuPoolSheet(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedItemForAction = null }) {
+                AppTextButton(onClick = { selectedItemForAction = null }) {
                     AppText("关闭")
                 }
             },
@@ -395,7 +405,7 @@ private fun DanmakuPoolItemRow(
             // 时间胶囊
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(DanmakuPoolShapeSpec.Radius4Dp.dp))
                     .background(AppSurfaceTokens.surfaceContainerHigh())
                     .padding(horizontal = 6.dp, vertical = 2.dp),
                 contentAlignment = Alignment.Center,
@@ -414,7 +424,7 @@ private fun DanmakuPoolItemRow(
             if (item.isSelf) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RoundedCornerShape(DanmakuPoolShapeSpec.Radius3Dp.dp))
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                         .padding(horizontal = 4.dp, vertical = 1.dp),
                 ) {
@@ -455,7 +465,7 @@ private fun DanmakuPoolItemRow(
             // 点赞按钮
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(DanmakuPoolShapeSpec.Radius12Dp.dp))
                     .clickable(onClick = onLikeClick)
                     .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,

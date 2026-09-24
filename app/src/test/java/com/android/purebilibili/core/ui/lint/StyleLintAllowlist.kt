@@ -60,22 +60,22 @@ internal object StyleLintAllowlist {
         "src/main/java/com/android/purebilibili/feature/live/components/LiveSuperChatFlashOverlay.kt",
     )
 
-    /** 迁移到 AppMotionTokens 后从本表移除. */
+    /**
+     * Remaining positional animation literals, reviewed individually. Preserve each existing effect cadence
+     * while migrating these components to AppMotionTokens; remove its path as soon as the calls are converted.
+     */
     val MOTION_HITS: Set<String> = setOf(
-        "src/main/java/com/android/purebilibili/feature/login/LoginComponents.kt",
-        "src/main/java/com/android/purebilibili/feature/login/LoginScreen.kt",
-        "src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt",
-        "src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt",
-        "src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt",
-        "src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt",
-        "src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt",
-        "src/main/java/com/android/purebilibili/feature/video/ui/components/CelebrationAnimations.kt",
-        "src/main/java/com/android/purebilibili/feature/video/ui/components/SponsorSkipUI.kt",
-        "src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt",
-        "src/main/java/com/android/purebilibili/feature/video/ui/overlay/CommandDanmakuOverlay.kt",
-        "src/main/java/com/android/purebilibili/feature/video/ui/overlay/FullscreenPlayerOverlay.kt",
-        "src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt",
-        "src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt"
+        "src/main/java/com/android/purebilibili/feature/login/LoginComponents.kt", // 7.2s login pulse cadence.
+        "src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt", // 1.5s / 2s tutorial pulses.
+        "src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt", // 90ms / 70ms filter reveal.
+        "src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt", // sheet transitions and locate highlight.
+        "src/main/java/com/android/purebilibili/feature/video/ui/components/CelebrationAnimations.kt", // 600ms completion flourish.
+        "src/main/java/com/android/purebilibili/feature/video/ui/components/SponsorSkipUI.kt", // 200ms skip control slide/fade.
+        "src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt", // thread and predictive-back transitions.
+        "src/main/java/com/android/purebilibili/feature/video/ui/overlay/CommandDanmakuOverlay.kt", // command overlay fade/scale timings.
+        "src/main/java/com/android/purebilibili/feature/video/ui/overlay/FullscreenPlayerOverlay.kt", // fullscreen control fade timings.
+        "src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt", // player control/loading transitions.
+        "src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt" // seek feedback and danmaku transition timings.
     )
 
     /** 迁移到 AppSurfaceTokens 后从本表移除. */

@@ -52,7 +52,7 @@ class BottomBarFloatingSegmentedControlBackdropStructureTest {
 
         assertTrue(source.contains("val viewportHeight = effectiveHeight + scaleOverflow * 2"))
         assertTrue(source.contains("modifier = rootModifier.height(viewportHeight)"))
-        assertTrue(source.contains("val effectiveHeight = height.coerceAtLeast(0.dp)"))
+        assertTrue(source.contains("val effectiveHeight = height.coerceAtLeast(AppSpacingTokens.None)"))
         assertTrue(!source.contains("height.coerceAtLeast(48.dp)"))
         assertTrue(source.contains(".height(viewportHeight)"))
     }

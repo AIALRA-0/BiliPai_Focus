@@ -22,7 +22,9 @@ class AudioModeNavigationStructureTest {
         assertTrue(videoDetailBranch.contains("viewModel = videoPlaybackViewModel"))
         assertTrue(audioModeBranch.contains("previousVideoKey?.let(videoDetailViewModelOwners::get)"))
         assertTrue(audioModeBranch.contains("viewModel(viewModelStoreOwner = sharedVideoOwner)"))
-        assertTrue(audioModeBranch.contains("viewModel.uiState.value is"))
+        assertTrue(audioModeBranch.contains("viewModel.uiState.collectAsStateWithLifecycle()"))
+        assertTrue(audioModeBranch.contains("playbackUiState.value is VideoPlaybackUiState.Success"))
+        assertTrue(audioModeBranch.contains("hasDisplayState = audioModeHasDisplayState"))
         assertTrue(videoDetailBranch.contains("isPlaybackSessionActive = videoDetailPlaybackSessionActive"))
         assertTrue(
             videoDetailBranch.contains(

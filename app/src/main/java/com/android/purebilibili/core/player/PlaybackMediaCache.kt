@@ -15,7 +15,12 @@ import androidx.media3.datasource.cache.SimpleCache
 import com.android.purebilibili.core.util.Logger
 import java.io.File
 import java.net.URI
+import java.util.LinkedHashSet
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.Condition
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 private const val TAG = "PlaybackMediaCache"
 private const val PLAYBACK_MEDIA_CACHE_DIR = "playback_media_cache"
@@ -62,25 +67,42 @@ internal object PlaybackMediaCache {
     private val cachedBytes = AtomicLong(0L)
     private val ignoredCount = AtomicLong(0L)
 
-    @Volatile
     private var simpleCache: SimpleCache? = null
+    private val cacheLock = ReentrantLock()
+    private val cacheStateChanged: Condition = cacheLock.newCondition()
+    private var activeCacheLeases = 0
+    private var cacheClearPending = false
 
     fun buildCachedDataSourceFactory(
         context: Context,
         upstreamFactory: DataSource.Factory
     ): DataSource.Factory {
-        val cache = getOrCreateCache(context) ?: return upstreamFactory
+        val appContext = context.applicationContext
         val monitoredUpstreamFactory = DataSource.Factory {
             upstreamFactory.createDataSource().apply {
                 addTransferListener(upstreamTransferListener)
             }
         }
-        return CacheDataSource.Factory()
-            .setCache(cache)
-            .setUpstreamDataSourceFactory(monitoredUpstreamFactory)
-            .setCacheKeyFactory(playbackCacheKeyFactory)
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-            .setEventListener(cacheEventListener)
+        return createLazyCacheDataSourceFactory(upstreamFactory) {
+            val lease = acquireCache(appContext)
+            if (lease == null) {
+                null
+            } else {
+                try {
+                    val cachedDataSource = CacheDataSource.Factory()
+                        .setCache(lease.cache)
+                        .setUpstreamDataSourceFactory(monitoredUpstreamFactory)
+                        .setCacheKeyFactory(playbackCacheKeyFactory)
+                        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                        .setEventListener(cacheEventListener)
+                        .createDataSource()
+                    CacheLeaseDataSource(cachedDataSource, lease)
+                } catch (error: Throwable) {
+                    lease.close()
+                    throw error
+                }
+            }
+        }
     }
 
     /**
@@ -110,24 +132,37 @@ internal object PlaybackMediaCache {
         length: Long
     ) {
         if (length <= 0L) return
-        val cache = getOrCreateCache(context) ?: return
-        val cacheDataSource = CacheDataSource.Factory()
-            .setCache(cache)
-            .setUpstreamDataSourceFactory(upstreamFactory)
-            .setCacheKeyFactory(playbackCacheKeyFactory)
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-            .createDataSourceForDownloading()
-        CacheWriter(
-            cacheDataSource,
-            DataSpec.Builder()
-                .setUri(url)
-                .setKey(cacheKey)
-                .setPosition(position)
-                .setLength(length)
-                .build(),
-            null,
-            null
-        ).cache()
+        val lease = acquireCache(context.applicationContext) ?: return
+        val cacheDataSource = try {
+            CacheDataSource.Factory()
+                .setCache(lease.cache)
+                .setUpstreamDataSourceFactory(upstreamFactory)
+                .setCacheKeyFactory(playbackCacheKeyFactory)
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                .createDataSourceForDownloading()
+        } catch (error: Throwable) {
+            lease.close()
+            throw error
+        }
+        try {
+            CacheWriter(
+                cacheDataSource,
+                DataSpec.Builder()
+                    .setUri(url)
+                    .setKey(cacheKey)
+                    .setPosition(position)
+                    .setLength(length)
+                    .build(),
+                null,
+                null
+            ).cache()
+        } finally {
+            try {
+                cacheDataSource.close()
+            } finally {
+                lease.close()
+            }
+        }
     }
 
     fun estimateBytes(context: Context): Long {
@@ -137,13 +172,19 @@ internal object PlaybackMediaCache {
     }
 
     fun clear(context: Context) {
-        runCatching {
-            simpleCache?.release()
-            simpleCache = null
-            cacheDir(context).deleteRecursively()
-            Logger.d(TAG, "播放器媒体缓存已清理")
-        }.onFailure { error ->
-            Logger.w(TAG, "播放器媒体缓存清理失败: ${error.message}")
+        val clearNow = cacheLock.withLock {
+            while (cacheClearPending) cacheStateChanged.awaitUninterruptibly()
+            cacheClearPending = true
+            if (activeCacheLeases == 0) {
+                true to simpleCache.also { simpleCache = null }
+            } else {
+                false to null
+            }
+        }
+        if (!clearNow.first) {
+            Logger.d(TAG, "播放器媒体缓存将在当前读取结束后清理")
+        } else {
+            finishClear(context.applicationContext, clearNow.second)
         }
     }
 
@@ -170,21 +211,99 @@ internal object PlaybackMediaCache {
         )
     }
 
-    private fun getOrCreateCache(context: Context): SimpleCache? {
-        simpleCache?.let { return it }
-        return synchronized(this) {
-            simpleCache ?: runCatching {
-                cacheDir(context).mkdirs()
-                @Suppress("DEPRECATION")
-                SimpleCache(
-                    cacheDir(context),
-                    LeastRecentlyUsedCacheEvictor(resolvePlaybackMediaCacheMaxBytes())
-                )
-            }.onSuccess {
-                simpleCache = it
+    private fun acquireCache(context: Context): CacheLease? = cacheLock.withLock {
+        while (cacheClearPending) cacheStateChanged.awaitUninterruptibly()
+        val cache = simpleCache ?: runCatching {
+            cacheDir(context).mkdirs()
+            @Suppress("DEPRECATION")
+            SimpleCache(
+                cacheDir(context),
+                LeastRecentlyUsedCacheEvictor(resolvePlaybackMediaCacheMaxBytes())
+            )
+        }.onFailure { error ->
+            Logger.w(TAG, "播放器媒体缓存初始化失败，降级为直接播放: ${error.message}")
+        }.getOrNull()
+        if (cache == null) return null
+        simpleCache = cache
+        activeCacheLeases += 1
+        CacheLease(cache, context.applicationContext)
+    }
+
+    private fun releaseCacheLease(context: Context) {
+        val clearNow = cacheLock.withLock {
+            check(activeCacheLeases > 0) { "Playback cache lease released more than once" }
+            activeCacheLeases -= 1
+            if (activeCacheLeases == 0 && cacheClearPending) {
+                true to simpleCache.also { simpleCache = null }
+            } else {
+                false to null
+            }
+        }
+        if (clearNow.first) {
+            finishClear(context, clearNow.second)
+        }
+    }
+
+    private fun finishClear(context: Context, cache: SimpleCache?) {
+        try {
+            runCatching {
+                cache?.release()
+                cacheDir(context).deleteRecursively()
+                Logger.d(TAG, "播放器媒体缓存已清理")
             }.onFailure { error ->
-                Logger.w(TAG, "播放器媒体缓存初始化失败，降级为直接播放: ${error.message}")
-            }.getOrNull()
+                Logger.w(TAG, "播放器媒体缓存清理失败: ${error.message}")
+            }
+        } finally {
+            cacheLock.withLock {
+                cacheClearPending = false
+                cacheStateChanged.signalAll()
+            }
+        }
+    }
+
+    private class CacheLease(
+        val cache: SimpleCache,
+        private val context: Context
+    ) : AutoCloseable {
+        private var closed = false
+
+        override fun close() {
+            val shouldRelease = synchronized(this) {
+                if (closed) false else {
+                    closed = true
+                    true
+                }
+            }
+            if (shouldRelease) releaseCacheLease(context)
+        }
+    }
+
+    private class CacheLeaseDataSource(
+        private val delegate: DataSource,
+        private val lease: CacheLease
+    ) : DataSource {
+        private val closed = AtomicBoolean(false)
+
+        override fun open(dataSpec: DataSpec): Long = delegate.open(dataSpec)
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            delegate.read(buffer, offset, length)
+
+        override fun getUri(): Uri? = delegate.uri
+
+        override fun getResponseHeaders(): Map<String, List<String>> = delegate.responseHeaders
+
+        override fun addTransferListener(transferListener: TransferListener) {
+            delegate.addTransferListener(transferListener)
+        }
+
+        override fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            try {
+                delegate.close()
+            } finally {
+                lease.close()
+            }
         }
     }
 
@@ -242,5 +361,94 @@ internal object PlaybackMediaCache {
             dataSpec: DataSpec,
             isNetwork: Boolean
         ) = Unit
+    }
+}
+
+/**
+ * Creates a data source without resolving its cache delegate until Media3 opens it. Media3 opens
+ * playback data sources from its loading path, keeping SimpleCache construction off Compose/Main.
+ */
+@UnstableApi
+internal fun createLazyCacheDataSourceFactory(
+    upstreamFactory: DataSource.Factory,
+    cachedDataSourceProvider: () -> DataSource?
+): DataSource.Factory = DataSource.Factory {
+    LazyCacheDataSource(upstreamFactory, cachedDataSourceProvider)
+}
+
+@UnstableApi
+private class LazyCacheDataSource(
+    private val upstreamFactory: DataSource.Factory,
+    private val cachedDataSourceProvider: () -> DataSource?
+) : DataSource {
+    private val lock = Any()
+    private val transferListeners = LinkedHashSet<TransferListener>()
+    private var delegate: DataSource? = null
+    private var opening = false
+
+    override fun open(dataSpec: DataSpec): Long {
+        synchronized(lock) {
+            check(delegate == null && !opening) { "DataSource must be closed before it is reopened" }
+            opening = true
+        }
+
+        val selectedDataSource = try {
+            val cached = try {
+                cachedDataSourceProvider()
+            } catch (error: Exception) {
+                Logger.w(TAG, "播放器缓存不可用，降级为直接播放: ${error.message}")
+                null
+            }
+            cached ?: upstreamFactory.createDataSource()
+        } catch (error: Throwable) {
+            synchronized(lock) { opening = false }
+            throw error
+        }
+
+        try {
+            synchronized(lock) {
+                transferListeners.forEach(selectedDataSource::addTransferListener)
+                delegate = selectedDataSource
+                opening = false
+            }
+        } catch (error: Throwable) {
+            synchronized(lock) { opening = false }
+            runCatching { selectedDataSource.close() }
+            throw error
+        }
+
+        return try {
+            selectedDataSource.open(dataSpec)
+        } catch (error: Throwable) {
+            runCatching { close() }.exceptionOrNull()?.let(error::addSuppressed)
+            throw error
+        }
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+        activeDataSource().read(buffer, offset, length)
+
+    override fun getUri(): Uri? = synchronized(lock) { delegate?.uri }
+
+    override fun getResponseHeaders(): Map<String, List<String>> =
+        synchronized(lock) { delegate?.responseHeaders ?: emptyMap() }
+
+    override fun addTransferListener(transferListener: TransferListener) {
+        synchronized(lock) {
+            if (transferListeners.add(transferListener)) {
+                delegate?.addTransferListener(transferListener)
+            }
+        }
+    }
+
+    override fun close() {
+        val current = synchronized(lock) {
+            delegate.also { delegate = null }
+        }
+        current?.close()
+    }
+
+    private fun activeDataSource(): DataSource = synchronized(lock) {
+        checkNotNull(delegate) { "DataSource must be opened before it is read" }
     }
 }

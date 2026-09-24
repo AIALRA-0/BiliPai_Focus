@@ -19,6 +19,7 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "us
 object TokenManager {
     private val SESSDATA_KEY = stringPreferencesKey("sessdata")
     private val BUVID3_KEY = stringPreferencesKey("buvid3")
+    private val buvid3CacheLock = Any()
 
     //  [新增] SharedPreferences 备份，解决冷启动时 DataStore 异步加载慢导致 ApiClient 无 Cookie 的问题
     private const val SP_NAME = "token_backup_sp"
@@ -71,7 +72,9 @@ object TokenManager {
         // 1.  同步读取 SP 备份，确保主线程立即有数据
         val sp = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
         sessDataCache = sp.getString(SP_KEY_SESS, null)?.let(SessionStorageCipher::decrypt)
-        buvid3Cache = sp.getString(SP_KEY_BUVID, null)?.let(SessionStorageCipher::decrypt)
+        synchronized(buvid3CacheLock) {
+            buvid3Cache = sp.getString(SP_KEY_BUVID, null)?.let(SessionStorageCipher::decrypt)
+        }
         csrfCache = sp.getString(SP_KEY_CSRF, null)?.let(SessionStorageCipher::decrypt)  //  读取 CSRF
         midCache = sp.getLong(SP_KEY_MID, 0L).takeIf { it > 0 }  //  读取 MID
         accessTokenCache = sp.getString(SP_KEY_ACCESS_TOKEN, null)?.let(SessionStorageCipher::decrypt)  //  读取 access_token
@@ -97,22 +100,46 @@ object TokenManager {
                     sessDataCache = dsSess
                 }
                 
-                if (dsBuvid == null) {
-                    val newBuvid = generateBuvid3()
-                    saveBuvid3(context, newBuvid)
-                } else {
-                    buvid3Cache = dsBuvid
+                val resolvedBuvid = resolveBuvid3AfterDataStoreLoad(dsBuvid)
+                if (dsBuvid.isNullOrBlank()) {
+                    saveBuvid3(context, resolvedBuvid)
                 }
 
                 //  数据同步：如果 DataStore 有值但 SP 没值 (或值不同)，同步写入 SP (从 V1 迁移到 V2)
-                if (sessDataCache != null && sessDataCache != sp.getString(SP_KEY_SESS, null)) {
+                // Cache values are plaintext while backup values use AES-GCM with a fresh IV;
+                // compare decoded values so each DataStore emission does not rewrite the backup.
+                val storedSess = sp.getString(SP_KEY_SESS, null)?.let(SessionStorageCipher::decrypt)
+                if (sessDataCache != null && sessDataCache != storedSess) {
                     sp.edit().putString(SP_KEY_SESS, sessDataCache?.let(SessionStorageCipher::encrypt)).apply()
                 }
-                if (buvid3Cache != null && buvid3Cache != sp.getString(SP_KEY_BUVID, null)) {
-                    sp.edit().putString(SP_KEY_BUVID, buvid3Cache?.let(SessionStorageCipher::encrypt)).apply()
+                val storedBuvid3 = sp.getString(SP_KEY_BUVID, null)?.let(SessionStorageCipher::decrypt)
+                val cachedBuvid3 = synchronized(buvid3CacheLock) { buvid3Cache }
+                if (cachedBuvid3 != null && cachedBuvid3 != storedBuvid3) {
+                    sp.edit().putString(SP_KEY_BUVID, cachedBuvid3.let(SessionStorageCipher::encrypt)).apply()
                 }
             }
         }
+    }
+
+    internal fun getOrCreateBuvid3(
+        generateFallback: () -> String = { generateBuvid3() },
+    ): String = synchronized(buvid3CacheLock) {
+        resolveBuvid3CacheValue(
+            cachedBuvid = buvid3Cache,
+            dataStoreBuvid = null,
+            generateFallback = generateFallback,
+        ).also { buvid3Cache = it }
+    }
+
+    internal fun resolveBuvid3AfterDataStoreLoad(
+        dataStoreBuvid: String?,
+        generateFallback: () -> String = { generateBuvid3() },
+    ): String = synchronized(buvid3CacheLock) {
+        resolveBuvid3CacheValue(
+            cachedBuvid = buvid3Cache,
+            dataStoreBuvid = dataStoreBuvid,
+            generateFallback = generateFallback,
+        ).also { buvid3Cache = it }
     }
     
     //  [新增] 保存 CSRF Token
@@ -181,7 +208,9 @@ object TokenManager {
     }
 
     suspend fun saveBuvid3(context: Context, buvid3: String) {
-        buvid3Cache = buvid3
+        synchronized(buvid3CacheLock) {
+            buvid3Cache = buvid3
+        }
         
         // 1. 存入 SP
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
@@ -235,7 +264,9 @@ object TokenManager {
 
     suspend fun clear(context: Context) {
         sessDataCache = null
-        buvid3Cache = null
+        synchronized(buvid3CacheLock) {
+            buvid3Cache = null
+        }
         csrfCache = null
         midCache = null
         isVipCache = false
@@ -265,3 +296,13 @@ object TokenManager {
         return UUID.randomUUID().toString().replace("-", "") + "infoc"
     }
 }
+
+internal fun resolveBuvid3CacheValue(
+    cachedBuvid: String?,
+    dataStoreBuvid: String?,
+    generateFallback: () -> String,
+): String = dataStoreBuvid?.takeIf { it.isNotBlank() }
+    ?: cachedBuvid?.takeIf { it.isNotBlank() }
+    ?: generateFallback().also { generated ->
+        require(generated.isNotBlank()) { "Buvid fallback must not be blank" }
+    }

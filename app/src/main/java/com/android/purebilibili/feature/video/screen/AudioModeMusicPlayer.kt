@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import androidx.compose.runtime.Composable
@@ -111,7 +112,7 @@ internal fun AudioModeMusicPlayer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(androidx.compose.material3.MaterialTheme.colorScheme.background),
+                .background(AppSurfaceTokens.background()),
             contentAlignment = Alignment.Center
         ) {
             AdaptiveLoadingIndicator(color = Color.White)

@@ -5,14 +5,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +33,11 @@ import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppFilledIconButton
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppIconButtonDefaults
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.store.BottomBarLiquidGlassPreset
 import dev.chrisbanes.haze.HazeState
@@ -158,20 +160,34 @@ internal fun HomeTopTabFloatingDock(
                         if (selected) onReselected() else onSelected(index)
                     }
                     when {
-                        showIcon && showText && selected -> FilledTonalButton(
+                        showIcon && showText && selected -> AppButton(
                             onClick = onClick,
-                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            shape = ButtonDefaults.filledTonalShape,
+                            contentPadding = PaddingValues(horizontal = AppSpacingTokens.Large),
+                            colors = ButtonDefaults.filledTonalButtonColors(),
+                            elevation = ButtonDefaults.filledTonalButtonElevation(),
                         ) {
                             icon()
                             Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
                             AppText(text = label, maxLines = 1, tapToCopyEnabled = false)
                         }
-                        showIcon && selected -> FilledTonalIconButton(onClick = onClick) { icon() }
-                        showIcon -> IconButton(onClick = onClick) { icon() }
-                        selected -> FilledTonalButton(onClick = onClick) {
+                        showIcon && selected -> AppFilledIconButton(
+                            onClick = onClick,
+                            colors = AppIconButtonDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            ),
+                        ) { icon() }
+                        showIcon -> AppIconButton(onClick = onClick) { icon() }
+                        selected -> AppButton(
+                            onClick = onClick,
+                            shape = ButtonDefaults.filledTonalShape,
+                            colors = ButtonDefaults.filledTonalButtonColors(),
+                            elevation = ButtonDefaults.filledTonalButtonElevation(),
+                        ) {
                             AppText(text = label, maxLines = 1, tapToCopyEnabled = false)
                         }
-                        else -> TextButton(onClick = onClick) {
+                        else -> AppTextButton(onClick = onClick) {
                             AppText(text = label, maxLines = 1, tapToCopyEnabled = false)
                         }
                     }

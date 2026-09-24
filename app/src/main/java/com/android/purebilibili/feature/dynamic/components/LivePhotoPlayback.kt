@@ -17,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -36,6 +35,8 @@ import androidx.media3.ui.PlayerView
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.feature.dynamic.DynamicStatusPalette
 
 internal fun normalizeLivePhotoVideoUrl(value: String?): String? {
     val url = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -167,9 +168,9 @@ internal fun LivePhotoPlayback(
                     player.prepare()
                     player.play()
                 },
-                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                modifier = Modifier.align(Alignment.BottomStart).padding(AppSpacingTokens.Large),
             ) {
-                AppText("实况加载失败 · 点击重试", color = Color.White)
+                AppText("实况加载失败 · 点击重试", color = DynamicStatusPalette.MediaContent)
             }
         }
     }

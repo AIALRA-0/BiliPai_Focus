@@ -235,6 +235,13 @@ import com.android.purebilibili.feature.video.controller.PlaybackProgressManager
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import kotlinx.coroutines.launch
 
+// Preserve existing local corner geometry across theme migrations.
+private object SpaceShapeSpec {
+    const val Radius4Dp = 4
+    const val Radius6Dp = 6
+    const val Radius18Dp = 18
+}
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SpaceScreen(
@@ -4372,7 +4379,7 @@ private fun SpaceCheeseCard(
                             .padding(4.dp)
                             .background(
                                 color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(SpaceShapeSpec.Radius4Dp.dp)
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
@@ -4460,7 +4467,7 @@ private fun SpaceCheeseSkeletonItem(
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
                         .height(18.dp),
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(SpaceShapeSpec.Radius4Dp.dp),
                     color = blockColor,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -4468,7 +4475,7 @@ private fun SpaceCheeseSkeletonItem(
                     modifier = Modifier
                         .fillMaxWidth(0.5f)
                         .height(14.dp),
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(SpaceShapeSpec.Radius4Dp.dp),
                     color = blockColor,
                 )
                 Spacer(modifier = Modifier.height(6.dp))
@@ -4476,7 +4483,7 @@ private fun SpaceCheeseSkeletonItem(
                     modifier = Modifier
                         .fillMaxWidth(0.3f)
                         .height(12.dp),
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(SpaceShapeSpec.Radius4Dp.dp),
                     color = blockColor,
                 )
             }
@@ -4735,7 +4742,7 @@ private fun SpaceHeaderRelationActions(
         if (!isOwner) {
             AppSurface(
                 onClick = onMessageClick,
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(SpaceShapeSpec.Radius18Dp.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 border = BorderStroke(
                     1.dp,
@@ -4761,7 +4768,7 @@ private fun SpaceHeaderRelationActions(
 
         AppSurface(
             onClick = onFollowClick,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(SpaceShapeSpec.Radius18Dp.dp),
             color = followButtonColors.backgroundColor,
             border = if (isFollowed && !isOwner) {
                 BorderStroke(
@@ -5077,7 +5084,7 @@ private fun SpaceBanBanner(
 ) {
     AppSurface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(SpaceShapeSpec.Radius6Dp.dp),
         color = MaterialTheme.colorScheme.errorContainer
     ) {
         Row(

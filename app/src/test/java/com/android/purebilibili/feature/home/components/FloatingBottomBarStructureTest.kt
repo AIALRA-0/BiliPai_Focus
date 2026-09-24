@@ -40,8 +40,10 @@ class FloatingBottomBarStructureTest {
         assertTrue(source.contains("shellHeight: Dp = FloatingBottomBarDefaultShellHeight"))
         assertTrue(source.contains("indicatorHeight: Dp = FloatingBottomBarIndicatorHeight"))
         assertTrue(source.contains("dragTrackingMode: DampedDragTrackingMode = DampedDragTrackingMode.SPRING"))
-        assertTrue(source.contains("FloatingBottomBarDefaultShellHeight: Dp = 56.dp"))
-        assertTrue(source.contains("FloatingBottomBarIndicatorHeight: Dp = 56.dp"))
+        assertTrue(source.contains("const val DefaultShellHeightDp = 56f"))
+        assertTrue(source.contains("const val IndicatorHeightDp = 56f"))
+        assertTrue(source.contains("FloatingBottomBarDefaultShellHeight: Dp = FloatingBottomBarLayoutSpec.DefaultShellHeightDp.dp"))
+        assertTrue(source.contains("FloatingBottomBarIndicatorHeight: Dp = FloatingBottomBarLayoutSpec.IndicatorHeightDp.dp"))
         assertTrue(source.contains("BottomBarReferencePressedScale"))
     }
 
@@ -98,6 +100,12 @@ class FloatingBottomBarStructureTest {
         val dragPort = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/home/components/miuix/DampedDragAnimation.kt"
         )
+        val bottomBar = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt"
+        )
+        val motionTokens = loadSource(
+            "../design-system/src/main/java/com/android/purebilibili/core/ui/motion/AppMotionTokens.kt"
+        )
         val body = source.substringAfter("fun FloatingBottomBar(")
         val baseRow = body
             .substringAfter("LocalFloatingBottomBarContentColor provides resolvedContentColor")
@@ -138,7 +146,7 @@ class FloatingBottomBarStructureTest {
         assertTrue(movingIndicator.contains("interactiveHighlight?.gestureModifier"))
         assertTrue(movingIndicator.contains("(dragSelectionEnabled || longPressDragSelectionEnabled) && safeTabsCount > 1"))
         assertTrue(movingIndicator.contains("dampedDragAnimation.modifier"))
-        assertTrue(body.contains("offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))"))
+        assertTrue(body.contains("offsetAnimation.animateTo(0f, AppMotionTokens.floatingDockOffsetSpring())"))
         val dragRememberKeys = body
             .substringAfter("val dampedDragAnimation = remember(")
             .substringBefore(") {")
@@ -163,11 +171,48 @@ class FloatingBottomBarStructureTest {
         assertFalse(source.contains("horizontalDragGesture"))
         assertTrue(source.contains("DampedDragTrackingMode"))
 
-        assertTrue(dragPort.contains("spring(1f, 1000f, visibilityThreshold)"))
-        assertTrue(dragPort.contains("spring(0.5f, 300f, visibilityThreshold * 10f)"))
-        assertTrue(dragPort.contains("spring(1f, 1000f, 0.001f)"))
-        assertTrue(dragPort.contains("spring(0.6f, 250f, 0.001f)"))
-        assertTrue(dragPort.contains("spring(0.7f, 250f, 0.001f)"))
+        assertTrue(dragPort.contains("AppMotionTokens.floatingDockDampedValueSpring(visibilityThreshold)"))
+        assertTrue(dragPort.contains("AppMotionTokens.floatingDockDampedVelocitySpring(visibilityThreshold * 10f)"))
+        assertTrue(dragPort.contains("AppMotionTokens.floatingDockPressProgressSpring()"))
+        assertTrue(dragPort.contains("AppMotionTokens.floatingDockIndicatorScaleXSpring()"))
+        assertTrue(dragPort.contains("AppMotionTokens.floatingDockIndicatorScaleYSpring()"))
+        assertTrue(bottomBar.contains("AppMotionTokens.floatingDockIndicatorProgressSpring()"))
+        assertTrue(bottomBar.contains("AppMotionTokens.floatingDockIndicatorScaleXSpring()"))
+        assertTrue(bottomBar.contains("AppMotionTokens.floatingDockIndicatorScaleYSpring()"))
+
+        val offsetSpring = motionSpec(motionTokens, "floatingDockOffsetSpring")
+        assertTrue(offsetSpring.contains("dampingRatio = 1f"))
+        assertTrue(offsetSpring.contains("stiffness = 300f"))
+        assertTrue(offsetSpring.contains("visibilityThreshold = 0.5f"))
+
+        val dampedValueSpring = motionSpec(motionTokens, "floatingDockDampedValueSpring")
+        assertTrue(dampedValueSpring.contains("dampingRatio = 1f"))
+        assertTrue(dampedValueSpring.contains("stiffness = 1_000f"))
+        assertTrue(dampedValueSpring.contains("visibilityThreshold = visibilityThreshold"))
+
+        val dampedVelocitySpring = motionSpec(motionTokens, "floatingDockDampedVelocitySpring")
+        assertTrue(dampedVelocitySpring.contains("dampingRatio = 0.5f"))
+        assertTrue(dampedVelocitySpring.contains("stiffness = 300f"))
+        assertTrue(dampedVelocitySpring.contains("visibilityThreshold = visibilityThreshold"))
+
+        val pressProgressSpring = motionSpec(motionTokens, "floatingDockPressProgressSpring")
+        assertTrue(pressProgressSpring.contains("dampingRatio = 1f"))
+        assertTrue(pressProgressSpring.contains("stiffness = 1_000f"))
+        assertTrue(pressProgressSpring.contains("visibilityThreshold = 0.001f"))
+
+        val indicatorProgressSpring = motionSpec(motionTokens, "floatingDockIndicatorProgressSpring")
+        assertTrue(indicatorProgressSpring.contains("= floatingDockIndicatorPrimarySpring()"))
+        val indicatorScaleXSpring = motionSpec(motionTokens, "floatingDockIndicatorScaleXSpring")
+        assertTrue(indicatorScaleXSpring.contains("= floatingDockIndicatorPrimarySpring()"))
+        val indicatorPrimarySpring = motionSpec(motionTokens, "floatingDockIndicatorPrimarySpring")
+        assertTrue(indicatorPrimarySpring.contains("dampingRatio = 0.6f"))
+        assertTrue(indicatorPrimarySpring.contains("stiffness = 250f"))
+        assertTrue(indicatorPrimarySpring.contains("visibilityThreshold = 0.001f"))
+
+        val indicatorScaleYSpring = motionSpec(motionTokens, "floatingDockIndicatorScaleYSpring")
+        assertTrue(indicatorScaleYSpring.contains("dampingRatio = 0.7f"))
+        assertTrue(indicatorScaleYSpring.contains("stiffness = 250f"))
+        assertTrue(indicatorScaleYSpring.contains("visibilityThreshold = 0.001f"))
         assertTrue(dragPort.contains("inspectDragGestures("))
         assertTrue(dragPort.contains("val modifier: Modifier = Modifier.pointerInput(Unit)"))
         assertTrue(dragPort.contains("var gestureAccepted = false"))
@@ -214,7 +259,8 @@ class FloatingBottomBarStructureTest {
         assertTrue(source.contains("val offsetAnimation = remember { Animatable(0f) }"))
         assertTrue(source.contains("rubberBandPx"))
         assertTrue(source.contains("EaseOut.transform(abs(fraction))"))
-        assertTrue(source.contains("4.dp.toPx()"))
+        assertTrue(source.contains("const val RubberBandDistanceDp = 4f"))
+        assertTrue(source.contains("FloatingBottomBarLayoutSpec.RubberBandDistanceDp.dp.toPx()"))
         assertTrue(source.contains("InteractiveHighlight("))
         assertTrue(source.contains("resolveDockInteractiveHighlightRadiusPx("))
         assertTrue(source.contains("resolveDockPillHighlightWidthDp("))
@@ -416,4 +462,7 @@ class FloatingBottomBarStructureTest {
         require(sourceFile != null) { "Cannot locate $path from ${File(".").absolutePath}" }
         return sourceFile.readText().replace("\r\n", "\n")
     }
+
+    private fun motionSpec(source: String, name: String): String =
+        source.substringAfter("fun $name(").substringBefore("\n    /**")
 }

@@ -175,6 +175,14 @@ import com.android.purebilibili.core.util.resolveScrollToTopPlan
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 
+// Keep this component's established pixel geometry across theme migrations.
+private object CommonListDialogSpec {
+    const val MaxListHeightDp = 360
+    const val ActionIconSizeDp = 20
+    const val MinDialogWidthDp = 280
+    const val MaxDialogWidthDp = 420
+}
+
 internal enum class FavoriteContentMode {
     BASE_LIST,
     SINGLE_FOLDER,
@@ -2155,7 +2163,7 @@ fun CommonListScreen(
             title = { AppText(if (copy) "复制到收藏夹" else "移动到收藏夹") },
             text = {
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
+                    modifier = Modifier.heightIn(max = CommonListDialogSpec.MaxListHeightDp.dp),
                     verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
                 ) {
                     items(
@@ -2319,7 +2327,7 @@ private fun FavoriteFolderSelector(
                     AppIcon(
                         imageVector = rememberAppChevronDownIcon(),
                         contentDescription = "切换收藏夹",
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(CommonListDialogSpec.ActionIconSizeDp.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -2328,7 +2336,7 @@ private fun FavoriteFolderSelector(
         AppDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(min = 280.dp, max = 420.dp),
+            modifier = Modifier.widthIn(min = CommonListDialogSpec.MinDialogWidthDp.dp, max = CommonListDialogSpec.MaxDialogWidthDp.dp),
         ) {
             AppDropdownMenuItem(
                 text = {

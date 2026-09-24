@@ -45,6 +45,12 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+// Keep this component's established pixel geometry across theme migrations.
+private object DynamicShareLayoutSpec {
+    const val MaxDialogHeightDp = 480
+    const val RecipientAvatarSizeDp = 48
+}
+
 internal fun buildDynamicShareCardContent(item: DynamicItem): String {
     val title = item.modules.module_dynamic?.major?.opus?.title.orEmpty()
     val body = item.modules.module_dynamic?.desc?.text
@@ -186,7 +192,7 @@ internal fun DynamicShareToMessageDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 480.dp)
+                    .heightIn(max = DynamicShareLayoutSpec.MaxDialogHeightDp.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
             ) {
@@ -257,7 +263,7 @@ internal fun DynamicShareSessionRow(
                     model = avatar,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(DynamicShareLayoutSpec.RecipientAvatarSizeDp.dp)
                         .clip(CircleShape),
                     contentScale = ContentScale.Crop,
                 )
