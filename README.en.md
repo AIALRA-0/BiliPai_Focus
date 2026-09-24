@@ -16,7 +16,7 @@ The Focus version follows an upstream version as its baseline and adds an indepe
 The following screens were captured from the Focus Dev build in an Android 31 emulator. The recommendation screen shows public content loaded at capture time.
 
 <div align="center">
-![Settings home in the Android 31 emulator Dev build, showing the search field and settings categories](docs/images/focus-0.2.3-alpha.2/settings-home.png)
+<img src="docs/images/focus-0.2.3-alpha.2/settings-home.png" alt="Settings home in the Android 31 emulator Dev build, showing the search field and settings categories" width="720">
 
 <p><em>Figure 2.1. Settings home at its current scroll position, with the settings search field and category entries visible.</em></p>
 </div>
@@ -54,7 +54,7 @@ The settings home provides a **Focus-specific settings** entry. Searching for â€
 - Focus keeps settings for followed-account filtering, related videos, search history, and the clear-history action
 
 <div align="center">
-![Focus-specific settings in the Android 31 emulator, showing followed-account filtering, related videos, and history options](docs/images/focus-0.2.3-alpha.2/focus-settings.png)
+<img src="docs/images/focus-0.2.3-alpha.2/focus-settings.png" alt="Focus-specific settings in the Android 31 emulator, showing followed-account filtering, related videos, and history options" width="720">
 
 <p><em>Figure 4.1. Focus-specific settings for followed-account filtering, related videos, search history, and clearing history.</em></p>
 </div>
@@ -62,7 +62,7 @@ The settings home provides a **Focus-specific settings** entry. Searching for â€
 The top-tab settings list only includes upstream-configurable entries. A tab's availability may also depend on navigation configuration, available content, or an entry provided by a plugin. See the [user FAQ](docs/wiki/FAQ.md) for troubleshooting.
 
 <div align="center">
-![Upstream navigation settings in the Android 31 emulator, showing top-tab visibility and ordering controls](docs/images/focus-0.2.3-alpha.2/top-tabs.png)
+<img src="docs/images/focus-0.2.3-alpha.2/top-tabs.png" alt="Upstream navigation settings in the Android 31 emulator, showing top-tab visibility and ordering controls" width="720">
 
 <p><em>Figure 4.2. Upstream navigation settings for top-tab visibility and ordering; the shown switch states are specific to this emulator.</em></p>
 </div>
@@ -80,9 +80,9 @@ Focus continues the upstream app's common user flows. Account permissions, the c
 - **Notes and recommendations** include video notes, AI-summary drafts, and Today Watch
 
 <div align="center">
-![Recommendation screen in the Android 31 emulator Dev build, showing the Recommend and Following tabs with public content cards](docs/images/focus-0.2.3-alpha.2/recommend-feed.png)
+<img src="docs/images/focus-0.2.3-alpha.2/recommend-feed.png" alt="Recommendation screen in the Android 31 emulator Dev build, showing the Recommend and Following tabs with public content cards" width="720">
 
-<p><em>Figure 5.1. Recommendation screen example with Recommend and Following tabs and public content loaded at capture time. Recommendations change over time.</em></p>
+<p><em>Figure 5.1. Example after enabling Recommend in navigation settings, with Recommend and Following tabs and public content loaded at capture time. Recommendations change over time.</em></p>
 </div>
 
 See the [feature matrix](docs/wiki/FEATURE_MATRIX.md) for capabilities, status, and current limits. AI-summary drafts depend on configured services. See the [roadmap](docs/wiki/ROADMAP.md) for planned work.

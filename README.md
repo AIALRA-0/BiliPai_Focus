@@ -25,7 +25,7 @@ Focus 发布以对应的上游版本为基线，再增加独立递增的小版�
 以下页面来自 Android 31 模拟器中的 Focus Dev 构建，展示设置入口和主要界面；推荐页显示截图时加载的公开内容
 
 <div align="center">
-![Android 31 模拟器 Dev 构建的设置首页，显示搜索框和设置分类](docs/images/focus-0.2.3-alpha.2/settings-home.png)
+<img src="docs/images/focus-0.2.3-alpha.2/settings-home.png" alt="Android 31 模拟器 Dev 构建的设置首页，显示搜索框和设置分类" width="720">
 
 <p><em>图 2.1　设置首页当前滚动位置；顶部可见设置搜索框和分类入口</em></p>
 </div>
@@ -72,7 +72,7 @@ Focus 页面只放本分支独有的行为控制
 - Focus 页面继续保留关注分组过滤、视频相关推荐、搜索历史和历史记录清空入口的设置
 
 <div align="center">
-![Android 31 模拟器中的 Focus 专属设置页，显示关注过滤、相关推荐和历史记录选项](docs/images/focus-0.2.3-alpha.2/focus-settings.png)
+<img src="docs/images/focus-0.2.3-alpha.2/focus-settings.png" alt="Android 31 模拟器中的 Focus 专属设置页，显示关注过滤、相关推荐和历史记录选项" width="720">
 
 <p><em>图 4.1　Focus 专属设置页；可在此调整关注过滤、相关推荐、搜索历史和历史记录清空行为</em></p>
 </div>
@@ -82,7 +82,7 @@ Focus 页面只放本分支独有的行为控制
 标签显示还取决于导航设置和当前可用内容，插件也可能提供额外入口
 
 <div align="center">
-![Android 31 模拟器中的上游导航设置页，显示顶部标签显隐和排序选项](docs/images/focus-0.2.3-alpha.2/top-tabs.png)
+<img src="docs/images/focus-0.2.3-alpha.2/top-tabs.png" alt="Android 31 模拟器中的上游导航设置页，显示顶部标签显隐和排序选项" width="720">
 
 <p><em>图 4.2　上游导航设置页；可查看顶部标签的显示开关和排序控件，当前开关状态仅代表此模拟器配置</em></p>
 </div>
@@ -104,9 +104,9 @@ Focus 延续上游面向日常使用的主流程
 - **笔记与推荐**包含视频笔记、AI 总结草稿和 Today Watch
 
 <div align="center">
-![Android 31 模拟器 Dev 构建中的推荐页，显示推荐和关注标签以及公开内容卡片](docs/images/focus-0.2.3-alpha.2/recommend-feed.png)
+<img src="docs/images/focus-0.2.3-alpha.2/recommend-feed.png" alt="Android 31 模拟器 Dev 构建中的推荐页，显示推荐和关注标签以及公开内容卡片" width="720">
 
-<p><em>图 5.1　推荐页示例；画面显示推荐与关注标签及截图时加载的公开内容，推荐内容会随时间变化</em></p>
+<p><em>图 5.1　在导航设置开启「推荐」后的示例；画面显示推荐与关注标签及截图时加载的公开内容，推荐内容会随时间变化</em></p>
 </div>
 
 完整能力、实现状态和当前限制见[功能矩阵](docs/wiki/FEATURE_MATRIX.md)，其中 AI 总结草稿的使用条件取决于已配置的服务
