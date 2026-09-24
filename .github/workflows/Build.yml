@@ -265,7 +265,7 @@ jobs:
             "-Pbili.build.releaseTag=${BILI_BUILD_RELEASE_TAG}"
           )
           if [ "${{ steps.set_build_type.outputs.build_type }}" = "release" ]; then
-            ./gradlew "${COMMON_ARGS[@]}" assembleRelease
+            ./gradlew --no-configuration-cache "${COMMON_ARGS[@]}" assembleRelease
           else
             ./gradlew "${COMMON_ARGS[@]}" assembleDev
           fi
