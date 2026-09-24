@@ -455,6 +455,12 @@ jobs:
       attestations: write
       id-token: write
     steps:
+      - name: Checkout verified release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.release_tag }}
+          persist-credentials: false
+
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
         with:
