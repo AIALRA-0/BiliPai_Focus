@@ -4,7 +4,7 @@
 
 ## 源码与版本
 
-- 上游新增的 5 个提交已通过合并提交 `bbc545841` 纳入，目标上游提交为 `f4d78bf6d`；本轮上游源码版本仍为 `0.2.3-alpha.2`。
+- 上游新增的 5 个提交已通过合并提交 `bbc545841` 纳入；发布前上游又增加 1 个个人页离屏骨架动画修复 `f259fd3fa`，通过合并提交 `70ea9d1fe` 纳入。最终上游基线为 `f259fd3fa`，源码版本仍为 `0.2.3-alpha.2`。
 - Focus 候选版本为 `0.2.3-alpha.2.focus.1`，版本码 389，正式包名 `com.android.purebilibili.focus`。Focus Release 计划发布到稳定渠道，发布说明须明确其上游基础是 alpha 版本。
 - 上一版公开 Focus Release 是 `v9.1.1-focus.5`，版本码 388。版本名跨世代时，客户端更新比较依据版本码而非字典序。
 
@@ -13,6 +13,8 @@
 - 首页标签只使用上游导航设置的显隐与排序；Focus 页面删除了重复的 9 个开关。迁移逻辑一次性读取旧两套配置，计算升级前实际可见的标签，再写入唯一配置；相关映射单元测试通过。
 - API 31 模拟器从已登录的 `.5` 正式包覆盖安装本轮已签名的 389 候选包成功。升级前后登录头像、原有「只显示关注」的首页布局均保留。
 - 设置首页的「Focus 专属」入口在首屏可见，设置搜索输入 `Focus` 可定位入口；Focus 页面保留独有控制项。上游导航页打开「推荐」后，返回首页显示「推荐」和「关注」。实机截图保存在本机 `.local/current-v389-*.png`，因含账号信息不发布。
+- 为测试旧客户端桥接，在 API 31 模拟器先保存已登录 389 状态快照，再安装公开 `.4` 包（码 226）。`.4` 启动时通过现有更新弹窗发现 `.5`；点击「立即更新」，下载完成后授予系统安装来源权限，经 Android 安装器确认，安装成功并打开 `.5`（码 388）。本机截图保存于 `.local/update-e2e-old4-*.png`。这证明旧版本名比较器仍可沿现有链路到达 `.5`；下一跳 `.5 → 389` 必须等待新版公开 Release 才能测试。
+- `.5` 桥接包中打开 Focus 旧设置并开启「显示热门」，首页实际顺序为「关注 → 热门」。该旧画面已记录于 `.local/update-e2e-v5-layout-before2.png`，将用于发布后检查两套设置合并迁移的实际结果。
 
 ## 动态与播放器实测
 
@@ -22,7 +24,7 @@
 ## 构建与发布门禁
 
 - 本轮 15 个定向单测类通过，随后针对更新器跨世代版本码和稳定渠道的 2 个测试类再次通过；`:app:compileDebugAndroidTestKotlin` 通过。完整设备套件的上一轮原始结果仍为 63 项中 16 失败、3 跳过，不能宣称全绿。用户已将其余测试修复暂缓，首页语义节点和折叠屏场景先以实际界面判断。
-- 本地 `:app:assembleRelease` 成功，包含 R8 与 `lintVitalRelease`；APK 为 `app/build/outputs/bilipai/release/BiliPai-Focus-0.2.3-alpha.2.focus.1.apk`，SHA-256 为 `570772de675f8364d74efdb43975934ec9cc1bb774ca6dac2442e0ab3839a013`。APK 的签名证书 SHA-256 为 `a2f021866ee4e5f8f63df109e3369be3ceefa98fee3485e4d583e4a24f07f6bc`，与旧版 `.5` 一致；这是本地候选产物，最终公开资产须另行核对。
+- 合入上游离屏骨架动画修复后再次运行本地 `:app:assembleRelease`，包含 R8 与 `lintVitalRelease`，成功用时 8 分 36 秒；APK 为 `app/build/outputs/bilipai/release/BiliPai-Focus-0.2.3-alpha.2.focus.1.apk`，SHA-256 为 `620a9fcb28787d824ccd16b64333eef67ab7597f371bad3997020061f10223c7`。`apksigner verify --print-certs` 返回 0，签名证书 SHA-256 为 `a2f021866ee4e5f8f63df109e3369be3ceefa98fee3485e4d583e4a24f07f6bc`，与旧版 `.5` 一致；这是本地候选产物，最终公开资产须另行核对。
 - 标签 CI 对 Release Gradle 调用关闭配置缓存，以避开前一版 `verifyFocusReleaseSigning` 的配置缓存序列化失败。新流程要求签名证书连续、生成构建元数据与校验和、生成非空构建证明，校验上传资产后才把 Release 从草稿发布。是否实际通过仍需以新标签的 GitHub Actions 与公开 Release 读回为准。
 
 ## 待完成的端到端步骤
