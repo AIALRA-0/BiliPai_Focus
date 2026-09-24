@@ -17,6 +17,7 @@
 - 为测试旧客户端桥接，在 API 31 模拟器先保存已登录 389 状态快照，再安装公开 `.4` 包（码 226）。`.4` 通过现有更新弹窗发现 `.5`；点击「立即更新」、下载、授予安装来源权限并确认系统安装器后，成功启动 `.5`（码 388）。
 - `.5` 桥接包中打开 Focus 旧设置的「显示热门」，并在上游导航设置中把热门排到关注之前，实际首页为「热门 → 关注」。另开启相关推荐与搜索历史，并保存搜索词 `FocusUpgradeProbe0924`，作为升级后迁移与数据保留标记。
 - 发布后从 `.5` 客户端真实执行「检查更新 → 发现 389 → 下载 → Android 安装器更新 → 打开」。已安装包版本为 `0.2.3-alpha.2.focus.1` / 389；拉取设备上的 `base.apk` 后计算出的 SHA-256 与 Release APK 完全一致：`bad8a4f0a8a75deae7a3f800fecb29be38bb64b9c2ae8fb7f9bcee42652b6639`。Android `firstInstallTime` 保持 `2026-09-24 11:41:09`，证明这是覆盖升级而非卸载重装。升级后首页顺序仍为「热门 → 关注」；相关推荐与搜索历史均保持开启；搜索历史仍含 `FocusUpgradeProbe0924`。冷启动后再次确认标签顺序保留。
+- 完成上述完整更新链测试后，恢复测试前的已登录 389 模拟器快照，再以公开 Release APK 覆盖安装同版本；正式 APK 启动后仍显示原账号头像、已登录关注视频和原「推荐 → 关注」标签配置。此额外检查验证公开产物在既有登录数据上可以运行；它不替代前述 `.5 → 389` 客户端更新测试。
 
 ## 动态与播放器实测
 
@@ -26,7 +27,7 @@
 ## 构建与发布门禁
 
 - 本轮 15 个定向单测类通过，随后针对更新器跨世代版本码和稳定渠道的 2 个测试类再次通过；`:app:compileDebugAndroidTestKotlin` 通过。完整设备套件结果仍为 63 项中 16 失败、3 跳过，不能宣称全绿。其余失败修复已暂缓。
-- 标签 CI Release run [36005042916](https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/36005042916) 成功，公开 Release 为稳定渠道（`prerelease=false`），共 5 个资产：APK、校验和、构建元数据、验证元数据及 `intoto` 构建证明。Release APK SHA-256 为 `bad8a4f0a8a75deae7a3f800fecb29be38bb64b9c2ae8fb7f9bcee42652b6639`。签名证书 SHA-256 `a2f021866ee4e5f8f63df109e3369be3ceefa98fee3485e4d583e4a24f07f6bc` 与前一 Focus 正式版一致。
+- 以原受保护标签源码补发的 CI Release run [36005042916](https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/36005042916) 成功，公开 Release 为稳定渠道（`prerelease=false`），共 5 个资产：APK、校验和、构建元数据、验证元数据及 `intoto` 构建证明。Release APK SHA-256 为 `bad8a4f0a8a75deae7a3f800fecb29be38bb64b9c2ae8fb7f9bcee42652b6639`。签名证书 SHA-256 `a2f021866ee4e5f8f63df109e3369be3ceefa98fee3485e4d583e4a24f07f6bc` 与前一 Focus 正式版一致。
 - 构建证明存在且其 bundle/digest 已核对；但因 GitHub Actions 的 `workflow_dispatch` 补发，证明声明的 workflow source ref 是 `main` 提交 `313b6fd31`，发布标签指向 `d59a6cda4`。两提交间仅工作流文件有差异。证明摘要与发布资产一致，但严格按 release tag 引用验证不通过；因此不把该证明描述为已通过 tag-ref 来源验证。
 - 首次标签 CI [run 35995414669](https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/35995414669) 质量门禁和构建成功，但 Bash 引号错误阻断后续步骤。后续补发依次修复脚本、补充发布 job 检出、再改用数字 Release ID，以解决 `gh release create --verify-tag` 和草稿 Release 查询问题。最终 [run 36005042916](https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/36005042916) 全部成功并发布 5 个资产；该手动补发方式造成前述证明 source ref 与 tag 不一致，来源限制已如实记录。
 
