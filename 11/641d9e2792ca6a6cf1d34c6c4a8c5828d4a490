@@ -1,0 +1,19 @@
+.github/workflows/Build.yml
+  s_71db67cf8751ad::t_ac1fc067c6fc0b 458-463
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "11641d9e2792ca6a6cf1d34c6c4a8c5828d4a490",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
