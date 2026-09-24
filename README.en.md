@@ -2,7 +2,7 @@
 <h1>BiliPai Focus</h1>
 <p>An Android client fork for browsing and watching Bilibili, preserving upstream features while keeping Focus controls clear and independent</p>
 <p><a href="README.md">简体中文</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/latest">Latest Focus release</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/jay3-yy/BiliPai">Upstream BiliPai</a></p>
-<p>Target for this release: <code>0.2.3-alpha.2.focus.1</code> / versionCode <code>389</code> (target channel: stable; pending end-to-end and release verification) · Upstream baseline: <code>0.2.3-alpha.2</code></p>
+<p>Current stable-channel release: <code>0.2.3-alpha.2.focus.1</code> / versionCode <code>389</code> · Upstream base: <code>0.2.3-alpha.2</code> (alpha) · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.2.3-alpha.2.focus.1">Release and verification assets</a></p>
 </div>
 
 ## 1 Project overview
@@ -131,14 +131,9 @@ The previous full-device run had 16 failures and 3 skips out of 63 checks. Itemi
 
 Fifteen targeted unit-test classes passed. Targeted API 31 emulator checks also covered an upgrade from the previous build, top-tab settings, restored dynamic-feed content, and playback resuming after a seek. Device details, steps, and limits are in the [September 24 iteration report](docs/audits/2026-09-24-focus-alpha2-iteration.md).
 
-These targeted results do not mean the full device suite is green or that this version has been released. Evidence still pending includes:
+Focus `v0.2.3-alpha.2.focus.1` is published on the stable channel. Tag CI completed signing-continuity checks and uploaded the APK, checksums, metadata, and build-attestation assets; an API 31 emulator verified the previous client discovering the update, downloading it, installing through Android, launching it, and retaining user data. The attestation digest was checked; its workflow source commit differs from the release tag, so strict tag-reference verification is limited as documented in the [iteration report](docs/audits/2026-09-24-focus-alpha2-iteration.md).
 
-- Tag CI signing continuity, build attestation, asset upload, and release read-back
-- The full Focus client update flow: check, download, install, launch, and data retention
-- Minimum API 26 ARM64 device coverage and a rerun of the full device suite
-- Actual home accessibility nodes and foldable screen behavior
-
-This page does not mark unrun checks or missing device evidence as passed.
+The previous full-device result remains 16 failures and 3 skips out of 63 checks; the suite is not all green. Minimum API 26 ARM64, a real foldable hinge/posture device, and complete automated home accessibility-node coverage still lack device evidence. These limits are recorded rather than reported as passed.
 
 ## 9 Documentation, support, and license
 

@@ -2,7 +2,7 @@
 <h1>BiliPai Focus</h1>
 <p>面向哔哩哔哩日常使用的 Android 客户端，沿用 BiliPai 上游并提供 Focus 专属内容控制</p>
 <p><a href="README.en.md">English</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/latest">下载最新 Focus Release</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/jay3-yy/BiliPai">上游 BiliPai</a></p>
-<p>本轮目标版本：<code>0.2.3-alpha.2.focus.1</code> / versionCode <code>389</code>（目标发布渠道为稳定版，待端到端与发布验证）· 上游基线：<code>0.2.3-alpha.2</code></p>
+<p>当前稳定渠道版本：<code>0.2.3-alpha.2.focus.1</code> / versionCode <code>389</code> · 上游基础版本：<code>0.2.3-alpha.2</code>（alpha）· <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.2.3-alpha.2.focus.1">Release 与校验资产</a></p>
 </div>
 
 ## 1 项目定位
@@ -171,16 +171,9 @@ cd BiliPai_Focus
 
 本轮 15 个定向单测类通过，API 31 模拟器上的旧版覆盖更新、首页标签设置、动态内容恢复和 Seek 后继续播放也已完成针对性验证；设备、步骤和限制见[2026-09-24 迭代验证记录](docs/audits/2026-09-24-focus-alpha2-iteration.md)
 
-这些定向结果不代表完整设备测试已经全绿，也不代表版本已经发布
+Focus `v0.2.3-alpha.2.focus.1` 已发布到稳定渠道。标签 CI 完成签名连续性校验、APK/校验和/元数据/构建证明资产上传与 Release 读回；API 31 模拟器也完成旧版客户端发现更新、下载、系统安装、启动及用户数据保留验证。证明文件摘要已核对；其工作流来源提交与发布标签有差异，严格标签引用验证限制见[迭代验证记录](docs/audits/2026-09-24-focus-alpha2-iteration.md)。
 
-仍待完成或补齐证据的项目包括：
-
-- 标签 CI 的签名连续性、构建证明、资产上传和发布读回
-- Focus 客户端检查更新、下载、安装、启动与数据保留的完整链路
-- 最低 API 26 ARM64 设备覆盖，以及完整设备套件复跑
-- 首页语义节点和折叠屏界面的实际验证
-
-未执行或缺少设备证据的项目不会在本页写成已通过
+完整设备测试的既有结果仍是 63 项中 16 项失败、3 项跳过，不能宣称全绿。最低 API 26 ARM64、真实折叠屏铰链/姿态、以及首页语义节点自动化仍缺少完整设备证据；这些限制不影响已完成并逐项记录的本轮发布验证。未执行或证据不足的项目不会标记为通过。
 
 ## 9 文档、反馈与许可
 
