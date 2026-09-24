@@ -1,0 +1,168 @@
+docs/wiki/VERSIONING.md
+  s_71db67cf8751ad::t_eb6ddfafcbd6f9 3,5,21,51,81,88-89
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchFocusPolicy.kt
+  s_71db67cf8751ad::t_d0ff45472bbefd 161
+app/src/main/java/com/android/purebilibili/core/store/SettingsModels.kt
+  s_71db67cf8751ad::t_d2ab8c900b0a6a 1080
+  s_71db67cf8751ad::t_3b25d1d8d5f84a 1051-1062,1064-1079,1081-1087,1089-1096,1106-1133
+  s_71db67cf8751ad::t_68f4eccdf769d9 1046-1047
+  s_71db67cf8751ad::t_cec5c484882bb8 1088
+  s_71db67cf8751ad::t_353f3193adb04a 1009-1020,1063,1097-1105
+  s_71db67cf8751ad::t_d550aec5bba965 1044-1045
+docs/wiki/QA.md
+  s_71db67cf8751ad::t_373d81b34c3b4c 181
+app/src/test/java/com/android/purebilibili/core/store/HomeTopTabSettingsMappingPolicyTest.kt
+  s_71db67cf8751ad::t_67e3505fdb29bd 81
+  s_71db67cf8751ad::t_e9ad8caffba622 14-17,19-29,31-47,58-69,71-72,74-80
+  s_71db67cf8751ad::t_d0051cea057ee0 88,92
+  s_71db67cf8751ad::t_b18b5b1ad6439d 73
+  s_71db67cf8751ad::t_38a386e360f5bf 18,30,48-57,70
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchNavigationPolicy.kt
+  s_71db67cf8751ad::t_d0ff45472bbefd 6-8
+app/src/main/java/com/android/purebilibili/core/store/FocusSettingsStore.kt
+  s_71db67cf8751ad::t_47c02480a38f07 55
+  s_71db67cf8751ad::t_353f3193adb04a 18-29
+  s_71db67cf8751ad::t_cc2726eb989a86 30-31
+app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingSettingsGuidePolicy.kt
+  s_71db67cf8751ad::t_d550aec5bba965 15
+  s_71db67cf8751ad::t_68f4eccdf769d9 45,54
+docs/wiki/ROADMAP.md
+  s_71db67cf8751ad::t_373d81b34c3b4c 79
+app/src/test/java/com/android/purebilibili/feature/home/HomeTopCategoryPolicyTest.kt
+  s_71db67cf8751ad::t_d0dd95d9aef75c 246,248-255
+app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt
+  s_71db67cf8751ad::t_50d8ae9ca72d6e 1390
+app/src/test/java/com/android/purebilibili/feature/settings/AppUpdateCheckerTest.kt
+  s_71db67cf8751ad::t_0ee694b94d8371 172-194
+  s_71db67cf8751ad::t_974028d04f5af0 38-66
+  s_71db67cf8751ad::t_feeb24a3b9aefd 37,171
+docs/audits/2026-09-24-focus-alpha2-iteration.md
+  s_71db67cf8751ad::t_ccca426b178d61 1-23,25-29,31-33
+  s_71db67cf8751ad::t_dfd61070ff52a1 30
+  s_71db67cf8751ad::t_4946f6286e1816 24
+CHANGELOG.md
+  s_71db67cf8751ad::t_e721abab743c4f 1-8,10-14
+  s_71db67cf8751ad::t_16f8d97c56a754 9
+app/src/test/java/com/android/purebilibili/feature/settings/AppVersionPolicyTest.kt
+  s_71db67cf8751ad::t_82adbbcb5639ee 16-17
+app/src/test/java/com/android/purebilibili/core/store/FocusSettingsMappingPolicyTest.kt
+  s_71db67cf8751ad::t_38a386e360f5bf 37-52
+  s_71db67cf8751ad::t_7399249c8983e4 53
+app/build.gradle.kts
+  s_71db67cf8751ad::t_13965f05a55d8c 213-214
+app/src/androidTest/java/com/Android/purebilibili/feature/video/PlayerControlsUiRegressionTest.kt
+  s_71db67cf8751ad::t_8a21d230c2479a 13,31,39,44-47,50-52,64,72-79
+app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt
+  s_71db67cf8751ad::t_e02069813b5d42 453,476,482
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt
+  s_71db67cf8751ad::t_d0ff45472bbefd 8,76-81
+  s_71db67cf8751ad::t_445ca72b85be5f 82
+AI.txt
+  s_71db67cf8751ad::t_373d81b34c3b4c 15
+app/src/test/java/com/android/purebilibili/feature/onboarding/OnboardingSettingsGuidePolicyTest.kt
+  s_71db67cf8751ad::t_68f4eccdf769d9 21,25
+  s_71db67cf8751ad::t_d0dd95d9aef75c 26
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsRootCategoryPolicy.kt
+  s_71db67cf8751ad::t_d0ff45472bbefd 107-108
+llms.txt
+  s_71db67cf8751ad::t_373d81b34c3b4c 19,38,69-70
+app/src/main/java/com/android/purebilibili/core/store/home/HomeTopTabSettingsStore.kt
+  s_71db67cf8751ad::t_ad6101fd239b23 9,14,21,25-26,30-31,46-48,71-74,77,80-81,84-119,121-126,128
+  s_71db67cf8751ad::t_353f3193adb04a 120
+app/src/test/java/com/android/purebilibili/feature/settings/FocusSettingsScreenPolicyTest.kt
+  s_71db67cf8751ad::t_5becbb73313fa5 5,8
+  s_71db67cf8751ad::t_e9ad8caffba622 13,17-20,54,66-77
+  s_71db67cf8751ad::t_50d8ae9ca72d6e 44-47
+docs/wiki/README.md
+  s_71db67cf8751ad::t_373d81b34c3b4c 24
+docs/wiki/RELEASE_WORKFLOW.md
+  s_71db67cf8751ad::t_373d81b34c3b4c 34,70
+app/src/test/java/com/android/purebilibili/feature/settings/SettingsRootCategoryPolicyTest.kt
+  s_71db67cf8751ad::t_7b24b02f4407bf 49-51
+  s_71db67cf8751ad::t_fd7bc2c0d3e3d8 48
+app/src/androidTest/java/com/Android/purebilibili/feature/home/HomeScreenTest.kt
+  s_71db67cf8751ad::t_8a21d230c2479a 9-10,69-70,80-95,97,99-102,106-110
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsSemanticIconPolicy.kt
+  s_71db67cf8751ad::t_d0ff45472bbefd 416
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsEntryVisualPolicy.kt
+  s_71db67cf8751ad::t_d0ff45472bbefd 44
+.gitignore
+  s_71db67cf8751ad::t_2a3b8a3c7dbce9 94
+  s_71db67cf8751ad::t_6e52303c8c13df 105-108
+README.en.md
+  s_71db67cf8751ad::t_23ccebaa3d3651 1-4,6-9,11-15,17,24-25,35,37,39,47-51,61-63,70-73,84,89-91,96,99-117,127-128,131,133,142-144,152,164-170,190-191
+  s_71db67cf8751ad::t_0efc76507fab0d 18,21-23,55-56,59-60,64,67-69,81-82,85-86
+  s_71db67cf8751ad::t_2c8294862e6bc7 10,38,40-44,93-95,146,172
+  s_71db67cf8751ad::t_eb0f3767925094 26,45-46,155-157,162-163
+  s_71db67cf8751ad::t_dfd61070ff52a1 16,58,66,87,129-130,132,134,136-138
+  s_71db67cf8751ad::t_95725c3248b22c 97-98
+  s_71db67cf8751ad::t_8fa040a16437cb 74-80
+  s_71db67cf8751ad::t_557d9ea9e048ea 5
+  s_71db67cf8751ad::t_5dcdf32fa44ed7 20,27,29-34,36,52,54,118-126,145,147-150,153-154,171,173-187
+  s_71db67cf8751ad::t_123e790c9989b6 158-161
+  s_71db67cf8751ad::t_4e73f2c7c367a2 88,92
+  s_71db67cf8751ad::t_cfa0e67f340a20 135,139-141
+  s_71db67cf8751ad::t_14030479d592cd 28
+  s_71db67cf8751ad::t_3e114eed3b5b68 53,151,188-189
+  s_71db67cf8751ad::t_84692c7684d49c 19,57,65,83
+README.md
+  s_71db67cf8751ad::t_0efc76507fab0d 27,30-31,74,77-78,84,87-88,106,109-110
+  s_71db67cf8751ad::t_d33efbec0a197e 114,140
+  s_71db67cf8751ad::t_14030479d592cd 42,44,46,48,50
+  s_71db67cf8751ad::t_5819840813c9bd 52,54-58,121,188,224
+  s_71db67cf8751ad::t_4e73f2c7c367a2 112,118,120,122-123
+  s_71db67cf8751ad::t_123e790c9989b6 200-203
+  s_71db67cf8751ad::t_84692c7684d49c 28,75,85,107
+  s_71db67cf8751ad::t_8fa040a16437cb 98-104
+  s_71db67cf8751ad::t_42b84a9ce82ef5 3,16,18-19,21,35,37-39,59-62,65,67,80,82,90,94,96,127,129-130,132-135,137,146,148,150,152,154,177,182-184,204,209,211-216,218-219,221,243
+  s_71db67cf8751ad::t_95725c3248b22c 125
+  s_71db67cf8751ad::t_dfd61070ff52a1 25,170,172,174,176,178-181
+  s_71db67cf8751ad::t_e35ace784793a7 40,197-199,207
+  s_71db67cf8751ad::t_3e114eed3b5b68 71,193,240-241
+  s_71db67cf8751ad::t_0d721cb7ca7212 1-2,4,6,8,23,33,63,69,92,116,126,128,131,136,143,156,168,171,173,175,185-186,194-195,206,208,210,217,220,222,226
+  s_71db67cf8751ad::t_78374c975c74d4 14
+  s_71db67cf8751ad::t_e309a9da851d7a 5,10,12,70,72,158-166,187,189-192,196,205,223,225,227-239
+app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt
+  s_71db67cf8751ad::t_50d8ae9ca72d6e 381,384,387,389-398,406
+README_EN.md
+  s_71db67cf8751ad::t_9f06a90f0736cd 1-6
+docs/wiki/AI.md
+  s_71db67cf8751ad::t_373d81b34c3b4c 9,55
+app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt
+  s_71db67cf8751ad::t_e02069813b5d42 35
+  s_71db67cf8751ad::t_4cc2ef02d8faa3 42
+app/src/main/java/com/android/purebilibili/feature/settings/screen/BottomBarSettingsScreen.kt
+  s_71db67cf8751ad::t_68f4eccdf769d9 115
+  s_71db67cf8751ad::t_d550aec5bba965 601
+  s_71db67cf8751ad::t_4cc2ef02d8faa3 518
+.github/workflows/Build.yml
+  s_71db67cf8751ad::t_fc8c9f47423695 595-601
+  s_71db67cf8751ad::t_07b629ea1cd030 502-581
+  s_71db67cf8751ad::t_56c71dae6ee489 342-343
+  s_71db67cf8751ad::t_4243807cb04c0d 429-435,437,440,446-448,455
+  s_71db67cf8751ad::t_52030938d19064 467-468,473,475-481,483-501,582-594
+app/src/test/java/com/android/purebilibili/core/buildinfo/BiliPaiApkNamingPolicyTest.kt
+  s_71db67cf8751ad::t_8523709acd9170 25,32-33,36-37,47-48
+app/src/main/java/com/android/purebilibili/core/store/FeatureSettingsPreferenceKeys.kt
+  s_71db67cf8751ad::t_47c02480a38f07 19
+  s_71db67cf8751ad::t_d0051cea057ee0 33-34
+  s_71db67cf8751ad::t_3b25d1d8d5f84a 16
+plugins/sdk/README.md
+  s_71db67cf8751ad::t_efbc18a1d38e7b 214,218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "905f7effd76d34702bd306681424baaa007df8a1",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
