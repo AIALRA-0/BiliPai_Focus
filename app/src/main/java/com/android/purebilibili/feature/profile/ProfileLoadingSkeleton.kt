@@ -54,9 +54,10 @@ private const val PROFILE_SKELETON_PULSE_DURATION_MILLIS = 950
 @Composable
 internal fun ProfileLoadingSkeleton(
     modifier: Modifier = Modifier,
+    animated: Boolean = true,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
-    val blockColor = rememberProfileSkeletonBlockColor()
+    val blockColor = rememberProfileSkeletonBlockColor(animated)
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -262,9 +263,9 @@ private fun ProfileSkeletonBlock(
 }
 
 @Composable
-private fun rememberProfileSkeletonBlockColor(): Color {
+private fun rememberProfileSkeletonBlockColor(animated: Boolean): Color {
     val reduceMotion = rememberSystemReduceMotion()
-    val pulse = if (reduceMotion) {
+    val pulse = if (!animated || reduceMotion) {
         0.45f
     } else if (com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()) {
         com.android.purebilibili.core.ui.skeleton.rememberGentleSkeletonPulse().value

@@ -520,7 +520,7 @@ fun ProfileScreen(
     val profileHeaderBlurActive = false
     when (currentUiState) {
         is ProfileUiState.Loading -> {
-            ProfileLoadingSkeleton()
+            ProfileLoadingSkeleton(animated = isCurrentPage)
         }
         is ProfileUiState.LoggedOut -> {
             // [Modified] 游客模式：复用统一 UI，但使用虚拟游客数据
