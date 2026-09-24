@@ -1,0 +1,30 @@
+README.en.md
+  s_71db67cf8751ad::t_a35b21ee3f717e 19,57,65,83
+  s_71db67cf8751ad::t_67eb131f084635 85
+docs/audits/2026-09-24-focus-alpha2-iteration.md
+  s_71db67cf8751ad::t_e7f7cee81001aa 30
+  s_71db67cf8751ad::t_d53d083414ae29 18,31-35
+  s_71db67cf8751ad::t_9e84e0a4556cd1 16
+  s_71db67cf8751ad::t_f7948ba4e206c5 40
+README.md
+  s_71db67cf8751ad::t_a35b21ee3f717e 28,75,85,107
+  s_71db67cf8751ad::t_3da0b322b544a0 109
+CHANGELOG.md
+  s_71db67cf8751ad::t_3747ff94c45aca 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "61cf859ec564ff8421cf07642d84254f2722743f",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
