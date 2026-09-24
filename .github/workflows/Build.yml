@@ -555,7 +555,13 @@ jobs:
             gh release edit "$RELEASE_TAG" --notes-file "$NOTES_FILE"
           fi
 
-          RELEASE_API_PATH="repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}"
+          RELEASE_ID="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
+          if [[ ! "$RELEASE_ID" =~ ^[0-9]+$ ]]; then
+            echo "Could not resolve the draft release's numeric ID." >&2
+            exit 1
+          fi
+          # The release-by-tag REST endpoint returns 404 while a release is a draft.
+          RELEASE_API_PATH="repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
           ASSET_LIST_FILE="$RUNNER_TEMP/focus-release-assets.json"
           REMOTE_ASSET_DIR="$RUNNER_TEMP/focus-release-asset-verification"
           mkdir -p "$REMOTE_ASSET_DIR"
@@ -638,8 +644,7 @@ jobs:
 
           RELEASE_PRERELEASE="$(gh api "$RELEASE_API_PATH" --jq .prerelease)"
           if [ "$RELEASE_PRERELEASE" = "true" ]; then
-            RELEASE_ID="$(gh api "$RELEASE_API_PATH" --jq .id)"
-            RELEASE_PRERELEASE="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            RELEASE_PRERELEASE="$(gh api "$RELEASE_API_PATH" \
               --method PATCH \
               -F prerelease=false \
               --jq .prerelease)"
