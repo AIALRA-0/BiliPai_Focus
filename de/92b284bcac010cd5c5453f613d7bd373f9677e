@@ -1,0 +1,24 @@
+docs/audits/2026-09-23-focus-upstream-sync.md
+  s_71db67cf8751ad::t_d068c1620bd985 101-102,114-115,117
+  s_71db67cf8751ad::t_177a2d227252e2 111-112,116
+docs/audits/2026-09-23-alpha2-verification.md
+  s_71db67cf8751ad::t_4aa6afcd356007 56,58-75,77-78
+  s_71db67cf8751ad::t_8861a20525b188 76
+  s_71db67cf8751ad::t_154e54813e8ecf 42,45,54,79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "de92b284bcac010cd5c5453f613d7bd373f9677e",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
