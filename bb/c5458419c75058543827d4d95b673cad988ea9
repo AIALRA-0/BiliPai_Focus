@@ -1,0 +1,67 @@
+app/src/main/java/com/android/purebilibili/core/util/ScrollToTopPolicy.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 16-18,29
+app/src/main/java/com/android/purebilibili/feature/settings/screen/AppearanceSettingsScreen.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 73-77,237-259,593-608
+  s_71db67cf8751ad::t_18b19ba89d79b2 609-610
+app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 186,206-220,533-545,2370-2371
+app/src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayoutPolicy.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 3-4,172-176
+app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 286-287,1715-1720
+  s_71db67cf8751ad::t_1f86c7199b1aad 1721-1723
+app/src/test/java/com/android/purebilibili/core/ui/performance/AppDisplayModePreferenceTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 1-38
+app/src/test/java/com/android/purebilibili/core/util/ScrollToTopPolicyTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 40,42-47
+app/src/test/java/com/android/purebilibili/feature/home/HomeScrollRequestPolicyTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 1-36
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 530-535
+  s_71db67cf8751ad::t_98a66e50262a42 528-529
+app/src/test/java/com/android/purebilibili/feature/settings/SettingsSearchPolicyTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 141-148
+  s_71db67cf8751ad::t_3ae6ad2f6e0154 140
+app/src/test/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayoutPolicyTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 4,13,18-35,52
+app/src/test/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailPresentationPolicyTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 479,486-491
+CHANGELOG.md
+  s_71db67cf8751ad::t_cd76a5d73c71b4 23
+app/src/main/java/com/android/purebilibili/MainActivity.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 91,1045-1047
+app/src/main/java/com/android/purebilibili/core/ui/performance/AppDisplayModePreference.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 1-76
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/ReplyComponents.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 130,2476-2477
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailComponents.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 1502
+app/src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 23,28,30-32,115-118,137-140
+app/src/main/java/com/android/purebilibili/feature/message/ChatScreen.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 115-120,240,276-281,584,595,603,664
+app/src/test/java/com/android/purebilibili/feature/home/HomeFeedScrollStatePersistenceStructureTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 78,84-87
+app/src/test/java/com/android/purebilibili/feature/message/ChatScreenStructureTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 26-29
+app/src/test/java/com/android/purebilibili/feature/video/ui/components/ReplyComponentsPolicyTest.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 993,1003-1009
+app/src/main/java/com/android/purebilibili/feature/video/VideoActivity.kt
+  s_71db67cf8751ad::t_cd76a5d73c71b4 35,45,62-63,110-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bbc5458419c75058543827d4d95b673cad988ea9",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
