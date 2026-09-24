@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.home
 
-import com.android.purebilibili.core.store.FocusSettings
-
 const val HOME_TOP_PARTITION_TAB_ID = "PARTITION"
 const val HOME_TOP_SUBSCRIPTION_TAB_ID = "SUBSCRIPTIONS"
 
@@ -105,38 +103,6 @@ fun resolveHomeTopTabEntries(
     }
 
     return ordered.toList().ifEmpty { DEFAULT_HOME_TOP_ENTRIES }
-}
-
-fun resolveFocusHomeTopTabEntries(
-    entries: List<HomeTopTabEntry>,
-    focusSettings: FocusSettings
-): List<HomeTopTabEntry> {
-    val filtered = entries.filter { entry ->
-        when (entry) {
-            is HomeTopTabEntry.Category -> when (entry.category) {
-                HomeCategory.RECOMMEND -> focusSettings.showHomeRecommendTab
-                HomeCategory.FOLLOW -> focusSettings.showHomeFollowTab
-                HomeCategory.POPULAR -> focusSettings.showHomePopularTab
-                HomeCategory.LIVE -> focusSettings.showHomeLiveTab
-                HomeCategory.ANIME -> focusSettings.showHomeAnimeTab
-                HomeCategory.GAME -> focusSettings.showHomeGameTab
-                HomeCategory.KNOWLEDGE -> focusSettings.showHomeKnowledgeTab
-                HomeCategory.TECH -> focusSettings.showHomeTechTab
-            }
-            HomeTopTabEntry.Partition -> focusSettings.showHomePartitionButton
-            // Focus filtering only applies to legacy category and partition
-            // entries. The upstream subscription tab is independently
-            // controlled by the user's home-tab configuration.
-            HomeTopTabEntry.Subscriptions -> true
-        }
-    }
-    return filtered.ifEmpty {
-        entries.filterIsInstance<HomeTopTabEntry.Category>()
-            .firstOrNull { it.category == HomeCategory.FOLLOW }
-            ?.let(::listOf)
-            ?: entries.firstOrNull()?.let(::listOf)
-            ?: DEFAULT_HOME_TOP_ENTRIES
-    }
 }
 
 fun resolveHomeTopCategories(

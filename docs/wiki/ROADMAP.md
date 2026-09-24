@@ -76,4 +76,4 @@
 3. Release 阻塞项完成、取消或改变验收标准。
 4. 模块职责、插件执行边界、账号隔离或隐私行为发生变化。
 
-同步入口：`README.md`、`README_EN.md`、`docs/wiki/FEATURE_MATRIX.md`、`docs/wiki/ARCHITECTURE.md`、`docs/wiki/QA.md` 与 `llms.txt`。
+同步入口：`README.md`、`README.en.md`、`docs/wiki/FEATURE_MATRIX.md`、`docs/wiki/ARCHITECTURE.md`、`docs/wiki/QA.md` 与 `llms.txt`。

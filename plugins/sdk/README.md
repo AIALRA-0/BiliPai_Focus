@@ -211,11 +211,11 @@ val packageBpPlugin by tasks.registering(Zip::class) {
 - [`plugins/samples/today-watch-remix/`](../samples/today-watch-remix/)：最小推荐插件，按点赞和播放量排序。
 - [`plugins/samples/watch-compass/`](../samples/watch-compass/)：观感罗盘样例，把推荐拆成“轻松起步 / 深挖正片 / 冷门宝藏”三类。
 
-示例目录没有独立 Gradle wrapper。请从示例目录调用仓库根 wrapper，并提供 Android SDK 路径：
+示例目录没有独立 Gradle wrapper。请预先设置标准环境变量 `ANDROID_HOME` 或 `ANDROID_SDK_ROOT`，再从示例目录调用仓库根 wrapper：
 
 ```bash
 cd plugins/samples/today-watch-remix
-ANDROID_HOME=/Users/yiyang/Library/Android/sdk ../../../gradlew -p . packageBpPlugin --no-daemon
+../../../gradlew -p . packageBpPlugin --no-daemon
 ```
 
 输出位置：

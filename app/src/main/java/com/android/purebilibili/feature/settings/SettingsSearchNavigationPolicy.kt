@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.settings
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 
 internal fun resolveSettingsSearchNavigation(result: SettingsSearchResult): BiliPaiNavKey? {
+    if (result.target == SettingsSearchTarget.FOCUS_SETTINGS) {
+        return BiliPaiNavKey.FocusSettings
+    }
     resolveSettingsSceneDetailFocus(result.target)?.let { detailFocus ->
         return when (detailFocus.target) {
             SettingsSearchTarget.APPEARANCE -> BiliPaiNavKey.AppearanceSettings

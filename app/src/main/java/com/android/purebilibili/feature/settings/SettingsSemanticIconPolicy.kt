@@ -413,6 +413,7 @@ internal fun resolveSettingsSearchTargetIconRole(
 ): SettingsIconRole = when (target) {
     SettingsSearchTarget.INTERFACE_THEME -> SettingsIconRole.INTERFACE_THEME
     SettingsSearchTarget.HOME_FEED -> SettingsIconRole.HOME_FEED
+    SettingsSearchTarget.FOCUS_SETTINGS -> SettingsIconRole.HOME_FEED
     SettingsSearchTarget.NAVIGATION -> SettingsIconRole.NAVIGATION
     SettingsSearchTarget.PLAYBACK_QUALITY -> SettingsIconRole.PLAYBACK_QUALITY
     SettingsSearchTarget.FULLSCREEN_GESTURE -> SettingsIconRole.FULLSCREEN_GESTURE

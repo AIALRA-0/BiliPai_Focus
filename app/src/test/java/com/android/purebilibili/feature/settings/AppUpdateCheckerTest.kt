@@ -35,6 +35,36 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `published Focus alpha base advances old Focus installs by versionCode`() {
+        val metadata = AppReleaseBuildMetadata(
+            appId = "com.android.purebilibili.focus",
+            versionName = "0.2.3-alpha.2.focus.1",
+            versionCode = 389,
+        )
+        for ((installedName, installedCode) in listOf(
+            "9.1.1-focus.4" to 226,
+            "9.1.1-focus.5" to 388,
+        )) {
+            assertTrue(
+                AppUpdateChecker.shouldOfferUpdate(
+                    currentVersion = installedName,
+                    currentVersionCode = installedCode,
+                    latestVersion = metadata.versionName,
+                    buildMetadata = metadata,
+                )
+            )
+        }
+        assertFalse(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = metadata.versionName,
+                currentVersionCode = metadata.versionCode,
+                latestVersion = metadata.versionName,
+                buildMetadata = metadata,
+            )
+        )
+    }
+
+    @Test
     fun `local build suffix does not make an older Focus release look newer`() {
         for (suffix in listOf("debug", "dev", "smooth")) {
             val local = "9.1.1-focus.5-$suffix"
@@ -136,6 +166,30 @@ class AppUpdateCheckerTest {
         )
 
         assertEquals("v6.9.9", release?.tagName)
+    }
+
+    @Test
+    fun `Focus stable channel accepts an upstream alpha based version name`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [{
+              "tag_name": "v0.2.3-alpha.2.focus.1",
+              "html_url": "https://example.com/focus-release",
+              "body": "Focus stable channel; upstream alpha base",
+              "published_at": "2026-09-24T11:00:00Z",
+              "draft": false,
+              "prerelease": false,
+              "assets": [{
+                "name": "BiliPai-Focus-0.2.3-alpha.2.focus.1.apk",
+                "browser_download_url": "https://example.com/focus-release.apk",
+                "content_type": "application/vnd.android.package-archive"
+              }]
+            }]
+            """.trimIndent()
+        )
+
+        assertEquals("v0.2.3-alpha.2.focus.1", release?.tagName)
+        assertFalse(release?.isPrerelease ?: true)
     }
 
     @Test

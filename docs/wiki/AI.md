@@ -6,7 +6,7 @@
 
 | 需求 | 文件 |
 | --- | --- |
-| 项目总览 | [`../../README.md`](../../README.md) / [`../../README_EN.md`](../../README_EN.md) |
+| 项目总览 | [`../../README.md`](../../README.md) / [`../../README.en.md`](../../README.en.md) |
 | 最新完整发布记录 | [`../../CHANGELOG.md`](../../CHANGELOG.md) |
 | 当前开发优先级 | [`ROADMAP.md`](ROADMAP.md) |
 | 架构 | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
@@ -52,7 +52,7 @@
 2. `CHANGELOG.md` 与 GitHub Releases。
 3. `docs/wiki/ROADMAP.md`（仅用于优先级和状态，不代表已发布）。
 4. Wiki 与插件开发文档。
-5. `README.md` / `README_EN.md`。
+5. `README.md` / `README.en.md`。
 
 当前 `app/build.gradle.kts` 声明构建 `0.2.3-beta.13 / versionCode 317`；`CHANGELOG.md` 最新记录为 `v0.2.3-beta.13`。公开发布状态仍以 GitHub / Telegram 为准。
 

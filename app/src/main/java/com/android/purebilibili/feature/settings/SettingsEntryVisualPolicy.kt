@@ -41,6 +41,7 @@ private fun resolveIosSettingsEntryTint(
 ): Color = when (target) {
     SettingsSearchTarget.INTERFACE_THEME -> iOSPink
     SettingsSearchTarget.HOME_FEED -> iOSOrange
+    SettingsSearchTarget.FOCUS_SETTINGS -> iOSPurple
     SettingsSearchTarget.NAVIGATION -> iOSBlue
     SettingsSearchTarget.PLAYBACK_QUALITY -> iOSGreen
     SettingsSearchTarget.FULLSCREEN_GESTURE -> iOSPurple

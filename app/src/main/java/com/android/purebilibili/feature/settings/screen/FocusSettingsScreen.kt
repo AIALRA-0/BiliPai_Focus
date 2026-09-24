@@ -32,14 +32,14 @@ fun FocusSettingsScreen(
         .collectAsStateWithLifecycle(initialValue = FocusSettings())
 
     SettingsPageScaffold(
-        title = "Focus",
+        title = "Focus 专属",
         onBack = onBack,
         backContentDescription = androidx.compose.ui.res.stringResource(R.string.common_back),
         bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
         lazyListContent = {
             item {
                 Text(
-                    text = "Focus 会默认收紧首页、搜索、历史与详情入口\n关注分组管理入口在动态页顶部",
+                    text = "Focus 专属功能：关注分组过滤、相关推荐、搜索历史和历史清空入口。\n首页标签统一在「设置 → 导航与交互 → 导航 → 顶部标签」管理；热搜与搜索发现可在搜索首页直接开关。新安装默认显示关注；订阅标签需启用订阅插件。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 22.sp,
@@ -47,100 +47,6 @@ fun FocusSettingsScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 )
-            }
-
-            item {
-                FocusSettingsSection(title = "首页") {
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_FEED),
-                        title = "显示推荐",
-                        subtitle = "只控制首页顶部入口，不删除推荐流实现",
-                        checked = settings.showHomeRecommendTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomeRecommendTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.FOLLOW_BUTTON),
-                        title = "显示关注",
-                        subtitle = "控制首页顶部关注标签显隐",
-                        checked = settings.showHomeFollowTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomeFollowTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.ANALYTICS),
-                        title = "显示热门",
-                        subtitle = "控制首页顶部热门标签显隐",
-                        checked = settings.showHomePopularTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomePopularTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.LIVE_SURFACE_TRANSITION),
-                        title = "显示直播",
-                        subtitle = "控制首页顶部直播标签显隐",
-                        checked = settings.showHomeLiveTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomeLiveTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.PGC_TIMELINE),
-                        title = "显示番剧",
-                        subtitle = "控制首页顶部番剧标签显隐",
-                        checked = settings.showHomeAnimeTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomeAnimeTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.EASTER_EGG),
-                        title = "显示游戏",
-                        subtitle = "控制首页顶部游戏标签显隐",
-                        checked = settings.showHomeGameTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomeGameTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.TIPS),
-                        title = "显示知识",
-                        subtitle = "控制首页顶部知识标签显隐",
-                        checked = settings.showHomeKnowledgeTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomeKnowledgeTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.DIAGNOSTICS),
-                        title = "显示科技",
-                        subtitle = "控制首页顶部科技标签显隐",
-                        checked = settings.showHomeTechTab,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomeTechTabVisible(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_COLUMNS),
-                        title = "显示分区按钮",
-                        subtitle = "控制首页顶部右侧分区入口",
-                        checked = settings.showHomePartitionButton,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setFocusHomePartitionButtonVisible(context, enabled) }
-                        },
-                    )
-                }
             }
 
             item {
@@ -175,26 +81,6 @@ fun FocusSettingsScreen(
 
             item {
                 FocusSettingsSection(title = "搜索") {
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.TIPS),
-                        title = "显示大家都在搜",
-                        subtitle = "在搜索首页显示热搜关键词区块",
-                        checked = settings.showSearchHotSection,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setSearchHotSectionEnabled(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.OPEN_SOURCE_HOME),
-                        title = "显示搜索发现",
-                        subtitle = "在搜索首页显示搜索发现区块",
-                        checked = settings.showSearchDiscoverSection,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setSearchDiscoverSectionEnabled(context, enabled) }
-                        },
-                    )
-                    AppPreferenceDivider()
                     AppSwitchPreference(
                         icon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_HISTORY),
                         title = "显示搜索历史",

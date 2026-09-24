@@ -210,8 +210,8 @@ android {
         targetSdk = 37
         // Keep Focus's semantic X.Y.Z-focus.N release identity and a monotonically increasing code above upstream alpha.2.
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 388
-        versionName = "9.1.1-focus.5"
+        versionCode = 389
+        versionName = "0.2.3-alpha.2.focus.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -112,7 +112,7 @@ internal fun resolveAllBottomBarTabs(
     BottomBarTabConfig("PLUGINS", "插件中心", resolveBottomBarTabIcon("PLUGINS", iconFamily), isDefault = false)
 )
 
-private val defaultTopTabIds = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
+private val defaultTopTabIds = listOf("FOLLOW", "SUBSCRIPTIONS")
 
 @Composable
 internal fun resolveAllTopTabs(
@@ -515,7 +515,7 @@ fun BottomBarSettingsContent(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                             AppText(
-                                text = "可调整顶部标签的显示/隐藏和顺序，第一位会直接显示在首页顶部。最多显示 ${SettingsManager.MAX_TOP_TABS} 个标签。",
+                                text = "可调整顶部标签的显示/隐藏和顺序，第一位会直接显示在首页顶部。最多显示 ${SettingsManager.MAX_TOP_TABS} 个标签；订阅标签需要启用订阅插件。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -598,7 +598,7 @@ fun BottomBarSettingsContent(
                                 val canToggle = if (tab.fixedVisible) {
                                     false
                                 } else if (isVisibleTab) {
-                                    localTopTabVisible.size > 2
+                                    localTopTabVisible.size > 1
                                 } else {
                                     localTopTabVisible.size < SettingsManager.MAX_TOP_TABS
                                 }

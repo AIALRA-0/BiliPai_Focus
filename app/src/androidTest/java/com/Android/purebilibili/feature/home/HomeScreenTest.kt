@@ -2,11 +2,12 @@ package com.android.purebilibili.feature.home
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.purebilibili.feature.home.components.BottomNavItem
+import com.android.purebilibili.feature.home.components.FrostedBottomBar
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -65,8 +66,8 @@ class HomeScreenTest {
         
         // When: 点击 "热门"
         composeTestRule
-            .onNodeWithContentDescription("热门")
-            .performSemanticsAction(SemanticsActions.OnClick)
+            .onNodeWithText("热门")
+            .performClick()
         
         // Then: 应回调索引 1
         composeTestRule.runOnIdle {
@@ -76,18 +77,36 @@ class HomeScreenTest {
     
     @Test
     fun bottomNavBar_shouldDisplayAllItems() {
-        // Given: 显示底部导航栏
+        val visibleItems = listOf(
+            BottomNavItem.HOME,
+            BottomNavItem.DYNAMIC,
+            BottomNavItem.HISTORY,
+            BottomNavItem.LISTEN_VIDEO,
+            BottomNavItem.PROFILE,
+        )
+        val labels = mapOf(
+            BottomNavItem.HOME.name to "推荐",
+            BottomNavItem.DYNAMIC.name to "动态",
+            BottomNavItem.HISTORY.name to "历史",
+            BottomNavItem.LISTEN_VIDEO.name to "听视频",
+            BottomNavItem.PROFILE.name to "我的",
+        )
+
+        // Give the component stable labels so the assertion is independent of emulator locale.
         composeTestRule.setContent {
-            com.android.purebilibili.feature.home.components.FrostedBottomBar(
+            FrostedBottomBar(
                 currentItem = com.android.purebilibili.feature.home.components.BottomNavItem.HOME,
-                onItemClick = {}
+                onItemClick = {},
+                visibleItems = visibleItems,
+                itemLabels = labels,
+                labelMode = 0,
             )
         }
         
-        // Then: 所有导航项应该可见
-        composeTestRule.onNodeWithContentDescription("首页").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("动态").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("历史记录").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("个人中心").assertIsDisplayed()
+        // The component's current visible surface exposes text labels; content descriptions are
+        // localized separately and are only used in icon-only display mode.
+        labels.values.forEach { label ->
+            composeTestRule.onNodeWithText(label).assertIsDisplayed()
+        }
     }
 }

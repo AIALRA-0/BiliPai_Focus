@@ -91,6 +91,7 @@ report.md
 *.md
 !llms.txt
 !README.md
+!README.en.md
 !README_EN.md
 !AGENTS.md
 !CHANGELOG.md
@@ -101,6 +102,10 @@ docs/*
 !docs/android17-verification.md
 !docs/images/
 !docs/images/screenshot*.png
+!docs/images/focus-0.2.3-alpha.2/
+!docs/images/focus-0.2.3-alpha.2/*.png
+!docs/audits/
+!docs/audits/2026-09-24-focus-alpha2-iteration.md
 !docs/wiki/
 !docs/wiki/*.md
 !docs/wiki/ui-design/

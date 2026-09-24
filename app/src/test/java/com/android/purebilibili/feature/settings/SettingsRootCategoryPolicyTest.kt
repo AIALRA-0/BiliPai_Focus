@@ -46,6 +46,10 @@ class SettingsRootCategoryPolicyTest {
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.HOME_FEED),
         )
         assertEquals(
+            SettingsRootCategory.HOME_RECOMMENDATION,
+            resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.FOCUS_SETTINGS),
+        )
+        assertEquals(
             SettingsRootCategory.PLAYBACK_QUALITY,
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.FULLSCREEN_GESTURE),
         )

@@ -31,7 +31,7 @@
    - 频道发布：直接复制 `更新日志(ChangeLog)` 至版本行（含），再附 versionCode / SHA-256
 
 3. 同步 README  
-   - 文件：`README.md`、`README_EN.md`
+   - 文件：`README.md`、`README.en.md`
    - 要求：同步顶部版本、快速导航、Latest、Roadmap 摘要（尤其“已完成基线”与当前 P0）
 
 4. 同步路线图
@@ -67,7 +67,7 @@
 - [ ] `CHANGELOG.md` 新版本段存在
 - [ ] 更新范围使用上一个 GitHub Release 标签，未把未发布的中间版本误作基准
 - [ ] `README.md` 已同步最新版本与已完成功能
-- [ ] `README_EN.md` 已同步最新版本与 Latest
+- [ ] `README.en.md` 已同步最新版本与 Release 状态；`README_EN.md` 保留兼容入口
 - [ ] `docs/wiki/ROADMAP.md` 已同步当前优先级和完成条件
 - [ ] `docs/wiki/FEATURE_MATRIX.md` 已同步
 - [ ] `docs/wiki/ARCHITECTURE.md` / `QA.md` / `RELEASE_WORKFLOW.md` 已同步

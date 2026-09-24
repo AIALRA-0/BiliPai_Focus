@@ -1,8 +1,8 @@
 # BiliPai 版本规范
 
-最后更新：2026-09-23
+最后更新：2026-09-24
 
-> Focus 分支沿用原项目的版本递增与发布一致性规则，但使用独立的 `-focus.N` 版本名、`com.android.purebilibili.focus` 包名和 `BiliPai-Focus-` 交付文件名前缀。下文的 `0.2.3-beta.7` 和 `BiliPai-` 是上游历史示例，不代表当前 Focus 构建。
+> Focus 使用 `<上游版本>.focus.<本上游版本的 Focus 发布序号>` 版本名、`com.android.purebilibili.focus` 包名和 `BiliPai-Focus-` 交付文件名前缀。上游版本变化时，Focus 序号从 `1` 重新开始。下文的 `0.2.3-beta.7` 和 `BiliPai-` 是上游历史示例，不代表当前 Focus 构建。
 
 ## 当前选择
 
@@ -18,7 +18,7 @@ MAJOR.MINOR.PATCH
 | `MINOR` | 新功能 | 第二位 +1，`PATCH` 归零 |
 | `PATCH` | 修 bug / 小改进 | 第三位 +1 |
 
-当前 Focus 构建：`9.1.1-focus.5` / `versionCode 388`，基于上游 `0.2.3-alpha.2` / `versionCode 387`。
+当前 Focus 构建：`0.2.3-alpha.2.focus.1` / `versionCode 389`，基于上游 `0.2.3-alpha.2` / `versionCode 387`。Focus Release 属于 Focus 稳定更新渠道；上游基础仍为 alpha，不代表上游稳定版。
 
 - **不要**用日期充当 `versionName`（例如 `26.0805.1`）。
 - 应用 ID、签名和用户配置格式不变。
@@ -48,7 +48,7 @@ MAJOR.MINOR.PATCH
    - debug：`versionNameSuffix = "-debug"`  
    - dev：`versionNameSuffix = "-dev"`  
    - smooth：`versionNameSuffix = "-smooth"`
-5. 稳定版 Git 标签：`v<versionName>`，例如 `v0.2.0`。
+5. Focus 稳定更新渠道的 Git 标签：`v<versionName>`，例如 `v0.2.3-alpha.2.focus.1`；GitHub Release 的 `prerelease` 应为 `false`，发布说明须披露上游 alpha 基础。
 
 ## 示例
 
@@ -78,15 +78,15 @@ MAJOR.MINOR.PATCH
 - `build-metadata.json` 中的 `versionName`；
 - 交付 APK 文件名中的版本。
 
-Focus Release APK：`BiliPai-Focus-<versionName>.apk`，例如 `BiliPai-Focus-9.1.1-focus.5.apk`。
+Focus Release APK：`BiliPai-Focus-<versionName>.apk`，例如 `BiliPai-Focus-0.2.3-alpha.2.focus.1.apk`。
 Focus Dev 验证包：`BiliPai-Focus-<versionName>-dev.apk`。
 
 ### 交付路径（不要拿 AGP 默认名）
 
 | 命令 | 用户交付文件 |
 | --- | --- |
-| `./gradlew :app:assembleRelease` | `app/build/outputs/bilipai/release/BiliPai-Focus-9.1.1-focus.5.apk` |
-| `./gradlew :app:assembleDev` | `app/build/outputs/bilipai/dev/BiliPai-Focus-9.1.1-focus.5-dev.apk` |
+| `./gradlew :app:assembleRelease` | `app/build/outputs/bilipai/release/BiliPai-Focus-0.2.3-alpha.2.focus.1.apk` |
+| `./gradlew :app:assembleDev` | `app/build/outputs/bilipai/dev/BiliPai-Focus-0.2.3-alpha.2.focus.1-dev.apk` |
 
 - `app/build/outputs/apk/**/app-*.apk` 或带 `-release` 后缀的中间产物**不是**对外交付名。
 - `assembleRelease` / `assembleDev` 会 `finalizedBy` 导出任务，强制写成 `BiliPai-Focus-` 前缀；命名校验会拒绝 `app-release` 一类默认名。

@@ -378,12 +378,24 @@ internal fun SettingsRootCategoryListSection(
     categories: List<SettingsRootCategory>,
     onCategoryClick: (SettingsRootCategory) -> Unit,
     onDonateClick: () -> Unit,
+    onFocusSettingsClick: () -> Unit,
 ) {
     val siblingTints = remember(categories.size) {
-        resolveSettingsSiblingIconTints(categories.size + 1)
+        resolveSettingsSiblingIconTints(categories.size + 2)
     }
     val donateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DONATE)
+    val focusVisual = rememberSettingsEntryVisual(SettingsSearchTarget.FOCUS_SETTINGS)
     SettingsCardGroup {
+        SettingsRootCategoryRow(
+            title = "Focus 专属",
+            subtitle = "关注分组过滤、相关推荐、搜索历史与历史清空入口",
+            icon = focusVisual.icon,
+            iconPainter = focusVisual.iconResId?.let { painterResource(id = it) },
+            iconTint = siblingTints.first(),
+            iconSizeDp = focusVisual.iconSizeDp,
+            onClick = onFocusSettingsClick,
+        )
+        SettingsAdaptiveDivider()
         categories.forEachIndexed { index, category ->
             val visual = rememberSettingsEntryVisual(category.searchTarget)
             SettingsRootCategoryRow(
@@ -391,7 +403,7 @@ internal fun SettingsRootCategoryListSection(
                 subtitle = category.subtitle,
                 icon = visual.icon,
                 iconPainter = visual.iconResId?.let { painterResource(id = it) },
-                iconTint = siblingTints[index],
+                iconTint = siblingTints[index + 1],
                 iconSizeDp = visual.iconSizeDp,
                 onClick = { onCategoryClick(category) },
             )
@@ -717,12 +729,6 @@ internal fun SettingsRootCategoryContent(
                                         SettingsSearchFocusIds.HOME_OVERVIEW,
                                     ),
                                     onClick = actions.onHomeClick,
-                                ),
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.HOME_FEED,
-                                    title = "Focus 设置",
-                                    value = "首页入口、关注过滤、搜索精简、相关推荐与历史清空",
-                                    onClick = actions.onFocusSettingsClick,
                                 ),
                             ),
                         )

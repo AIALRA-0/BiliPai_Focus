@@ -2,23 +2,22 @@ package com.android.purebilibili.feature.settings
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.android.purebilibili.navigation3.BiliPaiNavKey
 
 class FocusSettingsScreenPolicyTest {
 
     @Test
-    fun `search visibility switches use positive show semantics`() {
+    fun `search hot and discover switches live outside Focus while history remains Focus-only`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt")
             .replace(Regex("\\s+"), " ")
 
-        assertTrue(source.contains("title = \"显示大家都在搜\""))
-        assertTrue(source.contains("checked = settings.showSearchHotSection"))
-        assertTrue(source.contains("SettingsManager.setSearchHotSectionEnabled(context, enabled)"))
-
-        assertTrue(source.contains("title = \"显示搜索发现\""))
-        assertTrue(source.contains("checked = settings.showSearchDiscoverSection"))
-        assertTrue(source.contains("SettingsManager.setSearchDiscoverSectionEnabled(context, enabled)"))
+        assertFalse(source.contains("settings.showSearchHotSection"))
+        assertFalse(source.contains("settings.showSearchDiscoverSection"))
+        assertFalse(source.contains("setSearchHotSectionEnabled"))
+        assertFalse(source.contains("setSearchDiscoverSectionEnabled"))
 
         assertTrue(source.contains("title = \"显示搜索历史\""))
         assertTrue(source.contains("checked = settings.showSearchHistorySection"))
@@ -42,15 +41,17 @@ class FocusSettingsScreenPolicyTest {
         val homeCategory = sections
             .substringAfter("SettingsRootCategory.HOME_RECOMMENDATION -> {")
             .substringBefore("SettingsRootCategory.NAVIGATION_INTERACTION -> {")
-        assertTrue(homeCategory.contains("title = \"Focus 设置\""))
-        assertTrue(homeCategory.contains("onClick = actions.onFocusSettingsClick"))
+        val rootCategoryList = sections.substringAfter("fun SettingsRootCategoryListSection(")
+        assertTrue(rootCategoryList.contains("title = \"Focus 专属\""))
+        assertTrue(rootCategoryList.contains("onClick = onFocusSettingsClick"))
+        assertFalse(homeCategory.contains("onFocusSettingsClick"))
         assertTrue(settingsScreen.contains("onFocusSettingsClick: () -> Unit = {}"))
         assertTrue(settingsScreen.contains("onFocusSettingsClick = onFocusSettingsClick"))
         assertTrue(settingsScreen.contains("onFocusSettingsClick: () -> Unit,"))
     }
 
     @Test
-    fun `focus screen uses adaptive settings components and exposes all stored home tabs`() {
+    fun `focus screen uses adaptive controls only for Focus-owned behavior`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt")
             .replace(Regex("\\s+"), " ")
 
@@ -62,9 +63,18 @@ class FocusSettingsScreenPolicyTest {
         assertFalse(source.contains("IOSGroup"))
         assertFalse(source.contains("IOSSwitchItem"))
         assertFalse(source.contains("IOSDivider"))
-        assertTrue(source.contains("SettingsManager.setFocusHomeAnimeTabVisible(context, enabled)"))
-        assertTrue(source.contains("SettingsManager.setFocusHomeKnowledgeTabVisible(context, enabled)"))
-        assertTrue(source.contains("SettingsManager.setFocusHomeTechTabVisible(context, enabled)"))
+        assertFalse(source.contains("setFocusHome"))
+        assertTrue(source.contains("关注分组过滤"))
+        assertTrue(source.contains("搜索历史"))
+        assertTrue(source.contains("SettingsManager.setFocusHistoryClearAllActionEnabled"))
+    }
+
+    @Test
+    fun `search can open Focus settings directly`() {
+        val results = resolveSettingsSearchResults("Focus 专属")
+        val focusResult = results.first { it.target == SettingsSearchTarget.FOCUS_SETTINGS }
+
+        assertEquals(BiliPaiNavKey.FocusSettings, resolveSettingsSearchNavigation(focusResult))
     }
 
     private fun loadSource(path: String): String {

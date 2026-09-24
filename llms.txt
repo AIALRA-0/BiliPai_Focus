@@ -16,7 +16,7 @@ Current sync target / 当前同步目标：`2026-08-26 · build 0.2.3-beta.13 (3
 | `AI.txt` | compatibility alias / AI 兼容入口 |
 | `docs/wiki/AI.md` | repository path map / 仓库路径导航 |
 | `README.md` | Chinese overview / 中文总览 |
-| `README_EN.md` | English overview / 英文总览 |
+| `README.en.md` | English overview / 英文总览 |
 | `docs/wiki/ROADMAP.md` | current priorities and delivery gates / 当前优先级与交付门槛 |
 | `CHANGELOG.md` | release history / 版本记录 |
 | `docs/wiki/README.md` | wiki index / Wiki 索引 |
@@ -35,7 +35,7 @@ Current sync target / 当前同步目标：`2026-08-26 · build 0.2.3-beta.13 (3
 
 | Task | First File |
 | --- | --- |
-| project overview / 项目总览 | `README.md` or `README_EN.md` |
+| project overview / 项目总览 | `README.md` or `README.en.md` |
 | current priorities / 当前路线图 | `docs/wiki/ROADMAP.md` |
 | latest changes / 最新变更 | `CHANGELOG.md` |
 | architecture / 架构 | `docs/wiki/ARCHITECTURE.md` |
@@ -66,8 +66,8 @@ When sources disagree, use this order.
 4. `llms.txt` 与 `docs/wiki/AI.md`
 5. `AI.txt`
 5. `AI.txt`
-6. `README.md` and `README_EN.md`
-6. `README.md` 与 `README_EN.md`
+6. `README.md` and `README.en.md`
+6. `README.md` 与 `README.en.md`
 
 ## Freshness Notes / 时效注记
 

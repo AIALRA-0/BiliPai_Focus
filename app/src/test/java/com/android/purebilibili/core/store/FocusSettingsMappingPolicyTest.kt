@@ -12,49 +12,43 @@ class FocusSettingsMappingPolicyTest {
     fun emptyPreferences_useExpectedFocusDefaults() {
         val result = SettingsManager.mapFocusSettingsFromPreferences(mutablePreferencesOf())
 
-        assertFalse(result.showHomeRecommendTab)
-        assertTrue(result.showHomeFollowTab)
-        assertFalse(result.showHomePopularTab)
-        assertFalse(result.showHomeLiveTab)
-        assertTrue(result.showHomeAnimeTab)
-        assertFalse(result.showHomeGameTab)
-        assertTrue(result.showHomeKnowledgeTab)
-        assertTrue(result.showHomeTechTab)
-        assertFalse(result.showHomePartitionButton)
         assertTrue(result.enableFollowGroupFiltering)
         assertFalse(result.showVideoRelatedVideosSection)
         assertTrue(result.showHistoryClearAllAction)
-        assertFalse(result.showSearchHotSection)
-        assertFalse(result.showSearchDiscoverSection)
         assertFalse(result.showSearchHistorySection)
     }
 
     @Test
     fun populatedPreferences_mapVideoRelatedSectionVisibility() {
         val prefs = mutablePreferencesOf(
-            booleanPreferencesKey("focus_home_follow_tab_visible") to false,
-            booleanPreferencesKey("focus_home_anime_tab_visible") to false,
-            booleanPreferencesKey("focus_home_knowledge_tab_visible") to false,
-            booleanPreferencesKey("focus_home_tech_tab_visible") to false,
             booleanPreferencesKey("focus_video_related_videos_section_visible") to true,
             booleanPreferencesKey("focus_follow_group_filtering_enabled") to false,
             booleanPreferencesKey("focus_history_clear_all_action_enabled") to false,
-            booleanPreferencesKey("search_hot_section_enabled") to true,
-            booleanPreferencesKey("search_discover_section_enabled") to false,
             booleanPreferencesKey("search_history_section_enabled") to true
         )
 
         val result = SettingsManager.mapFocusSettingsFromPreferences(prefs)
 
-        assertFalse(result.showHomeFollowTab)
-        assertFalse(result.showHomeAnimeTab)
-        assertFalse(result.showHomeKnowledgeTab)
-        assertFalse(result.showHomeTechTab)
         assertFalse(result.enableFollowGroupFiltering)
         assertTrue(result.showVideoRelatedVideosSection)
         assertFalse(result.showHistoryClearAllAction)
-        assertTrue(result.showSearchHotSection)
-        assertFalse(result.showSearchDiscoverSection)
         assertTrue(result.showSearchHistorySection)
+    }
+
+    @Test
+    fun legacyTopTabVisibility_mapsForOneTimeMigrationOnly() {
+        val prefs = mutablePreferencesOf(
+            booleanPreferencesKey("focus_home_follow_tab_visible") to false,
+            booleanPreferencesKey("focus_home_anime_tab_visible") to false,
+            booleanPreferencesKey("focus_home_knowledge_tab_visible") to true,
+            booleanPreferencesKey("focus_home_partition_button_visible") to true,
+        )
+
+        val result = FocusSettingsStore.mapLegacyHomeTabVisibilityFromPreferences(prefs)
+
+        assertFalse(result.showFollow)
+        assertFalse(result.showAnime)
+        assertTrue(result.showKnowledge)
+        assertTrue(result.showPartition)
     }
 }

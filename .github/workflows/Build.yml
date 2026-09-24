@@ -339,7 +339,8 @@ jobs:
           sha256sum *.apk | tee checksums.txt
           VERSION_NAME=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' "${{ github.workspace }}/app/build.gradle.kts" | head -n 1)
           VERSION_CODE=$(sed -n 's/.*versionCode = \([0-9][0-9]*\).*/\1/p' "${{ github.workspace }}/app/build.gradle.kts" | head -n 1)
-          export VERSION_NAME VERSION_CODE
+          GENERATED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          export VERSION_NAME VERSION_CODE GENERATED_AT
           python3 - <<'PY'
           import hashlib
           import json
@@ -379,7 +380,6 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
         env:
           DIST_DIR: ${{ github.workspace }}/build/release-evidence
-          GENERATED_AT: ${{ github.run_started_at }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -426,22 +426,33 @@ jobs:
           BUNDLE_FILE_NAME: build-provenance.intoto.jsonl
           PREDICATE_TYPE: https://slsa.dev/provenance/v1
         run: |
-          if [ -n "$BUNDLE_PATH" ] && [ -f "$BUNDLE_PATH" ]; then
-            cp "$BUNDLE_PATH" "$DIST_DIR/$BUNDLE_FILE_NAME"
+          if [ -z "$ATTESTATION_ID" ] || [ -z "$ATTESTATION_URL" ]; then
+            echo "Artifact attestation did not return its ID and URL." >&2
+            exit 1
           fi
+          if [ -z "$BUNDLE_PATH" ] || [ ! -s "$BUNDLE_PATH" ]; then
+            echo "Artifact attestation bundle is missing or empty." >&2
+            exit 1
+          fi
+          cp "$BUNDLE_PATH" "$DIST_DIR/$BUNDLE_FILE_NAME"
 
           python3 - <<'PY'
+          import hashlib
           import json
           import os
           from pathlib import Path
 
           dist_dir = Path(os.environ["DIST_DIR"])
+          bundle_path = dist_dir / os.environ["BUNDLE_FILE_NAME"]
+          if not bundle_path.is_file() or bundle_path.stat().st_size == 0:
+              raise SystemExit("Copied artifact attestation bundle is missing or empty")
           metadata_path = dist_dir / "verification-metadata.json"
           payload = {
               "schemaVersion": 1,
               "attestationId": os.environ.get("ATTESTATION_ID", ""),
               "attestationUrl": os.environ.get("ATTESTATION_URL", ""),
               "bundleFileName": os.environ.get("BUNDLE_FILE_NAME", ""),
+              "bundleSha256": hashlib.sha256(bundle_path.read_bytes()).hexdigest(),
               "predicateType": os.environ.get("PREDICATE_TYPE", ""),
           }
           metadata_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
@@ -453,12 +464,138 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
           DIST_DIR: ${{ github.workspace }}/build/release-evidence
+          NOTES_FILE: ${{ runner.temp }}/focus-release-notes.md
+          CHANNEL_NOTE: Focus 稳定渠道发布，基于上游 0.2.3-alpha.2。
         run: |
           gh release view "$RELEASE_TAG" --json isDraft >/dev/null 2>&1 || \
             gh release create "$RELEASE_TAG" \
               --draft \
+              --verify-tag \
               --title "$RELEASE_TAG" \
-              --generate-notes
+              --generate-notes \
+              --notes "$CHANNEL_NOTE"
 
-          gh release upload "$RELEASE_TAG" "$DIST_DIR"/* --clobber
-          gh release edit "$RELEASE_TAG" --draft=false
+          gh release view "$RELEASE_TAG" --json body --jq .body > "$NOTES_FILE"
+          NOTE_UPDATED="$(python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          notes_path = Path(os.environ["NOTES_FILE"])
+          marker = os.environ["CHANNEL_NOTE"]
+          current = notes_path.read_text(encoding="utf-8")
+          if marker in current:
+              print("false")
+          else:
+              body = current.strip()
+              notes_path.write_text(
+                  marker + ("\n\n" + body if body else "") + "\n",
+                  encoding="utf-8",
+              )
+              print("true")
+          PY
+          )"
+          if [ "$NOTE_UPDATED" = "true" ]; then
+            gh release edit "$RELEASE_TAG" --notes-file "$NOTES_FILE"
+          fi
+
+          RELEASE_API_PATH="repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}"
+          ASSET_LIST_FILE="$RUNNER_TEMP/focus-release-assets.json"
+          REMOTE_ASSET_DIR="$RUNNER_TEMP/focus-release-asset-verification"
+          mkdir -p "$REMOTE_ASSET_DIR"
+          for local_asset in "$DIST_DIR"/*; do
+            [ -f "$local_asset" ] || continue
+            ASSET_NAME="${local_asset##*/}"
+            gh api "$RELEASE_API_PATH" > "$ASSET_LIST_FILE"
+            ASSET_STATE="$(python3 - "$local_asset" "$ASSET_LIST_FILE" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          local_path = Path(sys.argv[1])
+          release = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+          matches = [asset for asset in release.get("assets", []) if asset.get("name") == local_path.name]
+          if len(matches) > 1:
+              raise SystemExit(f"Release contains duplicate assets named {local_path.name}")
+          if not matches:
+              print("missing")
+              raise SystemExit(0)
+
+          remote = matches[0]
+          local_size = local_path.stat().st_size
+          if int(remote.get("size", -1)) != local_size:
+              raise SystemExit(f"Existing release asset {local_path.name} has a different size; refusing to replace it")
+
+          remote_digest = remote.get("digest")
+          if remote_digest:
+              local_digest = hashlib.sha256(local_path.read_bytes()).hexdigest()
+              if remote_digest.lower() != f"sha256:{local_digest}":
+                  raise SystemExit(f"Existing release asset {local_path.name} has a different SHA-256; refusing to replace it")
+              print("same")
+          else:
+              print("verify-download")
+          PY
+          )"
+            case "$ASSET_STATE" in
+              missing)
+                gh release upload "$RELEASE_TAG" "$local_asset"
+                ;;
+              same)
+                echo "Existing release asset matches; skipping upload: $ASSET_NAME"
+                ;;
+              verify-download)
+                gh release download "$RELEASE_TAG" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --pattern "$ASSET_NAME" \
+                  --dir "$REMOTE_ASSET_DIR"
+                python3 - "$local_asset" "$REMOTE_ASSET_DIR/$ASSET_NAME" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          local_path = Path(sys.argv[1])
+          remote_path = Path(sys.argv[2])
+          if not remote_path.is_file():
+              raise SystemExit(f"Could not download existing release asset {remote_path.name} for verification")
+          if local_path.stat().st_size != remote_path.stat().st_size:
+              raise SystemExit(f"Existing release asset {local_path.name} has a different size; refusing to replace it")
+
+          def sha256(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          if sha256(local_path) != sha256(remote_path):
+              raise SystemExit(f"Existing release asset {local_path.name} has a different SHA-256; refusing to replace it")
+          PY
+                echo "Existing release asset matches; skipping upload: $ASSET_NAME"
+                ;;
+              *)
+                echo "Unexpected release asset state '$ASSET_STATE' for $ASSET_NAME." >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          RELEASE_PRERELEASE="$(gh api "$RELEASE_API_PATH" --jq .prerelease)"
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            RELEASE_ID="$(gh api "$RELEASE_API_PATH" --jq .id)"
+            RELEASE_PRERELEASE="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+              --method PATCH \
+              -F prerelease=false \
+              --jq .prerelease)"
+          fi
+          if [ "$RELEASE_PRERELEASE" != "false" ]; then
+            echo "Focus releases must be published with prerelease=false." >&2
+            exit 1
+          fi
+
+          RELEASE_IS_DRAFT="$(gh api "$RELEASE_API_PATH" --jq .draft)"
+          if [ "$RELEASE_IS_DRAFT" = "true" ]; then
+            gh release edit "$RELEASE_TAG" --draft=false
+          elif [ "$RELEASE_IS_DRAFT" != "false" ]; then
+            echo "Could not confirm whether the Focus release is still a draft." >&2
+            exit 1
+          fi

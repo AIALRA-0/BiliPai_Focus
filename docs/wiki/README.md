@@ -21,7 +21,7 @@
 每次 Release 至少同步以下内容：
 
 1. `CHANGELOG.md` 新版本段落
-2. `README.md` / `README_EN.md` 的 Latest 与 Roadmap 摘要
+2. `README.md` / `README.en.md` 的版本状态与 Roadmap 入口
 3. `docs/wiki/ROADMAP.md` 的当前优先级、完成条件与版本基线
 4. 本 Wiki 的功能矩阵、架构、QA 与发布流程
 5. 若 `app/build.gradle.kts` 的 `versionName` 已领先 `CHANGELOG.md`，需先补齐发布文档或明确说明仍是主线未同步状态

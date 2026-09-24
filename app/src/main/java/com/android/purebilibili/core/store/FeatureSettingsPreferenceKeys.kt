@@ -13,8 +13,10 @@ internal val KEY_HIDE_TOP_TABS = booleanPreferencesKey("hide_top_tabs")
 internal val KEY_HOME_TOP_RIGHT_ACTION = intPreferencesKey("home_top_right_action")
 internal val KEY_TOP_TAB_ORDER = stringPreferencesKey("top_tab_order")
 internal val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
+internal val KEY_FOCUS_HOME_TOP_TABS_MIGRATION_VERSION = intPreferencesKey("focus_home_top_tabs_migration_version")
 internal val KEY_HOME_TOP_LAYOUT_ORDER = intPreferencesKey("home_top_layout_order")
 
+// Retained for the one-time migration from the old duplicate Focus visibility layer.
 internal val KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE = booleanPreferencesKey("focus_home_recommend_tab_visible")
 internal val KEY_FOCUS_HOME_FOLLOW_TAB_VISIBLE = booleanPreferencesKey("focus_home_follow_tab_visible")
 internal val KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE = booleanPreferencesKey("focus_home_popular_tab_visible")
@@ -28,7 +30,7 @@ internal val KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED = booleanPreferencesKey("f
 internal val KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE = booleanPreferencesKey("focus_video_related_videos_section_visible")
 internal val KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED = booleanPreferencesKey("focus_history_clear_all_action_enabled")
 
-internal const val DEFAULT_TOP_TAB_ORDER = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
-internal const val DEFAULT_TOP_TAB_VISIBLE = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
+internal const val DEFAULT_TOP_TAB_ORDER = "FOLLOW,SUBSCRIPTIONS"
+internal const val DEFAULT_TOP_TAB_VISIBLE = "FOLLOW,SUBSCRIPTIONS"
 internal const val DEFAULT_TOP_TAB_LABEL_MODE = 2
 internal const val MAX_HOME_TOP_TABS = 5

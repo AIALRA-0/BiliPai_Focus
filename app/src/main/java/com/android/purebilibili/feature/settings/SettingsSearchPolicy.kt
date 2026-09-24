@@ -5,6 +5,7 @@ import com.android.purebilibili.core.util.PinyinUtils
 enum class SettingsSearchTarget {
     INTERFACE_THEME,
     HOME_FEED,
+    FOCUS_SETTINGS,
     NAVIGATION,
     PLAYBACK_QUALITY,
     FULLSCREEN_GESTURE,
@@ -71,6 +72,13 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = "首页展示、推荐流、刷新数量、动态栏位、动态详情图片展示、番剧影视时间表、全局顶栏显示与首页壁纸",
         section = "设置",
         aliases = listOf("首页", "推荐", "推荐流", "首页展示", "首页壁纸", "壁纸效果", "刷新数量", "动态栏位", "动态顶栏", "追番时间表", "影视时间表", "电影时间线", "展示番剧影视时间表", "首页顶栏收起", "动态图片", "动态详情图片", "缩略图", "展开大图", "展开图片", "图文动态", "图片展示")
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.FOCUS_SETTINGS,
+        title = "Focus 专属设置",
+        subtitle = "关注分组过滤、相关推荐、搜索历史与历史清空入口",
+        section = "Focus 专属",
+        aliases = listOf("focus", "focus设置", "focus专属", "专属设置", "关注分组过滤", "相关推荐", "清空历史入口")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.NAVIGATION,

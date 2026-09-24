@@ -104,7 +104,8 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
     SettingsSearchTarget.FULLSCREEN_GESTURE,
     SettingsSearchTarget.INTERACTION_COMMENT -> SettingsRootCategory.PLAYBACK_QUALITY
 
-    SettingsSearchTarget.HOME_FEED -> SettingsRootCategory.HOME_RECOMMENDATION
+    SettingsSearchTarget.HOME_FEED,
+    SettingsSearchTarget.FOCUS_SETTINGS -> SettingsRootCategory.HOME_RECOMMENDATION
 
     SettingsSearchTarget.ANIMATION,
     SettingsSearchTarget.NAVIGATION,

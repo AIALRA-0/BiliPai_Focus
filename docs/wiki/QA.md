@@ -178,7 +178,7 @@ UI 主题、组件、页面状态和设备宽度的专项矩阵见 [UI 设计规
 
 发布前检查：
 1. 正式发布时，`app/build.gradle.kts` 的 `versionCode` / `versionName` 必须与新增的 `CHANGELOG.md` 版本段一致；开发分支允许版本号领先，但 README/Wiki 必须明确区分开发构建与最近公开版本。
-2. `README.md`、`README_EN.md` 的版本徽章、最近更新和截图引用可在 GitHub 上渲染。
+2. `README.md`、`README.en.md` 的版本状态、更新说明和截图引用可在 GitHub 上渲染。
 3. `docs/wiki/ROADMAP.md`、`docs/wiki/FEATURE_MATRIX.md`、`docs/wiki/ARCHITECTURE.md`、`docs/wiki/RELEASE_WORKFLOW.md` 如涉及同一能力，应同步更新或明确滞后。
 4. 新增权限、插件能力、遥测行为、下载/安装流程变化时，必须同步更新本 QA 的隐私专项。
 5. Release 文案不要只写最后一个修复，要覆盖本次从上个版本到当前的用户可感知变更。

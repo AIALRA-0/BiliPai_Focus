@@ -1387,6 +1387,7 @@ private fun MobileSettingsNavLayout(
                             categories = sectionOrder,
                             onCategoryClick = onCategoryClick,
                             onDonateClick = onDonateClick,
+                            onFocusSettingsClick = onFocusSettingsClick,
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))

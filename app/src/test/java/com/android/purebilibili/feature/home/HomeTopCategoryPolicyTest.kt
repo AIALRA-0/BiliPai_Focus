@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.R
-import com.android.purebilibili.core.store.FocusSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -244,24 +243,16 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `focus category filtering preserves upstream subscription tab`() {
-        val subscriptionsOnly = listOf(HomeTopTabEntry.Subscriptions)
-
+    fun `unified selection does not apply legacy Focus filters`() {
         assertEquals(
-            subscriptionsOnly,
-            resolveFocusHomeTopTabEntries(
-                entries = subscriptionsOnly,
-                focusSettings = FocusSettings(
-                    showHomeRecommendTab = false,
-                    showHomeFollowTab = false,
-                    showHomePopularTab = false,
-                    showHomeLiveTab = false,
-                    showHomeAnimeTab = false,
-                    showHomeGameTab = false,
-                    showHomeKnowledgeTab = false,
-                    showHomeTechTab = false,
-                    showHomePartitionButton = false,
-                ),
+            listOf(
+                HomeTopTabEntry.Category(HomeCategory.ANIME),
+                HomeTopTabEntry.Partition,
+                HomeTopTabEntry.Subscriptions,
+            ),
+            resolveHomeTopTabEntries(
+                customOrderIds = listOf("ANIME", "PARTITION", "SUBSCRIPTIONS"),
+                visibleIds = setOf("ANIME", "PARTITION", "SUBSCRIPTIONS"),
             ),
         )
     }

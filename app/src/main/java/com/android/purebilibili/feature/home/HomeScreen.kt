@@ -450,10 +450,7 @@ fun HomeScreen(
     val homeTopTabSettings by SettingsManager.getHomeTopTabSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeTopTabSettings(),
         context = kotlin.coroutines.EmptyCoroutineContext
     )
-    val focusSettings by SettingsManager.getFocusSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.FocusSettings(),
-        context = kotlin.coroutines.EmptyCoroutineContext
-    )
-    // Focus controls its category and partition tabs; plugin subscriptions keep upstream enablement rules.
+    // Top-tab order and visibility are stored only in the upstream navigation settings.
     val subscriptionRevision by com.android.purebilibili.core.plugin.feed.SubscriptionFeedStore.revision
         .collectAsStateWithLifecycle()
     val installedPlugins by com.android.purebilibili.core.plugin.PluginManager.pluginsFlow
@@ -476,14 +473,13 @@ fun HomeScreen(
             )
         }
     }
-    val topTabEntries = remember(homeTopTabSettings, focusSettings, subscriptionFeedsEnabled) {
+    val topTabEntries = remember(homeTopTabSettings, subscriptionFeedsEnabled) {
         val configuredEntries = resolveHomeTopTabEntries(
             customOrderIds = homeTopTabSettings.orderIds,
             visibleIds = homeTopTabSettings.visibleIds,
         )
-        val focusEntries = resolveFocusHomeTopTabEntries(configuredEntries, focusSettings)
         ensureSubscriptionHomeTab(
-            entries = focusEntries,
+            entries = configuredEntries,
             feedsEnabled = subscriptionFeedsEnabled,
             visibleIds = homeTopTabSettings.visibleIds,
         )

@@ -12,7 +12,7 @@ Current sync target / 当前同步目标：`2026-08-28 · build 0.2.3-beta.15 (3
 
 1. `llms.txt`
 2. `docs/wiki/AI.md`
-3. `README.md` / `README_EN.md`
+3. `README.md` / `README.en.md`（`README_EN.md` 保留旧链接兼容）
 4. `docs/wiki/ROADMAP.md`
 5. `docs/wiki/FEATURE_MATRIX.md`
 6. `CHANGELOG.md` + source code verification
