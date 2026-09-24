@@ -1,0 +1,23 @@
+README.md
+  s_71db67cf8751ad::t_f7e143050d1b56 5,174,176
+docs/audits/2026-09-24-focus-alpha2-iteration.md
+  s_71db67cf8751ad::t_f7e143050d1b56 8,17-19,28-31,38,42-44
+README.en.md
+  s_71db67cf8751ad::t_f7e143050d1b56 5,134,136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "060a5eb20ab08d4cea14c64906e5e509d02eda45",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
