@@ -12,6 +12,16 @@ on:
         options:
           - 'dev'
           - 'release'
+      release_tag:
+        type: string
+        description: '仅用于补发已存在的受保护标签；留空为普通构建'
+        required: false
+        default: ''
+      expected_commit_sha:
+        type: string
+        description: '补发标签必须指向的完整提交 SHA'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -27,6 +37,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.inputs.release_tag || github.sha }}
           persist-credentials: false
 
       - name: Checkout pinned Miuix source
@@ -104,12 +115,15 @@ jobs:
       contents: read
     outputs:
       build_type: ${{ steps.set_build_type.outputs.build_type }}
+      release_tag: ${{ steps.set_build_type.outputs.release_tag }}
+      release_eligible: ${{ steps.set_build_type.outputs.release_eligible }}
     env:
       NATIVE_TARGET: "arm64-v8a"
     steps:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.inputs.release_tag || github.sha }}
           persist-credentials: false
 
       - name: Checkout pinned Miuix source
@@ -150,6 +164,8 @@ jobs:
         id: set_build_type
         env:
           REQUESTED_BUILD_TYPE: ${{ github.event.inputs.build_type }}
+          RECOVERY_TAG: ${{ github.event.inputs.release_tag }}
+          EXPECTED_COMMIT_SHA: ${{ github.event.inputs.expected_commit_sha }}
           REF_PROTECTED: ${{ github.ref_protected }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -160,13 +176,48 @@ jobs:
             BUILD_TYPE="dev"
           fi
 
-          if [ "$BUILD_TYPE" = "release" ] && \
-             { [[ "${GITHUB_REF}" != refs/tags/v* ]] || [ "$REF_PROTECTED" != "true" ]; }; then
-            echo "Release builds require a protected refs/tags/v* ref." >&2
-            exit 1
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          SOURCE_REF="$GITHUB_REF"
+          RELEASE_TAG=""
+          RELEASE_ELIGIBLE="false"
+          if [ -n "$RECOVERY_TAG" ]; then
+            if [ "$BUILD_TYPE" != "release" ] ||
+               [[ ! "$RECOVERY_TAG" =~ ^v[0-9A-Za-z.+-]+$ ]] ||
+               [[ ! "$EXPECTED_COMMIT_SHA" =~ ^[[:xdigit:]]{40}$ ]] ||
+               [ "$SOURCE_SHA" != "$EXPECTED_COMMIT_SHA" ]; then
+              echo "Recovery requires release mode, a version tag, and the exact source commit." >&2
+              exit 1
+            fi
+            VERSION_NAME="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+            if [ "$RECOVERY_TAG" != "v${VERSION_NAME}" ]; then
+              echo "Recovery tag does not match the APK version name." >&2
+              exit 1
+            fi
+            REMOTE_TAG_SHA="$(git ls-remote origin "refs/tags/${RECOVERY_TAG}^{}" | awk '{print $1}')"
+            if [ -z "$REMOTE_TAG_SHA" ]; then
+              REMOTE_TAG_SHA="$(git ls-remote origin "refs/tags/${RECOVERY_TAG}" | awk '{print $1}')"
+            fi
+            if [ "$REMOTE_TAG_SHA" != "$SOURCE_SHA" ]; then
+              echo "Recovery tag no longer points to the expected source commit." >&2
+              exit 1
+            fi
+            SOURCE_REF="refs/tags/$RECOVERY_TAG"
+            RELEASE_TAG="$RECOVERY_TAG"
+            RELEASE_ELIGIBLE="true"
+          elif [ "$BUILD_TYPE" = "release" ]; then
+            if [[ "$GITHUB_REF" != refs/tags/v* ]] || [ "$REF_PROTECTED" != "true" ]; then
+              echo "Release builds require a protected refs/tags/v* ref." >&2
+              exit 1
+            fi
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+            RELEASE_ELIGIBLE="true"
           fi
 
           echo "build_type=$BUILD_TYPE" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "source_ref=$SOURCE_REF" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_eligible=$RELEASE_ELIGIBLE" >> "$GITHUB_OUTPUT"
           echo "构建类型已设置"
 
       - name: Set up Java
@@ -189,7 +240,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Configure optional Firebase services
-        if: startsWith(github.ref, 'refs/tags/v') && github.ref_protected && steps.set_build_type.outputs.build_type == 'release'
+        if: steps.set_build_type.outputs.release_eligible == 'true'
         env:
           FCM_CONFIG_BASE64: ${{ secrets.FCM }}
         run: |
@@ -200,7 +251,7 @@ jobs:
           fi
 
       - name: Prepare Focus release signing key
-        if: steps.set_build_type.outputs.build_type == 'release' && startsWith(github.ref, 'refs/tags/v') && github.ref_protected
+        if: steps.set_build_type.outputs.release_eligible == 'true'
         env:
           FOCUS_RELEASE_KEYSTORE_B64: ${{ secrets.FOCUS_RELEASE_KEYSTORE_B64 }}
           FOCUS_RELEASE_STORE_PASSWORD: ${{ secrets.FOCUS_RELEASE_STORE_PASSWORD }}
@@ -250,11 +301,11 @@ jobs:
 
       - name: Build APK
         env:
-          BILI_BUILD_COMMIT_SHA: ${{ github.sha }}
-          BILI_BUILD_GIT_REF: ${{ github.ref }}
+          BILI_BUILD_COMMIT_SHA: ${{ steps.set_build_type.outputs.source_sha }}
+          BILI_BUILD_GIT_REF: ${{ steps.set_build_type.outputs.source_ref }}
           BILI_BUILD_WORKFLOW_RUN_ID: ${{ github.run_id }}
           BILI_BUILD_WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BILI_BUILD_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          BILI_BUILD_RELEASE_TAG: ${{ steps.set_build_type.outputs.release_tag }}
         run: |
           COMMON_ARGS=(
             "-Pbili.miuix.source=${GITHUB_WORKSPACE}/.ci/miuix"
@@ -274,7 +325,7 @@ jobs:
         if: steps.set_build_type.outputs.build_type == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-          CURRENT_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          CURRENT_RELEASE_TAG: ${{ steps.set_build_type.outputs.release_tag }}
         run: |
           set -euo pipefail
           BASELINE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" | python3 -c '
@@ -287,7 +338,7 @@ jobs:
               if any(asset.get("name", "").lower().endswith(".apk") for asset in release.get("assets", [])):
                   print(release.get("tag_name", ""))
                   break
-          ')
+          ')"
           if [ -z "$BASELINE_TAG" ]; then
             echo "No published Focus APK is available to verify upgrade signing continuity."
             exit 1
@@ -355,8 +406,8 @@ jobs:
               "appId": "com.android.purebilibili.focus",
               "versionName": os.environ["VERSION_NAME"],
               "versionCode": int(os.environ["VERSION_CODE"]),
-              "gitCommitSha": os.environ["GITHUB_SHA"],
-              "gitRef": os.environ["GITHUB_REF"],
+              "gitCommitSha": os.environ["SOURCE_COMMIT_SHA"],
+              "gitRef": os.environ["SOURCE_GIT_REF"],
               "workflowRunId": os.environ["GITHUB_RUN_ID"],
               "workflowRunUrl": os.environ["WORKFLOW_RUN_URL"],
               "releaseTag": os.environ["RELEASE_TAG"],
@@ -380,11 +431,11 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
         env:
           DIST_DIR: ${{ github.workspace }}/build/release-evidence
-          GITHUB_SHA: ${{ github.sha }}
-          GITHUB_REF: ${{ github.ref }}
+          SOURCE_COMMIT_SHA: ${{ steps.set_build_type.outputs.source_sha }}
+          SOURCE_GIT_REF: ${{ steps.set_build_type.outputs.source_ref }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          RELEASE_TAG: ${{ steps.set_build_type.outputs.release_tag }}
 
       - name: Upload Build Artifacts
         if: env.GITHUB_APK_DISTRIBUTION_ENABLED == 'true'
@@ -396,7 +447,7 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    if: startsWith(github.ref, 'refs/tags/v') && github.ref_protected && needs.build.outputs.build_type == 'release'
+    if: needs.build.outputs.release_eligible == 'true' && needs.build.outputs.build_type == 'release'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -462,7 +513,7 @@ jobs:
         if: env.GITHUB_APK_DISTRIBUTION_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
           DIST_DIR: ${{ github.workspace }}/build/release-evidence
           NOTES_FILE: ${{ runner.temp }}/focus-release-notes.md
           CHANNEL_NOTE: Focus 稳定渠道发布，基于上游 0.2.3-alpha.2。
