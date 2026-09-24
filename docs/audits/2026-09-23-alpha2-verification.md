@@ -42,7 +42,7 @@
 - 此次实测暴露真正的 Focus 过滤回归：隐藏测试组后，动态侧栏布局仍展示该 UP 的动态正文。源码核对发现 `DynamicScreen.kt` 的 SIDEBAR/DRAWER 分页构造仅执行通用用户筛选，漏调 Focus 分组过滤；横向布局已调用。已补齐侧栏页的配置/开关键与过滤，增加回归断言，最终包尚待设备复测。复现截图 `.local/dynamic-hidden-sidebar-before-fix.png`。
 - 另一轮主代码与 AndroidTest 源码均编译通过，全量单测 8,325 项仅 1 项旧平板结构断言失败，已按新增评论偏好 Flow 修正。随后缓存延迟初始化与播放器速度读取修复的首轮全量单测为 8,327 项、3 项失败：两项旧 MiniPlayer 生命周期测试未设置 Main 测试调度器，导致异步初始化在纯 JVM 测试环境抛错；第三项是前两项遗留异常污染的 WatchLater 测试。测试调度器/关闭清理修复后，定向回归通过，最新全量复测为 1,160 个测试类、8,328 项、0 failure、0 error、0 skipped；AndroidTest 源码编译也通过。日志 `.local/verification-alpha2m.log`。
 
-未验证的项目仍包括：性能及错误反馈修复后的最终 Debug/Release 包、最终包覆盖升级、登录态特色功能逐项回归、API 36 最终包设备回归、旧客户端发现及下载更新。
+截至后续收口，最终 Debug/Release 构建与 API 31 旧版覆盖升级已有验证，见下节。登录态最终包验证已覆盖登录态、分组状态持久化和隐藏动态过滤；动态侧栏正向展示及 Seek 后播放恢复仅部分验证。API 36 最终包设备回归与旧客户端发现、下载、安装更新仍未验证。
 
 ## 2026-09-23 发布收口增量
 
@@ -51,6 +51,13 @@
 - `:app:connectedDebugAndroidTest` 在 API 31 模拟器运行 63 项，原始结果为 16 failure、3 skip、0 error，日志 `.local/connected-debug-alpha2-ultimate.log`，不能称为全绿。三项跳过因用例要求 API 33。失败含不适用的基准计时断言、Compose 夹具选择器和重复 `setContent` 等；没有从该轮找到应用 Crash/ANR。设备套件的失败需与产品验证分别记录。
 - 三类可能影响体验的用例已单独重跑定位：MIUIX 上下滚动原先从顶栏 inset 起手，改从卡片区起手后单列、双列、主题切换 3/3 通过（`.local/isolated-scroll-interior-final.txt`）；懒加载切列期间第四张卡合法离屏，改在动画完成后核对四张卡，3/3 通过（`.local/isolated-grid-final.txt`）；弹幕弹窗在异步请求焦点完成后核对，1/1 通过（`.local/isolated-danmaku-composer-final.txt`）。三项调整都保留原有用户行为断言。
 - 三列瀑布流手动锚点测试在原套件及独立复测仍失败；现行生产路径按上游 `a5fb57137` 仅对单列列表启用手动锚点，以避免多列重排跳转，而该旧测试对多列强行启用手动锚点。没有据此修改产品逻辑，也不将失败写为通过；独立日志 `.local/isolated-waterfall-alpha2.txt`。
-- GitHub Focus 仓库此前没有 Tag 规则，CI 新版 Release 工作流要求受保护的 `v*` Tag。已创建并远端读回只匹配 `refs/tags/v*` 的 active 规则集 ID `23918149`，限制创建、更新、删除，管理员可执行发布；此时尚未推送新版代码、Tag 或 APK。
+- GitHub Focus 仓库此前没有 Tag 规则，CI 新版 Release 工作流要求受保护的 `v*` Tag。已创建并远端读回只匹配 `refs/tags/v*` 的 active 规则集 ID `23918149`，限制创建、更新、删除，管理员可执行发布；同步分支已推送，Tag 与 APK 尚未发布。
 
-最终签名 Release、旧版升级、登录态特色功能逐项回归以及旧客户端完整更新链路仍需后续结果填入，不能据本节视为通过。
+## 最终签名 Release 与覆盖升级核验
+
+- 最终源码提交为 `09eb220aeb93efcc4e980b410870dc6834e4ada8`，合入上游 `6d5496b44abb832309d762adb991e9d6b2270ec5`。最终签名 Release 构建通过，日志 `.local/release-alpha2-final-signed.log`；产物 `app/build/outputs/bilipai/release/BiliPai-Focus-9.1.1-focus.5.apk`，SHA-256：`0E9528C62CD92411B4DDF6B0A8BB31278FA30A8635890C812EB5D85A4D276291`。包名为 `com.android.purebilibili.focus`，版本名 `9.1.1-focus.5`，版本码 388，`targetSdk=37`，ABI 为 `arm64-v8a`；APK 签名验证通过，证书 SHA-256 `a2f021866ee4e5f8f63df109e3369be3ceefa98fee3485e4d583e4a24f07f6bc` 与旧版 `.4` 一致。
+- 使用 API 31 模拟器的旧版快照进行实际 `adb install -r` 覆盖升级：旧版 `.4`／码 226 升至 `.5`／码 388，安装成功，`firstInstallTime` 保持 `2026-06-06 09:55:25`。升级后 Room `user_version=6`；`search_history` 与 `blocked_ups` 各仍有 1 行，旧探针 `FocusUpgradeProbe0923` 和 UID `998877665544` 均存在。Focus 设置仍为 Recommend OFF、Following/Popular ON、Live/Game/Partition OFF。新版冷启动 `am start -W` 为 3637 ms。此证据证明本机签名 APK 的安装器覆盖升级和数据迁移，不代表 GitHub 更新器链路已验证。
+- 登录态模拟器 `emulator-5556` 已覆盖安装签名 `.5`。B 站登录态保持有效；`FocusQA0923` 分组、成员分配和隐藏设置在强停冷启动后仍保留。隐藏该分组时，动态侧栏中该 UP 的内容未出现，验证了隐藏过滤；切为可见后分组内能看到该 UP，但侧栏中正向显示其动态内容未能确认，记为部分验证。测试结束已恢复原隐藏状态。
+- 同一登录态环境中视频详情可打开并暂停；播放位置从约 3 秒 Seek 到约 20 秒后持续缓冲，未见 ExoPlayer 或 AndroidRuntime 错误。Seek 后恢复播放未验证通过，记为部分验证，不能据此声称播放/Seek 全链路正常。
+- 本节收口时，分支 CI run `35959218778` 的 `quality-guards` 成功、`build` 仍在运行。GitHub Tag/Release 尚未发布，因此旧客户端通过 GitHub 检查更新、下载、安装和启动的端到端链路仍为 **待验证**。不能把本机 `adb install -r` 结果写成更新器验收通过。
+- 最终测试状态：`:app:testDebugUnitTest` 为 8,334 项通过；`:app:lintDebug` 为 0 error、591 warning、2 hint。最终干净 Debug 与 AndroidTest 构建通过。API 31 `:app:connectedDebugAndroidTest` 共 63 项，16 fail、3 skip；滚动 3/3、网格切换 3/3、弹幕输入 1/1 的独立复测通过。三列瀑布流手动锚点用例仍失败，原因和生产路径边界见前节；其余 instrumentation 失败没有被归并为通过。
