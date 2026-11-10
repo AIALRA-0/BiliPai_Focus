@@ -1,0 +1,21 @@
+app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt
+  s_71db67cf8751ad::t_f74d27f14d463a 2137-2140
+app/src/main/java/com/android/purebilibili/feature/settings/screen/BottomBarSettingsScreen.kt
+  s_71db67cf8751ad::t_49644632200ad3 686
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9fc0c7447978a6d30c110a547dcf3318525bf3b2",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
