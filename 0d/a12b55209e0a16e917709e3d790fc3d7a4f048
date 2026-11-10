@@ -1,0 +1,49 @@
+app/src/test/java/com/android/purebilibili/feature/video/viewmodel/VideoCommentThreadRecoveryTest.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 214,397
+app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoCommentViewModel.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 795,838,857,864,877,937,1034,1052,1113,1303,1306,1676
+CHANGELOG.md
+  s_71db67cf8751ad::t_f0092eff94e5ee 43-45
+  s_71db67cf8751ad::t_745d4139618c92 3,5
+  s_71db67cf8751ad::t_cbb6a6068662e4 46
+app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 1770,1781,1792,2121,2137,2245,2250,2657
+app/src/test/java/com/android/purebilibili/feature/video/viewmodel/SubReplySortPolicyTest.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 222
+app/src/main/java/com/android/purebilibili/feature/comment/CommentDetailViewModel.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 18,110-111,137,139,168-169,210,220-223,226-227,229-233,239-254,291-292,296,318,328-331,342-343,353-389,393-476,614
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 566,820
+app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentSheet.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 597
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailComponents.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 350,584,587,597,600,613,615,665,672,690-691,736,744,746,872-876,886,903,1014,1043
+app/src/main/java/com/android/purebilibili/feature/video/viewmodel/SubReplySortPolicy.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 31-34,105
+app/src/androidTest/java/com/Android/purebilibili/feature/video/ui/components/SubReplyDetailUiRegressionTest.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 79,131,654
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplySheet.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 114
+app/src/test/java/com/android/purebilibili/feature/comment/CommentDetailReplyVisibilityTest.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 60-62,96,131,287-294,297,300-301,303,305
+app/src/main/java/com/android/purebilibili/feature/comment/CommentDetailScreen.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 123,162,170,184
+app/src/test/java/com/android/purebilibili/feature/dynamic/DynamicCommentSendViewModelTest.kt
+  s_71db67cf8751ad::t_f0092eff94e5ee 1066
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0da12b55209e0a16e917709e3d790fc3d7a4f048",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
