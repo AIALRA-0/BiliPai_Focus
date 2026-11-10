@@ -93,6 +93,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     hazeState: HazeState,
     isTransitionFinished: Boolean,
     relatedContentReady: Boolean = true,
+    relatedVideosVisible: Boolean,
     isLeaving: Boolean,
     rootTransitionOwnsContentAlpha: Boolean,
     keepContentVisibleAfterBackPreview: Boolean = false,
@@ -292,6 +293,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                         pagerState = videoContentPagerState,
                                         relatedVideos = success.related,
                                         relatedLoadState = success.relatedLoadState,
+                                        relatedVideosVisible = relatedVideosVisible,
                                         replies = commentState.replies,
                                         replyCount = commentState.resolveReplyCount(
                                             subject = CommentSubjectKey(engagementSuccess.info.aid),

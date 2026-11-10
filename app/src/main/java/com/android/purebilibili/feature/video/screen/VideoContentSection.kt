@@ -462,6 +462,7 @@ internal class VideoContentData(
     val followingMids: Set<Long>,
     val videoTags: List<VideoTag>,
     val relatedLoadState: VideoPlaybackUiState.RelatedLoadState = VideoPlaybackUiState.RelatedLoadState.READY,
+    val relatedVideosVisible: Boolean = true,
 )
 
 internal class VideoContentEngagementState(
@@ -601,6 +602,7 @@ internal fun VideoContentSection(
     val nativePagerDragHeld by pagerState.interactionSource.collectIsDraggedAsState()
     val customPagerDragHeld by contentPagerInteractions.collectIsDraggedAsState()
     val relatedVideos = data.relatedVideos
+    val relatedVideosVisible = data.relatedVideosVisible
     val replies = data.replies
     val replyCount = data.replyCount
     val emoteMap = data.emoteMap
@@ -968,6 +970,7 @@ internal fun VideoContentSection(
                         modifier = Modifier,
                         info = info,
                         relatedVideos = relatedVideos,
+                        relatedVideosVisible = relatedVideosVisible,
                         relatedLoadState = data.relatedLoadState,
                         relatedContentReady = presentationState.relatedContentReady,
                         currentPageIndex = currentPageIndex,
@@ -1373,6 +1376,7 @@ private fun VideoIntroTab(
     modifier: Modifier,
     info: ViewInfo,
     relatedVideos: List<RelatedVideo>,
+    relatedVideosVisible: Boolean,
     relatedLoadState: VideoPlaybackUiState.RelatedLoadState,
     relatedContentReady: Boolean = true,
     currentPageIndex: Int,
@@ -1493,67 +1497,69 @@ private fun VideoIntroTab(
                 animateVideoDetailLayout = animateVideoDetailLayout
             )
         }
-        if (visibleRelatedVideos.isNotEmpty()) {
-            item(key = "video_related_header", contentType = "video_related_header") {
-                com.android.purebilibili.feature.video.ui.components.RelatedVideosHeader()
-            }
-        } else if (!relatedContentReady || relatedLoadState == VideoPlaybackUiState.RelatedLoadState.LOADING) {
-            // 首批推荐结果未到时先占住卡片槽位，避免列表到达后整体跳动。
-            items(count = com.android.purebilibili.feature.video.ui.components.RELATED_VIDEO_SKELETON_ROW_COUNT, key = { "video_related_loading_$it" }, contentType = { "video_related_loading" }) {
-                com.android.purebilibili.feature.video.ui.components.RelatedVideoGridRowSkeleton(
-                    cardLayout = relatedVideoCardLayout,
-                    cardPresentation = cardPresentation,
-                )
-            }
-        } else {
-            item(key = "video_related_empty") {
-                AppText(
-                    if (relatedLoadState == VideoPlaybackUiState.RelatedLoadState.FAILED) "相关推荐加载失败" else "暂无相关推荐",
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
-        }
-
-        itemsIndexed(
-            items = relatedRows,
-            key = { rowIndex, row ->
-                val first = row.firstOrNull()
-                resolveIndexedVideoLazyKey(
-                    namespace = "video_related_row",
-                    index = rowIndex,
-                    bvid = first?.bvid.orEmpty(),
-                    aid = first?.aid ?: 0L,
-                    cid = first?.cid ?: 0L
-                )
-            },
-            contentType = { _, _ -> "video_related_row" },
-        ) { _, row ->
-            if (!relatedContentReady) {
-                com.android.purebilibili.feature.video.ui.components.RelatedVideoGridRowSkeleton(
-                    cardLayout = relatedVideoCardLayout,
-                    cardPresentation = cardPresentation,
-                )
-            } else CompositionLocalProvider(
-                LocalVideoCardSharedElementSourceRoute provides
-                    com.android.purebilibili.feature.video.ui.components.resolveRelatedVideoCardHostRoute(
-                        LocalVideoCardSharedElementSourceRoute.current, info.bvid,
+        if (relatedVideosVisible) {
+            if (visibleRelatedVideos.isNotEmpty()) {
+                item(key = "video_related_header", contentType = "video_related_header") {
+                    com.android.purebilibili.feature.video.ui.components.RelatedVideosHeader()
+                }
+            } else if (!relatedContentReady || relatedLoadState == VideoPlaybackUiState.RelatedLoadState.LOADING) {
+                // 首批推荐结果未到时先占住卡片槽位，避免列表到达后整体跳动。
+                items(count = com.android.purebilibili.feature.video.ui.components.RELATED_VIDEO_SKELETON_ROW_COUNT, key = { "video_related_loading_$it" }, contentType = { "video_related_loading" }) {
+                    com.android.purebilibili.feature.video.ui.components.RelatedVideoGridRowSkeleton(
+                        cardLayout = relatedVideoCardLayout,
+                        cardPresentation = cardPresentation,
                     )
-            ) {
-                RelatedVideoGridRow(
-                    videos = row,
-                    cardLayout = relatedVideoCardLayout,
-                    cardPresentation = cardPresentation,
-                    followingMids = followingMids,
-                    showUpBadge = showUpBadge,
-                    onVideoClick = { video ->
-                        val navOptions = buildVideoNavigationOptions(
-                            targetCid = video.cid,
-                            coverUrl = video.pic
+                }
+            } else {
+                item(key = "video_related_empty") {
+                    AppText(
+                        if (relatedLoadState == VideoPlaybackUiState.RelatedLoadState.FAILED) "相关推荐加载失败" else "暂无相关推荐",
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+
+            itemsIndexed(
+                items = relatedRows,
+                key = { rowIndex, row ->
+                    val first = row.firstOrNull()
+                    resolveIndexedVideoLazyKey(
+                        namespace = "video_related_row",
+                        index = rowIndex,
+                        bvid = first?.bvid.orEmpty(),
+                        aid = first?.aid ?: 0L,
+                        cid = first?.cid ?: 0L
+                    )
+                },
+                contentType = { _, _ -> "video_related_row" },
+            ) { _, row ->
+                if (!relatedContentReady) {
+                    com.android.purebilibili.feature.video.ui.components.RelatedVideoGridRowSkeleton(
+                        cardLayout = relatedVideoCardLayout,
+                        cardPresentation = cardPresentation,
+                    )
+                } else CompositionLocalProvider(
+                    LocalVideoCardSharedElementSourceRoute provides
+                        com.android.purebilibili.feature.video.ui.components.resolveRelatedVideoCardHostRoute(
+                            LocalVideoCardSharedElementSourceRoute.current, info.bvid,
                         )
-                        onRelatedVideoClick(video.bvid, navOptions)
-                    },
-                    onUpClick = onUpClick,
-                )
+                ) {
+                    RelatedVideoGridRow(
+                        videos = row,
+                        cardLayout = relatedVideoCardLayout,
+                        cardPresentation = cardPresentation,
+                        followingMids = followingMids,
+                        showUpBadge = showUpBadge,
+                        onVideoClick = { video ->
+                            val navOptions = buildVideoNavigationOptions(
+                                targetCid = video.cid,
+                                coverUrl = video.pic
+                            )
+                            onRelatedVideoClick(video.bvid, navOptions)
+                        },
+                        onUpClick = onUpClick,
+                    )
+                }
             }
         }
     }

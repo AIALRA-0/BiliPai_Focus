@@ -5481,6 +5481,7 @@ internal fun VideoDetailScreenStateHolder(
                                         motionSpec = motionSpec,
                                         hazeState = hazeState,
                                         relatedContentReady = entryRelatedReady,
+                                        relatedVideosVisible = focusRelatedVideosVisible,
                                         isTransitionFinished = isTransitionFinished ||
                                             keepLoadedContentForBackPreview ||
                                             suppressEnterFadeAfterBackPreview,
