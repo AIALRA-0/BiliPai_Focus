@@ -1,0 +1,26 @@
+README.md
+  s_71db67cf8751ad::t_af62714b1bf695 8-9,11,13-15,31,66-67,69,72-73,78-79,81,83-87,89,91-92
+  s_71db67cf8751ad::t_cb58b36c3a9f45 10,12,30,68,70,80,82,88
+  s_71db67cf8751ad::t_51a79954035dbb 90
+  s_71db67cf8751ad::t_22bb98b7325644 71
+  s_71db67cf8751ad::t_aeb9267cfca3f5 93
+README.en.md
+  s_71db67cf8751ad::t_af62714b1bf695 8-15,24-25,43-50,55-69
+  s_71db67cf8751ad::t_887fcfde621989 70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9b884cbc9657cdba51ee631771beb222b1df8261",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
