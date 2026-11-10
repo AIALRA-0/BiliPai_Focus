@@ -2,7 +2,7 @@
 
 ## 发布从哪个代码构建，产物是什么
 
-本次同步的共同祖先是 `7f0bc8cd4fdb11190c8b056f2c673c0ec18d29fa`。最终核对时，`upstream/main` 仍指向 `05c4e2ac5c1621b7a5f6008572661075096af007`。合并 `v0.7.9-beta.7` 的提交是 `6d88f5fcd`，随后合并上游 main 布局与动效改动的提交是 `4bf8bfaf7`。
+本次同步的共同祖先是 `7f0bc8cd4fdb11190c8b056f2c673c0ec18d29fa`。发布前核对时，`upstream/main` 仍指向 `05c4e2ac5c1621b7a5f6008572661075096af007`。合并 `v0.7.9-beta.7` 的提交是 `6d88f5fcd`，随后合并上游 main 布局与动效改动的提交是 `4bf8bfaf7`。
 
 规范发布 [`v0.7.9-beta.7.focus.1`](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1) 指向提交 [`521ec722a0e9707053e16ed104ffe4410d7b8084`](https://github.com/AIALRA-0/BiliPai_Focus/commit/521ec722a0e9707053e16ed104ffe4410d7b8084)，版本码为 `390`。对应的 [Build 运行 42828014967](https://github.com/AIALRA-0/BiliPai_Focus/actions/runs/42828014967) 成功，Release 提供五个文件：APK、`build-metadata.json`、`build-provenance.intoto.jsonl`、`checksums.txt` 和 `verification-metadata.json`。APK 的 [发布文件](https://github.com/AIALRA-0/BiliPai_Focus/releases/download/v0.7.9-beta.7.focus.1/BiliPai-Focus-0.7.9-beta.7.focus.1.apk) SHA-256 为 `b473541318db7b4fa2246454145d05c6343029ed6bf4b64f2caa06ba5ecbad01`；签名证书 SHA-256 为 `a2f021866ee4e5f8f63df109e3369be3ceefa98fee3485e4d583e4a24f07f6bc`。构建证明记录 ID 为 `65858955`，Release 同时提供 [provenance 文件](https://github.com/AIALRA-0/BiliPai_Focus/releases/download/v0.7.9-beta.7.focus.1/build-provenance.intoto.jsonl)。
 
@@ -23,3 +23,7 @@ API 31 上，386 人的默认动态分组隐藏后，侧栏只显示「全部」
 ## 哪些检查仍未通过或没有覆盖
 
 发布 Build 成功不代表整套质量门禁全绿。完整 `lintDev` 检查报告了 1,753 个错误、996 个警告和 25 个提示；共运行 10,656 个完整单元测试，其中 481 个失败，分布在 226 个测试类。此前 63 项设备测试有 16 项失败、3 项跳过；本轮针对性设备检查 6/6 通过。API 26 ARM64 模拟器在当前 Windows 环境不可用，因此没有该环境下的升级复测；也没有完整的量化性能基线，不能据此声称性能指标已经达标。
+
+## 发布后上游又更新了什么
+
+本次规范发布的上游截止提交是 `05c4e2ac5c1621b7a5f6008572661075096af007`。发布后，`upstream/main` 在 2026-11-10 07:30–07:31 PST 新增 4 个提交，推进到 `199164c0`，版本升至 `0.7.9-beta.9`。这些提交涉及顶栏模糊、缓存和动效，播放器全屏弹幕、控制栏与过渡，详情统计与标签修复，以及版本元数据；没有安全、网络或数据库迁移改动。本次发布和端到端验证没有包含这 4 个提交，留待下一轮语义合并与回归。
