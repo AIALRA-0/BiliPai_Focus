@@ -1356,13 +1356,16 @@ fun rememberVideoPlayerState(
                     }
 
                     PlayerErrorRecoveryAction.SWITCH_CDN -> {
-                        retryCountRef.cdnSwitchCount++
-                        com.android.purebilibili.core.util.Logger.d(
-                            "VideoPlayerState",
-                            "📡 Network error, switching CDN (${retryCountRef.cdnSwitchCount}/$maxCdnSwitches)"
-                        )
                         scope.launch {
                             kotlinx.coroutines.delay(500)
+                            if (!shouldRunDelayedPlayerErrorRecovery(error, player.playerError)) {
+                                return@launch
+                            }
+                            retryCountRef.cdnSwitchCount++
+                            com.android.purebilibili.core.util.Logger.d(
+                                "VideoPlayerState",
+                                "📡 Network error, switching CDN (${retryCountRef.cdnSwitchCount}/$maxCdnSwitches)"
+                            )
                             viewModel.switchCdn()
                         }
                     }

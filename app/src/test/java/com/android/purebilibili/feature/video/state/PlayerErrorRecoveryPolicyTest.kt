@@ -3,8 +3,24 @@ package com.android.purebilibili.feature.video.state
 import androidx.media3.common.PlaybackException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PlayerErrorRecoveryPolicyTest {
+
+    @Test
+    fun delayedCdnRecoveryRunsOnlyWhileTheReportedErrorIsStillActive() {
+        val error = PlaybackException("network error", null, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
+
+        assertTrue(shouldRunDelayedPlayerErrorRecovery(error, error))
+        assertFalse(shouldRunDelayedPlayerErrorRecovery(error, null))
+        assertFalse(
+            shouldRunDelayedPlayerErrorRecovery(
+                error,
+                PlaybackException("network error", null, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
+            )
+        )
+    }
 
     @Test
     fun networkErrorPrefersCdnSwitchWhenAlternativesExist() {

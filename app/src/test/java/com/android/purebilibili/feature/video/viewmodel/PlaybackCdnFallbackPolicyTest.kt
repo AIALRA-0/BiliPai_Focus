@@ -74,6 +74,7 @@ class PlaybackCdnFallbackPolicyTest {
             originalVideoUrl = "https://upos-a.bilivideo.com/video.m4s",
             originalAudioUrl = "https://upos-a.bilivideo.com/audio.m4s",
             regionLabel = null,
+            selectedVideoUrlWasRewritten = true,
             usesCustomRule = true,
             fallbackCandidates = listOf(
                 PlaybackCdnCandidate(
@@ -110,10 +111,11 @@ class PlaybackCdnFallbackPolicyTest {
             selectedAudioUrl = "https://cn-sh-ct-01-01.bilivideo.com/audio.m4s",
             originalVideoUrl = "https://upos-sz-mirrorali.bilivideo.com/video.m4s",
             originalAudioUrl = "https://upos-sz-mirrorali.bilivideo.com/audio.m4s",
-            regionLabel = "上海"
+            regionLabel = "上海",
+            selectedVideoUrlWasRewritten = true
         )
 
-        assertTrue(state.usesCdnRewrite)
+        assertTrue(state.hasFallbackCandidate)
         assertEquals("https://upos-sz-mirrorali.bilivideo.com/video.m4s", state.fallbackVideoUrl)
         assertEquals("https://upos-sz-mirrorali.bilivideo.com/audio.m4s", state.fallbackAudioUrl)
         assertTrue(shouldFallbackFromCdnRewrite(state, playbackReady = false))
@@ -129,8 +131,36 @@ class PlaybackCdnFallbackPolicyTest {
             regionLabel = null
         )
 
-        assertFalse(state.usesCdnRewrite)
+        assertFalse(state.hasFallbackCandidate)
         assertFalse(shouldFallbackFromCdnRewrite(state, playbackReady = false))
+    }
+
+    @Test
+    fun `only a rewritten video candidate is classified as rewrite timeout`() {
+        assertFalse(
+            wasPlaybackVideoUrlRewritten(
+                source = PlaybackCdnCandidateSource.ORIGINAL,
+                selectedVideoUrl = "https://upos-backup.bilivideo.com/video.m4s",
+                originalVideoUrl = "https://upos-main.bilivideo.com/video.m4s",
+                hasExplicitHostPreference = false
+            )
+        )
+        assertTrue(
+            wasPlaybackVideoUrlRewritten(
+                source = PlaybackCdnCandidateSource.REGION,
+                selectedVideoUrl = "https://upos-region.bilivideo.com/video.m4s",
+                originalVideoUrl = "https://upos-main.bilivideo.com/video.m4s",
+                hasExplicitHostPreference = false
+            )
+        )
+        assertTrue(
+            wasPlaybackVideoUrlRewritten(
+                source = PlaybackCdnCandidateSource.ORIGINAL,
+                selectedVideoUrl = "https://upos-preferred.bilivideo.com/video.m4s",
+                originalVideoUrl = "https://upos-main.bilivideo.com/video.m4s",
+                hasExplicitHostPreference = true
+            )
+        )
     }
 
     @Test
@@ -171,7 +201,10 @@ class PlaybackCdnFallbackPolicyTest {
             audioFallbackUrl = "https://audio.example.com/30280-backup.m4s"
         )
 
-        assertTrue(state.usesCdnRewrite)
+        assertTrue(state.hasFallbackCandidate)
+        assertFalse(state.selectedVideoUrlWasRewritten)
+        assertFalse(shouldFallbackFromCdnRewrite(state, playbackReady = false))
+        assertTrue(shouldFallbackFromPlaybackCdnError(state))
         assertEquals("https://audio.example.com/30280-backup.m4s", state.fallbackAudioUrl)
         assertTrue(
             shouldFallbackFromCdnRewrite(
@@ -191,7 +224,8 @@ class PlaybackCdnFallbackPolicyTest {
             selectedAudioUrl = null,
             originalVideoUrl = "https://upos-sz-mirrorali.bilivideo.com/video.m4s",
             originalAudioUrl = null,
-            regionLabel = "上海"
+            regionLabel = "上海",
+            selectedVideoUrlWasRewritten = true
         )
 
         val consumed = state.markFallbackConsumed()
@@ -206,7 +240,8 @@ class PlaybackCdnFallbackPolicyTest {
             selectedAudioUrl = "https://cn-sh-ct-01-01.bilivideo.com/audio.m4s",
             originalVideoUrl = "https://upos-sz-mirrorali.bilivideo.com/video.m4s",
             originalAudioUrl = "https://upos-sz-mirrorali.bilivideo.com/audio.m4s",
-            regionLabel = "上海"
+            regionLabel = "上海",
+            selectedVideoUrlWasRewritten = true
         )
 
         assertTrue(
@@ -227,7 +262,8 @@ class PlaybackCdnFallbackPolicyTest {
             selectedAudioUrl = "https://cn-sh-ct-01-01.bilivideo.com/audio.m4s",
             originalVideoUrl = "https://upos-sz-mirrorali.bilivideo.com/video.m4s",
             originalAudioUrl = "https://upos-sz-mirrorali.bilivideo.com/audio.m4s",
-            regionLabel = "上海"
+            regionLabel = "上海",
+            selectedVideoUrlWasRewritten = true
         )
 
         assertTrue(
@@ -248,7 +284,8 @@ class PlaybackCdnFallbackPolicyTest {
             selectedAudioUrl = "https://cn-sh-ct-01-01.bilivideo.com/audio.m4s",
             originalVideoUrl = "https://upos-sz-mirrorali.bilivideo.com/video.m4s",
             originalAudioUrl = "https://upos-sz-mirrorali.bilivideo.com/audio.m4s",
-            regionLabel = "上海"
+            regionLabel = "上海",
+            selectedVideoUrlWasRewritten = true
         )
 
         assertFalse(

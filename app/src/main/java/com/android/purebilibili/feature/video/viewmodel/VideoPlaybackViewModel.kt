@@ -165,15 +165,17 @@ internal fun resolvePlaybackStallRecoveryDecision(
     currentCdnIndex: Int,
     cdnCandidateCount: Int,
     attemptedCdnIndexes: Set<Int>,
-    usesAdaptivePlayback: Boolean
+    usesAdaptivePlayback: Boolean,
+    allowNoFirstFrameRecovery: Boolean = false
 ): PlaybackStallRecoveryDecision {
     if (
-        playbackState != Player.STATE_BUFFERING ||
+        (playbackState != Player.STATE_BUFFERING &&
+            !(playbackState == Player.STATE_READY && allowNoFirstFrameRecovery && !firstFrameRendered)) ||
         !playWhenReady ||
-        !firstFrameRendered ||
+        (!firstFrameRendered && !allowNoFirstFrameRecovery) ||
         forwardBufferDurationMs > 0L ||
         cdnCandidateCount <= 1 ||
-        usesAdaptivePlayback
+        (usesAdaptivePlayback && firstFrameRendered)
     ) {
         return PlaybackStallRecoveryDecision()
     }
@@ -395,6 +397,7 @@ internal fun shouldApplyAudioModeCollectionPlaylist(
 internal data class PlaybackCdnFallbackState(
     val selectedVideoUrl: String = "",
     val selectedAudioUrl: String? = null,
+    val selectedVideoUrlWasRewritten: Boolean = false,
     val fallbackVideoUrl: String? = null,
     val fallbackAudioUrl: String? = null,
     val fallbackCandidates: List<com.android.purebilibili.feature.plugin.PlaybackCdnCandidate> = emptyList(),
@@ -402,7 +405,7 @@ internal data class PlaybackCdnFallbackState(
     val usesCustomRule: Boolean = false,
     val fallbackConsumed: Boolean = false
 ) {
-    val usesCdnRewrite: Boolean
+    val hasFallbackCandidate: Boolean
         get() = !fallbackConsumed &&
             !fallbackVideoUrl.isNullOrBlank() &&
             (selectedVideoUrl != fallbackVideoUrl || selectedAudioUrl != fallbackAudioUrl)
@@ -422,6 +425,7 @@ internal data class PlaybackCdnFallbackState(
         return copy(
             selectedVideoUrl = currentFallbackVideoUrl,
             selectedAudioUrl = currentFallbackAudioUrl,
+            selectedVideoUrlWasRewritten = false,
             fallbackVideoUrl = next?.videoUrl,
             fallbackAudioUrl = next?.audioUrl,
             usesCustomRule = false,
@@ -440,6 +444,7 @@ internal fun buildPlaybackCdnFallbackState(
     originalVideoUrl: String,
     originalAudioUrl: String?,
     regionLabel: String?,
+    selectedVideoUrlWasRewritten: Boolean = false,
     audioFallbackUrl: String? = null,
     fallbackCandidates: List<com.android.purebilibili.feature.plugin.PlaybackCdnCandidate> = emptyList(),
     usesCustomRule: Boolean = false
@@ -464,6 +469,7 @@ internal fun buildPlaybackCdnFallbackState(
     return PlaybackCdnFallbackState(
         selectedVideoUrl = selectedVideoUrl,
         selectedAudioUrl = selectedAudioUrl,
+        selectedVideoUrlWasRewritten = selectedVideoUrlWasRewritten,
         fallbackVideoUrl = firstFallback?.videoUrl,
         fallbackAudioUrl = firstFallback?.audioUrl,
         fallbackCandidates = candidates,
@@ -523,7 +529,9 @@ internal fun shouldFallbackFromCdnRewrite(
     state: PlaybackCdnFallbackState,
     playbackReady: Boolean
 ): Boolean {
-    return state.usesCdnRewrite && !playbackReady
+    return state.hasFallbackCandidate &&
+        state.selectedVideoUrlWasRewritten &&
+        !playbackReady
 }
 
 internal fun shouldFallbackFromCdnRewrite(
@@ -533,10 +541,25 @@ internal fun shouldFallbackFromCdnRewrite(
     hasSelectedAudioTrack: Boolean,
     audioRendererError: Boolean
 ): Boolean {
-    if (!state.usesCdnRewrite) return false
-    if (!playbackReady) return true
+    if (!state.hasFallbackCandidate) return false
+    if (!playbackReady) return state.selectedVideoUrlWasRewritten
     if (audioRendererError) return true
     return expectedAudioTrack && !hasSelectedAudioTrack
+}
+
+internal fun shouldFallbackFromPlaybackCdnError(
+    state: PlaybackCdnFallbackState
+): Boolean = state.hasFallbackCandidate
+
+internal fun wasPlaybackVideoUrlRewritten(
+    source: com.android.purebilibili.feature.plugin.PlaybackCdnCandidateSource?,
+    selectedVideoUrl: String,
+    originalVideoUrl: String,
+    hasExplicitHostPreference: Boolean
+): Boolean {
+    return source == com.android.purebilibili.feature.plugin.PlaybackCdnCandidateSource.CUSTOM ||
+        source == com.android.purebilibili.feature.plugin.PlaybackCdnCandidateSource.REGION ||
+        (hasExplicitHostPreference && selectedVideoUrl != originalVideoUrl)
 }
 
 internal fun hostForPlaybackLog(url: String?): String {
@@ -2246,7 +2269,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val playbackEndListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
-                cancelPlaybackStallRecovery()
+                if (playbackStallRecoveryFirstFrameRendered) {
+                    cancelPlaybackStallRecovery()
+                } else {
+                    schedulePlaybackStallRecovery()
+                }
                 markPlaybackCdnReadyIfMediaReady()
                 recordCurrentCdnHealthEvent(CdnHealthEvent.PLAYBACK_READY)
                 scheduleCdnDashPrefetch()
@@ -2425,7 +2452,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 cdnCandidateCount = latest.allVideoUrls.size,
                 attemptedCdnIndexes = attemptedPlaybackStallRecoveryCdnIndexes,
                 usesAdaptivePlayback = latest.playbackQualityMode == PlaybackQualityMode.AUTO &&
-                    latest.adaptiveDashSource != null
+                    latest.adaptiveDashSource != null,
+                allowNoFirstFrameRecovery = playbackCdnFallbackState.hasFallbackCandidate
             )
             val nextCdnIndex = decision.nextCdnIndex ?: return@launch
             attemptedPlaybackStallRecoveryCdnIndexes += nextCdnIndex
@@ -3450,6 +3478,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             videoDurationMs = result.duration
                         )
                         _uiState.value = readyState
+                        // prepare() 可能先报告 BUFFERING，随后才发布 Success。新视频状态就绪后
+                        // 再启动现有的有界恢复计时，避免首帧一直不出现时漏掉备用线路。
+                        if (!shouldSkipPlayerPrepare && shouldAutoPlay && !playbackStallRecoveryFirstFrameRendered) {
+                            schedulePlaybackStallRecovery()
+                        }
                         publishSubjectSnapshot(readyState)
                         // Do not wait for the foreground Compose collector to mirror this state.
                         // Background collection is lifecycle-paused, while playback can still
@@ -4167,7 +4200,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         cancelPlaybackStallRecovery()
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
 
-        if (playbackCdnFallbackState.usesCdnRewrite) {
+        if (playbackCdnFallbackState.hasFallbackCandidate) {
             fallbackFromCdnRewrite(reason = "player_error")
             return
         }
@@ -8318,8 +8351,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         )
         val allVideoUrls = preferredCandidates.map { it.videoUrl }
         val allAudioUrls = preferredCandidates.map { it.audioUrl.orEmpty() }
-        val selectedVideoUrl = allVideoUrls.firstOrNull() ?: videoUrl
-        val selectedAudioUrl = allAudioUrls.firstOrNull()?.takeIf { it.isNotBlank() } ?: audioUrl
+        val selectedCandidate = preferredCandidates.firstOrNull()
+        val selectedVideoUrl = selectedCandidate?.videoUrl ?: videoUrl
+        val selectedAudioUrl = selectedCandidate?.audioUrl?.takeIf { it.isNotBlank() } ?: audioUrl
+        val selectedVideoUrlWasRewritten = wasPlaybackVideoUrlRewritten(
+            source = selectedCandidate?.source,
+            selectedVideoUrl = selectedVideoUrl,
+            originalVideoUrl = videoUrl,
+            hasExplicitHostPreference = playbackCdnPreference.value.host != null
+        )
         val selectedAdaptiveDashSource =
             if (selectedVideoUrl == videoUrl && selectedAudioUrl == audioUrl) {
                 adaptiveDashSource
@@ -8352,6 +8392,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 originalVideoUrl = videoUrl,
                 originalAudioUrl = audioUrl,
                 regionLabel = cdnRewrite?.regionLabel,
+                selectedVideoUrlWasRewritten = selectedVideoUrlWasRewritten,
                 audioFallbackUrl = rawAudioUrls.drop(1).firstOrNull(),
                 fallbackCandidates = originalCandidates,
                 usesCustomRule = cdnRewrite?.sources?.firstOrNull() ==
@@ -8390,7 +8431,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     ) {
         playbackCdnFallbackJob?.cancel()
         playbackCdnFallbackState = state
-        if (!playWhenReady || !state.usesCdnRewrite) return
+        if (!playWhenReady || !state.hasFallbackCandidate) return
 
         playbackCdnFallbackJob = viewModelScope.launch {
             delay(PLAYBACK_CDN_FIRST_FRAME_FALLBACK_TIMEOUT_MS)
@@ -8417,13 +8458,19 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     private fun markPlaybackCdnReadyIfMediaReady() {
         val state = playbackCdnFallbackState
-        if (state.usesCdnRewrite && state.selectedAudioUrl != null && !hasSelectedAudioTrack(exoPlayer)) {
+        if (state.hasFallbackCandidate && state.selectedAudioUrl != null && !hasSelectedAudioTrack(exoPlayer)) {
             recordCurrentCdnHealthEvent(CdnHealthEvent.AUDIO_TRACK_MISSING)
             Logger.d(
                 "PlayerVM",
                 "CDN fallback remains armed: region=${state.regionLabel ?: "unknown"}, " +
                     "audio=${hostForPlaybackLog(state.selectedAudioUrl)}, fallbackAudio=${hostForPlaybackLog(state.fallbackAudioUrl)}"
             )
+            if (playbackCdnFallbackJob?.isActive != true) {
+                armPlaybackCdnFallback(
+                    state = state,
+                    playWhenReady = exoPlayer?.playWhenReady == true
+                )
+            }
             return
         }
         playbackCdnFallbackJob?.cancel()
@@ -8464,7 +8511,21 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     private fun fallbackFromCdnRewrite(reason: String) {
         val state = playbackCdnFallbackState
-        if (!shouldFallbackFromCdnRewrite(state, playbackReady = false)) return
+        val shouldFallback = when (reason) {
+            "first_frame_timeout" -> shouldFallbackFromCdnRewrite(
+                state = state,
+                playbackReady = false
+            )
+            "audio_track_timeout" -> shouldFallbackFromCdnRewrite(
+                state = state,
+                playbackReady = exoPlayer?.playbackState == Player.STATE_READY,
+                expectedAudioTrack = state.selectedAudioUrl != null,
+                hasSelectedAudioTrack = hasSelectedAudioTrack(exoPlayer),
+                audioRendererError = false
+            )
+            else -> shouldFallbackFromPlaybackCdnError(state)
+        }
+        if (!shouldFallback) return
         val event = if (reason == "first_frame_timeout") {
             CdnHealthEvent.FIRST_FRAME_TIMEOUT
         } else {

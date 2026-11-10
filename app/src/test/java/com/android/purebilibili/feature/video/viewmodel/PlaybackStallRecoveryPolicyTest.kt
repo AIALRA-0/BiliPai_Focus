@@ -103,6 +103,68 @@ class PlaybackStallRecoveryPolicyTest {
     }
 
     @Test
+    fun `ten second no first frame recovery allows one stalled alternative including adaptive playback`() {
+        val buffering = resolvePlaybackStallRecoveryDecision(
+            playbackState = Player.STATE_BUFFERING,
+            playWhenReady = true,
+            firstFrameRendered = false,
+            forwardBufferDurationMs = 0L,
+            currentCdnIndex = 0,
+            cdnCandidateCount = 2,
+            attemptedCdnIndexes = setOf(0),
+            usesAdaptivePlayback = true,
+            allowNoFirstFrameRecovery = true
+        )
+        val readyWithoutFrame = resolvePlaybackStallRecoveryDecision(
+            playbackState = Player.STATE_READY,
+            playWhenReady = true,
+            firstFrameRendered = false,
+            forwardBufferDurationMs = 0L,
+            currentCdnIndex = 0,
+            cdnCandidateCount = 2,
+            attemptedCdnIndexes = setOf(0),
+            usesAdaptivePlayback = true,
+            allowNoFirstFrameRecovery = true
+        )
+
+        assertEquals(1, buffering.nextCdnIndex)
+        assertEquals(1, readyWithoutFrame.nextCdnIndex)
+    }
+
+    @Test
+    fun `no first frame recovery keeps pause progress and candidate limits`() {
+        val common = { playWhenReady: Boolean, forwardBufferMs: Long, candidateCount: Int ->
+            resolvePlaybackStallRecoveryDecision(
+                playbackState = Player.STATE_BUFFERING,
+                playWhenReady = playWhenReady,
+                firstFrameRendered = false,
+                forwardBufferDurationMs = forwardBufferMs,
+                currentCdnIndex = 0,
+                cdnCandidateCount = candidateCount,
+                attemptedCdnIndexes = setOf(0),
+                usesAdaptivePlayback = true,
+                allowNoFirstFrameRecovery = true
+            )
+        }
+
+        assertFalse(common(false, 0L, 2).shouldSwitchCdn)
+        assertFalse(common(true, 1L, 2).shouldSwitchCdn)
+        assertFalse(common(true, 0L, 1).shouldSwitchCdn)
+        assertFalse(
+            resolvePlaybackStallRecoveryDecision(
+                playbackState = Player.STATE_BUFFERING,
+                playWhenReady = true,
+                firstFrameRendered = false,
+                forwardBufferDurationMs = 0L,
+                currentCdnIndex = 0,
+                cdnCandidateCount = 2,
+                attemptedCdnIndexes = setOf(0),
+                usesAdaptivePlayback = true
+            ).shouldSwitchCdn
+        )
+    }
+
+    @Test
     fun `AUTO adaptive playback remains with Media3 while locked quality can switch CDN`() {
         val adaptive = resolvePlaybackStallRecoveryDecision(
             playbackState = Player.STATE_BUFFERING,

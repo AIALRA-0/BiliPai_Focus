@@ -11,6 +11,11 @@ internal enum class PlayerErrorRecoveryAction {
     GIVE_UP
 }
 
+internal fun shouldRunDelayedPlayerErrorRecovery(
+    reportedError: PlaybackException,
+    activePlayerError: PlaybackException?
+): Boolean = activePlayerError === reportedError
+
 internal fun decidePlayerErrorRecovery(
     errorCode: Int,
     hasCdnAlternatives: Boolean,
