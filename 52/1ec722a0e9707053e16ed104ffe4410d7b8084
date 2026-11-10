@@ -1,0 +1,25 @@
+app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt
+  s_71db67cf8751ad::t_00e5857c805b3d 5484
+CHANGELOG.md
+  s_71db67cf8751ad::t_2cfeb8f43fcdf5 15-18
+app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt
+  s_71db67cf8751ad::t_00e5857c805b3d 465,605,973,1379,1500-1519,1522-1531,1533-1544,1546-1562
+app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPhoneContent.kt
+  s_71db67cf8751ad::t_00e5857c805b3d 96,296
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "521ec722a0e9707053e16ed104ffe4410d7b8084",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
