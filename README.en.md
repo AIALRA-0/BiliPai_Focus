@@ -21,7 +21,7 @@ BiliPai Focus follows the [BiliPai upstream project](https://github.com/jay3-yy/
 
 The current source sets the Focus version to `0.7.9-beta.7.focus.1` and Android update code (`versionCode`) to `390`, based on upstream `0.7.9-beta.7`. This is an unreleased source candidate; no Focus Release package for it is available yet.
 
-The version name follows the upstream beta.7 release line; the source is synchronized through upstream `main` commit `1c8f38de`.
+The version name follows the upstream beta.7 release line; the source is synchronized through upstream `main` commit `05c4e2ac5`.
 
 [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases/latest) currently provides the latest published Focus version, `0.2.3-alpha.2.focus.1` / `389`. See the [versioning guide](docs/wiki/VERSIONING.md) for version names and the Focus stable update channel. The upstream base is still beta, so it is not an upstream stable release.
 

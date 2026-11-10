@@ -959,7 +959,7 @@ fun HomeScreen(
     val gridColumns = remember(
         contentWidth,
         displayMode,
-        homeSettings.effectiveGridColumnCount,
+        homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
         homeSettings.effectiveGridColumnCountCompact,
         homeSettings.homeFeedCardWidthPreset,
         windowSizeClass.widthSizeClass
@@ -971,7 +971,7 @@ fun HomeScreen(
             fixedColumnCount = resolveHomeFeedStoredColumnCount(
                 widthSizeClass = windowSizeClass.widthSizeClass,
                 compactColumnCount = homeSettings.effectiveGridColumnCountCompact,
-                defaultColumnCount = homeSettings.effectiveGridColumnCount,
+                defaultColumnCount = homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
             ),
             cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
             widthSizeClass = windowSizeClass.widthSizeClass
@@ -1986,10 +1986,14 @@ fun HomeScreen(
                                 }
                              }
                         ) {
+                             val skeletonAnimationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+                                 respectComponentMotion = false,
+                             )
                              // [物理优化] 内容容器应用下沉效果
                               Box(
                                   modifier = Modifier
                                       .fillMaxSize()
+                                      .then(skeletonAnimationGate.modifier)
                                       .zIndex(0f)
                                        .graphicsLayer {
                                            translationY = when (pullRefreshIndicatorStyle) {
@@ -2034,7 +2038,7 @@ fun HomeScreen(
                               // [性能优化] 脉冲 state 只包进 provider,值在骨架卡 draw 阶段读取,
                               // 骨架期间屏幕级组合作用域不再逐帧失效;非骨架期不启动无限动画。
                               val skeletonPulseState = if (showInitialSkeleton) {
-                                  rememberHomeFeedSkeletonPulseState()
+                                  rememberHomeFeedSkeletonPulseState(animated = skeletonAnimationGate.active)
                               } else {
                                   remember { mutableStateOf(0f) }
                               }

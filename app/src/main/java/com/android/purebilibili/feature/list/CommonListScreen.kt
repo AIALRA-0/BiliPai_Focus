@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.navigation.tabIndicatorPosition
-import com.android.purebilibili.feature.home.effectiveGridColumnCount
+import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
@@ -310,7 +310,7 @@ fun CommonListScreen(
         settings = homeSettings,
         widthSizeClass = windowSizeClass.widthSizeClass,
         defaultColumns = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
-            windowSizeClass.widthSizeClass, homeSettings.effectiveGridColumnCountCompact, homeSettings.effectiveGridColumnCount,
+            windowSizeClass.widthSizeClass, homeSettings.effectiveGridColumnCountCompact, homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
         ).takeIf { it > 0 } ?: defaultPersonalColumns,
         bounds = resolveHomeFeedPinchColumnBounds(
             windowSizeClass.widthSizeClass, LocalConfiguration.current.screenWidthDp,
@@ -3248,7 +3248,11 @@ internal fun CommonListContent(
     val fixedHeaderInset = resolveCommonListViewportTopPadding(padding.calculateTopPadding())
     val scrollableHeaderInset = if (scrollUnderHeader) fixedHeaderInset else AppSpacingTokens.None
     // History retains its own layout; other single-column lists share a bounded content width.
+    val skeletonAnimationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
     val viewportModifier = Modifier
+        .then(skeletonAnimationGate.modifier)
         .then(if (columns == 1 && !isHistoryPersonalList) Modifier.responsiveContentWidth(resolveCommonListSingleColumnMaxWidth()) else Modifier)
         .fillMaxSize()
         .padding(top = if (scrollUnderHeader) AppSpacingTokens.None else fixedHeaderInset)
@@ -3261,7 +3265,7 @@ internal fun CommonListContent(
     val showInitialSkeleton = isLoading && items.isEmpty()
     val historySkeletonBlockColor = if (showInitialSkeleton && isPersonalList) {
         com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(
-            com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState()
+            com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState(animated = skeletonAnimationGate.active)
         )
     } else {
         null

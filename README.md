@@ -27,7 +27,7 @@ Focus 专属的内容控制见下文
 
 当前源码把 Focus 版本设为 `0.7.9-beta.7.focus.1`，Android 应用升级序号 `versionCode` 为 `390`，上游基础版本是 `0.7.9-beta.7`
 
-版本名沿用上游 beta.7 版本线；源码已同步到上游 `main` 的 `1c8f38de` 提交
+版本名沿用上游 beta.7 版本线；源码已同步到上游 `main` 的 `05c4e2ac5` 提交
 
 这是一份待发布的源码候选，还没有对应的 Focus Release 安装包
 
