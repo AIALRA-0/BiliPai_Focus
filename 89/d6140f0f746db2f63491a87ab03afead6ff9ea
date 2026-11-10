@@ -1,0 +1,47 @@
+app/src/main/java/com/android/purebilibili/feature/video/state/PlayerErrorRecoveryPolicy.kt
+  s_71db67cf8751ad::t_7d6642336cdec0 14-18
+docs/audits/2026-11-09-focus-upstream-and-playback.md
+  s_71db67cf8751ad::t_121ade5d842e44 28
+  s_71db67cf8751ad::t_f721041f3bc5e7 38
+  s_71db67cf8751ad::t_e1514f326ac53e 46
+  s_71db67cf8751ad::t_69379f31a20785 11-18
+  s_71db67cf8751ad::t_e052ceba5959e3 32-37,39-41,47,51
+  s_71db67cf8751ad::t_dff9b68283eda6 1-10,19-27,29-31,42-45,48-50
+app/src/test/java/com/android/purebilibili/feature/video/viewmodel/PlaybackStallRecoveryPolicyTest.kt
+  s_71db67cf8751ad::t_7d6642336cdec0 102-103,105-163
+  s_71db67cf8751ad::t_c9b20941d7bb76 104
+app/src/test/java/com/android/purebilibili/feature/video/state/PlayerErrorRecoveryPolicyTest.kt
+  s_71db67cf8751ad::t_7d6642336cdec0 6-7,11-23
+  s_71db67cf8751ad::t_2b1584d60c0b18 24
+app/src/main/java/com/android/purebilibili/feature/video/state/VideoPlayerState.kt
+  s_71db67cf8751ad::t_7d6642336cdec0 1361-1368
+app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt
+  s_71db67cf8751ad::t_14135bd2a893ce 3483-3485
+  s_71db67cf8751ad::t_42d94f647e8877 4203,8434,8461,8468-8473
+  s_71db67cf8751ad::t_62deee867534dc 8514-8528
+  s_71db67cf8751ad::t_e265990385a687 3481-3482
+  s_71db67cf8751ad::t_1aafad66d904ed 8354-8362,8395
+  s_71db67cf8751ad::t_ba3d097c2ab9e2 400,408,428,472,532-534,544-545,550-562
+  s_71db67cf8751ad::t_279cb0ee5d82e6 168-169,172-173,175,178,447,2272-2276,2455-2456
+  s_71db67cf8751ad::t_ef9ec0c20d11ff 563-564
+app/src/test/java/com/android/purebilibili/feature/video/viewmodel/PlaybackCdnFallbackPolicyTest.kt
+  s_71db67cf8751ad::t_28253ca0780c58 139-165
+  s_71db67cf8751ad::t_659081a6a5d3a2 77,114-115,118,134,204-207,227-228,243-244,265-266,287-288
+  s_71db67cf8751ad::t_f3716fd540cc6d 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "89d6140f0f746db2f63491a87ab03afead6ff9ea",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
