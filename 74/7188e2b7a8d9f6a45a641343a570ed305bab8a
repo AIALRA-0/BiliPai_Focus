@@ -1,0 +1,21 @@
+docs/audits/2026-11-10-focus-release-e2e.md
+  s_71db67cf8751ad::t_d7755f14a666e9 7,25
+  s_71db67cf8751ad::t_917cc2af9345cd 13,19
+  s_71db67cf8751ad::t_5209b363fe7c66 1-6,8-12,14-18,20-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "747188e2b7a8d9f6a45a641343a570ed305bab8a",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
