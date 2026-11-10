@@ -1,0 +1,35 @@
+app/src/test/java/com/android/purebilibili/feature/home/HomeRefreshPolicyTest.kt
+  s_71db67cf8751ad::t_8b3d583ed7ff9e 633-636
+app/src/main/java/com/android/purebilibili/feature/home/HomeReturnState.kt
+  s_71db67cf8751ad::t_94dca581c36ffb 58
+app/src/test/java/com/android/purebilibili/feature/home/HomeReturnStateTest.kt
+  s_71db67cf8751ad::t_94dca581c36ffb 4,20-23,34,48,61,70-71,81
+app/src/test/java/com/android/purebilibili/core/plugin/feed/PublicContentNetworkTest.kt
+  s_71db67cf8751ad::t_2743caae083cc6 45,47-50
+  s_71db67cf8751ad::t_0b367854f0f6b9 53,55-57
+app/build.gradle.kts
+  s_71db67cf8751ad::t_3fc674f4e2be82 622
+app/src/main/java/com/android/purebilibili/feature/home/HomeFeedVideoSource.kt
+  s_71db67cf8751ad::t_3e936844d7c513 50
+app/src/main/java/com/android/purebilibili/core/plugin/feed/PublicContentNetwork.kt
+  s_71db67cf8751ad::t_73ac02a5dbc86c 29,32
+  s_71db67cf8751ad::t_0b367854f0f6b9 30-31,33-34
+app/src/main/java/com/android/purebilibili/feature/video/usecase/VideoPlaybackUseCase.kt
+  s_71db67cf8751ad::t_05b88a2a841387 373
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e690c2326186a9892cacfa83a1e6b0df6546c104",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
