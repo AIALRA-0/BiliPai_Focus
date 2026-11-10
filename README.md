@@ -1,8 +1,8 @@
 <div align="center">
 <h1>BiliPai Focus</h1>
 <p>BiliPai Focus 是基于 BiliPai 的第三方 Android 客户端，供你浏览和播放哔哩哔哩内容，并单独调整关注过滤、相关推荐与历史记录入口</p>
-<p><a href="README.en.md">English</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/latest">下载当前已发布版本</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/jay3-yy/BiliPai">上游 BiliPai</a></p>
-<p>当前源码候选：<code>0.7.9-beta.7.focus.1</code> / Android 应用升级序号 <code>versionCode 390</code>（待发布）· 上游基线：<code>0.7.9-beta.7</code>（beta）<br>最近已发布 Focus 版本：<code>0.2.3-alpha.2.focus.1</code> / Android 应用升级序号 <code>versionCode 389</code></p>
+<p><a href="README.en.md">English</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1">下载 Focus 0.7.9-beta.7.focus.1</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/jay3-yy/BiliPai">上游 BiliPai</a></p>
+<p>当前已发布 Focus 版本：<code>0.7.9-beta.7.focus.1</code> / Android 应用升级序号 <code>versionCode 390</code> · 上游基线：<code>0.7.9-beta.7</code>（beta）</p>
 </div>
 
 <div align="center">
@@ -25,13 +25,11 @@ Focus 专属的内容控制见下文
 
 ## 2 这个版本目前处于什么状态
 
-当前源码把 Focus 版本设为 `0.7.9-beta.7.focus.1`，Android 应用升级序号 `versionCode` 为 `390`，上游基础版本是 `0.7.9-beta.7`
+当前已发布的 Focus 版本为 `0.7.9-beta.7.focus.1`，Android 应用升级序号 `versionCode` 为 `390`，上游基础版本是 `0.7.9-beta.7`
 
 版本名沿用上游 beta.7 版本线；源码已同步到上游 `main` 的 `05c4e2ac5` 提交
 
-这是一份待发布的源码候选，还没有对应的 Focus Release 安装包
-
-[Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases/latest) 当前提供最近已发布的 Focus 版本 `0.2.3-alpha.2.focus.1` / Android 应用升级序号 `versionCode 389`
+该版本已作为 Focus 稳定更新渠道版本发布，可在 [GitHub Release 页面](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1)查看说明并下载安装包
 
 版本号规则和 Focus 稳定更新渠道说明见[版本规范](docs/wiki/VERSIONING.md)
 
@@ -47,7 +45,7 @@ Focus 专属的内容控制见下文
 
 收藏或追番等账号功能可能需要登录，高清画质也取决于账号权限
 
-- 第一步，打开 [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases/latest)，阅读最新发布说明
+- 第一步，打开 [Focus 0.7.9-beta.7.focus.1 Release](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1)，阅读发布说明
   下载前请确认选择的是 Focus 安装包
 - 第二步，在 Android 设备上下载并打开 APK；如果系统询问，请允许当前来源安装应用
 - 第三步，打开应用后，你可以先浏览公开内容；使用需要账号权限的功能时，应用会提示登录
@@ -114,13 +112,13 @@ Focus 专属的内容控制见下文
 
 ## 6 beta.7 同步带来了哪些变化
 
-当前候选基于上游 `0.7.9-beta.7`，主要变化包括：
+本次发布基于上游 `0.7.9-beta.7`，主要变化包括：
 
 - 横屏全屏新增“返回时显示评论”选项；打开后，第一次按返回键会打开评论；再按一次才返回上一级，并保持横屏
 - 小店商品、专栏、动态详情、UP 主搜索和直播分区等页面补齐从来源卡片进入详情的系统转场
 - Focus 修复备用线路的计时器：普通视频不会因为计时器被重置而提前切换线路；播放确实报错时仍可尝试备用线路
 
-这些变化尚未随本候选版本发布；完整记录和其他更新见 [CHANGELOG.md](CHANGELOG.md)
+这些变化随本次 Focus Release 发布；完整记录和其他更新见 [CHANGELOG.md](CHANGELOG.md)
 
 ### 6.1 上游近期还做了哪些改进
 

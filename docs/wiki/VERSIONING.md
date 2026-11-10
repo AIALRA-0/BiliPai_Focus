@@ -18,7 +18,7 @@ MAJOR.MINOR.PATCH
 | `MINOR` | 新功能 | 第二位 +1，`PATCH` 归零 |
 | `PATCH` | 修 bug / 小改进 | 第三位 +1 |
 
-当前待发布 Focus 构建：`0.7.9-beta.7.focus.1` / `versionCode 390`，基于上游 `0.7.9-beta.7`。上一次已发布 Focus 版本为 `0.2.3-alpha.2.focus.1` / 389。Focus Release 属于 Focus 稳定更新渠道；上游基础仍为 beta，不代表上游稳定版。
+当前已发布 Focus 版本为 [`0.7.9-beta.7.focus.1`](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1) / `versionCode 390`，基于上游 `0.7.9-beta.7`。这是 Focus 稳定更新渠道版本；上游基础仍为 beta，不代表上游稳定版。
 
 - **不要**用日期充当 `versionName`（例如 `26.0805.1`）。
 - 应用 ID、签名和用户配置格式不变。

@@ -1,4 +1,4 @@
-## v0.7.9-beta.7.focus.1 (待发布)
+## [v0.7.9-beta.7.focus.1](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1) (2026-11-10)
 
 BiliPai Focus 稳定更新渠道版本，基于上游 BiliPai `0.7.9-beta.7` 及其后续主线修复（上游基础为 beta）；`versionCode 390`。
 
