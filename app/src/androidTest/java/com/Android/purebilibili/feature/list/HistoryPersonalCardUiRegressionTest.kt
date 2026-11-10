@@ -18,8 +18,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.data.model.response.HistoryBusiness
 import com.android.purebilibili.data.model.response.HistoryData
+import com.android.purebilibili.feature.home.components.cards.HORIZONTAL_VIDEO_CARD_INFO_PADDING_DP
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -43,7 +45,7 @@ class HistoryPersonalCardUiRegressionTest {
                 hasClickAction() and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button),
                 useUnmergedTree = true,
             ).fetchSemanticsNode().boundsInRoot
-            assertEquals("Title must not reserve a full-height menu lane", card.right - 8f, title.right, 1f)
+            assertEquals("Title must fill the available info content width", expectedTitleRight(card), title.right, 1f)
             assertTrue("Menu must stay below the title", menu.top >= title.bottom)
             assertTrue("Menu must retain its minimum touch target", menu.width >= 48f && menu.height >= 48f)
             assertTrue("Metadata must stay outside the menu touch target", owner.right <= menu.left)
@@ -60,7 +62,7 @@ class HistoryPersonalCardUiRegressionTest {
         rule.onNodeWithContentDescription("历史记录操作", useUnmergedTree = true).assertDoesNotExist()
         val after = rule.onNodeWithText(TITLE, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals(before.width, after.width, 1f)
-        assertEquals(bounds("history_card").right - 8f, after.right, 1f)
+        assertEquals(expectedTitleRight(bounds("history_card")), after.right, 1f)
     }
 
     private fun setCard(batchMode: () -> Boolean = { false }, size: () -> Pair<Int, Float>) {
@@ -94,6 +96,9 @@ class HistoryPersonalCardUiRegressionTest {
     }
 
     private fun bounds(tag: String) = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+
+    private fun expectedTitleRight(card: androidx.compose.ui.geometry.Rect): Float =
+        card.right - AppSpacingTokens.Medium.value - HORIZONTAL_VIDEO_CARD_INFO_PADDING_DP
 
     private companion object {
         const val TITLE = "这是一个用于检查历史记录标题右侧空间的较长视频标题，不应为底部菜单留下整列空白"

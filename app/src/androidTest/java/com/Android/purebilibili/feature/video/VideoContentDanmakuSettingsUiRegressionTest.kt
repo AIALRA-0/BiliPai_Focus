@@ -84,8 +84,6 @@ class VideoContentDanmakuSettingsUiRegressionTest {
                             emoteMap = emptyMap(),
                             followingMids = emptySet(),
                             videoTags = emptyList(),
-                            bgmInfo = null,
-                            bgmInfoList = emptyList(),
                         ),
                         engagementState = VideoContentEngagementState(
                             isLoggedIn = false,
@@ -99,7 +97,10 @@ class VideoContentDanmakuSettingsUiRegressionTest {
                         ),
                         commentState = VideoContentCommentState(
                             isRepliesLoading = false,
+                            isRepliesRefreshing = false,
+                            repliesError = null,
                             isRepliesEnd = false,
+                            voteCard = null,
                             sortMode = CommentSortMode.HOT,
                             currentMid = 0L,
                             showUpFlag = false,
@@ -107,6 +108,7 @@ class VideoContentDanmakuSettingsUiRegressionTest {
                             dissolvingIds = emptySet(),
                             likedComments = emptySet(),
                             hatedComments = emptySet(),
+                            nextPage = 1,
                         ),
                         noteState = VideoContentNoteState(
                             aiSummary = null,
@@ -114,6 +116,7 @@ class VideoContentDanmakuSettingsUiRegressionTest {
                             videoNoteState = VideoNoteUiState(),
                         ),
                         presentationState = VideoContentPresentationState(
+                            sponsorVideoLabel = "",
                             danmakuEnabled = true,
                             transitionEnabled = true,
                             isQuickReturnLimitedForSharedElements = false,
@@ -154,6 +157,7 @@ class VideoContentDanmakuSettingsUiRegressionTest {
                             onSubReplyClick = { _, _ -> },
                             onCommentReplyClick = {},
                             onLoadMoreReplies = {},
+                            onRefreshReplies = {},
                             onDeleteComment = {},
                             onDissolveStart = {},
                             onCommentLike = {},
@@ -171,16 +175,16 @@ class VideoContentDanmakuSettingsUiRegressionTest {
                             onOpenVideoNoteEditor = {},
                             onCloseVideoNoteEditor = {},
                             onVideoNoteDocumentChange = {},
-                            onInsertVideoNoteTimestamp = {},
+                            onInsertVideoNoteTimestamp = { null },
                             onVideoNoteTimestampClick = {},
                             onSaveVideoNote = {},
                             onDeleteVideoNote = {},
                             onRetryVideoNote = {},
+                            onLoadMorePublicVideoNotes = {},
                             onPublicVideoNoteClick = { _, _ -> },
                         ),
                         uiActions = VideoContentUiActions(
                             onSelectedTabChange = {},
-                            onIntroScrollThresholdChange = {},
                             onCommentScrollStateChange = { _, _ -> },
                         ),
                     )

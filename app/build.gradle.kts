@@ -206,6 +206,10 @@ val buildReleaseTag = providers.gradleProperty("bili.build.releaseTag")
     .orElse("")
     .get()
 val focusRepository = detectFocusRepositoryCoordinates()
+val devAndroidTestUnminified = providers.gradleProperty("bili.dev.androidTest.unminified")
+    .map { it.toBoolean() }
+    .orElse(false)
+    .get()
 
 android {
     namespace = "com.android.purebilibili"
@@ -265,6 +269,9 @@ android {
         }
     }
 
+    // 设备测试使用 Dev 包，避免将测试 Activity 和样本放入正式 Release。
+    testBuildType = "dev"
+
     buildTypes {
         release {
             if (hasFocusReleaseSigning) {
@@ -302,6 +309,11 @@ android {
         create("dev") {
             // Dev 保持“接近发布”的验证语义，不用于日常本地快速迭代。
             initWith(getByName("release"))
+            // 只有显式运行设备测试时才关闭 Dev 压缩；正常 Dev 与 Release 构建仍走 R8。
+            if (devAndroidTestUnminified) {
+                isMinifyEnabled = false
+                isShrinkResources = false
+            }
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             resValue("string", "app_name", "BliPai Focus Dev")
@@ -325,6 +337,15 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             matchingFallbacks += listOf("dev", "release")
+        }
+    }
+
+    // Dev 设备测试复用 Debug 的本地播放器样本，避免依赖账号或网络。
+    // 这些文件只加入 Dev，Release 包不会包含测试 Activity 和媒体。
+    sourceSets {
+        getByName("dev") {
+            assets.srcDir("src/debug/assets")
+            manifest.srcFile("src/debug/AndroidManifest.xml")
         }
     }
 
@@ -656,6 +677,7 @@ dependencies {
 
     // --- 11. Debug (调试工具) ---
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    add("devImplementation", "androidx.compose.ui:ui-test-manifest")
     if (debugUiToolingRuntimeEnabled) {
         debugImplementation("androidx.compose.ui:ui-tooling")
     }

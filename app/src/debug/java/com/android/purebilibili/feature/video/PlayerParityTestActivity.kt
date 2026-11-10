@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.runBlocking
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** Debug-only local playback laboratory. No account, network, or production routing is replaced. */
+/** Debug 设备测试专用本地播放器夹具；修改时要同步更新 app/src/dev 中的副本，不属于正式版功能。 */
 class PlayerParityTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
         private set

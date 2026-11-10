@@ -7,9 +7,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigationevent.DirectNavigationEventInput
@@ -78,7 +79,7 @@ class DialogPredictiveBackUiTest(private val style: AppUiStyle) {
         }
         rule.mainClock.advanceTimeBy(400)
         rule.runOnIdle { assertEquals(1, dismissals) }
-        rule.onNodeWithText("未保存草稿").assertDoesNotExist()
+        rule.onAllNodesWithText("未保存草稿").assertCountEquals(0)
     }
 
     @Test

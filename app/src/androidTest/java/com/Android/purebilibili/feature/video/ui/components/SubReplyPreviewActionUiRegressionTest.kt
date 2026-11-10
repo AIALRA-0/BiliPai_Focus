@@ -64,6 +64,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     item = reply(total = 6, loaded = 6),
                     onClick = {},
                     onSubClick = { _, _ -> openedThreads++ },
@@ -91,6 +92,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     item = reply(total = 6, loaded = 4),
                     onClick = {},
                     onSubClick = { root, target -> openedThread = root.rpid to target },
@@ -112,6 +114,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     item = current.value,
                     onClick = {},
                     onSubClick = { _, _ -> },
@@ -144,6 +147,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     item = reply(total = 1, loaded = 1).copy(replies = listOf(child)),
                     onClick = {},
                     onSubClick = { root, target -> openedThreads += root.rpid to target },
@@ -184,6 +188,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     item = reply(total = 1, loaded = 1).copy(
                         content = content.copy(message = "完整评论：" + content.message),
                         replies = listOf(mentionReply().copy(content = content)),
@@ -245,6 +250,7 @@ class SubReplyPreviewActionUiRegressionTest {
                                 content = ReplyContent(message = "动态评论菜单回归"),
                             )
                         ),
+                        collapsedSubReplyPreviewLimit = 3,
                         isLoading = false,
                         isLoadingMore = false,
                         dynamicAuthorMid = 99L,
@@ -282,6 +288,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     item = ReplyItem(rpid = 501L, mid = 0L, member = ReplyMember(mid = "invalid")),
                     onClick = {},
                     onSubClick = { _, _ -> },
@@ -308,6 +315,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     item = item,
                     hideSubPreview = hideSubPreview,
                     onClick = {},
@@ -332,6 +340,7 @@ class SubReplyPreviewActionUiRegressionTest {
         rule.setContent {
             MaterialTheme {
                 ReplyItemView(
+                    collapsedSubReplyPreviewLimit = 3,
                     // Missing member.mid must still identify our own comment through item.mid.
                     item = ReplyItem(
                         rpid = 501L,

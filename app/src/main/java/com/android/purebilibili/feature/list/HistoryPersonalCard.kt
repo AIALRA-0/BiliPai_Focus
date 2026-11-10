@@ -12,7 +12,10 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -82,6 +85,7 @@ import com.android.purebilibili.data.model.response.HistoryBusiness
 import com.android.purebilibili.data.model.response.HistoryItem
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCoverOverlayTextShadow
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
+import com.android.purebilibili.feature.home.components.cards.HORIZONTAL_VIDEO_CARD_INFO_SPACING_DP
 import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.feature.personal.PersonalCardSelectMask
 
@@ -306,7 +310,7 @@ internal fun HistoryPersonalCard(
                             ),
                         ),
                     ),
-                    modifier = Modifier.size(29.dp),
+                    modifier = Modifier.size(AppChromeSizeTokens.MinimumTouchTarget),
                     anchorModifier = Modifier.fillMaxSize(),
                 ) {
                     Spacer(Modifier)
@@ -443,25 +447,36 @@ internal fun HistoryPersonalCard(
             )
         },
         supportingContent = {
-            AppText(
-                text = owner,
-                style = contentTypography.author,
-                color = AppContentColors.secondaryText(),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                tapToCopyEnabled = false,
-            )
-            if (viewedAt.isNotBlank()) {
-                AppText(
-                    text = viewedAt,
-                    style = contentTypography.author,
-                    color = AppContentColors.secondaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    tapToCopyEnabled = false,
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_CARD_INFO_SPACING_DP.dp),
+                ) {
+                    AppText(
+                        text = owner,
+                        style = contentTypography.author,
+                        color = AppContentColors.secondaryText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        tapToCopyEnabled = false,
+                    )
+                    if (viewedAt.isNotBlank()) {
+                        AppText(
+                            text = viewedAt,
+                            style = contentTypography.author,
+                            color = AppContentColors.secondaryText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            tapToCopyEnabled = false,
+                        )
+                    }
+                }
+                actionContent?.invoke()
             }
         },
-        trailingContent = actionContent?.let { action -> { action() } },
+        trailingContent = null,
     )
 }

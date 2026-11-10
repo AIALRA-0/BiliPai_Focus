@@ -14,12 +14,13 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -90,11 +91,11 @@ class SubReplyDetailUiRegressionTest {
         }
         composeTestRule.onNodeWithText("readable target without a directed prefix").assertIsDisplayed()
         assertPartialIndicatorBesideTitle("评论详情")
-        composeTestRule.onNodeWithTag("subreply_detail_root").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("subreply_detail_sort").assertDoesNotExist()
-        composeTestRule.onNodeWithText("没有更多了").assertDoesNotExist()
-        composeTestRule.onNodeWithText("返回全部回复").assertDoesNotExist()
-        composeTestRule.onNodeWithText("相关回复共", substring = true).assertDoesNotExist()
+        composeTestRule.onAllNodesWithTag("subreply_detail_root").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("subreply_detail_sort").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("没有更多了").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("返回全部回复").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("相关回复共", substring = true).assertCountEquals(0)
         composeTestRule.onNodeWithText("回复").performClick()
         composeTestRule.runOnIdle {
             assertEquals(target.rpid, replyId)
@@ -137,7 +138,8 @@ class SubReplyDetailUiRegressionTest {
             }
         }
         composeTestRule.onNodeWithText(target.content.message).assertIsDisplayed()
-        composeTestRule.onNodeWithTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${target.rpid}").assertDoesNotExist()
+        composeTestRule.onAllNodesWithTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${target.rpid}")
+            .assertCountEquals(0)
     }
 
     @Test
@@ -155,6 +157,7 @@ class SubReplyDetailUiRegressionTest {
                 LazyColumn {
                     dynamicInlineCommentItems(
                         comments = listOf(reply),
+                        collapsedSubReplyPreviewLimit = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
                         isLoading = false,
                         isLoadingMore = false,
                         dynamicAuthorMid = 99L,
@@ -182,19 +185,19 @@ class SubReplyDetailUiRegressionTest {
 
         composeTestRule.onNodeWithContentDescription("评论操作").performClick()
         composeTestRule.onNodeWithText("复制全部").assertIsDisplayed()
-        composeTestRule.onNodeWithText("删除").assertDoesNotExist()
-        composeTestRule.onNodeWithText("删除评论").assertDoesNotExist()
+        composeTestRule.onAllNodesWithText("删除").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("删除评论").assertCountEquals(0)
         composeTestRule.onNodeWithText("复制用户名").performClick()
 
         // A dynamic's owner is still not allowed to delete somebody else's comment.
         composeTestRule.runOnIdle { currentMid.value = 99L }
-        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.onAllNodesWithContentDescription("删除").assertCountEquals(0)
         composeTestRule.runOnIdle { currentMid.value = 77L }
-        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.onAllNodesWithContentDescription("删除").assertCountEquals(0)
         composeTestRule.runOnIdle { currentMid.value = 0L }
-        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.onAllNodesWithContentDescription("删除").assertCountEquals(0)
         composeTestRule.runOnIdle { currentMid.value = null }
-        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.onAllNodesWithContentDescription("删除").assertCountEquals(0)
     }
 
     @Test
@@ -232,7 +235,7 @@ class SubReplyDetailUiRegressionTest {
             assertEquals(listOf(301L, 100L), deletedIds)
             deletionAvailable.value = false
         }
-        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.onAllNodesWithContentDescription("删除").assertCountEquals(0)
     }
 
     @Test
@@ -561,8 +564,8 @@ class SubReplyDetailUiRegressionTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}301").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("${COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX}100").assertDoesNotExist()
+        composeTestRule.onAllNodesWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}301").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("${COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX}100").assertCountEquals(0)
         composeTestRule.onNodeWithText("root").performTouchInput { click(center) }
         composeTestRule.runOnIdle { assertEquals(null, replyTarget) }
         composeTestRule.onNodeWithText("回复").performClick()
@@ -587,7 +590,8 @@ class SubReplyDetailUiRegressionTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("未找到目标回复，可能已删除或不可见").assertDoesNotExist()
+        composeTestRule.onAllNodesWithText("未找到目标回复，可能已删除或不可见")
+            .assertCountEquals(0)
         composeTestRule.runOnIdle {
             assertEquals(0, loadMoreCount)
             state.value = state.value.copy(error = null, isEnd = true)
