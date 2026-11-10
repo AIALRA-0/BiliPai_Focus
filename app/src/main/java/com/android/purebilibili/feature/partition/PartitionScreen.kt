@@ -1,6 +1,8 @@
 // 文件路径: feature/partition/PartitionScreen.kt
 package com.android.purebilibili.feature.partition
 
+import com.android.purebilibili.feature.home.collectAsHomeFeedState
+
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
@@ -88,6 +90,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -104,6 +107,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -543,6 +548,7 @@ fun PartitionContent(
         start = 16.dp,
         end = 16.dp
     ),
+    sideRailTopPaddingProvider: () -> Dp = { contentPadding.calculateTopPadding() },
     hazeState: HazeState? = null,
     onVideoClick: (VideoItem) -> Unit = {},
     onBangumiClick: (Int) -> Unit = {},
@@ -555,7 +561,7 @@ fun PartitionContent(
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = HomeSettings())
     val topChromeIconFamily = rememberAppTopChromePolicy().effectiveIconFamily
     val liquidGlassIndicatorEnabled = rememberAppChromeLiquidGlassEnabled(
-        androidNativeEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+        androidNativeEnabled = homeSettings.otherGlassEnabled,
     )
     val liquidGlassTuning = remember(
         homeSettings.liquidGlassProgress,
@@ -568,7 +574,8 @@ fun PartitionContent(
             homeSettings.liquidGlassReadabilityMode,
         )
     }
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    val state by viewModel.uiState.collectAsHomeFeedState(pageWorkActive)
     val rankingListStates = partitionTabs.associate { partition ->
         partition.id to key(partition.id) { rememberLazyListState() }
     }
@@ -606,8 +613,8 @@ fun PartitionContent(
             lastVisibleIndex != null && lastVisibleIndex >= state.videos.lastIndex - 4
         }
     }
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore && !state.isLoading && state.videos.isNotEmpty()) {
+    LaunchedEffect(shouldLoadMore, pageWorkActive) {
+        if (pageWorkActive && shouldLoadMore && !state.isLoading && state.videos.isNotEmpty()) {
             viewModel.loadMore()
         }
     }
@@ -638,10 +645,20 @@ fun PartitionContent(
                     iconFamily = topChromeIconFamily,
                     modifier = Modifier
                         .width(sideRailWidth)
-                        // 纵向 dock 的外边距仅用于玻璃；关闭时保留原生侧栏的视口和内边距。
+                        // 侧栏按当前顶栏的可见高度测量，收起后释放顶部空间；
+                        // 在测量阶段读取滚动状态，玻璃、MD3、Miuix 共用视口规则。
+                        .layout { measurable, constraints ->
+                            val top = sideRailTopPaddingProvider().roundToPx()
+                                .coerceIn(0, constraints.maxHeight)
+                            val rail = measurable.measure(constraints.offset(vertical = -top))
+                            layout(rail.width, rail.height + top) {
+                                rail.placeRelative(0, top)
+                            }
+                        }
+                        // 横向外边距和底部避让仅用于玻璃；原生侧栏继续使用列表内边距。
                         .then(
                             if (liquidGlassIndicatorEnabled) {
-                                Modifier.padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = bottomPadding)
+                                Modifier.padding(start = 4.dp, end = 4.dp, bottom = bottomPadding)
                             } else Modifier
                         )
                         .zIndex(if (liquidGlassIndicatorEnabled) 1f else 0f),
@@ -656,7 +673,7 @@ fun PartitionContent(
                         )
                     } else PaddingValues(
                         start = if (sideRailOnRight) 4.dp else railOuterPadding,
-                        top = topPadding + 8.dp,
+                        top = 8.dp,
                         bottom = bottomPadding,
                         end = if (sideRailOnRight) railOuterPadding else 4.dp
                     ),
@@ -1637,11 +1654,16 @@ private fun PartitionVideoList(
 
 /** 剧集榜单条目展示海报、更新进度、播放量和追剧量，点击进入该剧集详情。 */
 @Composable
-private fun PartitionSeasonRankCard(
+internal fun PartitionSeasonRankCard(
     video: VideoItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 剧集榜单共用系统窗口来源登记，覆盖番剧、国创、影视与纪录片；不改变卡片材质和布局。
+    val transition = com.android.purebilibili.feature.bangumi.rememberBangumiCardTransition(
+        seasonId = video.id,
+        onClick = onClick,
+    )
     // AppText 按主题读取自身默认样式，不能仅依赖父级 Material ProvideTextStyle。
     // 在入口显式分配标题、更新信息和统计字阶，两种材质及原生主题共用。
     val typography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()
@@ -1649,7 +1671,8 @@ private fun PartitionSeasonRankCard(
         modifier = modifier,
         coverAspectRatio = 3f / 4f,
         allowPortraitCover = true,
-        onClick = onClick,
+        onClick = transition.onClick,
+        nativeSnapshotModifier = transition.modifier,
         headlineContent = {
             AppText(
                 text = video.title,

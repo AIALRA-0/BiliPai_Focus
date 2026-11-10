@@ -11,6 +11,23 @@ import kotlin.test.assertTrue
 class VideoDetailFullscreenOrientationPolicyTest {
 
     @Test
+    fun portraitPagerExcludesLandscapeFullscreenEvenBeforeConfigurationRotates() {
+        for (orientationDriven in listOf(false, true)) {
+            for (manualRequest in listOf(false, true)) {
+                for (smallWindow in listOf(false, true)) {
+                    assertFalse(resolveVideoDetailFullscreenMode(
+                        isOrientationDrivenFullscreen = orientationDriven,
+                        isLandscape = true,
+                        userRequestedFullscreen = manualRequest,
+                        isInMultiWindowMode = smallWindow,
+                        isPortraitFullscreen = true,
+                    ))
+                }
+            }
+        }
+    }
+
+    @Test
     fun `phone small window detail entry stays portrait despite stale landscape bounds`() {
         for (autoRotate in listOf(false, true)) {
             for (mode in listOf(FullscreenMode.AUTO, FullscreenMode.HORIZONTAL)) {
@@ -170,7 +187,7 @@ class VideoDetailFullscreenOrientationPolicyTest {
                 isFullscreenMode = true,
             ))
         }
-        assertEquals(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = false,
                 systemAutoRotateEnabled = false,
@@ -181,6 +198,27 @@ class VideoDetailFullscreenOrientationPolicyTest {
                 manualFullscreenRequested = true,
             )
         )
+    }
+
+    @Test
+    fun `manual fullscreen keeps the exact landscape side when auto rotate is off`() {
+        for (side in listOf(
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+        )) {
+            assertEquals(side,
+                resolvePhoneVideoRequestedOrientation(
+                    autoRotateEnabled = false,
+                    systemAutoRotateEnabled = false,
+                    fullscreenMode = FullscreenMode.HORIZONTAL,
+                    isCompactDevice = true,
+                    isOrientationDrivenFullscreen = true,
+                    isFullscreenMode = true,
+                    manualFullscreenRequested = true,
+                    currentRequestedOrientation = side,
+                )
+            )
+        }
     }
 
     @Test

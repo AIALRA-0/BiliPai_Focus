@@ -55,8 +55,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.tween
-import com.android.purebilibili.core.ui.LocalSharedTransitionScope
-import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
 import com.android.purebilibili.core.ui.feedContentTypography
 import com.android.purebilibili.core.ui.AppShapes
@@ -64,13 +62,9 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.LocalMiuixVideoCardTransitionState
-import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
-import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedCoverCacheKey
-import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 import kotlin.math.roundToInt
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
@@ -172,22 +166,6 @@ fun GlassVideoCard(
         sharedElementSourceRoute ?: localSharedElementSourceRoute
     }
     val effectiveTransitionEnabled = transitionEnabled
-    val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
-    val transitionAdaptiveInfo = com.android.purebilibili.core.ui.transition
-        .LocalVideoTransitionAdaptiveInfo.current
-    val cardSharedTransitionMotionSpec = remember(
-        effectiveSharedElementSourceRoute,
-        effectiveTransitionEnabled,
-        sharedTransitionSpeedSettings,
-        transitionAdaptiveInfo,
-    ) {
-        resolveVideoCardSharedTransitionMotionSpec(
-            sourceRoute = effectiveSharedElementSourceRoute,
-            transitionEnabled = effectiveTransitionEnabled,
-            speedSettings = sharedTransitionSpeedSettings,
-            adaptiveInfo = transitionAdaptiveInfo,
-        )
-    }
     val coverCacheKey = remember(video.bvid, useLowQualityCover) {
         resolveVideoSharedCoverCacheKey(video.bvid, useLowQualityCover)
     }
@@ -225,15 +203,6 @@ fun GlassVideoCard(
     }
     
     //  尝试获取共享元素作用域
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val coverSharedEnabled = effectiveTransitionEnabled &&
-        sharedTransitionScope != null &&
-        animatedVisibilityScope != null
-    val useCardShellSharedBounds = shouldUseVideoCardShellSharedBounds(
-        sourceRoute = effectiveSharedElementSourceRoute,
-        transitionEnabled = coverSharedEnabled
-    )
     val isSharedReturnTarget = remember(
         video.bvid,
         effectiveSharedElementSourceRoute,
@@ -248,8 +217,7 @@ fun GlassVideoCard(
     val coverCrossfadeEnabled = shouldEnableVideoCardCoverCrossfade(
         isScrollInProgress = false,
         isReturningFromDetail = isReturningFromVideoDetail,
-        useCoverSharedBounds = useCardShellSharedBounds ||
-            (LocalMiuixVideoCardTransitionState.current.enabled && isSharedReturnTarget),
+        useCoverSharedBounds = LocalMiuixVideoCardTransitionState.current.enabled && isSharedReturnTarget,
         isSharedReturnTarget = isSharedReturnTarget,
     )
     // 🌈 彩虹渐变边框色
@@ -272,15 +240,6 @@ fun GlassVideoCard(
         modifier = Modifier
             .fillMaxWidth()
             .adaptiveCardHoverEffect(shape = cardShellShape)
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = video.bvid,
-                sourceRoute = effectiveSharedElementSourceRoute,
-                motionSpec = cardSharedTransitionMotionSpec,
-                clipShape = cardShellShape
-            )
             .padding(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro)
             .animateEnter(
                 index = index,
@@ -357,12 +316,6 @@ fun GlassVideoCard(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .videoCardShellReturnCoverAlpha(
-                                enabled = useCardShellSharedBounds,
-                                bvid = video.bvid,
-                                sourceRoute = effectiveSharedElementSourceRoute,
-                                isReturningFromDetail = isReturningFromVideoDetail,
-                            )
                             .clip(coverShape)
                     ) {
                         // 由 AsyncImage 根据卡片布局约束选择解码尺寸。
@@ -451,13 +404,6 @@ fun GlassVideoCard(
                         .fillMaxWidth()
                         .padding(horizontal = AppSpacingTokens.Medium + AppSpacingTokens.Micro)
                         .padding(bottom = AppSpacingTokens.Medium + AppSpacingTokens.Micro)
-                        .videoCardShellReturnChromeAlpha(
-                            enabled = useCardShellSharedBounds,
-                            bvid = video.bvid,
-                            sourceRoute = effectiveSharedElementSourceRoute,
-                            isReturningFromDetail = isReturningFromVideoDetail,
-                            isQuickReturnFromDetail = isQuickReturningFromVideoDetail,
-                        )
                 ) {
                     AppText(
                         text = video.title,

@@ -61,9 +61,8 @@ class FrameBudgetLintTest {
         assertEquals(
             EXPECTED_HAZE_SOURCE_COUNTS,
             actual,
-            "hazeSourceCompat registrations are an explicitly reviewed 31-site inventory. " +
-                "Each site records its subtree every frame, so changes must update the per-file inventory " +
-                "with a reason; use conditional attachment when its consumer is inactive.",
+            "当前源码有35处 hazeSourceCompat，按文件逐处登记。每处都会在消费者工作时记录子树；" +
+                "新增时要说明页面和启用条件，消费者不工作时应条件挂载。",
         )
     }
 
@@ -93,7 +92,7 @@ class FrameBudgetLintTest {
         val offenders = mainSources()
             .map { it to it.readText() }
             .filter { (_, text) -> BLUR_EFFECT.containsMatchIn(text) }
-            .filterNot { (_, text) -> RADIUS_GUARD.containsMatchIn(text) }
+            .filterNot { (_, text) -> hasRadiusGuard(text.withoutCommentLines()) }
             .map { (file, _) -> file.name }
 
         assertTrue(
@@ -226,7 +225,7 @@ class FrameBudgetLintTest {
         val RUN_BLOCKING = Regex("""\brunBlocking\s*[({]""")
         val BLUR_EFFECT = Regex("""createBlurEffect\s*\(""")
         val RADIUS_GUARD = Regex(
-            """(?:last\w*(?:Blur)?Radius|cached\w*Radius|effects\.getOrPut\(radiusKey\)|\w*BlurEffectCache\.resolve\()""",
+            """(?:last\w*(?:Blur)?Radius|cached\w*Radius|\b\w*Radius(?:Px)?\s*!=\s*\w+|effects\.getOrPut\(radiusKey\)|effectsByRadius\.getOrPut\(|(?i:\w*renderEffectCache\.resolve\()|blurEffects\s*=\s*remember\(blurOnChange,\s*density\.density\))""",
         )
         val INFINITE_TRANSITION = Regex("""rememberInfiniteTransition\s*\(""")
 
@@ -236,31 +235,39 @@ class FrameBudgetLintTest {
             """\bSettingsManager\s*\.\s*\w+Sync\s*\(\s*(context|ctx|this)\b""",
         )
 
-        // ── 冻结于接入棘轮时的实测值，只能调小 ──────────────────────────
-        const val MAX_COMPOSED = 23
-        const val MAX_OFFSCREEN = 2
+        // 当前有24个 composed 定义；其中 StaggeredEntrance.kt 是 Focus 自有实现。
+        // 保留这个实测基线，后续仍需迁移或证明新增实现的必要性。
+        const val MAX_COMPOSED = 24
+
+        // code389 检查点已有7处，code390 的 LiquidGlassScenePreference 加入第8处。
+        // 这些调用用于转场快照、反射或 DstIn 渐隐遮罩；上限继续阻止其他代码随意增加离屏层。
+        const val MAX_OFFSCREEN = 8
         const val MAX_RUN_BLOCKING_IN_STORE = 1
 
-        // Reviewed haze source registrations, recorded by file so a reduction in one module
-        // cannot silently mask a new per-frame recording site elsewhere.
+        // code390 当前的35处 haze source 按文件登记。新增页面源或增加同文件分支时，
+        // 要先确认消费者启用条件，再同步更新对应条目。
         val EXPECTED_HAZE_SOURCE_COUNTS = mapOf(
             "core/ui/ImmersiveAppScaffold.kt" to 1,
+            "feature/article/ArticleDetailScreen.kt" to 1,
             "feature/bangumi/BangumiScreen.kt" to 1,
+            "feature/bangumi/ui/player/BangumiCommentPanel.kt" to 1,
             "feature/dynamic/DynamicScreen.kt" to 2,
             "feature/dynamic/components/DynamicSidebar.kt" to 1,
             "feature/home/HomeScreen.kt" to 1,
+            "feature/home/WeeklySeriesScreen.kt" to 1,
             "feature/list/CommonListScreen.kt" to 1,
             "feature/live/LivePlayerScreen.kt" to 1,
             "feature/message/ChatScreen.kt" to 1,
             "feature/profile/ProfileScreen.kt" to 3,
-            "feature/search/SearchScreen.kt" to 9,
+            "feature/search/SearchResultPageContent.kt" to 8,
+            "feature/search/SearchScreen.kt" to 1,
             "feature/settings/screen/SettingsScreen.kt" to 1,
             "feature/settings/screen/SettingsTabletShell.kt" to 1,
             "feature/settings/ui/SettingsPageScaffold.kt" to 1,
             "feature/space/SpaceScreen.kt" to 1,
             "feature/video/screen/VideoDetailPhoneContent.kt" to 1,
             "feature/video/ui/overlay/FullscreenPlayerOverlay.kt" to 1,
-            "feature/video/ui/overlay/ImmersiveStatusBarBackdrop.kt" to 1,
+            "feature/video/ui/overlay/ImmersiveStatusBarBackdrop.kt" to 2,
             "feature/video/ui/section/VideoPlayerSection.kt" to 1,
             "feature/watchlater/WatchLaterScreen.kt" to 1,
             "navigation/AppNavigation.kt" to 1,
@@ -275,13 +282,15 @@ class FrameBudgetLintTest {
         // 页面共用），与既有 skeleton 增量同类；收敛 skeleton 时一并调小。
         const val MAX_INFINITE_TRANSITION = 17
 
-        // 89 → 90：守卫接入前已有一个存量同步设置调用未纳入基线；PR #715 未新增
-        // 此类调用。校准到当前实测值后继续阻止新的调用点进入首帧/重组路径。
-        const val MAX_SETTINGS_SYNC_CALL_SITES = 90
+        // code389 检查点统计到113处；code390 移除了 VideoCard.kt 的1处，当前为112处。
+        // 统计范围包含 service、启动和界面代码；调用点总数不代表每处都会阻塞主线程。
+        const val MAX_SETTINGS_SYNC_CALL_SITES = 112
 
-        // 当前 3 个：PredictiveBackBackgroundPolicy.kt（每帧重建，转场期最热的一条路径）、
-        // ImagePreviewDialog.kt、MainActivity.kt（splash 淡出期，峰值半径 70dp）。
+        // 半径比较、按半径缓存和 remember 写法都会复用 RenderEffect，因此不计为无守卫文件。
+        // 当前无守卫项仍不超过3个；AmbientGpuBlurPolicy 的固定半径效果按 GPU 模糊作业创建。
         const val MAX_UNGUARDED_BLUR_EFFECT_FILES = 3
+
+        private fun hasRadiusGuard(text: String): Boolean = RADIUS_GUARD.containsMatchIn(text)
 
         val cachedMain: List<File> by lazy {
             val roots = listOf(

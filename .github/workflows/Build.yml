@@ -2,6 +2,10 @@ name: Build
 
 on:
   push:
+    branches:
+      - '**'
+    tags-ignore:
+      - 'v9.1.1-focus.6'
   workflow_dispatch:
     inputs:
       build_type:
@@ -213,6 +217,11 @@ jobs:
               exit 1
             fi
             RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+            VERSION_NAME="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+            if [ "$RELEASE_TAG" != "v${VERSION_NAME}" ]; then
+              echo "Release tag does not match the APK version name." >&2
+              exit 1
+            fi
             RELEASE_ELIGIBLE="true"
           fi
 
@@ -525,7 +534,7 @@ jobs:
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
           DIST_DIR: ${{ github.workspace }}/build/release-evidence
           NOTES_FILE: ${{ runner.temp }}/focus-release-notes.md
-          CHANNEL_NOTE: Focus 稳定渠道发布，基于上游 0.2.3-alpha.2。
+          CHANNEL_NOTE: Focus 稳定渠道发布，基于上游 0.7.9-beta.7；上游基础为测试版。
         run: |
           gh release view "$RELEASE_TAG" --json isDraft >/dev/null 2>&1 || \
             gh release create "$RELEASE_TAG" \

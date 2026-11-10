@@ -492,7 +492,7 @@ internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
         "icon_bilipai_pink" -> R.mipmap.ic_launcher_bilipai_monet_foreground
         "icon_bilipai_white" -> R.mipmap.ic_launcher_bilipai_monet_foreground
         "icon_bilipai_monet" -> R.mipmap.ic_launcher_bilipai_monet_foreground
-        "icon_3d" -> R.drawable.ic_launcher_foreground_flat
+        "icon_3d" -> R.drawable.ic_launcher_play_window_monochrome
         else -> R.mipmap.ic_launcher_blue_snow_maid_monochrome
     }
 }
@@ -533,7 +533,10 @@ internal fun resolveMediaButtonControlType(keyCode: Int, action: Int): MediaCont
         KeyEvent.KEYCODE_MEDIA_NEXT -> MediaControlType.NEXT
         KeyEvent.KEYCODE_MEDIA_PLAY -> MediaControlType.PLAY
         KeyEvent.KEYCODE_MEDIA_PAUSE -> MediaControlType.PAUSE
-        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> MediaControlType.PLAY_PAUSE
+        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+        KeyEvent.KEYCODE_HEADSETHOOK -> MediaControlType.PLAY_PAUSE
+        // 车机/耳机可能发 MEDIA_STOP；系统会 stop 到 IDLE，这里按暂停处理。
+        KeyEvent.KEYCODE_MEDIA_STOP -> MediaControlType.PAUSE
         else -> null
     }
 }
@@ -1861,13 +1864,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
             controllerInfo: MediaSession.ControllerInfo,
             intent: Intent
         ): Boolean {
-            Logger.d(TAG, " onMediaButtonEvent: action=${intent.action}")
             val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
             } else {
                 @Suppress("DEPRECATION")
                 intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT) as? KeyEvent
             }
+            Logger.d(TAG, " onMediaButtonEvent: action=${intent.action} keyCode=${keyEvent?.keyCode} keyAction=${keyEvent?.action}")
             val controlType = keyEvent?.let { resolveMediaButtonControlType(it.keyCode, it.action) }
             if (controlType != null) {
                 Logger.d(TAG, "🎮 媒体按键控制: $controlType")
@@ -3252,6 +3255,20 @@ class MiniPlayerManager private constructor(private val context: Context) :
         INSTANCE = null
     }
 
+    /** 主线程采样；独立音频进程有自己的保存入口，不从过期的本地播放器取断点。 */
+    internal fun captureForMemoryTermination(): com.android.purebilibili.core.store.AudioPlaybackCheckpoint? {
+        if (remoteAudio.active || isLiveMode) return null
+        val local = player ?: return null
+        val bvid = currentBvid ?: return null
+        if (currentCid <= 0L || local.currentMediaItem == null || local.playbackState == Player.STATE_IDLE) return null
+        return com.android.purebilibili.core.store.AudioPlaybackCheckpoint(
+            accountMid = NetworkModule.playbackAccount()?.mid ?: TokenManager.midCache ?: 0L,
+            bvid = bvid,
+            cid = currentCid,
+            positionMs = if (local.playbackState == Player.STATE_ENDED) 0L else local.currentPosition.coerceAtLeast(0L),
+        )
+    }
+
     // --- 播放器监听器 ---
     private var libraryCheckpointJob: Job? = null
 
@@ -3342,6 +3359,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     Logger.d(TAG, "Playback ended")
                     playbackServiceRequested = false
                     clearPlaybackNotificationArtifacts()
+                    // 播完清掉片尾进度，避免下次从最后一帧恢复。
+                    currentBvid?.takeIf { it.isNotBlank() }?.let { bvid ->
+                        com.android.purebilibili.core.player.PlaybackProgressManager
+                            .getInstance(context)
+                            .clearPosition(bvid, currentCid)
+                    }
                 }
             }
         }

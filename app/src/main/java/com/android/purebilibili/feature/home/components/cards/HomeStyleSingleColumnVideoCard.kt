@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.components.VideoStatusBadges
 import com.android.purebilibili.core.ui.components.wallpaperAwareMediaCardBackground
 import com.android.purebilibili.core.ui.AppContentColors
@@ -39,11 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -74,7 +74,6 @@ import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapsh
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
@@ -82,6 +81,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.feature.home.resolveHomeCoverRequestSpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
@@ -111,6 +111,7 @@ internal fun HomeStyleSingleColumnVideoCard(
     compactPartition: Boolean = false,
 ) {
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(video.bvid)
     var cardVisibleInWindow by remember(video.bvid, video.aid) { mutableStateOf(false) }
     val publishTimeText = rememberVideoCardPublishTimeText(video, showPublishTime, cardVisibleInWindow)
     val isLongPressEnabled = com.android.purebilibili.core.ui.LocalVideoCardLongPressEnabled.current
@@ -149,8 +150,9 @@ internal fun HomeStyleSingleColumnVideoCard(
             adaptiveInfo = transitionAdaptiveInfo,
         )
     }
-    val cardBounds = remember { object { var value: Rect? = null } }
-    val coverBounds = remember { object { var value: Rect? = null } }
+    // 只保存坐标引用，滚动时不计算全局矩形；点击时读取当前布局，适用于所有材质。
+    val cardCoordinates = remember { object { var value: LayoutCoordinates? = null } }
+    val coverCoordinates = remember { object { var value: LayoutCoordinates? = null } }
     val infoCoordinates = remember { object { var value: LayoutCoordinates? = null } }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(
         video.bvid, enabled = sharedTransitionEnabled,
@@ -190,8 +192,10 @@ internal fun HomeStyleSingleColumnVideoCard(
             // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
             return@appActionWithFeedback
         }
-        cardBounds.value?.let { bounds ->
-            val sourceCoverBounds = coverBounds.value
+        cardCoordinates.value?.takeIf { it.isAttached }?.let { coordinates ->
+            val bounds = coordinates.videoCardSourceBoundsInRoot()
+            val sourceCoverBounds = coverCoordinates.value
+                ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
             CardPositionManager.recordVideoCardPosition(
                 bvid = video.bvid,
                 sourceRoute = sourceRoute,
@@ -254,19 +258,10 @@ internal fun HomeStyleSingleColumnVideoCard(
                 cardVisibleInWindow = it
             }
             .adaptiveCardHoverEffect(shape = cardShape)
-            .onGloballyPositioned { coordinates ->
-                cardBounds.value = coordinates.videoCardSourceBoundsInRoot()
+            .onPlaced { coordinates ->
+                cardCoordinates.value = coordinates
             }
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = video.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = motionSpec,
-                clipShape = cardShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(video.bvid, cardShape)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
             .then(
@@ -281,10 +276,10 @@ internal fun HomeStyleSingleColumnVideoCard(
                 onClick = triggerClick,
                 onLongClick = if (isLongPressEnabled) onLongClick else null,
             ),
-        coverModifier = Modifier.onGloballyPositioned { coordinates ->
-            coverBounds.value = coordinates.videoCardSourceBoundsInRoot()
+        coverModifier = Modifier.onPlaced { coordinates ->
+            coverCoordinates.value = coordinates
         },
-        infoModifier = Modifier.onGloballyPositioned { coordinates ->
+        infoModifier = Modifier.onPlaced { coordinates ->
             infoCoordinates.value = coordinates
         },
         coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier,
@@ -301,7 +296,7 @@ internal fun HomeStyleSingleColumnVideoCard(
         },
         coverOverlayContent = {
             VideoStatusBadges(
-                labels = video.statusLabels,
+                labels = video.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.ExtraSmall),
             )
             if (durationStyle == com.android.purebilibili.core.store.HomeDurationStyle.HIDDEN) {

@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -195,13 +196,19 @@ internal fun entryProvider(builder: NavEntryBuilder.() -> Unit): (NavKey) -> Nav
  * [androidx.compose.animation.core.AnimationSpec].
  */
 @Composable
-private fun NavPresentation.animateTopTo(target: Float, motion: NavMotion) {
+private fun NavPresentation.animateTopTo(target: Float, motion: NavMotion, prepareEnterFrame: Boolean) {
     val currentMotion = rememberUpdatedState(motion)
     LaunchedEffect(target) {
         // Consume the release velocity exactly once per retarget, whether or not it gets used.
         val released = pendingSettleVelocity
         pendingSettleVelocity = 0f
         if (animatedTop.value == target) return@LaunchedEffect
+        if (prepareEnterFrame && target > animatedTop.value) {
+            // The incoming source frame participates in this frame's layout/draw. Start the
+            // clock on the following frame so its initial composition cannot consume the tween.
+            withFrameNanos { }
+            withFrameNanos { }
+        }
         // A gesture-release settle toward this same target may already own the float (a swipe
         // commit pops synchronously and queues its velocity-seeded settle ahead of this effect);
         // defer to it instead of stomping the seeded spring with a fresh-from-rest curve.
@@ -343,6 +350,7 @@ private fun NavDisplayLayout(
     transition: NavTransition,
     effects: NavDisplayEffects,
     backCompletionPolicy: NavBackCompletionPolicy?,
+    onBackStarted: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val presentation = rememberNavPresentation(backStack.lastIndex)
@@ -352,6 +360,7 @@ private fun NavDisplayLayout(
     val topIndex = backStack.lastIndex
     val backScope = rememberCoroutineScope()
     val currentOnBack = rememberUpdatedState(onBack)
+    val currentOnBackStarted = rememberUpdatedState(onBackStarted)
     val currentBackCompletionPolicy = rememberUpdatedState(backCompletionPolicy)
     val focusManager = LocalFocusManager.current
 
@@ -514,6 +523,7 @@ private fun NavDisplayLayout(
         enabled = backStack.size > 1,
         drainEventsOnCancel = backCompletionPolicy != null,
         onProgress = { sessionId, events ->
+            currentOnBackStarted.value()
             val session = PredictiveBackSession(
                 completionPolicy = currentBackCompletionPolicy.value,
                 ownershipLease = predictiveBackOwnership.acquire(),
@@ -642,7 +652,11 @@ private fun NavDisplayLayout(
 
     // Drive the single shared float towards the new top index via the governing settle curves. The
     // renderer only sets the target; the interactive gesture layer may snapToFinger it instead.
-    presentation.animateTopTo(backStack.lastIndex.toFloat(), topMotion)
+    val prepareEnterFrame = presentation.presented.any { entry ->
+        indexByContentKey[entry.contentKey] == backStack.lastIndex &&
+            (entry.transitionOrNull() ?: transition).preparesEnterFrame
+    }
+    presentation.animateTopTo(backStack.lastIndex.toFloat(), topMotion, prepareEnterFrame)
 
     // Effective interactive dismiss direction of the CURRENT top entry: a per-route override wins,
     // else its governing transition declares the natural direction. Rebuilding one entry to read
@@ -679,7 +693,10 @@ private fun NavDisplayLayout(
                 externalGestureOwnership = { predictiveBackOwnership.generation },
                 onCommit = currentOnBack.value,
                 onCancel = {},
-                onGesture = { presentation.gesture = it },
+                onGesture = {
+                    if (it != null && presentation.gesture == null) currentOnBackStarted.value()
+                    presentation.gesture = it
+                },
             ),
     ) {
         // Backdrop behind every entry (reference shell behavior): a solid layer in the page
@@ -717,7 +734,10 @@ private fun NavDisplayLayout(
                     val settlingSpring = entry.presentation.isRemoving &&
                         (entry.transitionOrNull() ?: transition).retainsSpringOvershoot &&
                         presentation.animatedTop.isRunning
-                    if (isVisibleAt(relativeDepth(top, index), windowDepth) || settlingSpring) {
+                    val preparingEnter = !entry.presentation.isRemoving &&
+                        relativeDepth(top, index) == -1f &&
+                        (entry.transitionOrNull() ?: transition).preparesEnterFrame
+                    if (isVisibleAt(relativeDepth(top, index), windowDepth) || settlingSpring || preparingEnter) {
                         val list = result ?: ArrayList<NavEntry<*>>(presented.size).also { result = it }
                         // Insertion-sorted by stack index: composition order is draw order, and a
                         // pure back-stack reorder leaves `presented` in its old order. Stable, so a
@@ -1037,6 +1057,7 @@ fun NavDisplay(
     transition: NavTransition = NavTransitions.MiuixDefault,
     effects: NavDisplayEffects = NavDisplayEffects(),
     backCompletionPolicy: NavBackCompletionPolicy? = null,
+    onBackStarted: () -> Unit = {},
     content: NavEntryBuilder.() -> Unit,
 ) {
     val provider = remember(content) { entryProvider(content) }
@@ -1048,6 +1069,7 @@ fun NavDisplay(
         transition = transition,
         effects = effects,
         backCompletionPolicy = backCompletionPolicy,
+        onBackStarted = onBackStarted,
     )
 }
 
@@ -1070,6 +1092,7 @@ fun NavDisplay(
     transition: NavTransition = NavTransitions.MiuixDefault,
     effects: NavDisplayEffects = NavDisplayEffects(),
     backCompletionPolicy: NavBackCompletionPolicy? = null,
+    onBackStarted: () -> Unit = {},
     content: NavEntryBuilder.() -> Unit,
 ) {
     NavDisplay(
@@ -1079,6 +1102,7 @@ fun NavDisplay(
         transition = transition,
         effects = effects,
         backCompletionPolicy = backCompletionPolicy,
+        onBackStarted = onBackStarted,
         content = content,
     )
 }
@@ -1105,6 +1129,7 @@ internal fun NavDisplay(
     transition: NavTransition = NavTransitions.MiuixDefault,
     effects: NavDisplayEffects = NavDisplayEffects(),
     backCompletionPolicy: NavBackCompletionPolicy? = null,
+    onBackStarted: () -> Unit = {},
 ) {
     require(backStack.isNotEmpty()) { "NavDisplay back stack cannot be empty" }
     NavDisplayLayout(
@@ -1114,6 +1139,7 @@ internal fun NavDisplay(
         transition = transition,
         effects = effects,
         backCompletionPolicy = backCompletionPolicy,
+        onBackStarted = onBackStarted,
         modifier = modifier,
     )
 }

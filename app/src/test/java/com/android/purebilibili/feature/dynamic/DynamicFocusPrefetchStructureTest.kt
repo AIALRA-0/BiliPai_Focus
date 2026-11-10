@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.dynamic
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -12,7 +13,7 @@ class DynamicFocusPrefetchStructureTest {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt")
             .replace("\r\n", "\n")
         val prefetchSource = source
-            .substringAfter("LaunchedEffect(\n        unfilteredActivePresentation.items.size")
+            .substringAfter("LaunchedEffect(\n        accountIdentity.generation,")
             .substringBefore("val oldContentDividerLabel")
 
         assertTrue(prefetchSource.contains("unfilteredActivePresentation.items.size"))
@@ -20,6 +21,44 @@ class DynamicFocusPrefetchStructureTest {
         assertTrue(prefetchSource.contains("shouldPrefetchMoreFocusDynamicItems("))
         assertTrue(prefetchSource.contains("refresh = false"))
         assertTrue(prefetchSource.contains("resolveDynamicFeedRequestType(displayedLogicalTab)"))
+    }
+
+    @Test
+    fun `switching accounts resets prefetch progress even when first page size is unchanged`() {
+        val previousAccount = FocusDynamicPrefetchProgress(
+            accountGeneration = 4L,
+            lastSourceItemCount = 20,
+            extraPagesFetched = MAX_FOCUS_DYNAMIC_PREFETCH_PAGES,
+        )
+
+        val switchedAccount = resolveFocusDynamicPrefetchProgressForAccount(
+            progress = previousAccount,
+            accountGeneration = 5L,
+        )
+
+        assertEquals(FocusDynamicPrefetchProgress(accountGeneration = 5L), switchedAccount)
+        assertTrue(
+            shouldProcessFocusDynamicPrefetchBatch(
+                sourceItemCount = 20,
+                lastSourceItemCount = switchedAccount.lastSourceItemCount,
+            ),
+        )
+        assertTrue(
+            shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = 2,
+                hasMore = true,
+                filterEnabled = true,
+                extraPagesFetched = switchedAccount.extraPagesFetched,
+            ),
+        )
+
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt")
+            .replace("\r\n", "\n")
+        val prefetchStateSource = source
+            .substringAfter("var focusPrefetchProgress by remember(")
+            .substringBefore("val oldContentDividerLabel")
+        assertTrue(prefetchStateSource.contains("accountIdentity.generation"))
+        assertTrue(prefetchStateSource.contains("LaunchedEffect(\n        accountIdentity.generation,"))
     }
 
     @Test

@@ -967,7 +967,7 @@ class BackgroundPlaybackPolicyTest {
         assertEquals(R.mipmap.ic_launcher_bilipai_monet_foreground, resolveNotificationSmallIconRes("icon_bilipai_pink"))
         assertEquals(R.mipmap.ic_launcher_bilipai_monet_foreground, resolveNotificationSmallIconRes("BiliPai White"))
         assertEquals(R.mipmap.ic_launcher_bilipai_monet_foreground, resolveNotificationSmallIconRes("BiliPai Monet"))
-        assertEquals(R.drawable.ic_launcher_foreground_flat, resolveNotificationSmallIconRes("icon_3d"))
+        assertEquals(R.drawable.ic_launcher_play_window_monochrome, resolveNotificationSmallIconRes("icon_3d"))
         assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("Flat Material"))
         assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("Neon"))
         assertEquals(R.mipmap.ic_launcher_blue_snow_maid_monochrome, resolveNotificationSmallIconRes("Pink"))
@@ -1070,6 +1070,20 @@ class BackgroundPlaybackPolicyTest {
             MediaControlType.PLAY_PAUSE,
             resolveMediaButtonControlType(
                 keyCode = android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                action = android.view.KeyEvent.ACTION_DOWN
+            )
+        )
+        assertEquals(
+            MediaControlType.PLAY_PAUSE,
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_HEADSETHOOK,
+                action = android.view.KeyEvent.ACTION_DOWN
+            )
+        )
+        assertEquals(
+            MediaControlType.PAUSE,
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_MEDIA_STOP,
                 action = android.view.KeyEvent.ACTION_DOWN
             )
         )

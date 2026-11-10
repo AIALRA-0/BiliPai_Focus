@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.request.crossfade
@@ -30,8 +31,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
 import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
@@ -89,7 +88,6 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
@@ -348,16 +346,7 @@ fun RelatedVideoItem(
             .onGloballyPositioned { coordinates ->
                 cardCoordinatesRef.value = coordinates
             }
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = video.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = sharedTransitionMotionSpec,
-                clipShape = cardShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(video.bvid, cardShape)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
             .clickable(onClick = triggerRelatedVideoClick)
@@ -530,8 +519,6 @@ internal fun RelatedVideoGridRow(
     var summaryVideo by remember { mutableStateOf<RelatedVideo?>(null) }
     var summaryLoading by remember { mutableStateOf(false) }
     var summaryText by remember { mutableStateOf("") }
-    val privacyEnabled by remember { SettingsManager.getPrivacyModeEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
     val actionMenuSource = rememberAppGlassMenuSource()
     Row(
         modifier = Modifier
@@ -593,13 +580,6 @@ internal fun RelatedVideoGridRow(
                                 onUpClick(video.owner.mid)
                             })
                         }
-                        AppDropdownMenuItem(text = { AppText(if (privacyEnabled) "退出无痕模式" else "进入无痕模式") }, leadingIcon = { AppIcon(if (privacyEnabled) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, null) }, onClick = {
-                            menuVideo = null
-                            scope.launch {
-                                SettingsManager.setPrivacyModeEnabled(context, !privacyEnabled)
-                                Toast.makeText(context, if (privacyEnabled) "已退出无痕模式" else "已进入无痕模式", Toast.LENGTH_SHORT).show()
-                            }
-                        })
                     }
                 },
             )

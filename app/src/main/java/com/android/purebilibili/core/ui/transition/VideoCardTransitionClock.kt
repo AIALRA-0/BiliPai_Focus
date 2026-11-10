@@ -20,8 +20,8 @@ import kotlin.math.roundToInt
  * - **0** = 落在列表源卡（景深清晰）
  * - **1** = 落在详情全屏（景深满糊）
  *
- * 元素 scale、背景 blur / scrim、chrome settle、壁纸 depth **只读** [depthProgress]，
- * 不再各自 Animatable 并行。
+ * 背景 blur / scrim 和壁纸 depth 读取 [depthProgress]。卡片位置、尺寸与圆角
+ * 由同一导航 settle 时间采样各属性弹簧，不注册独立帧循环。
  *
  * Miuix 主链路：只跟随 NavDisplay，包含预测 seek/commit/cancel 和真实结束帧。
  * ## 无 Nav 主驱动的兼容路径优先级（高 → 低）
@@ -38,6 +38,7 @@ internal class VideoCardTransitionClock {
     val landingFeedback = VideoCardLandingFeedbackState()
 
     private var navigationDepthProvider: (() -> Float?)? = null
+    private var navigationMaskDepthProvider: (() -> Float?)? = null
     private var navigationSettleState: VideoCardTransitionSettleState? by mutableStateOf(null)
     var initialVelocity: Float = 0f
         private set
@@ -53,8 +54,12 @@ internal class VideoCardTransitionClock {
         }
 
     /** Miuix owns position AND lifetime. Do not start a hidden fallback alongside it. */
-    fun bindNavigationDriver(provider: (() -> Float?)?) {
+    fun bindNavigationDriver(
+        provider: (() -> Float?)?,
+        maskProvider: (() -> Float?)? = null,
+    ) {
         navigationDepthProvider = provider
+        navigationMaskDepthProvider = maskProvider
         if (provider == null) navigationSettleState = null
     }
 
@@ -128,6 +133,15 @@ internal class VideoCardTransitionClock {
             gestureRestoreInProgress = gestureRestoreInProgress,
             returnDepthFloor = returnDepthFloor,
         )
+    }
+
+    /**
+     * 背景遮罩深度（独立弹簧通道，压暗先于模糊到位）。
+     * 无导航驱动或回灌路径时退化为 [depthProgress]，与旧单通道行为一致。
+     */
+    fun maskProgress(): Float {
+        navigationMaskDepthProvider?.invoke()?.let { return it.coerceIn(0f, 1f) }
+        return depthProgress()
     }
 
     /**

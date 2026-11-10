@@ -68,6 +68,7 @@ object SearchRepository {
     private val api = NetworkModule.searchApi
     private val searchJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val navApi = NetworkModule.api
+    private val WBI_INVALID_CODES = setOf(-352, -403, -412)
 
     //  [新增] 搜索分页信息
     data class SearchPageInfo(
@@ -112,27 +113,33 @@ object SearchRepository {
     /** 综合页按站点 search/all/v2 返回的分类结构，优先展示视频、UP 主和番剧。 */
     suspend fun searchAll(keyword: String, page: Int = 1): Result<SearchAllResults> = withContext(Dispatchers.IO) {
         try {
-            val params = signWithWbi(
-                mapOf(
-                    "keyword" to keyword,
-                    "search_type" to "all",
-                    "page" to page.toString(),
-                    "page_size" to "20",
-                    "platform" to "pc",
-                    "web_location" to "1430654"
-                )
+            val baseParams = mapOf(
+                "keyword" to keyword,
+                "search_type" to "all",
+                "page" to page.toString(),
+                "page_size" to "20",
+                "platform" to "pc",
+                "web_location" to "1430654"
             )
-            val response = api.searchAll(params)
+            val response = withWbiRetry(baseParams, { api.searchAll(it) }, { it.code })
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, response.message))
             }
+            requireSearchPayload(response.data != null, response.data?.v_voucher)
             val categories = response.data?.result.orEmpty()
             val videos = categories.firstOrNull { it.result_type == "video" }
                 ?.data.orEmpty()
                 .mapNotNull { runCatching { searchJson.decodeFromJsonElement<SearchVideoItem>(it).toVideoItem() }.getOrNull() }
-            val ups = categories.firstOrNull { it.result_type == "bili_user" }
-                ?.data.orEmpty()
-                .mapNotNull { runCatching { searchJson.decodeFromJsonElement<SearchUpItem>(it).cleanupFields() }.getOrNull() }
+            val featuredUps = categories.filter { it.result_type == "bili_user" }
+                .flatMap { it.data.orEmpty() }
+                .map { searchJson.decodeFromJsonElement<SearchUpItem>(it).cleanupFields() }
+            val ups = resolveSearchAllUpPreview(
+                page = page,
+                userResultCount = response.data?.pageinfo?.get("bili_user")?.numResults ?: 0,
+                featuredUsers = featuredUps
+            ) {
+                searchUp(keyword = keyword).getOrThrow().first
+            }
             val bangumi = categories.filter { it.result_type == "media_bangumi" || it.result_type == "media_ft" }
                 .flatMap { it.data.orEmpty() }
                 .mapNotNull { runCatching { searchJson.decodeFromJsonElement<com.android.purebilibili.data.model.response.BangumiSearchItem>(it) }.getOrNull() }
@@ -204,9 +211,7 @@ object SearchRepository {
                 " search(video): keyword=$keyword, order=${order.value}, duration=${duration.value}, tids=$tids, pubBegin=$pubBegin, pubEnd=$pubEnd, page=$page"
             )
 
-            val signedParams = signWithWbi(params)
-
-            val response = api.search(signedParams)
+            val response = withWbiRetry(params, { api.search(it) }, { it.code })
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, response.message))
             }
@@ -337,6 +342,7 @@ object SearchRepository {
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, response.message))
             }
+            requireSearchPayload(response.data != null, response.data?.v_voucher)
             
             val upList = response.data?.result
                 ?.map { it.cleanupFields() }
@@ -758,23 +764,34 @@ object SearchRepository {
     }
 
     private suspend fun signWithWbi(params: Map<String, String>): Map<String, String> {
-        // 走 WbiKeyManager 的缓存（内存 + SP 持久化，24 小时有效），
-        // 之前这里每次都重新请求 /x/web-interface/nav，冷启动时网络未就绪会失败，
-        // 失败后又静默降级成无签名参数，服务端拒绝签名的 wbi 接口，表现为「搜索失败」。
         val keys = WbiKeyManager.getWbiKeys().getOrNull()
             ?: WbiKeyManager.refreshKeys().getOrNull()
         if (keys == null) {
-            com.android.purebilibili.core.network.CoreDataLog.e(
-                "SearchRepo",
-                "signWithWbi: WBI keys unavailable after retry, use unsigned params",
-            )
-            return params
+            throw IllegalStateException("WBI keys unavailable")
         }
         return WbiUtils.sign(params, keys.first, keys.second)
     }
 
+    private suspend fun <T> withWbiRetry(
+        params: Map<String, String>,
+        call: suspend (Map<String, String>) -> T,
+        codeOf: (T) -> Int,
+    ): T {
+        var signed = signWithWbi(params)
+        var response = call(signed)
+        if (codeOf(response) in WBI_INVALID_CODES) {
+            com.android.purebilibili.core.network.CoreDataLog.w("SearchRepo", "WBI invalid code=${codeOf(response)}, refreshing keys and retrying")
+            WbiKeyManager.invalidateCache()
+            WbiKeyManager.refreshKeys()
+            signed = signWithWbi(params)
+            response = call(signed)
+        }
+        return response
+    }
+
     private fun createSearchError(code: Int, message: String): Exception {
         val readable = when (code) {
+            -352, -403 -> "搜索签名失效，请重试"
             -412 -> "搜索请求被拦截，请稍后重试"
             -400 -> "搜索参数错误"
             -404 -> "搜索接口不存在"

@@ -17,7 +17,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.analytics.AnalyticsListener
 import com.android.purebilibili.core.cache.PlayUrlCache
 import com.android.purebilibili.core.cooldown.PlaybackCooldownManager
 import com.android.purebilibili.core.lifecycle.BackgroundManager
@@ -1519,10 +1518,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val relatedPublicationAllowed = MutableStateFlow(true)
     private var relatedLoadJob: Job? = null
     private var relatedPreloadJob: Job? = null
-    private val relatedLoadScheduler = RelatedVideoLoadScheduler()
-    private val videoNetworkPressureObserver = VideoNetworkPressureObserver(application)
     private var relatedPlaybackPreparedToken = -1L
-    private var relatedFirstFrameToken = -1L
     private var pendingPlaybackResumeNotice: PlaybackResumeNotice? = null
     private var initialPartResumeNoticeCid: Long = 0L
     private var dismissedPartResumeNoticeToken: Long = -1L
@@ -1935,6 +1931,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     internal fun peekInPageInitiatedPlaybackIdentityBvid(): String? {
         return inPageInitiatedPlaybackIdentity?.first
     }
+
+    /** 当前详情播放会话的实时身份，包含不更换导航键的选集和自动连播。 */
+    internal fun peekWindowReturnBvid(): String? = currentBvid.takeIf { it.isNotBlank() }
 
     private fun markInPageInitiatedPlayback(bvid: String, cid: Long) {
         inPageInitiatedPlaybackIdentity = bvid to cid
@@ -2446,7 +2445,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             saveCurrentPosition()
             // 切换播放器时立即停止旧实例，避免转场期间双播
             previousPlayer.removeListener(playbackEndListener)
-            previousPlayer.removeAnalyticsListener(videoBandwidthListener)
             previousPlayer.playWhenReady = false
             previousPlayer.pause()
         }
@@ -2459,23 +2457,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         // 防止重复添加同一个 listener（同一 player 多次 attach 的场景）
         player.removeListener(playbackEndListener)
         player.addListener(playbackEndListener)
-        player.removeAnalyticsListener(videoBandwidthListener)
-        player.addAnalyticsListener(videoBandwidthListener)
         signalPlaybackTaskChanges()
     }
 
-    @SuppressLint("UnsafeOptInUsageError")
-    private val videoBandwidthListener = object : AnalyticsListener {
-        override fun onBandwidthEstimate(
-            eventTime: AnalyticsListener.EventTime,
-            totalLoadTimeMs: Int,
-            totalBytesLoaded: Long,
-            bitrateEstimate: Long
-        ) {
-            videoNetworkPressureObserver.recordBandwidthSample(totalLoadTimeMs, totalBytesLoaded, bitrateEstimate)
-        }
-    }
-    
     //  [新增] 播放完成监听器
     private val playbackEndListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -2619,9 +2603,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             maybeAnnounceRestoredPlaybackPosition()
             playbackStallRecoveryFirstFrameRendered = true
             if (_uiState.value is VideoPlaybackUiState.Success) {
-                if (relatedPlaybackPreparedToken == currentLoadRequestToken) {
-                    relatedFirstFrameToken = currentLoadRequestToken
-                }
                 logVideoLoadStage(VideoLoadStage.FIRST_FRAME, currentLoadRequestToken)
             }
         }
@@ -3377,12 +3358,14 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         !isPlayerPlayingSameVideo
 
                 if (shouldSoftRestorePlayer) {
-                    val restorePositionMs = playbackUseCase.getCachedPosition(currentBvid, currentCid)
+                    val restorePositionMs = resolveRestoredPlaybackPositionMs(
+                        cachedPositionMs = playbackUseCase.getCachedPosition(currentBvid, currentCid),
+                        videoDurationMs = currentSuccess.videoDurationMs,
+                    )
                     val shouldAutoPlay = playbackRequest.autoPlay ?: appContext?.let {
                         com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(it)
                     } ?: true
                     relatedPlaybackPreparedToken = currentLoadRequestToken
-                    relatedFirstFrameToken = -1L
                     playResolvedPlayback(
                         videoUrl = currentSuccess.playUrl,
                         audioUrl = currentSuccess.audioUrl,
@@ -3396,9 +3379,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     )
                 } else {
                     relatedPlaybackPreparedToken = currentLoadRequestToken
-                    if (playbackStallRecoveryFirstFrameRendered || player.isPlaying) {
-                        relatedFirstFrameToken = currentLoadRequestToken
-                    }
                     com.android.purebilibili.core.player.PlayerVolumeController.applyPreferredVolume(player)
                     val shouldAutoPlay = playbackRequest.autoPlay ?: appContext?.let {
                         com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(it)
@@ -3502,7 +3482,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         pendingPlaybackResumeNotice = null
         videoLoadTimeline.start(requestToken)
         relatedPlaybackPreparedToken = -1L
-        relatedFirstFrameToken = -1L
         playerInfoJob?.cancel()
         activeLoadJob?.cancel()
         activeLoadAutoPlay = playbackRequest.autoPlay
@@ -3796,7 +3775,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         if (!shouldSkipPlayerPrepare) {
                             playbackPreparationAllowed.first { it }
                             relatedPlaybackPreparedToken = requestToken
-                            relatedFirstFrameToken = -1L
                             val prepared = provisionalPlayer
                             if (prepared != null && prepared === exoPlayer &&
                                 result.info.cid == playbackRequest.cid &&
@@ -3820,7 +3798,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             provisionalConfirmed = true
                         } else {
                              relatedPlaybackPreparedToken = requestToken
-                             relatedFirstFrameToken = requestToken
                              Logger.d("PlayerVM", "🎯 Skipping player preparation (reuse intent=$shouldAutoPlay)")
                              exoPlayer?.let { p ->
                                  PlayerHistorySessions.forPlayer(p).onIsPlayingChanged(p.isPlaying)
@@ -8748,26 +8725,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         if (pluginCheckJob?.isActive != true) startPlaybackTasks()
     }
 
-    private suspend fun relatedVideoLoadSnapshot(bvid: String): RelatedVideoLoadSnapshot {
-        val player = exoPlayer
-        val prepared = relatedPlaybackPreparedToken == currentLoadRequestToken
-        return RelatedVideoLoadSnapshot(
-            requestToken = currentLoadRequestToken,
-            constrainedNetwork = videoNetworkPressureObserver.isConstrained(),
-            hasCachedRelated = VideoRepository.getCachedRelatedVideosResult(bvid) != null,
-            playbackPrepared = prepared,
-            firstFrameRendered = prepared && relatedFirstFrameToken == currentLoadRequestToken,
-            playbackReady = prepared && player?.playbackState == Player.STATE_READY,
-            buffering = prepared && player?.playbackState == Player.STATE_BUFFERING,
-            playWhenReady = player?.playWhenReady ?: true,
-            bufferedDurationMs = if (prepared && player != null) {
-                (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
-            } else 0L,
-            playbackFailed = _uiState.value is VideoPlaybackUiState.Error || (prepared && player?.playerError != null),
-            playbackEnded = prepared && player?.playbackState == Player.STATE_ENDED
-        )
-    }
-
     private fun loadRelatedVideosForRequest(
         bvid: String,
         requestToken: Long
@@ -8776,12 +8733,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         relatedLoadJob = viewModelScope.launch {
             repeat(2) { attempt ->
                 if (currentLoadRequestToken != requestToken) return@launch
-                val canLoadRelated = relatedLoadScheduler.awaitPermit(
-                    requestToken = requestToken,
-                    snapshot = { relatedVideoLoadSnapshot(bvid) },
-                    onDeferred = { logVideoLoadStage(VideoLoadStage.RELATED_DEFERRED, requestToken) }
-                )
-                if (!canLoadRelated || currentLoadRequestToken != requestToken) return@launch
+                // 列表元数据与播放并行请求，不等待首帧、缓冲或网络带宽许可。
+                // 入场期间的数据发布仍由下方门控约束；切换视频会取消本请求。
                 logVideoLoadStage(VideoLoadStage.RELATED_REQUEST_STARTED, requestToken)
                 val result = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
                     VideoRepository.getRelatedVideosResult(bvid)
@@ -9933,6 +9886,22 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
         if (reason == "player_error") {
             recordCurrentCdnHealthEvent(CdnHealthEvent.PLAYER_ERROR)
+            val current = _uiState.value as? VideoPlaybackUiState.Success
+            if (current != null) {
+                attemptedPlaybackStallRecoveryCdnIndexes += current.currentCdnIndex
+                val shouldUseRewriteFallback =
+                    state.selectedVideoUrlWasRewritten && state.hasFallbackCandidate
+                if (!shouldUseRewriteFallback) {
+                    val next = current.allVideoUrls.indices.firstOrNull {
+                        it !in attemptedPlaybackStallRecoveryCdnIndexes
+                    }
+                    if (next != null) {
+                        attemptedPlaybackStallRecoveryCdnIndexes += next
+                        switchCdnTo(next)
+                        return
+                    }
+                }
+            }
         }
         if (!shouldFallback) return
         when (reason) {
@@ -10080,7 +10049,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     
     fun restoreFromCache(cachedState: VideoPlaybackUiState.Success, startPosition: Long = -1L) {
         relatedPlaybackPreparedToken = -1L
-        relatedFirstFrameToken = -1L
         currentBvid = cachedState.info.bvid
         currentCid = cachedState.info.cid
         val restoredState = if (startPosition >= 0) {
@@ -10220,7 +10188,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     override fun onCleared() {
         finishQualitySwitchTelemetry("canceled", "screen_closed")
         cancelPendingVideoLoad()
-        exoPlayer?.removeAnalyticsListener(videoBandwidthListener)
         // A player retained for listening must not retain this cleared screen through its listener.
         exoPlayer?.removeListener(playbackEndListener)
         playerPluginSessionHost.close()

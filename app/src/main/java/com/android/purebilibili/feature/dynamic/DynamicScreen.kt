@@ -152,6 +152,24 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 val LocalDynamicScrollChannel = compositionLocalOf<Channel<DynamicScrollRequest>?> { null }
 
+internal data class FocusDynamicPrefetchProgress(
+    val accountGeneration: Long,
+    val lastSourceItemCount: Int = -1,
+    val extraPagesFetched: Int = 0,
+)
+
+internal fun resolveFocusDynamicPrefetchProgressForAccount(
+    progress: FocusDynamicPrefetchProgress,
+    accountGeneration: Long,
+): FocusDynamicPrefetchProgress =
+    if (progress.accountGeneration == accountGeneration) progress
+    else FocusDynamicPrefetchProgress(accountGeneration = accountGeneration)
+
+internal fun shouldProcessFocusDynamicPrefetchBatch(
+    sourceItemCount: Int,
+    lastSourceItemCount: Int,
+): Boolean = sourceItemCount > 0 && sourceItemCount != lastSourceItemCount
+
 /**
  *  动态页面 - 支持两种布局模式
  *
@@ -576,38 +594,49 @@ fun DynamicScreen(
         )
     }
     val filteredItems = activePresentation.items
-    var focusAutoPrefetchedPages by remember(
+    var focusPrefetchProgress by remember(
+        accountIdentity.generation,
         displayedLogicalTab,
         selectedUserId,
         focusFollowGroupConfig,
         focusFollowGroupFilteringEnabled,
-    ) { mutableIntStateOf(0) }
-    var lastFocusPrefetchItemCount by remember(
-        displayedLogicalTab,
-        selectedUserId,
-        focusFollowGroupConfig,
-        focusFollowGroupFilteringEnabled,
-    ) { mutableIntStateOf(-1) }
+    ) { mutableStateOf(FocusDynamicPrefetchProgress(accountIdentity.generation)) }
     LaunchedEffect(
+        accountIdentity.generation,
         unfilteredActivePresentation.items.size,
         activePresentation.items.size,
         activePresentation.hasMore,
         activePresentation.isLoading,
-        focusAutoPrefetchedPages,
+        focusPrefetchProgress.extraPagesFetched,
         focusFollowGroupFilteringEnabled,
     ) {
+        val progressForAccount = resolveFocusDynamicPrefetchProgressForAccount(
+            progress = focusPrefetchProgress,
+            accountGeneration = accountIdentity.generation,
+        )
+        if (progressForAccount != focusPrefetchProgress) {
+            focusPrefetchProgress = progressForAccount
+            return@LaunchedEffect
+        }
         val sourceItemCount = unfilteredActivePresentation.items.size
-        if (sourceItemCount <= 0 || sourceItemCount == lastFocusPrefetchItemCount) return@LaunchedEffect
-        lastFocusPrefetchItemCount = sourceItemCount
+        if (!shouldProcessFocusDynamicPrefetchBatch(
+                sourceItemCount = sourceItemCount,
+                lastSourceItemCount = progressForAccount.lastSourceItemCount,
+            )
+        ) return@LaunchedEffect
+        val observedProgress = progressForAccount.copy(lastSourceItemCount = sourceItemCount)
+        focusPrefetchProgress = observedProgress
         if (!shouldPrefetchMoreFocusDynamicItems(
                 visibleItemCount = activePresentation.items.size,
                 hasMore = activePresentation.hasMore,
                 filterEnabled = focusFollowGroupFilteringEnabled,
-                extraPagesFetched = focusAutoPrefetchedPages,
+                extraPagesFetched = observedProgress.extraPagesFetched,
             )
         ) return@LaunchedEffect
 
-        focusAutoPrefetchedPages += 1
+        focusPrefetchProgress = observedProgress.copy(
+            extraPagesFetched = observedProgress.extraPagesFetched + 1,
+        )
         if (activePresentation.isSelectedUserFeed) {
             viewModel.loadMoreUserDynamics()
         } else {

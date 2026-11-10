@@ -29,7 +29,7 @@ class AppLiquidAwareSearchFieldStructureTest {
         assertTrue(source.contains("leadingIconHorizontalOffset = 8.dp"))
         assertTrue(source.contains("AppModalBottomSheet("))
         assertTrue(source.contains("BottomBarLiquidSegmentedControl("))
-        assertTrue(source.contains("items = listOf(\"全部评论\", \"只看UP主\")"))
+        assertTrue(source.contains("items = CommentSearchScope.entries.map { it.label }"))
         assertTrue(source.contains("items = CommentSearchSortMode.entries.map"))
         assertTrue(source.contains("val stackControls = maxWidth < 420.dp"))
         assertTrue(source.contains("height = 48.dp"))
@@ -50,7 +50,7 @@ class AppLiquidAwareSearchFieldStructureTest {
         assertTrue(navigation.contains("LocalAppPopupSurfaceRenderer provides"))
         assertTrue(navigation.contains("LocalFloatingChromeBackdrop provides"))
         assertTrue(navigation.contains("bottomBarBackdrop"))
-        assertTrue(renderer.contains("Surface("))
+        assertTrue(renderer.contains("AppSurface("))
         assertTrue(!renderer.contains("BottomBarMatchedReusableLiquidDock("))
     }
 }

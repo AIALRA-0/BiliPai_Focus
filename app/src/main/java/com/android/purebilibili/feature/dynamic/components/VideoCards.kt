@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.network.NetworkHeaders
@@ -74,7 +75,6 @@ import com.android.purebilibili.core.ui.transition.LocalClickToPlayEnabled
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionVisualSpec
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
@@ -82,6 +82,7 @@ import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCo
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnCoverAlpha
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.data.model.response.ArchiveMajor
 
 /**
@@ -99,10 +100,15 @@ fun VideoCardLarge(
     isCollection: Boolean = false,
     collectionTitle: String = "",
     cornerBadgeText: String? = null,
-    sharedElementKey: Any? = null
+    sharedElementKey: Any? = null,
+    sourceIdentity: String = archive.bvid,
 ) {
     val context = LocalContext.current
     val coverUrl = remember(archive.cover) { normalizeDynamicCoverUrl(archive.cover) }
+    val sponsorBadge = rememberSponsorFeedBadgeLabel(archive.bvid)
+    val resolvedCornerBadgeText = listOfNotNull(cornerBadgeText, sponsorBadge)
+        .joinToString("/")
+        .takeIf { it.isNotBlank() }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = remember(configuration.screenWidthDp, density) {
@@ -115,7 +121,7 @@ fun VideoCardLarge(
     val cardBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
     val coverBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
     val infoBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
-    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(archive.bvid)
+    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(sourceIdentity)
     val stationaryCoverRequest = remember(coverUrl) {
         ImageRequest.Builder(context)
             .data(coverUrl)
@@ -134,7 +140,7 @@ fun VideoCardLarge(
             val sourceCoverBounds = coverBoundsRef.value
                 ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
             CardPositionManager.recordVideoCardPosition(
-                bvid = archive.bvid,
+                bvid = sourceIdentity,
                 sourceRoute = sourceRoute,
                 bounds = bounds,
                 screenWidth = screenWidthPx,
@@ -182,7 +188,7 @@ fun VideoCardLarge(
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
     val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
     val sharedElementReady = sharedTransitionEnabled &&
-        archive.bvid.isNotBlank() &&
+        sourceIdentity.isNotBlank() &&
         sourceRoute != null &&
         sharedTransitionScope != null &&
         animatedVisibilityScope != null
@@ -227,16 +233,7 @@ fun VideoCardLarge(
 
     Column(
         modifier = modifier
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = archive.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = sharedTransitionMotionSpec,
-                clipShape = coverShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(sourceIdentity, coverShape)
             .then(nativeCardSnapshot.modifier)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates
@@ -247,13 +244,13 @@ fun VideoCardLarge(
             coverUrl = coverUrl,
             coverRequest = stationaryCoverRequest,
             isCollection = isCollection,
-            cornerBadgeText = cornerBadgeText,
+            cornerBadgeText = resolvedCornerBadgeText,
             coverShape = coverShape,
             overlayModifier = nativeCardSnapshot.coverOverlayModifier,
             modifier = Modifier
                 .videoCardShellReturnCoverAlpha(
                     enabled = useCardShellSharedBounds,
-                    bvid = archive.bvid,
+                    bvid = sourceIdentity,
                     sourceRoute = sourceRoute,
                 )
                 .onGloballyPositioned { coordinates ->
@@ -264,7 +261,7 @@ fun VideoCardLarge(
             modifier = Modifier.onGloballyPositioned { infoBoundsRef.value = it }
                 .videoCardShellReturnChromeAlpha(
                     enabled = useCardShellSharedBounds,
-                    bvid = archive.bvid,
+                    bvid = sourceIdentity,
                     sourceRoute = sourceRoute,
                 )
         ) {

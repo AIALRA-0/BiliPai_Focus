@@ -115,6 +115,7 @@ class VideoCardScrollLiteVisualPolicyTest {
         )
     }
 
+
     @Test
     fun `elegant video card keeps its surface outside the shared transition layer`() {
         val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
@@ -165,8 +166,7 @@ class VideoCardScrollLiteVisualPolicyTest {
 
     @Test
     fun `cover stats do not claim separate shared bounds when shell owns morph`() {
-        // CARD_SHELL 容器已接管共享元素；封面上的播放量/弹幕不再挂独立 sharedBounds，
-        // 避免与 shell morph / 冻结景深叠层抢 key。
+        // The card shell owns the shared element while the cover stats stay inside it.
         val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
             .readText()
         val coverStatsBlock = source

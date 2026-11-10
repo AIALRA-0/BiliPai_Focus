@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
@@ -93,6 +95,24 @@ import com.android.purebilibili.feature.home.components.cards.HorizontalVideoSta
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCoverOverlayTextShadow
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardPrimaryStatBadgeMinWidthDp
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardSecondaryStatBadgeMinWidthDp
+
+/** 屏幕几何仅用于落点；裁原生图层必须先换回录制像素，优先使用点击时的局部实测。 */
+internal fun resolveVideoDetailNativeInfoCrop(
+    sourceInfoRect: Rect,
+    sourceCardSize: Size,
+    layerSize: IntSize,
+    recordedInfoBounds: Rect?,
+): Rect {
+    if (recordedInfoBounds != null) return recordedInfoBounds
+    val scaleX = layerSize.width / sourceCardSize.width
+    val scaleY = layerSize.height / sourceCardSize.height
+    return Rect(
+        sourceInfoRect.left * scaleX,
+        sourceInfoRect.top * scaleY,
+        sourceInfoRect.right * scaleX,
+        sourceInfoRect.bottom * scaleY,
+    )
+}
 
 /** Click-time card text rendered inside the Miuix flying detail entry. */
 internal data class VideoDetailReturnSourceCardChromeModel(
@@ -196,7 +216,6 @@ internal fun resolveVideoDetailFlyingSourceChromeAlpha(
     sourceLayout: VideoCardSourceLayout,
     detailContentLoading: Boolean = false,
     isNowPlayingBar: Boolean = false,
-    followProgressEnabled: Boolean = true,
     /**
      * 卡片返回是否**已提交**（`markReturning` / 用户点返回）。
      *
@@ -217,9 +236,6 @@ internal fun resolveVideoDetailFlyingSourceChromeAlpha(
     ) {
         return 0f
     }
-    if (!followProgressEnabled && morphDepthProgress > 0f &&
-        isVideoCardReturnContentYieldActive(phase, isReturnGestureInProgress, morphDepthProgress)
-    ) return 0f
     // The complete bar bitmap must use the same narrow window in both directions.
     // Ordinary opening chrome stays visible until depth 0.72, which stretches the
     // short capsule into large text before the real player has taken over.
@@ -296,7 +312,6 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
         VideoCardTransitionBackgroundPhase.RETURNING
     },
     isReturnGestureInProgressProvider: () -> Boolean = { true },
-    followProgressEnabledProvider: () -> Boolean = { true },
     horizontalMediaHandoffEnabled: Boolean = true,
     mediaFrameProvider: () -> VideoDetailReturnMediaLayoutFrame? = { null },
     /** 返回是否已提交；IDLE 时重建壳必须与详情 chrome 同时归零。见 [resolveVideoDetailFlyingSourceChromeAlpha]。 */
@@ -357,7 +372,6 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
             isReturnGestureInProgress = isReturnGestureInProgressProvider(),
             sourceLayout = layout.layout,
             detailContentLoading = detailContentLoading,
-            followProgressEnabled = followProgressEnabledProvider(),
             isCommittedCardReturn = isCommittedCardReturn,
             preserveNativeViewport = preserveNativeViewport,
         )
@@ -415,7 +429,6 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
             sourceLayout = layout.layout,
             detailContentLoading = detailContentLoading,
             isNowPlayingBar = isNowPlayingBar,
-            followProgressEnabled = followProgressEnabledProvider(),
             isCommittedCardReturn = isCommittedCardReturn,
             preserveNativeViewport = preserveNativeViewport,
         )
@@ -430,45 +443,51 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
             heightPx: Float,
             cropXPx: Float,
             cropYPx: Float,
-        ): Modifier = offset {
-            val inverse = sourcePixelInverseScale
-            IntOffset(
-                x = (frozenInfoAnchorXPx * inverse.scaleX).roundToInt(),
-                y = infoTopPx(inverse),
+        ): Modifier {
+            val crop = resolveVideoDetailNativeInfoCrop(
+                sourceInfoRect = Rect(cropXPx, cropYPx, cropXPx + widthPx, cropYPx + heightPx),
+                sourceCardSize = Size(layout.cardWidthPx, layout.cardHeightPx),
+                layerSize = nativeCardLayer.size,
+                recordedInfoBounds = sourceChromeSnapshot?.nativeInfoBounds,
             )
-        }.layout { measurable, _ ->
-            val inverse = sourcePixelInverseScale
-            val w = (widthPx * inverse.scaleX).roundToInt().coerceAtLeast(1)
-            val h = (heightPx * inverse.scaleY).roundToInt().coerceAtLeast(1)
-            val placeable = measurable.measure(Constraints.fixed(w, h))
-            layout(w, h) { placeable.place(0, 0) }
-        }.clipToBounds().graphicsLayer {
-            val phase = phaseProvider()
-            val isReturnGestureInProgress = isReturnGestureInProgressProvider()
-            alpha = resolveVideoDetailFlyingSourceChromeAlpha(
-                morphDepthProgress = morphDepthProgressProvider(),
-                phase = phase,
-                isReturnGestureInProgress = isReturnGestureInProgress,
-                sourceLayout = layout.layout,
-                detailContentLoading = detailContentLoading,
-                isNowPlayingBar = isNowPlayingBar,
-                followProgressEnabled = followProgressEnabledProvider(),
-                isCommittedCardReturn = isCommittedCardReturn,
-                preserveNativeViewport = preserveNativeViewport,
-            )
-        }.drawWithContent {
-            if (CardPositionManager.nativeVideoCardLayerFor(sourceChromeSnapshot) !== nativeCardLayer) {
-                return@drawWithContent
-            }
-            val inverse = sourcePixelInverseScale
-            clipRect(left = horizontalInfoClipLeftPx().coerceAtMost(size.width)) {
-                scale(
-                    scaleX = inverse.scaleX,
-                    scaleY = inverse.scaleY,
-                    pivot = Offset.Zero,
-                ) {
-                    translate(-cropXPx, -cropYPx) {
-                        drawLayer(nativeCardLayer)
+            return offset {
+                val inverse = sourcePixelInverseScale
+                IntOffset(
+                    x = (frozenInfoAnchorXPx * inverse.scaleX).roundToInt(),
+                    y = infoTopPx(inverse),
+                )
+            }.layout { measurable, _ ->
+                val inverse = sourcePixelInverseScale
+                val w = (widthPx * inverse.scaleX).roundToInt().coerceAtLeast(1)
+                val h = (heightPx * inverse.scaleY).roundToInt().coerceAtLeast(1)
+                val placeable = measurable.measure(Constraints.fixed(w, h))
+                layout(w, h) { placeable.place(0, 0) }
+            }.clipToBounds().graphicsLayer {
+                val phase = phaseProvider()
+                val isReturnGestureInProgress = isReturnGestureInProgressProvider()
+                alpha = resolveVideoDetailFlyingSourceChromeAlpha(
+                    morphDepthProgress = morphDepthProgressProvider(),
+                    phase = phase,
+                    isReturnGestureInProgress = isReturnGestureInProgress,
+                    sourceLayout = layout.layout,
+                    detailContentLoading = detailContentLoading,
+                    isNowPlayingBar = isNowPlayingBar,
+                    isCommittedCardReturn = isCommittedCardReturn,
+                    preserveNativeViewport = preserveNativeViewport,
+                )
+            }.drawWithContent {
+                if (CardPositionManager.nativeVideoCardLayerFor(sourceChromeSnapshot) !== nativeCardLayer) {
+                    return@drawWithContent
+                }
+                clipRect(left = horizontalInfoClipLeftPx().coerceAtMost(size.width)) {
+                    scale(
+                        scaleX = size.width / crop.width,
+                        scaleY = size.height / crop.height,
+                        pivot = Offset.Zero,
+                    ) {
+                        translate(-crop.left, -crop.top) {
+                            drawLayer(nativeCardLayer)
+                        }
                     }
                 }
             }

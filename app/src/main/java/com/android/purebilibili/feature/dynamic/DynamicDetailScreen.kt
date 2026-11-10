@@ -168,7 +168,7 @@ fun DynamicDetailScreen(
         )
     val homeSettings by SettingsManager.getHomeSettings(context)
         .collectAsStateWithLifecycle(initialValue = HomeSettings())
-    val liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
+    val liquidGlassEnabled = homeSettings.commentBarGlassEnabled
     // Only scrolling content captures this backdrop. The comment controls remain sibling
     // overlays, matching video detail and preventing a RenderNode backdrop cycle.
     // Record a complete viewport, including its background. Capturing only the transparent
@@ -349,8 +349,8 @@ fun DynamicDetailScreen(
                                 val headerIndex = if (useSplitLayout) 0 else 1
                                 snapshotFlow {
                                     val current = commentUiState
-                                    val pinReady = openCommentRootRpid <= 0L ||
-                                        current.pinnedReply?.rpid == openCommentRootRpid ||
+                                    val pinReady = (openCommentRootRpid <= 0L && openCommentTargetRpid <= 0L) ||
+                                        current.pinnedReply?.rpid == current.pinnedRootReplyId ||
                                         current.pinnedReplyError != null
                                     current.dynamicId == state.item.id_str && !current.isLoading && pinReady &&
                                         listState.layoutInfo.totalItemsCount > headerIndex

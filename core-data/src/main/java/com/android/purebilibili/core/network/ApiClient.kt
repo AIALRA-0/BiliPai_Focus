@@ -211,6 +211,14 @@ interface BilibiliApi {
     @GET("x/web-interface/nav")
     suspend fun getNavInfo(): NavResponse
 
+    @POST("https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket")
+    suspend fun getWebTicket(
+        @Query("key_id") keyId: String,
+        @Query("hexsign") hexsign: String,
+        @Query("context[ts]") timestamp: Long,
+        @Query("csrf") csrf: String,
+    ): WebTicketResponse
+
     @GET("x/web-interface/nav/stat")
     suspend fun getNavStat(): NavStatResponse
 
@@ -1248,6 +1256,14 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 20 // 每页数量
     ): ReplyResponse
 
+    // 单条评论；root 参数是待查询评论自身的 rpid，不一定是楼层根评论。
+    @GET("x/v2/reply/detail")
+    suspend fun getReplyDetail(
+        @Query("oid") oid: Long,
+        @Query("type") type: Int,
+        @Query("root") replyId: Long,
+    ): ReplyResponse
+
     @GET("x/v2/reply/count")
     suspend fun getReplyCount(
         @Query("oid") oid: Long,
@@ -2115,14 +2131,10 @@ interface DynamicApi {
         @retrofit2.http.Field("csrf") csrf: String
     ): DynamicCreateReserveResponse
 
-    @retrofit2.http.FormUrlEncoded
     @retrofit2.http.POST("x/dynamic/feed/reserve/click")
     suspend fun clickDynamicReserve(
         @Query("csrf") csrf: String,
-        @retrofit2.http.Field("reserve_id") reserveId: Long,
-        @retrofit2.http.Field("cur_btn_status") currentButtonStatus: Int,
-        @retrofit2.http.Field("dynamic_id_str") dynamicId: String,
-        @retrofit2.http.Field("reserve_total") reserveTotal: Long,
+        @retrofit2.http.Body body: DynamicReserveClickRequest,
     ): com.android.purebilibili.data.model.response.DynamicReserveClickResponse
 
     //  发布纯文本动态（multipart form，type=4 表示纯文本）

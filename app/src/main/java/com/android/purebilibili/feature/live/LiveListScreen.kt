@@ -11,7 +11,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -31,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.distinctUntilChanged
 import android.widget.Toast
 import com.android.purebilibili.core.ui.components.AppBadge
@@ -80,7 +80,6 @@ import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
-import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.LiveAreaParent
@@ -89,7 +88,6 @@ import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
 
 data class LiveRoomItem(
     val roomId: Long,
@@ -127,6 +125,10 @@ data class LiveListUiState(
     val sortTags: List<com.android.purebilibili.data.model.response.LiveSecondSortTag> = emptyList(),
     val selectedSortType: String? = null,
     val isLoading: Boolean = false,
+    /** 账号首轮模块结束前，整页只显示骨架。 */
+    val initialLoadComplete: Boolean = false,
+    /** 切分区时重新置为 false；普通刷新保留已有内容。 */
+    val contentLoadComplete: Boolean = false,
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = true,
     val page: Int = 1,
@@ -143,6 +145,8 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
     val uiState = _uiState.asStateFlow()
     private val requests = LiveBrowseRequestPolicy()
     private var refreshEpoch = 0L
+    private var refreshJob: kotlinx.coroutines.Job? = null
+    private var pageLoadJob: kotlinx.coroutines.Job? = null
     private var topRefreshJob: kotlinx.coroutines.Job? = null
     private var accountIdentity = com.android.purebilibili.core.store.TokenManager.accountIdentity.value
 
@@ -155,59 +159,65 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         if (current == accountIdentity) return
         accountIdentity = current
         topRefreshJob?.cancel()
+        refreshJob?.cancel()
+        pageLoadJob?.cancel()
         requests.invalidate()
-        _uiState.value = _uiState.value.copy(accountIdentity = current, contentItems = emptyList(), followItems = emptyList(), livingCount = null, followError = null, areaEntries = emptyList())
+        _uiState.value = _uiState.value.copy(accountIdentity = current, initialLoadComplete = false, contentLoadComplete = false, contentItems = emptyList(), followItems = emptyList(), livingCount = null, followError = null, areaEntries = emptyList())
         refresh()
     }
 
     fun refresh() {
-        val request = requests.refresh() ?: return
+        val request = requests.refresh(replace = true) ?: return
         topRefreshJob?.cancel()
+        refreshJob?.cancel()
+        pageLoadJob?.cancel()
         val state = _uiState.value
         val epoch = ++refreshEpoch
         val identity = com.android.purebilibili.core.store.TokenManager.accountIdentity.value
         _uiState.value = state.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null)
-        viewModelScope.launch {
-            val modules = if (state.selectedAreaIndex != LIVE_HOME_RECOMMEND_INDEX) async {
-                LiveRepository.getLiveFeedHome(page = 1, moduleSelect = true)
-            } else null
-            loadPage(request, state)
-            modules?.await()?.onSuccess { snapshot ->
-                if (epoch == refreshEpoch && identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
-                    val current = _uiState.value
-                    val entries = snapshot.areaEntries.ifEmpty { current.areaEntries }
-                    // 解析失败（-1，如快照缺少该分区）视为未知，保留当前选中，
-                    // 不能用 -1 覆盖导致指示器退回推荐。
-                    val resolvedIndex = resolveRefreshedLiveHomeAreaIndex(current.selectedAreaIndex, current.selectedParentAreaId, current.selectedAreaId, entries)
-                    _uiState.value = current.copy(
-                        selectedAreaIndex = if (resolvedIndex >= 0) resolvedIndex else current.selectedAreaIndex,
-                        followItems = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.followRooms.map { it.toLiveRoomItem() } else current.followItems,
-                        livingCount = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount else current.livingCount,
-                        followError = snapshot.followError,
-                        areaEntries = entries,
-                    )
-                }
-            }
-            if (epoch == refreshEpoch && identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
-                _uiState.value = _uiState.value.copy(refreshCompletion = epoch)
-            }
-            if (epoch == refreshEpoch && _uiState.value.areaList.isEmpty()) {
+        refreshJob = viewModelScope.launch {
+            // 目录与顶部模块独立补齐，推荐/分区结果不等待它们结束骨架。
+            if (state.areaList.isEmpty()) launch {
                 LiveRepository.getLiveAreaIndex().onSuccess { areas ->
                     if (epoch == refreshEpoch && identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
-                        _uiState.value = _uiState.value.copy(areaList = areas)
+                        _uiState.update { it.copy(areaList = areas) }
                     }
                 }
+            }
+            if (state.selectedAreaIndex != LIVE_HOME_RECOMMEND_INDEX) launch {
+                LiveRepository.getLiveFeedHome(page = 1, moduleSelect = true).onSuccess { snapshot ->
+                    if (epoch == refreshEpoch && identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
+                        val current = _uiState.value
+                        val entries = snapshot.areaEntries.ifEmpty { current.areaEntries }
+                        // 解析失败（-1，如快照缺少该分区）视为未知，保留当前选中，
+                        // 不能用 -1 覆盖导致指示器退回推荐。
+                        val resolvedIndex = resolveRefreshedLiveHomeAreaIndex(current.selectedAreaIndex, current.selectedParentAreaId, current.selectedAreaId, entries)
+                        _uiState.value = current.copy(
+                            selectedAreaIndex = if (resolvedIndex >= 0) resolvedIndex else current.selectedAreaIndex,
+                            followItems = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.followRooms.map { it.toLiveRoomItem() } else current.followItems,
+                            livingCount = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount else current.livingCount,
+                            followError = snapshot.followError,
+                            areaEntries = entries,
+                        )
+                    }
+                }
+            }
+            loadPage(request, state)
+            if (epoch == refreshEpoch && identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
+                // 列表请求独立结束加载；顶部慢请求继续由本轮任务持有。
+                _uiState.value = _uiState.value.copy(isLoading = false, initialLoadComplete = true, contentLoadComplete = true, refreshCompletion = epoch)
             }
         }
     }
 
     fun refreshTop() {
-        if (_uiState.value.isLoading) return
+        if (_uiState.value.isLoading || !_uiState.value.initialLoadComplete || refreshJob?.isActive == true) return
         topRefreshJob?.cancel()
         val identity = com.android.purebilibili.core.store.TokenManager.accountIdentity.value
+        val epoch = refreshEpoch
         topRefreshJob = viewModelScope.launch {
             LiveRepository.getLiveFeedHome(page = 1, moduleSelect = true).onSuccess { snapshot ->
-                if (identity != com.android.purebilibili.core.store.TokenManager.accountIdentity.value) return@onSuccess
+                if (epoch != refreshEpoch || identity != com.android.purebilibili.core.store.TokenManager.accountIdentity.value) return@onSuccess
                 val current = _uiState.value
                 val entries = snapshot.areaEntries
                 // 同 refresh()：解析失败视为未知，保留当前选中，避免指示器退回推荐。
@@ -240,18 +250,19 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         if (state.isLoading || state.isLoadingMore) return
         val request = requests.loadMore(state.hasMore) ?: return
         _uiState.value = state.copy(isLoadingMore = true, loadMoreError = null)
-        viewModelScope.launch { loadPage(request, state) }
+        pageLoadJob = viewModelScope.launch { loadPage(request, state) }
     }
 
     private fun reloadSelection() {
         refreshEpoch += 1L
         requests.invalidate()
         _uiState.value = _uiState.value.copy(
-            contentItems = emptyList(), isLoadingMore = false, loadMoreError = null,
+            contentItems = emptyList(), contentLoadComplete = false, isLoadingMore = false, loadMoreError = null,
         )
         refresh()
     }
 
+    // 首屏内容可先显示；请求归属保留到关注补取完成，避免与分页相互覆盖。
     private suspend fun loadPage(request: LiveBrowseRequestPolicy.Request, state: LiveListUiState) {
         when {
             state.selectedAreaIndex == LIVE_HOME_RECOMMEND_INDEX -> loadRecommendPage(request)
@@ -333,47 +344,69 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
     private suspend fun loadRecommendPage(request: LiveBrowseRequestPolicy.Request) {
         val page = request.page
         val append = request.append
-        LiveRepository.getLiveFeedHome(page = page).fold(
-            onSuccess = { snapshot ->
-                if (!requests.succeed(request)) return@fold
-                val mapped = snapshot.rooms.map { it.toLiveRoomItem() }
-                val followMapped = snapshot.followRooms.map { it.toLiveRoomItem() }
-                val current = _uiState.value
-                val mergedRooms = if (append) {
-                    (current.contentItems + mapped).distinctBy { it.roomId }
-                } else {
-                    mapped.distinctBy { it.roomId }
-                }
-                val areaEntries = when {
-                    snapshot.areaEntries.isNotEmpty() -> snapshot.areaEntries
-                    !append -> current.areaEntries
-                    else -> current.areaEntries
-                }.ifEmpty {
-                    current.areaList.map {
-                        com.android.purebilibili.data.model.response.LiveFeedAreaEntry(
-                            title = it.name,
-                            areaId = 0,
-                            parentAreaId = it.id,
-                        )
-                    }
-                }
-                _uiState.value = current.copy(
-                    contentItems = mergedRooms,
-                    followItems = if (!append && snapshot.hasFollowModule && snapshot.followError == null) followMapped else current.followItems,
-                    livingCount = if (!append && snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount else current.livingCount,
-                    followError = if (!append) snapshot.followError else current.followError,
-                    areaEntries = areaEntries,
-                    page = page,
-                    hasMore = snapshot.hasMore,
-                    isLoading = false,
-                    isLoadingMore = false,
-                    error = if (mergedRooms.isEmpty() && !append) "暂无直播" else null,
+        val startedAtMs = android.os.SystemClock.elapsedRealtime()
+        var roomsPublished = false
+        fun publishRooms(snapshot: com.android.purebilibili.data.model.response.LiveFeedHomeSnapshot, complete: Boolean) {
+            if (!requests.owns(request)) return
+            if (!roomsPublished || complete) {
+                com.android.purebilibili.core.util.Logger.d(
+                    "LiveStartup", "feed page=$page stage=${if (complete) "complete" else "rooms_ready"} elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAtMs}"
                 )
+                roomsPublished = true
+            }
+            val mapped = snapshot.rooms.map { it.toLiveRoomItem() }
+            val followMapped = snapshot.followRooms.map { it.toLiveRoomItem() }
+            val current = _uiState.value
+            val mergedRooms = if (append) {
+                (current.contentItems + mapped).distinctBy { it.roomId }
+            } else {
+                mapped.distinctBy { it.roomId }
+            }
+            val areaEntries = when {
+                snapshot.areaEntries.isNotEmpty() -> snapshot.areaEntries
+                !append -> current.areaEntries
+                else -> current.areaEntries
+            }.ifEmpty {
+                current.areaList.map {
+                    com.android.purebilibili.data.model.response.LiveFeedAreaEntry(
+                        title = it.name,
+                        areaId = 0,
+                        parentAreaId = it.id,
+                    )
+                }
+            }
+            _uiState.value = current.copy(
+                contentItems = mergedRooms,
+                followItems = if (!append && snapshot.hasFollowModule && snapshot.followError == null) followMapped else current.followItems,
+                livingCount = if (!append && snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount ?: current.livingCount else current.livingCount,
+                followError = if (!append) snapshot.followError else current.followError,
+                areaEntries = areaEntries,
+                page = page,
+                hasMore = snapshot.hasMore,
+                isLoading = !append && !complete,
+                initialLoadComplete = true,
+                contentLoadComplete = true,
+                isLoadingMore = false,
+                error = if (mergedRooms.isEmpty() && !append) "暂无直播" else null,
+            )
+        }
+        LiveRepository.getLiveFeedHome(
+            page = page,
+            onRoomsReady = { snapshot ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                    publishRooms(snapshot, complete = false)
+                }
+            },
+        ).fold(
+            onSuccess = { snapshot ->
+                publishRooms(snapshot, complete = true)
+                requests.succeed(request)
             },
             onFailure = { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
                 if (!requests.fail(request)) return@fold
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isLoading = !append,
                     isLoadingMore = false,
                     error = if (!append) error.message ?: "加载失败" else _uiState.value.error,
                     loadMoreError = if (append) error.message ?: "加载更多失败" else null,
@@ -402,16 +435,17 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
                     followError = if (!append) null else current.followError,
                     page = page,
                     hasMore = snapshot.hasMore && (!append || mapped.isEmpty() || mergedRooms.size > current.contentItems.size),
-                    isLoading = false,
+                    isLoading = !append,
                     isLoadingMore = false,
                     // 空关注列表是正常内容状态，仍需保留顶部分类，方便切回推荐直播。
                     error = null,
                 )
             },
             onFailure = { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
                 if (!requests.fail(request)) return@fold
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isLoading = !append,
                     isLoadingMore = false,
                     error = if (!append) error.message ?: "加载关注直播失败" else _uiState.value.error,
                     loadMoreError = if (append) error.message ?: "加载更多失败" else null,
@@ -432,7 +466,7 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         ) ?: run {
             if (!requests.fail(request)) return
             _uiState.value = state.copy(
-                isLoading = false,
+                isLoading = !append,
                 isLoadingMore = false,
                 error = "无效的直播分区"
             )
@@ -458,15 +492,16 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
                     sortTags = if (snapshot.sortTags.isNotEmpty()) snapshot.sortTags else current.sortTags,
                     page = page,
                     hasMore = snapshot.hasMore,
-                    isLoading = false,
+                    isLoading = !append,
                     isLoadingMore = false,
                     error = if (merged.isEmpty() && !append) "暂无直播内容" else null,
                 )
             },
             onFailure = { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
                 if (!requests.fail(request)) return@fold
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isLoading = !append,
                     isLoadingMore = false,
                     error = if (!append) error.message ?: "加载失败" else _uiState.value.error,
                     loadMoreError = if (append) error.message ?: "加载更多失败" else null,
@@ -520,7 +555,7 @@ fun LiveListScreen(
         else LiveListUiState(isLoading = true, accountIdentity = accountIdentity)
     LaunchedEffect(accountIdentity) { viewModel.onAccountChanged() }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-        viewModel.refreshTop()
+        if (isCurrentPage) viewModel.refreshTop()
     }
     val context = LocalContext.current
     val palette = rememberLiveChromePalette()
@@ -529,16 +564,11 @@ fun LiveListScreen(
     var feedbackCard by remember { mutableStateOf<LiveRoomCardUiModel?>(null) }
     var feedbackSource by remember { mutableStateOf<com.android.purebilibili.core.ui.components.AppGlassMenuSource?>(null) }
 
-    val windowSizeClass = LocalWindowSizeClass.current
     val topChromePolicy = rememberAppTopChromePolicy()
     val visualSpec = remember(topChromePolicy.tabPresentation) {
         resolveLiveVisualSpec(topChromePolicy.tabPresentation)
     }
     val metrics = visualSpec.homeMetrics
-    val contentWidth = windowSizeClass.widthDp
-    val gridColumns = remember(contentWidth, windowSizeClass.isTablet) {
-        resolveLiveBiliPaiGridColumns(contentWidth.value.toInt(), windowSizeClass.isTablet)
-    }
     val gridBottomPadding = LocalBottomBarContentPadding.current
     val liveGridState = rememberLazyGridState()
     val followRowState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -623,13 +653,14 @@ fun LiveListScreen(
                 showFollowSection = accountIdentity.mid != null || state.followItems.isNotEmpty() || state.livingCount != null,
                 followError = state.followError,
                 isLoading = state.isLoading,
+                showInitialSkeleton = !state.initialLoadComplete,
+                showContentSkeleton = !state.contentLoadComplete,
                 error = state.error,
                 onRetry = viewModel::refresh,
                 isLoadingMore = state.isLoadingMore,
                 hasMore = state.hasMore,
                 loadMoreError = state.loadMoreError,
                 showFirstFrame = state.showFirstFrame,
-                gridColumns = gridColumns,
                 bottomPadding = gridBottomPadding,
                 topPadding = topInset,
                 metrics = metrics,
@@ -676,7 +707,7 @@ fun LiveListScreen(
             containerColor = palette.backgroundTop,
             topBarSurfaceColor = palette.backgroundTop,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            blurContentReady = !(state.isLoading && state.contentItems.isEmpty()),
+            blurContentReady = state.initialLoadComplete && state.contentLoadComplete,
             chromeBackdropSource = searchBackdrop,
             topBar = {
                 Box(
@@ -720,7 +751,7 @@ fun LiveListScreen(
 }
 
 @Composable
-private fun LiveHomeContent(
+internal fun LiveHomeContent(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     followRowState: androidx.compose.foundation.lazy.LazyListState,
     contentItems: List<LiveRoomItem>,
@@ -735,13 +766,14 @@ private fun LiveHomeContent(
     showFollowSection: Boolean,
     followError: String?,
     isLoading: Boolean,
+    showInitialSkeleton: Boolean,
+    showContentSkeleton: Boolean,
     error: String?,
     onRetry: () -> Unit,
     isLoadingMore: Boolean,
     hasMore: Boolean,
     loadMoreError: String?,
     showFirstFrame: Boolean,
-    gridColumns: Int,
     bottomPadding: androidx.compose.ui.unit.Dp,
     topPadding: androidx.compose.ui.unit.Dp,
     metrics: LiveBiliPaiHomeMetrics,
@@ -764,107 +796,120 @@ private fun LiveHomeContent(
             areaEntries.getOrNull(resolveLiveHomeAreaListIndex(selectedAreaIndex).coerceAtLeast(0))?.parentAreaId == it.id
         }
 
-    LazyVerticalGrid(
-        columns = LiveRoomGridCells(),
-        state = gridState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = metrics.safeSpaceDp.dp,
-            end = metrics.safeSpaceDp.dp,
-            top = topPadding + metrics.cardSpaceDp.dp,
-            bottom = maxOf(bottomPadding, 100.dp)
-        ),
-        horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
-        verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp)
-    ) {
-        if (showFollowSection) {
-            item(key = "live_follow_header", span = { GridItemSpan(maxLineSpan) }) {
-                LiveFollowHeader(
-                    livingCount = livingCount,
-                    onActionClick = onFollowingClick,
-                    modifier = Modifier.fillMaxWidth(),
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val skeletonLayout = rememberLiveSkeletonLayout(maxWidth, maxHeight, metrics)
+        val skeletonColor = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(
+            com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
+                animated = showInitialSkeleton || showContentSkeleton,
+            ),
+        )
+        LazyVerticalGrid(
+            columns = LiveRoomGridCells(),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = metrics.safeSpaceDp.dp,
+                end = metrics.safeSpaceDp.dp,
+                top = topPadding + metrics.cardSpaceDp.dp,
+                bottom = maxOf(bottomPadding, 100.dp)
+            ),
+            horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
+            verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp)
+        ) {
+            if (showInitialSkeleton) {
+                liveHomeHeaderSkeletonItems(showFollowSection, metrics, skeletonColor)
+                liveRoomSkeletonItems(skeletonLayout.cardCount, metrics, skeletonColor)
+                return@LazyVerticalGrid
+            }
+            if (showFollowSection) {
+                item(key = "live_follow_header", span = { GridItemSpan(maxLineSpan) }) {
+                    LiveFollowHeader(
+                        livingCount = livingCount,
+                        onActionClick = onFollowingClick,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (isLoading && followItems.isEmpty() && livingCount != 0 && followError == null) {
+                    liveFollowAvatarsSkeletonItem(metrics, skeletonColor)
+                }
+                if (followItems.isNotEmpty()) item(key = "live_follow_avatars", span = { GridItemSpan(maxLineSpan) }) {
+                    LiveFollowAvatarRow(
+                        items = followItems,
+                        listState = followRowState,
+                        metrics = metrics,
+                        onLiveClick = onLiveClick,
+                        onUserClick = onUserClick,
+                        onFollowingClick = onFollowingClick,
+                        showMore = (livingCount ?: 0) > followItems.size,
+                    )
+                }
+            }
+            if (showFollowSection && followError != null) item(key = "live_follow_error", span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    AppText(followError, modifier = Modifier.weight(1f), color = rememberLiveChromePalette().secondaryText)
+                    AppTextButton(onClick = onRetry) { AppText("重试") }
+                }
+            }
+            item(key = "live_categories", span = { GridItemSpan(maxLineSpan) }) {
+                LiveAreaHomeChipRow(
+                    areaEntries = resolveLiveHomeAreaEntries(areaEntries, areaList),
+                    selectedAreaIndex = selectedAreaIndex,
+                    showFirstFrame = showFirstFrame,
+                    onAreaSelected = onAreaSelected,
+                    onToggleFirstFrame = onToggleFirstFrame,
+                    onAreaListClick = onAreaListClick,
+                    onMatchClick = onMatchClick,
                 )
             }
-            if (followItems.isNotEmpty()) item(key = "live_follow_avatars", span = { GridItemSpan(maxLineSpan) }) {
-                LiveFollowAvatarRow(
-                    items = followItems,
-                    listState = followRowState,
-                    metrics = metrics,
-                    onLiveClick = onLiveClick,
-                    onUserClick = onUserClick,
-                    onFollowingClick = onFollowingClick,
-                    showMore = (livingCount ?: 0) > followItems.size,
-                )
+            if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LiveSortTagChipRow(
+                            tags = sortTags,
+                            selectedSortType = selectedSortType,
+                            onSortTagSelected = onSortTagSelected,
+                        )
+                    }
+                }
+            when {
+                isLoading && contentItems.isEmpty() -> {
+                    liveRoomSkeletonItems(skeletonLayout.cardCount, metrics, skeletonColor)
+                }
+                error != null && contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    LiveListErrorState(error, onRetry)
+                }
+                contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    EmptyState(
+                        message = if (isLiveHomeFollowedTab(selectedAreaIndex)) {
+                            "关注的主播暂时都未开播"
+                        } else {
+                            "暂无直播内容"
+                        },
+                        visualSpec = visualSpec
+                    )
+                }
+                else -> {
+                    items(contentItems, key = { it.roomId }) { item ->
+                        val model = item.toLiveRoomCardUiModel(showFirstFrame)
+                        LiveRoomCard(
+                            model = model,
+                            enableSharedCoverTransition = true,
+                            onClick = { onLiveClick(item.roomId, item.title, item.uname) },
+                            onLongPress = { onLongPressCard(model) },
+                            onFeedback = { source -> onFeedback(model, source) },
+                        )
+                    }
+                }
             }
-        }
-        if (showFollowSection && followError != null) item(key = "live_follow_error", span = { GridItemSpan(maxLineSpan) }) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                AppText(followError, modifier = Modifier.weight(1f), color = rememberLiveChromePalette().secondaryText)
-                AppTextButton(onClick = onRetry) { AppText("重试") }
-            }
-        }
-        item(key = "live_categories", span = { GridItemSpan(maxLineSpan) }) {
-            LiveAreaHomeChipRow(
-                areaEntries = resolveLiveHomeAreaEntries(areaEntries, areaList),
-                selectedAreaIndex = selectedAreaIndex,
-                showFirstFrame = showFirstFrame,
-                onAreaSelected = onAreaSelected,
-                onToggleFirstFrame = onToggleFirstFrame,
-                onAreaListClick = onAreaListClick,
-                onMatchClick = onMatchClick,
-            )
-        }
-        if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
+            if (hasMore && !isLoading && error == null) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    LiveSortTagChipRow(
-                        tags = sortTags,
-                        selectedSortType = selectedSortType,
-                        onSortTagSelected = onSortTagSelected,
+                    LiveHomeLoadMoreFooter(
+                        isLoadingMore = isLoadingMore,
+                        contentCount = contentItems.size,
+                        hasMore = hasMore,
+                        error = loadMoreError,
+                        onLoadMore = onLoadMore,
                     )
                 }
-            }
-        when {
-            isLoading && contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
-                com.android.purebilibili.core.ui.skeleton.ContentVideoGridSkeletonFixedColumns(
-                    columns = gridColumns,
-                    modifier = Modifier.fillMaxWidth().height(560.dp),
-                )
-            }
-            error != null && contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveListErrorState(error, onRetry)
-            }
-            contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
-                EmptyState(
-                    message = if (isLiveHomeFollowedTab(selectedAreaIndex)) {
-                        "关注的主播暂时都未开播"
-                    } else {
-                        "暂无直播内容"
-                    },
-                    visualSpec = visualSpec
-                )
-            }
-            else -> {
-                items(contentItems, key = { it.roomId }) { item ->
-                    val model = item.toLiveRoomCardUiModel(showFirstFrame)
-                    LiveRoomCard(
-                        model = model,
-                        enableSharedCoverTransition = true,
-                        onClick = { onLiveClick(item.roomId, item.title, item.uname) },
-                        onLongPress = { onLongPressCard(model) },
-                        onFeedback = { source -> onFeedback(model, source) },
-                    )
-                }
-            }
-        }
-        if (hasMore && !isLoading && error == null) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveHomeLoadMoreFooter(
-                    isLoadingMore = isLoadingMore,
-                    contentCount = contentItems.size,
-                    hasMore = hasMore,
-                    error = loadMoreError,
-                    onLoadMore = onLoadMore,
-                )
             }
         }
     }

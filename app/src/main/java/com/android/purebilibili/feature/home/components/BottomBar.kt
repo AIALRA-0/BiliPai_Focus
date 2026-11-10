@@ -1057,6 +1057,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     // The global liquid-glass switch owns primary navigation chrome. Runtime jank
     // downgrades may trim secondary effects, but must not silently turn this surface solid.
     val effectiveForceLowBlurBudget = forceLowBlurBudget
+    val materialBlur = rememberMaterialBackdropBlur(liquidGlassTuning)
     val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val renderGlassEffects = shouldRenderBottomBarLiquidGlassEffects(
         glassEnabled = glassEnabled,
@@ -1064,7 +1065,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     )
     // 玻璃专属嵌套边界：复用父壳的材质，不改变关闭玻璃后的原生磨砂与几何。
     val parentGlass = com.android.purebilibili.core.ui.blur.LocalAppGlassContainer.current
-        .takeIf { renderGlassEffects && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled }
+        .takeIf { renderGlassEffects }
     val samplingBackdrop = if (parentGlass != null) parentGlass.backdrop else backdrop
     val inheritShellOptics = parentGlass != null
     val inheritDeformation = parentGlass?.ownsDeformation == true
@@ -1103,7 +1104,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     // recomposes chrome. Each callback is keyed only by the inputs it draws.
     val backdropShape = remember(shape) { { shape } }
     val backdropEffects = remember(
-        renderGlassEffects, blurEnabled, blurRadius, drawShellLens, inheritShellOptics,
+        materialBlur, renderGlassEffects, blurEnabled, blurRadius, drawShellLens, inheritShellOptics,
         effectiveShellLensIntensity, materialSpec.vibrancy, materialSpec.blurRadiusDp,
         materialSpec.shellRefractionHeightDp, materialSpec.shellRefractionAmountDp,
         materialSpec.shellChromaticAberration, liquidGlassTuning.saturation,
@@ -1129,7 +1130,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
                 if (!inheritShellOptics) {
                     val resolvedBlurRadius =
                         materialSpec.blurRadiusDp?.dp ?: AppSpacingTokens.ExtraSmall
-                    miuixBlur(resolvedBlurRadius.toPx(), resolvedBlurRadius.toPx())
+                    materialBlur(resolvedBlurRadius.toPx())
                 }
                 if (
                     drawShellLens &&
@@ -2274,7 +2275,7 @@ fun FrostedBottomBar(
     }
     ProvideBottomBarSkinMotion(uiSkinDecoration) {
         AppBottomNavigationHost(
-            androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+            androidNativeLiquidGlassEnabled = homeSettings.bottomDockGlassEnabled,
             materialContent = { policy ->
                 MaterialBottomBar(
                     currentItem = currentItem,
@@ -5030,13 +5031,20 @@ internal fun BiliPaiBottomBarSearchVisualContent(
             keyboardController?.hide()
         }
     }
+    // 目标状态只控制输入和焦点；可见内容随当前进度退出，反向时不提前卸载。
+    val latestFieldAlpha by rememberUpdatedState(fieldAlpha)
+    val showFieldContent by remember(expanded) {
+        derivedStateOf { expanded || latestFieldAlpha() > 0f }
+    }
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = if (!expanded) AppSpacingTokens.None
-                else if (glassSearchVisuals) 16.dp else AppSpacingTokens.Large),
+            .bottomBarSearchContentInsets(
+                progress = fieldAlpha,
+                expandedInset = if (glassSearchVisuals) 16.dp else AppSpacingTokens.Large,
+            ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (expanded) Arrangement.Start else Arrangement.Center
+        horizontalArrangement = Arrangement.Start,
     ) {
         Box(
             modifier = Modifier
@@ -5080,7 +5088,7 @@ internal fun BiliPaiBottomBarSearchVisualContent(
                     }
             )
         }
-        if (expanded) {
+        if (showFieldContent) {
             Spacer(modifier = Modifier.width(if (glassSearchVisuals) 4.dp else AppSpacingTokens.Small + AppSpacingTokens.Micro))
             if (interactive) {
                 BasicTextField(

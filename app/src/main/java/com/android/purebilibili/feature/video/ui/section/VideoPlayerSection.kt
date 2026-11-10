@@ -23,6 +23,8 @@ import androidx.compose.ui.input.key.type
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
+import com.android.purebilibili.feature.video.LocalVideoDetailOpeningSeed
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
@@ -231,6 +233,7 @@ import com.android.purebilibili.feature.anime4k.resolveAnime4KOutputDecision
 import com.android.purebilibili.feature.anime4k.shouldFallbackAnime4KBeforeFirstFrame
 import com.android.purebilibili.feature.anime4k.gl.Anime4KGLSurfaceView
 import com.android.purebilibili.plugin.sdk.VideoEnhancementPluginApi
+import com.android.purebilibili.core.subtitle.SUBTITLE_GAP_HOLD_MS
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.buildSubtitleTrackOptions
@@ -239,7 +242,7 @@ import com.android.purebilibili.feature.video.subtitle.normalizeSubtitleDisplayM
 import com.android.purebilibili.feature.video.subtitle.normalizeSubtitleVerticalOffsetFraction
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleControlAvailability
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModeByAutoPreference
-import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTextAt
+import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayTextAt
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTrackDisplayLabel
 import com.android.purebilibili.feature.video.subtitle.shouldRenderPrimarySubtitle
 import com.android.purebilibili.feature.video.subtitle.shouldRenderSecondarySubtitle
@@ -486,6 +489,7 @@ private fun BoxScope.VideoSubtitleOverlayHost(
     ) {
         com.android.purebilibili.feature.video.subtitle.subtitlePositionTimeline(
             subtitleOwner.subtitlePrimaryCues, subtitleOwner.subtitleSecondaryCues, timingOffsetMs,
+            endHoldMs = SUBTITLE_GAP_HOLD_MS,
         )
     }
     val subtitlePositionMs by com.android.purebilibili.core.player.rememberPlaybackPosition(
@@ -495,7 +499,7 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             (subtitleOwner.subtitlePrimaryCues.isNotEmpty() || subtitleOwner.subtitleSecondaryCues.isNotEmpty()),
         timeline = subtitleTimeline,
     )
-    val subtitlePrimaryRawText = remember(
+    val subtitlePrimaryText = remember(
         uiState,
         subtitleFeatureEnabled,
         subtitlePositionMs,
@@ -508,10 +512,10 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             return@remember null
         }
         if (!shouldRenderPrimarySubtitle(subtitleDisplayMode)) return@remember null
-        resolveSubtitleTextAt(success.subtitlePrimaryCues,
+        resolveSubtitleDisplayTextAt(success.subtitlePrimaryCues,
             com.android.purebilibili.feature.video.subtitle.subtitlePositionForOffset(subtitlePositionMs, timingOffsetMs))
     }
-    val subtitleSecondaryRawText = remember(
+    val subtitleSecondaryText = remember(
         uiState,
         subtitleFeatureEnabled,
         subtitlePositionMs,
@@ -524,62 +528,8 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             return@remember null
         }
         if (!shouldRenderSecondarySubtitle(subtitleDisplayMode)) return@remember null
-        resolveSubtitleTextAt(success.subtitleSecondaryCues,
+        resolveSubtitleDisplayTextAt(success.subtitleSecondaryCues,
             com.android.purebilibili.feature.video.subtitle.subtitlePositionForOffset(subtitlePositionMs, timingOffsetMs))
-    }
-
-    var stickyPrimaryText by remember(subtitlePollingIdentity, timingOffsetMs) { mutableStateOf<String?>(null) }
-    var stickySecondaryText by remember(subtitlePollingIdentity, timingOffsetMs) { mutableStateOf<String?>(null) }
-    var primaryBlankSinceMs by remember(subtitlePollingIdentity, timingOffsetMs) { mutableLongStateOf(-1L) }
-    var secondaryBlankSinceMs by remember(subtitlePollingIdentity, timingOffsetMs) { mutableLongStateOf(-1L) }
-    val nowForSticky = subtitlePositionMs
-    val subtitlePrimaryText = remember(
-        subtitlePrimaryRawText,
-        stickyPrimaryText,
-        primaryBlankSinceMs,
-        nowForSticky
-    ) {
-        val blankGap = if (subtitlePrimaryRawText.isNullOrBlank() && primaryBlankSinceMs >= 0L) {
-            (nowForSticky - primaryBlankSinceMs).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-        com.android.purebilibili.feature.video.subtitle.resolveStickySubtitleText(
-            currentText = subtitlePrimaryRawText,
-            previousText = stickyPrimaryText,
-            blankGapMs = blankGap,
-        )
-    }
-    val subtitleSecondaryText = remember(
-        subtitleSecondaryRawText,
-        stickySecondaryText,
-        secondaryBlankSinceMs,
-        nowForSticky
-    ) {
-        val blankGap = if (subtitleSecondaryRawText.isNullOrBlank() && secondaryBlankSinceMs >= 0L) {
-            (nowForSticky - secondaryBlankSinceMs).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-        com.android.purebilibili.feature.video.subtitle.resolveStickySubtitleText(
-            currentText = subtitleSecondaryRawText,
-            previousText = stickySecondaryText,
-            blankGapMs = blankGap,
-        )
-    }
-    SideEffect {
-        if (!subtitlePrimaryRawText.isNullOrBlank()) {
-            stickyPrimaryText = subtitlePrimaryRawText
-            primaryBlankSinceMs = -1L
-        } else if (primaryBlankSinceMs < 0L) {
-            primaryBlankSinceMs = nowForSticky
-        }
-        if (!subtitleSecondaryRawText.isNullOrBlank()) {
-            stickySecondaryText = subtitleSecondaryRawText
-            secondaryBlankSinceMs = -1L
-        } else if (secondaryBlankSinceMs < 0L) {
-            secondaryBlankSinceMs = nowForSticky
-        }
     }
 
     var subtitleVerticalOffsetFraction by rememberSaveable(bvid) {
@@ -735,7 +685,12 @@ internal fun VideoPlayerSection(
     val hostedAmbient = LocalAmbientPresentation.current
     val ambient = hostedAmbient ?: remember(state.playerState.player) { AmbientPresentation() }
     val ambientController = LocalAmbientController.current ?: remember(ambient) { AmbientFrameController(ambient) }
-    CompositionLocalProvider(LocalAmbientPresentation provides ambient, LocalAmbientController provides ambientController) {
+    val themeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    CompositionLocalProvider(
+        LocalAmbientPresentation provides ambient,
+        LocalAmbientController provides ambientController,
+        com.android.purebilibili.core.ui.LocalAppThemeConfig provides themeConfig.copy(liquidGlassEnabled = themeConfig.playerGlassEnabled),
+    ) {
         Box(modifier = modifier) {
             if (!state.isFullscreen && hostedAmbient == null) {
                 PlayerAmbientGlow(ambient, fullscreen = false, modifier = Modifier.matchParentSize())
@@ -963,7 +918,10 @@ private fun VideoPlayerSectionContent(
     val liquidGlassLayoutEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     // 两种材质共用控制栏几何，首帧与实际测量使用同一高度依据。
     val bottomGestureExclusionHeightDp =
-        com.android.purebilibili.feature.video.ui.overlay.piliPlayerBottomControlsHeightDp(viewPoints.isNotEmpty())
+        com.android.purebilibili.feature.video.ui.overlay.piliPlayerBottomControlsHeightDp(
+            hasChapters = viewPoints.isNotEmpty(),
+            compactInline = !isFullscreen && configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT,
+        )
     val gestureSeekFallbackDurationMs = remember(uiState) {
         (uiState as? VideoPlaybackUiState.Success)?.videoDurationMs ?: 0L
     }
@@ -2086,6 +2044,10 @@ private fun VideoPlayerSectionContent(
                         danmakuManager.isEnabled = newState
                         if (!newState) {
                             danmakuManager.clear()
+                        }
+                        // 弹幕开关由横竖屏共用；快捷键与按钮一样保存，换片后继续沿用。
+                        settingsScope.launch {
+                            SettingsManager.setDanmakuEnabled(context, newState)
                         }
                         Toast.makeText(context, if (newState) "弹幕已开启" else "弹幕已关闭", Toast.LENGTH_SHORT).show()
                         true
@@ -4094,10 +4056,15 @@ private fun VideoPlayerSectionContent(
                         ) {
                             val ratio = minOf(1f, 1280f / maxOf(texture.width, texture.height))
                             outputHandoffFrame = try {
-                                texture.getBitmap(
-                                    (texture.width * ratio).roundToInt().coerceAtLeast(1),
-                                    (texture.height * ratio).roundToInt().coerceAtLeast(1),
-                                )?.asImageBitmap()
+                                com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork(
+                                    "output_handoff_readback",
+                                    detail = { "texture=${texture.width}x${texture.height} ratio=$ratio fullscreen=$isFullscreen" },
+                                ) {
+                                    texture.getBitmap(
+                                        (texture.width * ratio).roundToInt().coerceAtLeast(1),
+                                        (texture.height * ratio).roundToInt().coerceAtLeast(1),
+                                    )?.asImageBitmap()
+                                }
                             } catch (_: IllegalStateException) {
                                 null
                             }
@@ -4598,6 +4565,25 @@ private fun VideoPlayerSectionContent(
                         playFromManualStartCover()
                     }
             ) {
+                // 封面异步就绪前只读取来源封面区域，不能将整行标题和统计放大进播放器。
+                // 窗口开合仍持有完整截图；此占位始终位于正常封面之下。
+                val openingSeed = LocalVideoDetailOpeningSeed.current
+                val openingSeedIdentity = remember { currentPlaybackIdentity }
+                if (openingSeed != null && currentPlaybackIdentity == openingSeedIdentity) {
+                    androidx.compose.foundation.Image(
+                        painter = remember(openingSeed) {
+                            BitmapPainter(
+                                openingSeed.bitmap.asImageBitmap(),
+                                srcOffset = IntOffset(openingSeed.coverPixels.left, openingSeed.coverPixels.top),
+                                srcSize = IntSize(openingSeed.coverPixels.width, openingSeed.coverPixels.height),
+                            )
+                        },
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
                 // 封面层存续期间始终复用当前封面，包括播放面就绪到首帧揭开的间隙及退场淡出。
                 // 竖屏、横屏与各材质共用此规则，避免已有图片被黑底替换。
                 if (currentCoverUrl.isNotEmpty()) {

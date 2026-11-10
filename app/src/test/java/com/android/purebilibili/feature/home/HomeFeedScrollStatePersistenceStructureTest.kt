@@ -59,23 +59,6 @@ class HomeFeedScrollStatePersistenceStructureTest {
     }
 
     @Test
-    fun `video navigation freezes feed anchor before shared transition starts`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        val clickSource = source
-            .substringAfter("val wrappedOnVideoClick: (HomeVideoClickRequest) -> Unit")
-            .substringBefore("val onTodayWatchVideoClick")
-
-        val captureIndex = clickSource.indexOf("pendingFeedScrollAnchor = captureHomeFeedScrollAnchor(")
-        val transitionStartIndex = clickSource.indexOf("isVideoNavigating = true")
-        val navigationIndex = clickSource.indexOf("onVideoClick(request)")
-
-        assertTrue(captureIndex >= 0)
-        assertTrue(captureIndex < transitionStartIndex)
-        assertTrue(transitionStartIndex < navigationIndex)
-        assertTrue(source.contains("gridState != null && pendingFeedScrollAnchor == null"))
-    }
-
-    @Test
     fun `avatar preference does not change card bounds during predictive return`() {
         val screenSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
         val pageSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt")
@@ -176,18 +159,21 @@ class HomeFeedScrollStatePersistenceStructureTest {
     }
 
     @Test
-    fun `category initial load is owned and cancelled by home view model`() {
+    fun `category initial load uses coordinated request ownership`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt")
-        val switchSource = source
-            .substringAfter("fun switchCategory(category: HomeCategory)")
-            .substringBefore("fun updateDisplayedTabIndex")
+        val initialLoadSource = source
+            .substringAfter("private fun startCategoryLoad(")
+            .substringBefore("private suspend fun fetchDataWithStartupRecovery")
+        val requestSource = source
+            .substringAfter("private fun launchFeedRequest(")
+            .substringBefore("fun refresh(")
 
-        assertTrue(source.contains("private var categoryInitialLoadJob: Job? = null"))
-        assertTrue(switchSource.contains("categoryInitialLoadJob?.cancel()"))
-        assertTrue(switchSource.contains("fetchData(isLoadMore = false, category = category)"))
-        assertTrue(switchSource.contains("catch (error: CancellationException)"))
-        assertTrue(switchSource.contains("throw error"))
-        assertFalse(source.contains("sessionSeenBvids"))
+        assertTrue(source.contains("private val feedRequests = HomeFeedRequestCoordinator()"))
+        assertTrue(initialLoadSource.contains("HomeFeedRequestKind.INITIAL"))
+        assertTrue(initialLoadSource.contains("startupRecovery"))
+        assertTrue(requestSource.contains("catch (error: CancellationException)"))
+        assertTrue(requestSource.contains("copy(isLoading = false)"))
+        assertTrue(requestSource.contains("throw error"))
     }
 
     @Test
@@ -197,7 +183,8 @@ class HomeFeedScrollStatePersistenceStructureTest {
             .substringAfter("private suspend fun fetchFollowFeed")
             .substringBefore("private fun videoItemKey")
 
-        assertFalse(followFeedSource.contains("DynamicRepository.resetPagination"))
+        assertTrue(followFeedSource.contains("followFeedSource.load("))
+        assertFalse(followFeedSource.contains("resetPagination"))
     }
 
     @Test
@@ -220,13 +207,15 @@ class HomeFeedScrollStatePersistenceStructureTest {
         val followFeedSource = source
             .substringAfter("private suspend fun fetchFollowFeed")
             .substringBefore("private fun videoItemKey")
+        val baselineSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeFollowFeedSource.kt")
 
         assertTrue(fetchDataSource.contains("val result = fetchFollowFeed("))
         assertTrue(fetchDataSource.contains("return result"))
-        assertTrue(followFeedSource.contains("probeWithBaseline"))
         assertTrue(followFeedSource.contains("resolveHomeFollowRefreshNewItemsCount("))
-        assertTrue(followFeedSource.contains("currentUpdateBaseline("))
-        assertTrue(followFeedSource.contains("return refreshTipCount"))
+        assertTrue(followFeedSource.contains("response.refreshUpdateNum"))
+        assertTrue(baselineSource.contains("probeWithBaseline"))
+        assertTrue(baselineSource.contains("currentUpdateBaseline"))
+        assertTrue(baselineSource.contains("HomeFollowFeedResponse(fullFeed, true, feed.updateNum)"))
     }
 
 

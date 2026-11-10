@@ -1,6 +1,7 @@
 // 文件路径: feature/watchlater/WatchLaterScreen.kt
 package com.android.purebilibili.feature.watchlater
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.util.responsiveContentWidth
 
 import com.android.purebilibili.navigation.tabSelectedPage
@@ -128,7 +129,6 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.data.model.response.VideoItem
@@ -142,6 +142,7 @@ import com.android.purebilibili.feature.personal.PersonalMediaCardSkeleton
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
 import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
 import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import kotlinx.coroutines.Dispatchers
@@ -1772,6 +1773,7 @@ private fun WatchLaterVideoCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(item.bvid)
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = remember(configuration.screenWidthDp, density) {
@@ -1882,17 +1884,7 @@ private fun WatchLaterVideoCard(
         },
         selected = isSelected,
         modifier = modifier
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = item.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = sharedTransitionMotionSpec,
-                clipShape = cardShellShape,
-                // 让播放器接管移动中的整卡，返回时再在 morph 末段接回源卡，避免与播放器重叠。
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(item.bvid, cardShellShape)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.videoCardSourceBoundsInRoot()
             },
@@ -1969,7 +1961,7 @@ private fun WatchLaterVideoCard(
         },
         coverOverlayContent = {
             VideoStatusBadges(
-                labels = item.statusLabels,
+                labels = item.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.ExtraSmall),
             )
             val progressState = com.android.purebilibili.data.model.resolveWatchLaterDisplayProgressState(item)

@@ -57,11 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
 import com.android.purebilibili.core.ui.videoCardTitleMaxLines
 import com.android.purebilibili.core.ui.videoCardTitleOverflow
-import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.FeedTitleHierarchy
 import com.android.purebilibili.core.ui.feedContentTypography
 import com.android.purebilibili.core.ui.AppSpacingTokens
@@ -71,14 +69,9 @@ import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.LocalMiuixVideoCardTransitionState
-import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
-import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedCoverCacheKey
-import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
-import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
@@ -158,22 +151,6 @@ fun CinematicVideoCard(
         sharedElementSourceRoute ?: localSharedElementSourceRoute
     }
     val effectiveTransitionEnabled = transitionEnabled
-    val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
-    val transitionAdaptiveInfo = com.android.purebilibili.core.ui.transition
-        .LocalVideoTransitionAdaptiveInfo.current
-    val cardSharedTransitionMotionSpec = remember(
-        effectiveSharedElementSourceRoute,
-        effectiveTransitionEnabled,
-        sharedTransitionSpeedSettings,
-        transitionAdaptiveInfo,
-    ) {
-        resolveVideoCardSharedTransitionMotionSpec(
-            sourceRoute = effectiveSharedElementSourceRoute,
-            transitionEnabled = effectiveTransitionEnabled,
-            speedSettings = sharedTransitionSpeedSettings,
-            adaptiveInfo = transitionAdaptiveInfo,
-        )
-    }
     val coverCacheKey = remember(video.bvid, useLowQualityCover) {
         resolveVideoSharedCoverCacheKey(video.bvid, useLowQualityCover)
     }
@@ -211,18 +188,6 @@ fun CinematicVideoCard(
     }
     
     // 共享元素
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val coverSharedEnabled = shouldEnableVideoCoverSharedTransition(
-        transitionEnabled = effectiveTransitionEnabled,
-        hasSharedTransitionScope = sharedTransitionScope != null,
-        hasAnimatedVisibilityScope = animatedVisibilityScope != null
-    )
-    val isQuickReturnLimited = isReturningFromVideoDetail && isQuickReturningFromVideoDetail
-    val useCardShellSharedBounds = shouldUseVideoCardShellSharedBounds(
-        sourceRoute = effectiveSharedElementSourceRoute,
-        transitionEnabled = coverSharedEnabled
-    )
     val isSharedReturnTarget = remember(
         video.bvid,
         effectiveSharedElementSourceRoute,
@@ -237,8 +202,7 @@ fun CinematicVideoCard(
     val coverCrossfadeEnabled = shouldEnableVideoCardCoverCrossfade(
         isScrollInProgress = false,
         isReturningFromDetail = isReturningFromVideoDetail,
-        useCoverSharedBounds = useCardShellSharedBounds ||
-            (LocalMiuixVideoCardTransitionState.current.enabled && isSharedReturnTarget),
+        useCoverSharedBounds = LocalMiuixVideoCardTransitionState.current.enabled && isSharedReturnTarget,
         isSharedReturnTarget = isSharedReturnTarget,
     )
     val cardShellShape = cardShape
@@ -274,15 +238,6 @@ fun CinematicVideoCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .videoCardShellSharedBoundsOrEmpty(
-                    enabled = useCardShellSharedBounds,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    bvid = video.bvid,
-                    sourceRoute = effectiveSharedElementSourceRoute,
-                    motionSpec = cardSharedTransitionMotionSpec,
-                    clipShape = cardShellShape
-                )
                 .clip(cardShape)
                 .then(nativeCardSnapshot.modifier)
                 .background(MediaContrastPalette.Scrim) // 纯黑底色
@@ -306,12 +261,6 @@ fun CinematicVideoCard(
                 .onGloballyPositioned { coordinates ->
                     coverBoundsRef.value = coordinates.boundsInRoot()
                 }
-                .videoCardShellReturnCoverAlpha(
-                    enabled = useCardShellSharedBounds,
-                    bvid = video.bvid,
-                    sourceRoute = effectiveSharedElementSourceRoute,
-                    isReturningFromDetail = isReturningFromVideoDetail,
-                )
             
             Box(modifier = Modifier.clip(cardShape)) {
                  AsyncImage(
@@ -339,12 +288,6 @@ fun CinematicVideoCard(
                     .fillMaxWidth()
                     .height(AppSpacingTokens.TripleExtraLarge * 4 - AppSpacingTokens.Medium)
                     .align(Alignment.BottomCenter)
-                    .videoCardShellReturnCoverAlpha(
-                        enabled = useCardShellSharedBounds,
-                        bvid = video.bvid,
-                        sourceRoute = effectiveSharedElementSourceRoute,
-                        isReturningFromDetail = isReturningFromVideoDetail,
-                    )
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -362,13 +305,6 @@ fun CinematicVideoCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(AppSpacingTokens.Large)
-                    .videoCardShellReturnChromeAlpha(
-                        enabled = useCardShellSharedBounds,
-                        bvid = video.bvid,
-                        sourceRoute = effectiveSharedElementSourceRoute,
-                        isReturningFromDetail = isReturningFromVideoDetail,
-                        isQuickReturnFromDetail = isQuickReturningFromVideoDetail,
-                    )
             ) {
                 AppText(
                     text = video.title,

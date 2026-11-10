@@ -528,7 +528,9 @@ internal fun resolveVideoDetailFullscreenMode(
     userRequestedFullscreen: Boolean,
     isInMultiWindowMode: Boolean,
     manualPortraitHoldActive: Boolean = false,
+    isPortraitFullscreen: Boolean = false,
 ): Boolean {
+    if (isPortraitFullscreen) return false
     if (!isOrientationDrivenFullscreen) return userRequestedFullscreen
     // In freeform/split-screen the user toggle is authoritative while Android applies
     // the requested orientation. Do not let stale landscape config re-enter fullscreen.
@@ -746,11 +748,9 @@ private fun resolveStableOrientationWhenAutoRotateDisabled(
     ) {
         return requestedOrientation
     }
-    // SENSOR_LANDSCAPE still follows gravity and can oscillate between both landscape sides
-    // while the user is lying down. With app auto-rotate disabled, preserve an exact landscape
-    // side if one is already active; otherwise enter the platform's fixed landscape orientation.
+    // 无精确侧时交给传感器选边，避免固定 LANDSCAPE 把方向翻到另一侧。
     return resolveCurrentExactLandscapeOrientation(currentRequestedOrientation)
-        ?: ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 }
 
 internal fun resolvePhoneAutoRotateRequestedOrientation(
@@ -934,17 +934,6 @@ internal fun shouldEnterPortraitFullscreenOnFullscreenToggle(
     portraitExperienceEnabled: Boolean
 ): Boolean {
     return portraitExperienceEnabled && targetOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-}
-
-internal fun resolvePortraitRotateTargetOrientation(
-    isOrientationDrivenFullscreen: Boolean,
-    manualPortraitHoldActive: Boolean = false
-): Int? {
-    return if (isOrientationDrivenFullscreen && !manualPortraitHoldActive) {
-        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-    } else {
-        null
-    }
 }
 
 internal fun resolveEffectivePhoneAutoRotateEnabled(

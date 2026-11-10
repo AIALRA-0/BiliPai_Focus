@@ -1358,9 +1358,7 @@ internal fun VideoContentSection(
                 onCommentClick = { reply ->
                     onCommentReplyClick(reply)
                 },
-                onSubReplyClick = { rootReply ->
-                    onSubReplyClick(rootReply, 0L)
-                },
+                onSubReplyClick = onSubReplyClick,
                 onDismiss = { showCommentSearchSheet = false },
                 miuixBackdrop = videoContentMiuixBackdrop,
             )
@@ -2065,9 +2063,7 @@ internal fun LandscapeCommentPanel(
             onCommentClick = { reply ->
                 onCommentReplyClick(reply)
             },
-            onSubReplyClick = { rootReply ->
-                onSubReplyClick(rootReply, 0L)
-            },
+            onSubReplyClick = onSubReplyClick,
             onDismiss = { showCommentSearchSheet = false },
         )
     }

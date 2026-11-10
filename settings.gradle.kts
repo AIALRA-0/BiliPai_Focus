@@ -12,6 +12,11 @@ pluginManagement {
     }
 }
 
+plugins {
+    // IDE 自带 JBR 可能高于项目要求；缺少 JDK 21 时允许 Gradle 获取对应工具链。
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 // ASM 补丁插件（ComposeDetachedOwnerGuard）以组合构建提供，独立 classpath，不进入 buildSrc。
 includeBuild("build-logic")
 
@@ -46,6 +51,11 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        maven {
+            url = uri("http://nexus.itgsa.com:5566/repository/sharedViewKit/")
+            isAllowInsecureProtocol = true
+            content { includeGroup("gsai.sdk") }
+        }
         // GitHub Packages (compose-miuix-ui/miuix).
         // Authentication is required even for this public package. Keep credentials outside
         // the repository in ~/.gradle/gradle.properties or environment variables.
@@ -73,6 +83,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "BiliPai"
 include(":app")
+include(":system-animation-stubs")
 include(":app-tv")
 include(":core-data")
 include(":core-player")

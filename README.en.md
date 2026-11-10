@@ -1,186 +1,143 @@
 <div align="center">
 <h1>BiliPai Focus</h1>
-<p>An Android client fork for browsing and watching Bilibili, preserving upstream features while keeping Focus controls clear and independent</p>
-<p><a href="README.md">简体中文</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/latest">Latest Focus release</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/jay3-yy/BiliPai">Upstream BiliPai</a></p>
-<p>Current stable-channel release: <code>0.2.3-alpha.2.focus.1</code> / versionCode <code>389</code> · Upstream base: <code>0.2.3-alpha.2</code> (alpha) · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.2.3-alpha.2.focus.1">Release and verification assets</a></p>
+<p>BiliPai Focus is a third-party Android client based on BiliPai. It lets you browse and watch Bilibili content while keeping Focus controls for followed-account filtering, related videos, and history actions.</p>
+<p><a href="README.md">简体中文</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/latest">Download the latest published release</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/jay3-yy/BiliPai">BiliPai upstream</a></p>
+<p>Current source candidate: <code>0.7.9-beta.7.focus.1</code> / Android update code <code>390</code> (not released) · Upstream base: <code>0.7.9-beta.7</code> (beta)<br>Latest published Focus version: <code>0.2.3-alpha.2.focus.1</code> / Android update code <code>389</code></p>
 </div>
 
-## 1 Project overview
+## 1 What can this project do
 
-BiliPai Focus is an independently maintained third-party Android client based on the [BiliPai upstream project](https://github.com/jay3-yy/BiliPai). It is not affiliated with or endorsed by Bilibili.
+BiliPai Focus follows the [BiliPai upstream project](https://github.com/jay3-yy/BiliPai) and retains its video, anime, live, activity-feed, search, messaging, and offline-download features. Focus also maintains its own controls for followed-account filtering, related videos, and history actions. It is not an official Bilibili client and is not affiliated with Bilibili.
 
-The Focus version follows an upstream version as its baseline and adds an independently increasing Focus revision. The source build version can differ from the latest published release; check [`app/build.gradle.kts`](app/build.gradle.kts) and [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) respectively.
+## 2 What is the status of this version
 
-## 2 App screens
+The current source sets the Focus version to `0.7.9-beta.7.focus.1` and Android update code (`versionCode`) to `390`, based on upstream `0.7.9-beta.7`. This is an unreleased source candidate; no Focus Release package for it is available yet.
 
-The following screens were captured from the Focus Dev build in an Android 31 emulator. The recommendation screen shows public content loaded at capture time.
+[Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases/latest) currently provides the latest published Focus version, `0.2.3-alpha.2.focus.1` / `389`. See the [versioning guide](docs/wiki/VERSIONING.md) for version names and the Focus stable update channel. The upstream base is still beta, so it is not an upstream stable release.
 
-<div align="center">
-<img src="docs/images/focus-0.2.3-alpha.2/settings-home.png" alt="Settings home in the Android 31 emulator Dev build, showing the search field and settings categories" width="720">
+## 3 How do I install the latest published version
 
-<p><em>Figure 2.1. Settings home at its current scroll position, with the settings search field and category entries visible.</em></p>
-</div>
+The app targets Android 8.0 (API 26) and later on 64-bit ARM devices. Playback quality depends on account permissions, video availability, and device decoding support. You can browse public content without signing in; some features, including saved items, following anime, and higher quality tiers, may require an account.
 
-## 3 Download and installation
+- Step 1: Open [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases/latest), read the release notes, and confirm that you are downloading the Focus package (APK).
+- Step 2: Download and open the APK on your Android device. If prompted, allow installation from the source you used to open it.
+- Step 3: Open the app. You can start with public content; sign in when a feature requires account access.
+- Step 4: If the sign-in page offers several methods, follow its instructions to use TV QR, phone and password, SMS verification, or Cookie import.
 
-The Focus package requires Android 8.0 or later and currently targets 64-bit ARM devices. Android 12 or later provides a more complete dynamic theming experience. Standard video can offer 4K, 1080P60, or HDR quality tiers; available options depend on account access, the video source, and device capabilities.
+Online playback, search, sign-in, and update checks require a network connection; importing a plugin by URL does too. Downloaded videos can play locally. The [user FAQ](docs/wiki/FAQ.md) covers account and network questions.
 
-### 3.1 Install
+## 4 Which controls does Focus add
 
-Step 1: Open [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases/latest) and read the release notes.
+The **Focus-specific** settings page keeps three controls that belong to this fork:
 
-Step 2: Download the latest Focus package.
+- Follow filtering: when disabled, the app keeps your follow groups and their membership but no longer hides items by group in the home Following feed or activity feed.
+- Related videos: controls the related-video and more-recommendations sections on video detail pages.
+- Clear history: controls whether the watch-history page shows a clear-all action.
 
-Step 3: Open the package on your Android device. The system may ask you to allow installations from the selected source.
+Upstream navigation settings now control home-tab visibility and order. When an older Focus install upgrades, the app migrates the tabs that were actually visible and preserves their order. A fresh install shows Following by default; the Subscriptions tab appears when the subscriptions plugin is enabled. Search landing sections use the existing settings and are no longer listed as Focus-specific controls.
 
-Step 4: Open the app and browse public content. Sign in to use features that require account access.
+## 5 Which upstream features does it retain
 
-The current sign-in page lists the methods available in this build. Options may include:
+- Video playback supports DASH, MP4, danmaku, gestures, speed controls, saved playback position, background play, picture-in-picture, and multiple quality tiers. Available quality depends on the account, video, and device.
+- Audio mode includes immersive and vinyl layouts, lyrics, queues, a sleep timer, system media controls, and Android Auto.
+- The home-screen widget can show the current title and playback controls, resume audio, and open Watch later or Search.
+- Subtitles and notes support local subtitle import and export, style and timing changes, private video notes, timestamps, and AI-summary drafts. AI summaries need a configured service.
+- Anime and live features include following, episode selection, live categories, and real-time danmaku, with layouts for phones, tablets, and foldables.
+- Home, search, categories, activity feeds, comments, profiles, articles, messages, direct messages, history, favorites, and Watch later cover common browsing and interaction tasks. Feeds support replies and image previews.
+- Offline downloads support resuming and local playback. DLNA and Google Cast can send content to compatible devices; WebDAV can back up and restore settings.
+- Appearance options include Material 3, Miuix, iOS-style components, optional Liquid Glass, dynamic colors, and elastic motion. The home screen also supports regular grids and large-screen layouts.
 
-- TV QR sign-in
-- Phone and password
-- SMS verification
-- Cookie import
+See the [system media guide](docs/wiki/SYSTEM_MEDIA.md) for the home-screen widget and Android Auto. The [changelog](CHANGELOG.md) lists source updates.
 
-The [user FAQ](docs/wiki/FAQ.md) covers account and network questions. Download this project's package only from Focus Releases, and follow Bilibili's platform rules and the rights holders' requirements.
+## 6 What changed with the beta.7 merge
 
-## 4 Focus-specific settings
+The current candidate is based on upstream `0.7.9-beta.7`. Notable changes include:
 
-The settings home provides a **Focus-specific settings** entry. Searching for “Focus” in settings also opens it. The Focus page is reserved for behavior unique to this fork.
+- A new **Show comments on landscape back** option: when enabled, the first Back action opens comments in landscape fullscreen; the next returns to the previous level while keeping landscape orientation.
+- System card transitions now cover additional shop-product, article, activity-detail, creator-search, and live-category pages.
+- Focus fixed the backup-line timer so ordinary playback does not switch lines early when that timer resets. A real playback error can still trigger a backup line.
 
-- Upstream navigation settings are the single source for top-tab visibility and ordering; Focus no longer provides duplicate switches
-- During an upgrade, Focus combines the two legacy tab settings into the set of tabs users actually saw, preserves their order, and migrates the result to the upstream setting
-- A fresh install shows “Following” by default. “Subscriptions” appears when the subscriptions plugin is enabled; other upstream-supported tabs can be enabled and ordered in navigation settings
-- Focus keeps settings for followed-account filtering, related videos, search history, and the clear-history action
+These changes are part of the source candidate and have not shipped in a Focus Release. See the [changelog](CHANGELOG.md) for the complete record.
 
-<div align="center">
-<img src="docs/images/focus-0.2.3-alpha.2/focus-settings.png" alt="Focus-specific settings in the Android 31 emulator, showing followed-account filtering, related videos, and history options" width="720">
+### 6.1 What else has the upstream project recently improved
 
-<p><em>Figure 4.1. Focus-specific settings for followed-account filtering, related videos, search history, and clearing history.</em></p>
-</div>
+- Content pages and cards: recommendation cards identify portrait videos, and the activity feed can hide its top creator row. Landscape danmaku styling and player loading or buffering indicators have also improved.
+- Playback and history: short videos resume unseen items after returning home, and the app records watch history only after actual playback. Fullscreen-to-mini-player transitions release the orientation lock; Watch later cards now have a remove action.
+- Search and comments: search input now updates the query without resetting cursors or IME composition. Comment translation handles Chinese replies and mixed-language text, while reply threads keep their scroll position.
 
-The top-tab settings list only includes upstream-configurable entries. A tab's availability may also depend on navigation configuration, available content, or an entry provided by a plugin. See the [user FAQ](docs/wiki/FAQ.md) for troubleshooting.
+## 7 What can plugins do, and what should I check before importing one
 
-<div align="center">
-<img src="docs/images/focus-0.2.3-alpha.2/top-tabs.png" alt="Upstream navigation settings in the Android 31 emulator, showing top-tab visibility and ordering controls" width="720">
+Built-in plugins cover sponsor skipping, ad filtering, Anime4K, danmaku tools, eye care, Today Watch, CDN selection, feed filtering, subscriptions, and casting. The plugin center can also edit JSON rules, check their syntax, preview filtering, and show matching results.
 
-<p><em>Figure 4.2. Upstream navigation settings for top-tab visibility and ordering; the shown switch states are specific to this emulator.</em></p>
-</div>
+- JSON or `.bp` rules can be imported by URL to filter recommendations or danmaku. These are declarative rules and do not run arbitrary code; see the [plugin development guide](docs/PLUGIN_DEVELOPMENT.md).
+- Enhanced ad filtering can also block keywords in actual video tags across home recommendations, search results, and related videos. With no keywords configured, it makes no extra tag requests; failed or timed-out lookups keep videos whose tags could not be checked.
+- JavaScript plugins can provide external content catalogs and media playback sources, and can be imported from a local file or URL. The app runs their code in its embedded browser (WebView) and shows declared permissions before installation. Review the source, data sources, and requested permissions first.
+- `.bpskin` is a data-only skin package for supported images, colors, and interface resources. It does not execute code; see the [skin package guide](plugins/samples/winter-cloud-skin/README.md).
+- External `.bpplugin` Kotlin packages show package details, signature or hash status, and requested capabilities. The host does not run their Dex code yet; see the [Plugin SDK guide](plugins/sdk/README.md).
+- Native Kotlin plugins require source changes and a new build; see the [native plugin development guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md).
 
-## 5 Upstream capabilities
+First Visit Recommendation adapts work by wangdaodao's [TabulaBili](https://github.com/wangdaodao/TabulaBili) and tjsky's [TabulaBili-Plus](https://github.com/tjsky/TabulaBili). This reference does not imply an affiliation with those authors.
 
-Focus continues the upstream app's common user flows. Account permissions, the content itself, and device capabilities can limit individual features.
+## 8 How do I build from source
 
-- **Video playback** covers quality, danmaku, and player controls
-- **Anime and live streams** cover episodes, playback progress, categories, and live rooms
-- **Content and community** include recommendations, search, activity feeds, and messages
-- **Offline and casting** include downloads, local playback, and device casting
-- **Backup and restore** support WebDAV
-- **Large screens and appearance** adapt to tablets, foldables, and multiple themes
-- **Notes and recommendations** include video notes, AI-summary drafts, and Today Watch
+The repository includes a Gradle Wrapper and requires JDK 21 and Android SDK 37. Android Studio and the local SDK must also support the Android Gradle Plugin and SDK versions declared by the build scripts. The Miuix dependency is hosted on GitHub Packages, which requires authentication even though the package is public. Put `gpr.user` and `gpr.key` in your local `~/.gradle/gradle.properties`, or provide `GITHUB_ACTOR` and `GITHUB_TOKEN`. Do not commit access tokens to the repository.
 
-<div align="center">
-<img src="docs/images/focus-0.2.3-alpha.2/recommend-feed.png" alt="Recommendation screen in the Android 31 emulator Dev build, showing the Recommend and Following tabs with public content cards" width="720">
+Run these commands in a terminal to compile the app's Kotlin source. This task does not create an APK. In Windows PowerShell, use `.\gradlew.bat :app:compileDebugKotlin`.
 
-<p><em>Figure 5.1. Example after enabling Recommend in navigation settings, with Recommend and Following tabs and public content loaded at capture time. Recommendations change over time.</em></p>
-</div>
-
-See the [feature matrix](docs/wiki/FEATURE_MATRIX.md) for capabilities, status, and current limits. AI-summary drafts depend on configured services. See the [roadmap](docs/wiki/ROADMAP.md) for planned work.
-
-## 6 Plugins and extensions
-
-- The app includes 10 built-in plugins; names and status are in the [feature matrix](docs/wiki/FEATURE_MATRIX.md)
-- JSON rule plugins can be imported by URL and filter recommendations or danmaku; format details are in the [plugin development guide](docs/PLUGIN_DEVELOPMENT.md)
-- External `.bpskin` skin packages preview limited interface resources; see the [skin sample](plugins/samples/winter-cloud-skin/README.md)
-- External `.bpplugin` Kotlin packages are parsed and checked to display their capability requests; the host does not run their code. See the [Plugin SDK guide](plugins/sdk/README.md)
-- Source-level native plugins require code changes and a new build; see the [native plugin guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md)
-
-Review the source and rules before importing third-party JSON plugins. Capability declarations for external packages are described in the [Plugin SDK guide](plugins/sdk/README.md).
-
-First Visit Recommendation adapts work by wangdaodao's [TabulaBili](https://github.com/wangdaodaodao/TabulaBili) and tjsky's [TabulaBili-Plus](https://github.com/tjsky/TabulaBili). This credit does not imply an affiliation with those authors.
-
-## 7 Build and development
-
-The project uses the Gradle Wrapper included in the repository and JDK 21. Android Studio and the Android SDK must support the Gradle plugin and SDK versions declared by the repository; exact dependency versions are in [`gradle/libs.versions.toml`](gradle/libs.versions.toml) and the build scripts.
-
-```bash
+<pre><code># Run from the repository root with JDK 21 and Android SDK 37
 git clone https://github.com/AIALRA-0/BiliPai_Focus.git
 cd BiliPai_Focus
-./gradlew :app:compileDebugKotlin
-```
+./gradlew :app:compileDebugKotlin</code></pre>
 
-This command compiles the app's Kotlin code and does not produce an installable package. To create a local installable package, maintainers can use `./gradlew :app:assembleDev`; its signing and installation behavior differ from an official Focus Release. Release builds require the Focus signing configuration held by the maintainers; the upstream signing key cannot replace it. See the [release workflow](docs/wiki/RELEASE_WORKFLOW.md).
+Maintainers can create an installable local development package with `:app:assembleDev`. Dev and official Focus Release builds use different signing configurations; an official Release requires the Focus signing configuration held by maintainers. `app/google-services.json` is optional; when present, the build enables Firebase Crashlytics and Analytics. See the [release workflow](docs/wiki/RELEASE_WORKFLOW.md).
 
-When `app/google-services.json` is present, the build enables Firebase Crashlytics and usage analytics. The app has separate controls for these features, and both default to enabled in the source. Review the settings and [privacy FAQ](docs/wiki/FAQ.md) before use. Do not commit private configuration files.
+## 9 What data uses the network
 
-Main modules:
+Login credentials are stored locally and sent directly from the device to official Bilibili APIs; the project does not operate its own account server. If a build includes Firebase configuration, crash reports and usage statistics are sent to Google Firebase while their settings are enabled. Both settings are on by default, and you can turn them off separately. The in-app privacy notice lists the data categories, including crash stacks, device and system information, and anonymous activity, page-view, basic-feature, version, and language-region statistics.
 
-- `app/`: Android app
-- `design-system/`: shared UI system
-- `settings-core/`: settings policies
-- `network-core/`: network policies
-- `plugin-sdk/`: plugin interfaces
-- `plugins/`: plugin examples and extensions
-- `baselineprofile/`: performance profiles
-- `docs/`: project documentation and verification records
-- `scripts/`: maintenance tools
+When reporting an issue, do not publish Cookies, access tokens, passwords, account QR codes, or unredacted logs. Third-party JavaScript plugins can also access the network or plugin storage when they declare and receive those permissions; inspect their source and permissions before importing them.
 
-## 8 Verification status
+## 10 Where can I find documentation or report a problem
 
-The previous full-device run had 16 failures and 3 skips out of 63 checks. Itemized results are in the [September 23 verification report](docs/audits/2026-09-23-alpha2-verification.md).
+- [User FAQ](docs/wiki/FAQ.md): accounts, networking, privacy, and common questions.
+- [System media guide](docs/wiki/SYSTEM_MEDIA.md): home-screen widget and Android Auto.
+- [Plugin development guide](docs/PLUGIN_DEVELOPMENT.md), [native plugin guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md), and [Plugin SDK](plugins/sdk/README.md): JSON rules and JavaScript or Kotlin plugins.
+- [Versioning](docs/wiki/VERSIONING.md), [release workflow](docs/wiki/RELEASE_WORKFLOW.md), and [changelog](CHANGELOG.md): version names, Releases, and source changes.
+- [Focus Issues](https://github.com/AIALRA-0/BiliPai_Focus/issues): report Focus-specific problems.
+- [BiliPai Issues](https://github.com/jay3-yy/BiliPai/issues): report problems shared with upstream.
+- [Focus Pull Requests](https://github.com/AIALRA-0/BiliPai_Focus/pulls): propose code, test, or documentation changes.
+- [Documentation index](docs/wiki/README.md): browse the wiki documentation.
+- [Upstream Telegram channel](https://t.me/bilipai666), [upstream Telegram group](https://t.me/bilipai888/1), and [upstream X account](https://x.com/YangY_0x00): upstream announcements and community information.
 
-Fifteen targeted unit-test classes passed. Targeted API 31 emulator checks also covered an upgrade from the previous build, top-tab settings, restored dynamic-feed content, and playback resuming after a seek. Device details, steps, and limits are in the [September 24 iteration report](docs/audits/2026-09-24-focus-alpha2-iteration.md).
+When reporting an issue, include the version, device, Android version, and steps to reproduce. Remove account credentials, personal information, and other users' activity from screenshots or logs.
 
-Focus `v0.2.3-alpha.2.focus.1` is published on the stable channel. Recovery CI checked out the original protected tag and completed signing-continuity checks and uploaded the APK, checksums, metadata, and build-attestation assets; an API 31 emulator verified the previous client discovering the update, downloading it, installing through Android, launching it, and retaining user data. The attestation digest was checked; its workflow source commit differs from the release tag, so strict tag-reference verification is limited as documented in the [iteration report](docs/audits/2026-09-24-focus-alpha2-iteration.md).
+To contribute, fork the repository and create a `feature/*` or `fix/*` branch. Describe the goal, scope, and checks actually completed in your pull request.
 
-The previous full-device result remains 16 failures and 3 skips out of 63 checks; the suite is not all green. Minimum API 26 ARM64, a real foldable hinge/posture device, and complete automated home accessibility-node coverage still lack device evidence. These limits are recorded rather than reported as passed.
+## 11 Where can I read the license terms
 
-## 9 Documentation, support, and license
+The repository's [LICENSE](LICENSE) contains the GNU GPL v3.0 text. The in-app user agreement also prohibits sale, paid downloads, and distribution for profit. The applicable scope of these statements needs clarification from the maintainers; confirm it before reusing or distributing the code. Third-party dependencies, assets, and services remain subject to their own licenses and platform rules. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for their sources.
 
-- [Wiki home](docs/wiki/README.md): project documentation index
-- [Architecture](docs/wiki/ARCHITECTURE.md): modules and app architecture
-- [Feature matrix](docs/wiki/FEATURE_MATRIX.md): feature status and limits
-- [QA guide](docs/wiki/QA.md): verification steps
-- [Plugin guides](docs/PLUGIN_DEVELOPMENT.md) and [native plugin guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md): plugin development documentation
-- [Versioning](docs/wiki/VERSIONING.md), [release workflow](docs/wiki/RELEASE_WORKFLOW.md), and [changelog](CHANGELOG.md): version and release documentation
-- [Code structure guide](STRUCTURE_GUIDELINES.adoc): collaboration and repository structure
-- [AI / LLM documentation entry](llms.txt) and [navigation guide](docs/wiki/AI.md): entry points for automated tools reading this project
-- [Focus issue tracker](https://github.com/AIALRA-0/BiliPai_Focus/issues): report Focus-specific issues
-- [BiliPai Issues](https://github.com/jay3-yy/BiliPai/issues): report upstream issues
-- [Upstream Telegram channel](https://t.me/bilipai666): BiliPai upstream project announcements
-- [Upstream Telegram group](https://t.me/bilipai888/1): community discussion for the upstream project
-- [Upstream X account](https://x.com/YangY_0x00): public updates from the upstream maintainer
-- [Focus pull requests](https://github.com/AIALRA-0/BiliPai_Focus/pulls)
-  - Fork the repository and create a `feature/*` or `fix/*` branch
-  - Keep changes focused and include relevant tests or documentation
-  - Describe the goal, impact, and verification in the pull request
+## 12 Which projects and authors provide foundations or references
 
-The repository's [`LICENSE`](LICENSE) contains the GNU General Public License v3.0 text. The upstream README also has a non-commercial use statement; the two descriptions differ, and this page does not replace maintainer confirmation of how they apply. Third-party assets and services remain subject to their own licenses and platform rules.
+Focus inherits and continues to sync code and project documentation from [BiliPai](https://github.com/jay3-yy/BiliPai). Major dependencies and references include:
 
-Crash reports and usage analytics are available only in builds that include Firebase configuration. Playback, search, sign-in, updates, and plugin imports require network access. Do not publish cookies, tokens, passwords, account QR codes, or unredacted logs in issue reports.
+- [Kotlin](https://kotlinlang.org/): programming language and coroutines.
+- [Jetpack Compose](https://developer.android.com/jetpack/compose): declarative UI toolkit.
+- [AndroidX Media3](https://github.com/androidx/media): media and video playback components.
+- [FFmpeg](https://ffmpeg.org/): audio decoding.
+- [Room](https://developer.android.com/training/data-storage/room) and [DataStore](https://developer.android.com/topic/libraries/architecture/datastore): local database and preferences.
+- [Retrofit](https://github.com/square/retrofit) and [OkHttp](https://github.com/square/okhttp): network requests.
+- [Coil](https://github.com/coil-kt/coil): image loading.
+- [Lottie](https://github.com/airbnb/lottie-android): vector animation.
+- [MaterialKolor](https://github.com/jordond/MaterialKolor): dynamic theme colors.
+- [Compose Rich Editor](https://github.com/MohamedRejeb/Compose-Rich-Editor): rich text editing.
+- [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine): danmaku rendering.
+- [BiliBili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) and [BiliBiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock): public API reference and sponsor-skip data.
+- [Miuix](https://github.com/compose-miuix-ui/miuix), [Haze](https://github.com/chrisbanes/haze), and [BiliPai-miuix](https://github.com/Piracola/BiliPai-miuix): UI components, blur effects, and an upstream design-system contribution by @piracola.
+- [Compose Cupertino](https://github.com/alexzhirkevich/compose-cupertino): iOS-style UI components.
+- [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus): mobile interaction reference and source of a player animation asset.
+- [Bili Pilot](https://github.com/siwei-yuan/bili-pilot): CDN-routing reference. Focus has an independent Kotlin implementation and does not copy its JavaScript code.
+- [SharedViewKit / SharedViewDemo](https://gitee.com/itgsa_sharedviewkit/SharedViewDemo): video-card transition SDK and integration reference from the Gold Standard Alliance (ITGSA); Xiaomi HyperOS system motion supplied motion-parameter references.
+- [TabulaBili](https://github.com/wangdaodao/TabulaBili) and [TabulaBili-Plus](https://github.com/tjsky/TabulaBili): references adapted for First Visit Recommendation.
 
-## 10 Acknowledgements
-
-Focus inherits and continues to sync code and project documentation from [BiliPai](https://github.com/jay3-yy/BiliPai). The project also uses or references these open-source projects and materials:
-
-- [Jetpack Compose](https://developer.android.com/jetpack/compose): declarative UI toolkit
-- [BiliPai-miuix](https://github.com/Piracola/BiliPai-miuix): upstream UI component facade and design-system refactoring contribution (@piracola)
-- [Miuix](https://github.com/compose-miuix-ui/miuix): Android UI components
-- [AndroidX Media](https://github.com/androidx/media): video and audio playback
-- [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine): danmaku rendering
-- [BilibiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock): sponsor-segment data
-- [Retrofit](https://github.com/square/retrofit): network requests
-- [OkHttp](https://github.com/square/okhttp): HTTP client
-- [Room](https://developer.android.com/training/data-storage/room): local database
-- [DataStore](https://developer.android.com/topic/libraries/architecture/datastore): local preference storage
-- [Coil](https://github.com/coil-kt/coil): image loading
-- [Lottie](https://github.com/airbnb/lottie-android): animation
-- [Haze](https://github.com/chrisbanes/haze): interface blur effects
-- [Compose Cupertino](https://github.com/alexzhirkevich/compose-cupertino): iOS-style UI components
-- [bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect): public API documentation
-- [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus): mobile implementation reference
-- [Bili Pilot](https://github.com/siwei-yuan/bili-pilot): mobile implementation reference
-
-Bili Pilot's signed-CDN, segment-routing, and prefetch designs are references only. Focus has an independent Kotlin implementation and does not copy its JavaScript code.
-
-See the Gradle version catalog for dependency versions. Each dependency remains subject to its own license.
+See the [Gradle version catalog](gradle/libs.versions.toml) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency versions and third-party notices.

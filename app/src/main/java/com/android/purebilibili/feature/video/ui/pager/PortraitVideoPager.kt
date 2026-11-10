@@ -322,7 +322,7 @@ fun PortraitVideoPager(
     onExitSnapshot: (String, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSearchClick: () -> Unit = {},
     onUserClick: (Long) -> Unit,
-    onRotateToLandscape: () -> Unit,
+    onExitFullscreen: () -> Unit,
     menuActions: com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions =
         com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions(),
 ) {
@@ -2020,7 +2020,7 @@ fun PortraitVideoPager(
                 onExitSnapshot = onExitSnapshot,
                 onSearchClick = onSearchClick,
                 onUserClick = handleUserClick,
-                onRotateToLandscape = onRotateToLandscape,
+                onExitFullscreen = onExitFullscreen,
                 onProgressUpdate = onProgressUpdate,
                 watchLaterVideos = watchLaterVideos,
                 recommendationVideos = recommendationItems,
@@ -2256,7 +2256,7 @@ private fun VideoPageItem(
     onExitSnapshot: (String, Long, Long, String) -> Unit,
     onSearchClick: () -> Unit,
     onUserClick: (Long) -> Unit,
-    onRotateToLandscape: () -> Unit,
+    onExitFullscreen: () -> Unit,
     onProgressUpdate: (String, Long, Long, String) -> Unit,
     watchLaterVideos: List<RelatedVideo>,
     recommendationVideos: List<RelatedVideo>,
@@ -3467,45 +3467,18 @@ private fun VideoPageItem(
         )
         
         if (showCover) {
-            Box(
-                modifier = mediaLayerModifier.background(Color.Black)
-            ) {
-                if (shouldUseViewportBoundPortraitCover(
-                        isCurrentPage = isCurrentPage,
-                        isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
-                        hasRenderedFirstFrame = hasRenderedFirstFrame
-                    )
-                ) {
-                    PortraitVideoViewportContainer(
-                        currentVideoAspect = resolvePortraitCoverViewportAspect(
-                            currentVideoAspect = currentVideoAspect,
-                            hasRenderedFirstFrame = hasRenderedFirstFrame || knownVideoAspectRatio != null
-                        ),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        AsyncImage(
-                            model = FormatUtils.fixImageUrl(cover),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = resolvePortraitCoverContentScale(isVerticalVideo = currentVideoAspect < 1f)
-                        )
-                    }
-                } else {
-                    AsyncImage(
-                        model = FormatUtils.fixImageUrl(cover),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = resolvePortraitCoverContentScale(isVerticalVideo = currentVideoAspect < 1f)
-                    )
-                }
-
-                if (isLoading && isCurrentPage && !portraitOverlayVisible) {
-                    com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        tint = AppContentColors.accent(),
-                    )
-                }
-            }
+            PortraitVideoCoverLayer(
+                cover = cover,
+                currentVideoAspect = currentVideoAspect,
+                useViewportBoundCover = shouldUseViewportBoundPortraitCover(
+                    isCurrentPage = isCurrentPage,
+                    isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
+                    hasRenderedFirstFrame = hasRenderedFirstFrame,
+                ),
+                hasKnownVideoAspect = hasRenderedFirstFrame || knownVideoAspectRatio != null,
+                showBuffering = isLoading && isCurrentPage && !portraitOverlayVisible,
+                modifier = mediaLayerModifier,
+            )
         }
 
         } // media backdrop source
@@ -4268,11 +4241,11 @@ private fun VideoPageItem(
                 },
                 onToggleFullscreen = {
                     onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid, cover)
-                    onRotateToLandscape()
+                    onExitFullscreen()
                 },
                 onPortraitFullscreen = {
                     onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid, cover)
-                    onRotateToLandscape()
+                    onExitFullscreen()
                 },
                 onLandscapeCommentClick = { showCommentSheet = true },
                 onDanmakuToggle = toggleDanmaku,

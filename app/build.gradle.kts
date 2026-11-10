@@ -8,6 +8,17 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     // JSON 序列化插件
     id("org.jetbrains.kotlin.plugin.serialization")
+    // Compose 预组合兼容补丁：guard LayoutNodeSubcompositionsState 的 detached-root owner 查找
+    id("com.android.bilipai.compose-detached-owner-guard")
+    // 弹窗退出后可能仍收到锚点布局回调，不再更新已移除的窗口。
+    id("com.android.bilipai.compose-popup-window-guard")
+    // 剪贴板权限拒绝时，输入框的无障碍粘贴可用性查询返回不可用。
+    id("com.android.bilipai.compose-clipboard-read-guard")
+    // Foundation 拖拽兼容补丁：在进入拖拽状态前过滤不受支持的输入类型。
+    id("com.android.bilipai.compose-drag-start-guard")
+    // 导航分发器被父级级联释放后，容忍子页面重复清理及延后的启用状态更新。
+    id("com.android.bilipai.navigationevent-disposal-guard")
+    id("com.android.bilipai.workmanager-namespace-guard")
     // Room 数据库编译插件
     id("com.google.devtools.ksp")
     // 🔥 Firebase 相关插件
@@ -208,10 +219,10 @@ android {
         applicationId = "com.android.purebilibili.focus"
         minSdk = 26
         targetSdk = 37
-        // Keep Focus's semantic X.Y.Z-focus.N release identity and a monotonically increasing code above upstream alpha.2.
+        // Focus 版本名沿用上游 X.Y.Z（含预发布后缀）并追加 .focus.N；版本码从上一版 Focus 递增。
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 389
-        versionName = "0.2.3-alpha.2.focus.1"
+        versionCode = 390
+        versionName = "0.7.9-beta.7.focus.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -477,9 +488,13 @@ composeCompiler {
 }
 
 dependencies {
-    val material3Version = "1.5.0-alpha25"
-    val material3AdaptiveVersion = "1.3.0-rc01"
-    val media3Version = "1.10.1"
+    // System callback declarations are compile-time types, never APK implementations.
+    compileOnly(project(":system-animation-stubs"))
+    implementation("gsai.sdk:sharedview-kit:1.0.0.5")
+    lintChecks(project(":ci-lint"))
+    val material3Version = "1.5.0-alpha29"
+    val material3AdaptiveVersion = "1.3.0"
+    val media3Version = "1.11.1"
     val lifecycleVersion = "2.11.0"
     val roomVersion = "2.8.4"
     val hazeVersion = "2.0.0-alpha03"
@@ -494,9 +509,7 @@ dependencies {
     implementation(project(":danmaku-engine"))
 
     // --- 1. Compose UI ---
-    // Material3 1.5.0-alpha25 is built against Compose 1.12.0-beta01. Use the
-    // matching beta BOM so Compose groups are intentionally aligned instead of
-    // being upgraded transitively past the stable BOM's 1.11.4 constraints.
+    // Compose BOM 与 Material3 版本由同一轮上游依赖升级对齐。
     implementation(platform(libs.androidx.compose.bom))
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.appcompat:appcompat:1.7.1")  // 🚀 For AppCompatDelegate night mode

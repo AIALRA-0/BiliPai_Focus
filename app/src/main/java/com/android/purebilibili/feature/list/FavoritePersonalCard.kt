@@ -49,12 +49,12 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.personal.PersonalCardSelectMask
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.feature.personal.rememberPersonalCardVideoTransition
 import com.android.purebilibili.feature.personal.PersonalMediaCardFrame
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
@@ -84,6 +84,7 @@ internal fun FavoritePersonalCard(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(item.bvid)
     val cardShape = AppShapes.container(ContainerLevel.Card)
     val transition = rememberPersonalCardVideoTransition(
         bvid = item.bvid,
@@ -192,7 +193,7 @@ internal fun FavoritePersonalCard(
         },
         coverOverlayContent = {
             VideoStatusBadges(
-                labels = item.statusLabels,
+                labels = item.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.ExtraSmall),
             )
             VideoCardCoverDurationText(

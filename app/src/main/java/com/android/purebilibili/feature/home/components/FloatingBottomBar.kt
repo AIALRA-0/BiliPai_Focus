@@ -586,6 +586,7 @@ fun FloatingBottomBar(
 ) {
     // Do not use the system night flag here: BiliPai supports an app-only dark theme.
     val isInDark = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
+    val materialBlur = rememberMaterialBackdropBlur(liquidGlassTuning)
     val isLiquidGlassMode = mode == FloatingBottomBarMode.LiquidGlass
     val gravityGate = if (isLiquidGlassMode) {
         com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
@@ -1432,10 +1433,7 @@ fun FloatingBottomBar(
                                         )
                                         if (parentGlass == null) {
                                             vibrancy(liquidGlassTuning.saturation)
-                                            blur(
-                                                liquidGlassTuning.backdropBlurRadius.dp.toPx(),
-                                                liquidGlassTuning.backdropBlurRadius.dp.toPx()
-                                            )
+                                            materialBlur(liquidGlassTuning.backdropBlurRadius.dp.toPx())
                                             lens(
                                                 refractionHeight = shellRefractionHeightPx,
                                                 refractionAmount = shellRefractionAmountPx,
@@ -1626,10 +1624,7 @@ fun FloatingBottomBar(
                                             padding = maxOf(padding, shellRefractionAmountPx)
                                         }
                                         vibrancy(liquidGlassTuning.saturation)
-                                        blur(
-                                            liquidGlassTuning.backdropBlurRadius.dp.toPx(),
-                                            liquidGlassTuning.backdropBlurRadius.dp.toPx()
-                                        )
+                                        materialBlur(liquidGlassTuning.backdropBlurRadius.dp.toPx())
                                         lens(
                                             refractionHeight = shellRefractionHeightPx,
                                             refractionAmount = shellRefractionAmountPx,

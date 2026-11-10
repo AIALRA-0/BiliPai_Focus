@@ -175,6 +175,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
 ): Modifier {
     val isDark = darkTheme ?: com.android.purebilibili.core.ui.isAppInDarkTheme()
     val density = LocalDensity.current
+    val materialBlur = rememberMaterialBackdropBlur(liquidGlassTuning)
     // 玻璃专属：嵌套外壳采样最近的材质层，原生磨砂路径继续使用调用方的背景。
     val parentGlass = com.android.purebilibili.core.ui.blur.LocalAppGlassContainer.current
         .takeIf { enabled && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled }
@@ -232,6 +233,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
             refractionAmountPx = refractionAmountPx,
             chromaticAberration = liquidGlassTuning.shellChromaticAberrationAmount,
             effectPaddingPx = effectPaddingPx,
+            materialBlur = materialBlur,
         )
         val highlightBlock = remember(baseHighlight, highlightAlpha) {
             val block: BackdropEffectScope.() -> Highlight? = {
@@ -342,6 +344,7 @@ internal fun Modifier.biliPaiFloatingDockCaptureSurface(
     }
     val scrimAlpha = liquidGlassTuning.contentReadabilityScrimAlpha
     val shapeBlock = remember(shape) { { shape } }
+    val materialBlur = rememberMaterialBackdropBlur(liquidGlassTuning)
     val effects = rememberFloatingDockBackdropEffects(
         blurRadiusPx = blurRadiusPx,
         saturation = liquidGlassTuning.saturation,
@@ -350,6 +353,7 @@ internal fun Modifier.biliPaiFloatingDockCaptureSurface(
         refractionAmountPx = refractionAmountPx,
         chromaticAberration = liquidGlassTuning.shellChromaticAberrationAmount,
         effectPaddingPx = 0f,
+        materialBlur = materialBlur,
     )
     val onDrawSurface = remember(surfaceColor, readabilityScrimColor, scrimAlpha) {
         val block: DrawScope.() -> Unit = {
@@ -379,6 +383,7 @@ private fun rememberFloatingDockBackdropEffects(
     refractionAmountPx: Float,
     chromaticAberration: Float,
     effectPaddingPx: Float,
+    materialBlur: BackdropEffectScope.(Float) -> Unit,
 ): BackdropEffectScope.() -> Unit = remember(
     blurRadiusPx,
     saturation,
@@ -387,6 +392,7 @@ private fun rememberFloatingDockBackdropEffects(
     refractionAmountPx,
     chromaticAberration,
     effectPaddingPx,
+    materialBlur,
 ) {
     {
         if (effectPaddingPx > 0f) {
@@ -399,7 +405,7 @@ private fun rememberFloatingDockBackdropEffects(
             padding = maxOf(padding, refractionAmountPx)
         }
         vibrancy(saturation)
-        blur(blurRadiusPx, blurRadiusPx)
+        materialBlur(blurRadiusPx)
         if (shouldDrawLens) {
             lens(
                 refractionHeight = refractionHeightPx,

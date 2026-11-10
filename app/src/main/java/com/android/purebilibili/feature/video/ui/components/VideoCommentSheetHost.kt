@@ -563,7 +563,7 @@ fun VideoCommentSheetHost(
             when (
                 resolveVideoCommentPredictiveBackTarget(
                     subReplyVisible = subReplyState.visible,
-                    conversationActive = subReplyState.conversationAnchor != null
+                    conversationActive = subReplyState.conversationAnchor != null && !subReplyState.isTargetOnly
                 )
             ) {
                 VideoCommentPredictiveBackTarget.CLOSE_CONVERSATION ->
@@ -578,7 +578,7 @@ fun VideoCommentSheetHost(
     )
     val threadDrag = rememberCommentThreadDrag(
         visible = subReplyState.visible,
-        rootReplyId = subReplyState.rootReply?.rpid,
+        rootReplyId = subReplyState.threadRootId.takeIf { it > 0L },
         onDismiss = commentViewModel::closeSubReply,
     )
     val threadCoveredBlurProgress = if (
@@ -817,7 +817,7 @@ fun VideoCommentSheetHost(
                             exit = if (threadBackCompleted) androidx.compose.animation.ExitTransition.None else motionSpec.contentExit,
                         ) {
                             val rootReply = subReplyState.rootReply
-                            if (rootReply != null) {
+                            if (rootReply != null || subReplyState.isTargetOnly) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -834,6 +834,7 @@ fun VideoCommentSheetHost(
                                         listModifier = threadListModifier,
                                         headerDragModifier = threadDrag.headerModifier,
                                         rootReply = rootReply,
+                                        isTargetOnly = subReplyState.isTargetOnly,
                                         subReplies = subReplyState.items,
                                         sortMode = subReplyState.sortMode,
                                         error = subReplyState.error,
@@ -881,7 +882,7 @@ fun VideoCommentSheetHost(
                                 SubReplyInitialContent(
                                     isLoading = subReplyState.isLoading,
                                     error = subReplyState.error,
-                                    onRetry = commentViewModel::loadMoreSubReplies,
+                                    onRetry = commentViewModel::refreshSubReplies,
                                     onDismiss = commentViewModel::closeSubReply,
                                 )
                             }
@@ -1150,9 +1151,7 @@ internal fun VideoCommentMainList(
             onCommentClick = { reply ->
                 onReplyClick(reply)
             },
-            onSubReplyClick = { rootReply ->
-                viewModel.openSubReply(rootReply)
-            },
+            onSubReplyClick = viewModel::openSubReply,
             onDismiss = { showCommentSearchSheet = false },
             miuixBackdrop = commentChromeBackdrop,
         )
