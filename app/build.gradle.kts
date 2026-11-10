@@ -269,8 +269,10 @@ android {
         }
     }
 
-    // 设备测试使用 Dev 包，避免将测试 Activity 和样本放入正式 Release。
-    testBuildType = "dev"
+    // 显式运行 Dev 设备测试时才切换测试类型；默认 CI 仍使用 Debug 单元测试任务。
+    if (devAndroidTestUnminified) {
+        testBuildType = "dev"
+    }
 
     buildTypes {
         release {
