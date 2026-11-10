@@ -184,6 +184,82 @@ internal data class PlaybackStallRecoveryDecision(
     val shouldSwitchCdn: Boolean get() = nextCdnIndex != null
 }
 
+internal data class StartupHttpStatusRecoveryState(
+    val hasRenderedFirstFrame: Boolean = false,
+    val startupFailureReported: Boolean = false
+)
+
+internal data class StartupHttpStatusRecoveryDecision(
+    val attemptedCdnIndexes: Set<Int>,
+    val state: StartupHttpStatusRecoveryState,
+    val nextCdnIndex: Int?,
+    val shouldReportExhaustion: Boolean
+)
+
+internal fun shouldUseStartupHttpStatusRecovery(
+    errorCode: Int,
+    state: StartupHttpStatusRecoveryState
+): Boolean = errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS &&
+    !state.hasRenderedFirstFrame
+
+internal fun recordStartupHttpStatusFailure(
+    state: StartupHttpStatusRecoveryState,
+    attemptedCdnIndexes: Set<Int>,
+    currentCdnIndex: Int,
+    cdnCandidateCount: Int
+): StartupHttpStatusRecoveryDecision {
+    if (state.hasRenderedFirstFrame) {
+        return StartupHttpStatusRecoveryDecision(
+            attemptedCdnIndexes = attemptedCdnIndexes,
+            state = state,
+            nextCdnIndex = null,
+            shouldReportExhaustion = false
+        )
+    }
+
+    val validIndexes = 0 until cdnCandidateCount.coerceAtLeast(0)
+    val attempted = attemptedCdnIndexes.filterTo(mutableSetOf()) { it in validIndexes }
+    if (currentCdnIndex in validIndexes) attempted += currentCdnIndex
+    val nextIndex = resolveNextUntriedPlaybackCdnIndex(
+        currentCdnIndex = currentCdnIndex,
+        cdnCandidateCount = cdnCandidateCount,
+        attemptedCdnIndexes = attempted
+    )
+    val shouldReportExhaustion = nextIndex == null && !state.startupFailureReported
+    return StartupHttpStatusRecoveryDecision(
+        attemptedCdnIndexes = attempted,
+        state = state.copy(startupFailureReported = state.startupFailureReported || shouldReportExhaustion),
+        nextCdnIndex = nextIndex,
+        shouldReportExhaustion = shouldReportExhaustion
+    )
+}
+
+internal fun resolveNextUntriedPlaybackCdnIndex(
+    currentCdnIndex: Int,
+    cdnCandidateCount: Int,
+    attemptedCdnIndexes: Set<Int>
+): Int? {
+    if (cdnCandidateCount <= 0) return null
+    val candidateIndexes = if (currentCdnIndex in 0 until cdnCandidateCount) {
+        (1..cdnCandidateCount).asSequence()
+            .map { offset -> (currentCdnIndex + offset) % cdnCandidateCount }
+    } else {
+        (0 until cdnCandidateCount).asSequence()
+    }
+    return candidateIndexes.firstOrNull { it !in attemptedCdnIndexes }
+}
+
+internal fun markPlaybackCdnFirstFrameRendered(
+    state: StartupHttpStatusRecoveryState
+): StartupHttpStatusRecoveryState = state.copy(
+    hasRenderedFirstFrame = true,
+    startupFailureReported = false
+)
+
+internal fun resetStartupHttpStatusRecoveryForUserAction(
+    state: StartupHttpStatusRecoveryState
+): StartupHttpStatusRecoveryState = state.copy(startupFailureReported = false)
+
 internal fun resolvePlaybackStallRecoveryDecision(
     playbackState: Int,
     playWhenReady: Boolean,
@@ -207,10 +283,11 @@ internal fun resolvePlaybackStallRecoveryDecision(
         return PlaybackStallRecoveryDecision()
     }
 
-    val nextIndex = (1 until cdnCandidateCount)
-        .asSequence()
-        .map { offset -> (currentCdnIndex + offset) % cdnCandidateCount }
-        .firstOrNull { candidate -> candidate !in attemptedCdnIndexes }
+    val nextIndex = resolveNextUntriedPlaybackCdnIndex(
+        currentCdnIndex = currentCdnIndex,
+        cdnCandidateCount = cdnCandidateCount,
+        attemptedCdnIndexes = attemptedCdnIndexes
+    )
     return PlaybackStallRecoveryDecision(nextCdnIndex = nextIndex)
 }
 
@@ -1464,6 +1541,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private var playbackStallRecoveryFirstFrameRendered = false
     private var playbackStallRecoveryMediaKey = ""
     private val attemptedPlaybackStallRecoveryCdnIndexes = mutableSetOf<Int>()
+    private var startupHttpStatusRecoveryState = StartupHttpStatusRecoveryState()
     
     // State
     private val _uiState = MutableStateFlow<VideoPlaybackUiState>(VideoPlaybackUiState.Loading.Initial)
@@ -2602,7 +2680,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         override fun onRenderedFirstFrame() {
             maybeAnnounceRestoredPlaybackPosition()
             playbackStallRecoveryFirstFrameRendered = true
-            if (_uiState.value is VideoPlaybackUiState.Success) {
+            val current = _uiState.value as? VideoPlaybackUiState.Success
+            if (current != null) {
+                preparePlaybackCdnRecoveryForMedia(current.info.bvid, current.info.cid)
+                attemptedPlaybackStallRecoveryCdnIndexes.clear()
+                startupHttpStatusRecoveryState = markPlaybackCdnFirstFrameRendered(startupHttpStatusRecoveryState)
                 logVideoLoadStage(VideoLoadStage.FIRST_FRAME, currentLoadRequestToken)
             }
         }
@@ -2663,8 +2745,64 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 fallbackFromPremiumAudioPlaybackError()
                 return
             }
+            if (current != null) {
+                preparePlaybackCdnRecoveryForMedia(current.info.bvid, current.info.cid)
+                if (shouldUseStartupHttpStatusRecovery(error.errorCode, startupHttpStatusRecoveryState)) {
+                    if (playbackCdnFallbackState.selectedVideoUrlWasRewritten &&
+                        playbackCdnFallbackState.hasFallbackCandidate
+                    ) {
+                        fallbackFromCdnRewrite(reason = "player_error")
+                        return
+                    }
+                    val decision = recordStartupHttpStatusFailure(
+                        state = startupHttpStatusRecoveryState,
+                        attemptedCdnIndexes = attemptedPlaybackStallRecoveryCdnIndexes,
+                        currentCdnIndex = current.currentCdnIndex,
+                        cdnCandidateCount = current.cdnCount
+                    )
+                    startupHttpStatusRecoveryState = decision.state
+                    attemptedPlaybackStallRecoveryCdnIndexes.clear()
+                    attemptedPlaybackStallRecoveryCdnIndexes.addAll(decision.attemptedCdnIndexes)
+                    recordCurrentCdnHealthEvent(CdnHealthEvent.PLAYER_ERROR)
+                    val nextCdnIndex = decision.nextCdnIndex
+                    if (nextCdnIndex != null) {
+                        attemptedPlaybackStallRecoveryCdnIndexes += nextCdnIndex
+                        Logger.w(
+                            "PlayerVM",
+                            "Startup HTTP status recovery: CDN ${current.currentCdnIndex + 1} failed; " +
+                                "trying untried CDN ${nextCdnIndex + 1}/${current.cdnCount}"
+                        )
+                        switchCdnToForRecovery(nextCdnIndex)
+                    } else if (decision.shouldReportExhaustion) {
+                        Logger.w("PlayerVM", "Startup HTTP status recovery exhausted all CDN candidates")
+                        toast("所有播放线路都无法启动，请稍后重试")
+                    }
+                    return
+                }
+            }
             fallbackFromCdnRewrite(reason = "player_error")
         }
+    }
+
+    internal fun isStartupHttpStatusRecoveryActive(errorCode: Int): Boolean {
+        if (errorCode != PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) return false
+        val current = _uiState.value as? VideoPlaybackUiState.Success ?: return false
+        preparePlaybackCdnRecoveryForMedia(current.info.bvid, current.info.cid)
+        return shouldUseStartupHttpStatusRecovery(errorCode, startupHttpStatusRecoveryState)
+    }
+
+    private fun preparePlaybackCdnRecoveryForMedia(bvid: String, cid: Long) {
+        val mediaKey = "$bvid:$cid"
+        if (playbackStallRecoveryMediaKey != mediaKey) {
+            playbackStallRecoveryMediaKey = mediaKey
+            attemptedPlaybackStallRecoveryCdnIndexes.clear()
+            startupHttpStatusRecoveryState = StartupHttpStatusRecoveryState()
+        }
+    }
+
+    private fun resetStartupHttpStatusRecoveryBudgetForUserAction() {
+        attemptedPlaybackStallRecoveryCdnIndexes.clear()
+        startupHttpStatusRecoveryState = resetStartupHttpStatusRecoveryForUserAction(startupHttpStatusRecoveryState)
     }
 
     private fun schedulePlaybackStallRecovery() {
@@ -2672,10 +2810,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
         if (scheduledPlayer.playbackState != Player.STATE_BUFFERING || !scheduledPlayer.playWhenReady) return
         val mediaKey = "${current.info.bvid}:${current.info.cid}"
-        if (playbackStallRecoveryMediaKey != mediaKey) {
-            playbackStallRecoveryMediaKey = mediaKey
-            attemptedPlaybackStallRecoveryCdnIndexes.clear()
-        }
+        preparePlaybackCdnRecoveryForMedia(current.info.bvid, current.info.cid)
         if (playbackStallRecoveryJob?.isActive == true) return
         val ticket = playbackRecoveryGeneration
 
@@ -2697,7 +2832,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 forwardBufferDurationMs = (latestPlayer.bufferedPosition - latestPlayer.currentPosition)
                     .coerceAtLeast(0L),
                 currentCdnIndex = latest.currentCdnIndex,
-                cdnCandidateCount = latest.allVideoUrls.size,
+                cdnCandidateCount = latest.cdnCount,
                 attemptedCdnIndexes = attemptedPlaybackStallRecoveryCdnIndexes,
                 usesAdaptivePlayback = latest.playbackQualityMode == PlaybackQualityMode.AUTO &&
                     latest.adaptiveDashSource != null,
@@ -2708,11 +2843,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             playbackStallRecoveryJob = null
             Logger.w(
                 "PlayerVM",
-                "Playback stall recovery: media=$playbackStallRecoveryMediaKey, " +
+                "Playback stall recovery: media=$mediaKey, " +
                     "cdn=${latest.currentCdnIndex + 1}->${nextCdnIndex + 1}, " +
                     "position=${latestPlayer.currentPosition}"
             )
-            switchCdnTo(nextCdnIndex)
+            switchCdnToForRecovery(nextCdnIndex)
         }
     }
 
@@ -3235,6 +3370,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             playbackStallRecoveryFirstFrameRendered = false
             playbackStallRecoveryMediaKey = "$bvid:$cid"
             attemptedPlaybackStallRecoveryCdnIndexes.clear()
+            startupHttpStatusRecoveryState = StartupHttpStatusRecoveryState()
         }
         val playbackRequest = PlaybackRequest.create(
             bvid = bvid,
@@ -4534,8 +4670,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
     }
     
-    fun retry() {
+    fun retry() = retryCurrentVideo(resetStartupCdnBudget = true)
+
+    internal fun retryForRecovery() = retryCurrentVideo(resetStartupCdnBudget = false)
+
+    private fun retryCurrentVideo(resetStartupCdnBudget: Boolean) {
         val bvid = currentBvid.takeIf { it.isNotBlank() } ?: return
+        if (resetStartupCdnBudget) resetStartupHttpStatusRecoveryBudgetForUserAction()
         val fallbackResumePositionMs = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
         val resumePlaybackAfterRetry = exoPlayer?.let { player ->
             resolvePlaybackIntentForSourceReplacement(
@@ -4571,7 +4712,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
      */
     fun retryWithCodecFallback() {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: run {
-            retry()
+            retryForRecovery()
             return
         }
 
@@ -4638,12 +4779,17 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
      *  切换 CDN 线路
      * 在当前画质下切换到下一个 CDN
      */
-    fun switchCdn() {
+    fun switchCdn() = switchCdn(automatic = false)
+
+    internal fun switchCdnForRecovery() = switchCdn(automatic = true)
+
+    private fun switchCdn(automatic: Boolean) {
         playbackRecoveryGeneration++
         cancelPlaybackStallRecovery()
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
 
         if (playbackCdnFallbackState.hasFallbackCandidate) {
+            if (!automatic) resetStartupHttpStatusRecoveryBudgetForUserAction()
             fallbackFromCdnRewrite(reason = "manual_switch")
             return
         }
@@ -4652,6 +4798,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             viewModelScope.launch { toast("没有其他可用线路") }
             return
         }
+
+        if (!automatic) resetStartupHttpStatusRecoveryBudgetForUserAction()
         
         // 计算下一个 CDN 索引（循环）
         val nextIndex = (current.currentCdnIndex + 1) % current.cdnCount
@@ -4693,7 +4841,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     /**
      *  切换到指定 CDN 线路
      */
-    fun switchCdnTo(index: Int) {
+    fun switchCdnTo(index: Int) = switchCdnTo(index, automatic = false)
+
+    internal fun switchCdnToForRecovery(index: Int) = switchCdnTo(index, automatic = true)
+
+    private fun switchCdnTo(index: Int, automatic: Boolean) {
         cancelPlaybackStallRecovery()
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
         
@@ -4705,6 +4857,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         
         val nextVideoUrl = current.allVideoUrls.getOrNull(index) ?: return
         val nextAudioUrl = current.allAudioUrls.getOrNull(index)
+        if (!automatic) resetStartupHttpStatusRecoveryBudgetForUserAction()
         playbackRecoveryGeneration++
         
         val currentPos = exoPlayer?.currentPosition ?: 0L
@@ -9888,6 +10041,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             recordCurrentCdnHealthEvent(CdnHealthEvent.PLAYER_ERROR)
             val current = _uiState.value as? VideoPlaybackUiState.Success
             if (current != null) {
+                preparePlaybackCdnRecoveryForMedia(current.info.bvid, current.info.cid)
                 attemptedPlaybackStallRecoveryCdnIndexes += current.currentCdnIndex
                 val shouldUseRewriteFallback =
                     state.selectedVideoUrlWasRewritten && state.hasFallbackCandidate
@@ -9897,7 +10051,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     }
                     if (next != null) {
                         attemptedPlaybackStallRecoveryCdnIndexes += next
-                        switchCdnTo(next)
+                        switchCdnToForRecovery(next)
                         return
                     }
                 }

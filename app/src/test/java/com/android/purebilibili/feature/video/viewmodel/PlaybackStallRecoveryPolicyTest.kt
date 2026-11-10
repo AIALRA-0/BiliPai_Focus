@@ -61,6 +61,82 @@ class PlaybackStallRecoveryPolicyTest {
     }
 
     @Test
+    fun `startup bad HTTP status tries each CDN once and stops after exhaustion`() {
+        var recoveryState = StartupHttpStatusRecoveryState()
+        var attemptedCdnIndexes = emptySet<Int>()
+        var exhausted: StartupHttpStatusRecoveryDecision? = null
+
+        for (currentCdnIndex in 0..2) {
+            val decision = recordStartupHttpStatusFailure(
+                state = recoveryState,
+                attemptedCdnIndexes = attemptedCdnIndexes,
+                currentCdnIndex = currentCdnIndex,
+                cdnCandidateCount = 3
+            )
+            assertEquals(currentCdnIndex.takeIf { it < 2 }?.plus(1), decision.nextCdnIndex)
+            attemptedCdnIndexes = decision.attemptedCdnIndexes + listOfNotNull(decision.nextCdnIndex)
+            recoveryState = decision.state
+            if (currentCdnIndex == 2) exhausted = decision
+        }
+
+        assertTrue(requireNotNull(exhausted).shouldReportExhaustion)
+        val repeated = recordStartupHttpStatusFailure(
+            state = recoveryState,
+            attemptedCdnIndexes = attemptedCdnIndexes,
+            currentCdnIndex = 2,
+            cdnCandidateCount = 3
+        )
+        assertEquals(null, repeated.nextCdnIndex)
+        assertFalse(repeated.shouldReportExhaustion)
+    }
+
+    @Test
+    fun `first rendered frame disables startup HTTP recovery`() {
+        val failure = recordStartupHttpStatusFailure(
+            state = StartupHttpStatusRecoveryState(),
+            attemptedCdnIndexes = emptySet(),
+            currentCdnIndex = 0,
+            cdnCandidateCount = 2
+        )
+        val afterFirstFrame = markPlaybackCdnFirstFrameRendered(failure.state)
+
+        assertTrue(afterFirstFrame.hasRenderedFirstFrame)
+        assertFalse(
+            shouldUseStartupHttpStatusRecovery(
+                errorCode = androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+                state = afterFirstFrame
+            )
+        )
+        assertFalse(
+            shouldUseStartupHttpStatusRecovery(
+                errorCode = androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+                state = StartupHttpStatusRecoveryState()
+            )
+        )
+    }
+
+    @Test
+    fun `explicit retry or route change clears only the startup failure notice`() {
+        val state = StartupHttpStatusRecoveryState(
+            hasRenderedFirstFrame = false,
+            startupFailureReported = true
+        )
+
+        val afterUserAction = resetStartupHttpStatusRecoveryForUserAction(state)
+
+        assertFalse(afterUserAction.startupFailureReported)
+        assertTrue(shouldUseStartupHttpStatusRecovery(
+            errorCode = androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+            state = afterUserAction
+        ))
+        assertTrue(
+            resetStartupHttpStatusRecoveryForUserAction(
+                StartupHttpStatusRecoveryState(hasRenderedFirstFrame = true, startupFailureReported = true)
+            ).hasRenderedFirstFrame
+        )
+    }
+
+    @Test
     fun `ready paused ended or buffered playback does not recover`() {
         val common = { state: Int, playWhenReady: Boolean, forwardBufferMs: Long ->
             resolvePlaybackStallRecoveryDecision(

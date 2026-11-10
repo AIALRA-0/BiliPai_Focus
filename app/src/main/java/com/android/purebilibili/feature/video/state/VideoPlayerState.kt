@@ -1452,6 +1452,9 @@ fun rememberVideoPlayerState(
                 val currentState = viewModel.uiState.value
                 // A new load may still have the old media item's error attached.
                 if (currentState !is VideoPlaybackUiState.Success) return
+                // The ViewModel owns startup HTTP-status route selection so both player listeners
+                // use the same failed-route budget and cannot start independent route loops.
+                if (viewModel.isStartupHttpStatusRecoveryActive(error.errorCode)) return
                 val hasCdnAlternatives = currentState.cdnCount > 1
                 val exoPlaybackError = error as? ExoPlaybackException
                 val isPremiumAudioFailure =
@@ -1490,7 +1493,7 @@ fun rememberVideoPlayerState(
                             "📡 Network error, switching CDN (${retryCountRef.cdnSwitchCount}/$maxCdnSwitches)"
                         )
                         scheduleRecovery(error, delayMs = 500L) {
-                            viewModel.switchCdn()
+                            viewModel.switchCdnForRecovery()
                         }
                     }
 
@@ -1502,7 +1505,7 @@ fun rememberVideoPlayerState(
                             "🔄 Network error, retry ${retryCountRef.count}/$maxRetries in ${delayMs}ms"
                         )
                         scheduleRecovery(error, delayMs) {
-                            viewModel.retry()
+                            viewModel.retryForRecovery()
                         }
                     }
 
@@ -1524,7 +1527,7 @@ fun rememberVideoPlayerState(
                             " Auto-retrying video load (non-network error)..."
                         )
                         scheduleRecovery(error) {
-                            viewModel.retry()
+                            viewModel.retryForRecovery()
                         }
                     }
 
