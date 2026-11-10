@@ -76,7 +76,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 SubReplySheet(
                     state = SubReplyUiState(
-                        visible = true, isTargetOnly = true, isEnd = true,
+                        visible = true, isEnd = true,
                         items = listOf(target).toImmutableList(),
                         baseItems = listOf(target).toImmutableList(),
                         targetReplyId = target.rpid,
@@ -128,7 +128,7 @@ class SubReplyDetailUiRegressionTest {
             MaterialTheme {
                 SubReplySheet(
                     state = SubReplyUiState(
-                        visible = true, isTargetOnly = true, isEnd = true,
+                        visible = true, isEnd = true,
                         items = listOf(target).toImmutableList(),
                     ),
                     emoteMap = emptyMap(), onDismiss = {}, onSortModeChange = {},
@@ -651,7 +651,7 @@ class SubReplyDetailUiRegressionTest {
             target.copy(rpid = 1000L + id, content = ReplyContent(message = "对话上文 $id"))
         }
         val state = mutableStateOf(SubReplyUiState(
-            visible = true, isTargetOnly = true, isLoading = true,
+            visible = true, isLoading = true,
             items = listOf(target).toImmutableList(),
             baseItems = listOf(target).toImmutableList(),
             targetReplyId = target.rpid, conversationAnchor = target,
