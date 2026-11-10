@@ -5,6 +5,14 @@
 <p>Current source candidate: <code>0.7.9-beta.7.focus.1</code> / Android update code <code>390</code> (not released) · Upstream base: <code>0.7.9-beta.7</code> (beta)<br>Latest published Focus version: <code>0.2.3-alpha.2.focus.1</code> / Android update code <code>389</code></p>
 </div>
 
+<div align="center">
+
+<img src="docs/images/readme/home-api31-light.png" alt="The Android API 31 light-theme home screen shows Search, the Recommend and Following tabs, public video cards, and bottom navigation. The app is signed out and displays public videos." width="320">
+
+Figure 1.1 Android API 31 light-theme home screen: after launch, you can browse public videos without signing in; the image shows the recommendation feed and main navigation.
+
+</div>
+
 ## 1 What can this project do
 
 BiliPai Focus follows the [BiliPai upstream project](https://github.com/jay3-yy/BiliPai) and retains its video, anime, live, activity-feed, search, messaging, and offline-download features. Focus also maintains its own controls for followed-account filtering, related videos, and history actions. It is not an official Bilibili client and is not affiliated with Bilibili.
@@ -12,6 +20,8 @@ BiliPai Focus follows the [BiliPai upstream project](https://github.com/jay3-yy/
 ## 2 What is the status of this version
 
 The current source sets the Focus version to `0.7.9-beta.7.focus.1` and Android update code (`versionCode`) to `390`, based on upstream `0.7.9-beta.7`. This is an unreleased source candidate; no Focus Release package for it is available yet.
+
+The version name follows the upstream beta.7 release line; the source is synchronized through upstream `main` commit `1c8f38de`.
 
 [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases/latest) currently provides the latest published Focus version, `0.2.3-alpha.2.focus.1` / `389`. See the [versioning guide](docs/wiki/VERSIONING.md) for version names and the Focus stable update channel. The upstream base is still beta, so it is not an upstream stable release.
 
@@ -30,9 +40,33 @@ Online playback, search, sign-in, and update checks require a network connection
 
 The **Focus-specific** settings page keeps three controls that belong to this fork:
 
+<div align="center">
+
+<img src="docs/images/readme/settings-api31-light.png" alt="The Android API 31 light-theme Settings home lists Appearance, Playback, Home, Navigation, Privacy, Plugins, and the Focus-specific entry." width="320">
+
+Figure 4.1 Android API 31 light-theme Settings screen: open the Focus-specific controls from the Settings home.
+
+</div>
+
 - Follow filtering: when disabled, the app keeps your follow groups and their membership but no longer hides items by group in the home Following feed or activity feed.
 - Related videos: controls the related-video and more-recommendations sections on video detail pages.
 - Clear history: controls whether the watch-history page shows a clear-all action.
+
+<div align="center">
+
+<img src="docs/images/readme/focus-api31-light.png" alt="The Android API 31 light-theme Focus-specific page shows the Follow filtering, Show related videos, and Show clear-all history switches; all three are enabled in this screenshot." width="320">
+
+Figure 4.2 Android API 31 light-theme Focus-specific page: the page groups the Follow filtering, Related videos, and Clear history controls.
+
+</div>
+
+<div align="center">
+
+<img src="docs/images/readme/focus-api36-dark.png" alt="The Android API 36 dark-theme Focus-specific page shows the same three switches; Follow filtering and Show clear-all history are enabled, while Show related videos is disabled in this screenshot." width="320">
+
+Figure 4.3 Android API 36 dark-theme Focus-specific page: the three controls remain readable in dark mode; Related videos is disabled and the other two switches are enabled in this screenshot.
+
+</div>
 
 Upstream navigation settings now control home-tab visibility and order. When an older Focus install upgrades, the app migrates the tabs that were actually visible and preserves their order. A fresh install shows Following by default; the Subscriptions tab appears when the subscriptions plugin is enabled. Search landing sections use the existing settings and are no longer listed as Focus-specific controls.
 

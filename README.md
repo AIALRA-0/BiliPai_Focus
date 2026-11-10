@@ -5,6 +5,14 @@
 <p>当前源码候选：<code>0.7.9-beta.7.focus.1</code> / Android 应用升级序号 <code>versionCode 390</code>（待发布）· 上游基线：<code>0.7.9-beta.7</code>（beta）<br>最近已发布 Focus 版本：<code>0.2.3-alpha.2.focus.1</code> / Android 应用升级序号 <code>versionCode 389</code></p>
 </div>
 
+<div align="center">
+
+<img src="docs/images/readme/home-api31-light.png" alt="Android API 31 浅色主题首页展示搜索入口、推荐和关注标签、公开视频卡片与底部导航；页面未登录，只显示公开视频" width="320">
+
+图 1.1 Android API 31 浅色主题首页：打开应用后可以未登录浏览公开视频，画面展示推荐列表和主要导航
+
+</div>
+
 ## 1 这个项目能做什么
 
 本项目以 [BiliPai](https://github.com/jay3-yy/BiliPai) 为上游
@@ -18,6 +26,8 @@ Focus 专属的内容控制见下文
 ## 2 这个版本目前处于什么状态
 
 当前源码把 Focus 版本设为 `0.7.9-beta.7.focus.1`，Android 应用升级序号 `versionCode` 为 `390`，上游基础版本是 `0.7.9-beta.7`
+
+版本名沿用上游 beta.7 版本线；源码已同步到上游 `main` 的 `1c8f38de` 提交
 
 这是一份待发布的源码候选，还没有对应的 Focus Release 安装包
 
@@ -53,9 +63,33 @@ Focus 专属的内容控制见下文
 
 设置首页中的“Focus 专属”页面保留本分支独有的三项控制：
 
+<div align="center">
+
+<img src="docs/images/readme/settings-api31-light.png" alt="Android API 31 浅色主题设置首页展示外观、播放、首页、导航、隐私、插件和 Focus 专属入口" width="320">
+
+图 4.1 Android API 31 浅色主题设置页：从设置首页可以进入 Focus 专属控制
+
+</div>
+
 - 关闭关注过滤后，系统仍保留关注分组及其归属，但首页关注流和动态页不再按分组隐藏内容
 - 视频相关推荐：控制视频详情页中的相关推荐与更多推荐区块
 - 历史清空入口：控制观看历史页是否显示一键清空操作
+
+<div align="center">
+
+<img src="docs/images/readme/focus-api31-light.png" alt="Android API 31 浅色主题 Focus 专属页面展示关注过滤、显示相关推荐和显示一键清空三个开关，截图中三个开关均已开启" width="320">
+
+图 4.2 Android API 31 浅色主题 Focus 专属页：进入该页面后可以看到关注过滤、相关推荐和历史清空入口三个控制
+
+</div>
+
+<div align="center">
+
+<img src="docs/images/readme/focus-api36-dark.png" alt="Android API 36 暗色主题 Focus 专属页面展示同一组三个开关；截图中关注过滤和历史清空入口已开启，相关推荐已关闭" width="320">
+
+图 4.3 Android API 36 暗色主题下的 Focus 专属页显示相关推荐开关关闭，其余两项开启
+
+</div>
 
 首页标签的显示和排序现在由上游导航设置统一管理
 
