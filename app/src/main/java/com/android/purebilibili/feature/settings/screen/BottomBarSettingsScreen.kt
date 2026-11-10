@@ -683,7 +683,7 @@ fun BottomBarSettingsContent(
 
                             Spacer(modifier = Modifier.height(4.dp))
                             AppText(
-                                text = "可用标签",
+                                text = "全部标签开关（包括已显示的标签）",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = AppContentColors.secondaryText()
                             )

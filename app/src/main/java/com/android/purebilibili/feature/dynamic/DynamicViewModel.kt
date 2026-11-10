@@ -2134,7 +2134,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         if (!state.visible || state.isRefreshing ||
             rootId <= 0L
         ) return
-        _subReplyState.value = state.copy(targetReplyId = if (state.rootReply == null) state.targetReplyId else 0L)
+        val recoveredTargetId = state.targetReplyId.takeIf { targetId ->
+            state.rootReply == null && state.items.any { it.rpid == targetId }
+        } ?: 0L
+        _subReplyState.value = state.copy(targetReplyId = recoveredTargetId)
         loadSubReplies(
             oid = target.oid,
             type = target.type,
