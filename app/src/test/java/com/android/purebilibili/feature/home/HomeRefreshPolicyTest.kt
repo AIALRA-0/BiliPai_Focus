@@ -630,7 +630,10 @@ class HomeRefreshPolicyTest {
         val color = resolveOldContentDividerContainerColor(lightScheme)
 
         assertEquals(lightScheme.primaryContainer, color.copy(alpha = 1f))
-        assertEquals(OLD_CONTENT_DIVIDER_CONTAINER_ALPHA, color.alpha)
+        // Compose Color 将 alpha 量化到 8 位，允许最多一个量化步长。
+        assertTrue(
+            kotlin.math.abs(color.alpha - OLD_CONTENT_DIVIDER_CONTAINER_ALPHA) <= 1f / 255f,
+        )
         // 半透明是刻意的：让模糊壁纸背景透出，与毛玻璃卡片观感一致。
         assertTrue(color.alpha < 1f)
     }

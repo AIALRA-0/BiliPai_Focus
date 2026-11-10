@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import com.android.purebilibili.feature.home.policy.HomeFeedScrollAnchor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -16,6 +17,10 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeReturnStateTest {
+    private fun returnState() = HomeReturnState(
+        mutableStateOf<HomeFeedScrollAnchor?>(null, referentialEqualityPolicy())
+    )
+
     private fun anchor(index: Int) = HomeFeedScrollAnchor(
         category = HomeCategory.RECOMMEND,
         popularSubCategory = PopularSubCategory.COMPREHENSIVE,
@@ -26,7 +31,7 @@ class HomeReturnStateTest {
 
     @Test
     fun repeatedReturnsWithoutDetailNotificationRestoreCardClicks() {
-        val state = HomeReturnState(mutableStateOf(null))
+        val state = returnState()
         repeat(4) { index ->
             state.beginVideoNavigation(anchor(index))
             assertTrue(state.videoNavigationInProgress)
@@ -40,7 +45,7 @@ class HomeReturnStateTest {
 
     @Test
     fun stillVisibleHomeDoesNotReleaseTheClickGuardBeforeNavigationLeaves() {
-        val state = HomeReturnState(mutableStateOf(null))
+        val state = returnState()
         state.beginVideoNavigation(anchor(1))
         state.onHomeVisibilityChanged(true)
         assertTrue(state.videoNavigationInProgress)
@@ -53,7 +58,7 @@ class HomeReturnStateTest {
 
     @Test
     fun hiddenPageDoesNotReplaceTheClickTimeAnchorAndOldRestoreCannotClearTheNextClick() = runTest {
-        val state = HomeReturnState(mutableStateOf(null))
+        val state = returnState()
         val clickedAnchor = anchor(7)
         state.beginVideoNavigation(clickedAnchor)
         state.freezeAnchorIfMissing(anchor(12))
@@ -62,6 +67,8 @@ class HomeReturnStateTest {
 
         // 同一位置再次点击也属于新的恢复请求，不能按数据相等消费旧请求。
         val nextAnchor = clickedAnchor.copy()
+        assertEquals(clickedAnchor, nextAnchor)
+        assertTrue(clickedAnchor !== nextAnchor)
         state.beginVideoNavigation(nextAnchor)
         state.consumeAnchor(clickedAnchor)
         assertSame(nextAnchor, state.pendingAnchor)
@@ -71,7 +78,7 @@ class HomeReturnStateTest {
 
     @Test
     fun aNewVideoDuringTheReturnWindowSuppressesOnlyTheOldCompletion() = runTest {
-        val state = HomeReturnState(mutableStateOf(null))
+        val state = returnState()
         var completions = 0
         state.beginVideoNavigation(anchor(3))
         val oldReturn = async { state.finishVideoReturn(400) { completions++ } }

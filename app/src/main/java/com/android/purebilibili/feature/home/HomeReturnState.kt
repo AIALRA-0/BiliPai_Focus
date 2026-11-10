@@ -55,7 +55,7 @@ internal class HomeReturnState(private val anchorState: MutableState<HomeFeedScr
 @Composable
 internal fun rememberHomeReturnState(): HomeReturnState {
     val anchor = rememberSaveable(stateSaver = HomeFeedScrollAnchorSaver) {
-        mutableStateOf<HomeFeedScrollAnchor?>(null)
+        mutableStateOf<HomeFeedScrollAnchor?>(null, referentialEqualityPolicy())
     }
     return remember(anchor) { HomeReturnState(anchor) }
 }

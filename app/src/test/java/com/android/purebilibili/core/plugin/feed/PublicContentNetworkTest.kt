@@ -42,13 +42,19 @@ class PublicContentNetworkTest {
     }
 
     @Test
-    fun `token aliases encoded parameter names and userinfo are removed without losing article IDs`() {
+    fun `encoded credentials and userinfo are stripped without losing article data`() {
         val request = Request.Builder()
-            .url("https://user:password@example.com/article?id=42&access_key=a&Access-Token=b&%61ccess_token=c&refresh_token=d&SESSDATA=e&bili_jct=f&csrf=g")
+            .url(
+                "https://user:password@example.com/article?id=42&tag=first&access_key=a&access_key=b&Access-Token=c&" +
+                    "%61ccess_token=d&%61ccess_token=e&access_token=f&refresh_token=g&SESSDATA=h&bili_jct=i&csrf=j&tag=second",
+            )
             .build()
         val url = sanitizePublicContentRequest(request).url
-        assertEquals(setOf("id"), url.queryParameterNames)
+        assertEquals(setOf("id", "tag"), url.queryParameterNames)
         assertEquals("42", url.queryParameter("id"))
+        assertEquals(listOf("first", "second"), url.queryParameterValues("tag"))
+        assertEquals(emptyList(), url.queryParameterValues("access_key"))
+        assertEquals(emptyList(), url.queryParameterValues("access_token"))
         assertEquals("", url.username)
         assertEquals("", url.password)
     }

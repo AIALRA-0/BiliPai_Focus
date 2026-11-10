@@ -619,8 +619,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.4.2")
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
-    // Pinyin 拼音转换 (用于模糊搜索)
-    implementation("com.belerweb:pinyin4j:2.5.0")
+    // 模糊搜索使用 PinyinUtils 中的 TinyPinyin。
     implementation("io.github.biezhi:TinyPinyin:2.0.3.RELEASE")
     implementation("androidx.webkit:webkit:1.18.0")
     // Core KTX

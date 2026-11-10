@@ -370,11 +370,7 @@ internal fun togglePlayerPlaybackFromUserAction(player: Player) {
             "state=${player.playbackState}, isPlaying=${player.isPlaying}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
     )
     if (player.playbackState == Player.STATE_ENDED) {
-        Logger.d(
-            "VideoPlaybackUseCase",
-            "USER_DBG togglePlayerPlaybackFromUserAction restart from beginning"
-        )
-        player.seekTo(0L)
+        // playPlayerFromUserAction 负责从结束态回到开头，避免重复 seek。
         playPlayerFromUserAction(player)
         return
     }

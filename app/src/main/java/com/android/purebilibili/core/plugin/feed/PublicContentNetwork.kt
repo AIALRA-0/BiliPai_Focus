@@ -26,7 +26,12 @@ internal fun createPublicContentHttpClient(): OkHttpClient = OkHttpClient.Builde
 
 internal fun sanitizePublicContentUrl(url: HttpUrl): HttpUrl {
     val builder = url.newBuilder().username("").password("")
-    url.queryParameterNames.filter(::isPublicContentCredential).forEach(builder::removeAllQueryParameters)
+    val encodedNames = url.encodedQuery?.split('&')?.map { it.substringBefore('=') }.orEmpty()
+    for (index in 0 until url.querySize) {
+        if (isPublicContentCredential(url.queryParameterName(index))) {
+            builder.removeAllEncodedQueryParameters(encodedNames[index])
+        }
+    }
     return builder.build()
 }
 

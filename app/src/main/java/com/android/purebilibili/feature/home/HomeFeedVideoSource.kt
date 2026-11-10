@@ -47,7 +47,7 @@ internal fun resolveRecommendFeedRequestIndex(
     isManualRefresh: Boolean,
     currentRefreshIndex: Int
 ): Int {
-    return if (isLoadMore || isManualRefresh) {
+    return if (isLoadMore && !isManualRefresh) {
         currentRefreshIndex + 1
     } else {
         0
