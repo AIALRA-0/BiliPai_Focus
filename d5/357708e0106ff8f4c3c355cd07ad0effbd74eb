@@ -1,0 +1,44 @@
+app/src/test/java/com/android/purebilibili/feature/video/viewmodel/PlaybackStallRecoveryPolicyTest.kt
+  s_71db67cf8751ad::t_6cb51666fca4d8 63-66,84-93,95-118
+  s_71db67cf8751ad::t_bcf59361884138 67-83,94
+  s_71db67cf8751ad::t_f50e84a1a4fe0f 119-138
+app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt
+  s_71db67cf8751ad::t_bf59ece0357d38 2801,2803-2804,2806-2807
+  s_71db67cf8751ad::t_8478dcac263295 2775,2850,10054
+  s_71db67cf8751ad::t_79682dc72dfa5f 2813,2835,2846
+  s_71db67cf8751ad::t_f3c9f8fe340160 2683-2685
+  s_71db67cf8751ad::t_bbf4f74c4a422a 2751-2756
+  s_71db67cf8751ad::t_ced359bb030fd0 188-192,195-200,202-205,208-211,218-220,222-229,232-252,255-258,286-290
+  s_71db67cf8751ad::t_2859838e56777e 10044
+  s_71db67cf8751ad::t_4b82f1e975a22e 2686-2687
+  s_71db67cf8751ad::t_709a6fad095c37 259-262,2805
+  s_71db67cf8751ad::t_12e174103338a5 4673-4677,4679,4715
+  s_71db67cf8751ad::t_a21717c49dbbd8 4782-4786,4792,4801-4802,4844-4848,4860
+  s_71db67cf8751ad::t_a4db97f65f3292 253-254
+  s_71db67cf8751ad::t_ca11677f24cfbd 2750,2758-2759,2763-2765,2769,2791,2798-2799
+  s_71db67cf8751ad::t_9da927f73441d9 3373
+  s_71db67cf8751ad::t_851dbb08c0712f 1544
+  s_71db67cf8751ad::t_f304bb5602e12c 2748-2749,2757,2760-2762,2766-2768,2770-2774,2776-2782,2787-2790,2792-2797
+  s_71db67cf8751ad::t_f32de3c89afefa 187,193-194,201,206-207,212-217,221,230-231
+  s_71db67cf8751ad::t_4f209fbbc1d54d 2800
+  s_71db67cf8751ad::t_77009b79f43152 2802
+app/src/main/java/com/android/purebilibili/feature/video/state/VideoPlayerState.kt
+  s_71db67cf8751ad::t_4f86d01b136070 1496,1508,1530
+  s_71db67cf8751ad::t_c3ee0c4e826b5f 1455-1457
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d5357708e0106ff8f4c3c355cd07ad0effbd74eb",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
