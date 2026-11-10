@@ -875,7 +875,7 @@
     <string name="appearance_theme_dark_mode">深色模式</string>
     <string name="appearance_theme_contrast_readability">配色可读性</string>
     <string name="appearance_theme_contrast_summary">切换配色后会自动检查。背景图片和屏幕亮度也会影响阅读感受。</string>
-    <string name="appearance_theme_contrast_ratio">对比度：主要文字 %.2f:1，次要文字 %.2f:1</string>
+    <string name="appearance_theme_contrast_ratio">对比度：主要文字 %1$.2f:1，次要文字 %2$.2f:1</string>
     <string name="appearance_theme_preview_primary">实际效果 · 主要文字</string>
     <string name="appearance_theme_preview_secondary">次要说明文字</string>
     <string name="appearance_theme_preview_selected">选中状态</string>
