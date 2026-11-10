@@ -1,0 +1,21 @@
+.github/workflows/Build.yml
+  s_71db67cf8751ad::t_1d235e1b445166 54,65,82-89,148,159,176-183
+.github/workflows/ComposeReports.yml
+  s_71db67cf8751ad::t_1d235e1b445166 23,34,51-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "86b3bebaae4b3d51f1d97ac1b65a885837762ae9",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
