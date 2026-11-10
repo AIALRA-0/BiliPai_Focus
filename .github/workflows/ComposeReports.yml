@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: compose-miuix-ui/miuix
-          ref: 2afdbb39f1aac5747165cc354cafd4b918fa55a5
+          ref: 292d8ec6e5850ab2af72cce2b90cbd4a6a42e175
           path: .ci/miuix
           persist-credentials: false
 
@@ -31,7 +31,7 @@ jobs:
           from pathlib import Path
 
           source = Path(".ci/miuix")
-          expected_revision = "2afdbb39f1aac5747165cc354cafd4b918fa55a5"
+          expected_revision = "292d8ec6e5850ab2af72cce2b90cbd4a6a42e175"
           actual_revision = subprocess.check_output(
               ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
           ).strip()
@@ -48,6 +48,14 @@ jobs:
           indentation = lines[index][:len(lines[index]) - len(lines[index].lstrip())]
           lines[index] = indentation + 'agp = "9.3.2"'
           catalog.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          settings = source / "settings.gradle.kts"
+          content = settings.read_text(encoding="utf-8")
+          for preview in ("NO_IMPLICIT_LOOKUP_IN_PARENT_PROJECTS", "ENHANCED_GRAPH_ORDERING"):
+              statement = f'enableFeaturePreview("{preview}")\n'
+              if content.count(statement) != 1:
+                  raise SystemExit(f"Expected exactly one {statement!r} in {settings}")
+              content = content.replace(statement, "")
+          settings.write_text(content, encoding="utf-8")
           PY
 
       - name: Set up Java
