@@ -13,6 +13,26 @@ import org.junit.Test
 import kotlinx.serialization.json.Json
 
 class LiveFeedParsePolicyTest {
+    @Test
+    fun missingFollowCountRemainsUnknownWhileExplicitZeroIsKept() {
+        assertEquals(null, parseLiveFeedHomeSnapshot(LiveFeedIndexData()).totalCount)
+        val data = LiveFeedIndexData(cardList = listOf(LiveFeedCard(
+            cardType = "my_idol_v1", cardData = LiveFeedCardData(myIdolV1 = LiveFeedModuleBlock(
+                extraInfo = com.android.purebilibili.data.model.response.LiveFeedExtraInfo(totalCount = 0),
+            )),
+        )))
+        assertEquals(0, parseLiveFeedHomeSnapshot(data).totalCount)
+    }
+
+    @Test
+    fun recommendationFeedbackReasonsSurviveRoomMapping() {
+        val card = Json.decodeFromString<LiveFeedRoomCard>(
+            """{"roomid":42,"feedback":[{"title":"不感兴趣","reasons":[{"id":12,"name":"主播","id_type":"uid","reason_id":7}]}]}"""
+        )
+        assertEquals("uid", card.toLiveRoom().feedback.single().reasons.single().idType)
+        assertEquals(12L, card.toLiveRoom().feedback.single().reasons.single().id)
+    }
+
 
     @Test
     fun feedRoomCardMapsToLiveRoomWithSystemCover() {
@@ -137,4 +157,53 @@ class LiveFeedParsePolicyTest {
             )
         )
     }
+    @Test
+    fun followAvatarsDoNotNeedBroadcastTitleOrCover() {
+        val data = Json { ignoreUnknownKeys = true }.decodeFromString<LiveFeedIndexData>("""
+          {"card_list":[{"card_type":"my_idol_v1","card_data":{"my_idol_v1":{
+            "extra_info":{"total_count":18},"list":[
+              {"roomid":123,"uid":7,"uname":"主播","face":"avatar"},
+              {"roomid":123,"uid":7,"uname":"主播","face":"avatar"},
+              {"roomid":0,"uname":"无效房间"}
+            ]}}}]}
+        """.trimIndent())
+        val snapshot = parseLiveFeedHomeSnapshot(data)
+        assertTrue(snapshot.hasFollowModule)
+        assertEquals(18, snapshot.totalCount)
+        assertEquals(1, snapshot.followRooms.size)
+        assertEquals("avatar", snapshot.followRooms.single().face)
+        assertEquals(123L, snapshot.followRooms.single().roomid)
+        assertFalse(needsLiveFollowSupplement(snapshot))
+    }
+
+    @Test
+    fun absentUnknownEmptyAndExplicitZeroModulesHaveDifferentSupplementRules() {
+        val missing = parseLiveFeedHomeSnapshot(LiveFeedIndexData())
+        assertFalse(missing.hasFollowModule)
+        assertTrue(needsLiveFollowSupplement(missing))
+        val empty = parseLiveFeedHomeSnapshot(LiveFeedIndexData(cardList = listOf(
+            LiveFeedCard(cardType = "my_idol_v1", cardData = LiveFeedCardData(myIdolV1 = LiveFeedModuleBlock()))
+        )))
+        assertTrue(empty.hasFollowModule)
+        assertEquals(null, empty.totalCount)
+        assertTrue(needsLiveFollowSupplement(empty))
+        assertFalse(needsLiveFollowSupplement(empty.copy(totalCount = 0)))
+        assertTrue(needsLiveFollowSupplement(empty.copy(totalCount = 18)))
+    }
+
+    @Test
+    fun supplementalFollowsPreserveRecommendationAndUnknownCount() {
+        val base = com.android.purebilibili.data.model.response.LiveFeedHomeSnapshot(
+            rooms = listOf(LiveRoom(roomid = 1)), hasMore = true,
+        )
+        val follow = LiveRoom(roomid = 2, uname = "主播", face = "avatar")
+        val merged = supplementLiveFollowSnapshot(base, listOf(follow, follow), null)
+        assertTrue(merged.hasFollowModule)
+        assertEquals(base.rooms, merged.rooms)
+        assertTrue(merged.hasMore)
+        assertEquals(1, merged.followRooms.size)
+        assertEquals(null, merged.totalCount)
+        assertEquals(0, supplementLiveFollowSnapshot(base, emptyList(), 0).totalCount)
+    }
+
 }

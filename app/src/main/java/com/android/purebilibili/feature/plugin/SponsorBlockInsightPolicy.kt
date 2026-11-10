@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
 import android.content.Context
 import com.android.purebilibili.core.plugin.PluginStore
 import kotlinx.serialization.Serializable
@@ -317,7 +319,7 @@ internal object SponsorBlockInsightStore {
     suspend fun readRecords(context: Context): List<SponsorBlockSkipRecord> {
         val value = PluginStore.getDataJson(
             context = context,
-            pluginId = SPONSOR_BLOCK_PLUGIN_ID,
+            pluginId = BuiltinPluginIds.SPONSOR_BLOCK,
             name = SPONSOR_BLOCK_HISTORY_STORE_NAME
         ) ?: return emptyList()
         return runCatching {
@@ -339,7 +341,7 @@ internal object SponsorBlockInsightStore {
                 .take(SPONSOR_BLOCK_HISTORY_LIMIT)
             PluginStore.setDataJson(
                 context = context,
-                pluginId = SPONSOR_BLOCK_PLUGIN_ID,
+                pluginId = BuiltinPluginIds.SPONSOR_BLOCK,
                 name = SPONSOR_BLOCK_HISTORY_STORE_NAME,
                 dataJson = json.encodeToString(
                     ListSerializer(SponsorBlockSkipRecord.serializer()),

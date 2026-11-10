@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.download
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
@@ -7,7 +9,7 @@ import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 //  Material Icons
 import androidx.compose.material.icons.Icons
@@ -52,6 +54,7 @@ fun DownloadQualityDialog(
             usePlatformDefaultWidth = dialogLayout.usePlatformDefaultWidth,
         ),
     ) {
+        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
         AppPopupSurface(
             type = AppPopupSurfaceType.DIALOG,
             modifier = Modifier.appContentDialogWidth(policy = dialogLayout),
@@ -69,27 +72,27 @@ fun DownloadQualityDialog(
                         text = "选择下载画质",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = AppContentColors.primaryText()
                     )
                     AppIconButton(onClick = onDismiss) {
                         AppIcon(
                             imageVector = Icons.Outlined.Close,
                             contentDescription = "取消",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = AppContentColors.secondaryText()
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
-                
+
                 // 视频标题
                 AppText(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                     maxLines = 2
                 )
-                
+
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Large))
 
                 Row(
@@ -107,17 +110,17 @@ fun DownloadQualityDialog(
                     AppText(
                         text = "同时缓存弹幕",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = AppContentColors.primaryText()
                     )
                 }
 
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
-                
+
                 // 画质列表
                 qualityOptions.forEach { (qualityId, qualityLabel) ->
                     val isSelected = qualityId == currentQuality
                     val isVip = qualityLabel.contains("4K") || qualityLabel.contains("HDR") || qualityLabel.contains("杜比")
-                    
+
                     AppSingleChoiceRow(
                         selected = isSelected,
                         onClick = {
@@ -150,9 +153,9 @@ fun DownloadQualityDialog(
                     }
                     Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 // 取消按钮
                 AppOutlinedButton(
                     onClick = onDismiss,

@@ -35,6 +35,42 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `legacy Focus clients can compare the stable compatibility tag`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("9.1.1-focus.4", "9.1.2-focus.1"))
+        assertTrue(AppUpdateChecker.isRemoteNewer("9.1.1-focus.5", "9.1.2-focus.1"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("9.1.2-focus.1", "9.1.1-focus.5"))
+    }
+
+    @Test
+    fun `compatibility release shows the package version from build metadata`() {
+        val metadata = AppReleaseBuildMetadata(
+            versionName = "0.7.9-beta.7.focus.1",
+            versionCode = 390,
+            releaseTag = "v9.1.2-focus.1",
+        )
+
+        val publishedVersion = AppUpdateChecker.resolvePublishedVersionName("v9.1.2-focus.1", metadata)
+
+        assertEquals("0.7.9-beta.7.focus.1", publishedVersion)
+        assertTrue(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = "9.1.1-focus.5",
+                currentVersionCode = 388,
+                latestVersion = publishedVersion,
+                buildMetadata = metadata,
+            )
+        )
+        assertFalse(
+            AppUpdateChecker.shouldOfferUpdate(
+                currentVersion = metadata.versionName,
+                currentVersionCode = metadata.versionCode,
+                latestVersion = publishedVersion,
+                buildMetadata = metadata,
+            )
+        )
+    }
+
+    @Test
     fun `published Focus alpha base advances old Focus installs by versionCode`() {
         val metadata = AppReleaseBuildMetadata(
             appId = "com.android.purebilibili.focus",
@@ -84,28 +120,71 @@ class AppUpdateCheckerTest {
     @Test
     fun `update endpoints stay on Focus and retain a Focus fallback`() {
         val endpoints = AppUpdateChecker.resolveEndpointCandidates(
-            primary = AppUpdateEndpointSet(
+            primary = AppUpdateChecker.UpdateEndpoint(
                 releasesApi = "https://api.github.com/repos/example/BiliPai_Focus/releases",
-                repositoryBuildGradleUrl = "https://raw.githubusercontent.com/example/BiliPai_Focus/main/app/build.gradle.kts",
-                repositoryUrl = "https://github.com/example/BiliPai_Focus",
                 releasesPageUrl = "https://github.com/example/BiliPai_Focus/releases"
             )
         )
 
         assertEquals(2, endpoints.size)
-        assertEquals("https://github.com/example/BiliPai_Focus", endpoints[0].repositoryUrl)
+        assertEquals("https://github.com/example/BiliPai_Focus/releases", endpoints[0].releasesPageUrl)
         assertEquals("https://api.github.com/repos/AIALRA-0/BiliPai_Focus/releases", endpoints[1].releasesApi)
+        assertEquals("https://github.com/AIALRA-0/BiliPai_Focus/releases", endpoints[1].releasesPageUrl)
     }
 
     @Test
-    fun `repository version fallback reads Focus version without switching repositories`() {
-        val candidate = AppUpdateChecker.parseRepositoryVersionCandidate(
-            rawBuildGradle = "defaultConfig { versionName = \"9.1.1-focus.5\" }",
-            repositoryUrl = "https://github.com/AIALRA-0/BiliPai_Focus"
+    fun `release without a page URL uses the Focus release source`() {
+        val candidate = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """[
+                {
+                    "tag_name": "v9.1.1-focus.5",
+                    "html_url": "",
+                    "prerelease": false,
+                    "assets": [
+                        {
+                            "name": "BiliPai-Focus.apk",
+                            "browser_download_url": "https://example.com/focus.apk",
+                            "size": 1
+                        }
+                    ]
+                }
+            ]""",
+            releasesPageUrl = "https://github.com/AIALRA-0/BiliPai_Focus/releases",
         )
 
-        assertEquals("9.1.1-focus.5", candidate?.tagName)
+        assertEquals("v9.1.1-focus.5", candidate?.tagName)
+        assertEquals(
+            "9.1.1-focus.5",
+            AppUpdateChecker.resolvePublishedVersionName(candidate?.tagName.orEmpty(), null),
+        )
         assertEquals("https://github.com/AIALRA-0/BiliPai_Focus/releases", candidate?.releaseUrl)
+    }
+
+    @Test
+    fun `stable candidate selection can choose the newer canonical release beside its compatibility tag`() {
+        val releases = """[
+            {
+                "tag_name": "v9.1.2-focus.1",
+                "html_url": "https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v9.1.2-focus.1",
+                "prerelease": false,
+                "published_at": "2026-11-09T12:00:00Z",
+                "assets": [{"name": "BiliPai-Focus.apk", "browser_download_url": "https://example.com/compat.apk", "size": 1}]
+            },
+            {
+                "tag_name": "v0.7.9-beta.7.focus.1",
+                "html_url": "https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1",
+                "prerelease": false,
+                "published_at": "2026-11-10T12:00:00Z",
+                "assets": [{"name": "BiliPai-Focus.apk", "browser_download_url": "https://example.com/canonical.apk", "size": 1}]
+            }
+        ]"""
+
+        val stableCandidate = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = releases,
+            includePrerelease = false,
+        )
+
+        assertEquals("v0.7.9-beta.7.focus.1", stableCandidate?.tagName)
     }
 
     @Test

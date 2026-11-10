@@ -4,6 +4,7 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.TopicTopDetails
 import com.android.purebilibili.data.model.response.TopicSortOption
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -44,7 +45,7 @@ object TopicRepository {
             if (topicId <= 0L) {
                 return@withContext Result.failure(IllegalArgumentException("topicId 不能为空"))
             }
-            val response = NetworkModule.dynamicApi.getTopicFeed(
+            var response = NetworkModule.dynamicApi.getTopicFeed(
                 topicId = topicId,
                 offset = offset,
                 sortBy = sortBy,
@@ -63,15 +64,36 @@ object TopicRepository {
                     )
                 )
             val sortConfig = cardList.topicSortByConf
+            val blockGoods = goodsDynamicFilterEnabled()
+            var page = cardList
+            var pagesFetched = 1
+            var previousOffset = offset
+            var visibleItems = page.items.mapNotNull { it.dynamicCardItem }
+                .filter { it.visible && (!blockGoods || !isGoodsDynamic(it)) }
+            while (blockGoods && shouldContinueDynamicFetchAfterFilter(
+                visibleItems.size, page.hasMore, previousOffset, page.offset, pagesFetched
+            )) {
+                previousOffset = page.offset
+                response = NetworkModule.dynamicApi.getTopicFeed(topicId = topicId, offset = previousOffset, sortBy = sortBy)
+                if (response.code != 0) return@withContext Result.failure(
+                    Exception(response.message.ifBlank { "话题动态加载失败 (${response.code})" })
+                )
+                page = response.data?.topicCardList ?: page.copy(hasMore = false)
+                pagesFetched += 1
+                visibleItems = page.items.mapNotNull { it.dynamicCardItem }
+                    .filter { it.visible && !isGoodsDynamic(it) }
+            }
             Result.success(
                 TopicFeedPage(
-                    items = cardList.items.mapNotNull { it.dynamicCardItem }.filter { it.visible },
-                    offset = cardList.offset,
-                    hasMore = cardList.hasMore,
+                    items = DynamicCommentPreviewRepository.enrich(visibleItems),
+                    offset = page.offset,
+                    hasMore = page.hasMore,
                     sortOptions = sortConfig?.allSortBy.orEmpty(),
                     selectedSortBy = sortConfig?.showSortBy ?: sortBy,
                 )
             )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)

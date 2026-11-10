@@ -148,6 +148,61 @@ class VideoDetailScrollCoordinatorTest {
     }
 
     @Test
+    fun restoredCompactCommentsAllowTheNextCollapseGesture() {
+        assertTrue(
+            shouldSkipGesturePlayerCollapseForLayout(
+                compactForIntroScroll = false,
+                compactForCommentTab = true,
+            )
+        )
+        val skipCollapse = shouldSkipGesturePlayerCollapseForLayout(
+            compactForIntroScroll = false,
+            compactForCommentTab = true,
+            restoreRequested = true,
+        )
+        assertFalse(skipCollapse)
+        val update = reduceVideoDetailPreScroll(
+            currentOffsetPx = 0f,
+            deltaPx = -40f,
+            minOffsetPx = -320f,
+            inlinePortraitScrollEnabled = true,
+            isPortraitFullscreen = false,
+            layoutAlreadyCollapsed = skipCollapse,
+        )
+        assertEquals(-40f, update?.nextOffsetPx)
+    }
+
+    @Test
+    fun pausedCommentHide_continuesPastCompactFoldableLayoutAndRestoresAtTop() {
+        val skipCollapse = shouldSkipGesturePlayerCollapseForLayout(
+            compactForIntroScroll = false,
+            compactForCommentTab = true,
+            hidePausedPlayerForComments = true,
+        )
+        assertFalse(skipCollapse)
+        val collapsed = reduceVideoDetailPreScroll(
+            currentOffsetPx = -360f,
+            deltaPx = -300f,
+            minOffsetPx = -600f,
+            inlinePortraitScrollEnabled = true,
+            isPortraitFullscreen = false,
+            layoutAlreadyCollapsed = skipCollapse,
+        )
+        assertEquals(-600f, collapsed?.nextOffsetPx)
+        assertEquals(-240f, collapsed?.consumedDeltaPx)
+        val restored = reduceVideoDetailPostScroll(
+            currentOffsetPx = -600f,
+            deltaPx = 600f,
+            minOffsetPx = -600f,
+            inlinePortraitScrollEnabled = true,
+            isPortraitFullscreen = false,
+            layoutAlreadyCollapsed = skipCollapse,
+        )
+        assertEquals(0f, restored?.nextOffsetPx)
+        assertEquals(600f, restored?.consumedDeltaPx)
+    }
+
+    @Test
     fun collapseProgress_clampsIntoZeroToOneRange() {
         assertEquals(
             0f,

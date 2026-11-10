@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.android.purebilibili.core.plugin.Plugin
-import com.android.purebilibili.core.plugin.PluginCapabilityManifest
+import com.android.purebilibili.core.plugin.BuiltinPlugin
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -27,10 +31,10 @@ import com.android.purebilibili.core.ui.components.AppSwitchPreference
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.Logger
-import com.android.purebilibili.feature.anime4k.Anime4KConfig
-import com.android.purebilibili.feature.anime4k.Anime4KPreset
+import com.android.purebilibili.plugin.sdk.Anime4KConfig
+import com.android.purebilibili.plugin.sdk.Anime4KPreset
 import com.android.purebilibili.feature.anime4k.FSR_SHARPNESS_SLIDER_STEPS
-import com.android.purebilibili.feature.anime4k.VideoEnhancementAlgorithm
+import com.android.purebilibili.plugin.sdk.VideoEnhancementAlgorithm
 import com.android.purebilibili.feature.anime4k.VideoEnhancementConfigLoadGuard
 import com.android.purebilibili.feature.anime4k.decodeVideoEnhancementConfig
 import com.android.purebilibili.feature.anime4k.encodeVideoEnhancementConfig
@@ -39,6 +43,7 @@ import com.android.purebilibili.feature.anime4k.resolveConfigAfterRememberAcross
 import com.android.purebilibili.feature.anime4k.resolveConfigAfterVideoEnhancementToggle
 import com.android.purebilibili.feature.anime4k.resolveAnime4KPresetLabel
 import com.android.purebilibili.feature.anime4k.shouldConfirmRememberAcrossVideosChange
+import com.android.purebilibili.plugin.sdk.VideoEnhancementPluginApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,15 +51,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private const val TAG = "Anime4KPlugin"
 
 /**
  * Anime4K 是内置插件：插件层负责配置和可见性，播放器输出仍由 VideoOutputRouter 管理。
  */
-class Anime4KPlugin : Plugin {
+class Anime4KPlugin : BuiltinPlugin, VideoEnhancementPluginApi {
 
-    override val id: String = PLUGIN_ID
+    override val id: String = BuiltinPluginIds.VIDEO_ENHANCEMENT
     override val name: String = "画质增强"
     override val description: String = "提供 Anime4K 与 AMD FSR 1.0 实时画质增强"
     override val version: String = "0.4.0"
@@ -70,29 +77,30 @@ class Anime4KPlugin : Plugin {
     )
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val configSaveMutex = Mutex()
     private var config = Anime4KConfig()
     private val configLoadGuard = VideoEnhancementConfigLoadGuard()
     private val _configState = MutableStateFlow(config)
-    val configState: StateFlow<Anime4KConfig> = _configState.asStateFlow()
+    override val configState: StateFlow<Anime4KConfig> = _configState.asStateFlow()
 
     override suspend fun onEnable() {
         loadConfig()
         Logger.d(TAG, "画质增强插件已启用")
     }
 
-    fun setPreset(preset: Anime4KPreset) {
+    override fun setPreset(preset: Anime4KPreset) {
         updateConfig(config.copy(preset = preset))
     }
 
-    fun setAlgorithm(algorithm: VideoEnhancementAlgorithm) {
+    override fun setAlgorithm(algorithm: VideoEnhancementAlgorithm) {
         updateConfig(config.copy(algorithm = algorithm))
     }
 
-    fun setFsrSharpness(strength: Float) {
+    override fun setFsrSharpness(strength: Float) {
         updateConfig(config.copy(fsrSharpness = normalizeFsrSharpness(strength)))
     }
 
-    fun setRememberAcrossVideos(enabled: Boolean, currentVideoEnabled: Boolean) {
+    override fun setRememberAcrossVideos(enabled: Boolean, currentVideoEnabled: Boolean) {
         updateConfig(
             resolveConfigAfterRememberAcrossVideosChange(
                 config = config,
@@ -102,7 +110,7 @@ class Anime4KPlugin : Plugin {
         )
     }
 
-    fun rememberCurrentVideoEnabled(enabled: Boolean) {
+    override fun rememberCurrentVideoEnabled(enabled: Boolean) {
         updateConfig(resolveConfigAfterVideoEnhancementToggle(config, enabled))
     }
 
@@ -113,11 +121,14 @@ class Anime4KPlugin : Plugin {
         _configState.value = value
         ioScope.launch {
             runCatching {
-                PluginStore.setConfigJson(
-                    context = PluginManager.getContext(),
-                    pluginId = id,
-                    configJson = encodeVideoEnhancementConfig(value)
-                )
+                configSaveMutex.withLock {
+                    // Persist the latest snapshot in write order, not a stale queued setter value.
+                    PluginStore.setConfigJson(
+                        context = PluginManager.getContext(),
+                        pluginId = id,
+                        configJson = encodeVideoEnhancementConfig(_configState.value)
+                    )
+                }
             }.onFailure { error ->
                 Logger.e(TAG, "保存画质增强配置失败", error)
             }
@@ -177,7 +188,7 @@ class Anime4KPlugin : Plugin {
             AppText(
                 text = "HDR、杜比视界、小窗和后台播放会自动使用原始视频输出。",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
             if (configSnapshot.algorithm == VideoEnhancementAlgorithm.ANIME4K) {
                 AppText("CNN 模型", style = MaterialTheme.typography.titleSmall)
@@ -256,16 +267,6 @@ class Anime4KPlugin : Plugin {
                     }
                 }
             )
-        }
-    }
-
-    companion object {
-        const val PLUGIN_ID: String = "anime4k"
-
-        fun getInstance(): Anime4KPlugin? {
-            return PluginManager.plugins
-                .firstOrNull { it.plugin.id == PLUGIN_ID }
-                ?.plugin as? Anime4KPlugin
         }
     }
 }

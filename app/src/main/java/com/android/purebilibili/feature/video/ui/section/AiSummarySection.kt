@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.video.ui.section
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
@@ -43,6 +45,8 @@ import androidx.compose.material.icons.outlined.*
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import top.yukonga.miuix.kmp.anim.folmeSpring
+import com.android.purebilibili.core.ui.motion.folmeExpandEnterTransition
+import com.android.purebilibili.core.ui.motion.folmeExpandExitTransition
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
@@ -57,6 +61,7 @@ fun AiSummaryCard(
     aiSummary: AiSummaryData?,
     onTimestampClick: ((Long) -> Unit)? = null,
     onCreateNoteDraftClick: (() -> Unit)? = null,
+    defaultExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (!hasAiSummaryContent(aiSummary)) return
@@ -65,7 +70,7 @@ fun AiSummaryCard(
     val collapsedPreview = remember(modelResult.summary, modelResult.outline) {
         modelResult.summary.takeIf { it.isNotBlank() } ?: "查看分段总结和时间点"
     }
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(defaultExpanded) }
     val useMiuix = LocalAppUiStyle.current == AppUiStyle.MIUIX
     val horizontalPadding = if (useMiuix) 12.dp else 16.dp
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -94,12 +99,12 @@ fun AiSummaryCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 LeadingIconBadge(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    containerColor = AppContentColors.accent().copy(alpha = 0.12f),
                 ) {
                     AppIcon(
                         imageVector = Icons.Filled.AutoAwesome,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = AppContentColors.accent(),
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -107,13 +112,13 @@ fun AiSummaryCard(
                     AppText(
                         text = "AI 总结",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = AppContentColors.primaryText(),
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     AppText(
                         text = collapsedPreview,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                         maxLines = if (expanded) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -121,7 +126,7 @@ fun AiSummaryCard(
                 AppIcon(
                     imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起" else "展开",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = AppContentColors.secondaryText(),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -129,22 +134,8 @@ fun AiSummaryCard(
 
         AnimatedVisibility(
             visible = expanded,
-            enter = if (useMiuix) {
-                expandVertically(
-                    animationSpec = folmeSpring(damping = 1f, response = 0.35f),
-                    expandFrom = Alignment.Top
-                ) + fadeIn(animationSpec = folmeSpring(damping = 1f, response = 0.25f))
-            } else {
-                fadeIn() + expandVertically()
-            },
-            exit = if (useMiuix) {
-                shrinkVertically(
-                    animationSpec = folmeSpring(damping = 1f, response = 0.35f),
-                    shrinkTowards = Alignment.Top
-                ) + fadeOut(animationSpec = folmeSpring(damping = 1f, response = 0.25f))
-            } else {
-                fadeOut() + shrinkVertically()
-            }
+            enter = folmeExpandEnterTransition(useMiuix),
+            exit = folmeExpandExitTransition(useMiuix)
         ) {
             Column(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
@@ -159,7 +150,7 @@ fun AiSummaryCard(
                     AppText(
                         text = modelResult.summary,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = AppContentColors.primaryText(),
                         modifier = Modifier.padding(
                             bottom = if (modelResult.outline.isNotEmpty()) 12.dp else 0.dp
                         ),
@@ -272,9 +263,9 @@ fun AiSummaryPromptCard(
         AiSummaryPromptTone.WARNING -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
     }
     val accentColor = when (promptState.tone) {
-        AiSummaryPromptTone.INFO -> MaterialTheme.colorScheme.primary
-        AiSummaryPromptTone.MUTED -> MaterialTheme.colorScheme.onSurfaceVariant
-        AiSummaryPromptTone.WARNING -> MaterialTheme.colorScheme.error
+        AiSummaryPromptTone.INFO -> AppContentColors.accent()
+        AiSummaryPromptTone.MUTED -> AppContentColors.secondaryText()
+        AiSummaryPromptTone.WARNING -> AppContentColors.error()
     }
 
     AppContentCard(
@@ -312,13 +303,13 @@ fun AiSummaryPromptCard(
                 AppText(
                     text = promptState.title,
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AppContentColors.primaryText(),
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 AppText(
                     text = promptState.message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                 )
             }
         }
@@ -384,7 +375,7 @@ private fun OutlineItemRow(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
+                        .background(AppContentColors.accent()),
                 )
             }
         }
@@ -392,7 +383,7 @@ private fun OutlineItemRow(
         AppText(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = AppContentColors.primaryText(),
             modifier = Modifier
                 .weight(1f)
                 .padding(end = 8.dp),
@@ -406,7 +397,7 @@ private fun OutlineItemRow(
             contentAlignment = Alignment.TopCenter,
         ) {
             AppSurface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                color = AppContentColors.accent().copy(alpha = 0.1f),
                 shape = AppShapes.container(ContainerLevel.Tag),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -422,7 +413,7 @@ private fun OutlineItemRow(
                     AppIcon(
                         imageVector = Icons.Outlined.Schedule,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = AppContentColors.accent(),
                         modifier = Modifier.size(12.dp),
                     )
                     Spacer(modifier = Modifier.width(3.dp))
@@ -431,7 +422,7 @@ private fun OutlineItemRow(
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFeatureSettings = "tnum",
                         ),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = AppContentColors.accent(),
                         maxLines = 1,
                     )
                 }

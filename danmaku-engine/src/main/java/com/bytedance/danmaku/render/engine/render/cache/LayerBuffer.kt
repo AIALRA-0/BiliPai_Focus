@@ -18,8 +18,6 @@ package com.bytedance.danmaku.render.engine.render.cache
 import com.bytedance.danmaku.render.engine.control.DanmakuConfig
 import com.bytedance.danmaku.render.engine.data.DanmakuData
 import com.bytedance.danmaku.render.engine.render.draw.DrawItem
-import com.bytedance.danmaku.render.engine.utils.DISCARD_TYPE_EXPIRE
-import com.bytedance.danmaku.render.engine.utils.DISCARD_TYPE_SCORE
 import java.util.*
 
 /**
@@ -59,33 +57,63 @@ class LayerBuffer(private val mConfig: DanmakuConfig,
         if (mBufferItems.isEmpty() || mBufferItems.size <= mBufferSize) {
             return
         }
-        mBufferItems.removeWhen(
-            filter = {
-            if (mConfig.common.bufferExpireRule != null) {
-                mConfig.common.bufferExpireRule?.invoke(it.data, playTime) == true
-            } else {
-                if (playTime - (it.data?.showAtTime ?: 0L) > mBufferMaxTime) {
-                    mConfig.common.discardListener?.invoke(it.data, DISCARD_TYPE_EXPIRE)
-                    true
-                } else {
-                    false
-                }
-            }
-            },
-            onRemove = mCachePool::release
-        )
-        while (mBufferItems.size > mBufferSize) {
-            val item = mBufferItems.minBy {
-                @Suppress("UNCHECKED_CAST")
-                mConfig.common.bufferDiscardRule.invoke(it.data) as Comparable<Any?>
-            }
-            item?.let {
-                mConfig.common.discardListener?.invoke(it.data, DISCARD_TYPE_SCORE)
-                mBufferItems.remove(it)
-                mCachePool.release(it)
+        val retained = mBufferItems.toList()
+        val decisions = admissions(playTime, retained.size) { retained[it].data }
+        val iterator = mBufferItems.iterator()
+        var index = 0
+        while (iterator.hasNext()) {
+            val item = iterator.next()
+            val reason = decisions[index++]
+            if (reason != 0) {
+                mConfig.common.discardListener?.invoke(item.data, reason)
+                iterator.remove()
+                mCachePool.release(item)
             }
         }
     }
+
+    /** Select from old + new arrivals before acquiring Paints or measuring incoming text. */
+    fun addData(
+        playTime: Long,
+        list: List<DanmakuData>,
+        createItem: (DanmakuData) -> DrawItem<DanmakuData>,
+    ) {
+        val previous = mBufferItems.toList()
+        val decisions = admissions(playTime, previous.size + list.size) { index ->
+            if (index < previous.size) previous[index].data else list[index - previous.size]
+        }
+        val iterator = mBufferItems.iterator()
+        var index = 0
+        while (iterator.hasNext()) {
+            val item = iterator.next()
+            val reason = decisions[index++]
+            if (reason != 0) {
+                mConfig.common.discardListener?.invoke(item.data, reason)
+                iterator.remove()
+                mCachePool.release(item)
+            }
+        }
+        list.forEachIndexed { incomingIndex, data ->
+            val reason = decisions[previous.size + incomingIndex]
+            if (reason == 0) mBufferItems.add(createItem(data))
+            else mConfig.common.discardListener?.invoke(data, reason)
+        }
+    }
+
+    private inline fun admissions(
+        playTime: Long,
+        count: Int,
+        crossinline dataAt: (Int) -> DanmakuData?,
+    ): IntArray = selectBufferAdmissions(
+        count = count,
+        capacity = mBufferSize,
+        isExpired = { index ->
+            val data = dataAt(index)
+            mConfig.common.bufferExpireRule?.invoke(data, playTime)
+                ?: (playTime - (data?.showAtTime ?: 0L) > mBufferMaxTime)
+        },
+        scoreAt = { mConfig.common.bufferDiscardRule(dataAt(it)) },
+    )
 
     /**
      * When need to measure (config changed, or measure items manually),
@@ -114,23 +142,4 @@ class LayerBuffer(private val mConfig: DanmakuConfig,
         mBufferMaxTime = maxTime
     }
 
-    /**
-     * Copy from Collection.removeIf(), api 26+.
-     */
-    private fun <T> MutableList<T>.removeWhen(
-        filter: (T) -> Boolean,
-        onRemove: (T) -> Unit
-    ): Boolean {
-        var removed = false
-        val each = iterator()
-        while (each.hasNext()) {
-            val item = each.next()
-            if (filter.invoke(item)) {
-                each.remove()
-                onRemove(item)
-                removed = true
-            }
-        }
-        return removed
-    }
 }

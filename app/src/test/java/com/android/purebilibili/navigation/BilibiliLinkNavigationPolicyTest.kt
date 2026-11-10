@@ -8,6 +8,15 @@ import kotlin.test.assertIs
 class BilibiliLinkNavigationPolicyTest {
 
     @Test
+    fun `lookalike shopping domains remain external`() {
+        listOf("bilibili.com.example.org", "fakeb23.tv", "b23.tv.example.org").forEach { host ->
+            assertIs<BilibiliLinkNavigationAction.External>(
+                resolveBilibiliLinkNavigationAction("https://$host/shop")
+            )
+        }
+    }
+
+    @Test
     fun `bilibili video link resolves to native target`() {
         val action = resolveBilibiliLinkNavigationAction("https://www.bilibili.com/video/BV1xx411c7mD")
 

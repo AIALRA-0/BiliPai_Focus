@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.profile
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import coil3.request.crossfade
 import coil3.request.allowHardware
 
@@ -66,9 +68,9 @@ fun WallpaperAdjustmentSheet(
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Mobile, 1: Tablet
     var mobileBias by remember { mutableFloatStateOf(initialMobileBias) }
     var tabletBias by remember { mutableFloatStateOf(initialTabletBias) }
-    
+
     val currentBias = if (selectedTab == 0) mobileBias else tabletBias
-    
+
     // Bottom Sheet
     AppModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -93,16 +95,16 @@ fun WallpaperAdjustmentSheet(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .clickable { onDismiss() },
-                    color = MaterialTheme.colorScheme.primary
+                    color = AppContentColors.accent()
                 )
-                
+
                 AppText(
                     text = "调整壁纸位置",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.Center)
                 )
-                
+
                 AppTextButton(
                     onClick = { onSave(mobileBias, tabletBias) },
                     enabled = previewLoaded && !previewFailed,
@@ -111,7 +113,7 @@ fun WallpaperAdjustmentSheet(
                     AppText(text = "保存", fontWeight = FontWeight.Bold)
                 }
             }
-            
+
             // Device target switcher follows the active native theme; liquid glass reuses the
             // shared moving indicator when the global glass option is enabled.
             WallpaperDeviceTabRow(
@@ -121,9 +123,9 @@ fun WallpaperAdjustmentSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp, vertical = 8.dp),
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Preview Area
             Box(
                 modifier = Modifier
@@ -137,7 +139,7 @@ fun WallpaperAdjustmentSheet(
                 val width = if (selectedTab == 0) 140.dp else 280.dp
                 val height = width / aspectRatio
                 val previewCornerRadius = if (selectedTab == 0) 16.dp else 12.dp
-                
+
                 // Card simulating the device screen
                 AppCard(
                     shape = AppCardShape.Uniform(previewCornerRadius),
@@ -166,7 +168,7 @@ fun WallpaperAdjustmentSheet(
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
-                        
+
                         // Fake UI Overlay to help context
                         // Gradient Overlay
                         Box(
@@ -179,7 +181,7 @@ fun WallpaperAdjustmentSheet(
                                     )
                                 )
                         )
-                        
+
                         // Text Overlay hint
                         if (previewLoaded) {
                             AppText(
@@ -206,7 +208,7 @@ fun WallpaperAdjustmentSheet(
                                 }
                                 AppText(
                                     text = if (previewFailed) "图片加载失败，请返回重新选择" else "正在加载图片…",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = AppContentColors.secondaryText(),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
@@ -214,9 +216,9 @@ fun WallpaperAdjustmentSheet(
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             // Slider Control
             Column(
                 modifier = Modifier.padding(horizontal = 24.dp)
@@ -229,7 +231,7 @@ fun WallpaperAdjustmentSheet(
                     AppText("居中", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                     AppText("底部对齐", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                 }
-                
+
                 AppSlider(
                     value = currentBias,
                     onValueChange = { newValue ->
@@ -239,7 +241,7 @@ fun WallpaperAdjustmentSheet(
                     steps = 0, // Continuous
                     modifier = Modifier.fillMaxWidth()
                 )
-                
+
                 AppText(
                     text = "上下拖动滑块调整图片显示区域",
                     style = MaterialTheme.typography.bodySmall,
@@ -300,7 +302,7 @@ fun ProfileWallpaperAdjustmentSheet(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .clickable { onDismiss() },
-                    color = MaterialTheme.colorScheme.primary
+                    color = AppContentColors.accent()
                 )
 
                 AppText(
@@ -316,7 +318,7 @@ fun ProfileWallpaperAdjustmentSheet(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .clickable { onSave(mobileTransform, tabletTransform) },
-                    color = MaterialTheme.colorScheme.primary
+                    color = AppContentColors.accent()
                 )
             }
 
@@ -442,7 +444,7 @@ fun ProfileWallpaperAdjustmentSheet(
                     AppText(
                         text = if (selectedTab == 0) "手机端参数" else "平板端参数",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = AppContentColors.primaryText()
                     )
                     AppText(
                         text = "缩放 ${"%.2f".format(currentTransform.scale)}x  横向 ${"%.2f".format(currentTransform.offsetX)}  纵向 ${"%.2f".format(currentTransform.offsetY)}",
@@ -471,7 +473,7 @@ fun ProfileWallpaperAdjustmentSheet(
 }
 
 @Composable
-private fun WallpaperDeviceTabRow(
+internal fun WallpaperDeviceTabRow(
     selectedTab: Int,
     modifier: Modifier = Modifier,
     onSelectedTabChange: (Int) -> Unit,
@@ -483,6 +485,9 @@ private fun WallpaperDeviceTabRow(
         )
     }
     AppThemeAdaptiveTabRow(
+        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+        role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
         options = options,
         selectedValue = selectedTab,
         onSelectionChange = onSelectedTabChange,
@@ -491,7 +496,7 @@ private fun WallpaperDeviceTabRow(
         height = 48.dp,
         indicatorHeight = com.android.purebilibili.core.ui
             .roundMatchedLiquidIndicatorHeightDp(48f).dp,
-        labelFontSize = 14.sp,
+        labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
         dragSelectionEnabled = true,
         tapPressRefractionEnabled = true,
     )

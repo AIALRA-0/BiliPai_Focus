@@ -10,7 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.DanmakuSettings
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
+import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import kotlinx.coroutines.launch
 
 internal data class TabletDanmakuChromeState(
@@ -18,13 +18,21 @@ internal data class TabletDanmakuChromeState(
     val onToggle: () -> Unit,
 )
 
+/**
+ * 平板/大屏的弹幕开关。
+ *
+ * [danmakuManager] 必须是详情页共享的那一份（由 `VideoDetailScreenStateHolder` 以
+ * `currentBvid` 建立）。此前这里以路由参数 `bvid` 自行 acquire，会在同页切集后与共享会话
+ * 分叉：开关实际改的是另一个 manager，并额外产生一次 acquire/release 与渲染器重建。
+ */
 @Composable
-internal fun rememberTabletDanmakuChromeState(bvid: String): TabletDanmakuChromeState {
+internal fun rememberTabletDanmakuChromeState(
+    danmakuManager: DanmakuManager,
+): TabletDanmakuChromeState {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val danmakuManager = rememberDanmakuManager(bvid)
     val danmakuSettings by SettingsManager
-        .getDanmakuSettings(context, DanmakuSettingsScope.PORTRAIT)
+        .getDanmakuSettings(context, DanmakuSettingsScope.LANDSCAPE)
         .collectAsStateWithLifecycle(initialValue = DanmakuSettings())
     val latestEnabled = rememberUpdatedState(danmakuSettings.enabled)
     val onToggle = remember(danmakuManager, context, scope) {
@@ -38,7 +46,7 @@ internal fun rememberTabletDanmakuChromeState(bvid: String): TabletDanmakuChrome
                 SettingsManager.setDanmakuEnabled(
                     context,
                     newValue,
-                    DanmakuSettingsScope.PORTRAIT,
+                    DanmakuSettingsScope.LANDSCAPE,
                 )
             }
             Unit

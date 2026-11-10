@@ -9,7 +9,7 @@ internal enum class LiveDanmakuHealthAction {
 }
 
 internal data class LiveDanmakuConnectionHealth(
-    val connectedAtMs: Long = 0L,
+    val connectedAtMs: Long = -1L,
     val lastServerFrameAtMs: Long = 0L,
     val lastHeartbeatReplyAtMs: Long = 0L,
     val lastBusinessMessageAtMs: Long = 0L,
@@ -33,6 +33,7 @@ internal fun markLiveDanmakuServerFrameReceived(
     health: LiveDanmakuConnectionHealth,
     nowMs: Long
 ): LiveDanmakuConnectionHealth {
+    if (health.disconnectedByUser) return health
     return health.copy(
         lastServerFrameAtMs = nowMs,
         disconnectedByUser = false
@@ -43,6 +44,7 @@ internal fun markLiveDanmakuHeartbeatReply(
     health: LiveDanmakuConnectionHealth,
     nowMs: Long
 ): LiveDanmakuConnectionHealth {
+    if (health.disconnectedByUser) return health
     return health.copy(
         lastServerFrameAtMs = nowMs,
         lastHeartbeatReplyAtMs = nowMs,
@@ -54,6 +56,7 @@ internal fun markLiveDanmakuBusinessMessage(
     health: LiveDanmakuConnectionHealth,
     nowMs: Long
 ): LiveDanmakuConnectionHealth {
+    if (health.disconnectedByUser) return health
     return health.copy(
         lastServerFrameAtMs = nowMs,
         lastBusinessMessageAtMs = nowMs,
@@ -72,7 +75,7 @@ internal fun resolveLiveDanmakuHealthAction(
     nowMs: Long,
     silenceTimeoutMs: Long = LIVE_DANMAKU_SILENCE_TIMEOUT_MS
 ): LiveDanmakuHealthAction {
-    if (health.disconnectedByUser || health.connectedAtMs <= 0L) {
+    if (health.disconnectedByUser || health.connectedAtMs < 0L) {
         return LiveDanmakuHealthAction.KEEP_ALIVE
     }
     val lastServerFrameObservedAtMs = health.lastServerFrameAtMs.takeIf { it > 0L } ?: health.connectedAtMs

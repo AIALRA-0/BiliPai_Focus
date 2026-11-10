@@ -8,6 +8,13 @@ import kotlin.test.assertTrue
 
 class CommentThreadDragPolicyTest {
     @Test
+    fun `list bottom overscroll does not drag the comment thread`() {
+        assertFalse(shouldStartCommentThreadDragFromList(-40f))
+        assertFalse(shouldStartCommentThreadDragFromList(0f))
+        assertTrue(shouldStartCommentThreadDragFromList(40f))
+    }
+
+    @Test
     fun `up and down require the same dismissal distance`() {
         assertFalse(shouldDismissCommentThreadByDrag(100f, 1000f))
         assertFalse(shouldDismissCommentThreadByDrag(-100f, 1000f))

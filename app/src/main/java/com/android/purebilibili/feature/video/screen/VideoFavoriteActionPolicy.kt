@@ -3,7 +3,9 @@ package com.android.purebilibili.feature.video.screen
 internal enum class VideoFavoriteEntryPoint {
     FullscreenOverlay,
     DetailActionRow,
-    BottomInputBar
+    BottomInputBar,
+    /** 听视频：始终弹出收藏夹选择，不走快捷默认收藏。 */
+    AudioMode,
 }
 
 internal enum class VideoFavoriteAction {
@@ -14,15 +16,24 @@ internal enum class VideoFavoriteAction {
 }
 
 /**
- * 收藏入口：统一打开收藏夹选择，提示用户可收藏到自己的收藏夹。
- * 取消收藏可在面板中取消勾选后保存。
+ * 长按始终打开收藏夹选择。
+ * 听视频入口始终打开收藏夹选择。
+ * 其余点按按设置分流：开启快捷收藏时进默认收藏夹，否则打开收藏夹选择。
  */
 internal fun resolveVideoFavoriteAction(
-    entryPoint: VideoFavoriteEntryPoint
+    entryPoint: VideoFavoriteEntryPoint,
+    isLongPress: Boolean,
+    quickSaveDefaultFolder: Boolean,
 ): VideoFavoriteAction {
-    return when (entryPoint) {
-        VideoFavoriteEntryPoint.FullscreenOverlay,
-        VideoFavoriteEntryPoint.DetailActionRow,
-        VideoFavoriteEntryPoint.BottomInputBar -> VideoFavoriteAction.OpenFavoriteFolders
+    return when {
+        isLongPress -> VideoFavoriteAction.OpenFavoriteFolders
+        entryPoint == VideoFavoriteEntryPoint.AudioMode -> VideoFavoriteAction.OpenFavoriteFolders
+        quickSaveDefaultFolder -> VideoFavoriteAction.ToggleFavorite
+        else -> when (entryPoint) {
+            VideoFavoriteEntryPoint.FullscreenOverlay,
+            VideoFavoriteEntryPoint.DetailActionRow,
+            VideoFavoriteEntryPoint.BottomInputBar,
+            VideoFavoriteEntryPoint.AudioMode -> VideoFavoriteAction.OpenFavoriteFolders
+        }
     }
 }

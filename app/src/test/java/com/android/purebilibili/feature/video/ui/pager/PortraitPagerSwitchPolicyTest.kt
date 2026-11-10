@@ -255,8 +255,8 @@ class PortraitPagerSwitchPolicyTest {
     }
 
     @Test
-    fun shouldShowPortraitCover_neverCoversTheActivePlayerSurface() {
-        assertFalse(
+    fun shouldShowPortraitCover_holdsUntilFirstFrameAndStaysHiddenDuringRebuffer() {
+        assertTrue(
             shouldShowPortraitCover(
                 isLoading = true,
                 isCurrentPage = true,
@@ -274,7 +274,7 @@ class PortraitPagerSwitchPolicyTest {
             )
         )
 
-        assertFalse(
+        assertTrue(
             shouldShowPortraitCover(
                 isLoading = false,
                 isCurrentPage = true,
@@ -283,7 +283,7 @@ class PortraitPagerSwitchPolicyTest {
             )
         )
 
-        assertFalse(
+        assertTrue(
             shouldShowPortraitCover(
                 isLoading = false,
                 isCurrentPage = true,
@@ -294,7 +294,7 @@ class PortraitPagerSwitchPolicyTest {
 
         assertFalse(
             shouldShowPortraitCover(
-                isLoading = false,
+                isLoading = true,
                 isCurrentPage = true,
                 isPlayerReadyForThisVideo = true,
                 hasRenderedFirstFrame = true
@@ -321,10 +321,14 @@ class PortraitPagerSwitchPolicyTest {
     }
 
     @Test
-    fun portraitCover_prefersFitScaleToAvoidTemporaryCropJump() {
+    fun portraitCover_fillsVerticalViewportButKeepsLandscapeCoverComplete() {
+        assertEquals(
+            ContentScale.Crop,
+            resolvePortraitCoverContentScale(isVerticalVideo = true)
+        )
         assertEquals(
             ContentScale.Fit,
-            resolvePortraitCoverContentScale()
+            resolvePortraitCoverContentScale(isVerticalVideo = false)
         )
     }
 

@@ -1,5 +1,10 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.plugin.sdk.EyeCareReminder
+import com.android.purebilibili.plugin.sdk.EyeProtectionPluginApi
+
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -49,9 +54,8 @@ fun EyeProtectionOverlay(
     playbackActive: Boolean = false
 ) {
     val plugins by PluginManager.pluginsFlow.collectAsStateWithLifecycle()
-    val pluginInfo = plugins.find { it.plugin.id == EYE_PROTECTION_PLUGIN_ID } ?: return
-    val plugin = pluginInfo.plugin as? EyeProtectionPlugin ?: return
-    val pluginEnabled = pluginInfo.enabled
+    val plugin = remember(plugins) { PluginManager.getPlugin(EyeProtectionPluginApi::class) } ?: return
+    val pluginEnabled = PluginManager.isEnabled(plugin.id)
     val settingsPreviewEnabled by plugin.settingsPreviewEnabled.collectAsStateWithLifecycle()
     if (!pluginEnabled && !settingsPreviewEnabled) return
 
@@ -133,7 +137,7 @@ private fun RestReminderDialog(
     val layoutPolicy = remember(configuration.screenHeightDp) {
         resolveEyeReminderDialogLayoutPolicy(screenHeightDp = configuration.screenHeightDp)
     }
-    val accent = MaterialTheme.colorScheme.primary
+    val accent = AppContentColors.accent()
     AppAlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier
@@ -177,7 +181,7 @@ private fun RestReminderDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 AppText(
-                    text = "已连续观看 ${reminder.usageMinutes} 分钟",
+                    text = "已使用 BiliPai 约 ${reminder.usageMinutes} 分钟",
                     style = MaterialTheme.typography.bodyMedium,
                     color = AppSurfaceTokens.onSurfaceVariantSummary(),
                     textAlign = TextAlign.Center
@@ -186,7 +190,7 @@ private fun RestReminderDialog(
                 AppText(
                     text = reminder.message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AppContentColors.primaryText(),
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
@@ -205,7 +209,7 @@ private fun RestReminderDialog(
                 shape = AppShapes.container(ContainerLevel.Card),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                AppText("看向远处 20 秒", fontWeight = FontWeight.Medium)
+                AppText("我已休息", fontWeight = FontWeight.Medium)
             }
         },
         dismissButton = {

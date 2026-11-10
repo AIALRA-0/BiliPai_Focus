@@ -12,6 +12,7 @@ data class VideoSubjectSnapshot(
     val title: String,
     val coverUrl: String,
     val durationMs: Long,
+    val isRepost: Boolean = false,
     val generation: Long
 )
 
@@ -25,6 +26,7 @@ internal fun VideoPlaybackUiState.Success.toSubjectSnapshot(
     title = info.title,
     coverUrl = info.pic,
     durationMs = videoDurationMs,
+    isRepost = info.isRepost,
     generation = generation
 )
 

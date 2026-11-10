@@ -1,5 +1,7 @@
 package com.android.purebilibili.core.util
 
+import com.android.purebilibili.core.performance.AbnormalProcessExitException
+import com.android.purebilibili.core.performance.encodeNativeExitTrace
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -133,6 +135,10 @@ class LoggerPersistencePolicyTest {
             resolveCrashSnapshotFile(baseDir)
         )
         assertEquals(
+            File("/tmp/bilipai/logs/last_crash_trace.pb"),
+            resolveRawCrashTraceFile(baseDir)
+        )
+        assertEquals(
             File("/tmp/bilipai/logs/pending_crash.marker"),
             resolveCrashSnapshotMarkerFile(baseDir)
         )
@@ -166,6 +172,26 @@ class LoggerPersistencePolicyTest {
         } finally {
             file.delete()
         }
+    }
+
+    @Test
+    fun exportMergesLogSourcesChronologicallyWithoutSplittingExceptionStacks() {
+        val basic = groupDiagnosticLogLines(
+            listOf(
+                "[2026-09-29 03:40:39.932] E/Player: failed",
+                "java.lang.IllegalStateException: failed",
+                "    at Player.load(Player.kt:42)",
+            )
+        )
+        val verbose = groupDiagnosticLogLines(
+            listOf("[2026-09-29 03:40:38.391] I/Startup: ready")
+        )
+        val merged = mergeDiagnosticLogEntries(basic + verbose, basic)
+
+        assertEquals(2, merged.size)
+        assertTrue(merged[0].contains("I/Startup: ready"))
+        assertTrue(merged[1].contains("Player.kt:42"))
+        assertTrue(merged[1].contains("\njava.lang.IllegalStateException"))
     }
 
     @Test
@@ -260,6 +286,37 @@ class LoggerPersistencePolicyTest {
         assertFalse(content.contains("secret-token"))
         assertFalse(content.contains("123456"))
         assertTrue(content.contains("access_token=***"))
+    }
+
+    @Test
+    fun nativeCrashSnapshotKeepsReadableSummaryWithoutEmbeddingRawProtobuf() {
+        val trace = requireNotNull(encodeNativeExitTrace(ByteArray(64) { it.toByte() }.inputStream()))
+        val content = buildCrashSnapshotContent(
+            throwable = AbnormalProcessExitException("Native 崩溃", trace),
+            entries = emptyList(),
+            exportedAtMillis = 1_741_334_802_000L,
+            appVersionName = "6.9.0",
+            versionCode = 103,
+            manufacturer = "Google",
+            model = "Pixel",
+            androidRelease = "17",
+            apiLevel = 37,
+        )
+
+        assertTrue(content.contains("系统异常回溯摘要"))
+        assertTrue(content.contains("原始回溯: 不在本文本内"))
+        assertFalse(content.contains("BEGIN TOMBSTONE PROTOBUF BASE64"))
+    }
+
+    @Test
+    fun legacySnapshotExportRemovesEmbeddedProtobufButKeepsRecentLogs() {
+        val legacy = "崩溃摘要\n----- BEGIN TOMBSTONE PROTOBUF BASE64 -----\nBV***\n" +
+            "----- END TOMBSTONE PROTOBUF BASE64 -----\n----- Recent Logs -----\n错误记录"
+        val cleaned = removeEmbeddedNativeTombstone(legacy)
+
+        assertFalse(cleaned.contains("BV***"))
+        assertTrue(cleaned.contains("崩溃摘要"))
+        assertTrue(cleaned.contains("错误记录"))
     }
 
     @Test

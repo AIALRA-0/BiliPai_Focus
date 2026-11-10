@@ -2,3 +2,5 @@
 *.md text eol=lf
 *.kt text eol=lf
 *.kts text eol=lf
+# Generated brand preview embeds assets and should not count as source code.
+artwork/brand-motion/preview.html linguist-generated=true

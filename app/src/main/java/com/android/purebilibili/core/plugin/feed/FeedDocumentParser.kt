@@ -186,10 +186,20 @@ private fun Element.mediaImageUrl(): String? {
     }
     val contentUrl = content?.getAttribute("url").orEmpty()
     if (contentUrl.isNotBlank()) return contentUrl
-    val enclosure = childElements().firstOrNull { it.feedLocalName() == "enclosure" }
-    val enclosureType = enclosure?.getAttribute("type").orEmpty()
-    val enclosureUrl = enclosure?.getAttribute("url").orEmpty()
-    if (enclosureType.startsWith("image") && enclosureUrl.isNotBlank()) return enclosureUrl
+    childElements().filter { it.feedLocalName() == "enclosure" }.forEach { enclosure ->
+        val type = enclosure.getAttribute("type").substringBefore(';').trim()
+        val url = enclosure.getAttribute("url").trim()
+        // Some RSS sources omit the MIME type on cover enclosures. Do not
+        // mistake explicitly typed audio/video podcast attachments for covers.
+        val imagePath = runCatching { java.net.URI(url).path }.getOrNull().orEmpty()
+        val extension = imagePath.substringAfterLast('/').substringAfterLast('.', "").lowercase()
+        val imageExtension = extension in
+            setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "svg")
+        if (url.isNotBlank() && (type.startsWith("image/", ignoreCase = true) ||
+                type.isBlank() && (imageExtension || extension.isBlank()) ||
+                type.equals("application/octet-stream", true) && imageExtension)
+        ) return url
+    }
     return null
 }
 

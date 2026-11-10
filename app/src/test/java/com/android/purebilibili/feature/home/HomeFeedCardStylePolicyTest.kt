@@ -54,13 +54,23 @@ class HomeFeedCardStylePolicyTest {
     }
 
     @Test
-    fun singleColumn_usesSixteenByTenForEveryCardStyle() {
-        HomeFeedCardStyle.entries.forEach { style ->
-            assertEquals(
-                HOME_FEED_BILIPAI_COVER_ASPECT_RATIO,
-                resolveHomeFeedCoverAspectRatio(style = style, gridColumns = 1),
-                0.0001f,
-            )
+    fun selectedCoverRatio_isPreservedAcrossColumnsAndWindowSizes() {
+        val cases = listOf(
+            HomeFeedCardStyle.CURRENT to 16f / 9f,
+            HomeFeedCardStyle.OFFICIAL to 4f / 3f,
+            HomeFeedCardStyle.BILIPAI to 16f / 10f,
+        )
+        cases.forEach { (style, ratio) ->
+            com.android.purebilibili.core.util.WindowWidthSizeClass.entries.forEach { width ->
+                (1..6).forEach { columns ->
+                    assertEquals(
+                        ratio,
+                        resolveHomeFeedCardLayout(style, columns, width).coverAspectRatio,
+                        0.0001f,
+                        "Selected $style must survive $columns columns on $width",
+                    )
+                }
+            }
         }
     }
 

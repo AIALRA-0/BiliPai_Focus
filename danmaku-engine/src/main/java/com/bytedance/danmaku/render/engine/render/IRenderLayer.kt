@@ -42,6 +42,18 @@ interface IRenderLayer {
      */
     fun addItems(playTime: Long, list: List<DrawItem<DanmakuData>>)
 
+    /**
+     * Built-in buffered layers reject raw data before text measurement.
+     * The raw list is borrowed for this call; retain a copy if needed after returning.
+     */
+    fun addData(
+        playTime: Long,
+        list: List<DanmakuData>,
+        createItem: (DanmakuData) -> DrawItem<DanmakuData>,
+    ) {
+        addItems(playTime, list.map(createItem))
+    }
+
     fun releaseItem(item: DrawItem<DanmakuData>)
 
     fun typesetting(playTime: Long, isPlaying: Boolean, configChanged: Boolean = false): Int

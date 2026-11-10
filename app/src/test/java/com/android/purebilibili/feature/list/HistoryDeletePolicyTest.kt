@@ -100,36 +100,21 @@ class HistoryDeletePolicyTest {
     }
 
     @Test
-    fun `Android 13 Xiaomi should skip native GL dissolve`() {
-        val animationSafe = isHistoryDissolveAnimationSafe(
-            sdkInt = 33,
-            manufacturer = "Xiaomi"
-        )
-
-        assertEquals(false, animationSafe)
+    fun `unsupported GLES devices delete without starting an effect`() {
         assertEquals(
             HistoryDeleteAnimationMode.DIRECT_DELETE,
-            resolveHistoryDeleteAnimationMode(
-                itemCount = 1,
-                dissolveAnimationSafe = animationSafe
-            )
+            resolveHistoryDeleteAnimationMode(itemCount = 1, dissolveAnimationSafe = false)
         )
     }
 
     @Test
-    fun `history dissolve remains enabled outside affected Xiaomi platform`() {
-        assertEquals(true, isHistoryDissolveAnimationSafe(sdkInt = 34, manufacturer = "Xiaomi"))
-        assertEquals(true, isHistoryDissolveAnimationSafe(sdkInt = 33, manufacturer = "Google"))
-    }
-
-    @Test
-    fun `batch delete should skip dissolve animation and delete directly`() {
+    fun `batch delete should dissolve selected cards`() {
         assertEquals(
-            HistoryDeleteAnimationMode.DIRECT_DELETE,
+            HistoryDeleteAnimationMode.BATCH_DISSOLVE,
             resolveHistoryDeleteAnimationMode(itemCount = 2)
         )
         assertEquals(
-            HistoryDeleteAnimationMode.DIRECT_DELETE,
+            HistoryDeleteAnimationMode.BATCH_DISSOLVE,
             resolveHistoryDeleteAnimationMode(itemCount = 30)
         )
     }
@@ -177,14 +162,14 @@ class HistoryDeletePolicyTest {
     }
 
     @Test
-    fun `create delete session normalizes keys and chooses direct delete mode`() {
+    fun `create delete session normalizes keys and chooses batch dissolve mode`() {
         val session = createHistoryDeleteSession(setOf(" a ", "b", ""))
 
         assertEquals(
             HistoryDeleteSession(
                 targetKeys = setOf("a", "b"),
                 completedKeys = emptySet(),
-                animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
+                animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
             ),
             session
         )
@@ -195,7 +180,7 @@ class HistoryDeletePolicyTest {
         val session = HistoryDeleteSession(
             targetKeys = setOf("a", "b"),
             completedKeys = emptySet(),
-            animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
+            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
         )
 
         val afterFirst = reduceHistoryDeleteSessionOnAnimationComplete(session, "a")
@@ -212,7 +197,7 @@ class HistoryDeletePolicyTest {
         val session = HistoryDeleteSession(
             targetKeys = setOf("a", "b", "c"),
             completedKeys = setOf("b"),
-            animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
+            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
         )
 
         assertEquals(setOf("a", "c"), resolveActiveHistoryDeleteKeys(session))
@@ -223,10 +208,58 @@ class HistoryDeletePolicyTest {
         val session = HistoryDeleteSession(
             targetKeys = setOf("a", "b"),
             completedKeys = setOf("a"),
-            animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
+            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
         )
 
         assertEquals(true, shouldKeepHistoryDeletePlaceholderHidden(session, "a"))
         assertEquals(false, shouldKeepHistoryDeletePlaceholderHidden(session, "b"))
     }
+
+    @Test
+    fun `batch dissolve keeps grid slots until all selected cards finish`() {
+        assertEquals(false, shouldJiggleHistoryDeleteCards(HistoryDeleteAnimationMode.BATCH_DISSOLVE))
+        assertEquals(false, shouldCollapseHistoryDeleteCard(HistoryDeleteAnimationMode.BATCH_DISSOLVE))
+    }
+
+    @Test
+    fun `offscreen selections do not wait for animation callbacks`() {
+        val session = requireNotNull(createHistoryDeleteSession(
+            targetKeys = setOf("a", "b", "c"),
+            visibleKeys = setOf(" a ", "b", "unselected"),
+        ))
+        assertEquals(setOf("c"), session.completedKeys)
+        assertEquals(setOf("a", "b"), resolveActiveHistoryDeleteKeys(session))
+        val afterFirst = reduceHistoryDeleteSessionOnAnimationComplete(session, "a")
+        assertEquals(false, shouldFinalizeHistoryDeleteSession(afterFirst))
+        assertEquals(true, shouldKeepHistoryDeletePlaceholderHidden(afterFirst, "a"))
+        assertEquals(true, shouldFinalizeHistoryDeleteSession(
+            reduceHistoryDeleteSessionOnAnimationComplete(afterFirst, "b")
+        ))
+    }
+
+    @Test
+    fun `selection outside current viewport can delete immediately`() {
+        val session = requireNotNull(createHistoryDeleteSession(
+            targetKeys = setOf("a", "b"),
+            visibleKeys = emptySet(),
+        ))
+        assertEquals(emptySet<String>(), resolveActiveHistoryDeleteKeys(session))
+        assertEquals(true, shouldFinalizeHistoryDeleteSession(session))
+    }
+
+    @Test
+    fun `batch delete on unsupported GLES remains direct`() {
+        assertEquals(HistoryDeleteAnimationMode.DIRECT_DELETE,
+            resolveHistoryDeleteAnimationMode(itemCount = 30, dissolveAnimationSafe = false))
+    }
+
+    @Test
+    fun `unrelated and duplicate callbacks do not advance a batch twice`() {
+        val session = requireNotNull(createHistoryDeleteSession(setOf("a", "b")))
+        assertEquals(session, reduceHistoryDeleteSessionOnAnimationComplete(session, "other"))
+        val completed = reduceHistoryDeleteSessionOnAnimationComplete(session, "a")
+        assertEquals(completed, reduceHistoryDeleteSessionOnAnimationComplete(completed, " a "))
+        assertEquals(false, shouldFinalizeHistoryDeleteSession(completed))
+    }
+
 }

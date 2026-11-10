@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSPink
+import com.android.purebilibili.core.theme.iOSRed
 import com.android.purebilibili.core.ui.AppSemanticAccentPalette
 import com.android.purebilibili.core.ui.AppSemanticVisualPolicy
 import org.junit.Assert.assertEquals
@@ -41,8 +42,37 @@ class SettingsEntryVisualPolicyTest {
     }
 
     @Test
-    fun materialEntries_keepCategoryColors() {
-        assertEquals(iOSPink, resolveSettingsEntryVisual(SettingsSearchTarget.APPEARANCE, materialPolicy).iconTint)
-        assertEquals(iOSBlue, resolveSettingsEntryVisual(SettingsSearchTarget.CLEAR_CACHE, materialPolicy).iconTint)
+    fun materialEntries_shareTheSuppliedNeutralColor() {
+        val neutral = Color(0xFF61666D)
+        SettingsSearchTarget.entries.forEach { target ->
+            assertEquals(neutral, resolveSettingsEntryVisual(target, materialPolicy, neutral).iconTint)
+        }
+    }
+
+    @Test
+    fun miuixEntries_keepCategoryColors() {
+        assertEquals(
+            iOSPink,
+            resolveSettingsEntryVisual(SettingsSearchTarget.APPEARANCE, materialPolicy, colorful = true).iconTint,
+        )
+        assertEquals(
+            iOSBlue,
+            resolveSettingsEntryVisual(SettingsSearchTarget.CLEAR_CACHE, materialPolicy, colorful = true).iconTint,
+        )
+        assertEquals(
+            iOSRed,
+            resolveSettingsEntryVisual(SettingsSearchTarget.DONATE, materialPolicy, colorful = true).iconTint,
+        )
+    }
+
+    @Test
+    fun helpCategory_usesInformationIconInsteadOfDiagnosticTerminal() {
+        val category = SettingsRootCategory.SYSTEM_ABOUT
+        assertEquals(SettingsSearchTarget.ABOUT_SUPPORT, category.searchTarget)
+        assertEquals(
+            R.drawable.ms_info_24,
+            resolveSettingsEntryVisual(category.searchTarget, materialPolicy).iconResId,
+        )
+        assertEquals(category, resolveSettingsRootCategoryForSearchTarget(category.searchTarget))
     }
 }

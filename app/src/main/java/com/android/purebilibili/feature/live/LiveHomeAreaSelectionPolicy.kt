@@ -56,3 +56,15 @@ internal fun resolveLiveAreaRoomQuery(
         areaId = if (parentAreaId > 0) areaId.coerceAtLeast(0) else 0
     )
 }
+
+/** 分类刷新按身份恢复选中项，服务端调整顺序时不切换当前房间列表。 */
+internal fun resolveRefreshedLiveHomeAreaIndex(
+    selectedIndex: Int,
+    parentAreaId: Int,
+    areaId: Int,
+    entries: List<LiveFeedAreaEntry>,
+): Int {
+    if (selectedIndex == LIVE_HOME_RECOMMEND_INDEX || selectedIndex == LIVE_HOME_FOLLOWED_INDEX) return selectedIndex
+    val index = entries.indexOfFirst { it.parentAreaId == parentAreaId && it.areaId == areaId }
+    return if (index >= 0) resolveLiveHomeSelectedIndexForArea(index) else -1
+}

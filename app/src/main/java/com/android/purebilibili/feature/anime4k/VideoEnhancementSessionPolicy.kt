@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.anime4k
 
+import com.android.purebilibili.plugin.sdk.Anime4KConfig
+
 /**
  * 新视频的画质增强默认关闭；只有用户明确允许跨视频记忆时才恢复最后状态。
  */

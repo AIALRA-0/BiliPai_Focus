@@ -107,7 +107,21 @@ class LiveDanmakuConnectionHealthPolicyTest {
     }
 
     @Test
-    fun `auth requests documented brotli protocol`() {
-        assertEquals(DanmakuProtocol.PROTO_VER_BROTLI, LIVE_DANMAKU_AUTH_PROTOCOL_VERSION)
+    fun `connection opened at monotonic zero still times out`() {
+        val health = markLiveDanmakuConnected(LiveDanmakuConnectionHealth(), nowMs = 0L)
+        assertEquals(
+            LiveDanmakuHealthAction.RECONNECT,
+            resolveLiveDanmakuHealthAction(health, nowMs = LIVE_DANMAKU_SILENCE_TIMEOUT_MS + 1)
+        )
+    }
+
+    @Test
+    fun `late frames cannot revive manually disconnected health`() {
+        val health = markLiveDanmakuDisconnectedByUser(
+            markLiveDanmakuConnected(LiveDanmakuConnectionHealth(), nowMs = 1_000L)
+        )
+        assertEquals(health, markLiveDanmakuServerFrameReceived(health, 2_000L))
+        assertEquals(health, markLiveDanmakuHeartbeatReply(health, 2_000L))
+        assertEquals(health, markLiveDanmakuBusinessMessage(health, 2_000L))
     }
 }

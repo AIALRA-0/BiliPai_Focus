@@ -14,6 +14,26 @@ fun shouldEmbedLivePageInHomeTopTab(category: HomeCategory): Boolean =
 fun shouldEmbedBangumiPageInHomeTopTab(category: HomeCategory): Boolean =
     category == HomeCategory.ANIME
 
+/**
+ * 只有实际可见的直播页消费返回。推荐隐藏时回到首个可见非直播页；
+ * 若只保留了直播页，则交还上层返回，不强行重新显示用户隐藏的推荐页。
+ */
+internal fun resolveHomeLiveTabBackTargetPage(
+    entries: List<HomeTopTabEntry>,
+    currentPage: Int,
+    isTopLevelActive: Boolean,
+): Int? {
+    if (!isTopLevelActive) return null
+    val currentEntry = entries.getOrNull(currentPage) as? HomeTopTabEntry.Category ?: return null
+    if (!shouldEmbedLivePageInHomeTopTab(currentEntry.category)) return null
+
+    val recommendIndex = entries.indexOfFirst {
+        it is HomeTopTabEntry.Category && it.category == HomeCategory.RECOMMEND
+    }
+    if (recommendIndex >= 0) return recommendIndex
+    return entries.indexOfFirst { it != currentEntry }.takeIf { it >= 0 }
+}
+
 enum class HomeTopTabScrollTarget {
     FEED,
     LIVE,

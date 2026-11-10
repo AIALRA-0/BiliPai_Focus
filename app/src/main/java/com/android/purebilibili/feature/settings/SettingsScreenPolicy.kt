@@ -131,9 +131,9 @@ internal fun resolveSettingsBottomBarReservedPadding(
     }
 
     return if (isBottomBarFloating) {
-        floatingBodyHeight + floatingInset + 12.dp
+        floatingBodyHeight + floatingInset
     } else {
-        dockedBodyHeight + 12.dp
+        dockedBodyHeight
     }
 }
 
@@ -143,11 +143,10 @@ internal fun resolveSettingsContentBottomPadding(
     isBottomBarFloating: Boolean,
     bottomBarLabelMode: Int,
     isTablet: Boolean,
-    extraBottomPadding: Dp = 28.dp
 ): Dp {
     return resolveBottomSafeAreaPadding(
         navigationBarsBottom = navigationBarsBottom,
-        extraBottomPadding = extraBottomPadding + resolveSettingsBottomBarReservedPadding(
+        extraBottomPadding = resolveSettingsBottomBarReservedPadding(
             bottomBarVisible = bottomBarVisible,
             isBottomBarFloating = isBottomBarFloating,
             bottomBarLabelMode = bottomBarLabelMode,

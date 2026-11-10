@@ -57,10 +57,12 @@ data class BottomBarUiSkinDecoration(
     @Suppress("UNUSED_PARAMETER")
     fun iconPathFor(item: BottomNavItem, selected: Boolean = false): String? {
         val paths = bottomBarIconPaths[item] ?: return null
-        // Keep each destination visually stable. Some archived skins use a completely
-        // different illustration for the selected asset, which reads as a random icon swap
-        // in BiliPai where the moving indicator already communicates selection.
+        // Compact navigation keeps a stable icon while the host indicator moves.
         return paths.unselected
+    }
+
+    fun illustratedIconPathFor(item: BottomNavItem, selected: Boolean): String? {
+        return bottomBarIconPaths[item]?.pathFor(selected)
     }
 }
 
@@ -145,6 +147,22 @@ data class HomeUiSkinDecoration(
     }
 }
 
+internal fun shouldUseIllustratedSkinBottomBar(
+    hasBackground: Boolean,
+    hasIcons: Boolean,
+    isTablet: Boolean,
+): Boolean = hasBackground && hasIcons && !isTablet
+
+internal fun BottomBarUiSkinDecoration?.usesIllustratedNavigation(isTablet: Boolean): Boolean =
+    shouldUseIllustratedSkinBottomBar(
+        hasBackground = !this?.bottomTrimImagePath.isNullOrBlank(),
+        hasIcons = this?.bottomBarIconPaths?.isNotEmpty() == true,
+        isTablet = isTablet,
+    )
+
+internal fun resolveIllustratedSkinIconSize(slotWidth: Dp): Dp =
+    (slotWidth - 8.dp).coerceIn(24.dp, 52.dp)
+
 internal fun resolveBottomBarSkinDockIconSize(): Dp = AppSpacingTokens.DoubleExtraLarge
 
 internal fun resolveBottomBarSkinDockHeight(): Dp = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large
@@ -176,7 +194,7 @@ internal fun resolveMiuixDockedBottomBarItemHeight(hasUiSkinDecoration: Boolean)
 
 @Composable
 fun rememberBottomBarUiSkinDecoration(uiSkinState: UiSkinState): BottomBarUiSkinDecoration? {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = com.android.purebilibili.core.ui.isAppInDarkTheme()
     return remember(uiSkinState, isDark) {
         resolveBottomBarUiSkinDecoration(uiSkinState, isDark)
     }
@@ -340,7 +358,8 @@ internal fun BottomBarSkinIcon(
     modifier: Modifier = Modifier
 ) {
     val motion = LocalBottomBarSkinMotionSpec.current
-    val looping = motion.enabled && selected && motion.mode.isLoopingSkinMotionMode()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val looping = motion.enabled && selected && motion.mode.isLoopingSkinMotionMode() && animationGate.active
     val loopScale = if (looping) {
         rememberInfiniteTransition(label = "skinIconLoop").animateFloat(
             initialValue = 0.96f,
@@ -354,7 +373,7 @@ internal fun BottomBarSkinIcon(
     } else {
         null
     }
-    Box(modifier = modifier.size(size)) {
+    Box(modifier = modifier.size(size).then(animationGate.modifier)) {
         if (motion.enabled) {
             AnimatedContent(
                 targetState = iconPath,
@@ -449,6 +468,9 @@ internal fun BottomBarSkinDecorativeTrim(
     clipShape: androidx.compose.ui.graphics.Shape? = null
 ) {
     if (decoration == null) return
+    // 以前只裁底色层，装饰图按 Fit 完整铺开：导入主题的 bottom_trim 是不透明矩形，
+    // 悬浮胶囊外会露出四个方角。
+    // 现在裁剪上移到合成层，底色和装饰图共用同一轮廓。
     Box(
         modifier = modifier
             .then(clipShape?.let { Modifier.clip(it) } ?: Modifier)
@@ -490,9 +512,9 @@ internal fun BottomBarSkinDecorativeTrim(
             AsyncImage(
                 model = File(imagePath),
                 contentDescription = null,
-                // Cover the complete bar (including the gesture-navigation inset) while
-                // keeping the package artwork visually grounded like the reference skin.
-                contentScale = ContentScale.Crop,
+                // Preserve the whole asset; transparent/unused space is filled by
+                // the base surface instead of zooming and cropping the artwork.
+                contentScale = ContentScale.Fit,
                 alignment = Alignment.BottomCenter,
                 modifier = Modifier
                     .matchParentSize()

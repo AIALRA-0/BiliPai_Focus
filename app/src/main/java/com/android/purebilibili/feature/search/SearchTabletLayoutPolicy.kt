@@ -8,7 +8,8 @@ import com.android.purebilibili.feature.home.resolveHomeFeedGridColumns
 
 fun resolveSearchMaxContentWidth(): Dp = 1280.dp
 
-fun resolveSearchSingleColumnResultMaxWidth(): Dp = 840.dp
+fun resolveSearchSingleColumnResultMaxWidth(): Dp =
+    com.android.purebilibili.core.util.resolveSingleColumnFeedMaxWidth()
 
 fun resolveSearchContentWidth(
     isExpandedScreen: Boolean,

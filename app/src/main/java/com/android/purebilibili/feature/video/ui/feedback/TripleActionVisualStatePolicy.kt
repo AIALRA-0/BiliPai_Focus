@@ -9,9 +9,15 @@ data class TripleActionVisualState(
 internal fun shouldTreatTripleActionCoinFailureAsAlreadyCoined(
     coinFailureMessage: String?
 ): Boolean {
-    return coinFailureMessage?.contains("已投满2个硬币") == true
+    // 覆盖原创「已投满2个硬币」与转载上限类提示（含服务端转发的「最多投」文案）
+    return coinFailureMessage?.contains("已投满") == true ||
+        coinFailureMessage?.contains("最多投") == true
 }
 
+/**
+ * 三连后的本地视觉状态。attemptedCoinCount 为本次三连实际投币数
+ * （原创 2、转载 1），不能用固定 2 乐观更新转载视频的投币数。
+ */
 fun resolveTripleActionVisualState(
     currentLiked: Boolean,
     currentCoinCount: Int,
@@ -19,13 +25,14 @@ fun resolveTripleActionVisualState(
     likeSuccess: Boolean,
     coinSuccess: Boolean,
     coinFailureMessage: String?,
-    favoriteSuccess: Boolean
+    favoriteSuccess: Boolean,
+    attemptedCoinCount: Int = 2
 ): TripleActionVisualState {
     return TripleActionVisualState(
         isLiked = currentLiked || likeSuccess,
         coinCount = when {
-            coinSuccess -> maxOf(currentCoinCount, 2)
-            shouldTreatTripleActionCoinFailureAsAlreadyCoined(coinFailureMessage) -> 2
+            coinSuccess -> maxOf(currentCoinCount, attemptedCoinCount)
+            shouldTreatTripleActionCoinFailureAsAlreadyCoined(coinFailureMessage) -> maxOf(currentCoinCount, attemptedCoinCount)
             else -> currentCoinCount
         },
         isFavorited = currentFavorited || favoriteSuccess

@@ -14,6 +14,7 @@ class SsdpDiscoveryPolicyTest {
         assertTrue(payloads.any { it.contains("ST: urn:schemas-upnp-org:service:AVTransport:1") })
         assertTrue(payloads.any { it.contains("ST: upnp:rootdevice") })
         assertTrue(payloads.any { it.contains("ST: ssdp:all") })
+        assertTrue(payloads.all { it.endsWith("\r\n\r\n") })
         assertEquals(payloads.size, payloads.distinct().size)
     }
 }

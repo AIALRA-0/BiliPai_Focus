@@ -78,10 +78,48 @@ internal class RuntimeVisualGuardTracker(
         }
     }
 
+    /** 仅切换会话所有权并清空采样窗口，保留降级记账（给需要跨会话保持降级的调用方）。 */
     fun activateSession(session: Any) {
         if (activeSession === session) return
         discardActiveWindow()
         activeSession = session
+    }
+
+    /**
+     * 会话级重置：进入一个新的用户交互会话（详情页读取会话、首页滚动会话等）时，
+     * 一并清掉**跨会话累积的降级状态**。
+     *
+     * 为什么需要：`downgraded` / `consecutiveHighJankWindows` / `lastDowngradeAtMs` 原先
+     * 只增不减，一次偶发掉帧（例如首次进入详情时叠加了多账号解析开销）会让随后几十次
+     * 进入都停留在 `MotionTier.Reduced`，主观感受就是「越进越卡」。而 60s cooldown +
+     * jank<4% 的恢复门槛在单次会话内几乎不可能满足。
+     *
+     * 语义边界：
+     * - **只重置「守卫自身的惩罚历史」**，不改 [baseTier]（设备基线档位由组合根注入）。
+     * - 当前会话的采样窗口清零，因此不会把上一会话的掉帧算进新会话的分母。
+     * - 这**不是**「按设备能力分档」：基线档位仍不因设备变化，只是不再把一次偶发掉帧
+     *   永久记账到后续会话。
+     * - 同一会话重复调用是幂等的：`onStart` 可能因配置变化重入，此时不清空正在采样的窗口。
+     */
+    fun beginSession(session: Any) {
+        if (activeSession === session) return
+        discardActiveWindow()
+        resetDowngradeHistory()
+        activeSession = session
+    }
+
+    /** 清空所有会话的降级记账（惩罚历史），保留采样窗口结构本身。 */
+    fun resetDowngradeHistory() {
+        signals.values.forEach { window ->
+            window.activeValue = null
+            window.frameCount = 0
+            window.jankyFrameCount = 0
+            window.consecutiveHighJankWindows = 0
+            window.lastDowngradeAtMs = null
+            window.downgraded = false
+            window.forceLowBlurBudget = false
+        }
+        publish(nowMs = null)
     }
 
     fun onFrame(session: Any, frameData: FrameData, nowMs: Long) {

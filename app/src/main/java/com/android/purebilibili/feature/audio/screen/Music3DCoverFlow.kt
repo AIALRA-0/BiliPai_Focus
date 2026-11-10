@@ -1,9 +1,16 @@
 package com.android.purebilibili.feature.audio.screen
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,7 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.pager.HorizontalPager
+import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +43,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -50,11 +61,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.AppShapes
@@ -63,6 +80,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.feature.audio.player.MusicQueueItemUi
 import com.android.purebilibili.feature.home.components.LiquidGlassTuning
@@ -71,6 +89,30 @@ import com.android.purebilibili.feature.home.components.resolveLiquidGlassTuning
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.roundToInt
+
+internal fun musicCoverDragTarget(source: Int, count: Int, offset: Float, spacing: Float, rightToLeft: Boolean): Int {
+    if (source !in 0 until count || spacing <= 0f) return source
+    val direction = if (rightToLeft) -1 else 1
+    val steps = (abs(offset) / spacing).roundToInt() * if (offset < 0f) -1 else 1
+    return (source + steps * direction).coerceIn(0, count - 1)
+}
+
+internal fun musicCoverPreviewShift(page: Int, source: Int, target: Int): Float = when {
+    source < 0 || target < 0 -> 0f
+    target > source && page in (source + 1)..target -> -1f
+    target < source && page in target until source -> 1f
+    else -> 0f
+}
+
+internal fun musicCoverTapTarget(center: Int, x: Float, left: Float, width: Float, rightToLeft: Boolean): Int {
+    val step = when {
+        x < left -> -1
+        x > left + width -> 1
+        else -> 0
+    }
+    return center + step * (if (rightToLeft) -1 else 1)
+}
 
 /**
  * 3D 实体 CD 盒切歌转盘 / 唱片架 (Cover Flow)。
@@ -95,6 +137,7 @@ internal fun Music3DCoverFlow(
     onNext: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     isLiked: Boolean = false,
+    isLikeStatusKnown: Boolean = true,
     onLikeClick: (() -> Unit)? = null,
     cardSizeDp: Int = 155,
     controlsWidthDp: Int = 440,
@@ -107,6 +150,9 @@ internal fun Music3DCoverFlow(
     glassTintColor: Color = Color.Unspecified,
     isDarkEnvironment: Boolean = true,
     reduceMotion: Boolean = false,
+    queueAction: (@Composable (Int) -> Unit)? = null,
+    onQueueMove: ((Int, Int) -> Unit)? = null,
+    queueShelfControls: Boolean = false,
 ) {
     if (queue.isEmpty()) return
 
@@ -116,6 +162,22 @@ internal fun Music3DCoverFlow(
         pageCount = { queue.size }
     )
     val coroutineScope = rememberCoroutineScope()
+    val latestQueue by rememberUpdatedState(queue)
+    val latestMove by rememberUpdatedState(onQueueMove)
+    val latestItemClick by rememberUpdatedState(onItemClick)
+    val rightToLeft = LocalLayoutDirection.current == LayoutDirection.Rtl
+    var draggedKey by remember { mutableStateOf<String?>(null) }
+    var dragSourceIndex by remember { mutableIntStateOf(-1) }
+    var dragTargetIndex by remember { mutableIntStateOf(-1) }
+    var dragOrder by remember { mutableStateOf<List<String>>(emptyList()) }
+    val dragOffset = remember { mutableFloatStateOf(0f) }
+    var suppressCoverTap by remember { mutableStateOf(false) }
+    val dragStartHaptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(
+        com.android.purebilibili.core.ui.AppHapticScene.LONG_PRESS,
+    )
+    val reorderHaptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(
+        com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT,
+    )
     val reflectionMaskColor = MusicContentColor
     val shelfShadowColor = MusicShadowColor
     var entrancePlayed by rememberSaveable { mutableStateOf(false) }
@@ -135,7 +197,8 @@ internal fun Music3DCoverFlow(
         }
     }
 
-    LaunchedEffect(currentIndex) {
+    // 队列编辑时跟随条目身份；其他唱片架保留按播放索引同步的原有行为。
+    LaunchedEffect(if (queueAction != null) queue.getOrNull(currentIndex)?.stableId else currentIndex) {
         if (currentIndex in queue.indices && pagerState.currentPage != currentIndex) {
             if (reduceMotion) pagerState.scrollToPage(currentIndex)
             else pagerState.animateScrollToPage(currentIndex)
@@ -157,29 +220,125 @@ internal fun Music3DCoverFlow(
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .fillMaxWidth()
-                        .heightIn(max = (cardSizeDp + 36).dp),
+                        .heightIn(max = (cardSizeDp + 36 + (cardSizeDp * 0.30f).toInt()).dp),
                 ) {
-                    val fittedCardSizeDp = minOf(cardSizeDp, (maxHeight.value - 36).toInt().coerceAtLeast(0))
+                    val fittedCardSizeDp = minOf(
+                        cardSizeDp,
+                        (maxHeight.value - 36 - cardSizeDp * 0.30f).toInt().coerceAtLeast(0)
+                    )
                     val horizontalPadding = ((maxWidth - fittedCardSizeDp.dp) / 2).coerceAtLeast(0.dp)
                     if (fittedCardSizeDp > 0) {
-                        HorizontalPager(
-                            state = pagerState,
-                            contentPadding = PaddingValues(horizontal = horizontalPadding),
-                            beyondViewportPageCount = if (queue.size > 2) 2 else if (queue.size > 1) 1 else 0,
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height((fittedCardSizeDp + 36).dp)
+                                .height((fittedCardSizeDp + 36 + fittedCardSizeDp * 0.30f).dp)
+                                .then(if (onQueueMove != null) Modifier.pointerInput(rightToLeft, fittedCardSizeDp) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { position ->
+                                            val cardWidth = fittedCardSizeDp.dp.toPx()
+                                            val cardLeft = (size.width - cardWidth) / 2f
+                                            val cardTop = ((size.height - cardWidth * 1.3f - 8.dp.toPx()) / 2f).coerceAtLeast(0f)
+                                            val source = pagerState.settledPage
+                                            val item = latestQueue.getOrNull(source)
+                                            if (item != null && !pagerState.isScrollInProgress &&
+                                                position.x in cardLeft..(cardLeft + cardWidth) &&
+                                                position.y in cardTop..(cardTop + cardWidth)
+                                            ) {
+                                                draggedKey = item.stableId
+                                                suppressCoverTap = true
+                                                dragSourceIndex = source
+                                                dragTargetIndex = source
+                                                dragOrder = latestQueue.map { it.stableId }
+                                                dragOffset.floatValue = 0f
+                                                dragStartHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            }
+                                        },
+                                        onDrag = { change, amount ->
+                                            if (draggedKey != null) {
+                                                change.consume()
+                                                dragOffset.floatValue += amount.x
+                                                val spacing = fittedCardSizeDp.dp.toPx() * 0.86f
+                                                val target = musicCoverDragTarget(
+                                                    dragSourceIndex, dragOrder.size, dragOffset.floatValue, spacing, rightToLeft,
+                                                )
+                                                if (target != dragTargetIndex) {
+                                                    dragTargetIndex = target
+                                                    reorderHaptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                }
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            if (draggedKey != null && dragTargetIndex != dragSourceIndex &&
+                                                latestQueue.map { it.stableId } == dragOrder &&
+                                                latestQueue.getOrNull(dragSourceIndex)?.stableId == draggedKey
+                                            ) {
+                                                latestMove?.invoke(dragSourceIndex, dragTargetIndex)
+                                                reorderHaptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            }
+                                            draggedKey = null
+                                            dragSourceIndex = -1
+                                            dragTargetIndex = -1
+                                            dragOrder = emptyList()
+                                            dragOffset.floatValue = 0f
+                                        },
+                                        onDragCancel = {
+                                            draggedKey = null
+                                            dragSourceIndex = -1
+                                            dragTargetIndex = -1
+                                            dragOrder = emptyList()
+                                            dragOffset.floatValue = 0f
+                                        },
+                                    )
+                                } else Modifier)
+                                .then(if (queueShelfControls) Modifier.pointerInput(rightToLeft, fittedCardSizeDp) {
+                                    var pressedCoverId: String? = null
+                                    detectTapGestures(
+                                        onPress = { position ->
+                                            suppressCoverTap = false
+                                            val cardWidth = fittedCardSizeDp.dp.toPx()
+                                            val cardLeft = (size.width - cardWidth) / 2f
+                                            val cardTop = ((size.height - cardWidth * 1.3f - 8.dp.toPx()) / 2f).coerceAtLeast(0f)
+                                            val target = musicCoverTapTarget(
+                                                pagerState.settledPage, position.x, cardLeft, cardWidth, rightToLeft,
+                                            )
+                                            pressedCoverId = if (position.y in cardTop..(cardTop + cardWidth)) {
+                                                latestQueue.getOrNull(target)?.stableId
+                                            } else null
+                                            tryAwaitRelease()
+                                        },
+                                        onTap = {
+                                            if (!suppressCoverTap && !pagerState.isScrollInProgress) {
+                                                val index = latestQueue.indexOfFirst { it.stableId == pressedCoverId }
+                                                if (index >= 0) latestItemClick(index)
+                                            }
+                                        },
+                                    )
+                                } else Modifier),
+                        ) {
+                        HorizontalPager(
+                            state = pagerState,
+                            userScrollEnabled = draggedKey == null,
+                            key = if (queueAction != null) { index -> queue[index].stableId } else null,
+                            contentPadding = PaddingValues(horizontal = horizontalPadding),
+                            beyondViewportPageCount = if (queue.size > 2) 2 else if (queue.size > 1) 1 else 0,
+                            modifier = Modifier.fillMaxSize()
                         ) { page ->
                             val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
                             if (abs(pageOffset) >= 3f) return@HorizontalPager
                             val item = queue[page]
                             val isCenter = abs(pageOffset) < 0.45f
                             val entranceDistance = abs(page - validCurrentIndex).toFloat()
+                            val previewShift = musicCoverPreviewShift(page, dragSourceIndex, dragTargetIndex)
+                            val animatedShift = animateFloatAsState(
+                                targetValue = previewShift,
+                                animationSpec = if (reduceMotion || draggedKey == null) snap() else spring(),
+                                label = "queueReorderShift",
+                            )
 
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .zIndex(10f - abs(pageOffset))
+                                    .zIndex(if (draggedKey == item.stableId) 20f else 10f - abs(pageOffset))
                                     .graphicsLayer {
                                         val itemEntrance = resolveMusicCoverFlowItemEntranceProgress(
                                             overallProgress = entranceProgress.value,
@@ -189,13 +348,15 @@ internal fun Music3DCoverFlow(
                                         cameraDistance = (fittedCardSizeDp * 0.075f).coerceIn(8f, 14f) * density
 
                                         // 2. Y 轴 3D 旋转角度（双向内旋折角，向中心聚拢呈弧形展台）
-                                        rotationY = (pageOffset * -32f).coerceIn(-52f, 52f) *
+                                        val visualPageOffset = pageOffset - animatedShift.value
+                                        rotationY = (visualPageOffset * -32f).coerceIn(-52f, 52f) *
                                             (if (reduceMotion) 1f else itemEntrance)
 
                                         // 3. 缩放景深层次：中心卡片 100%，近邻卡片 ~84%，次邻卡片 ~68%
-                                        val depthScale = (1f - (abs(pageOffset) * 0.16f)).coerceIn(0.52f, 1f)
+                                        val depthScale = (1f - (abs(visualPageOffset) * 0.16f)).coerceIn(0.52f, 1f)
                                         val scale = depthScale *
-                                            (if (reduceMotion) 1f else (0.96f + 0.04f * itemEntrance))
+                                            (if (reduceMotion) 1f else (0.96f + 0.04f * itemEntrance)) *
+                                            if (draggedKey == item.stableId) 1.04f else 1f
                                         scaleX = scale
                                         scaleY = scale
 
@@ -206,23 +367,33 @@ internal fun Music3DCoverFlow(
                                             (offsetMag - 1f).coerceAtLeast(0f) * 0.48f) * fittedCardSizeDp.dp.toPx()
                                         val finalTranslationX = if (pageOffset > 0f) -spacingShift else spacingShift
                                         translationX = finalTranslationX *
-                                            (if (reduceMotion) 1f else itemEntrance)
-                                        translationY = if (reduceMotion) 0f else (1f - itemEntrance) * 18.dp.toPx()
+                                            (if (reduceMotion) 1f else itemEntrance) +
+                                            animatedShift.value * (if (rightToLeft) -1f else 1f) * fittedCardSizeDp.dp.toPx() * 0.86f +
+                                            if (draggedKey == item.stableId) dragOffset.floatValue else 0f
+                                        translationY = (if (reduceMotion) 0f else (1f - itemEntrance) * 18.dp.toPx()) -
+                                            if (draggedKey == item.stableId && !reduceMotion) 6.dp.toPx() else 0f
 
                                         // 5. 层次高保真可见度
-                                        alpha = resolveMusicCoverFlowItemAlpha(abs(pageOffset)) * itemEntrance
+                                        alpha = resolveMusicCoverFlowItemAlpha(abs(visualPageOffset)) * itemEntrance
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable {
-                                        coroutineScope.launch {
-                                            if (reduceMotion) pagerState.scrollToPage(page)
-                                            else pagerState.animateScrollToPage(page)
+                                    modifier = if (queueShelfControls) {
+                                        Modifier.semantics {
+                                            onClick(label = "播放${item.title}") {
+                                                val index = latestQueue.indexOfFirst { it.stableId == item.stableId }
+                                                if (index < 0) false else { latestItemClick(index); true }
+                                            }
                                         }
-                                        onItemClick(page)
-                                    }
+                                    } else Modifier.clickable {
+                                            coroutineScope.launch {
+                                                if (reduceMotion) pagerState.scrollToPage(page)
+                                                else pagerState.animateScrollToPage(page)
+                                            }
+                                            onItemClick(page)
+                                        }
                                 ) {
                                     // 实体 CD 盒主体
                                     Box(
@@ -329,10 +500,10 @@ internal fun Music3DCoverFlow(
                                             )
                                     )
 
-                                    // 地面镜面微弱倒影消隐（Floor Mirror Reflection）
+                                    // 地面镜面倒影：真实封面镜像，随距离渐隐（Floor Mirror Reflection）
                                     Box(
                                         modifier = Modifier
-                                            .size(width = fittedCardSizeDp.dp, height = 22.dp)
+                                            .size(width = fittedCardSizeDp.dp, height = (fittedCardSizeDp * 0.30f).dp)
                                             .graphicsLayer {
                                                 scaleY = -1f // 倒影垂直反转
                                                 alpha = resolveMusicCoverFlowShadowEntranceProgress(entranceProgress.value)
@@ -347,8 +518,9 @@ internal fun Music3DCoverFlow(
                                                 drawContent()
                                                 drawRect(
                                                     brush = Brush.verticalGradient(
-                                                        0f to Color.Transparent,
-                                                        1f to reflectionMaskColor.copy(alpha = 0.42f),
+                                                        0f to reflectionMaskColor.copy(alpha = 0.92f),
+                                                        0.55f to reflectionMaskColor.copy(alpha = 0.34f),
+                                                        1f to reflectionMaskColor.copy(alpha = 0.02f),
                                                     ),
                                                     blendMode = BlendMode.DstIn,
                                                 )
@@ -360,17 +532,20 @@ internal fun Music3DCoverFlow(
                                             modifier = Modifier
                                                 .size(fittedCardSizeDp.dp),
                                             contentScale = ContentScale.Crop,
-                                            alpha = 0.10f
+                                            alpha = 0.34f
                                         )
                                     }
                                 }
                             }
+                        }
                         }
                     }
 
                 }
             }
             if (!shelfBelowControls) shelf()
+
+            queueAction?.invoke(pagerState.settledPage.coerceIn(queue.indices))
 
             progressContent?.let { progress ->
                 Spacer(Modifier.height(14.dp))
@@ -392,20 +567,22 @@ internal fun Music3DCoverFlow(
 
             Spacer(Modifier.height(12.dp))
 
-            // 底部悬浮胶囊控制条（药丸毛玻璃容器 + 歌名 - 歌手 + 心形/上一首/播放/下一首）
+            // 底部悬浮胶囊控制条（主题色容器 + 歌名 - 歌手 + 心形/上一首/播放/下一首）
             val playingItem = queue[validCurrentIndex]
-            val pillContainerColor = resolveMusicGlassContainerColor(glassTintColor, isDarkEnvironment)
-            val pillBorderColor = resolveMusicGlassBorderColor(glassTintColor, isDarkEnvironment)
-            val pillContentColor = MusicContentColor
+            val pillContainerColor = AppSurfaceTokens.surfaceContainer()
+            val pillBorderColor = MaterialTheme.colorScheme.outlineVariant
+            val pillContentColor = AppContentColors.primaryText()
+            // 玻璃开启时各唱片架共用背景采样；关闭时保留原生控制条。
+            val useControlGlass = glassEnabled && miuixBackdrop != null
 
             AppSurface(
                 shape = CircleShape,
-                color = if (miuixBackdrop != null) Color.Transparent else pillContainerColor,
+                color = if (useControlGlass) Color.Transparent else pillContainerColor,
                 border = BorderStroke(
                     width = 0.8.dp,
                     color = pillBorderColor
                 ),
-                shadowElevation = if (miuixBackdrop != null) 0.dp else 6.dp,
+                shadowElevation = 6.dp,
                 modifier = Modifier
                     .widthIn(max = controlsWidthDp.dp)
                     .fillMaxWidth()
@@ -418,15 +595,15 @@ internal fun Music3DCoverFlow(
                         alpha = chromeEntrance
                         translationY = if (reduceMotion) 0f else (1f - chromeEntrance) * 12.dp.toPx()
                     }
-                    .biliPaiFloatingDockShell(
+                    .then(if (useControlGlass) Modifier.biliPaiFloatingDockShell(
                         backdrop = miuixBackdrop,
                         containerColor = pillContainerColor,
                         pressProgress = 0f,
                         shape = CircleShape,
-                        enabled = glassEnabled && miuixBackdrop != null,
-                        blurEnabled = !glassEnabled,
-                        liquidGlassTuning = liquidGlassTuning
-                    )
+                        enabled = true,
+                        liquidGlassTuning = liquidGlassTuning,
+                        darkTheme = isDarkEnvironment,
+                    ) else Modifier)
             ) {
                 Row(
                     modifier = Modifier
@@ -449,9 +626,9 @@ internal fun Music3DCoverFlow(
                         Spacer(Modifier.width(10.dp))
 
                         // 点赞按钮（未点赞薄线心，已点赞红粉心）
-                        onLikeClick?.let { like ->
+                        if (onLikeClick != null && isLikeStatusKnown) {
                             AppIconButton(
-                                onClick = like,
+                                onClick = onLikeClick,
                                 modifier = Modifier.size(48.dp)
                             ) {
                                 AppIcon(
@@ -459,6 +636,18 @@ internal fun Music3DCoverFlow(
                                     contentDescription = if (isLiked) "取消喜欢" else "喜欢",
                                     tint = if (isLiked) MusicLikeColor else pillContentColor.copy(alpha = 0.82f),
                                     modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        } else {
+                            // 交互状态未知时保留同尺寸中性占位，避免图标翻转，也不提供会写错状态的入口。
+                            Box(modifier = Modifier.size(48.dp)) {
+                                AppIcon(
+                                    imageVector = Icons.Outlined.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = pillContentColor.copy(alpha = 0.28f),
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .size(17.dp)
                                 )
                             }
                         }
@@ -503,7 +692,7 @@ internal fun Music3DCoverFlow(
                                 modifier = Modifier.size(19.dp)
                             )
                         }
-                    } else if (onLikeClick != null) {
+                    } else if (onLikeClick != null && isLikeStatusKnown) {
                         // 在大屏分屏下已由左侧主控切歌，此处仅保留单手快速点赞
                         Spacer(Modifier.width(8.dp))
                         AppIconButton(

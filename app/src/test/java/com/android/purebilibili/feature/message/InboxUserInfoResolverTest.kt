@@ -6,8 +6,29 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 class InboxUserInfoResolverTest {
+
+    @Test
+    fun groupIdentityIsNotStoredAsAUserWithTheSameNumericId() {
+        val group = SessionItem(
+            talker_id = 42L,
+            session_type = 2,
+            account_info = SessionAccountInfo(name = "群名称", pic_url = "//cdn.example/group.jpg"),
+        )
+        val user = group.copy(
+            session_type = 1,
+            account_info = SessionAccountInfo(name = "用户昵称", pic_url = "//cdn.example/user.jpg"),
+        )
+
+        assertNull(InboxUserInfoResolver.sessionUserInfo(group))
+        assertEquals(
+            UserBasicInfo(42L, "用户昵称", "https://cdn.example/user.jpg"),
+            InboxUserInfoResolver.sessionUserInfo(user),
+        )
+        assertNull(InboxUserInfoResolver.sessionUserInfo(user.copy(talker_id = 0L)))
+    }
 
     @Test
     fun resolveDisplayName_fallsBackToSessionWhenCachedNameIsBlank() {
@@ -119,5 +140,23 @@ class InboxUserInfoResolverTest {
 
         assertEquals("旧用户名", merged?.name)
         assertEquals("https://cdn.example/old.jpg", merged?.face)
+    }
+
+    @Test
+    fun mergeFetchedUserInfo_keepsSessionIdentityWhenProfileRequestFails() {
+        val sessionInfo = UserBasicInfo(1009L, "会话昵称", "https://cdn.example/session.jpg")
+
+        assertEquals(sessionInfo, InboxUserInfoResolver.mergeFetchedUserInfo(sessionInfo, null))
+    }
+
+    @Test
+    fun mergeFetchedUserInfo_completesAvatarWithoutDiscardingSessionName() {
+        val sessionInfo = UserBasicInfo(1010L, "会话昵称", "")
+        val partialProfile = UserBasicInfo(1010L, " ", "//cdn.example/profile.jpg")
+
+        assertEquals(
+            UserBasicInfo(1010L, "会话昵称", "https://cdn.example/profile.jpg"),
+            InboxUserInfoResolver.mergeFetchedUserInfo(sessionInfo, partialProfile),
+        )
     }
 }

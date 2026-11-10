@@ -43,4 +43,17 @@ class HomeWebFeedWbiPolicyTest {
             )
         )
     }
+    @Test
+    fun refreshAndPaginationKeepTheProtocolVersionAndAdvanceTogether() {
+        val initial = buildHomeWebFeedParams(idx = 0, refreshCount = 20)
+        val next = buildHomeWebFeedParams(idx = 3, refreshCount = 35)
+        assertEquals("V8", initial["feed_version"])
+        assertEquals(initial["feed_version"], next["feed_version"])
+        assertEquals("0", initial["fresh_idx"])
+        assertEquals("3", next["fresh_idx"])
+        assertEquals(next["fresh_idx"], next["brush"])
+        assertEquals("35", next["ps"])
+        assertEquals("4", next["fresh_type"])
+    }
+
 }

@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.download
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
@@ -6,7 +8,7 @@ import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,7 +38,7 @@ import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  * 📂 文件夹选择对话框
- * 
+ *
  * @param initialPath 初始路径
  * @param onPathSelected 选中回调
  * @param onDismiss 取消回调
@@ -49,12 +51,12 @@ fun DirectorySelectionDialog(
 ) {
     var currentPath by remember { mutableStateOf(initialPath) }
     var fileList by remember { mutableStateOf<List<File>>(emptyList()) }
-    
+
     // 加载文件列表
     LaunchedEffect(currentPath) {
         val dir = File(currentPath)
         if (dir.exists() && dir.isDirectory) {
-            val files = dir.listFiles()?.filter { 
+            val files = dir.listFiles()?.filter {
                 it.isDirectory && !it.name.startsWith(".") // 仅显示目录且不以.开头
             }?.sortedBy { it.name } ?: emptyList()
             fileList = files
@@ -74,6 +76,7 @@ fun DirectorySelectionDialog(
             usePlatformDefaultWidth = dialogLayout.usePlatformDefaultWidth,
         ),
     ) {
+        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
         AppPopupSurface(
             type = AppPopupSurfaceType.DIALOG,
             modifier = Modifier
@@ -89,9 +92,9 @@ fun DirectorySelectionDialog(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 // 当前路径显示
                 AppSurface(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -105,19 +108,19 @@ fun DirectorySelectionDialog(
                         AppIcon(
                             imageVector = Icons.Filled.Folder,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = AppContentColors.accent(),
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         AppText(
                             text = currentPath,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = AppContentColors.secondaryText(),
                             maxLines = 2
                         )
                     }
                 }
-                
+
                 // 返回上级按钮
                 val parentDir = File(currentPath).parentFile
                 if (parentDir != null && parentDir.canRead()) {
@@ -131,7 +134,7 @@ fun DirectorySelectionDialog(
                         AppIcon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "上级目录",
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = AppContentColors.accent()
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         AppText(
@@ -155,7 +158,7 @@ fun DirectorySelectionDialog(
                             ) {
                                 AppText(
                                     text = "空文件夹",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    color = AppContentColors.secondaryText()
                                 )
                             }
                         }
@@ -177,13 +180,13 @@ fun DirectorySelectionDialog(
                                 AppText(
                                     text = file.name,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    color = AppContentColors.primaryText(),
                                     modifier = Modifier.weight(1f)
                                 )
                                 AppIcon(
                                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                    tint = AppContentColors.secondaryText().copy(alpha = 0.3f),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -191,9 +194,9 @@ fun DirectorySelectionDialog(
                         }
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 // 3. 底部按钮
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -206,7 +209,7 @@ fun DirectorySelectionDialog(
                     ) {
                         AppText("取消")
                     }
-                    
+
                     AppButton(
                         onClick = { onPathSelected(currentPath) },
                         modifier = Modifier.weight(1f),

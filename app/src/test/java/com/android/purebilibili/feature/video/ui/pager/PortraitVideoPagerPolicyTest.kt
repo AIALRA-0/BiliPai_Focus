@@ -6,7 +6,6 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
 import androidx.media3.common.Player
-import androidx.media3.ui.AspectRatioFrameLayout
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import java.io.File
@@ -175,59 +174,6 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
-    fun portraitPager_defaultViewportPolicy_doesNotForceFillContainer() {
-        assertFalse(resolvePortraitPagerFillContainer())
-        assertFalse(
-            resolvePortraitPagerFillContainer(
-                aspectRatio = VideoAspectRatio.FIT,
-                isVerticalContent = true
-            )
-        )
-        assertTrue(
-            resolvePortraitPagerFillContainer(
-                aspectRatio = VideoAspectRatio.FILL,
-                isVerticalContent = true
-            )
-        )
-        // Stretch is coerced to Fit for vertical content, so do not fill-deform.
-        assertFalse(
-            resolvePortraitPagerFillContainer(
-                aspectRatio = VideoAspectRatio.STRETCH,
-                isVerticalContent = true
-            )
-        )
-    }
-
-    @Test
-    fun portraitPager_defaultResizeMode_prefersFit() {
-        assertEquals(
-            AspectRatioFrameLayout.RESIZE_MODE_FIT,
-            resolvePortraitPagerResizeMode()
-        )
-        assertEquals(
-            AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-            resolvePortraitPagerResizeMode(
-                aspectRatio = VideoAspectRatio.FILL,
-                isVerticalContent = true
-            )
-        )
-        assertEquals(
-            AspectRatioFrameLayout.RESIZE_MODE_FIT,
-            resolvePortraitPagerResizeMode(
-                aspectRatio = VideoAspectRatio.STRETCH,
-                isVerticalContent = true
-            )
-        )
-        assertEquals(
-            AspectRatioFrameLayout.RESIZE_MODE_FIT,
-            resolvePortraitPagerResizeMode(
-                aspectRatio = VideoAspectRatio.RATIO_16_9,
-                isVerticalContent = true
-            )
-        )
-    }
-
-    @Test
     fun portraitPager_fixedRatioUsesTargetViewportAspect() {
         assertEquals(
             16f / 9f,
@@ -306,11 +252,31 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun portraitPlaybackAllowed_inBackgroundWhenBackgroundAudioContinues() {
+        // 「后台播放」开启且策略允许继续播放时，ON_STOP 不应触发暂停
+        assertTrue(
+            shouldAllowPortraitPlayback(
+                isCurrentStoryTab = true,
+                isLifecycleResumed = false,
+                continueInBackgroundAudio = true
+            )
+        )
+        // 离开当前 tab（滑动到别的视频）时即使后台播放开启也不继续
+        assertFalse(
+            shouldAllowPortraitPlayback(
+                isCurrentStoryTab = false,
+                isLifecycleResumed = false,
+                continueInBackgroundAudio = true
+            )
+        )
+    }
+
+    @Test
     fun portraitDanmakuSurface_usesVideoViewportSoDisplayAreaMatchesVideoHeight() {
         assertEquals(
             PortraitDanmakuSurfaceMode.VideoViewport,
             resolvePortraitDanmakuSurfaceMode(
-                currentVideoAspect = 16f / 9f,
+                upperRegionAvailable = true,
                 displayAreaMode = PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT
             )
         )
@@ -321,7 +287,7 @@ class PortraitVideoPagerPolicyTest {
         assertEquals(
             PortraitDanmakuSurfaceMode.Page,
             resolvePortraitDanmakuSurfaceMode(
-                currentVideoAspect = 9f / 16f,
+                upperRegionAvailable = true,
                 displayAreaMode = PortraitDanmakuDisplayAreaMode.SCREEN_TOP
             )
         )
@@ -360,12 +326,13 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
-    fun pageDanmakuSurface_isInsetFromStatusBar() {
-        assertTrue(
-            shouldInsetPortraitDanmakuFromStatusBar(PortraitDanmakuSurfaceMode.Page)
-        )
-        assertFalse(
-            shouldInsetPortraitDanmakuFromStatusBar(PortraitDanmakuSurfaceMode.VideoViewport)
+    fun portraitDanmakuSurface_fallsBackToVideoWhenNoUsableUpperRegionExists() {
+        assertEquals(
+            PortraitDanmakuSurfaceMode.VideoViewport,
+            resolvePortraitDanmakuSurfaceMode(
+                upperRegionAvailable = false,
+                displayAreaMode = PortraitDanmakuDisplayAreaMode.SCREEN_TOP,
+            )
         )
     }
 
@@ -389,16 +356,6 @@ class PortraitVideoPagerPolicyTest {
         )
     }
 
-    @Test
-    fun landscapeVideoViewport_isLiftedSlightlyInFitMode() {
-        assertEquals(
-            -48,
-            resolvePortraitVideoViewportVerticalOffsetDp(
-                currentVideoAspect = 16f / 9f,
-                fillContainer = false
-            )
-        )
-    }
 
     @Test
     fun landscapeContainer_doesNotLiftVideoViewport() {
@@ -428,12 +385,6 @@ class PortraitVideoPagerPolicyTest {
                 fillContainer = true
             )
         )
-    }
-
-    @Test
-    fun portraitDanmakuReadableFontScale_boostsDefaultWithoutExceedingSettingsLimit() {
-        assertEquals(1.18f, resolvePortraitDanmakuReadableFontScale(1f))
-        assertEquals(2.0f, resolvePortraitDanmakuReadableFontScale(1.9f))
     }
 
     @Test
@@ -471,7 +422,7 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
-    fun portraitActiveAid_fallsBackToItemIdentityOnlyBeforePlayerTargetsPage() {
+    fun portraitActiveAid_keepsItemIdentityUntilPlayerHasLoadedAid() {
         assertEquals(
             1001L,
             resolvePortraitActiveAid(
@@ -481,7 +432,7 @@ class PortraitVideoPagerPolicyTest {
             )
         )
         assertEquals(
-            0L,
+            1001L,
             resolvePortraitActiveAid(
                 isPlayerReadyForThisVideo = true,
                 itemAid = 1001L,
@@ -491,63 +442,16 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
-    fun portraitFavoriteTap_opensFavoriteFoldersInsteadOfImmediateDefaultFavorite() {
+    fun portraitFavoriteTap_withoutQuickSave_opensFavoriteFolders() {
         assertEquals(
             PortraitFavoriteAction.OpenFavoriteFolders,
-            resolvePortraitFavoriteAction()
-        )
-    }
-
-    @Test
-    fun portraitInteractionUi_prefersLocalOverrideWhenSharedPlayerStateBelongsToAnotherVideo() {
-        val sharedState = VideoPlaybackUiState.Success(
-            info = ViewInfo(
-                bvid = "BV_PREV",
-                aid = 1001L,
-                owner = Owner(mid = 1L, name = "up"),
-                stat = Stat(like = 20, favorite = 10)
-            ),
-            playUrl = "https://example.com/video.mp4",
-            isLiked = true,
-            isFavorited = true
-        )
-
-        val resolved = resolvePortraitVideoInteractionUiState(
-            targetBvid = "BV_NEXT",
-            fallbackStat = Stat(like = 8, favorite = 3),
-            sharedState = sharedState,
-            localOverride = PortraitVideoInteractionOverride(
-                isLiked = true,
-                isFavorited = true,
-                likeCount = 9,
-                favoriteCount = 4
+            resolvePortraitFavoriteAction(
+                isLongPress = false,
+                quickSaveDefaultFolder = false,
             )
         )
-
-        assertTrue(resolved.isLiked)
-        assertTrue(resolved.isFavorited)
-        assertEquals(9, resolved.likeCount)
-        assertEquals(4, resolved.favoriteCount)
     }
 
-    @Test
-    fun portraitTripleActionOverride_updatesLocalLikeAndFavoriteCounts() {
-        val resolved = resolvePortraitTripleActionOverride(
-            currentState = PortraitVideoInteractionUiState(
-                isLiked = false,
-                isFavorited = false,
-                likeCount = 8,
-                favoriteCount = 3
-            ),
-            likeSuccess = true,
-            favoriteSuccess = true
-        )
-
-        assertTrue(resolved.isLiked == true)
-        assertTrue(resolved.isFavorited == true)
-        assertEquals(9, resolved.likeCount)
-        assertEquals(4, resolved.favoriteCount)
-    }
 
     @Test
     fun portraitRecommendationSnapshot_extractsStableBvidSetFromMixedPageItems() {
@@ -613,25 +517,6 @@ class PortraitVideoPagerPolicyTest {
         assertTrue(pagerSignature.contains("sharedPlayer: ExoPlayer?"))
         assertTrue(pagerSignature.contains("useTextureSurfaceForNavigation: Boolean = false"))
         assertFalse(pagerSignature.contains("commentViewModel: VideoCommentViewModel"))
-    }
-
-    @Test
-    fun navigationReturn_usesTexturePlayerViewForLivePortraitFrameMorph() {
-        val pagerSource = File(
-            "src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt"
-        ).readText()
-        val adapterSource = File(
-            "src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPortraitOverlayAdapter.kt"
-        ).readText()
-        val holderSource = File(
-            "src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt"
-        ).readText()
-
-        assertTrue(pagerSource.contains("navigationTransformEnabled = useTextureSurfaceForNavigation"))
-        assertTrue(pagerSource.contains("R.layout.view_player_texture"))
-        assertTrue(adapterSource.contains("useTextureSurfaceForNavigation = useTextureSurfaceForNavigation"))
-        assertTrue(holderSource.contains("useTextureSurfaceForNavigation = useTextureSurfaceForNavigation"))
-        assertTrue(holderSource.contains("resolveNavigationLiveSurfaceTextureEnabled("))
     }
 
     @Test

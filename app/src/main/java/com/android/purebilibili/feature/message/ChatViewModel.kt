@@ -7,19 +7,31 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.coroutines.AccountScopedRequests
+import com.android.purebilibili.core.store.AccountSessionIdentity
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.EmoteInfo
 import com.android.purebilibili.data.model.response.PrivateMessageItem
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.repository.MessageSessionControlInfo
+import com.android.purebilibili.data.repository.MessageManagementRepository
+import com.android.purebilibili.data.model.response.EmotePackage
 import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.data.repository.VideoRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+
+private const val MAX_PRIVATE_IMAGE_BYTES = 15 * 1024 * 1024
 
 /**
  * 视频预览信息 (用于链接预览)
@@ -35,6 +47,7 @@ data class VideoPreviewInfo(
 )
 
 data class ChatUiState(
+    val accountIdentity: AccountSessionIdentity = TokenManager.accountIdentity.value,
     val isLoading: Boolean = true,
     val isSending: Boolean = false,
     val isUploadingImage: Boolean = false,
@@ -44,8 +57,21 @@ data class ChatUiState(
     val emoteInfos: List<EmoteInfo> = emptyList(),
     val hasMore: Boolean = false,
     val minSeqno: Long = 0,
+    val messagesLoaded: Boolean = false,
+    val scrollToLatestVersion: Long = 0L,
     val error: String? = null,
+    val refreshError: String? = null,
+    val loadMoreError: String? = null,
     val sendError: String? = null,
+    val sentText: String? = null,
+    val notice: String? = null,
+    val emotePackages: List<EmotePackage> = emptyList(),
+    val isEmoteLoading: Boolean = false,
+    val emoteError: String? = null,
+    val userInfo: UserBasicInfo? = null,
+    val isReporting: Boolean = false,
+    val reportError: String? = null,
+    val reportSuccessVersion: Long = 0,
     val sessionControlInfo: MessageSessionControlInfo = MessageSessionControlInfo(),
     val isSessionControlLoading: Boolean = false,
     val isSessionControlUpdating: Boolean = false,
@@ -59,6 +85,11 @@ class ChatViewModel(
     
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+    private val accountRequests = AccountScopedRequests(viewModelScope)
+    private var messageLoadMutex = Mutex()
+    private var readAckMutex = Mutex()
+    private var latestMessagesJob: Job? = null
+    private var lastReadSeqno = 0L
     
     // 视频预览缓存
     private val videoPreviewCache = mutableMapOf<String, VideoPreviewInfo>()
@@ -75,6 +106,17 @@ class ChatViewModel(
     private val avPattern = Regex("av(\\d+)", RegexOption.IGNORE_CASE)
     
     init {
+        accountRequests.observe {
+            latestMessagesJob = null
+            messageLoadMutex = Mutex()
+            readAckMutex = Mutex()
+            lastReadSeqno = 0L
+            videoPreviewCache.clear()
+            loadingBvids.clear()
+            _uiState.value = ChatUiState(accountIdentity = accountRequests.identity)
+            loadMessages()
+            loadSessionControlInfo()
+        }
         loadMessages()
         loadSessionControlInfo()
     }
@@ -82,41 +124,92 @@ class ChatViewModel(
     /**
      * 加载消息
      */
-    fun loadMessages() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            
-            MessageRepository.getMessages(
-                talkerId = talkerId,
-                sessionType = sessionType,
-                size = 30
-            ).fold(
-                onSuccess = { data ->
-                    val messages = data.messages?.reversed() ?: emptyList()
-                    _uiState.value = _uiState.value.copy(
+    fun loadMessages(scrollToLatest: Boolean = false) {
+        if (latestMessagesJob?.isActive == true && !scrollToLatest) return
+        latestMessagesJob = accountRequests.launch {
+            loadLatestMessages(showLoading = true, scrollToLatest = scrollToLatest)
+        }
+    }
+
+    /** Called by the visible screen; cancellation stops the current refresh too. */
+    suspend fun refreshMessages() {
+        if (!_uiState.value.messagesLoaded || latestMessagesJob?.isActive == true) return
+        loadLatestMessages(showLoading = false, scrollToLatest = false)
+    }
+
+    private suspend fun loadLatestMessages(showLoading: Boolean, scrollToLatest: Boolean) {
+        val requestedIdentity = accountRequests.identity
+        val requestMutex = messageLoadMutex
+        requestMutex.withLock {
+            if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
+            if (showLoading) {
+                _uiState.update {
+                    it.copy(isLoading = !it.messagesLoaded, error = null, refreshError = null)
+                }
+            }
+            try {
+                val data = MessageRepository.getMessages(
+                    talkerId = talkerId,
+                    sessionType = sessionType,
+                    size = 30,
+                ).getOrThrow()
+                if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
+                var incoming = data.messages.orEmpty().reversed()
+                var emotes = data.e_infos.orEmpty()
+                val existingKeys = _uiState.value.messages.map(::chatMessageKey).toSet()
+                var gapCursor = data.min_seqno
+                var gapHasMore = data.has_more == 1
+                // On resume, fill the gap if more than one page arrived while the screen was away.
+                while (
+                    existingKeys.isNotEmpty() && incoming.isNotEmpty() && gapHasMore && gapCursor > 0L &&
+                    incoming.none { chatMessageKey(it) in existingKeys }
+                ) {
+                    if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
+                    val gapPage = MessageRepository.getMessages(
+                        talkerId = talkerId,
+                        sessionType = sessionType,
+                        size = 30,
+                        endSeqno = gapCursor,
+                    ).getOrThrow()
+                    val older = gapPage.messages.orEmpty().reversed()
+                    incoming = mergeChatMessages(older, incoming)
+                    emotes = emotes + gapPage.e_infos.orEmpty()
+                    gapHasMore = older.isNotEmpty() && gapPage.has_more == 1 &&
+                        gapPage.min_seqno in 1L until gapCursor
+                    gapCursor = gapPage.min_seqno
+                }
+                if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
+                _uiState.update { current ->
+                    val replaceCursor = current.messages.isEmpty()
+                    current.copy(
                         isLoading = false,
-                        messages = messages,
-                        emoteInfos = data.e_infos ?: emptyList(),
-                        hasMore = data.has_more == 1,
-                        minSeqno = data.min_seqno,
-                        videoPreviews = videoPreviewCache.toMap()
-                    )
-                    
-                    // 标记为已读
-                    data.max_seqno.takeIf { it > 0 }?.let { seqno ->
-                        markAsRead(seqno)
-                    }
-                    
-                    // 扫描并预加载视频信息
-                    scanAndLoadVideoPreviews(messages)
-                },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = e.message ?: "加载失败"
+                        messagesLoaded = true,
+                        messages = mergeChatMessages(current.messages, incoming),
+                        emoteInfos = (current.emoteInfos + emotes).distinctBy { it.text },
+                        hasMore = if (replaceCursor) {
+                            incoming.isNotEmpty() && data.has_more == 1 && data.min_seqno > 0L
+                        } else current.hasMore,
+                        minSeqno = if (replaceCursor) data.min_seqno else current.minSeqno,
+                        error = null,
+                        refreshError = null,
+                        scrollToLatestVersion = current.scrollToLatestVersion + if (scrollToLatest) 1L else 0L,
+                        videoPreviews = videoPreviewCache.toMap(),
                     )
                 }
-            )
+                resolveChatReadSeqno(data.messages.orEmpty())?.let(::markAsRead)
+                scanAndLoadVideoPreviews(incoming)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        error = (e.message ?: "加载消息失败").takeUnless { current.messagesLoaded },
+                        refreshError = (e.message ?: "刷新消息失败").takeIf { current.messagesLoaded },
+                    )
+                }
+            }
         }
     }
     
@@ -153,7 +246,7 @@ class ChatViewModel(
         
         loadingBvids.add(bvid)
         
-        viewModelScope.launch {
+        accountRequests.launch {
             try {
                 val result = VideoRepository.getVideoDetails(bvid)
                 result.onSuccess { (viewInfo, _) ->
@@ -173,6 +266,8 @@ class ChatViewModel(
                         videoPreviews = videoPreviewCache.toMap()
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("ChatVM", "Failed to load video preview for $bvid", e)
             } finally {
@@ -217,33 +312,38 @@ class ChatViewModel(
      * 加载更多历史消息
      */
     fun loadMoreMessages() {
-        if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
-        
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoadingMore = true)
-            
-            MessageRepository.getMessages(
-                talkerId = talkerId,
-                sessionType = sessionType,
-                size = 30,
-                endSeqno = _uiState.value.minSeqno
-            ).fold(
-                onSuccess = { data ->
-                    val newMessages = data.messages?.reversed() ?: emptyList()
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingMore = false,
-                        messages = newMessages + _uiState.value.messages,
-                        hasMore = data.has_more == 1,
-                        minSeqno = data.min_seqno
-                    )
-                    
-                    // 扫描新消息中的视频链接
-                    scanAndLoadVideoPreviews(newMessages)
-                },
-                onFailure = {
-                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
+        val current = _uiState.value
+        if (current.isLoadingMore || current.isLoading || !current.hasMore || current.minSeqno <= 0L) return
+        _uiState.update { it.copy(isLoadingMore = true, loadMoreError = null) }
+        accountRequests.launch {
+            try {
+                messageLoadMutex.withLock {
+                    val cursor = _uiState.value.minSeqno
+                    val data = MessageRepository.getMessages(
+                        talkerId = talkerId,
+                        sessionType = sessionType,
+                        size = 30,
+                        endSeqno = cursor,
+                    ).getOrThrow()
+                    val older = data.messages.orEmpty().reversed()
+                    _uiState.update {
+                        it.copy(
+                            messages = mergeChatMessages(older, it.messages),
+                            emoteInfos = (it.emoteInfos + data.e_infos.orEmpty()).distinctBy { emote -> emote.text },
+                            hasMore = older.isNotEmpty() && data.has_more == 1 && data.min_seqno in 1L until cursor,
+                            minSeqno = data.min_seqno,
+                            loadMoreError = null,
+                        )
+                    }
+                    scanAndLoadVideoPreviews(older)
                 }
-            )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(loadMoreError = e.message ?: "加载历史消息失败") }
+            } finally {
+                _uiState.update { it.copy(isLoadingMore = false) }
+            }
         }
     }
     
@@ -251,48 +351,44 @@ class ChatViewModel(
      * 发送文字消息
      */
     fun sendMessage(content: String) {
-        if (content.isBlank()) return
+        if (content.isBlank() || _uiState.value.isSending || _uiState.value.isUploadingImage) return
+        _uiState.update { it.copy(isSending = true, sendError = null) }
         
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSending = true, sendError = null)
-            
-            MessageRepository.sendTextMessage(
-                receiverId = talkerId,
-                content = content.trim(),
-                receiverType = sessionType
-            ).fold(
-                onSuccess = { data ->
-                    _uiState.value = _uiState.value.copy(isSending = false)
-                    // 刷新消息列表
-                    loadMessages()
-                },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isSending = false,
-                        sendError = e.message ?: "发送失败"
-                    )
-                }
-            )
+        accountRequests.launch {
+            try {
+                MessageRepository.sendTextMessage(
+                    receiverId = talkerId,
+                    content = content.trim(),
+                    receiverType = sessionType,
+                ).getOrThrow()
+                _uiState.update { it.copy(sentText = content) }
+                loadMessages(scrollToLatest = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(sendError = e.message ?: "发送失败") }
+            } finally {
+                _uiState.update { it.copy(isSending = false) }
+            }
         }
+    }
+
+    fun consumeSentText(text: String) {
+        _uiState.update { if (it.sentText == text) it.copy(sentText = null) else it }
     }
 
     fun sendImageMessage(context: Context, imageUri: Uri) {
         if (_uiState.value.isUploadingImage || _uiState.value.isSending) return
 
-        viewModelScope.launch {
+        accountRequests.launch {
             _uiState.value = _uiState.value.copy(isUploadingImage = true, sendError = null)
 
             withContext(Dispatchers.IO) {
                 runCatching {
-                    val bytes = context.contentResolver.openInputStream(imageUri)?.use { stream ->
-                        stream.readBytes()
-                    } ?: error("无法读取图片文件")
+                    val bytes = readPrivateImageBytes(context, imageUri)
 
                     if (bytes.isEmpty()) {
                         error("图片内容为空")
-                    }
-                    if (bytes.size > 15 * 1024 * 1024) {
-                        error("图片过大（单张最大 15MB）")
                     }
 
                     val mimeType = context.contentResolver.getType(imageUri) ?: "image/jpeg"
@@ -318,9 +414,10 @@ class ChatViewModel(
             }.fold(
                 onSuccess = {
                     _uiState.value = _uiState.value.copy(isUploadingImage = false)
-                    loadMessages()
+                    loadMessages(scrollToLatest = true)
                 },
                 onFailure = { error ->
+                    if (error is CancellationException) throw error
                     _uiState.value = _uiState.value.copy(
                         isUploadingImage = false,
                         sendError = error.message ?: "图片发送失败"
@@ -331,7 +428,7 @@ class ChatViewModel(
     }
 
     fun loadSessionControlInfo() {
-        viewModelScope.launch {
+        accountRequests.launch {
             _uiState.value = _uiState.value.copy(isSessionControlLoading = true)
             MessageRepository.getSessionControlInfo(talkerId, sessionType)
                 .onSuccess { info ->
@@ -343,6 +440,49 @@ class ChatViewModel(
                 .onFailure {
                     _uiState.value = _uiState.value.copy(isSessionControlLoading = false)
                 }
+        }
+    }
+
+    fun loadEmotes() {
+        if (_uiState.value.isEmoteLoading || _uiState.value.emotePackages.isNotEmpty()) return
+        _uiState.update { it.copy(isEmoteLoading = true, emoteError = null) }
+        accountRequests.launch {
+            MessageManagementRepository.emotes().fold(
+                onSuccess = { packages -> _uiState.update { it.copy(isEmoteLoading = false, emotePackages = packages) } },
+                onFailure = { error -> _uiState.update { it.copy(isEmoteLoading = false, emoteError = error.message ?: "加载表情失败") } },
+            )
+        }
+    }
+    fun loadChatUser(fallbackName: String = "") {
+        if (sessionType != 1) return
+        val cached = MessageUserInfoLoader.cached(talkerId)
+        val initial = InboxUserInfoResolver.mergeFetchedUserInfo(
+            UserBasicInfo(talkerId, fallbackName, ""),
+            cached,
+        )
+        _uiState.update { it.copy(userInfo = InboxUserInfoResolver.mergeFetchedUserInfo(it.userInfo, initial)) }
+        accountRequests.launch {
+            val user = MessageUserInfoLoader.fetch(talkerId)
+            _uiState.update { it.copy(userInfo = InboxUserInfoResolver.mergeFetchedUserInfo(it.userInfo, user)) }
+        }
+    }
+    fun togglePinned() {
+        val pinned = _uiState.value.sessionControlInfo.isPinned ?: return
+        updateSessionControl { MessageRepository.setSessionTop(talkerId, sessionType, !pinned) }
+    }
+    fun toggleBlocked() {
+        val blocked = _uiState.value.sessionControlInfo.followStatus == 128
+        updateSessionControl { MessageManagementRepository.block(talkerId, !blocked) }
+    }
+    fun clearReportError() { _uiState.update { it.copy(reportError = null) } }
+    fun report(messageKey: Long?, reason: Int, description: String, accusedUid: Long = talkerId) {
+        if (_uiState.value.isReporting) return
+        _uiState.update { it.copy(isReporting = true, reportError = null) }
+        accountRequests.launch {
+            MessageManagementRepository.report(accusedUid, messageKey, reason, description).fold(
+                onSuccess = { _uiState.update { it.copy(isReporting = false, reportSuccessVersion = it.reportSuccessVersion + 1, notice = "举报已提交") } },
+                onFailure = { error -> _uiState.update { it.copy(isReporting = false, reportError = error.message ?: "举报失败") } },
+            )
         }
     }
 
@@ -371,7 +511,7 @@ class ChatViewModel(
 
     private fun updateSessionControl(action: suspend () -> Result<Unit>) {
         if (_uiState.value.isSessionControlUpdating) return
-        viewModelScope.launch {
+        accountRequests.launch {
             _uiState.value = _uiState.value.copy(isSessionControlUpdating = true, sendError = null)
             action().fold(
                 onSuccess = {
@@ -389,9 +529,9 @@ class ChatViewModel(
     }
 
     fun withdrawMessage(message: PrivateMessageItem) {
-        if (message.msg_key <= 0L || message.msg_status == 1) return
+        if (message.msg_key <= 0L || message.msg_status == 1 || _uiState.value.withdrawingMessageKey != null) return
 
-        viewModelScope.launch {
+        accountRequests.launch {
             _uiState.value = _uiState.value.copy(
                 withdrawingMessageKey = message.msg_key,
                 sendError = null
@@ -425,8 +565,20 @@ class ChatViewModel(
      * 标记为已读
      */
     private fun markAsRead(seqno: Long) {
-        viewModelScope.launch {
-            MessageRepository.markAsRead(talkerId, sessionType, seqno)
+        if (seqno <= lastReadSeqno) return
+        val requestedIdentity = accountRequests.identity
+        val requestMutex = readAckMutex
+        accountRequests.launch {
+            requestMutex.withLock {
+                if (!accountRequests.isCurrent(requestedIdentity) || seqno <= lastReadSeqno) return@withLock
+                val result = MessageRepository.markAsRead(talkerId, sessionType, seqno)
+                if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
+                result.onSuccess {
+                    lastReadSeqno = maxOf(lastReadSeqno, seqno)
+                }.onFailure { error ->
+                    _uiState.update { it.copy(refreshError = "标记已读失败：${error.message ?: "请稍后重试"}") }
+                }
+            }
         }
     }
     
@@ -434,7 +586,7 @@ class ChatViewModel(
      * 清除发送错误
      */
     fun clearSendError() {
-        _uiState.value = _uiState.value.copy(sendError = null)
+        _uiState.value = _uiState.value.copy(sendError = null, notice = null)
     }
 
     private fun queryDisplayName(context: Context, uri: Uri): String? {
@@ -445,6 +597,36 @@ class ChatViewModel(
                     if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
                 }
         }.getOrNull()
+    }
+
+    private fun readPrivateImageBytes(context: Context, uri: Uri): ByteArray {
+        val resolver = context.contentResolver
+        val declaredSize = runCatching {
+            resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+                ?.use { cursor ->
+                    val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (index >= 0 && cursor.moveToFirst() && !cursor.isNull(index)) {
+                        cursor.getLong(index)
+                    } else null
+                }
+        }.getOrNull()
+        if (declaredSize != null && declaredSize > MAX_PRIVATE_IMAGE_BYTES) {
+            error("图片过大（单张最大 15MB）")
+        }
+
+        return resolver.openInputStream(uri)?.use { stream ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(32 * 1024)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                if (output.size() + count > MAX_PRIVATE_IMAGE_BYTES) {
+                    error("图片过大（单张最大 15MB）")
+                }
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        } ?: error("无法读取图片文件")
     }
     
     /**

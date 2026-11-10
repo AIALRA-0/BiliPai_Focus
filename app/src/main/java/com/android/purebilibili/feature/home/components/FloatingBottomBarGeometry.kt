@@ -1,12 +1,11 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
+import com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion
+
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Home dock resting indicator is 56dp in a typically ~75dp slot (~1.35). */
 internal const val FLOATING_DOCK_MIN_INDICATOR_ASPECT = 1.35f
@@ -112,20 +111,22 @@ internal fun resolveCompactDockInnerShadowRadiusDp(shellHeightDp: Float): Float 
 internal fun resolveCompactDockTabPressScale(shellHeightDp: Float): Float =
     1f + FLOATING_DOCK_TAB_PRESS_SCALE_EXTRA * resolveFloatingDockGeometryScale(shellHeightDp)
 
-/**
- * Half the extra height a pressed indicator needs beyond the dock.
- * Compact 40dp chrome must reserve this or the 78/56 bloom is clipped by
- * siblings such as the detail-page pager.
- */
-internal fun resolveCompactDockScaleOverflowDp(
-    shellHeightDp: Float,
-    indicatorHeightDp: Float,
+/** Signed speed near the logical viewport edges; zero in the middle or invalid geometry. */
+internal fun resolveDockDragEdgeScrollFraction(
+    indicatorCenterPx: Float,
+    viewportWidthPx: Float,
+    edgeWidthPx: Float,
 ): Float {
-    val geometry = com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorGeometry(
-        dockHeightDp = shellHeightDp,
-        indicatorHeightDp = indicatorHeightDp,
-    )
-    return ((geometry.pressedHeightDp - shellHeightDp) / 2f).coerceAtLeast(0f)
+    if (!indicatorCenterPx.isFinite() || !viewportWidthPx.isFinite() ||
+        !edgeWidthPx.isFinite() || viewportWidthPx <= 0f || edgeWidthPx <= 0f
+    ) return 0f
+    val edge = edgeWidthPx.coerceAtMost(viewportWidthPx / 2f)
+    return when {
+        indicatorCenterPx < edge -> -((edge - indicatorCenterPx) / edge).coerceIn(0f, 1f)
+        indicatorCenterPx > viewportWidthPx - edge ->
+            ((indicatorCenterPx - viewportWidthPx + edge) / edge).coerceIn(0f, 1f)
+        else -> 0f
+    }
 }
 
 /** HyperIsland 静止几何：64dp 壳配 56dp 指示器，即上下各留 4dp（= 壳高 × 4/64）。 */
@@ -139,64 +140,12 @@ internal fun resolveFloatingDockRestIndicatorVerticalInsetDp(
     return shellHeightDp * FLOATING_DOCK_REST_INDICATOR_INSET_RATIO
 }
 
-/**
- * Press bloom needs extra vertical room. Only consume it from the layout when the
- * caller did not already lock height to the shell; otherwise the 56dp rest pill is
- * clamped to the same height as the 64dp dock and the idle inset becomes 0.
- */
-internal fun shouldReserveFloatingDockScaleOverflow(
-    incomingMaxHeightPx: Int,
-    shellHeightPx: Int,
-    overflowPx: Int,
-): Boolean {
-    if (overflowPx <= 0 || shellHeightPx <= 0) return false
-    if (incomingMaxHeightPx == Constraints.Infinity) return true
-    return incomingMaxHeightPx >= shellHeightPx + overflowPx * 2
-}
 
-internal fun Modifier.floatingDockScaleOverflow(
-    overflow: Dp,
-    shellHeight: Dp,
-): Modifier = layout { measurable, constraints ->
-    val overflowPx = overflow.roundToPx().coerceAtLeast(0)
-    val shellPx = shellHeight.roundToPx().coerceAtLeast(0)
-    val reserve = shouldReserveFloatingDockScaleOverflow(
-        incomingMaxHeightPx = if (constraints.hasBoundedHeight) {
-            constraints.maxHeight
-        } else {
-            Constraints.Infinity
-        },
-        shellHeightPx = shellPx,
-        overflowPx = overflowPx,
-    )
-    if (!reserve) {
-        val placeable = measurable.measure(constraints)
-        layout(placeable.width, placeable.height) {
-            placeable.placeRelative(0, 0)
-        }
-    } else {
-        val innerMaxHeight = if (constraints.hasBoundedHeight) {
-            (constraints.maxHeight - overflowPx * 2).coerceAtLeast(0)
-        } else {
-            constraints.maxHeight
-        }
-        val placeable = measurable.measure(
-            constraints.copy(minHeight = 0, maxHeight = innerMaxHeight)
-        )
-        val width = placeable.width.coerceIn(constraints.minWidth, constraints.maxWidth)
-        val height = (placeable.height + overflowPx * 2)
-            .coerceIn(constraints.minHeight, constraints.maxHeight)
-        layout(width, height) {
-            placeable.placeRelative(0, overflowPx)
-        }
-    }
-}
-
-internal const val FLOATING_DOCK_INDICATOR_VELOCITY_DIVISOR = 10f
+internal const val FLOATING_DOCK_INDICATOR_VELOCITY_DIVISOR = LiquidIndicatorMotion.VelocityDivisor
 internal const val FLOATING_DOCK_INDICATOR_VELOCITY_SCALE_X_MULTIPLIER = 0.75f
-internal const val FLOATING_DOCK_INDICATOR_VELOCITY_CLAMP = 0.2f
+internal const val FLOATING_DOCK_INDICATOR_VELOCITY_CLAMP = LiquidIndicatorMotion.VelocityClamp
 
-enum class FloatingBottomBarGeometryMode { Dock, Segmented, TopNavigation }
+enum class FloatingBottomBarGeometryMode { Dock, Segmented, TopNavigation, CompactDock }
 
 internal fun resolveFloatingDockSlotWidthPx(
     containerWidthPx: Float,
@@ -211,15 +160,39 @@ internal fun resolveFloatingDockDragReferenceWidthPx(
 ): Float = (tabWidthPx.coerceAtLeast(0f) * 5f + horizontalPaddingPx.coerceAtLeast(0f) * 2f)
     .coerceAtLeast(1f)
 
+/** The pill's overflow above/below the track, expressed before its layer scale. */
+internal fun resolveFloatingDockChromaticGapBand(
+    indicatorHeight: Float,
+    shellHeight: Float,
+    indicatorScaleY: Float,
+    shellScaleY: Float = 1f,
+): Float {
+    if (!indicatorHeight.isFinite() || !shellHeight.isFinite() ||
+        !indicatorScaleY.isFinite() || !shellScaleY.isFinite() ||
+        indicatorHeight <= 0f || shellHeight <= 0f || indicatorScaleY <= 0f || shellScaleY <= 0f
+    ) return 0f
+    val localTrackHeight = shellHeight * shellScaleY / indicatorScaleY
+    return ((indicatorHeight - localTrackHeight) / 2f).coerceIn(0f, indicatorHeight / 2f)
+}
+
+/** Motion feedback also works when pager follow bypasses the local press spring. */
+internal fun resolveFloatingDockSelectionMotionProgress(position: Float, targetPosition: Float): Float {
+    if (!position.isFinite() || !targetPosition.isFinite()) return 0f
+    val distance = maxOf(abs(position - targetPosition), abs(position - position.roundToInt()))
+    // Ignore tiny resting offsets; ramp to full optical feedback over a quarter slot.
+    return ((distance - 0.015f) / 0.235f).coerceIn(0f, 1f)
+}
+
 internal fun resolveFloatingDockRefractionProgress(
     pressProgress: Float,
     tapPressRefractionEnabled: Boolean,
     isDragging: Boolean,
     isPagerScrolling: Boolean,
-): Float = if (tapPressRefractionEnabled || isDragging || isPagerScrolling) {
-    pressProgress.coerceIn(0f, 1f)
-} else {
-    0f
+    selectionMotionProgress: Float = 0f,
+): Float {
+    val press = if (tapPressRefractionEnabled || isDragging || isPagerScrolling) pressProgress else 0f
+    // Opting out of stationary tap feedback must never turn off a moving selection's lens.
+    return maxOf(press, selectionMotionProgress).coerceIn(0f, 1f)
 }
 
 internal fun resolveFloatingDockIndicatorHeightDp(
@@ -231,17 +204,19 @@ internal fun resolveFloatingDockIndicatorHeightDp(
 ): Float {
     if (requestedHeightDp <= 0f) return 0f
     if (tabWidthDp <= 0f) return requestedHeightDp
-    if (geometryMode != FloatingBottomBarGeometryMode.Dock) {
-        // Match the home dock's 2dp resting inset. The aspect constraint still wins
-        // on narrow slots; never widen the pill across neighbouring destinations.
-        val insetHeight = shellHeightDp?.let { (it - 4f).coerceAtLeast(0f) }
-            ?: requestedHeightDp
-        return if (geometryMode == FloatingBottomBarGeometryMode.TopNavigation) {
-            min(insetHeight, tabWidthDp / FLOATING_DOCK_MIN_INDICATOR_ASPECT)
-        } else {
-            resolveSegmentedControlIndicatorHeightDp(tabWidthDp, insetHeight)
-        }
+    if (geometryMode == FloatingBottomBarGeometryMode.TopNavigation) {
+        // Top labels and icons share one inset shell. Slot width must not flatten
+        // the indicator vertically; overflow is handled by the top rail's layout.
+        return min(requestedHeightDp, shellHeightDp ?: requestedHeightDp).coerceAtLeast(0f)
     }
+    if (geometryMode == FloatingBottomBarGeometryMode.Segmented) {
+        // Keep the resting capsule wider than it is tall. Pressed height and
+        // capture overflow are resolved separately, so drag bloom can exceed the shell.
+        val insetHeight = shellHeightDp?.let { min(requestedHeightDp, (it - 6f).coerceAtLeast(0f)) }
+            ?: requestedHeightDp
+        return resolveSegmentedControlIndicatorHeightDp(tabWidthDp, insetHeight)
+    }
+    // The bottom dock retains its reference height and slot-aspect policy.
     // Dock 模式同样留出静止垂直边距，按 HyperIsland 的 64/56 比例（壳高 × 4/64）。
     // 兜底：调用方即使把高度传满壳高，指示器也不会贴住上下边缘。
     val restingInsetDp = shellHeightDp
@@ -264,20 +239,14 @@ internal fun resolveFloatingDockIndicatorLayerScaleX(
     baseScaleX: Float,
     velocity: Float,
 ): Float {
-    val normalizedVelocity = velocity / FLOATING_DOCK_INDICATOR_VELOCITY_DIVISOR
-    val velocityScale = (normalizedVelocity * FLOATING_DOCK_INDICATOR_VELOCITY_SCALE_X_MULTIPLIER)
-        .coerceIn(-FLOATING_DOCK_INDICATOR_VELOCITY_CLAMP, FLOATING_DOCK_INDICATOR_VELOCITY_CLAMP)
-    return baseScaleX / (1f - velocityScale)
+    return LiquidIndicatorMotion.scaleX(baseScaleX, velocity)
 }
 
 internal fun resolveFloatingDockIndicatorLayerScaleY(
     baseScaleY: Float,
     velocity: Float,
 ): Float {
-    val normalizedVelocity = velocity / FLOATING_DOCK_INDICATOR_VELOCITY_DIVISOR
-    val velocityScale = (normalizedVelocity * 0.25f)
-        .coerceIn(-FLOATING_DOCK_INDICATOR_VELOCITY_CLAMP, FLOATING_DOCK_INDICATOR_VELOCITY_CLAMP)
-    return baseScaleY * (1f - velocityScale)
+    return LiquidIndicatorMotion.scaleY(baseScaleY, velocity)
 }
 
 internal fun resolveFloatingDockCapturedContentHorizontalScale(
@@ -287,6 +256,34 @@ internal fun resolveFloatingDockCapturedContentHorizontalScale(
 ): Float {
     val stretch = if (indicatorScaleY <= 0.001f) 1f else indicatorScaleX / indicatorScaleY
     return itemScale / stretch.coerceAtLeast(0.001f)
+}
+
+/** Extra half-slot around a content-sized endpoint belongs outside the visible shell. */
+internal fun resolveFloatingDockContentShellInsetPx(slotWidthPx: Float, capsuleWidthPx: Float): Float =
+    ((slotWidthPx - capsuleWidthPx.coerceIn(0f, slotWidthPx.coerceAtLeast(0f))) / 2f)
+        .coerceAtLeast(0f)
+
+/** Scroll viewport trims endpoint slack only while that content edge is visible. */
+internal fun resolveFloatingDockScrollableShellInsetPx(
+    slotWidthPx: Float,
+    capsuleWidthPx: Float,
+    distanceFromContentEdgePx: Float,
+): Float = (resolveFloatingDockContentShellInsetPx(slotWidthPx, capsuleWidthPx) -
+    distanceFromContentEdgePx.coerceAtLeast(0f)).coerceAtLeast(0f)
+
+/** Interpolate label-sized capsules on the same continuous position as their translation. */
+internal fun resolveFloatingDockContentIndicatorWidthPx(
+    position: Float,
+    contentWidthsPx: List<Float>,
+    maximumWidthPx: Float,
+): Float {
+    if (contentWidthsPx.isEmpty() || !position.isFinite()) return maximumWidthPx
+    val safePosition = position.coerceIn(0f, contentWidthsPx.lastIndex.toFloat())
+    val start = safePosition.toInt()
+    val end = (start + 1).coerceAtMost(contentWidthsPx.lastIndex)
+    val fraction = safePosition - start
+    val width = contentWidthsPx[start] + (contentWidthsPx[end] - contentWidthsPx[start]) * fraction
+    return width.coerceIn(0f, maximumWidthPx.coerceAtLeast(0f))
 }
 
 internal fun resolveFloatingDockIndicatorOffsetPx(
@@ -300,6 +297,32 @@ internal fun resolveFloatingDockIndicatorOffsetPx(
     val centeredOffset = position * tabWidthPx + (tabWidthPx - indicatorWidthPx) / 2f
     val maxOffset = (tabWidthPx * safeTabsCount - indicatorWidthPx).coerceAtLeast(0f)
     return centeredOffset.coerceIn(0f, maxOffset)
+}
+
+/** Clamp in logical scroll coordinates so RTL and LTR share the same visible dock bounds. */
+internal fun resolveFloatingDockViewportIndicatorPosition(
+    position: Float,
+    tabWidthPx: Float,
+    tabsCount: Int,
+    indicatorWidthPx: Float,
+    scrollOffsetPx: Float,
+    viewportWidthPx: Float,
+    horizontalPaddingPx: Float,
+    clampToViewport: Boolean = true,
+): Float {
+    // A browse-only rail owns selection by identity. Moving its viewport must not relocate
+    // that selection onto a different visible label when the selected tab scrolls offscreen.
+    if (!clampToViewport) return position
+    if (tabWidthPx <= 0f || indicatorWidthPx <= 0f || viewportWidthPx <= 0f) return position
+    val maxOffset = (tabWidthPx * tabsCount.coerceAtLeast(1) - indicatorWidthPx).coerceAtLeast(0f)
+    val viewportStart = scrollOffsetPx.coerceIn(0f, maxOffset)
+    val viewportEnd = (scrollOffsetPx + viewportWidthPx -
+        horizontalPaddingPx.coerceAtLeast(0f) * 2f - indicatorWidthPx)
+        .coerceIn(viewportStart, maxOffset)
+    val offset = resolveFloatingDockIndicatorOffsetPx(
+        position, tabWidthPx, tabsCount, indicatorWidthPx,
+    ).coerceIn(viewportStart, viewportEnd)
+    return (offset - (tabWidthPx - indicatorWidthPx) / 2f) / tabWidthPx
 }
 
 internal fun resolveFloatingDockIndicatorContentAlignmentPx(
@@ -329,6 +352,18 @@ internal fun resolveFloatingDockClippedContentTranslationPx(
     indicatorWidthPx = indicatorWidthPx,
 )
 
+/** Every rail uses the same shell-relative bloom, including compact text categories. */
+@Suppress("UNUSED_PARAMETER")
+internal fun resolveFloatingDockIndicatorGeometry(
+    shellHeightDp: Float,
+    indicatorHeightDp: Float,
+    geometryMode: FloatingBottomBarGeometryMode,
+): com.android.purebilibili.core.ui.MatchedLiquidIndicatorGeometry =
+    com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorGeometry(
+        dockHeightDp = shellHeightDp,
+        indicatorHeightDp = indicatorHeightDp,
+    )
+
 internal fun resolveFloatingDockCaptureInsets(
     shellHeightDp: Float,
     requestedIndicatorHeightDp: Float,
@@ -344,9 +379,10 @@ internal fun resolveFloatingDockCaptureInsets(
         geometryMode = geometryMode,
         shellHeightDp = shellHeightDp,
     )
-    val geometry = com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorGeometry(
-        dockHeightDp = shellHeightDp,
+    val geometry = resolveFloatingDockIndicatorGeometry(
+        shellHeightDp = shellHeightDp,
         indicatorHeightDp = fittedIndicatorHeightDp,
+        geometryMode = geometryMode,
     )
     val samplingReachDp = max(
         resolveCompactDockIndicatorLensHeightDp(shellHeightDp),
@@ -375,4 +411,19 @@ internal fun shouldAcceptFloatingDockDragAtWindowX(
 ): Boolean {
     if (screenWidthPx <= 0f) return true
     return windowX >= leftInsetPx && windowX <= screenWidthPx - rightInsetPx
+}
+
+/** 原生前景始终可见；只有玻璃捕获副本接管文字时才淡出底层。 */
+internal fun resolveFloatingDockBaseContentAlpha(isLiquidGlass: Boolean, coverage: Float): Float =
+    if (isLiquidGlass) 1f - coverage.coerceIn(0f, 1f) else 1f
+
+/** 导航指示器与外壳使用相同内缩轮廓；横纵布局都先按移动轴/跨轴归一化。 */
+internal fun resolveFloatingDockIndicatorCornerRadiusDp(
+    shellThicknessDp: Float,
+    indicatorThicknessDp: Float,
+    indicatorSlotExtentDp: Float,
+): Float {
+    val inset = ((shellThicknessDp - indicatorThicknessDp) / 2f).coerceAtLeast(0f)
+    return (shellThicknessDp / 2f - inset)
+        .coerceIn(0f, minOf(indicatorThicknessDp, indicatorSlotExtentDp).coerceAtLeast(0f) / 2f)
 }

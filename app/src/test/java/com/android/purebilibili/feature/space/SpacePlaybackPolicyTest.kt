@@ -5,6 +5,7 @@ import com.android.purebilibili.data.model.response.HistoryPage
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -40,6 +41,20 @@ class SpacePlaybackPolicyTest {
         assertEquals(83L, playlist?.playlistItems?.get(0)?.duration)
         assertEquals(624L, playlist?.playlistItems?.get(1)?.duration)
         assertEquals(3723L, playlist?.playlistItems?.get(2)?.duration)
+    }
+
+    @Test
+    fun `space queue retains video statistics and publish time`() {
+        val video = item(bvid = "BV1", title = "标题", length = "12:34").copy(
+            play = 12345,
+            comment = 67,
+            created = 1792022400L,
+        )
+        val queued = buildExternalPlaylistFromSpaceVideos(listOf(video))!!.playlistItems.single()
+        assertEquals(12345L, queued.playCount)
+        assertEquals(67L, queued.commentCount)
+        assertEquals(1792022400L, queued.publishedAt)
+        assertEquals(754L, queued.duration)
     }
 
     @Test
@@ -311,5 +326,31 @@ class SpacePlaybackPolicyTest {
         assertEquals(SpaceCollectionDetailType.FAVORITE_SEASON, favoriteSeason?.type)
         assertNull(resolveSpaceCollectionDetailRequest("series", id = 0L, mid = 1L, title = ""))
         assertNull(resolveSpaceCollectionDetailRequest("unknown", id = 1L, mid = 1L, title = ""))
+    }
+    @Test
+    fun `favorite pagination honors server continuation even below thirty items`() {
+        for (type in listOf("favorite", "favorite_season")) {
+            assertTrue(resolveSpaceCollectionHasMore(type, pageItemCount = 20, favoriteHasMore = true))
+            assertTrue(resolveSpaceCollectionHasMore(type, pageItemCount = 1, favoriteHasMore = true))
+            assertFalse(resolveSpaceCollectionHasMore(type, pageItemCount = 20, favoriteHasMore = false))
+        }
+        for (type in listOf("season", "series")) {
+            assertTrue(resolveSpaceCollectionHasMore(type, pageItemCount = 30))
+            assertFalse(resolveSpaceCollectionHasMore(type, pageItemCount = 29))
+        }
+    }
+
+    @Test
+    fun `only an owned ordinary favorite folder permits removal and moving`() {
+        assertTrue(canManageSpaceFavoriteResources("favorite", ownerMid = 42L, accountMid = 42L))
+        assertFalse(canManageSpaceFavoriteResources("favorite", ownerMid = 99L, accountMid = 42L))
+        assertFalse(canManageSpaceFavoriteResources("favorite", ownerMid = 0L, accountMid = 0L))
+        assertFalse(canManageSpaceFavoriteResources("favorite", ownerMid = 42L, accountMid = null))
+        assertTrue(canCopySpaceFavoriteResources("favorite", accountMid = 42L))
+        assertFalse(canCopySpaceFavoriteResources("favorite", accountMid = null))
+        for (type in listOf("favorite_season", "season", "series")) {
+            assertFalse(canManageSpaceFavoriteResources(type, ownerMid = 42L, accountMid = 42L))
+            assertFalse(canCopySpaceFavoriteResources(type, accountMid = 42L))
+        }
     }
 }

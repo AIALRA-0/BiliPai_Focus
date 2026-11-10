@@ -1,5 +1,7 @@
 package com.android.purebilibili.core.ui.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -31,8 +33,8 @@ fun Modifier.appDesktopInteractionVisuals(
     if (!enabled) return this
     val focused by interactionSource.collectIsFocusedAsState()
     val hovered by interactionSource.collectIsHoveredAsState()
-    val focusColor = MaterialTheme.colorScheme.primary
-    val hoverColor = MaterialTheme.colorScheme.onSurface
+    val focusColor = AppContentColors.accent()
+    val hoverColor = AppContentColors.primaryText()
     return this
         .pointerHoverIcon(PointerIcon.Hand)
         .drawWithContent {
@@ -73,8 +75,8 @@ fun Modifier.appDesktopFocusableItemVisuals(
     val hoverInteractionSource = remember { MutableInteractionSource() }
     val hovered by hoverInteractionSource.collectIsHoveredAsState()
     var focused by remember { mutableStateOf(false) }
-    val focusColor = MaterialTheme.colorScheme.primary
-    val hoverColor = MaterialTheme.colorScheme.onSurface
+    val focusColor = AppContentColors.accent()
+    val hoverColor = AppContentColors.primaryText()
     return this
         .pointerHoverIcon(PointerIcon.Hand)
         .hoverable(hoverInteractionSource)

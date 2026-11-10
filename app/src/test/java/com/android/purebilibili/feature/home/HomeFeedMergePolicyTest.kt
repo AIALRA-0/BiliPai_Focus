@@ -1,6 +1,10 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.data.model.response.RecommendationFeedbackMetadata
+import com.android.purebilibili.data.model.response.RecommendationFeedbackReason
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.data.repository.RecommendationFeedbackRequest
+import com.android.purebilibili.data.repository.buildRecommendationFeedbackRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -41,6 +45,90 @@ class HomeFeedMergePolicyTest {
         val app = listOf(video("BV1"), video("BV3"))
         val merged = HomeFeedMergePolicy.mergeFeeds(web = web, app = app)
         assertEquals(listOf("BV1", "BV3", "BV2"), merged.map { it.bvid })
+    }
+
+    @Test
+    fun `later app duplicate restores server feedback without replacing the displayed web card`() {
+        val feedback = RecommendationFeedbackMetadata(
+            goto = "av",
+            param = "123",
+            reasons = listOf(RecommendationFeedbackReason(id = 1L, name = "不感兴趣")),
+            supportsServerSync = true
+        )
+        val webCard = video("BV_SHARED").copy(title = "Web title", pic = "web.jpg")
+        val appCard = webCard.copy(
+            title = "App title",
+            pic = "app.jpg",
+            recommendationFeedback = feedback
+        )
+
+        val merged = HomeFeedMergePolicy.mergeFeeds(
+            web = listOf(webCard, video("BV_WEB")),
+            app = listOf(video("BV_APP"), appCard)
+        )
+
+        assertEquals(listOf("BV_APP", "BV_SHARED", "BV_WEB"), merged.map { it.bvid })
+        val retained = merged[1]
+        assertEquals("Web title", retained.title)
+        assertEquals("web.jpg", retained.pic)
+        val reason = resolveHomeNotInterestedReasons(retained).single()
+        assertEquals(
+            RecommendationFeedbackRequest(goto = "av", resourceId = "123", reasonId = 1L, feedbackId = null),
+            buildRecommendationFeedbackRequest(retained.recommendationFeedback!!, reason)
+        )
+    }
+
+    @Test
+    fun `later duplicate without feedback does not downgrade server reasons`() {
+        val appCard = video("BV_SHARED").copy(
+            recommendationFeedback = RecommendationFeedbackMetadata(
+                goto = "av",
+                param = "123",
+                reasons = listOf(RecommendationFeedbackReason(id = 1L, name = "不感兴趣")),
+                supportsServerSync = true
+            )
+        )
+
+        val merged = HomeFeedMergePolicy.mergeFeeds(
+            web = listOf(video("BV_SHARED")),
+            app = listOf(appCard)
+        )
+
+        val retained = merged.single()
+        val reason = resolveHomeNotInterestedReasons(retained).single()
+        assertEquals(
+            RecommendationFeedbackRequest(goto = "av", resourceId = "123", reasonId = 1L, feedbackId = null),
+            buildRecommendationFeedbackRequest(retained.recommendationFeedback!!, reason)
+        )
+    }
+
+    @Test
+    fun `duplicate with usable server reasons enriches incomplete feedback`() {
+        val incomplete = video("BV_SHARED").copy(
+            recommendationFeedback = RecommendationFeedbackMetadata(
+                goto = "av",
+                param = "123",
+                supportsServerSync = true
+            )
+        )
+        val complete = incomplete.copy(
+            recommendationFeedback = incomplete.recommendationFeedback!!.copy(
+                reasons = listOf(RecommendationFeedbackReason(id = 2L, name = "此类内容过多"))
+            )
+        )
+
+        val merged = HomeFeedMergePolicy.mergeFeeds(
+            web = listOf(video("BV_WEB")),
+            app = listOf(incomplete, complete)
+        )
+
+        assertEquals(listOf("BV_SHARED", "BV_WEB"), merged.map { it.bvid })
+        val retained = merged.first()
+        val reason = resolveHomeNotInterestedReasons(retained).single()
+        assertEquals(
+            RecommendationFeedbackRequest(goto = "av", resourceId = "123", reasonId = 2L, feedbackId = null),
+            buildRecommendationFeedbackRequest(retained.recommendationFeedback!!, reason)
+        )
     }
 
     @Test

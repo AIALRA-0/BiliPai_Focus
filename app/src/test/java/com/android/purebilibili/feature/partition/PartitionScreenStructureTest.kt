@@ -20,6 +20,17 @@ import org.junit.Test
 class PartitionScreenStructureTest {
 
     @Test
+    fun `ranking tabs preserve category order and every season target`() {
+        assertEquals(
+            listOf("全站", "番剧", "国创", "动画", "音乐", "舞蹈", "游戏", "知识", "科技", "运动", "汽车",
+                "美食", "动物", "鬼畜", "时尚", "娱乐", "影视", "记录", "电影", "剧集", "综艺"),
+            partitionTabs.map { it.name },
+        )
+        assertEquals(listOf(1, 4, 3, 2, 5, 7), partitionTabs.mapNotNull { resolvePartitionBangumiType(it.id) })
+        assertEquals(partitionTabs.size, partitionTabs.map { it.id }.distinct().size)
+    }
+
+    @Test
     fun `partition page uses side rail and feed list layout`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/partition/PartitionScreen.kt")
 
@@ -57,7 +68,9 @@ class PartitionScreenStructureTest {
         assertTrue(source.contains("VideoRepository.getPopularVideos(page = pageToFetch)"))
         assertTrue(source.contains("VideoRepository.getRegionVideos(tid = partition.id, page = pageToFetch)"))
         assertTrue(source.contains("resolvePartitionBangumiType(partition.id)"))
-        assertTrue(source.contains("onBangumiClick(bangumiType)"))
+        assertFalse(source.contains("onBangumiClick(bangumiType)"))
+        assertTrue(source.contains("onPartitionSelected = viewModel::selectPartition"))
+        assertTrue(source.contains("onBangumiSeasonClick(video.id)"))
         assertFalse(source.contains("LazyVerticalGrid("))
         assertTrue(source.contains("AdaptivePullToRefreshBox("))
         assertTrue(source.contains("onRefresh = viewModel::refresh"))

@@ -52,6 +52,23 @@ internal fun isFollowingListIncomplete(loadedCount: Int, total: Int): Boolean {
     return total > loadedCount
 }
 
+/**
+ * 单页关注列表加载完成后，是否还能继续加载下一页。
+ *
+ * 只有「本页非空」且「合并后确有新增用户」才继续：服务器在边界处重复返回同一页时
+ * （去重后长度不变）必须停下，否则 `loadAllForSearch` 会无限翻页。
+ */
+internal fun shouldContinueFollowingPagination(
+    previousCount: Int,
+    mergedCount: Int,
+    incomingCount: Int,
+    total: Int
+): Boolean {
+    if (incomingCount <= 0) return false
+    if (mergedCount <= previousCount) return false
+    return isFollowingListIncomplete(mergedCount, total)
+}
+
 internal fun shouldPublishFollowingLoadBatch(
     loadedCount: Int,
     total: Int,

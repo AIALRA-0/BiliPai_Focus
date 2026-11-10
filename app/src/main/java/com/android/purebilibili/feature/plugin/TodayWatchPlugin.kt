@@ -1,4 +1,8 @@
 package com.android.purebilibili.feature.plugin
+
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import androidx.compose.foundation.background
@@ -31,20 +35,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.plugin.PluginCapability
-import com.android.purebilibili.core.plugin.PluginCapabilityManifest
+import com.android.purebilibili.plugin.sdk.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
-import com.android.purebilibili.core.plugin.RecommendationAction
-import com.android.purebilibili.core.plugin.RecommendationCreatorSignal
-import com.android.purebilibili.core.plugin.RecommendationGroup
-import com.android.purebilibili.core.plugin.RecommendationGroupItem
-import com.android.purebilibili.core.plugin.RecommendationMode
-import com.android.purebilibili.core.plugin.RecommendationPluginApi
-import com.android.purebilibili.core.plugin.RecommendationRequest
-import com.android.purebilibili.core.plugin.RecommendationResult
-import com.android.purebilibili.core.plugin.RecommendationStrategy
-import com.android.purebilibili.core.plugin.RecommendedVideo
+import com.android.purebilibili.core.plugin.BuiltinPlugin
+import com.android.purebilibili.plugin.sdk.RecommendationAction
+import com.android.purebilibili.plugin.sdk.RecommendationCreatorSignal
+import com.android.purebilibili.plugin.sdk.RecommendationGroup
+import com.android.purebilibili.plugin.sdk.RecommendationGroupItem
+import com.android.purebilibili.plugin.sdk.RecommendationMode
+import com.android.purebilibili.plugin.sdk.RecommendationPluginApi
+import com.android.purebilibili.plugin.sdk.RecommendationRequest
+import com.android.purebilibili.plugin.sdk.RecommendationResult
+import com.android.purebilibili.plugin.sdk.RecommendationStrategy
+import com.android.purebilibili.plugin.sdk.RecommendedVideo
+import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.store.TodayWatchFeedbackSnapshot
 import com.android.purebilibili.core.store.TodayWatchFeedbackStore
 import com.android.purebilibili.core.store.TodayWatchProfileStore
@@ -107,9 +113,9 @@ data class TodayWatchPluginConfig(
     val refreshTriggerToken: Long = 0L
 )
 
-class TodayWatchPlugin : RecommendationPluginApi {
+class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, TodayWatchControls {
 
-    override val id: String = PLUGIN_ID
+    override val id: String = BuiltinPluginIds.TODAY_WATCH
     override val name: String = "今日推荐单"
     override val description: String = "本地分析观看历史，生成可定制推荐队列"
     override val version: String = "1.1.0"
@@ -131,7 +137,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var config: TodayWatchPluginConfig = TodayWatchPluginConfig()
     private val _configState = MutableStateFlow(config)
-    val configState: StateFlow<TodayWatchPluginConfig> = _configState.asStateFlow()
+    override val configState: StateFlow<TodayWatchPluginConfig> = _configState.asStateFlow()
 
     override suspend fun onEnable() {
         loadConfigSuspend()
@@ -142,7 +148,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
         Logger.d(TAG, "今日推荐单插件已禁用")
     }
 
-    fun updateConfig(transform: (TodayWatchPluginConfig) -> TodayWatchPluginConfig) {
+    private fun updateConfig(transform: (TodayWatchPluginConfig) -> TodayWatchPluginConfig) {
         val updated = normalizeConfig(transform(config))
         if (updated == config) return
         config = updated
@@ -150,11 +156,15 @@ class TodayWatchPlugin : RecommendationPluginApi {
         saveConfig()
     }
 
-    fun setCurrentMode(mode: TodayWatchPluginMode) {
+    override fun setCurrentMode(mode: TodayWatchPluginMode) {
         updateConfig { it.copy(currentMode = mode) }
     }
 
-    override fun buildRecommendations(request: RecommendationRequest): RecommendationResult {
+    override fun setCollapsed(collapsed: Boolean) {
+        updateConfig { it.copy(collapsed = collapsed) }
+    }
+
+    override fun buildRecommendations(request: RecommendationRequest<VideoItem>): RecommendationResult<VideoItem> {
         val plan = buildTodayWatchPlan(
             historyVideos = request.historyVideos,
             candidateVideos = request.candidateVideos,
@@ -323,7 +333,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
             AppText(
                 text = "默认模式",
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = AppContentColors.accent()
             )
             TodayWatchPluginModeSegmentedControl(
                 selectedMode = uiConfig.currentMode,
@@ -353,7 +363,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
                     RecommendationStrategy.EXPLORE -> "增加新 UP、新主题与近期内容"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
 
             AppText("候选范围", style = MaterialTheme.typography.labelLarge)
@@ -376,7 +386,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
                     "仅重排首页已有内容，不产生额外请求"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
 
             AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -384,7 +394,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
             AppText(
                 text = "推荐规模",
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = AppContentColors.accent()
             )
             AppText("UP主榜数量", style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -494,12 +504,12 @@ class TodayWatchPlugin : RecommendationPluginApi {
             AppText(
                 text = "推荐画像维护",
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = AppContentColors.accent()
             )
             AppText(
                 text = "会清空本地学习到的偏好与不感兴趣反馈，推荐会回到冷启动状态。",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
             AppTextButton(
                 onClick = { showResetDialog = true }
@@ -511,7 +521,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
                 AppText(
                     text = resetMessage.orEmpty(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = AppContentColors.accent()
                 )
             }
 
@@ -519,7 +529,7 @@ class TodayWatchPlugin : RecommendationPluginApi {
             AppText(
                 text = "所有设置仅在本地生效，不上传你的历史记录。",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
             }
         }
@@ -551,15 +561,6 @@ class TodayWatchPlugin : RecommendationPluginApi {
         }
     }
 
-    companion object {
-        const val PLUGIN_ID: String = "today_watch"
-
-        fun getInstance(): TodayWatchPlugin? {
-            return PluginManager.plugins
-                .find { it.plugin.id == PLUGIN_ID }
-                ?.plugin as? TodayWatchPlugin
-        }
-    }
 }
 
 @Composable
@@ -575,16 +576,20 @@ private fun TodayWatchPluginModeSegmentedControl(
         if (mode == TodayWatchPluginMode.RELAX) "今晚轻松看" else "深度学习看"
     }
     BottomBarLiquidSegmentedControl(
+        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+        centerGlassContent = true,
+        centerNativeContent = true,
         items = labels,
         selectedIndex = selectedIndex,
         onSelected = { index ->
             modes.getOrNull(index)?.takeIf { it != selectedMode }?.let(onModeChange)
         },
         modifier = modifier.wrapContentWidth(Alignment.CenterHorizontally),
-        itemWidth = 120.dp,
+        itemWidth = if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) null else 120.dp,
         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
-        labelFontSize = 13.sp,
+        labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
         containerHorizontalPadding = 4.dp,
         containerVerticalPadding = 4.dp,
         miuixBackdrop = miuixBackdrop,
@@ -602,12 +607,12 @@ private fun TodayWatchTasteInsightSection(
     AppText(
         text = "推荐依据",
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary
+        color = AppContentColors.accent()
     )
     AppText(
         text = "${state.modeTitle}：${state.modeSummary}",
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+        color = AppContentColors.secondaryText()
     )
 
     if (state.preferredCreators.isNotEmpty()) {
@@ -628,7 +633,7 @@ private fun TodayWatchTasteInsightSection(
         AppText(
             text = "还没有本地负反馈。点视频菜单里的“不感兴趣”后，会在这里显示近期样本。",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = AppContentColors.secondaryText()
         )
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -640,12 +645,12 @@ private fun TodayWatchTasteInsightSection(
                     AppText(
                         text = item.title,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = AppContentColors.primaryText()
                     )
                     AppText(
                         text = item.subtitle,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AppContentColors.secondaryText()
                     )
                 }
             }

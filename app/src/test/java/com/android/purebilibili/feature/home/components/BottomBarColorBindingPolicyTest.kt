@@ -62,6 +62,84 @@ class BottomBarColorBindingPolicyTest {
     }
 
     @Test
+    fun `plain floating bar reveals skin trim and stays opaque without decoration`() {
+        val defaultColor = Color(0x80765432)
+
+        assertEquals(
+            Color.Transparent,
+            resolveBiliPaiFloatingContainerColor(
+                defaultColor = defaultColor,
+                usePlainMiuixFloatingBar = true,
+                mode = FloatingBottomBarMode.None,
+                hasUiSkinDecoration = true,
+            ),
+        )
+        assertEquals(
+            defaultColor.copy(alpha = 1f),
+            resolveBiliPaiFloatingContainerColor(
+                defaultColor = defaultColor,
+                usePlainMiuixFloatingBar = true,
+                mode = FloatingBottomBarMode.None,
+                hasUiSkinDecoration = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `glass and blur keep their surface unless the backdrop is missing`() {
+        val defaultColor = Color(0x80765432)
+
+        assertEquals(
+            defaultColor,
+            resolveBiliPaiFloatingContainerColor(
+                defaultColor = defaultColor,
+                usePlainMiuixFloatingBar = false,
+                mode = FloatingBottomBarMode.Blur,
+                hasUiSkinDecoration = true,
+            ),
+        )
+        assertEquals(
+            defaultColor,
+            resolveBiliPaiFloatingContainerColor(
+                defaultColor = defaultColor,
+                usePlainMiuixFloatingBar = false,
+                mode = FloatingBottomBarMode.LiquidGlass,
+                hasUiSkinDecoration = true,
+            ),
+        )
+        assertEquals(
+            defaultColor,
+            resolveBiliPaiFloatingContainerColor(
+                defaultColor = defaultColor,
+                usePlainMiuixFloatingBar = false,
+                mode = FloatingBottomBarMode.None,
+                hasUiSkinDecoration = false,
+            ),
+        )
+        assertEquals(
+            Color.Transparent,
+            resolveBiliPaiFloatingContainerColor(
+                defaultColor = defaultColor,
+                usePlainMiuixFloatingBar = false,
+                mode = FloatingBottomBarMode.None,
+                hasUiSkinDecoration = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `plain search slot stays on the opaque shell color`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+            .readText()
+        val searchSlot = source
+            .substringAfter("BiliPaiBottomBarSearchSlot(")
+            .substringBefore("iconStyle = iconStyle")
+
+        assertTrue(searchSlot.contains("biliPaiContainerColor.copy(alpha = 1f)"))
+        assertFalse(searchSlot.contains("floatingContainerColor"))
+    }
+
+    @Test
     fun `resolves custom color by enum name`() {
         val binding = resolveBottomBarItemColorBinding(
             item = BottomNavItem.DYNAMIC,

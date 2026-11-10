@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import com.android.purebilibili.core.ui.OpticalContrastPalette
@@ -177,6 +179,7 @@ internal fun HomeTopTabChrome(
                         containerWidth = cappedMaxWidth.dp,
                         itemCount = dockCategoryCount,
                         labelMode = dockLabelMode,
+                        shellHeight = resolveHomeTopDockShellHeight(isFloatingStyle = isTabFloating),
                     )
                 } else {
                     val preferredItem = resolveTopTabWrapItemWidthDp(
@@ -211,8 +214,8 @@ internal fun HomeTopTabChrome(
                             Modifier.shadow(
                                 elevation = effectiveTabShadowElevation,
                                 shape = tabShape,
-                                ambientColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                                spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                ambientColor = AppContentColors.primaryText().copy(alpha = 0.12f),
+                                spotColor = AppContentColors.primaryText().copy(alpha = 0.12f)
                             )
                         } else {
                             Modifier
@@ -334,6 +337,6 @@ private fun BoxScope.CollapsedTopTabHandle() {
             .align(Alignment.Center)
             .size(width = AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Micro, height = AppSpacingTokens.ExtraSmall)
             .clip(AppShapes.container(ContainerLevel.Pill))
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f))
+            .background(AppContentColors.primaryText().copy(alpha = 0.28f))
     )
 }

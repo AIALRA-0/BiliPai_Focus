@@ -12,49 +12,38 @@ import kotlin.test.assertNull
 class DynamicFocusFollowGroupPolicyTest {
 
     @Test
-    fun startupLoadRetriesEmptyNonAuthResultsWithBoundedBackoff() {
+    fun firstPagePrefetchesWhenFocusFilteringLeavesTooFewVisibleItems() {
+        val config = FocusFollowGroupConfig(
+            groups = listOf(
+                FocusFollowGroup(id = "default", name = "默认分组", visible = true),
+                FocusFollowGroup(id = "quiet", name = "静音", visible = false),
+            ),
+            assignments = mapOf("1002" to "quiet"),
+        )
+        val firstPage = DynamicPagePresentation(
+            items = listOf(dynamicItem(mid = 1002L)),
+            isLoading = false,
+            error = null,
+            hasMore = true,
+            isSelectedUserFeed = false,
+            incrementalRefreshBoundaryKey = "first-page-boundary",
+            incrementalPrependedCount = 1,
+        )
+
+        val visiblePage = firstPage.withFocusFollowGroupFilter(config)
+
+        assertEquals(emptyList(), visiblePage.items)
+        assertEquals("first-page-boundary", visiblePage.incrementalRefreshBoundaryKey)
+        assertEquals(1, visiblePage.incrementalPrependedCount)
         assertEquals(
             true,
-            shouldRetryDynamicStartupLoad(
-                visibleItemCount = 0,
-                error = null,
-                attempt = 0
-            )
+            shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = visiblePage.items.size,
+                hasMore = visiblePage.hasMore,
+                filterEnabled = true,
+                extraPagesFetched = 0,
+            ),
         )
-        assertEquals(
-            true,
-            shouldRetryDynamicStartupLoad(
-                visibleItemCount = 0,
-                error = "网络错误",
-                attempt = 1
-            )
-        )
-        assertEquals(
-            false,
-            shouldRetryDynamicStartupLoad(
-                visibleItemCount = 0,
-                error = "未登录，请先登录",
-                attempt = 0
-            )
-        )
-        assertEquals(
-            false,
-            shouldRetryDynamicStartupLoad(
-                visibleItemCount = 1,
-                error = null,
-                attempt = 0
-            )
-        )
-        assertEquals(
-            false,
-            shouldRetryDynamicStartupLoad(
-                visibleItemCount = 0,
-                error = null,
-                attempt = 2
-            )
-        )
-        assertEquals(250L, resolveDynamicStartupRetryDelayMs(0))
-        assertEquals(1_000L, resolveDynamicStartupRetryDelayMs(1))
     }
 
     @Test
@@ -76,6 +65,34 @@ class DynamicFocusFollowGroupPolicyTest {
         )
 
         assertEquals(listOf(1001L), result.map { it.modules.module_author?.mid })
+    }
+
+    @Test
+    fun presentationFiltering_keepsUpstreamPaginationAndRefreshMetadata() {
+        val config = FocusFollowGroupConfig(
+            groups = listOf(
+                FocusFollowGroup(id = "default", name = "默认分组", visible = true),
+                FocusFollowGroup(id = "quiet", name = "静音", visible = false),
+            ),
+            assignments = mapOf("1002" to "quiet"),
+        )
+        val source = DynamicPagePresentation(
+            items = listOf(dynamicItem(mid = 1001L), dynamicItem(mid = 1002L)),
+            isLoading = false,
+            error = null,
+            hasMore = true,
+            isSelectedUserFeed = false,
+            incrementalRefreshBoundaryKey = "boundary",
+            incrementalPrependedCount = 2,
+        )
+
+        val filtered = source.withFocusFollowGroupFilter(config)
+
+        assertEquals(listOf(1001L), filtered.items.map { it.modules.module_author?.mid })
+        assertEquals(true, filtered.hasMore)
+        assertEquals("boundary", filtered.incrementalRefreshBoundaryKey)
+        assertEquals(2, filtered.incrementalPrependedCount)
+        assertEquals(2, source.items.size)
     }
 
     @Test

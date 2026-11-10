@@ -64,6 +64,26 @@ fun resolvePbpRidgeDensity(normalizedIntensity: Float): PbpRidgeDensity {
     }
 }
 
+/**
+ * 把弹幕出现时间（毫秒）聚合为按 [stepSeconds] 秒分桶的密度曲线，供官方 pbp
+ * 接口失效时本地构建热度数据。桶大小按视频时长自适应（目标约 240 个采样点）。
+ */
+fun buildDanmakuDensityValues(
+    positionsMs: List<Long>,
+    durationSeconds: Long,
+    stepSeconds: Int = ((durationSeconds / 240).coerceIn(2L, 10L)).toInt(),
+): List<Float> {
+    if (durationSeconds <= 0L || stepSeconds <= 0) return emptyList()
+    val bucketCount = ((durationSeconds + stepSeconds - 1L) / stepSeconds).toInt().coerceAtLeast(1)
+    val counts = FloatArray(bucketCount)
+    for (positionMs in positionsMs) {
+        if (positionMs < 0L) continue
+        val index = (positionMs / 1000L / stepSeconds).toInt()
+        if (index < bucketCount) counts[index] += 1f
+    }
+    return counts.toList()
+}
+
 fun buildPbpRidgeSamples(
     data: PbpProgressData,
     durationMs: Long

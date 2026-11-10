@@ -1,10 +1,12 @@
 // 文件路径: feature/settings/JsonPluginEditorScreen.kt
 package com.android.purebilibili.feature.settings
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.plugin.json.JsonPluginManager
 import com.android.purebilibili.core.plugin.json.JsonRulePlugin
 import com.android.purebilibili.core.plugin.json.Rule
-import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.feature.settings.ui.settingsScrollContentPadding
 import com.android.purebilibili.core.ui.components.AppCard
@@ -112,15 +113,15 @@ fun JsonPluginEditorContent(
                 Column(modifier = Modifier.padding(16.dp)) {
                     AppText("基本信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     AppTextField(
                         value = name,
                         onValueChange = onNameChange,
                         label = "插件名称"
                     )
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
-                    
+
                     AppTextField(
                         value = description,
                         onValueChange = onDescriptionChange,
@@ -131,7 +132,7 @@ fun JsonPluginEditorContent(
                 }
             }
         }
-        
+
         // 规则列表
         item {
             Row(
@@ -140,7 +141,7 @@ fun JsonPluginEditorContent(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 AppText("过滤规则", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                
+
                 AppTextButton(onClick = {
                     onRulesChange(rules + Rule(field = "title", op = "contains", value = JsonPrimitive(""), action = "hide"))
                 }) {
@@ -150,7 +151,7 @@ fun JsonPluginEditorContent(
                 }
             }
         }
-        
+
         itemsIndexed(rules, key = { index, _ -> index }) { index, rule ->
             RuleEditor(
                 rule = rule,
@@ -173,7 +174,7 @@ fun JsonPluginEditorContent(
                 AppText(
                     text = "点击 + 添加规则",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppContentColors.secondaryText()
                 )
             }
         }
@@ -205,17 +206,17 @@ private fun RuleEditor(
     } else {
         listOf("content", "userId", "type")
     }
-    
+
     val opOptions = listOf("eq", "ne", "lt", "le", "gt", "ge", "contains", "startsWith", "endsWith", "regex")
     val actionOptions = if (pluginType == "feed") listOf("hide") else listOf("hide", "highlight")
-    
+
     var field by remember { mutableStateOf(rule.field ?: "title") }
     var op by remember { mutableStateOf(rule.op ?: "contains") }
     var value by remember { mutableStateOf(
         (rule.value as? JsonPrimitive)?.content ?: ""
     ) }
     var action by remember { mutableStateOf(rule.action) }
-    
+
     AppSurface(
         modifier = Modifier
             .fillMaxWidth()
@@ -235,57 +236,57 @@ private fun RuleEditor(
                 AppText(
                     text = "规则",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = AppContentColors.link()
                 )
                 AppIconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                     AppIcon(
                         com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_delete_24),
                         contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = AppContentColors.error(),
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
-            
+
             // 字段选择
             DropdownSelector(
                 label = "字段",
                 value = field,
                 options = fieldOptions,
-                onSelect = { 
+                onSelect = {
                     field = it
                     onUpdate(rule.copy(field = it))
                 }
             )
-            
+
             // 操作符选择
             DropdownSelector(
                 label = "操作符",
                 value = op,
                 options = opOptions,
-                onSelect = { 
+                onSelect = {
                     op = it
                     onUpdate(rule.copy(op = it))
                 }
             )
-            
+
             // 值输入
             AppTextField(
                 value = value,
-                onValueChange = { 
+                onValueChange = {
                     value = it
                     onUpdate(rule.copy(value = JsonPrimitive(it)))
                 },
                 label = "值",
                 singleLine = true
             )
-            
+
             // 动作选择
             DropdownSelector(
                 label = "动作",
                 value = action,
                 options = actionOptions,
-                onSelect = { 
+                onSelect = {
                     action = it
                     onUpdate(rule.copy(action = it))
                 }
@@ -302,19 +303,19 @@ private fun DropdownSelector(
     onSelect: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    
+
     Column {
         AppText(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = AppContentColors.secondaryText()
         )
-        Box {
+        com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { expanded = true }) {
             AppOutlinedButton(
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                AppText(value.ifEmpty { "选择..." })
+                AppText(value.ifEmpty { "选择…" })
             }
             AppDropdownMenu(
                 expanded = expanded,

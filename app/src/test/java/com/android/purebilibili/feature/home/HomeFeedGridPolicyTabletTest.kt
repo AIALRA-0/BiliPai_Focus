@@ -1,20 +1,10 @@
 package com.android.purebilibili.feature.home
 
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
 import com.android.purebilibili.core.store.HomeFeedCardStyle
-import com.android.purebilibili.core.util.AppFoldPosture
-import com.android.purebilibili.core.util.AppFoldingFeatureInfo
-import com.android.purebilibili.core.util.AppHingeOrientation
-import com.android.purebilibili.core.util.AppWindowAdaptiveInfo
-import com.android.purebilibili.core.util.WindowHeightSizeClass
-import com.android.purebilibili.core.util.WindowSizeClass
 import com.android.purebilibili.core.util.WindowWidthSizeClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class HomeFeedGridPolicyTabletTest {
 
@@ -75,7 +65,7 @@ class HomeFeedGridPolicyTabletTest {
     }
 
     @Test
-    fun cardAspectRatioSwitchesToSixteenNineOnExpanded() {
+    fun legacyWindowRatioDoesNotOverrideSelectedCoverStyle() {
         val compactRatio = resolveHomeFeedCardAspectRatio(WindowWidthSizeClass.Compact)
         val mediumRatio = resolveHomeFeedCardAspectRatio(WindowWidthSizeClass.Medium)
         val expandedRatio = resolveHomeFeedCardAspectRatio(WindowWidthSizeClass.Expanded)
@@ -88,7 +78,7 @@ class HomeFeedGridPolicyTabletTest {
         assertEquals(16f / 9f, largeRatio)
         assertEquals(16f / 9f, extraLargeRatio)
         assertEquals(
-            16f / 9f,
+            16f / 10f,
             resolveHomeFeedCoverAspectRatio(
                 style = HomeFeedCardStyle.BILIPAI,
                 gridColumns = 6,
@@ -98,32 +88,10 @@ class HomeFeedGridPolicyTabletTest {
     }
 
     @Test
-    fun bookHingeCreatesCenteredGridGapOnlyWhenAvoidanceIsRequired() {
-        val bookInfo = AppWindowAdaptiveInfo(
-            windowSizeClass = WindowSizeClass(
-                widthSizeClass = WindowWidthSizeClass.Expanded,
-                heightSizeClass = WindowHeightSizeClass.Medium,
-                widthDp = 900.dp,
-                heightDp = 700.dp,
-            ),
-            foldingFeature = AppFoldingFeatureInfo(
-                posture = AppFoldPosture.Book,
-                hingeOrientation = AppHingeOrientation.Vertical,
-                hingeBounds = IntRect(440, 0, 460, 700),
-                isSeparating = true,
-            ),
-        )
-
-        val bookSpec = resolveHomeFeedBookHingeGridSpec(bookInfo, density = 1f)
-        val flatSpec = resolveHomeFeedBookHingeGridSpec(
-            bookInfo.copy(
-                foldingFeature = bookInfo.foldingFeature.copy(posture = AppFoldPosture.Flat),
-            ),
-            density = 1f,
-        )
-
-        assertTrue(bookSpec.enabled)
-        assertEquals(36.dp, bookSpec.centerGapDp)
-        assertFalse(flatSpec.enabled)
+    fun fixedOddColumnPreferenceIsClampedToTheAvailableSafePane() {
+        assertEquals(2, com.android.purebilibili.core.ui.adaptive.resolveHingeSafeFeedColumns(5, 440f))
+        assertEquals(1, com.android.purebilibili.core.ui.adaptive.resolveHingeSafeFeedColumns(3, 170f))
+        assertEquals(1, com.android.purebilibili.core.ui.adaptive.resolveHingeSafeFeedColumns(1, 640f))
+        assertEquals(1, com.android.purebilibili.core.ui.adaptive.resolveHingeSafeFeedColumns(2, 440f, minCardWidthDp = 280))
     }
 }

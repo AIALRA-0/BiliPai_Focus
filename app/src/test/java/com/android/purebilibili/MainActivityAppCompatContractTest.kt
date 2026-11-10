@@ -151,28 +151,6 @@ class MainActivityAppCompatContractTest {
             "The retired hand-drawn TV/play monochrome icon should not remain packaged"
         )
 
-        listOf("", "_round").forEach { suffix ->
-            val adaptiveIcon = loadResourceText("mipmap-anydpi-v26/ic_launcher_bilipai_monet$suffix.xml")
-            assertTrue(
-                adaptiveIcon.contains("<foreground android:drawable=\"@mipmap/ic_launcher_bilipai_monet_foreground\" />") &&
-                    adaptiveIcon.contains("<monochrome android:drawable=\"@mipmap/ic_launcher_bilipai_monet_foreground\" />"),
-                "BiliPai Monet$suffix should let the launcher tint the same clean logo used by its color icon"
-            )
-            assertTrue(
-                !resourcePathExists("mipmap-anydpi-v31/ic_launcher_bilipai_monet$suffix.xml"),
-                "BiliPai Monet$suffix should not replace the official monochrome path with an Android 12 override"
-            )
-        }
-        assertTrue(
-            !resourcePathExists("drawable-v31/ic_launcher_bilipai_monet_background.xml"),
-            "BiliPai Monet should not simulate themed icons by drawing private system accent resources"
-        )
-        assertTrue(
-            !loadResourceText("drawable/ic_launcher_bilipai_monet_background.xml").contains("system_accent") &&
-                !loadResourceText("drawable-night/ic_launcher_bilipai_monet_background.xml").contains("system_accent"),
-            "BiliPai Monet color fallbacks should remain deterministic when the launcher does not theme icons"
-        )
-
         val splashAdaptiveIcon = loadResourceText("mipmap-anydpi-v26/splash_icon_bilipai_monet.xml")
         val splashForeground = loadResourceText("drawable/splash_icon_bilipai_monet_foreground.xml")
         assertTrue(
@@ -632,15 +610,15 @@ class MainActivityAppCompatContractTest {
         val manifest = loadResourceText("../AndroidManifest.xml")
 
         mapOf(
-            "MainActivityAliasBlueSnowMaid" to SplashAliasContract("MainActivitySplashBlueSnowMaid", "Theme.PureBiliBili.Splash.BlueSnowMaid", "ic_launcher_blue_snow_maid", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_round"),
-            "MainActivityAliasBlueSnowMaidAnnouncement" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncement", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncement", "ic_launcher_blue_snow_maid_announcement", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_announcement_round"),
-            "MainActivityAliasBlueSnowMaidAnnouncementLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncementLight", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncementLight", "ic_launcher_blue_snow_maid_announcement_light", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_announcement_light_round"),
-            "MainActivityAliasBlueSnowMaidAnnouncementDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncementDark", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncementDark", "ic_launcher_blue_snow_maid_announcement_dark", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_announcement_dark_round"),
-            "MainActivityAliasBlueSnowMaidFront" to SplashAliasContract("MainActivitySplashBlueSnowMaidFront", "Theme.PureBiliBili.Splash.BlueSnowMaidFront", "ic_launcher_blue_snow_maid_front", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_front_round"),
-            "MainActivityAliasBlueSnowMaidLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidLight", "Theme.PureBiliBili.Splash.BlueSnowMaidLight", "ic_launcher_blue_snow_maid_light", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_light_round"),
-            "MainActivityAliasBlueSnowMaidDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidDark", "Theme.PureBiliBili.Splash.BlueSnowMaidDark", "ic_launcher_blue_snow_maid_dark", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_dark_round"),
-            "MainActivityAliasBlueSnowMaidFrontLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidFrontLight", "Theme.PureBiliBili.Splash.BlueSnowMaidFrontLight", "ic_launcher_blue_snow_maid_front_light", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_front_light_round"),
-            "MainActivityAliasBlueSnowMaidFrontDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidFrontDark", "Theme.PureBiliBili.Splash.BlueSnowMaidFrontDark", "ic_launcher_blue_snow_maid_front_dark", splashActivityRoundIcon = "@mipmap/ic_launcher_blue_snow_maid_front_dark_round"),
+            "MainActivityAliasBlueSnowMaid" to SplashAliasContract("MainActivitySplashBlueSnowMaid", "Theme.PureBiliBili.Splash.BlueSnowMaid", "ic_launcher_blue_snow_maid"),
+            "MainActivityAliasBlueSnowMaidAnnouncement" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncement", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncement", "ic_launcher_blue_snow_maid_announcement"),
+            "MainActivityAliasBlueSnowMaidAnnouncementLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncementLight", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncementLight", "ic_launcher_blue_snow_maid_announcement_light"),
+            "MainActivityAliasBlueSnowMaidAnnouncementDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidAnnouncementDark", "Theme.PureBiliBili.Splash.BlueSnowMaidAnnouncementDark", "ic_launcher_blue_snow_maid_announcement_dark"),
+            "MainActivityAliasBlueSnowMaidFront" to SplashAliasContract("MainActivitySplashBlueSnowMaidFront", "Theme.PureBiliBili.Splash.BlueSnowMaidFront", "ic_launcher_blue_snow_maid_front"),
+            "MainActivityAliasBlueSnowMaidLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidLight", "Theme.PureBiliBili.Splash.BlueSnowMaidLight", "ic_launcher_blue_snow_maid_light"),
+            "MainActivityAliasBlueSnowMaidDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidDark", "Theme.PureBiliBili.Splash.BlueSnowMaidDark", "ic_launcher_blue_snow_maid_dark"),
+            "MainActivityAliasBlueSnowMaidFrontLight" to SplashAliasContract("MainActivitySplashBlueSnowMaidFrontLight", "Theme.PureBiliBili.Splash.BlueSnowMaidFrontLight", "ic_launcher_blue_snow_maid_front_light"),
+            "MainActivityAliasBlueSnowMaidFrontDark" to SplashAliasContract("MainActivitySplashBlueSnowMaidFrontDark", "Theme.PureBiliBili.Splash.BlueSnowMaidFrontDark", "ic_launcher_blue_snow_maid_front_dark"),
             "MainActivityAlias3DLauncher" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
             "MainActivityAlias3D" to SplashAliasContract("MainActivitySplashIcon3D", "Theme.PureBiliBili.Splash.Icon3D", "ic_launcher_3d"),
             "MainActivityAliasBiliPai" to SplashAliasContract("MainActivitySplashBiliPai", "Theme.PureBiliBili.Splash.BiliPai", "ic_launcher_bilipai"),
@@ -856,20 +834,36 @@ class MainActivityAppCompatContractTest {
     }
 
     private fun loadResourceFile(resourcePath: String): File {
-        val candidates = listOf(
-            File("app/src/main/res/$resourcePath"),
-            File("src/main/res/$resourcePath")
+        val roots = listOf(
+            File("app/src/main/res"), File("src/main/res"),
+            File("brand-motion/src/main/res"), File("../brand-motion/src/main/res"),
         )
-        return candidates.firstOrNull { it.exists() }
-            ?: error("Cannot locate $resourcePath from ${File(".").absolutePath}")
+        roots.map { File(it, resourcePath) }.firstOrNull { it.isFile }?.let { return it }
+        // Keep all pixel/density/theme assertions, following resource aliases just as Android does.
+        if (resourcePath.startsWith("mipmap") && resourcePath.endsWith(".png")) {
+            val directory = resourcePath.substringBefore('/')
+            val name = resourcePath.substringAfter('/').removeSuffix(".png")
+            val density = directory.split('-').firstOrNull { it.endsWith("dpi") }
+            for (root in roots) {
+                val aliases = File(root, directory.replaceFirst("mipmap", "values") + "/launcher_image_aliases.xml")
+                if (!aliases.isFile) continue
+                val items = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                    .parse(aliases).getElementsByTagName("item")
+                for (index in 0 until items.length) {
+                    val item = items.item(index) as org.w3c.dom.Element
+                    if (item.getAttribute("name") != name || item.getAttribute("type") != "mipmap") continue
+                    val target = item.textContent.trim().removePrefix("@mipmap/")
+                    val targetDirectory = if (density == null) "mipmap" else "mipmap-$density"
+                    return roots.map { File(it, "$targetDirectory/$target.png") }.firstOrNull { it.isFile }
+                        ?: error("Missing bitmap target for $resourcePath")
+                }
+            }
+        }
+        error("Cannot locate $resourcePath from ${File(".").absolutePath}")
     }
 
-    private fun resourcePathExists(resourcePath: String): Boolean {
-        return listOf(
-            File("app/src/main/res/$resourcePath"),
-            File("src/main/res/$resourcePath")
-        ).any { it.exists() }
-    }
+    private fun resourcePathExists(resourcePath: String): Boolean =
+        runCatching { loadResourceFile(resourcePath) }.isSuccess
 
     private fun loadResourceText(resourcePath: String): String {
         return loadResourceFile(resourcePath).readText()

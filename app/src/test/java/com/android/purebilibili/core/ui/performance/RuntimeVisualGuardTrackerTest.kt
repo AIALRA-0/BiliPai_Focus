@@ -303,6 +303,57 @@ class RuntimeVisualGuardTrackerTest {
         }
     }
 
+    @Test
+    fun beginSession_clearsCrossSessionDowngradeHistory() {
+        val tracker = RuntimeVisualGuardTracker()
+
+        // 连续两个高掉帧窗口 → 降级。
+        tracker.finishWindow(totalFrames = 12, jankyFrames = 1, nowMs = 100L)
+        tracker.finishWindow(totalFrames = 12, jankyFrames = 1, nowMs = 200L)
+        assertTrue(tracker.decision.value.downgraded)
+        assertEquals(MotionTier.Reduced, tracker.decision.value.effectiveMotionTier)
+
+        // 进入新会话（如返回列表后再次进入详情）→ 惩罚历史清零，不再「越进越卡」。
+        tracker.beginSession(Any())
+        assertFalse(tracker.decision.value.downgraded)
+        assertFalse(tracker.decision.value.forceLowBlurBudget)
+        assertEquals(MotionTier.Normal, tracker.decision.value.effectiveMotionTier)
+    }
+
+    @Test
+    fun beginSession_isIdempotentForTheSameSession() {
+        val tracker = RuntimeVisualGuardTracker(minimumFrameCount = 12)
+        val session = Any()
+
+        tracker.beginSession(session)
+        tracker.finishWindow(totalFrames = 12, jankyFrames = 1, nowMs = 100L)
+
+        // 同会话重入须同时保留已结算的降级历史和当前未结算的采样窗口。
+        repeat(6) { index ->
+            tracker.onFrame(tracked = true, isJank = index == 0, nowMs = 200L)
+        }
+        tracker.beginSession(session)
+        repeat(6) {
+            tracker.onFrame(tracked = true, isJank = false, nowMs = 200L)
+        }
+        tracker.onFrame(tracked = false, isJank = false, nowMs = 200L)
+
+        assertTrue(tracker.decision.value.downgraded)
+    }
+
+    @Test
+    fun resetDowngradeHistory_keepsBaseTier() {
+        val tracker = RuntimeVisualGuardTracker(baseTier = MotionTier.Reduced)
+
+        tracker.finishWindow(totalFrames = 12, jankyFrames = 1, nowMs = 100L)
+        tracker.finishWindow(totalFrames = 12, jankyFrames = 1, nowMs = 200L)
+        tracker.beginSession(Any())
+
+        // 只清惩罚历史，不覆盖组合根注入的设备基线档位。
+        assertEquals(MotionTier.Reduced, tracker.decision.value.effectiveMotionTier)
+        assertFalse(tracker.decision.value.downgraded)
+    }
+
     private fun RuntimeVisualGuardTracker.finishWindow(
         totalFrames: Int,
         jankyFrames: Int,

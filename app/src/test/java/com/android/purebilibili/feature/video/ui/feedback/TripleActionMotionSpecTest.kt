@@ -30,9 +30,9 @@ class TripleActionMotionSpecTest {
     }
 
     @Test
-    fun `triple celebration uses center overlay in portrait`() {
+    fun `triple celebration avoids the content center in portrait`() {
         assertEquals(
-            TripleCelebrationPlacement.CenterOverlay,
+            TripleCelebrationPlacement.BottomTrailing,
             resolveTripleCelebrationPlacement(
                 isFullscreen = false,
                 isLandscape = false
@@ -41,9 +41,9 @@ class TripleActionMotionSpecTest {
     }
 
     @Test
-    fun `triple celebration keeps center overlay in fullscreen`() {
+    fun `triple celebration avoids the picture center in fullscreen`() {
         assertEquals(
-            TripleCelebrationPlacement.CenterOverlay,
+            TripleCelebrationPlacement.BottomTrailing,
             resolveTripleCelebrationPlacement(
                 isFullscreen = true,
                 isLandscape = true

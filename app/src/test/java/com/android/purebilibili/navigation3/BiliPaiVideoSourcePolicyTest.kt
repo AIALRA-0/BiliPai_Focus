@@ -8,31 +8,6 @@ import kotlin.test.assertTrue
 class BiliPaiVideoSourcePolicyTest {
 
     @Test
-    fun relatedTransitionPreferenceOnlyDisablesRelatedCardMorph() {
-        assertFalse(
-            resolveVideoCardTransitionEnabledForSource(
-                cardTransitionEnabled = true,
-                relatedVideoTransitionEnabled = false,
-                sourceRoute = "video/BV_PARENT",
-            )
-        )
-        assertTrue(
-            resolveVideoCardTransitionEnabledForSource(
-                cardTransitionEnabled = true,
-                relatedVideoTransitionEnabled = false,
-                sourceRoute = "home",
-            )
-        )
-        assertFalse(
-            resolveVideoCardTransitionEnabledForSource(
-                cardTransitionEnabled = false,
-                relatedVideoTransitionEnabled = true,
-                sourceRoute = "video/BV_PARENT",
-            )
-        )
-    }
-
-    @Test
     fun listAndRelatedDetailUseTheSameWholeCardMorphMode() {
         assertTrue(isRelatedVideoCardMorphSourceRoute("video/BV_PARENT"))
         assertFalse(isRelatedVideoCardMorphSourceRoute("partition"))
@@ -118,7 +93,7 @@ class BiliPaiVideoSourcePolicyTest {
     }
 
     @Test
-    fun videoToVideoNavigationKeepsPreviousListSourceInsteadOfVideoRoute() {
+    fun videoLinkNavigationUsesImmediateParentInsteadOfPreviousListSource() {
         val source = resolveBiliPaiVideoSource(
             bvid = "BV2",
             explicitSourceRoute = null,
@@ -126,8 +101,8 @@ class BiliPaiVideoSourcePolicyTest {
             previousSourceRoute = "home"
         )
 
-        assertEquals("home", source.route)
-        assertEquals("home:BV2", source.key)
+        assertEquals("video/BV1", source.route)
+        assertEquals("video/BV1:BV2", source.key)
     }
 
     @Test

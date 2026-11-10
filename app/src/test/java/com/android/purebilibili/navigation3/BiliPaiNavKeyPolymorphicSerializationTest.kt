@@ -11,6 +11,19 @@ class BiliPaiNavKeyPolymorphicSerializationTest {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
+    fun dynamicCommentEntrySurvivesSavedBackStackRestoration() {
+        val stack: List<BiliPaiNavKey> = listOf(
+            BiliPaiNavKey.MainHost,
+            BiliPaiNavKey.DynamicDetail("123"),
+            BiliPaiNavKey.DynamicDetail("123", openComments = true),
+            BiliPaiNavKey.DynamicDetail("123", 456L, 789L, openComments = true),
+        )
+        val encoded = json.encodeToString(ListSerializer(BiliPaiNavKey.serializer()), stack)
+        val decoded = json.decodeFromString(ListSerializer(BiliPaiNavKey.serializer()), encoded)
+        assertEquals(stack, decoded)
+    }
+
+    @Test
     fun `back stack with SeasonSeriesDetail round trips`() {
         // 回归：SeasonSeriesDetail.type 与默认 class discriminator "type" 冲突，
         // onSaveInstanceState 保存导航栈时曾抛 JsonEncodingException 闪退。

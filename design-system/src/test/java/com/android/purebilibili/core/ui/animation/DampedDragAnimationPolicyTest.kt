@@ -60,8 +60,8 @@ class DampedDragAnimationPolicyTest {
         assertTrue(source.contains("pressedScale = pressedScale.coerceAtLeast(1f)"))
         assertTrue(source.contains("scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec)"))
         assertTrue(source.contains("scaleYAnimation.animateTo(pressedScale, scaleYAnimationSpec)"))
-        assertTrue(source.contains("private val valueAnimationSpec = spring(1f, 1000f, 0.001f)"))
-        assertTrue(source.contains("private val velocityAnimationSpec = spring(0.5f, 300f, 0.01f)"))
+        assertTrue(source.contains("private val valueAnimationSpec = LiquidIndicatorMotion.positionSpec()"))
+        assertTrue(source.contains("private val velocityAnimation = LiquidIndicatorVelocity(scope)"))
         // 9.0.0 标准手势检测 API
         assertTrue(source.contains("awaitEachGesture"))
         assertTrue(source.contains("awaitFirstDown(requireUnconsumed = false)"))
@@ -101,12 +101,12 @@ class DampedDragAnimationPolicyTest {
         assertTrue(source.contains("deformationVelocityTracker.resetTracking()"))
         assertTrue(source.contains("deformationVelocityTracker.addPosition("))
         assertTrue(source.contains("Offset(value, 0f)"))
-        assertTrue(source.contains("velocityAnimation.animateTo(targetVelocity, velocityAnimationSpec)"))
+        assertTrue(source.contains("velocityAnimation.updateTarget(targetVelocity)"))
         assertTrue(dragSource.contains("updateDeformationVelocity(clampedValue)"))
         assertTrue(source.contains("velocityTracker.addPosition("))
         assertTrue(source.contains("velocityTracker.calculateVelocity()"))
-        // velocityAnimation 仍通过 animateToValue 中的 animateTo(0f) 做释放衰减
-        assertTrue(source.contains("velocityAnimation.animateTo(0f, velocityAnimationSpec)"))
+        // 释放只更新同一平滑器的目标，不创建新的速度动画协程
+        assertTrue(source.contains("velocityAnimation.updateTarget(0f)"))
         assertFalse(dragSource.contains("velocityAnimation.snapTo(gestureVelocityItems)"))
         assertFalse(source.contains("deformationVelocityAnimation"))
         assertFalse(source.contains("dragVelocityItemsPerSecond"))
@@ -143,12 +143,25 @@ class DampedDragAnimationPolicyTest {
             .substringAfter("fun updateIndex(index: Int)")
             .substringBefore("private const val BILIPAI_PRESSED_SCALE")
 
-        assertTrue(updateIndexSource.contains("animateToValue(safeIndex.toFloat())"))
-        assertTrue(source.contains("fun animateToValue(value: Float, onSettled: (() -> Unit)? = null)"))
-        assertTrue(source.contains("press()"))
+        assertTrue(updateIndexSource.contains("animateToValue(\n            value = safeIndex.toFloat(),"))
+        assertTrue(updateIndexSource.contains("onSettled = { settledSelectionCount += 1 }"))
+        assertTrue(source.contains("fun animateToValue("))
+        assertTrue(source.contains("onSettled: (() -> Unit)? = null"))
+        assertTrue(source.contains("animatePress: Boolean = true"))
+        assertTrue(source.contains("if (animatePress) press()"))
         assertTrue(source.contains("release(onSettled = onSettled)"))
-        assertTrue(source.contains("if (value != targetValue)"))
-        assertTrue(source.contains("abs(it - valueAnimation.targetValue) < threshold"))
+        val releaseSource = source
+            .substringAfter("fun release(onSettled: (() -> Unit)? = null)")
+            .substringBefore("private fun updateDeformationVelocity")
+        val settleTargetIndex = releaseSource.indexOf("snapshotFlow { abs(valueAnimation.value - targetValue) }")
+        val settledCallbackIndex = releaseSource.indexOf("onSettled?.invoke()")
+        val pressReleaseIndex = releaseSource.indexOf("pressProgressAnimation.animateTo(0f")
+        assertTrue(
+            settleTargetIndex >= 0 && settledCallbackIndex > settleTargetIndex,
+        )
+        assertTrue(
+            pressReleaseIndex > settledCallbackIndex,
+        )
     }
 
 }

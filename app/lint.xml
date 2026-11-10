@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Approved legacy file exemptions, migrated from StyleLintAllowlist.
+         Keep each approval scoped to its original rule; no hit-count or source digest snapshots.
+         Remove a path when its feature moves to named tokens. -->
+    <issue id="BiliPaiHardcodedColor">
+        <!-- Fixed live SuperChat/danmaku brand colors preserve contrast in light themes. -->
+        <ignore path="src/main/java/com/android/purebilibili/feature/live/components/LiveSendDanmakuSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/live/components/LiveSuperChatFlashOverlay.kt" />
+    </issue>
+    <issue id="BiliPaiHardcodedDimension">
+        <!-- Existing pixel layouts have non-token dimensions; retain the original file approvals. -->
+        <ignore path="src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCard.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicFeedSkeletonCard.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/live/LiveHomeSelectableChip.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/live/LiveListScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/live/components/LiveStreamSourceSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/live/components/LiveSuperChatFlashOverlay.kt" />
+    </issue>
+    <issue id="BiliPaiHardcodedTypography">
+        <ignore path="src/main/java/com/android/purebilibili/feature/live/components/LiveSuperChatFlashOverlay.kt" />
+    </issue>
+    <!-- BiliPaiHardcodedShape has no approved paths: SHAPE_HITS was empty. -->
+    <issue id="BiliPaiHardcodedMotion">
+        <ignore path="src/main/java/com/android/purebilibili/feature/login/LoginComponents.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/login/LoginScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/CelebrationAnimations.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/SponsorSkipUI.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/overlay/CommandDanmakuOverlay.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/overlay/FullscreenPlayerOverlay.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt" />
+    </issue>
+    <issue id="BiliPaiHardcodedSurface">
+        <ignore path="src/main/java/com/android/purebilibili/feature/bangumi/BangumiDetailScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/bangumi/BangumiScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/category/CategoryScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/download/BatchDownloadDialog.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/download/DirectorySelectionDialog.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/download/DownloadListScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/download/DownloadQualityDialog.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/message/ChatScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/onboarding/OnboardingScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/plugin/AdFilterPlugin.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/plugin/EyeProtectionOverlay.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/plugin/HomeFeedAnonymizerPlugin.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/plugin/SponsorBlockPlugin.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/profile/OfficialWallpaperSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/profile/ProfileScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/profile/SplashWallpaperPickerSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/profile/WallpaperAdjustmentSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/search/SearchTrendingScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/search/TopicDetailScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/settings/screen/PluginsScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/player/VideoPlayerComponents.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/screen/TabletCinemaLayout.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/screen/TabletVideoLayout.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreen.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/BottomInputBar.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/CollectionSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/CommentInputDialog.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/DanmakuSendDialog.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/EmotePanelSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/FavoriteFolderSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/GlassComponents.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/InteractiveChoiceOverlay.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/ReplyComponents.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/SkeletonComponents.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/components/TwoFingerSpeedFeedbackOverlay.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitDetailSheet.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/video/ui/section/VideoInfoSection.kt" />
+        <ignore path="src/main/java/com/android/purebilibili/feature/web/WebViewScreen.kt" />
+    </issue>
+</lint>

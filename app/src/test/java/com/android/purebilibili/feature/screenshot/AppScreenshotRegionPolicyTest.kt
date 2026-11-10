@@ -74,6 +74,22 @@ class AppScreenshotRegionPolicyTest {
     }
 
     @Test
+    fun cropSelectionIdentifiesEdgesAndMovesWithinImage() {
+        val rect = AppScreenshotSelectionRect(20f, 30f, 120f, 130f)
+        assertEquals(RegionDragTarget.TOP_LEFT, resolveRegionDragTarget(rect, AppScreenshotPoint(21f, 31f), 12f))
+        assertEquals(RegionDragTarget.MOVE, resolveRegionDragTarget(rect, AppScreenshotPoint(70f, 80f), 12f))
+        assertEquals(RegionDragTarget.NEW, resolveRegionDragTarget(rect, AppScreenshotPoint(180f, 180f), 12f))
+        assertEquals(AppScreenshotSelectionRect(100f, 100f, 200f, 200f), adjustRegionSelection(rect, RegionDragTarget.MOVE, AppScreenshotPoint(300f, 300f), 200f, 200f))
+    }
+
+    @Test
+    fun cropResizeCannotInvertOrLeaveImage() {
+        val rect = AppScreenshotSelectionRect(20f, 30f, 120f, 130f)
+        assertEquals(AppScreenshotSelectionRect(96f, 106f, 120f, 130f), adjustRegionSelection(rect, RegionDragTarget.TOP_LEFT, AppScreenshotPoint(200f, 200f), 200f, 200f))
+        assertEquals(AppScreenshotSelectionRect(20f, 30f, 200f, 200f), adjustRegionSelection(rect, RegionDragTarget.BOTTOM_RIGHT, AppScreenshotPoint(300f, 300f), 200f, 200f))
+    }
+
+    @Test
     fun captureModeDefault_isFullWindow() {
         assertEquals(
             AppScreenshotCaptureMode.FULL_WINDOW,

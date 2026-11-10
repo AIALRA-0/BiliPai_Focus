@@ -14,31 +14,31 @@
     <string name="settings_title">設定</string>
     <string name="appearance_settings_title">外觀設定</string>
     <string name="playback_settings_title">播放設定</string>
-    <string name="animation_effects_title">動畫與效果</string>
+    <string name="animation_effects_title">動畫與觸感</string>
     <string name="icon_settings_title">應用圖示</string>
     <string name="bottom_bar_management_title">導航設定</string>
     <string name="permission_management_title">權限管理</string>
     <string name="plugins_center_title">外掛中心</string>
     <string name="open_source_licenses_title">開源授權</string>
-    <string name="tips_title">小貼士</string>
+    <string name="tips_title">使用技巧</string>
 
     <string name="appearance_theme_color_section">主題與顏色</string>
-    <string name="appearance_ui_preset_title">介面預設</string>
-    <string name="appearance_ui_preset_subtitle">全域切換 Material 3 與 Miuix 外觀預設</string>
+    <string name="appearance_ui_preset_title">介面風格</string>
+    <string name="appearance_ui_preset_subtitle">統一更換按鈕、圖示和頁面樣式</string>
     <string name="appearance_ui_preset_android_material_title">Android 原生 · Material 3</string>
-    <string name="appearance_ui_preset_android_material_summary">使用更標準的 Material 3 導航、圖示、頂欄與清單語義，保留目前 Android 原生分支的互動節奏。</string>
+    <string name="appearance_ui_preset_android_material_summary">使用 Google Material 3 介面風格</string>
     <string name="appearance_ui_preset_android_miuix_title">Android 原生 · Miuix</string>
-    <string name="appearance_ui_preset_android_miuix_summary">保留 Android 資訊架構，但把頂欄與局部容器切換為更貼近小米系統語義的 Miuix 元件風格。</string>
+    <string name="appearance_ui_preset_android_miuix_summary">使用更接近小米系統的介面風格</string>
     <string name="appearance_android_native_variant_title">Android 原生風格</string>
-    <string name="appearance_android_native_variant_subtitle">在 Material 3 與 Miuix Android 原生子風格之間切換</string>
+    <string name="appearance_android_native_variant_subtitle">選擇 Google 或小米風格的介面</string>
     <string name="appearance_android_native_variant_material3">Google Material 3</string>
     <string name="appearance_android_native_variant_miuix">Miuix</string>
     <string name="appearance_theme_mode_title">主題模式</string>
-    <string name="appearance_theme_mode_subtitle">支援點擊或左右滑動切換</string>
+    <string name="appearance_theme_mode_subtitle">選擇淺色、深色或跟隨系統</string>
     <string name="appearance_dark_theme_style_title">深色風格</string>
     <string name="appearance_dark_theme_style_subtitle">跟隨系統進入深色時，也會使用這裡的風格</string>
     <string name="appearance_app_language_title">應用語言</string>
-    <string name="appearance_app_language_subtitle">在整個應用中切換簡體中文、繁體中文或 English</string>
+    <string name="appearance_app_language_subtitle">選擇應用顯示語言</string>
     <string name="ui_preset_ios">iOS</string>
     <string name="ui_preset_android_native">Android 原生</string>
     <string name="theme_mode_follow_system">跟隨系統</string>
@@ -49,7 +49,7 @@
     <string name="theme_mode_dark_short">深色</string>
     <string name="dark_theme_style_default">普通黑</string>
     <string name="dark_theme_style_default_short">普通黑</string>
-    <string name="dark_theme_style_amoled">AMOLED 純黑</string>
+    <string name="dark_theme_style_amoled">純黑背景</string>
     <string name="dark_theme_style_amoled_short">純黑</string>
     <string name="app_language_follow_system">跟隨系統</string>
     <string name="app_language_follow_system_short">系統</string>
@@ -129,4 +129,18 @@
     <string name="shortcut_favorite_long">我的收藏</string>
     <string name="shortcut_history_short">歷史</string>
     <string name="shortcut_history_long">觀看歷史</string>
+
+    <!-- Progressive top blur renderer -->
+    <string name="animation_progressive_renderer_title">漸進模糊方案</string>
+    <string name="animation_progressive_renderer_summary">兩種方案共用模糊強度、覆蓋範圍與過渡設定。</string>
+    <string name="animation_progressive_renderer_fallback_summary">目前系統不支援官方方案，選擇後仍使用 Miuix。</string>
+    <string name="animation_progressive_renderer_miuix_description">現有方案，預設使用。</string>
+    <string name="animation_progressive_renderer_android">Android 官方</string>
+    <string name="animation_progressive_renderer_android_description">使用系統背景模糊；不支援時自動使用 Miuix。</string>
+    <string name="preview_blur_compare_button">對照預覽</string>
+    <string name="preview_blur_compare_title">漸進模糊對照</string>
+    <string name="preview_blur_compare_summary">使用相同畫面和目前模糊參數。拖動下方滑桿可同步移動背景，預覽不會修改已儲存的設定。</string>
+    <string name="preview_blur_compare_scroll">移動預覽背景</string>
+    <string name="preview_blur_compare_unavailable">%1$s 暫時無法使用，目前裝置無法顯示該方案的實際效果。</string>
+    <string name="preview_blur_compare_api_requirement">官方方案需要平台 API 37.2 或更新版本；目前為 API %1$s，暫時使用 Miuix。</string>
 </resources>

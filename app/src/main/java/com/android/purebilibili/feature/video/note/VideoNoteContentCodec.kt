@@ -44,6 +44,7 @@ object VideoNoteContentCodec {
         return document.blocks.joinToString(separator = "") { block ->
             when (block) {
                 is VideoNoteBlock.Text -> block.text
+                is VideoNoteBlock.Quote -> block.text
                 is VideoNoteBlock.Timestamp -> "[${block.label}]"
             }
         }.trim()
@@ -53,6 +54,11 @@ object VideoNoteContentCodec {
         val obj = element.jsonObject
         val insert = obj["insert"] ?: return null
         val attributes = obj["attributes"]?.jsonObject
+        if (attributes?.get("blockquote")?.jsonPrimitive?.booleanOrNull == true && insert is JsonPrimitive) {
+            val text = insert.content.removeSuffix("\n")
+            if (text.isBlank()) return null
+            return VideoNoteBlock.Quote(text = text)
+        }
         if (insert is JsonPrimitive) {
             val text = insert.content
             if (text.isEmpty()) return null
@@ -60,7 +66,10 @@ object VideoNoteContentCodec {
                 text = text,
                 bold = attributes?.get("bold")?.jsonPrimitive?.booleanOrNull == true,
                 highlight = attributes?.get("background")?.jsonPrimitive?.content == HIGHLIGHT_COLOR,
-                unorderedList = attributes?.get("list")?.jsonPrimitive?.content == "bullet"
+                unorderedList = attributes?.get("list")?.jsonPrimitive?.content == "bullet",
+                italic = attributes?.get("italic")?.jsonPrimitive?.booleanOrNull == true,
+                underline = attributes?.get("underline")?.jsonPrimitive?.booleanOrNull == true,
+                strikethrough = attributes?.get("strike")?.jsonPrimitive?.booleanOrNull == true
             )
         }
         val tag = insert.jsonObject["tag"]?.jsonObject ?: return null
@@ -81,6 +90,9 @@ object VideoNoteContentCodec {
                     if (block.bold) put("bold", JsonPrimitive(true))
                     if (block.highlight) put("background", JsonPrimitive(HIGHLIGHT_COLOR))
                     if (block.unorderedList) put("list", JsonPrimitive("bullet"))
+                    if (block.italic) put("italic", JsonPrimitive(true))
+                    if (block.underline) put("underline", JsonPrimitive(true))
+                    if (block.strikethrough) put("strike", JsonPrimitive(true))
                 }
                 buildJsonObject(
                     insert = JsonPrimitive(
@@ -89,6 +101,10 @@ object VideoNoteContentCodec {
                     attributes = attributes
                 )
             }
+            is VideoNoteBlock.Quote -> buildJsonObject(
+                insert = JsonPrimitive(if (block.text.endsWith('\n')) block.text else block.text + "\n"),
+                attributes = mapOf("blockquote" to JsonPrimitive(true))
+            )
             is VideoNoteBlock.Timestamp -> buildJsonObject(
                 insert = JsonObject(
                     mapOf(

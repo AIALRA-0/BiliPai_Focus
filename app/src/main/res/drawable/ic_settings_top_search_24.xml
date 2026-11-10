@@ -1,0 +1,10 @@
+<!-- App-authored: search anchored in the page header, rather than the bottom dock. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M3,21V3h18v18zM3,15h18M12,8a3,3 0,1 0,-6 0a3,3 0,1 0,6 0M11,10l3,3" />
+</vector>

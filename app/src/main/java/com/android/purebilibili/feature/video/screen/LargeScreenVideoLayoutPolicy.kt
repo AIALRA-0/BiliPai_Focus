@@ -8,12 +8,14 @@ import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
  */
 internal const val LARGE_SCREEN_VIDEO_LANDSCAPE_RATIO = 1.2f
 internal const val LARGE_SCREEN_VIDEO_ASPECT_16_9 = 16f / 9f
+internal const val PHONE_DETAIL_VIDEO_ASPECT_RATIO = 16f / 9f
 internal const val LARGE_SCREEN_VIDEO_MIN_SIDE_PANE_DP = 280f
 internal const val LARGE_SCREEN_VIDEO_MAX_SIDE_PANE_DP = 425f
 internal const val LARGE_SCREEN_VIDEO_SIDE_PANE_BREAKPOINT_DP = 560f
 internal const val LARGE_SCREEN_VIDEO_SQUARE_MIN_HEIGHT_FRACTION = 0.39f
 internal const val LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION = 0.4f
 internal const val FOLDABLE_COVER_COMPACT_PLAYER_HEIGHT_FRACTION = 0.5f
+internal const val FOLDABLE_COVER_COLLAPSED_PLAYER_HEIGHT_FRACTION = 0.25f
 internal const val FOLDABLE_COVER_COMPACT_HEIGHT_MAX_DP = 480f
 
 internal enum class LargeScreenVideoLayoutMode {
@@ -36,7 +38,7 @@ internal data class LargeScreenVideoMetrics(
  * Phone-layout player height for the current window.
  *
  * Landscape-natural foldable cover displays can be physically held in portrait while Android
- * still reports a wide, compact-height window. A full-width 16:9 player leaves almost no measured
+ * still reports a wide, compact-height window. A full-width player leaves almost no measured
  * height for the detail pager, so the comment LazyColumn cannot receive a useful scroll viewport.
  * Keep the single-column cover layout, but reserve half of a compact-height window for detail UI.
  */
@@ -45,7 +47,7 @@ internal fun resolvePhoneInlineVideoViewportHeightDp(
     windowHeightDp: Float,
     isFoldableCoverWindow: Boolean,
 ): Float {
-    val aspectHeight = (windowWidthDp.coerceAtLeast(0f) / LARGE_SCREEN_VIDEO_ASPECT_16_9)
+    val aspectHeight = windowWidthDp.coerceAtLeast(0f) / PHONE_DETAIL_VIDEO_ASPECT_RATIO
     if (!isFoldableCoverWindow || windowHeightDp <= 0f) return aspectHeight
     if (windowHeightDp >= FOLDABLE_COVER_COMPACT_HEIGHT_MAX_DP) return aspectHeight
     return minOf(

@@ -1,9 +1,11 @@
 package com.android.purebilibili.feature.video.screen
 
 internal fun resolveVideoDetailBeyondViewportPageCount(
-    selectedTabIndex: Int = 0
-): Int = if (selectedTabIndex == 1) {
-    // 评论页已经可见时不保活简介页；简介页时提前组合评论页，避免横滑后才创建排序栏。
+    selectedTabIndex: Int = 0,
+    commentPagePreloadReady: Boolean = true,
+): Int = if (selectedTabIndex == 1 || !commentPagePreloadReady) {
+    // 先只测量当前页；首次简介挂载完成并进入评论工作阶段后，才预组合相邻评论页。
+    // 这里只控制屏外页，直接打开评论的当前页始终照常挂载。
     0
 } else {
     1

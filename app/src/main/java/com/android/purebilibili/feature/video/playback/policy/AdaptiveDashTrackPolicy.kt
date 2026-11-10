@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.playback.policy
 
+import com.android.purebilibili.core.player.policy.PlaybackQualityMode
+
 import com.android.purebilibili.data.model.response.Dash
 import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.data.model.response.DashVideo
@@ -16,40 +18,29 @@ data class AdaptiveDashTrackSet(
 
 const val PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD = 1.5f
 private const val DOLBY_AUDIO_QUALITY_ID = 30250
+private const val DOLBY_AUDIO_QUALITY_ALTERNATE_ID = 30255
 private const val HI_RES_AUDIO_QUALITY_ID = 30251
 
 fun isSpeedSensitivePremiumAudioQuality(audioQuality: Int): Boolean {
-    return audioQuality == DOLBY_AUDIO_QUALITY_ID || audioQuality == HI_RES_AUDIO_QUALITY_ID
+    return audioQuality == DOLBY_AUDIO_QUALITY_ID ||
+        audioQuality == DOLBY_AUDIO_QUALITY_ALTERNATE_ID ||
+        audioQuality == HI_RES_AUDIO_QUALITY_ID
 }
 
 fun resolveSpeedCompatibleAudioQualityPreference(
     requestedAudioQuality: Int,
     playbackSpeed: Float,
-    speedThreshold: Float = PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD
+    speedThreshold: Float = PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD,
+    requestedAudioKind: AudioStreamKind? = null
 ): Int {
     if (playbackSpeed <= speedThreshold) return requestedAudioQuality
-    return if (isSpeedSensitivePremiumAudioQuality(requestedAudioQuality)) {
+    return if (isSpeedSensitivePremiumAudioQuality(requestedAudioQuality) ||
+        requestedAudioKind == AudioStreamKind.DOLBY || requestedAudioKind == AudioStreamKind.HI_RES
+    ) {
         -1
     } else {
         requestedAudioQuality
     }
-}
-
-fun shouldRefreshPremiumAudioForPlaybackSpeedChange(
-    requestedAudioQuality: Int,
-    previousPlaybackSpeed: Float,
-    nextPlaybackSpeed: Float,
-    speedThreshold: Float = PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD
-): Boolean {
-    return resolveSpeedCompatibleAudioQualityPreference(
-        requestedAudioQuality = requestedAudioQuality,
-        playbackSpeed = previousPlaybackSpeed,
-        speedThreshold = speedThreshold
-    ) != resolveSpeedCompatibleAudioQualityPreference(
-        requestedAudioQuality = requestedAudioQuality,
-        playbackSpeed = nextPlaybackSpeed,
-        speedThreshold = speedThreshold
-    )
 }
 
 fun buildAdaptiveDashTrackSet(

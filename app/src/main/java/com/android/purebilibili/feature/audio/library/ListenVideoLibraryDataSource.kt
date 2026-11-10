@@ -90,19 +90,41 @@ internal class ListenVideoLibraryLoader(
     }
 ) {
     private val folderRequestMutex = Mutex()
-    private val firstFolderPages = mutableMapOf<Long, FavoriteResourceData>()
+    private val folderPages = mutableMapOf<Pair<Long, Int>, FavoriteResourceData>()
+    private val albumPages = mutableMapOf<Pair<Long, Int>, FavoriteResourceData>()
     private var lastFolderRequestAtMillis: Long? = null
 
     suspend fun loadCollectedFolders(mid: Long): Result<List<FavFolder>> {
         return loadPages { page -> source.collectedFolders(mid, page) }
     }
 
-    suspend fun loadFolder(mediaId: Long): Result<List<FavoriteData>> {
-        return loadFolderPages(mediaId)
+    suspend fun loadFolder(
+        mediaId: Long,
+        onPageLoaded: suspend (List<FavoriteData>) -> Unit = {},
+    ): Result<List<FavoriteData>> {
+        var lastRequestedPage = 1
+        return loadResourcePages(onPageLoaded) { page ->
+            lastRequestedPage = page
+            requestFolderPage(mediaId, page)
+        }.also { result ->
+            if (result.isFailure) folderPages.remove(mediaId to lastRequestedPage)
+        }
     }
 
-    suspend fun loadAlbum(seasonId: Long): Result<List<FavoriteData>> {
-        return loadResourcePages { page -> source.albumPage(seasonId, page) }
+    suspend fun loadAlbum(
+        seasonId: Long,
+        onPageLoaded: suspend (List<FavoriteData>) -> Unit = {},
+    ): Result<List<FavoriteData>> {
+        var lastRequestedPage = 1
+        return loadResourcePages(onPageLoaded) { page ->
+            lastRequestedPage = page
+            albumPages[seasonId to page]?.let { return@loadResourcePages Result.success(it) }
+            source.albumPage(seasonId, page).also { result ->
+                result.getOrNull()?.let { albumPages[seasonId to page] = it }
+            }
+        }.also { result ->
+            if (result.isFailure) albumPages.remove(seasonId to lastRequestedPage)
+        }
     }
 
     suspend fun loadPlaylistPreviewCovers(
@@ -127,17 +149,21 @@ internal class ListenVideoLibraryLoader(
 
     suspend fun indexFolders(
         folders: List<FavFolder>,
-        onFolderIndexed: (completed: Int, total: Int) -> Unit = { _, _ -> }
+        onFolderIndexed: (completed: Int, total: Int) -> Unit = { _, _ -> },
+        onResourcesIndexed: suspend (List<FavoriteData>) -> Unit = {},
     ): ListenVideoIndexResult {
         val validFolders = folders.filter { it.id > 0L }
         val resources = mutableListOf<FavoriteData>()
         val failedFolderIds = linkedSetOf<Long>()
         var haltedByRiskControl = false
         for ((index, folder) in validFolders.withIndex()) {
-            val result = loadFolderPages(folder.id)
-            if (result.isSuccess) {
-                resources += result.getOrDefault(emptyList())
-            } else {
+            var folderResources = emptyList<FavoriteData>()
+            val result = loadFolder(folder.id) {
+                folderResources = it
+                onResourcesIndexed(resources + folderResources)
+            }
+            resources += folderResources
+            if (result.isFailure) {
                 failedFolderIds += folder.id
                 if (isFavoriteRiskControlError(result.exceptionOrNull()!!)) {
                     haltedByRiskControl = true
@@ -170,6 +196,12 @@ internal class ListenVideoLibraryLoader(
             var page = 1
             do {
                 val response = request(page).getOrThrow()
+                if (response.hasMore && response.folders.isEmpty()) {
+                    error("收藏夹分页返回空数据，请稍后重试")
+                }
+                if (response.hasMore && response.folders.none { next -> folders.none { it.id == next.id } }) {
+                    error("收藏夹分页没有新内容，请稍后重试")
+                }
                 folders += response.folders
                 page += 1
             } while (response.hasMore)
@@ -182,17 +214,26 @@ internal class ListenVideoLibraryLoader(
     }
 
     private suspend fun loadResourcePages(
+        onPageLoaded: suspend (List<FavoriteData>) -> Unit = {},
         request: suspend (Int) -> Result<FavoriteResourceData>
     ): Result<List<FavoriteData>> {
         return try {
-            val resources = mutableListOf<FavoriteData>()
+            val resources = linkedMapOf<String, FavoriteData>()
             var page = 1
             do {
                 val response = request(page).getOrThrow()
-                resources += response.medias.orEmpty()
+                val previousSize = resources.size
+                response.medias.orEmpty().forEach { resource ->
+                    val key = "${resource.type}:${resource.bvid.ifBlank { resource.bv_id }}:${resource.season_id}:${resource.id}"
+                    resources[key] = resource
+                }
+                onPageLoaded(resources.values.toList())
+                if (response.has_more && resources.size == previousSize) {
+                    error("列表分页没有新内容，已保留读取的曲目，请稍后重试")
+                }
                 page += 1
             } while (response.has_more)
-            Result.success(resources)
+            Result.success(resources.values.toList())
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -200,18 +241,12 @@ internal class ListenVideoLibraryLoader(
         }
     }
 
-    private suspend fun loadFolderPages(mediaId: Long): Result<List<FavoriteData>> {
-        return loadResourcePages { page -> requestFolderPage(mediaId, page) }
-    }
-
     /** Serialize favorite-folder requests and keep a minimum gap between actual network calls. */
     private suspend fun requestFolderPage(
         mediaId: Long,
         page: Int
     ): Result<FavoriteResourceData> = folderRequestMutex.withLock {
-        if (page == 1) {
-            firstFolderPages[mediaId]?.let { return@withLock Result.success(it) }
-        }
+        folderPages[mediaId to page]?.let { return@withLock Result.success(it) }
         val lastRequest = lastFolderRequestAtMillis
         if (lastRequest != null) {
             val elapsed = (nowMillis() - lastRequest).coerceAtLeast(0L)
@@ -226,7 +261,7 @@ internal class ListenVideoLibraryLoader(
             lastFolderRequestAtMillis = nowMillis()
         }
         result.getOrNull()?.let { response ->
-            if (page == 1) firstFolderPages[mediaId] = response
+            folderPages[mediaId to page] = response
         }
         result
     }

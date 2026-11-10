@@ -1,6 +1,8 @@
 // 文件路径: feature/home/components/LiquidIndicator.kt
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import com.android.purebilibili.core.ui.OpticalContrastPalette
@@ -42,12 +44,12 @@ import top.yukonga.miuix.kmp.blur.drawBackdrop
 
 /**
  * 🌊 液态玻璃选中指示器
- * 
+ *
  * 实现类似 visionOS 的玻璃折射效果：
  * - 透镜折射效果 (Android 13+ 支持)
  * - 拖拽时放大形变
  * - 高光和内阴影
- * 
+ *
  * @param position 当前位置（浮点索引）
  * @param itemWidth 单个项目宽度
  * @param itemCount 项目数量
@@ -65,7 +67,7 @@ internal fun LiquidIndicator(
     velocity: Float = 0f,
     startPadding: Dp = AppSpacingTokens.None,
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+    color: Color = AppContentColors.accent().copy(alpha = 0.18f),
     isLiquidGlassEnabled: Boolean = false,
     clampToBounds: Boolean = false,
     edgeInset: Dp = AppSpacingTokens.None,
@@ -111,7 +113,7 @@ internal fun LiquidIndicator(
             velocityRangePxPerSecond = motionSpec.indicator.lensVelocityRangePxPerSecond
         )
     }
-    
+
     val itemWidthPx = with(density) { itemWidth.toPx() }
     val indicatorWidthPx = resolveLiquidIndicatorWidthPx(
         itemWidthPx = itemWidthPx,
@@ -128,7 +130,7 @@ internal fun LiquidIndicator(
     val edgeInsetPx = with(density) { edgeInset.toPx() }
     // 居中偏移：(Item宽度 - 指示器宽度) / 2
     val centerOffsetPx = (itemWidthPx - indicatorWidthPx) / 2f
-    
+
     // 速度形变
     val deformation = lensProfile.motionFraction *
         (motionSpec.indicator.deformationScaleXDelta * styleTuning.deformationMultiplier)
@@ -173,7 +175,7 @@ internal fun LiquidIndicator(
                         edgeInsetPx = edgeInsetPx,
                         viewportShiftPx = viewportShiftPx
                     )
-                    
+
                     this.scaleX = scaleX
                     this.scaleY = scaleY
                     shadowElevation = 0f
@@ -234,12 +236,12 @@ internal fun LiquidIndicator(
 
 /**
  * 简化版液态指示器（不依赖 Backdrop）
- * 
+ *
  * 使用标准 Compose 动画实现类似效果
  */
 /**
  * 简化版液态指示器（适用于 TabRow 等变长场景）
- * 
+ *
  * 使用标准 Compose 动画实现类似效果
  */
 @Composable
@@ -252,7 +254,7 @@ fun SimpleLiquidIndicator(
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
     liquidGlassTuning: LiquidGlassTuning? = null,
     backdrop: Backdrop? = null,
-    indicatorColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+    indicatorColor: Color = AppContentColors.accent().copy(alpha = 0.12f),
     indicatorHeight: Dp = AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Micro,
     cornerRadius: Dp = AppSpacingTokens.Large,
     widthRatio: Float = 0.78f,
@@ -288,10 +290,10 @@ fun SimpleLiquidIndicator(
     )
     val indicatorWidth = with(density) { indicatorWidthPx.toDp() }
     val indicatorHeightPx = with(density) { indicatorHeight.toPx() }
-    
+
     // [修复] 居中偏移：将指示器居中放置在每个 Tab 单元格内
     val centerOffsetPx = (itemWidthPx - indicatorWidthPx) / 2f
-    
+
     val scale by animateFloatAsState(
         targetValue = 1f + lensProfile.motionFraction * (0.12f * styleTuning.deformationMultiplier),
         animationSpec = AppMotionTokens.expressiveSpec(),
@@ -305,7 +307,7 @@ fun SimpleLiquidIndicator(
     val resolvedIndicatorColor = indicatorColor.copy(
         alpha = (indicatorColor.alpha * indicatorAlphaScale).coerceIn(0f, 1f)
     )
-    
+
     // 居中放置指示器，避免使用 BoxWithConstraints 产生子组合 (SubcomposeLayout) 开销
     Box(
         modifier = modifier.fillMaxHeight(),
@@ -315,7 +317,7 @@ fun SimpleLiquidIndicator(
             modifier = Modifier
                 .graphicsLayer {
                     translationX = position * itemWidthPx + centerOffsetPx
-                    
+
                     this.scaleX = scale
                     this.scaleY = 1f - lensProfile.motionFraction * (0.08f * styleTuning.deformationMultiplier)
                 }

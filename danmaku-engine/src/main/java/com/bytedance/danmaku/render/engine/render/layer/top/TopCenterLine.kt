@@ -20,7 +20,6 @@ import com.bytedance.danmaku.render.engine.data.DanmakuData
 import com.bytedance.danmaku.render.engine.render.IRenderLayer
 import com.bytedance.danmaku.render.engine.render.draw.DrawItem
 import com.bytedance.danmaku.render.engine.render.layer.line.BaseRenderLine
-import com.bytedance.danmaku.render.engine.utils.STEPPER_TIME
 
 /**
  * Created by dss886 on 2019/9/22.
@@ -47,6 +46,7 @@ class TopCenterLine(controller: DanmakuController,
         item.x = (width - item.width) / 2
         item.y = this.y
         item.showTime = playTime
+        beginItemTiming(item)
         mDrawingItems.clear()
         mDrawingItems.add(item)
         return true
@@ -63,9 +63,7 @@ class TopCenterLine(controller: DanmakuController,
     override fun typesetting(playTime: Long, isPlaying: Boolean, configChanged: Boolean): Int {
         if (isPlaying) {
             val item = mDrawingItems.takeIf { it.isNotEmpty() }?.get(0) ?: return 0
-            if (!item.isPaused) {
-                item.showDuration += STEPPER_TIME
-            }
+            item.showDuration += itemElapsedTimeMs(item)
             // remove items that has shown enough time
             if (item.showDuration >= mConfig.top.showTimeMax) {
                 mLayer.releaseItem(item)

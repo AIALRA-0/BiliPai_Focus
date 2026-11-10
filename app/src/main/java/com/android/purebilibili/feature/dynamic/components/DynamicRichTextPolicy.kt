@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -19,6 +22,62 @@ internal const val DYNAMIC_RICH_TEXT_USER_TAG = "USER"
 internal const val DYNAMIC_RICH_TEXT_VOTE_TAG = "VOTE"
 internal const val DYNAMIC_RICH_TEXT_TOPIC_TAG = "TOPIC"
 internal const val DYNAMIC_RICH_TEXT_TOPIC_KEYWORD_TAG = "TOPIC_KEYWORD"
+
+/** 动态富文本原生链接 payload 前缀：LinkAnnotation.Clickable 用单一 tag 承载「类型:载荷」。 */
+internal const val DYNAMIC_RICH_TEXT_LINK_URL_PREFIX = "URL:"
+internal const val DYNAMIC_RICH_TEXT_LINK_USER_PREFIX = "USER:"
+internal const val DYNAMIC_RICH_TEXT_LINK_USER_NAME_PREFIX = "USERNAME:"
+internal const val DYNAMIC_RICH_TEXT_LINK_VOTE_PREFIX = "VOTE:"
+internal const val DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX = "TOPIC:"
+internal const val DYNAMIC_RICH_TEXT_LINK_TOPIC_KEYWORD_PREFIX = "TOPICKW:"
+
+/** 构建原生 [LinkAnnotation.Clickable]；BasicText 在 Text 内部处理点击，优先于划选/卡片长按。 */
+private fun dynamicRichTextLinkAnnotation(
+    payload: String,
+    listener: LinkInteractionListener?,
+): LinkAnnotation = LinkAnnotation.Clickable(
+    tag = payload,
+    styles = null,
+    linkInteractionListener = listener,
+)
+
+/** 动态富文本链接动作（纯数据，供分发与测试）。 */
+internal sealed interface DynamicRichTextLinkAction {
+    data class Url(val url: String) : DynamicRichTextLinkAction
+    data class User(val mid: Long) : DynamicRichTextLinkAction
+    data class UserName(val name: String) : DynamicRichTextLinkAction
+    data class Vote(val voteId: Long) : DynamicRichTextLinkAction
+    data class TopicId(val topicId: Long) : DynamicRichTextLinkAction
+    data class TopicKeyword(val keyword: String) : DynamicRichTextLinkAction
+}
+
+internal fun resolveDynamicRichTextLinkAction(tag: String): DynamicRichTextLinkAction? {
+    return when {
+        tag.startsWith(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX) ->
+            DynamicRichTextLinkAction.Url(tag.removePrefix(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX))
+        tag.startsWith(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX) ->
+            tag.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX).toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?.let(DynamicRichTextLinkAction::User)
+        tag.startsWith(DYNAMIC_RICH_TEXT_LINK_USER_NAME_PREFIX) ->
+            tag.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_NAME_PREFIX)
+                .takeIf { it.isNotBlank() }
+                ?.let(DynamicRichTextLinkAction::UserName)
+        tag.startsWith(DYNAMIC_RICH_TEXT_LINK_VOTE_PREFIX) ->
+            tag.removePrefix(DYNAMIC_RICH_TEXT_LINK_VOTE_PREFIX).toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?.let(DynamicRichTextLinkAction::Vote)
+        tag.startsWith(DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX) ->
+            tag.removePrefix(DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX).toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?.let(DynamicRichTextLinkAction::TopicId)
+        tag.startsWith(DYNAMIC_RICH_TEXT_LINK_TOPIC_KEYWORD_PREFIX) ->
+            tag.removePrefix(DYNAMIC_RICH_TEXT_LINK_TOPIC_KEYWORD_PREFIX)
+                .takeIf { it.isNotBlank() }
+                ?.let(DynamicRichTextLinkAction::TopicKeyword)
+        else -> null
+    }
+}
 
 internal enum class DynamicRichTextOpenMode {
     IN_APP,
@@ -39,16 +98,27 @@ internal fun buildDynamicRichTextAnnotatedString(
     desc: DynamicDesc,
     primaryColor: Color,
     textColor: Color,
-    extraEmoteUrlMap: Map<String, String> = emptyMap()
+    extraEmoteUrlMap: Map<String, String> = emptyMap(),
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean = false,
 ): AnnotatedString {
-    return buildDynamicRichText(desc, primaryColor, textColor, extraEmoteUrlMap).annotatedString
+    return buildDynamicRichText(
+        desc = desc,
+        primaryColor = primaryColor,
+        textColor = textColor,
+        extraEmoteUrlMap = extraEmoteUrlMap,
+        linkListener = linkListener,
+        collapseWebLinks = collapseWebLinks,
+    ).annotatedString
 }
 
 internal fun buildDynamicRichText(
     desc: DynamicDesc,
     primaryColor: Color,
     textColor: Color,
-    extraEmoteUrlMap: Map<String, String> = emptyMap()
+    extraEmoteUrlMap: Map<String, String> = emptyMap(),
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean = false,
 ): DynamicRichTextBuildResult {
     val nodeEmoteMap = collectDynamicEmojiUrlMap(desc.rich_text_nodes)
     val emoteUrlMap = buildMap {
@@ -77,7 +147,9 @@ internal fun buildDynamicRichText(
                     primaryColor = primaryColor,
                     textColor = textColor,
                     emoteUrlMap = emoteUrlMap,
-                    usedEmojiIds = usedEmojiIds
+                    usedEmojiIds = usedEmojiIds,
+                    linkListener = linkListener,
+                    collapseWebLinks = collapseWebLinks,
                 )
             }
         } else {
@@ -86,7 +158,9 @@ internal fun buildDynamicRichText(
                 primaryColor = primaryColor,
                 textColor = textColor,
                 emoteUrlMap = emoteUrlMap,
-                usedEmojiIds = usedEmojiIds
+                usedEmojiIds = usedEmojiIds,
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
     }
@@ -178,11 +252,9 @@ internal fun resolveDynamicOpusTextBlockRichDesc(
             rich_text_nodes = resolvedBlockNodes,
         )
     }
-    if (preferredDesc == null) return null
-    // Detail opus payloads often omit emoji nodes while retaining shortcode text. Always
-    // route text blocks through RichTextContent so its existing catalog fallback can expand
-    // those shortcodes just as it does in the dynamic preview.
-    return preferredDesc.copy(text = blockText)
+    // Even when both metadata sources are absent, route the paragraph through
+    // RichTextContent so its plain-text @/topic fallback can still run.
+    return preferredDesc?.copy(text = blockText) ?: DynamicDesc(text = blockText)
 }
 
 /**
@@ -206,7 +278,17 @@ internal fun mergeDynamicRichTextMetadataIntoText(
 
     val result = mutableListOf<RichTextNode>()
     var cursor = 0
-    actionableNodes.forEach { node ->
+    // Detail nodes and preview metadata can be appended in different orders. Follow the
+    // actual paragraph order so a later mention cannot advance past an earlier one.
+    actionableNodes.sortedWith(
+        compareBy<RichTextNode> { node ->
+            findDynamicRichTextNodeMatch(text, node, 0)?.start ?: Int.MAX_VALUE
+        }.thenByDescending { node ->
+            if (node.type.trim().removePrefix("RICH_TEXT_NODE_TYPE_").equals("AT", ignoreCase = true) &&
+                resolveDynamicRichTextUserMid(node) != null
+            ) 1 else 0
+        }
+    ).forEach { node ->
         val match = findDynamicRichTextNodeMatch(text, node, cursor) ?: return@forEach
         val token = match.token
         val start = match.start
@@ -323,10 +405,11 @@ internal fun resolveDynamicRichTextNodeDisplayText(nodes: List<RichTextNode>): S
 }
 
 internal fun resolveDynamicRichTextNodeToken(node: RichTextNode): String {
+    val emojiText = node.emoji?.text
     return when {
         node.text.isNotBlank() -> node.text
         node.orig_text.isNotBlank() -> node.orig_text
-        node.emoji?.text?.isNotBlank() == true -> node.emoji.text
+        !emojiText.isNullOrBlank() -> emojiText
         else -> ""
     }
 }
@@ -335,22 +418,25 @@ internal fun resolveDynamicDescForImages(
     desc: DynamicDesc,
     hasImages: Boolean
 ): DynamicDesc {
-    if (!hasImages) return desc
-    return desc.copy(
-        text = stripDynamicImagePlaceholders(desc.text),
-        rich_text_nodes = desc.rich_text_nodes.filterNot { node ->
-            isDynamicStandaloneImagePlaceholder(resolveDynamicRichTextNodeToken(node))
-        }.map { node ->
-            node.copy(
-                text = stripDynamicImagePlaceholders(node.text),
-                orig_text = stripDynamicImagePlaceholders(node.orig_text)
-            )
-        }.filterNot { node ->
-            resolveDynamicRichTextNodeToken(node).isBlank() &&
-                node.emoji == null &&
-                node.jump_url.isNullOrBlank() &&
-                node.rid.isNullOrBlank()
-        }
+    val edgeNormalized = normalizeDynamicDescEdges(desc)
+    if (!hasImages) return edgeNormalized
+    return normalizeDynamicDescEdges(
+        edgeNormalized.copy(
+            text = stripDynamicImagePlaceholders(edgeNormalized.text),
+            rich_text_nodes = edgeNormalized.rich_text_nodes.filterNot { node ->
+                isDynamicStandaloneImagePlaceholder(resolveDynamicRichTextNodeToken(node))
+            }.map { node ->
+                node.copy(
+                    text = stripDynamicImagePlaceholders(node.text),
+                    orig_text = stripDynamicImagePlaceholders(node.orig_text)
+                )
+            }.filterNot { node ->
+                resolveDynamicRichTextNodeToken(node).isBlank() &&
+                    node.emoji == null &&
+                    node.jump_url.isNullOrBlank() &&
+                    node.rid.isNullOrBlank()
+            }
+        )
     )
 }
 
@@ -403,6 +489,38 @@ private fun isDynamicStandaloneImagePlaceholder(text: String): Boolean {
     return text.trim() in DYNAMIC_IMAGE_PLACEHOLDERS
 }
 
+/**
+ * 去掉正文首尾的空白行/空格。列表 summary 常带尾部换行，会在文末多撑出一行，
+ * 使 seed 帧的「文字→图片」间距大于完整详情，网络回来后突然收紧。
+ */
+internal fun normalizeDynamicBodyText(text: String): String {
+    if (text.isEmpty()) return text
+    return text.trimEnd('\n', '\r', ' ', '\t').trimStart('\n', '\r')
+}
+
+internal fun normalizeDynamicDescEdges(desc: DynamicDesc): DynamicDesc {
+    val normalizedText = normalizeDynamicBodyText(desc.text)
+    val nodes = desc.rich_text_nodes
+    if (nodes.isEmpty()) {
+        return if (normalizedText == desc.text) desc else desc.copy(text = normalizedText)
+    }
+    val normalizedNodes = nodes.mapIndexed { index, node ->
+        var text = node.text
+        var origText = node.orig_text
+        if (index == 0) {
+            text = text.trimStart('\n', '\r')
+            origText = origText.trimStart('\n', '\r')
+        }
+        if (index == nodes.lastIndex) {
+            text = normalizeDynamicBodyText(text)
+            origText = normalizeDynamicBodyText(origText)
+        }
+        if (text == node.text && origText == node.orig_text) node
+        else node.copy(text = text, orig_text = origText)
+    }
+    return desc.copy(text = normalizedText, rich_text_nodes = normalizedNodes)
+}
+
 private fun stripDynamicImagePlaceholders(text: String): String {
     if (text.isBlank()) return text
     if (!DYNAMIC_IMAGE_PLACEHOLDERS.any { placeholder -> text.contains(placeholder) }) {
@@ -437,7 +555,9 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
     primaryColor: Color,
     textColor: Color,
     emoteUrlMap: Map<String, String>,
-    usedEmojiIds: MutableMap<String, String>
+    usedEmojiIds: MutableMap<String, String>,
+    linkListener: LinkInteractionListener?,
+    collapseWebLinks: Boolean,
 ) {
     val nodeType = node.type.trim().removePrefix("RICH_TEXT_NODE_TYPE_")
     val displayToken = resolveDynamicRichTextNodeToken(node)
@@ -460,6 +580,7 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
                 displayText = displayToken,
                 voteId = node.rid,
                 primaryColor = primaryColor,
+                linkListener = linkListener,
             )
         }
 
@@ -467,6 +588,7 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
             appendDynamicRichTextTopic(
                 node = node,
                 primaryColor = primaryColor,
+                linkListener = linkListener,
             )
         }
 
@@ -474,14 +596,17 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
             appendDynamicRichTextLink(
                 displayText = displayToken,
                 targetUrl = resolveDynamicRichTextLinkTarget(node),
-                primaryColor = primaryColor
+                primaryColor = primaryColor,
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
 
         nodeType.equals("AT", ignoreCase = true) -> {
             appendDynamicRichTextAtMention(
                 node = node,
-                primaryColor = primaryColor
+                primaryColor = primaryColor,
+                linkListener = linkListener
             )
         }
 
@@ -491,7 +616,9 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
                 primaryColor = primaryColor,
                 textColor = textColor,
                 emoteUrlMap = emoteUrlMap,
-                usedEmojiIds = usedEmojiIds
+                usedEmojiIds = usedEmojiIds,
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
     }
@@ -527,27 +654,29 @@ private val DYNAMIC_TOPIC_PATH_ID_PATTERN =
 private fun AnnotatedString.Builder.appendDynamicRichTextTopic(
     node: RichTextNode,
     primaryColor: Color,
+    linkListener: LinkInteractionListener?,
 ) {
     val displayToken = resolveDynamicRichTextNodeToken(node)
     val keyword = displayToken.trim().removePrefix("#").removeSuffix("#").trim()
     val topicId = resolveDynamicRichTextTopicId(node)
-    if (topicId != null) {
-        pushStringAnnotation(
-            tag = DYNAMIC_RICH_TEXT_TOPIC_TAG,
-            annotation = topicId.toString(),
-        )
+    // 带 topicId 优先跳话题详情；无 id 时回落关键词搜索。原生链接单一 tag
+    // 承载其中一种载荷，由 [resolveDynamicRichTextLinkAction] 解析。
+    val payload = when {
+        topicId != null -> DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX + topicId
+        keyword.isNotEmpty() -> DYNAMIC_RICH_TEXT_LINK_TOPIC_KEYWORD_PREFIX + keyword
+        else -> null
     }
-    if (keyword.isNotEmpty()) {
-        pushStringAnnotation(
-            tag = DYNAMIC_RICH_TEXT_TOPIC_KEYWORD_TAG,
-            annotation = keyword,
-        )
+    if (payload != null) {
+        withLink(dynamicRichTextLinkAnnotation(payload, linkListener)) {
+            withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
+                append(displayToken)
+            }
+        }
+    } else {
+        withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
+            append(displayToken)
+        }
     }
-    withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
-        append(displayToken)
-    }
-    if (keyword.isNotEmpty()) pop()
-    if (topicId != null) pop()
 }
 
 internal fun resolveDynamicRichTextUserMid(node: RichTextNode): Long? {
@@ -567,17 +696,33 @@ internal fun resolveDynamicRichTextUserMid(node: RichTextNode): Long? {
 
 private fun AnnotatedString.Builder.appendDynamicRichTextAtMention(
     node: RichTextNode,
-    primaryColor: Color
+    primaryColor: Color,
+    linkListener: LinkInteractionListener?,
 ) {
     val mid = resolveDynamicRichTextUserMid(node)
     if (mid != null) {
-        pushStringAnnotation(tag = DYNAMIC_RICH_TEXT_USER_TAG, annotation = mid.toString())
-    }
-    withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
-        append(resolveDynamicRichTextNodeToken(node))
-    }
-    if (mid != null) {
-        pop()
+        withLink(
+            dynamicRichTextLinkAnnotation(
+                DYNAMIC_RICH_TEXT_LINK_USER_PREFIX + mid,
+                linkListener,
+            )
+        ) {
+            withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
+                append(resolveDynamicRichTextNodeToken(node))
+            }
+        }
+    } else {
+        val display = resolveDynamicRichTextNodeToken(node)
+        val name = display.trim().removePrefix("@").trim()
+        if (name.isNotEmpty()) {
+            withLink(dynamicRichTextLinkAnnotation(DYNAMIC_RICH_TEXT_LINK_USER_NAME_PREFIX + name, linkListener)) {
+                withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
+                    append(display)
+                }
+            }
+        } else {
+            append(display)
+        }
     }
 }
 
@@ -625,14 +770,18 @@ private fun AnnotatedString.Builder.appendDynamicRichTextExpandableText(
     primaryColor: Color,
     textColor: Color,
     emoteUrlMap: Map<String, String>,
-    usedEmojiIds: MutableMap<String, String>
+    usedEmojiIds: MutableMap<String, String>,
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean,
 ) {
     if (text.isEmpty()) return
     if (emoteUrlMap.isEmpty()) {
         withStyle(SpanStyle(color = textColor)) {
             appendDynamicRichTextPlainText(
                 text = text,
-                primaryColor = primaryColor
+                primaryColor = primaryColor,
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
         return
@@ -644,7 +793,9 @@ private fun AnnotatedString.Builder.appendDynamicRichTextExpandableText(
             withStyle(SpanStyle(color = textColor)) {
                 appendDynamicRichTextPlainText(
                     text = text.substring(lastIndex, match.range.first),
-                    primaryColor = primaryColor
+                    primaryColor = primaryColor,
+                    linkListener = linkListener,
+                    collapseWebLinks = collapseWebLinks,
                 )
             }
         }
@@ -664,30 +815,38 @@ private fun AnnotatedString.Builder.appendDynamicRichTextExpandableText(
         withStyle(SpanStyle(color = textColor)) {
             appendDynamicRichTextPlainText(
                 text = text.substring(lastIndex),
-                primaryColor = primaryColor
+                primaryColor = primaryColor,
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
     }
 }
 
 private val DYNAMIC_RICH_TEXT_TOPIC_PATTERN = Regex("""#([^#\n\r\t]+)#""")
+private val DYNAMIC_RICH_TEXT_MENTION_PATTERN =
+    Regex("""(?<![A-Za-z0-9_.])@[\p{L}\p{N}_.·-]{1,32}""")
+
+private enum class DynamicPlainTextTokenKind { URL, TOPIC, MENTION }
 
 private data class DynamicPlainTextToken(
     val range: IntRange,
-    val isUrl: Boolean,
+    val kind: DynamicPlainTextTokenKind,
     val value: String,
     val keyword: String? = null
 )
 
 private fun AnnotatedString.Builder.appendDynamicRichTextPlainText(
     text: String,
-    primaryColor: Color
+    primaryColor: Color,
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean,
 ) {
     val tokens = mutableListOf<DynamicPlainTextToken>()
     DYNAMIC_RICH_TEXT_URL_PATTERN.findAll(text).forEach { match ->
         tokens += DynamicPlainTextToken(
             range = match.range,
-            isUrl = true,
+            kind = DynamicPlainTextTokenKind.URL,
             value = match.value
         )
     }
@@ -700,11 +859,26 @@ private fun AnnotatedString.Builder.appendDynamicRichTextPlainText(
             if (kw.isNotEmpty()) {
                 tokens += DynamicPlainTextToken(
                     range = match.range,
-                    isUrl = false,
+                    kind = DynamicPlainTextTokenKind.TOPIC,
                     value = match.value,
                     keyword = kw
                 )
             }
+        }
+    }
+    // Detail paragraphs can contain only TEXT nodes, while other spans in the same
+    // paragraph still have metadata. Highlight missing mentions inside plain fragments;
+    // structured AT nodes keep their user IDs and are rendered before this fallback.
+    DYNAMIC_RICH_TEXT_MENTION_PATTERN.findAll(text).forEach { match ->
+        val overlapsExisting = tokens.any { existing ->
+            match.range.first <= existing.range.last && match.range.last >= existing.range.first
+        }
+        if (!overlapsExisting) {
+            tokens += DynamicPlainTextToken(
+                range = match.range,
+                kind = DynamicPlainTextTokenKind.MENTION,
+                value = match.value,
+            )
         }
     }
     tokens.sortBy { it.range.first }
@@ -714,24 +888,43 @@ private fun AnnotatedString.Builder.appendDynamicRichTextPlainText(
         if (token.range.first > lastIndex) {
             append(text.substring(lastIndex, token.range.first))
         }
-        if (token.isUrl) {
-            appendDynamicRichTextLink(
+        when (token.kind) {
+            DynamicPlainTextTokenKind.URL -> appendDynamicRichTextLink(
                 displayText = token.value,
                 targetUrl = token.value,
-                primaryColor = primaryColor
+                primaryColor = primaryColor,
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
-        } else {
-            val kw = token.keyword.orEmpty()
-            if (kw.isNotEmpty()) {
-                pushStringAnnotation(
-                    tag = DYNAMIC_RICH_TEXT_TOPIC_KEYWORD_TAG,
-                    annotation = kw
+            DynamicPlainTextTokenKind.TOPIC -> {
+                val kw = token.keyword.orEmpty()
+                if (kw.isNotEmpty()) {
+                    withLink(
+                        dynamicRichTextLinkAnnotation(
+                            DYNAMIC_RICH_TEXT_LINK_TOPIC_KEYWORD_PREFIX + kw,
+                            linkListener,
+                        )
+                    ) {
+                        withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
+                            append(token.value)
+                        }
+                    }
+                } else {
+                    withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
+                        append(token.value)
+                    }
+                }
+            }
+            DynamicPlainTextTokenKind.MENTION -> withLink(
+                dynamicRichTextLinkAnnotation(
+                    DYNAMIC_RICH_TEXT_LINK_USER_NAME_PREFIX + token.value.removePrefix("@"),
+                    linkListener,
                 )
+            ) {
+                withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
+                    append(token.value)
+                }
             }
-            withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
-                append(token.value)
-            }
-            if (kw.isNotEmpty()) pop()
         }
         lastIndex = token.range.last + 1
     }
@@ -743,39 +936,65 @@ private fun AnnotatedString.Builder.appendDynamicRichTextPlainText(
 private fun AnnotatedString.Builder.appendDynamicRichTextLink(
     displayText: String,
     targetUrl: String?,
-    primaryColor: Color
+    primaryColor: Color,
+    linkListener: LinkInteractionListener?,
+    collapseWebLinks: Boolean,
 ) {
     val resolvedUrl = targetUrl?.trim().takeUnless { it.isNullOrEmpty() } ?: displayText
-    pushStringAnnotation(tag = DYNAMIC_RICH_TEXT_URL_TAG, annotation = resolvedUrl)
-    withStyle(
-        SpanStyle(
-            color = primaryColor,
-            fontWeight = FontWeight.Medium,
-            textDecoration = TextDecoration.Underline
+    withLink(
+        dynamicRichTextLinkAnnotation(
+            DYNAMIC_RICH_TEXT_LINK_URL_PREFIX + resolvedUrl,
+            linkListener,
         )
     ) {
-        append(displayText)
+        withStyle(
+            SpanStyle(
+                color = primaryColor,
+                fontWeight = FontWeight.Medium,
+                textDecoration = TextDecoration.Underline
+            )
+        ) {
+            append(resolveDynamicWebLinkDisplayText(displayText, collapseWebLinks))
+        }
     }
-    pop()
+}
+
+internal fun resolveDynamicWebLinkDisplayText(
+    displayText: String,
+    collapseWebLinks: Boolean,
+): String {
+    if (!collapseWebLinks) return displayText
+    val normalized = normalizeDynamicRichTextUrl(displayText).orEmpty()
+    val isWebUrl = normalized.startsWith("https://") || normalized.startsWith("http://")
+    return if (isWebUrl && DYNAMIC_RICH_TEXT_URL_PATTERN.matches(normalized)) {
+        displayText.replace(displayText.trim(), "网页链接")
+    } else {
+        displayText
+    }
 }
 
 private fun AnnotatedString.Builder.appendDynamicRichTextVote(
     displayText: String,
     voteId: String?,
     primaryColor: Color,
+    linkListener: LinkInteractionListener?,
 ) {
     val normalizedVoteId = voteId?.trim()?.toLongOrNull()?.takeIf { it > 0L }
     if (normalizedVoteId != null) {
-        pushStringAnnotation(
-            tag = DYNAMIC_RICH_TEXT_VOTE_TAG,
-            annotation = normalizedVoteId.toString(),
-        )
-    }
-    withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
-        append(displayText)
-    }
-    if (normalizedVoteId != null) {
-        pop()
+        withLink(
+            dynamicRichTextLinkAnnotation(
+                DYNAMIC_RICH_TEXT_LINK_VOTE_PREFIX + normalizedVoteId,
+                linkListener,
+            )
+        ) {
+            withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
+                append(displayText)
+            }
+        }
+    } else {
+        withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
+            append(displayText)
+        }
     }
 }
 

@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.list
 
+import com.android.purebilibili.core.ui.components.appActionWithFeedback
+
+import com.android.purebilibili.core.ui.AppContentColors
+
 import android.app.Application
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -13,12 +17,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import com.android.purebilibili.core.ui.components.AppLazyVerticalStaggeredGrid as LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.components.AppFloatingToolbar
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,10 +66,13 @@ import com.android.purebilibili.data.repository.FavoriteCategoryItem
 import com.android.purebilibili.data.repository.PersonalFavoriteRepository
 import com.android.purebilibili.feature.personal.PERSONAL_LIST_POSTER_ASPECT_RATIO
 import com.android.purebilibili.feature.personal.PersonalMediaCardFrame
+import com.android.purebilibili.core.coroutines.AccountScopedRequests
+import com.android.purebilibili.core.store.TokenManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 // Keep this component's established pixel geometry across theme migrations.
 private object FavoriteCategoryLayoutSpec {
@@ -88,8 +97,21 @@ data class FavoriteCategoryUiState(
 class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(FavoriteCategoryUiState())
     val uiState = _uiState.asStateFlow()
+    private val accountRequests = AccountScopedRequests(viewModelScope)
+    private var hasSelectedSection = false
+    private var loadGeneration = 0L
+    private var loadJob: Job? = null
+
+    init {
+        accountRequests.observe {
+            loadGeneration += 1L
+            _uiState.value = FavoriteCategoryUiState(section = _uiState.value.section)
+            if (hasSelectedSection) load(reset = true)
+        }
+    }
 
     fun selectSection(section: FavoriteSection) {
+        hasSelectedSection = true
         if (_uiState.value.section == section && _uiState.value.items.isNotEmpty()) return
         _uiState.value = FavoriteCategoryUiState(
             section = section,
@@ -132,13 +154,17 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
     }
 
     fun remove(item: FavoriteCategoryItem) {
-        viewModelScope.launch {
+        val generation = loadGeneration
+        val identity = accountRequests.identity
+        accountRequests.launch {
             val state = _uiState.value
             val result = when (item.section) {
                 FavoriteSection.BANGUMI, FavoriteSection.CINEMA ->
                     BangumiRepository.unfollowBangumi(item.id).map { Unit }
                 else -> PersonalFavoriteRepository.remove(item, state.publishedNotes)
             }
+            ensureActive()
+            if (!accountRequests.isCurrent(identity) || generation != loadGeneration) return@launch
             if (result.isSuccess) {
                 _uiState.update { it.copy(items = it.items.filterNot { candidate -> candidate.id == item.id }) }
             } else {
@@ -150,15 +176,21 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
     fun removeSelected() {
         val state = _uiState.value
         if (state.selectedIds.isEmpty()) return
-        viewModelScope.launch {
+        val generation = loadGeneration
+        val identity = accountRequests.identity
+        accountRequests.launch {
             val selected = state.items.filter { it.id in state.selectedIds }
             val failures = selected.map { item ->
+                ensureActive()
+                if (!accountRequests.isCurrent(identity)) return@launch
                 when (item.section) {
                     FavoriteSection.BANGUMI, FavoriteSection.CINEMA ->
                         BangumiRepository.unfollowBangumi(item.id).map { Unit }
                     else -> PersonalFavoriteRepository.remove(item, state.publishedNotes)
                 }
             }.count { it.isFailure }
+            ensureActive()
+            if (!accountRequests.isCurrent(identity) || generation != loadGeneration) return@launch
             if (failures == 0) {
                 _uiState.update {
                     it.copy(
@@ -178,10 +210,16 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
             state.section !in setOf(FavoriteSection.BANGUMI, FavoriteSection.CINEMA) ||
             state.selectedIds.isEmpty()
         ) return
-        viewModelScope.launch {
+        val generation = loadGeneration
+        val identity = accountRequests.identity
+        accountRequests.launch {
             val results = state.selectedIds.map { seasonId ->
+                ensureActive()
+                if (!accountRequests.isCurrent(identity)) return@launch
                 BangumiRepository.updateBangumiFollowStatus(seasonId, status.value)
             }
+            ensureActive()
+            if (!accountRequests.isCurrent(identity) || generation != loadGeneration) return@launch
             if (results.all { it.isSuccess }) {
                 _uiState.update { it.copy(selectedIds = emptySet()) }
                 load(reset = true)
@@ -192,21 +230,32 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
     }
 
     fun updatePgcStatus(item: FavoriteCategoryItem, status: FavoritePgcStatus) {
-        viewModelScope.launch {
+        val generation = loadGeneration
+        val identity = accountRequests.identity
+        accountRequests.launch {
             val result = BangumiRepository.updateBangumiFollowStatus(item.id, status.value)
+            ensureActive()
+            if (!accountRequests.isCurrent(identity) || generation != loadGeneration) return@launch
             if (result.isSuccess) load(reset = true)
             else _uiState.update { it.copy(error = result.exceptionOrNull()?.message ?: "更新状态失败") }
         }
     }
 
     private fun load(reset: Boolean) {
+        if (TokenManager.sessDataCache.isNullOrEmpty()) {
+            _uiState.value = FavoriteCategoryUiState(section = _uiState.value.section)
+            return
+        }
+        loadJob?.cancel()
+        val generation = ++loadGeneration
+        val identity = accountRequests.identity
         val requestState = _uiState.value
         val requestPage = if (reset) 1 else requestState.page + 1
         _uiState.update {
-            if (reset) it.copy(isLoading = true, error = null, page = 1, hasMore = false)
+            if (reset) it.copy(items = emptyList(), selectedIds = emptySet(), isLoading = true, isLoadingMore = false, error = null, page = 1, hasMore = false)
             else it.copy(isLoadingMore = true, error = null)
         }
-        viewModelScope.launch {
+        loadJob = accountRequests.launch {
             val result = when (requestState.section) {
                 FavoriteSection.BANGUMI, FavoriteSection.CINEMA -> loadPgc(
                     section = requestState.section,
@@ -221,7 +270,8 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
                     com.android.purebilibili.data.repository.FavoriteCategoryPage(emptyList(), false)
                 )
             }
-            if (_uiState.value.section != requestState.section) return@launch
+            ensureActive()
+            if (!accountRequests.isCurrent(identity) || generation != loadGeneration) return@launch
             result.fold(
                 onSuccess = { page ->
                     _uiState.update { current ->
@@ -291,6 +341,8 @@ fun FavoriteCategoryRoute(
     onTopicClick: (Long) -> Unit,
     onWebClick: (String, String) -> Unit,
     onCheeseClick: ((Long) -> Unit)? = null,
+    gridState: androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState =
+        com.android.purebilibili.core.ui.rememberCompatibleStaggeredGridState(),
     viewModel: FavoriteCategoryViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -299,6 +351,7 @@ fun FavoriteCategoryRoute(
         state = state,
         query = query,
         contentPadding = contentPadding,
+        gridState = gridState,
         onPgcStatusSelected = viewModel::selectPgcStatus,
         onPublishedNotesSelected = viewModel::selectPublishedNotes,
         onRetry = viewModel::retry,
@@ -322,6 +375,7 @@ private fun FavoriteCategoryContent(
     state: FavoriteCategoryUiState,
     query: String,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    gridState: androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState,
     onPgcStatusSelected: (FavoritePgcStatus) -> Unit,
     onPublishedNotesSelected: (Boolean) -> Unit,
     onRetry: () -> Unit,
@@ -355,14 +409,14 @@ private fun FavoriteCategoryContent(
                 Modifier.fillMaxSize().padding(top = headerInset),
                 contentAlignment = Alignment.Center,
             ) {
-                AppText("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppText("正在加载…", color = AppContentColors.secondaryText())
             }
             state.error != null && state.items.isEmpty() -> Column(
                 Modifier.fillMaxSize().padding(top = headerInset),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                AppText(state.error, color = MaterialTheme.colorScheme.error)
+                AppText(state.error, color = AppContentColors.error())
                 AppButton(onClick = onRetry) { AppText("重试") }
             }
             visibleItems.isEmpty() -> Box(
@@ -371,13 +425,15 @@ private fun FavoriteCategoryContent(
             ) {
                 AppText(
                     if (query.isBlank()) "暂无${state.section.label}收藏" else "未找到相关内容",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                 )
             }
             else -> FavoriteCategoryGrid(
                 state = state.copy(items = visibleItems),
+                gridState = gridState,
                 topPadding = stickyChromeReserve,
-                bottomPadding = contentPadding.calculateBottomPadding(),
+                bottomPadding = contentPadding.calculateBottomPadding() +
+                    if (state.selectedIds.isNotEmpty()) 80.dp else 0.dp,
                 onLoadMore = onLoadMore,
                 onToggleSelection = onToggleSelection,
                 onRemove = onRemove,
@@ -407,30 +463,24 @@ private fun FavoriteCategoryContent(
                     onSelected = { onPublishedNotesSelected(it == 1) },
                 )
             }
-
-            if (state.selectedIds.isNotEmpty()) {
-                FlowRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacingTokens.Medium),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
-                ) {
-                    if (state.section == FavoriteSection.BANGUMI || state.section == FavoriteSection.CINEMA) {
-                        FavoritePgcStatus.entries.forEach { status ->
-                            AppTextButton(onClick = { onUpdateSelectedPgcStatus(status) }) {
-                                AppText("移至${status.label}")
-                            }
-                        }
-                    } else {
-                        AppTextButton(onClick = onRemoveSelected) {
-                            AppText("删除(${state.selectedIds.size})")
+        }
+        if (state.selectedIds.isNotEmpty()) {
+            AppFloatingToolbar(
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .padding(start = 12.dp, end = 12.dp, bottom = contentPadding.calculateBottomPadding() + 12.dp),
+            ) {
+                if (state.section == FavoriteSection.BANGUMI || state.section == FavoriteSection.CINEMA) {
+                    FavoritePgcStatus.entries.forEach { status ->
+                        AppTextButton(onClick = { onUpdateSelectedPgcStatus(status) }) {
+                            AppText("移至${status.label}")
                         }
                     }
-                    AppTextButton(onClick = onClearSelection) {
-                        AppText("取消选择")
+                } else {
+                    AppTextButton(onClick = onRemoveSelected) {
+                        AppText("删除(${state.selectedIds.size})")
                     }
                 }
+                AppTextButton(onClick = onClearSelection) { AppText("取消选择") }
             }
         }
     }
@@ -446,16 +496,21 @@ private fun FavoriteCategoryFilterRow(
         labels.mapIndexed { index, label -> AppSegmentOption(index, label) }
     }
     val uiStyle = LocalAppUiStyle.current
+    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     val isScrollable = labels.size > 4
     val horizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3 && isScrollable) AppSpacingTokens.None else AppSpacingTokens.Medium
     val minTabWidth = if (labels.size <= 3) {
-        FavoriteCategoryLayoutSpec.HeaderHeightDp.dp
+        // Keep the Focus header width while allowing the upstream compact glass PGC dock.
+        if (liquidGlassEnabled && labels.size == 3) 64.dp else FavoriteCategoryLayoutSpec.HeaderHeightDp.dp
     } else if (uiStyle == AppUiStyle.MATERIAL3) {
         AppChromeSizeTokens.MinimumTouchTarget
     } else {
         Dp.Unspecified
     }
     AppThemeAdaptiveTabRow(
+        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+        role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
         options = options,
         selectedValue = selectedIndex.coerceIn(0, labels.lastIndex.coerceAtLeast(0)),
         onSelectionChange = onSelected,
@@ -475,6 +530,7 @@ private fun FavoriteCategoryFilterRow(
 @Composable
 private fun FavoriteCategoryGrid(
     state: FavoriteCategoryUiState,
+    gridState: androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState,
     topPadding: androidx.compose.ui.unit.Dp,
     bottomPadding: androidx.compose.ui.unit.Dp,
     onLoadMore: () -> Unit,
@@ -489,8 +545,10 @@ private fun FavoriteCategoryGrid(
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = resolveFavoriteCategoryColumnCount(state.section, maxWidth.value)
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
+        val alignRows = columns > 1 && !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
+        LazyVerticalStaggeredGrid(
+            state = gridState,
+            columns = StaggeredGridCells.Fixed(columns),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 start = AppSpacingTokens.Medium,
                 end = AppSpacingTokens.Medium,
@@ -498,15 +556,18 @@ private fun FavoriteCategoryGrid(
                 bottom = bottomPadding + AppSpacingTokens.Medium,
             ),
             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
-            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+            verticalItemSpacing = AppSpacingTokens.Medium,
         ) {
-            itemsIndexed(state.items, key = { _, item -> "${item.section}_${item.id}" }) { index, item ->
+            val itemKeys = state.items.map { "${it.section}_${it.id}" }
+            val renderCard: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
+                val item = state.items[index]
                 if (index == state.items.lastIndex && state.hasMore && !state.isLoadingMore) {
                     LaunchedEffect(state.page, state.items.size) { onLoadMore() }
                 }
                 when (state.section) {
                     FavoriteSection.BANGUMI, FavoriteSection.CINEMA -> FavoritePgcCard(
                         item = item,
+                        modifier = cardModifier,
                         selected = item.id in state.selectedIds,
                         batchMode = state.selectedIds.isNotEmpty(),
                         selectedStatus = state.pgcStatus,
@@ -522,10 +583,11 @@ private fun FavoriteCategoryGrid(
                         onClick = { onTopicClick(item.id) },
                         label = { AppText("# ${item.title}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         leadingIcon = null,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = cardModifier.fillMaxWidth(),
                     )
                     else -> FavoriteGenericCategoryCard(
                         item = item,
+                        modifier = cardModifier,
                         selected = item.id in state.selectedIds,
                         batchMode = state.selectedIds.isNotEmpty(),
                         onClick = {
@@ -549,6 +611,25 @@ private fun FavoriteCategoryGrid(
                     )
                 }
             }
+            if (!alignRows) {
+                itemsIndexed(state.items, key = { index, _ -> itemKeys[index] }) { index, _ ->
+                    renderCard(index, Modifier)
+                }
+            } else {
+                com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(state.items.size, columns)
+                    .forEach { row ->
+                        item(key = "favorite_category_row_${itemKeys[row.first]}", span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                            com.android.purebilibili.feature.home.HomeAlignedVideoRow(
+                                indices = row,
+                                itemKeys = itemKeys,
+                                columns = columns,
+                                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                                modifier = Modifier.fillMaxWidth(),
+                                content = renderCard,
+                            )
+                        }
+                    }
+            }
         }
     }
 }
@@ -557,6 +638,7 @@ private fun FavoriteCategoryGrid(
 @OptIn(ExperimentalFoundationApi::class)
 private fun FavoritePgcCard(
     item: FavoriteCategoryItem,
+    modifier: Modifier = Modifier,
     selected: Boolean,
     batchMode: Boolean,
     selectedStatus: FavoritePgcStatus,
@@ -566,9 +648,9 @@ private fun FavoritePgcCard(
     onRemove: () -> Unit,
 ) {
     AppSurface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = onLongClick),
         shape = AppShapes.container(ContainerLevel.Card),
         color = AppSurfaceTokens.cardContainer(),
     ) {
@@ -609,11 +691,11 @@ private fun FavoritePgcCard(
                 modifier = Modifier.padding(AppSpacingTokens.Medium),
                 verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
             ) {
-                AppText(item.title, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                AppText(item.title, style = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography().title, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 AppText(
                     item.subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -625,8 +707,8 @@ private fun FavoritePgcCard(
                         AppTextButton(onClick = { onStatusSelected(status) }) {
                             AppText(
                                 status.label,
-                                color = if (status == selectedStatus) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (status == selectedStatus) AppContentColors.accent()
+                                else AppContentColors.secondaryText(),
                             )
                         }
                     }
@@ -639,26 +721,39 @@ private fun FavoritePgcCard(
 @Composable
 private fun FavoriteGenericCategoryCard(
     item: FavoriteCategoryItem,
+    modifier: Modifier = Modifier,
     selected: Boolean,
     batchMode: Boolean,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     onRemove: () -> Unit,
 ) {
+    val container = if (item.section == FavoriteSection.ARTICLE && !batchMode && item.id > 0L) {
+        com.android.purebilibili.core.ui.rememberNativeCardContainerTransition(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.DynamicDetail(item.id.toString()), onClick,
+        )
+    } else null
     PersonalMediaCardFrame(
+        modifier = modifier.then(container?.modifier ?: Modifier),
+        horizontalCoverMaxWidthDp = com.android.purebilibili.feature.home.components.cards.WIDE_LIST_COVER_MAX_WIDTH_DP,
         selected = selected,
         headlineContent = {
-            AppText(item.title, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            AppText(
+                item.title,
+                style = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography().title,
+                maxLines = com.android.purebilibili.core.ui.videoCardTitleMaxLines(),
+                overflow = com.android.purebilibili.core.ui.videoCardTitleOverflow(),
+            )
         },
         overlineContent = item.badge.takeIf(String::isNotBlank)?.let { badge ->
-            { AppText(badge, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall) }
+            { AppText(badge, color = AppContentColors.accent(), style = MaterialTheme.typography.labelSmall) }
         },
         supportingContent = item.subtitle.takeIf(String::isNotBlank)?.let { subtitle ->
             {
                 AppText(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -679,7 +774,7 @@ private fun FavoriteGenericCategoryCard(
                 }
             }
         },
-        onClick = if (batchMode) ({ onLongClick?.invoke(); Unit }) else onClick,
+        onClick = if (batchMode) ({ onLongClick?.invoke(); Unit }) else container?.onClick ?: onClick,
         onLongClick = onLongClick,
     )
 }

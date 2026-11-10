@@ -6,6 +6,8 @@ data class FeedSource(
     val id: String,
     val title: String,
     val url: String,
+    /** 分组名，空串表示未分组。 */
+    val group: String = "",
 )
 
 data class ParsedFeed(
@@ -55,4 +57,8 @@ sealed interface FeedBlock {
 data class FeedLoadSnapshot(
     val items: List<ParsedFeedItem>,
     val errors: List<String>,
+    val validators: Map<String, FeedConditionalValidators> = emptyMap(),
+    /** 刷新进度：已完成源数 / 总源数，用于长刷新时的可见反馈。 */
+    val completedSources: Int = 0,
+    val totalSources: Int = 0,
 )

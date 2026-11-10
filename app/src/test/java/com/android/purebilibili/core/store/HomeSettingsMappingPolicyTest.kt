@@ -27,6 +27,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isBottomBarFloating)
         assertEquals(0, result.bottomBarLabelMode)
         assertEquals(SettingsManager.TopTabLabelMode.TEXT_ONLY, result.topTabLabelMode)
+        assertFalse(result.partitionSideRailOnRight)
         assertFalse(result.hideTopTabs)
         assertEquals(HomeTopRightAction.SETTINGS, result.homeTopRightAction)
         assertEquals(HomeTopLayoutOrder.SEARCH_THEN_TABS, result.homeTopLayoutOrder)
@@ -35,7 +36,7 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(HomeHeaderCollapseMode.BOTH, result.homeHeaderCollapseMode)
         assertEquals(HomeBarHideType.SYNC, result.homeBarHideType)
         assertEquals(
-            CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+            CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
             result.commonListHeaderCollapseMode
         )
         assertTrue(result.isHeaderCollapseEnabled)
@@ -45,6 +46,7 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.isHomeSearchLiquidGlassEnabled)
         assertFalse(result.isBottomBarLiquidGlassEnabled)
         assertFalse(result.isBottomBarSearchEnabled)
+        assertFalse(result.listScopedSearchEnabled)
         assertEquals(BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP, result.bottomBarSearchAutoExpandMode)
         assertEquals(BottomBarSearchLayoutMode.FULL_DOCK, result.bottomBarSearchLayoutMode)
         assertFalse(result.androidNativeLiquidGlassEnabled)
@@ -90,6 +92,7 @@ class HomeSettingsMappingPolicyTest {
             booleanPreferencesKey("bottom_bar_floating") to false,
             intPreferencesKey("bottom_bar_label_mode") to 2,
             intPreferencesKey("top_tab_label_mode") to 1,
+            booleanPreferencesKey("partition_side_rail_on_right") to true,
             intPreferencesKey("home_top_right_action") to HomeTopRightAction.INBOX.value,
             intPreferencesKey("home_top_layout_order") to HomeTopLayoutOrder.TABS_THEN_SEARCH.value,
             booleanPreferencesKey("header_blur_enabled") to false,
@@ -103,6 +106,7 @@ class HomeSettingsMappingPolicyTest {
             booleanPreferencesKey("home_search_liquid_glass_enabled") to false,
             booleanPreferencesKey("bottom_bar_liquid_glass_enabled") to false,
             booleanPreferencesKey("bottom_bar_search_enabled") to true,
+            booleanPreferencesKey("list_scoped_search_enabled") to true,
             intPreferencesKey("bottom_bar_search_auto_expand_mode") to BottomBarSearchAutoExpandMode.DISABLED.value,
             intPreferencesKey("bottom_bar_search_layout_mode") to BottomBarSearchLayoutMode.HOME_AND_SEARCH.value,
             booleanPreferencesKey("android_native_liquid_glass_enabled") to true,
@@ -140,6 +144,7 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.isBottomBarFloating)
         assertEquals(2, result.bottomBarLabelMode)
         assertEquals(1, result.topTabLabelMode)
+        assertTrue(result.partitionSideRailOnRight)
         assertEquals(HomeTopRightAction.INBOX, result.homeTopRightAction)
         assertEquals(HomeTopLayoutOrder.TABS_THEN_SEARCH, result.homeTopLayoutOrder)
         assertFalse(result.isHeaderBlurEnabled)
@@ -156,6 +161,7 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.isHomeSearchLiquidGlassEnabled)
         assertFalse(result.isBottomBarLiquidGlassEnabled)
         assertTrue(result.isBottomBarSearchEnabled)
+        assertTrue(result.listScopedSearchEnabled)
         assertEquals(BottomBarSearchAutoExpandMode.DISABLED, result.bottomBarSearchAutoExpandMode)
         assertEquals(BottomBarSearchLayoutMode.HOME_AND_SEARCH, result.bottomBarSearchLayoutMode)
         assertTrue(result.androidNativeLiquidGlassEnabled)
@@ -358,6 +364,19 @@ class HomeSettingsMappingPolicyTest {
     }
 
     @Test
+    fun topOnlyCollapseMode_restoresSavedSelectionAndCollapsesBothRows() {
+        val prefs = mutablePreferencesOf(
+            intPreferencesKey("home_header_collapse_mode") to HomeHeaderCollapseMode.SHOW_AT_TOP_ONLY.value
+        )
+        val result = mapHomeSettingsFromPreferences(prefs)
+
+        assertEquals(HomeHeaderCollapseMode.SHOW_AT_TOP_ONLY, result.homeHeaderCollapseMode)
+        assertTrue(result.isHeaderCollapseEnabled)
+        assertTrue(result.homeHeaderCollapseMode.collapseSearch)
+        assertTrue(result.homeHeaderCollapseMode.collapseTabs)
+    }
+
+    @Test
     fun invalidHomeBarHideTypeFallsBackToSync() {
         val prefs = mutablePreferencesOf(
             intPreferencesKey("home_bar_hide_type") to 99
@@ -501,15 +520,6 @@ class HomeSettingsMappingPolicyTest {
 
         assertEquals(HomeDurationStyle.OVERLAY_TEXT_ONLY, explicit.homeDurationStyle)
         assertEquals(HomeFeedCardStyle.BILIPAI, explicit.homeFeedCardStyle)
-    }
-
-    @Test
-    fun normalizeHomeRefreshCount_clampsToSupportedRange() {
-        assertEquals(10, normalizeHomeRefreshCount(1))
-        assertEquals(30, normalizeHomeRefreshCount(30))
-        assertEquals(20, DEFAULT_HOME_REFRESH_COUNT)
-        assertEquals(30, MAX_HOME_REFRESH_COUNT)
-        assertEquals(30, normalizeHomeRefreshCount(999))
     }
 
     @Test

@@ -5,11 +5,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.materialkolor.PaletteStyle
-import com.materialkolor.dynamicColorScheme
+import com.materialkolor.material3.dynamicColorScheme
 import com.materialkolor.dynamiccolor.ColorSpec
 import com.android.purebilibili.testutil.readProjectSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
@@ -121,46 +122,56 @@ class ThemeColorSchemeCompletenessTest {
     }
 
     // --- iOS 静态方案 ---
-    // --- 静态 MD3 方案 ---
+    // --- 自定义种子 MD3 方案(运行时走 createBiliPaiStyleColorScheme → MaterialKolor HCT) ---
 
     @Test
-    fun `static md3 light scheme explicitly sets all roles`() {
-        assertStaticMd3SchemesDeclareEveryRole()
-        val scheme = createStaticMd3ColorScheme(seed, darkTheme = false, amoledDarkTheme = false)
-        assertAllRolesExplicit(
-            scheme, "静态 MD3 light",
-            expectedError = listOf(
-                Color(0xFFB3261E), Color(0xFFFFFFFF), Color(0xFFF9DEDC), Color(0xFF410E0B)
-            )
+    fun `custom seed md3 light scheme explicitly sets all roles`() {
+        val scheme = createBiliPaiStyleColorScheme(
+            seedColor = seed,
+            darkTheme = false,
+            amoledDarkTheme = false,
+            paletteStyle = PaletteStyle.TonalSpot,
+            colorSpec = ColorSpec.SpecVersion.SPEC_2021,
         )
-        assertSurfaceContainerOrdered(scheme, "静态 MD3 light")
+        assertAllRolesExplicit(
+            scheme, "自定义种子 MD3 light",
+            expectedError = scheme.roles().filter { it.first.startsWith("error") }.map { it.second }
+        )
+        assertSurfaceContainerOrdered(scheme, "自定义种子 MD3 light")
         assertEquals(Color.Black, scheme.scrim)
-        assertEquals(scheme.primary, scheme.surfaceTint)
+        assertEquals(seed, scheme.surfaceTint)
     }
 
     @Test
-    fun `static md3 dark scheme explicitly sets all roles`() {
-        assertStaticMd3SchemesDeclareEveryRole()
-        val scheme = createStaticMd3ColorScheme(seed, darkTheme = true, amoledDarkTheme = false)
-        assertAllRolesExplicit(
-            scheme, "静态 MD3 dark",
-            expectedError = listOf(
-                Color(0xFFF2B8B5), Color(0xFF601410), Color(0xFF8C1D18), Color(0xFFF9DEDC)
-            )
+    fun `custom seed md3 dark scheme explicitly sets all roles`() {
+        val scheme = createBiliPaiStyleColorScheme(
+            seedColor = seed,
+            darkTheme = true,
+            amoledDarkTheme = false,
+            paletteStyle = PaletteStyle.TonalSpot,
+            colorSpec = ColorSpec.SpecVersion.SPEC_2021,
         )
-        assertSurfaceContainerOrdered(scheme, "静态 MD3 dark")
+        assertAllRolesExplicit(
+            scheme, "自定义种子 MD3 dark",
+            expectedError = scheme.roles().filter { it.first.startsWith("error") }.map { it.second }
+        )
+        assertSurfaceContainerOrdered(scheme, "自定义种子 MD3 dark")
         assertEquals(Color.Black, scheme.scrim)
+        assertEquals(seed, scheme.surfaceTint)
     }
 
     @Test
-    fun `static md3 amoled scheme explicitly sets all roles`() {
-        assertStaticMd3SchemesDeclareEveryRole()
-        val scheme = createStaticMd3ColorScheme(seed, darkTheme = true, amoledDarkTheme = true)
+    fun `custom seed md3 amoled scheme explicitly sets all roles`() {
+        val scheme = createBiliPaiStyleColorScheme(
+            seedColor = seed,
+            darkTheme = true,
+            amoledDarkTheme = true,
+            paletteStyle = PaletteStyle.TonalSpot,
+            colorSpec = ColorSpec.SpecVersion.SPEC_2021,
+        )
         assertAllRolesExplicit(
-            scheme, "静态 MD3 amoled",
-            expectedError = listOf(
-                Color(0xFFF2B8B5), Color(0xFF601410), Color(0xFF8C1D18), Color(0xFFF9DEDC)
-            )
+            scheme, "自定义种子 MD3 amoled",
+            expectedError = scheme.roles().filter { it.first.startsWith("error") }.map { it.second }
         )
         // amoled 覆盖会把 surfaceContainer 压到近纯黑,五级单调性由既有覆盖逻辑保证,不再断言
         assertEquals(Color.Black, scheme.background)
@@ -172,25 +183,17 @@ class ThemeColorSchemeCompletenessTest {
 
     @Test
     fun `materialkolor dynamic scheme generates all roles for light and dark`() {
-        val light = alignStaticColorSchemeWithThemePrimary(
-            scheme = dynamicColorScheme(
-                seedColor = seed,
-                isDark = false,
-                style = PaletteStyle.TonalSpot,
-                specVersion = ColorSpec.SpecVersion.SPEC_2021,
-            ),
-            themePrimaryColor = seed,
-            darkTheme = false,
+        val light = dynamicColorScheme(
+            seedColor = seed,
+            isDark = false,
+            style = PaletteStyle.TonalSpot,
+            specVersion = ColorSpec.SpecVersion.SPEC_2021,
         )
-        val dark = alignStaticColorSchemeWithThemePrimary(
-            scheme = dynamicColorScheme(
-                seedColor = seed,
-                isDark = true,
-                style = PaletteStyle.TonalSpot,
-                specVersion = ColorSpec.SpecVersion.SPEC_2021,
-            ),
-            themePrimaryColor = seed,
-            darkTheme = true,
+        val dark = dynamicColorScheme(
+            seedColor = seed,
+            isDark = true,
+            style = PaletteStyle.TonalSpot,
+            specVersion = ColorSpec.SpecVersion.SPEC_2021,
         )
 
         assertAllRolesExplicit(light, "materialkolor light", expectedError = listOf(light.error, light.onError, light.errorContainer, light.onErrorContainer))
@@ -199,8 +202,8 @@ class ThemeColorSchemeCompletenessTest {
         assertSurfaceContainerOrdered(dark, "materialkolor dark")
         assertEquals(Color.Black, light.scrim)
         assertEquals(Color.Black, dark.scrim)
-        // align 后 surfaceTint 与种子色 primary 一致
-        assertEquals(seed, light.surfaceTint)
-        assertEquals(seed, dark.surfaceTint)
+        // surfaceTint 保持 materialkolor 原生调和值，不再被原始种子 hex 覆盖
+        assertNotEquals(seed, light.surfaceTint)
+        assertNotEquals(seed, dark.surfaceTint)
     }
 }

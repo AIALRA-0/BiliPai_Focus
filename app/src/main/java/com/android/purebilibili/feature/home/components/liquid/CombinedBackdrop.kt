@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import top.yukonga.miuix.kmp.blur.Backdrop
+import com.android.purebilibili.core.ui.blur.ContinuousBackdrop
 
 /**
  * BiliPai combined sampling: page backdrop first, then tinted tabs
@@ -21,8 +22,9 @@ class CombinedBackdrop(
 
     override val isCoordinatesDependent: Boolean = first.isCoordinatesDependent || second.isCoordinatesDependent
 
-    override val offsetResidualX: Float get() = first.offsetResidualX
-    override val offsetResidualY: Float get() = first.offsetResidualY
+    // 每个源使用相同的连续采样，不借用第一层余量补偿其余图层。
+    private val firstSampling = ContinuousBackdrop(first)
+    private val secondSampling = ContinuousBackdrop(second)
 
     override fun DrawScope.drawBackdrop(
         density: Density,
@@ -30,8 +32,8 @@ class CombinedBackdrop(
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
         downscaleFactor: Int,
     ) {
-        with(first) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
-        with(second) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
+        with(firstSampling) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
+        with(secondSampling) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
     }
 }
 

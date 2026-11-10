@@ -15,11 +15,74 @@ class LiveSuperChatExpiryPolicyTest {
     }
 
     @Test
-    fun remainingAndExpiryTrackElapsedTime() {
-        assertEquals(25, resolveLiveSuperChatRemainingSec(durationSec = 30, elapsedSec = 5))
-        assertFalse(shouldExpireLiveSuperChat(durationSec = 30, elapsedSec = 5))
-        assertTrue(shouldExpireLiveSuperChat(durationSec = 30, elapsedSec = 30))
-        assertTrue(shouldExpireLiveSuperChat(durationSec = 30, elapsedSec = 40))
+    fun serverDeadlineWinsOverDurationEvenWhenExpired() {
+        assertEquals(
+            2_005L,
+            resolveLiveSuperChatEndTime(endTime = 2_005L, startTime = 1_945L, duration = 300, nowEpochSeconds = 2_000L),
+        )
+        val expired = resolveLiveSuperChatEndTime(
+            endTime = 1_999L, startTime = 1_945L, duration = 300, nowEpochSeconds = 2_000L,
+        )
+        assertEquals(1_999L, expired)
+        assertTrue(shouldExpireLiveSuperChat(expired, 2_000L))
+    }
+
+    @Test
+    fun startTimeAndDurationRecoverMissingDeadlineWithoutRestartingIt() {
+        val endTime = resolveLiveSuperChatEndTime(
+            endTime = 0L, startTime = 1_945L, duration = 60, nowEpochSeconds = 2_000L,
+        )
+        assertEquals(2_005L, endTime)
+        assertEquals(5, remainingLiveSuperChatSeconds(endTime, 2_000L))
+        assertEquals(2, remainingLiveSuperChatSeconds(endTime, 2_003L))
+        assertFalse(shouldExpireLiveSuperChat(endTime, 2_004L))
+        assertTrue(shouldExpireLiveSuperChat(endTime, 2_005L))
+        assertEquals(0, remainingLiveSuperChatSeconds(endTime, 2_006L))
+    }
+
+    @Test
+    fun panelReentryUsesTheSameAbsoluteDeadline() {
+        val endTime = resolveLiveSuperChatEndTime(
+            endTime = 2_005L, startTime = 0L, duration = 0, nowEpochSeconds = 2_000L,
+        )
+        assertEquals(5, remainingLiveSuperChatSeconds(endTime, 2_000L))
+        // Hide at 2000 and reopen at 2003: displaying the same message cannot renew it.
+        assertEquals(2, remainingLiveSuperChatSeconds(endTime, 2_003L))
+        assertEquals(2, remainingLiveSuperChatSeconds(endTime, 2_003L))
+    }
+
+    @Test
+    fun missingTimingIsNormalizedOnceAtReceipt() {
+        val endTime = resolveLiveSuperChatEndTime(
+            endTime = 0L, startTime = 0L, duration = 0, nowEpochSeconds = 2_000L,
+        )
+        assertEquals(2_060L, endTime)
+        assertEquals(57, remainingLiveSuperChatSeconds(endTime, 2_003L))
+        assertEquals(
+            endTime,
+            resolveLiveSuperChatEndTime(endTime, startTime = 0L, duration = 0, nowEpochSeconds = 2_003L),
+        )
+        assertEquals(
+            2_030L,
+            resolveLiveSuperChatEndTime(endTime = 0L, startTime = 0L, duration = 30, nowEpochSeconds = 2_000L),
+        )
+    }
+
+    @Test
+    fun flashExpiresAtServerDeadlineOrOriginalTenSecondCap() {
+        val shortDeadline = resolveLiveSuperChatFlashEndTime(endTime = 2_005L, receivedAt = 2_000L)
+        assertEquals(2_005L, shortDeadline)
+        assertEquals(2, remainingLiveSuperChatSeconds(shortDeadline, 2_003L))
+        val cappedDeadline = resolveLiveSuperChatFlashEndTime(endTime = 2_300L, receivedAt = 2_000L)
+        assertEquals(2_010L, cappedDeadline)
+        assertEquals(7, remainingLiveSuperChatSeconds(cappedDeadline, 2_003L))
+        assertTrue(shouldExpireLiveSuperChat(cappedDeadline, 2_010L))
+        assertTrue(shouldExpireLiveSuperChat(resolveLiveSuperChatFlashEndTime(1_999L, 2_000L), 2_000L))
+    }
+
+    @Test
+    fun largeDeadlineDoesNotOverflowCountdown() {
+        assertEquals(Int.MAX_VALUE, remainingLiveSuperChatSeconds(Int.MAX_VALUE.toLong() + 2_001L, 2_000L))
     }
 
     @Test

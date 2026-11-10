@@ -35,7 +35,8 @@ data class AudioQualityOption(
     val label: String,
     val isHiRes: Boolean = false,
     val isDolby: Boolean = false,
-    val isSoftwareDecoded: Boolean = false
+    val isSoftwareDecoded: Boolean = false,
+    val codecDescription: String = ""
 )
 
 data class AudioQualityControlPresentation(
@@ -52,9 +53,5 @@ data class AudioSelectionDecision(
     val fallbackReason: AudioFallbackReason?
 ) {
     val selectedPreferenceId: Int
-        get() = when (selected?.kind) {
-            AudioStreamKind.HI_RES -> AUDIO_QUALITY_HI_RES
-            AudioStreamKind.DOLBY -> AUDIO_QUALITY_DOLBY
-            AudioStreamKind.STANDARD, null -> AUDIO_QUALITY_AUTO
-        }
+        get() = selected?.track?.id ?: AUDIO_QUALITY_AUTO
 }

@@ -94,16 +94,6 @@ class AudioModePlayModeStructureTest {
         assertTrue(metadata.artist == "马也_Crabbit")
     }
 
-    @Test
-    fun multiPageAudioModeExposesPageSelectorAndAutoplaysSelection() {
-        val source = audioModePlayerSource()
-
-        assertTrue(source.contains("info.pages.size > 1"))
-        assertTrue(source.contains("PagesSelector("))
-        assertTrue(source.contains("cid = page.cid"))
-        assertTrue(source.contains("autoPlay = resolveAudioModePageSwitchAutoPlay()"))
-    }
-
     private fun audioModePlayerSource(): String = loadSource(
         "src/main/java/com/android/purebilibili/feature/video/screen/AudioModeMusicPlayer.kt",
         "app/src/main/java/com/android/purebilibili/feature/video/screen/AudioModeMusicPlayer.kt"

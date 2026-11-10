@@ -1,13 +1,16 @@
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.core.ui.AppContentColors
+
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
+import android.net.Uri
 import android.os.Build
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
+import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +22,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -45,7 +48,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -54,12 +56,14 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.imageLoader
 import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
 import com.android.purebilibili.core.ui.AppSplitLayout
 import com.android.purebilibili.core.ui.AppTopBar
@@ -71,7 +75,6 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppGridLayoutIcon
 import com.android.purebilibili.core.ui.rememberAppListLayoutIcon
 import com.android.purebilibili.data.model.response.DynamicItem
-import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCardActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardInteractionActions
@@ -85,20 +88,23 @@ import com.android.purebilibili.feature.dynamic.components.toggleDynamicDetailIm
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicReportReasons
 import com.android.purebilibili.feature.dynamic.components.saveDynamicImageToGallery
 import com.android.purebilibili.feature.dynamic.components.DynamicShareToMessageDialog
-import com.android.purebilibili.feature.dynamic.components.DynamicInlineCommentComposer
+import com.android.purebilibili.feature.dynamic.components.DynamicCommentEntryBar
+import com.android.purebilibili.feature.dynamic.components.DynamicCommentInputHost
 import com.android.purebilibili.feature.dynamic.components.DynamicInlineCommentHeader
 import com.android.purebilibili.feature.dynamic.components.DynamicSubReplyPreviewHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.dynamic.components.dynamicInlineCommentItems
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
 import com.android.purebilibili.feature.video.ui.components.resolveBottomInputBarContentBottomPadding
 import com.android.purebilibili.feature.video.ui.components.shouldUseFloatingLiquidBottomInputBar
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
+import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
 
 internal fun resolveDynamicDetailBottomBarColor(
     uiStyle: AppUiStyle,
@@ -108,22 +114,13 @@ internal fun resolveDynamicDetailBottomBarColor(
     AppUiStyle.MATERIAL3 -> colorScheme.surface
 }
 
-private sealed interface DynamicDetailUiState {
-    data object Loading : DynamicDetailUiState
-    data class Success(val item: DynamicItem) : DynamicDetailUiState
-    data class Error(val message: String) : DynamicDetailUiState
-}
-
-private object DynamicDetailScreenLayoutSpec {
-    const val CommentComposerMaxWidthDp = 360f
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DynamicDetailScreen(
     dynamicId: String,
     openCommentRootRpid: Long = 0L,
     openCommentTargetRpid: Long = 0L,
+    openComments: Boolean = false,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
     onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
@@ -135,48 +132,60 @@ fun DynamicDetailScreen(
     onMusicClick: ((Long) -> Unit)? = null,
     onCollectionClick: ((Long, Long, String, String) -> Unit)? = null,
     onCourseClick: ((String, String) -> Unit)? = null,
+    onOpenLink: ((String) -> Unit)? = null,
     onDynamicDetailClick: (String) -> Unit = {},
+    onMatchClick: ((Long) -> Unit)? = null,
     onShareToMessageClick: ((DynamicItem) -> Unit)? = null,
+    contentTransitionReady: Boolean = true,
 ) {
     val interactionViewModel: DynamicViewModel = viewModel()
-    var retryToken by rememberSaveable { mutableIntStateOf(0) }
+    val detailViewModel: DynamicDetailViewModel = viewModel(key = "dynamic-detail:$dynamicId")
     val screenTitle = stringResource(R.string.dynamic_detail_title)
     val backLabel = stringResource(R.string.common_back)
     val retryLabel = stringResource(R.string.common_retry)
     val loadFailedMessage = stringResource(R.string.dynamic_detail_load_failed)
-    val seedItem = remember(dynamicId) { DynamicRepository.peekDynamicDetailSeed(dynamicId) }
-    val uiState by produceState<DynamicDetailUiState>(
-        initialValue = seedItem?.let { DynamicDetailUiState.Success(it) } ?: DynamicDetailUiState.Loading,
-        key1 = dynamicId,
-        key2 = retryToken
-    ) {
-        if (seedItem == null) {
-            value = DynamicDetailUiState.Loading
-        }
-        value = DynamicRepository.getDynamicDetail(dynamicId).fold(
-            onSuccess = { item -> DynamicDetailUiState.Success(item) },
-            onFailure = { error ->
-                DynamicDetailUiState.Error(error.message ?: loadFailedMessage)
-            }
-        )
+    val loadedUiState by detailViewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(detailViewModel, dynamicId) {
+        detailViewModel.load(dynamicId, loadFailedMessage)
     }
 
+    val uiState = if (contentTransitionReady) loadedUiState else DynamicDetailUiState.Loading
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.android.purebilibili.core.ui.transition.LocalDynamicCommentPreviewVisible provides false,
+        com.android.purebilibili.feature.share.LocalReplyShareContext provides
+            com.android.purebilibili.feature.share.ReplyShareContext("https://t.bilibili.com/$dynamicId", title = "动态"),
+    ) {
+    val contentRevealAlpha = com.android.purebilibili.core.ui.transition.rememberSharedCardDetailRevealAlpha(
+        entryKey = dynamicId,
+        contentTransitionReady = contentTransitionReady,
+        contentLoaded = uiState !is DynamicDetailUiState.Loading,
+    )
     val context = LocalContext.current
     val collapsedSubReplyPreviewLimit by SettingsManager
         .getCommentCollapsedReplyPreviewLimit(context)
         .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
+            initialValue = SettingsManager.DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT,
         )
     val homeSettings by SettingsManager.getHomeSettings(context)
         .collectAsStateWithLifecycle(initialValue = HomeSettings())
     val liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
     // Only scrolling content captures this backdrop. The comment controls remain sibling
     // overlays, matching video detail and preventing a RenderNode backdrop cycle.
-    val detailCommentBackdrop = if (liquidGlassEnabled) rememberLayerBackdrop() else null
+    // Record a complete viewport, including its background. Capturing only the transparent
+    // LazyColumn leaves sparse glyph/image bounds as filter input; edge-clamped sampling
+    // can then stretch those bounds into rectangular bands inside the glass.
+    // The composer stays outside this source to prevent sampling itself.
+    val detailCommentSource = if (liquidGlassEnabled) rememberChromeBackdropSource() else null
+    val detailCommentBackdrop = detailCommentSource?.backdrop
+    val detailCommentSourceModifier = if (detailCommentSource != null) {
+        detailCommentSource.modifier.sharedGlobalWallpaperBackground(MaterialTheme.colorScheme.background)
+    } else {
+        Modifier
+    }
     val gifImageLoader = context.imageLoader
     val defaultDetailImageLayout by SettingsManager.getDynamicDetailImageLayout(context)
         .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.DynamicDetailImageLayout.EXPANDED
+            initialValue = SettingsManager.peekDynamicDetailImageLayout(context)
         )
     var detailImageLayoutOverrideName by rememberSaveable(dynamicId) { mutableStateOf<String?>(null) }
     val effectiveDetailImageLayout = remember(
@@ -189,20 +198,43 @@ fun DynamicDetailScreen(
     }
     val likedDynamics by interactionViewModel.likedDynamics.collectAsStateWithLifecycle()
     val likeOverrides by interactionViewModel.likeOverrides.collectAsStateWithLifecycle()
-    val comments by interactionViewModel.comments.collectAsStateWithLifecycle()
-    val commentsLoading by interactionViewModel.commentsLoading.collectAsStateWithLifecycle()
-    val commentsLoadingMore by interactionViewModel.commentsLoadingMore.collectAsStateWithLifecycle()
-    val commentTotalCount by interactionViewModel.commentTotalCount.collectAsStateWithLifecycle()
+    // 评论区一次性读取单一状态：以前 5 个 flow 分别发射，加载完成时会出现中间帧。
+    val commentUiState by interactionViewModel.commentUiState.collectAsStateWithLifecycle()
+    val comments = remember(
+        commentUiState.comments,
+        commentUiState.pinnedRootReplyId,
+        commentUiState.pinnedReply,
+    ) { resolveDynamicDetailDisplayComments(commentUiState) }
+    val commentsLoading = commentUiState.isLoading
+    val commentsRefreshing = commentUiState.isRefreshing
+    val commentsRefreshError = commentUiState.pinnedReplyError ?: commentUiState.refreshError
+    val commentsLoadingMore = commentUiState.isLoadingMore
+    val commentTotalCount = commentUiState.totalCount
+    // 骨架槽位数按可视高度估算：铺满首屏，数据到达时列表不会被撑长或缩短。
+    val commentSkeletonSlotCount = resolveDynamicCommentSkeletonSlotCount(
+        viewportHeightDp = LocalConfiguration.current.screenHeightDp,
+    )
     val commentSortMode by interactionViewModel.dynamicCommentSortMode.collectAsStateWithLifecycle()
     val subReplyState by interactionViewModel.subReplyState.collectAsStateWithLifecycle()
-    val commentReplyTarget by interactionViewModel.commentReplyTarget.collectAsStateWithLifecycle()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }
     var pendingReport by remember { mutableStateOf<DynamicManageAction.Report?>(null) }
     var editingAction by remember { mutableStateOf<DynamicManageAction.Edit?>(null) }
     var pendingMessageShare by remember { mutableStateOf<DynamicItem?>(null) }
+    var reactionItem by remember(dynamicId) { mutableStateOf<DynamicItem?>(null) }
+    reactionItem?.let { item ->
+        com.android.purebilibili.feature.dynamic.components.DynamicReactionSheet(
+            item = item,
+            onDismiss = { reactionItem = null },
+            onUserClick = onUserClick,
+        )
+    }
     var forwardCountDelta by remember(dynamicId) { mutableIntStateOf(0) }
     var subReplyCoveredBlurProgress by remember { mutableFloatStateOf(0f) }
-    val detailListState = rememberLazyListState()
+    val avatarPushEnabled = com.android.purebilibili.feature.video.ui.components.rememberCommentAvatarPushEnabled()
+    val detailListState = rememberLazyListState(
+        initialFirstVisibleItemIndex =
+            if (openComments || openCommentRootRpid > 0L || openCommentTargetRpid > 0L) 1 else 0,
+    )
     //  [新增] 大屏/横屏分栏：右栏评论列表
     val commentListState = rememberLazyListState()
     val useSplitLayout = LocalWindowSizeClass.current.shouldUseSplitLayout
@@ -210,9 +242,17 @@ fun DynamicDetailScreen(
     var showImagePreview by remember { mutableStateOf(false) }
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
-    var previewSourceRect by remember { mutableStateOf<Rect?>(null) }
+    var previewSourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
+    LaunchedEffect(commentsRefreshError) {
+        commentsRefreshError?.let { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     AppScaffold(
+        modifier = Modifier.graphicsLayer {
+            alpha = if (uiState is DynamicDetailUiState.Loading) 1f else contentRevealAlpha.value
+        },
         blurContentReady = uiState !is DynamicDetailUiState.Loading,
         topBar = {
             val canToggleImageLayout = (uiState as? DynamicDetailUiState.Success)
@@ -273,9 +313,9 @@ fun DynamicDetailScreen(
                     ) {
                         AppText(
                             text = state.message,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AppContentColors.secondaryText()
                         )
-                        AppButton(onClick = { retryToken++ }) {
+                        AppButton(onClick = { detailViewModel.load(dynamicId, loadFailedMessage, force = true) }) {
                             AppText(retryLabel)
                         }
                     }
@@ -292,11 +332,33 @@ fun DynamicDetailScreen(
                     openCommentRootRpid,
                     openCommentTargetRpid
                 ) {
-                    interactionViewModel.openCommentSheet(
-                        item = state.item,
+                    detailViewModel.initializeCommentsOnce(
+                        targetKey = commentTargetKey,
                         rootReplyId = openCommentRootRpid,
-                        targetReplyId = openCommentTargetRpid
-                    )
+                        targetReplyId = openCommentTargetRpid,
+                    ) {
+                        interactionViewModel.openCommentSheet(
+                            item = state.item,
+                            rootReplyId = openCommentRootRpid,
+                            targetReplyId = openCommentTargetRpid,
+                            pinRootReply = true,
+                        )
+                        if (openComments || openCommentRootRpid > 0L || openCommentTargetRpid > 0L) {
+                            detailScrollScope.launch {
+                                val listState = if (useSplitLayout) commentListState else detailListState
+                                val headerIndex = if (useSplitLayout) 0 else 1
+                                snapshotFlow {
+                                    val current = commentUiState
+                                    val pinReady = openCommentRootRpid <= 0L ||
+                                        current.pinnedReply?.rpid == openCommentRootRpid ||
+                                        current.pinnedReplyError != null
+                                    current.dynamicId == state.item.id_str && !current.isLoading && pinReady &&
+                                        listState.layoutInfo.totalItemsCount > headerIndex
+                                }.first { it }
+                                listState.scrollToItem(headerIndex)
+                            }
+                        }
+                    }
                 }
 
                 LaunchedEffect(detailListState, commentListState, useSplitLayout) {
@@ -307,20 +369,31 @@ fun DynamicDetailScreen(
                         val activeState = if (useSplitLayout) commentListState else detailListState
                         val lastVisibleIndex = activeState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
                         val itemCount = activeState.layoutInfo.totalItemsCount
-                        shouldLoadMoreDynamicDetailComments(
-                            lastVisibleIndex = lastVisibleIndex,
-                            itemCount = itemCount,
-                            loadedCount = comments.size,
-                            totalCount = commentTotalCount,
-                            isLoading = commentsLoading,
-                            isLoadingMore = commentsLoadingMore,
-                        )
+                        // 在 snapshotFlow 内直接读最新 State，避免捕获入场时的 loading/列表快照。
+                        val current = commentUiState
+                        if (shouldLoadMoreDynamicDetailComments(
+                                lastVisibleIndex = lastVisibleIndex,
+                                itemCount = itemCount,
+                                hasMore = current.hasMore,
+                                isLoading = current.isLoading || current.isRefreshing || current.refreshError != null,
+                                isLoadingMore = current.isLoadingMore,
+                            )) current.nextPage else null
                     }
                         .distinctUntilChanged()
-                        .filter { it }
+                        .filterNotNull()
                         .collect {
                             interactionViewModel.loadMoreComments()
                         }
+                }
+
+                val showCommentsInPlace: () -> Unit = {
+                    detailScrollScope.launch {
+                        if (useSplitLayout) {
+                            commentListState.animateScrollToItem(0)
+                        } else {
+                            detailListState.animateScrollToItem(1)
+                        }
+                    }
                 }
 
                 //  [新增] 卡片与评论内容提取，供分栏/单列两种布局复用
@@ -341,18 +414,12 @@ fun DynamicDetailScreen(
                                     onMusicClick = onMusicClick,
                                     onCollectionClick = onCollectionClick,
                                     onCourseClick = onCourseClick,
+                                    onOpenLink = onOpenLink,
                                     onDynamicDetailClick = onDynamicDetailClick,
+                                    onMatchClick = onMatchClick,
                                 ),
                                 interaction = DynamicCardInteractionActions(
-                                    onCommentClick = {
-                                        detailScrollScope.launch {
-                                            if (useSplitLayout) {
-                                                commentListState.animateScrollToItem(0)
-                                            } else {
-                                                detailListState.animateScrollToItem(1)
-                                            }
-                                        }
-                                    },
+                                    onCommentClick = { showCommentsInPlace() },
                                     onRepostClick = { showRepostDialog = it },
                                     onLikeClickWithState = { targetDynamicId, isLiked ->
                                         interactionViewModel.likeDynamic(
@@ -429,18 +496,33 @@ fun DynamicDetailScreen(
                     item(key = "dynamic_detail_comment_header") {
                         DynamicInlineCommentHeader(
                             totalCount = commentTotalCount,
+                            onShowReactions = { reactionItem = state.item },
                             sortMode = commentSortMode,
                             onSortModeChange = interactionViewModel::setDynamicCommentSortMode,
                         )
                     }
                     dynamicInlineCommentItems(
-                        comments = comments,
                         collapsedSubReplyPreviewLimit = collapsedSubReplyPreviewLimit,
+                        avatarListState = (if (useSplitLayout) commentListState else detailListState)
+                            .takeIf { avatarPushEnabled },
+                        comments = comments,
                         isLoading = commentsLoading,
                         isLoadingMore = commentsLoadingMore,
-                        onViewReplies = { reply -> interactionViewModel.openSubReply(reply) },
+                        onViewReplies = { reply, targetReplyId ->
+                            val target = if (targetReplyId > 0L || reply.rpid != commentUiState.pinnedRootReplyId) {
+                                targetReplyId
+                            } else {
+                                commentUiState.pinnedTargetReplyId
+                            }
+                            interactionViewModel.openSubReply(reply, target)
+                        },
                         onReply = { reply -> interactionViewModel.startCommentReply(reply) },
                         onLike = { reply -> interactionViewModel.likeComment(reply.rpid) },
+                        onHate = { reply ->
+                            interactionViewModel.hateComment(reply.rpid) { _, message ->
+                                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         dynamicAuthorMid = state.item.modules.module_author?.mid ?: 0L,
                         currentUserMid = com.android.purebilibili.core.store.TokenManager.midCache,
                         onDelete = { reply ->
@@ -466,17 +548,12 @@ fun DynamicDetailScreen(
                             previewTextContent = textContent
                             showImagePreview = true
                         },
+                        skeletonSlotCount = commentSkeletonSlotCount,
                     )
                 }
                 val commentComposer: @Composable (Modifier) -> Unit = { modifier ->
-                    DynamicInlineCommentComposer(
-                        onPostComment = { message ->
-                            interactionViewModel.postComment(state.item.id_str, message) { _, toastMessage ->
-                                android.widget.Toast.makeText(context, toastMessage, android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        replyTargetUname = commentReplyTarget?.uname,
-                        onClearReplyTarget = interactionViewModel::clearCommentReplyTarget,
+                    DynamicCommentEntryBar(
+                        onClick = interactionViewModel::openCommentComposer,
                         liquidGlassEnabled = liquidGlassEnabled,
                         backdrop = detailCommentBackdrop,
                         modifier = modifier,
@@ -492,6 +569,7 @@ fun DynamicDetailScreen(
                 )
 
                 val coveredBlurProgress = if (subReplyState.visible) subReplyCoveredBlurProgress else 0f
+                val coveredBlurEffectCache = remember { BlurRenderEffectCache() }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -504,11 +582,7 @@ fun DynamicDetailScreen(
                                     progress = coveredBlurProgress,
                                 )
                                 renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                    AndroidRenderEffect.createBlurEffect(
-                                        blurFrame.blurRadiusPx,
-                                        blurFrame.blurRadiusPx,
-                                        Shader.TileMode.CLAMP,
-                                    ).asComposeRenderEffect()
+                                    coveredBlurEffectCache.resolve(blurFrame.blurRadiusPx)
                                 } else {
                                     null
                                 }
@@ -536,20 +610,27 @@ fun DynamicDetailScreen(
                             secondaryContent = {
                                 if (floatingCommentComposer) {
                                     Box(modifier = Modifier.fillMaxSize()) {
-                                        LazyColumn(
-                                            state = commentListState,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .then(
-                                                    if (detailCommentBackdrop != null) {
-                                                        Modifier.layerBackdrop(detailCommentBackdrop)
-                                                    } else {
-                                                        Modifier
-                                                    }
-                                                ),
-                                            contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = commentContentBottomPadding),
+                                        AdaptivePullToRefreshBox(
+                                            isRefreshing = commentsRefreshing,
+                                            onRefresh = interactionViewModel::refreshComments,
+                                            modifier = Modifier.fillMaxSize(),
+                                            indicatorTopInset = paddingValues.calculateTopPadding(),
                                         ) {
-                                            commentContent()
+                                            LazyColumn(
+                                                state = commentListState,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .then(
+                                                        if (detailCommentBackdrop != null) {
+                                                            detailCommentSourceModifier
+                                                        } else {
+                                                            Modifier
+                                                        }
+                                                    ),
+                                                contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = commentContentBottomPadding),
+                                            ) {
+                                                commentContent()
+                                            }
                                         }
                                         Box(
                                             modifier = Modifier
@@ -562,19 +643,26 @@ fun DynamicDetailScreen(
                                         ) {
                                             commentComposer(
                                                 Modifier
-                                                    .widthIn(max = DynamicDetailScreenLayoutSpec.CommentComposerMaxWidthDp.dp)
+                                                    .widthIn(max = 360.dp)
                                                     .fillMaxWidth(),
                                             )
                                         }
                                     }
                                 } else {
                                     Box(modifier = Modifier.fillMaxSize()) {
-                                        LazyColumn(
-                                            state = commentListState,
+                                        AdaptivePullToRefreshBox(
+                                            isRefreshing = commentsRefreshing,
+                                            onRefresh = interactionViewModel::refreshComments,
                                             modifier = Modifier.fillMaxSize(),
-                                            contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = commentContentBottomPadding),
+                                            indicatorTopInset = paddingValues.calculateTopPadding(),
                                         ) {
-                                            commentContent()
+                                            LazyColumn(
+                                                state = commentListState,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = commentContentBottomPadding),
+                                            ) {
+                                                commentContent()
+                                            }
                                         }
                                         Column(
                                             modifier = Modifier
@@ -586,8 +674,8 @@ fun DynamicDetailScreen(
                                             AppSurface(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 color = resolveDynamicDetailBottomBarColor(LocalAppUiStyle.current, MaterialTheme.colorScheme),
-                                                tonalElevation = AppSpacingTokens.None,
-                                                shadowElevation = AppSpacingTokens.None,
+                                                tonalElevation = 0.dp,
+                                                shadowElevation = 0.dp,
                                             ) {
                                                 commentComposer(
                                                     Modifier
@@ -611,21 +699,28 @@ fun DynamicDetailScreen(
                                 .consumeWindowInsets(paddingValues)
                                 .responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth())
                         ) {
-                            LazyColumn(
-                                state = detailListState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .then(
-                                        if (floatingCommentComposer && detailCommentBackdrop != null) {
-                                            Modifier.layerBackdrop(detailCommentBackdrop)
-                                        } else {
-                                            Modifier
-                                        }
-                                    ),
-                                contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = commentContentBottomPadding),
+                            AdaptivePullToRefreshBox(
+                                isRefreshing = commentsRefreshing,
+                                onRefresh = interactionViewModel::refreshComments,
+                                modifier = Modifier.fillMaxSize(),
+                                indicatorTopInset = paddingValues.calculateTopPadding(),
                             ) {
-                                cardContent()
-                                commentContent()
+                                LazyColumn(
+                                    state = detailListState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(
+                                            if (floatingCommentComposer && detailCommentBackdrop != null) {
+                                                detailCommentSourceModifier
+                                            } else {
+                                                Modifier
+                                            }
+                                        ),
+                                    contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = commentContentBottomPadding),
+                                ) {
+                                    cardContent()
+                                    commentContent()
+                                }
                             }
                             if (floatingCommentComposer) {
                                 Box(
@@ -639,7 +734,7 @@ fun DynamicDetailScreen(
                                 ) {
                                     commentComposer(
                                         Modifier
-                                            .widthIn(max = DynamicDetailScreenLayoutSpec.CommentComposerMaxWidthDp.dp)
+                                            .widthIn(max = 360.dp)
                                             .fillMaxWidth(),
                                     )
                                 }
@@ -654,8 +749,8 @@ fun DynamicDetailScreen(
                                     AppSurface(
                                         modifier = Modifier.fillMaxWidth(),
                                         color = resolveDynamicDetailBottomBarColor(LocalAppUiStyle.current, MaterialTheme.colorScheme),
-                                        tonalElevation = AppSpacingTokens.None,
-                                        shadowElevation = AppSpacingTokens.None,
+                                        tonalElevation = 0.dp,
+                                        shadowElevation = 0.dp,
                                     ) {
                                         commentComposer(
                                             Modifier
@@ -676,13 +771,19 @@ fun DynamicDetailScreen(
                     state = subReplyState,
                     onDismiss = interactionViewModel::closeSubReply,
                     onLoadMore = interactionViewModel::loadMoreSubReplies,
+                    onRefresh = interactionViewModel::refreshSubReplies,
                     onSortModeChange = interactionViewModel::setSubReplySortMode,
                     onUserClick = onUserClick,
                     onReplyClick = { reply ->
-                        interactionViewModel.closeSubReply()
+                        // 保持楼中楼可见，避免输入弹层出现前先闪回主评论列表。
                         interactionViewModel.startCommentReply(reply)
                     },
                     onCommentLike = { rpid -> interactionViewModel.likeComment(rpid) },
+                    onCommentHate = { rpid ->
+                        interactionViewModel.hateComment(rpid) { _, message ->
+                            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
                     currentMid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L,
                     onDeleteComment = { rpid ->
                         interactionViewModel.deleteDynamicComment(rpid) { _, message ->
@@ -698,11 +799,27 @@ fun DynamicDetailScreen(
                     },
                 )
 
+                val postComment: (String, List<Uri>, (Boolean) -> Unit) -> Unit = { message, images, onResult ->
+                    interactionViewModel.postComment(state.item.id_str, message, images) { success, toastMessage ->
+                        android.widget.Toast.makeText(context, toastMessage, android.widget.Toast.LENGTH_SHORT).show()
+                        onResult(success)
+                    }
+                }
+                DynamicCommentInputHost(
+                    draftKeyPrefix = "dynamic-detail:${state.item.id_str}",
+                    viewModel = interactionViewModel,
+                    onPostComment = postComment,
+                )
+
                 if (showImagePreview && previewImages.isNotEmpty()) {
                     ImagePreviewDialog(
                         images = previewImages,
                         initialIndex = previewInitialIndex,
-                        sourceRect = previewSourceRect,
+                        sourceRect = previewSourceRect?.rect,
+                        sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+                        sourceKey = previewSourceRect?.sourceKey,
+                        sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
+                            ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
                         textContent = previewTextContent,
                         onDismiss = {
                             showImagePreview = false
@@ -713,9 +830,10 @@ fun DynamicDetailScreen(
 
                 showRepostDialog?.let { repostDynamicId ->
                     RepostDialog(
+                        contentKey = repostDynamicId,
                         onDismiss = { showRepostDialog = null },
-                        onRepost = { content: String, onComplete: (Boolean) -> Unit ->
-                            interactionViewModel.repostDynamic(repostDynamicId, content) { success, msg ->
+                        onRepost = { content, alsoComment, richContents, topic, onComplete ->
+                            interactionViewModel.repostDynamic(repostDynamicId, content, alsoComment, richContents, topic) { success, msg ->
                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 if (success) {
                                     forwardCountDelta++
@@ -735,6 +853,8 @@ fun DynamicDetailScreen(
                         isEditing = true,
                         submitting = submitting,
                         errorMessage = errorMessage,
+                        replyOid = action.replyOid,
+                        replyType = action.replyType,
                         onDismiss = { editingAction = null },
                         onSubmit = { draft ->
                             submitting = true
@@ -743,7 +863,7 @@ fun DynamicDetailScreen(
                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 if (success) {
                                     editingAction = null
-                                    retryToken++
+                                    detailViewModel.load(dynamicId, loadFailedMessage, force = true)
                                 } else {
                                     errorMessage = msg
                                 }
@@ -814,5 +934,6 @@ fun DynamicDetailScreen(
                 }
             }
         }
+    }
     }
 }

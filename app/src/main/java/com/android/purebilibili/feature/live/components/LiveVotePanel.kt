@@ -1,17 +1,20 @@
 package com.android.purebilibili.feature.live.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
@@ -38,11 +41,11 @@ fun LiveVotePanel(snapshot: LiveVoteSnapshot, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AppText("当前暂无投票", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppText("当前暂无投票", color = AppContentColors.secondaryText())
             AppText(
                 "投票开始后会自动显示，仅提供查看。",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
         }
         return
@@ -76,13 +79,22 @@ private fun LiveVoteCard(vote: LiveVoteInfo) {
                 AppText(
                     if (vote.isActive) "进行中" else vote.resultText.ifBlank { "已结束" },
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (vote.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (vote.isActive) AppContentColors.accent() else AppContentColors.secondaryText()
                 )
             }
             vote.options.forEach { option ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    AppText(option.description, style = MaterialTheme.typography.bodyMedium)
-                    AppText("${(option.percent * 100f).roundToInt()}%", style = MaterialTheme.typography.labelMedium)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AppText(
+                        option.description,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = AppContentColors.primaryText()
+                    )
+                    AppText(
+                        "${(option.percent * 100f).roundToInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = AppContentColors.primaryText()
+                    )
                 }
                 AppLinearProgressIndicator(
                     progress = { option.percent.coerceIn(0f, 1f) },
@@ -95,7 +107,7 @@ private fun LiveVoteCard(vote: LiveVoteInfo) {
                 else -> ""
             }
             if (timing.isNotBlank()) {
-                AppText(timing, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppText(timing, style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
             }
         }
     }

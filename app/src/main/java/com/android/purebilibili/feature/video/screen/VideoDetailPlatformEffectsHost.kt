@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.Player
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.buildPipPlaybackRemoteActions
 import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
 
@@ -32,13 +33,54 @@ internal fun VideoDetailPipParamsEffect(
     pipModeEnabled: Boolean,
     player: Player?,
 ) {
-    var lastPipBounds by remember { mutableStateOf<Rect?>(null) }
-    var lastPipModeEnabled by remember { mutableStateOf<Boolean?>(null) }
-    var lastPipUpdateElapsedMs by remember { mutableLongStateOf(0L) }
+    var lastPipBounds by remember(player) { mutableStateOf<Rect?>(null) }
+    var lastPipModeEnabled by remember(player) { mutableStateOf<Boolean?>(null) }
+    var lastPipUpdateElapsedMs by remember(player) { mutableLongStateOf(0L) }
     val latestPlayer by rememberUpdatedState(player)
+    val supportsPip = remember(activity) {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            activity?.packageManager?.hasSystemFeature(
+                android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE
+            ) == true
+    }
 
-    LaunchedEffect(activity, playerBounds, pipModeEnabled) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || activity == null) return@LaunchedEffect
+    // Android gesture navigation can enter PiP before onUserLeaveHint. Keep its
+    // eligibility synchronized with the player, rather than a cached UI state.
+    DisposableEffect(activity, player, pipModeEnabled) {
+        var lastAutoEnterEnabled: Boolean? = null
+        fun updateAutoEnter() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && supportsPip && activity != null) {
+                val enabled = pipModeEnabled && player?.isPlaying == true &&
+                    MiniPlayerManager.getInstance(context).shouldEnterPip()
+                if (lastAutoEnterEnabled == enabled) return
+                lastAutoEnterEnabled = enabled
+                activity.setPictureInPictureParams(
+                    android.app.PictureInPictureParams.Builder()
+                        .setAutoEnterEnabled(enabled)
+                        .build()
+                )
+            }
+        }
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) = updateAutoEnter()
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = updateAutoEnter()
+        }
+        player?.addListener(listener)
+        updateAutoEnter()
+        onDispose {
+            player?.removeListener(listener)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && supportsPip && activity != null) {
+                activity.setPictureInPictureParams(
+                    android.app.PictureInPictureParams.Builder()
+                        .setAutoEnterEnabled(false)
+                        .build()
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(activity, player, playerBounds, pipModeEnabled) {
+        if (!supportsPip || activity == null) return@LaunchedEffect
         val modeChanged = lastPipModeEnabled == null || lastPipModeEnabled != pipModeEnabled
         val boundsChanged = hasMeaningfulVideoPlayerBoundsChange(lastPipBounds, playerBounds)
         val now = android.os.SystemClock.elapsedRealtime()
@@ -61,7 +103,10 @@ internal fun VideoDetailPipParamsEffect(
             .apply {
                 playerBounds?.let(::setSourceRectHint)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    setAutoEnterEnabled(pipModeEnabled)
+                    setAutoEnterEnabled(
+                        pipModeEnabled && latestPlayer?.isPlaying == true &&
+                            MiniPlayerManager.getInstance(context).shouldEnterPip()
+                    )
                     setSeamlessResizeEnabled(pipModeEnabled)
                 }
             }
@@ -70,11 +115,9 @@ internal fun VideoDetailPipParamsEffect(
     }
 }
 
+/** 播放及缓冲保留常亮，暂停、结束和空闲立即释放常亮资格。 */
 @Composable
-internal fun VideoDetailKeepScreenOnEffect(
-    window: Window?,
-    player: Player,
-) {
+internal fun rememberVideoPlaybackKeepAwake(player: Player): Boolean {
     val shouldKeepAwake by produceState(
         initialValue = shouldKeepVideoPlaybackAwake(
             playWhenReady = player.playWhenReady,
@@ -96,8 +139,18 @@ internal fun VideoDetailKeepScreenOnEffect(
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = update()
         }
         player.addListener(listener)
+        update()
         awaitDispose { player.removeListener(listener) }
     }
+    return shouldKeepAwake
+}
+
+@Composable
+internal fun VideoDetailKeepScreenOnEffect(
+    window: Window?,
+    player: Player,
+) {
+    val shouldKeepAwake = rememberVideoPlaybackKeepAwake(player)
     DisposableEffect(window, shouldKeepAwake) {
         if (shouldKeepAwake) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

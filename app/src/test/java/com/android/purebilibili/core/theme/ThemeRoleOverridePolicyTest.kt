@@ -3,6 +3,7 @@ package com.android.purebilibili.core.theme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.store.ThemeModeRoleOverrides
 import com.android.purebilibili.core.store.ThemeRoleOverrides
 import com.android.purebilibili.feature.settings.Md3ColorSource
@@ -12,6 +13,28 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ThemeRoleOverridePolicyTest {
+
+    @Test
+    fun enablingAdvancedPalette_keepsCustomSeedAndDoesNotRegenerateFromResolvedAccents() {
+        val base = themeRoleOverridesFromSchemes(lightColorScheme(), darkColorScheme())
+        val result = enableThemeRoleOverrides(ThemeRoleOverrides(), base, "#007AFF")
+        assertTrue(result.enabled)
+        assertEquals("#007AFF", result.light.controlAccentHex)
+        assertEquals("#007AFF", result.dark.controlAccentHex)
+        assertEquals(base.light.backgroundHex, result.light.backgroundHex)
+        val legacy = enableThemeRoleOverrides(base.copy(enabled = true), base, "#007AFF")
+        assertEquals(result, legacy)
+    }
+
+    @Test
+    fun reenablingAdvancedPalette_preservesEditedControlSeedsAndSurfaces() {
+        val edited = ThemeRoleOverrides(
+            light = ThemeModeRoleOverrides("#FFF000", "#111111", "#555555", "#34C759"),
+            dark = ThemeModeRoleOverrides("#121212", "#EEEEEE", "#AAAAAA", "#FF9500"),
+        )
+        val base = themeRoleOverridesFromSchemes(lightColorScheme(), darkColorScheme())
+        assertEquals(edited.copy(enabled = true), enableThemeRoleOverrides(edited, base, "#007AFF"))
+    }
 
     @Test
     fun wallpaperSource_disablesAppRoleOverridesWithoutDeletingThem() {
@@ -30,7 +53,7 @@ class ThemeRoleOverridePolicyTest {
     }
 
     @Test
-    fun miuixStyle_disablesAdvancedRoleOverridesWithoutDeletingThem() {
+    fun customSource_keepsAdvancedRoleOverrides() {
         val overrides = ThemeRoleOverrides(
             enabled = true,
             light = ThemeModeRoleOverrides("#F4F0E8", "#201A17", "#655D57", "#FFF000"),
@@ -39,16 +62,33 @@ class ThemeRoleOverridePolicyTest {
         val result = resolveEffectiveThemeRoleOverrides(
             source = Md3ColorSource.CUSTOM,
             overrides = overrides,
-            uiStyle = AppUiStyle.MIUIX,
         )
 
-        assertFalse(result.enabled)
+        assertTrue(result.enabled)
         assertEquals(overrides.light, result.light)
         assertEquals(overrides.dark, result.dark)
     }
 
     @Test
-    fun enabledOverrides_replaceMaterialRolesAndChooseReadableButtonText() {
+    fun miuixAdvancedStartingValues_useNativeCanvasAndTextIncludingAmoled() {
+        val light = lightColorScheme(background = Color.Red, onBackground = Color.Green)
+        val dark = darkColorScheme(background = Color.Blue, onBackground = Color.Yellow)
+        for (amoled in listOf(false, true)) {
+            val result = themeRoleOverridesFromSchemes(light, dark, AppUiStyle.MIUIX, amoled)
+            val nativeLight = resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(light), false, useMonetMapping = true)
+            val nativeDark = resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(dark), true, useMonetMapping = true)
+            assertFalse(result.enabled)
+            assertEquals(formatMd3CustomColorHex(nativeLight.surface), result.light.backgroundHex)
+            assertEquals(formatMd3CustomColorHex(nativeLight.onSurface), result.light.primaryTextHex)
+            assertEquals(formatMd3CustomColorHex(nativeLight.onSurfaceVariantSummary), result.light.secondaryTextHex)
+            assertEquals(formatMd3CustomColorHex(nativeDark.surface), result.dark.backgroundHex)
+            assertEquals(formatMd3CustomColorHex(nativeDark.onSurface), result.dark.primaryTextHex)
+            assertEquals(formatMd3CustomColorHex(nativeDark.onSurfaceVariantSummary), result.dark.secondaryTextHex)
+        }
+    }
+
+    @Test
+    fun enabledOverrides_replaceSurfacesButGenerateControlRolePairs() {
         val overrides = ThemeRoleOverrides(
             enabled = true,
             light = ThemeModeRoleOverrides("#F4F0E8", "#201A17", "#655D57", "#FFF000"),
@@ -60,8 +100,34 @@ class ThemeRoleOverridePolicyTest {
         assertEquals(Color(0xFFF4F0E8), result.background)
         assertEquals(Color(0xFF201A17), result.onBackground)
         assertEquals(Color(0xFF655D57), result.onSurfaceVariant)
-        assertEquals(Color(0xFFFFF000), result.primary)
-        assertEquals(Color.Black, result.onPrimary)
+        assertEquals(Color.White, result.onPrimary)
+        assertTrue(result.primary.luminance() < result.onPrimary.luminance())
+        assertTrue(themeRoleContrastRatio(
+            formatMd3CustomColorHex(result.onPrimary), formatMd3CustomColorHex(result.primary)
+        ) >= 3f)
+    }
+
+    @Test
+    fun blueControlSeed_usesDifferentLightAndDarkRolePairsInsteadOfBlackWhiteSelection() {
+        val overrides = ThemeRoleOverrides(
+            enabled = true,
+            light = ThemeModeRoleOverrides("#FFFFFF", "#111111", "#555555", "#007AFF"),
+            dark = ThemeModeRoleOverrides("#121212", "#EEEEEE", "#AAAAAA", "#007AFF"),
+        )
+        val light = applyThemeRoleOverrides(lightColorScheme(), overrides, darkTheme = false)
+        val dark = applyThemeRoleOverrides(darkColorScheme(), overrides, darkTheme = true)
+
+        assertEquals(Color.White, light.onPrimary)
+        assertTrue(light.primary.luminance() < light.onPrimary.luminance())
+        assertTrue(dark.primary.luminance() > dark.onPrimary.luminance())
+        assertTrue(dark.onPrimary != Color.Black)
+        assertTrue(light.primary != dark.primary)
+        assertEquals(light.primaryFixed, dark.primaryFixed)
+        for (scheme in listOf(light, dark)) {
+            assertTrue(themeRoleContrastRatio(
+                formatMd3CustomColorHex(scheme.onPrimary), formatMd3CustomColorHex(scheme.primary)
+            ) >= 3f)
+        }
     }
 
     @Test

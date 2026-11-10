@@ -74,7 +74,7 @@ internal object GoogleCastMediaLoader {
         contentType: String = DEFAULT_CONTENT_TYPE,
         startPositionMs: Long = 0L,
         autoplay: Boolean = true
-    ): Result<Unit> = withContext(Dispatchers.Main) {
+    ): Result<Unit> = withContext(Dispatchers.Main.immediate) {
         try {
             val router = MediaRouter.getInstance(context)
             val cachedRoute = GoogleCastRouteManager.getCachedRoute(routeId)

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
 import android.content.Context
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.data.model.response.VideoItem
@@ -22,6 +24,7 @@ internal enum class AdFilterReasonType {
     SPONSORED,
     CLICKBAIT,
     CUSTOM_KEYWORD,
+    TAG_KEYWORD,
     LOW_VIEW
 }
 
@@ -114,7 +117,7 @@ internal fun resolveAdFilterInsightSummary(
             .filter { it.reasonType == AdFilterReasonType.LOW_VIEW }
             .take(safeLimit),
         customKeywordRecords = sortedRecords
-            .filter { it.reasonType == AdFilterReasonType.CUSTOM_KEYWORD }
+            .filter { it.reasonType == AdFilterReasonType.CUSTOM_KEYWORD || it.reasonType == AdFilterReasonType.TAG_KEYWORD }
             .take(safeLimit),
         upProfiles = upProfiles,
         blockedUpProfiles = resolveAdFilterBlockedUpProfiles(
@@ -193,6 +196,7 @@ internal fun resolveAdFilterReasonLabel(reasonType: AdFilterReasonType): String 
         AdFilterReasonType.SPONSORED -> "广告推广"
         AdFilterReasonType.CLICKBAIT -> "标题党"
         AdFilterReasonType.CUSTOM_KEYWORD -> "关键词"
+        AdFilterReasonType.TAG_KEYWORD -> "视频标签"
         AdFilterReasonType.LOW_VIEW -> "低播放量"
     }
 }
@@ -208,7 +212,7 @@ internal object AdFilterInsightStore {
     suspend fun readRecords(context: Context): List<AdFilterRecord> {
         val value = PluginStore.getDataJson(
             context = context,
-            pluginId = ADFILTER_PLUGIN_ID,
+            pluginId = BuiltinPluginIds.AD_FILTER,
             name = AD_FILTER_HISTORY_STORE_NAME
         ) ?: return emptyList()
         return runCatching {
@@ -230,7 +234,7 @@ internal object AdFilterInsightStore {
                 .take(AD_FILTER_HISTORY_LIMIT)
             PluginStore.setDataJson(
                 context = context,
-                pluginId = ADFILTER_PLUGIN_ID,
+                pluginId = BuiltinPluginIds.AD_FILTER,
                 name = AD_FILTER_HISTORY_STORE_NAME,
                 dataJson = json.encodeToString(
                     ListSerializer(AdFilterRecord.serializer()),
@@ -246,7 +250,7 @@ internal object AdFilterInsightStore {
     suspend fun readUpProfiles(context: Context): List<AdFilterUpProfile> {
         val value = PluginStore.getDataJson(
             context = context,
-            pluginId = ADFILTER_PLUGIN_ID,
+            pluginId = BuiltinPluginIds.AD_FILTER,
             name = AD_FILTER_UP_PROFILE_STORE_NAME
         ) ?: return emptyList()
         return runCatching {
@@ -272,7 +276,7 @@ internal object AdFilterInsightStore {
                 .take(AD_FILTER_UP_PROFILE_LIMIT)
             PluginStore.setDataJson(
                 context = context,
-                pluginId = ADFILTER_PLUGIN_ID,
+                pluginId = BuiltinPluginIds.AD_FILTER,
                 name = AD_FILTER_UP_PROFILE_STORE_NAME,
                 dataJson = json.encodeToString(
                     ListSerializer(AdFilterUpProfile.serializer()),

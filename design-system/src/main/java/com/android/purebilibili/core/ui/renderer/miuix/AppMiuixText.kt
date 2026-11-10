@@ -41,7 +41,7 @@ internal fun AppMiuixText(
 ) = Text(
     text = text,
     modifier = modifier,
-    color = color,
+    color = com.android.purebilibili.core.ui.resolveAppButtonSlotColor(color),
     autoSize = autoSize,
     fontSize = fontSize,
     fontStyle = fontStyle,
@@ -81,7 +81,7 @@ internal fun AppMiuixText(
     style: TextStyle,
 ) = Text(
     text = text,
-    color = color,
+    color = com.android.purebilibili.core.ui.resolveAppButtonSlotColor(color),
     modifier = modifier,
     autoSize = autoSize,
     fontSize = fontSize,
@@ -124,7 +124,7 @@ internal fun AppMiuixText(
 ) = Text(
     text = text,
     modifier = modifier,
-    color = color,
+    color = com.android.purebilibili.core.ui.resolveAppButtonSlotColor(color),
     autoSize = autoSize,
     fontSize = fontSize,
     fontStyle = fontStyle,
@@ -166,7 +166,7 @@ internal fun AppMiuixText(
     style: TextStyle,
 ) = Text(
     text = text,
-    color = color,
+    color = com.android.purebilibili.core.ui.resolveAppButtonSlotColor(color),
     modifier = modifier,
     autoSize = autoSize,
     fontSize = fontSize,

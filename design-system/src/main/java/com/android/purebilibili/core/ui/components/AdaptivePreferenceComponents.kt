@@ -1,13 +1,19 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.android.purebilibili.core.ui.components
+
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.LocalAppEntryIconColorCursor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Clear
@@ -17,36 +23,32 @@ import androidx.compose.material3.*
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.input.ImeAction
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.LocalDynamicColorActive
@@ -60,7 +62,6 @@ import com.android.purebilibili.core.ui.LocalAppIconStyle
 import com.android.purebilibili.core.ui.LocalAppListItemStyle
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
-import com.android.purebilibili.core.ui.adaptiveSquircleBackground
 import com.android.purebilibili.core.ui.AppIconStyle
 import com.android.purebilibili.core.ui.AppListItemStyle
 import com.android.purebilibili.core.ui.rememberResolvedAppIconStyle
@@ -73,17 +74,14 @@ import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.preference.SliderPreference as MiuixSliderPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference as MiuixSwitchPreference
+import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.TextField as MiuixTextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults as MiuixTextFieldDefaults
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-private object NoOpHapticFeedback : HapticFeedback {
-    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
-}
 
 /**
  * Trailing preference value layout (version / channel / short detail on the right).
@@ -149,21 +147,19 @@ data class AdaptiveListVisualCapabilities(
 
 internal fun resolveAdaptiveListComponentVisualSpec(
     uiStyle: AppUiStyle,
-    liquidGlassEnabled: Boolean = true,
 ): AdaptiveListComponentVisualSpec {
     val chromeTokens = resolveAndroidNativeChromeTokens(uiStyle)
     val compactChrome = resolveCompactCapsuleChromeSpec(uiStyle)
-    val nonGlassMiuix = isMiuixNonGlassEnabled(uiStyle, liquidGlassEnabled)
     return if (uiStyle == AppUiStyle.MIUIX) {
         AdaptiveListComponentVisualSpec(
             sectionStartPaddingDp = chromeTokens.denseHorizontalSpacingDp,
-            groupCornerRadiusDp = if (nonGlassMiuix) 16 else chromeTokens.containerCornerRadiusDp,
+            groupCornerRadiusDp = 16,
             groupTonalElevationDp = chromeTokens.tonalSurfaceElevationDp,
             iconCornerRadiusDp = 10,
             iconContainerSizeDp = 38,
             iconGlyphSizeDp = 20,
             iconBackgroundAlpha = chromeTokens.selectedContainerAlpha,
-            gridCornerRadiusDp = if (nonGlassMiuix) 16 else chromeTokens.containerCornerRadiusDp,
+            gridCornerRadiusDp = 16,
             searchBarCornerRadiusDp = compactChrome.primaryCornerRadiusDp,
             searchBarHeightDp = compactChrome.primaryHeightDp,
             dividerThicknessDp = 0f,
@@ -190,56 +186,58 @@ internal fun resolveAdaptiveListComponentVisualSpec(
 @Composable
 private fun rememberAdaptiveListComponentVisualSpec(): AdaptiveListComponentVisualSpec {
     val style = LocalAppUiStyle.current
-    val glass = LocalAppThemeConfig.current.liquidGlassEnabled
-    return remember(style, glass) { resolveAdaptiveListComponentVisualSpec(style, glass) }
+    val colorful = useColorfulPreferenceIcons()
+    return remember(style, colorful) {
+        val native = resolveAdaptiveListComponentVisualSpec(style)
+        if (colorful) native.copy(iconContainerSizeDp = 32, iconGlyphSizeDp = 22, iconCornerRadiusDp = 10)
+        else native
+    }
 }
 
 @Composable
 private fun rememberAdaptiveListRowVisualSpec(): AdaptiveListRowVisualSpec {
     val style = LocalAppUiStyle.current
-    val glass = LocalAppThemeConfig.current.liquidGlassEnabled
-    return remember(style, glass) { resolveAdaptiveListRowVisualSpec(style, glass) }
+    return remember(style) { resolveAdaptiveListRowVisualSpec(style) }
 }
 
 internal fun resolveAdaptiveListRowVisualSpec(
     uiStyle: AppUiStyle,
-    liquidGlassEnabled: Boolean = true,
 ): AdaptiveListRowVisualSpec {
-    val chromeTokens = resolveAndroidNativeChromeTokens(uiStyle)
+    // Shared app-authored rows use compact spacing in either material and theme.
+    // Native renderers retain their intrinsic content height; long text can grow the row.
     return if (uiStyle == AppUiStyle.MIUIX) {
         AdaptiveListRowVisualSpec(
             insideHorizontalPaddingDp = 16,
-            insideVerticalPaddingDp = 14,
+            insideVerticalPaddingDp = AppChromeSizeTokens.PreferenceVerticalPaddingDp,
             trailingIconSizeDp = 14,
             trailingSpacingDp = 6,
-            minTouchTargetHeightDp = 48
+            minTouchTargetHeightDp = AppChromeSizeTokens.CompactRowMinHeightDp
         )
     } else {
         AdaptiveListRowVisualSpec(
-            insideHorizontalPaddingDp = 18,
-            insideVerticalPaddingDp = 16,
+            insideHorizontalPaddingDp = 16,
+            insideVerticalPaddingDp = AppChromeSizeTokens.PreferenceVerticalPaddingDp,
             trailingIconSizeDp = 16,
             trailingSpacingDp = 8,
-            minTouchTargetHeightDp = chromeTokens.rowMinTouchTargetDp
+            minTouchTargetHeightDp = AppChromeSizeTokens.CompactRowMinHeightDp
         )
     }
 }
 
 internal fun resolveAdaptiveListVisualCapabilities(
     uiStyle: AppUiStyle,
-    liquidGlassEnabled: Boolean = true,
 ): AdaptiveListVisualCapabilities = AdaptiveListVisualCapabilities(
-    componentSpec = resolveAdaptiveListComponentVisualSpec(uiStyle, liquidGlassEnabled),
-    rowSpec = resolveAdaptiveListRowVisualSpec(uiStyle, liquidGlassEnabled),
+    componentSpec = resolveAdaptiveListComponentVisualSpec(uiStyle),
+    rowSpec = resolveAdaptiveListRowVisualSpec(uiStyle),
     showExplicitActionChevron = !shouldUseNativeMiuixSearchBar(uiStyle),
 )
 
 @Composable
 fun rememberAdaptiveListVisualCapabilities(): AdaptiveListVisualCapabilities {
     val uiStyle = LocalAppUiStyle.current
-    val glass = LocalAppThemeConfig.current.liquidGlassEnabled
-    return remember(uiStyle, glass) {
-        resolveAdaptiveListVisualCapabilities(uiStyle, glass)
+    val componentSpec = rememberAdaptiveListComponentVisualSpec()
+    return remember(uiStyle, componentSpec) {
+        resolveAdaptiveListVisualCapabilities(uiStyle).copy(componentSpec = componentSpec)
     }
 }
 
@@ -259,6 +257,14 @@ internal fun resolveAdaptiveGroupContainerColor(
         targetAlpha = 0.62f
     )
 }
+
+/** 与实际分组共用底色及壁纸透明度，供条目容器转场使用，不改变原生材质参数。 */
+@Composable
+fun adaptivePreferenceGroupContainerColor(): Color = resolveAdaptiveGroupContainerColor(
+    uiStyle = LocalAppUiStyle.current,
+    colorScheme = MaterialTheme.colorScheme,
+    globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current && LocalAppUiStyle.current != AppUiStyle.MIUIX,
+)
 
 internal fun resolveAdaptiveSearchBarContainerColor(
     uiStyle: AppUiStyle,
@@ -322,16 +328,9 @@ internal fun resolveAdaptiveSemanticIconTint(
     colorScheme: ColorScheme,
     useSemanticAccentRoles: Boolean = true,
 ): Color {
-    if (
-        uiStyle != AppUiStyle.MATERIAL3 ||
-        iconTint == Color.Unspecified
-    ) {
-        return iconTint
-    }
-    // Settings icons are navigation affordances rather than status indicators.
-    // MATERIAL3 therefore uses the active theme accent consistently across the whole
-    // settings hierarchy; MIUIX keeps its familiar per-item colors.
-    return colorScheme.primary
+    // Miuix 保留各入口自己的图标色；Material 3 的导航类入口统一使用中性内容色。
+    if (uiStyle != AppUiStyle.MATERIAL3) return iconTint
+    return colorScheme.onSurfaceVariant
 }
 
 @Suppress("UNUSED_PARAMETER")
@@ -342,9 +341,10 @@ internal fun resolveAdaptivePreferenceIconContainerColor(
     iconStyle: AppIconStyle = AppIconStyle.AUTO,
     colorScheme: ColorScheme? = null,
 ): Color = when (iconStyle) {
-    AppIconStyle.THEME_CONTAINER -> colorScheme?.secondaryContainer ?: semanticTint
+    AppIconStyle.THEME_CONTAINER -> colorScheme?.primaryContainer ?: semanticTint
     AppIconStyle.MD3_STANDARD -> Color.Transparent
-    AppIconStyle.AUTO -> semanticTint
+    // AUTO（Miuix 默认）沿用调用方传入的入口色作为图标底色；MD3 走上面的 MD3_STANDARD 分支
+    AppIconStyle.AUTO, AppIconStyle.SOFT_COLORFUL, AppIconStyle.VIVID_COLORFUL -> semanticTint
 }
 
 internal fun resolveAdaptivePreferenceIconContentColor(
@@ -352,22 +352,26 @@ internal fun resolveAdaptivePreferenceIconContentColor(
     colorScheme: ColorScheme,
     iconStyle: AppIconStyle = AppIconStyle.AUTO,
 ): Color {
-    if (containerColor == Color.Unspecified) return Color.Unspecified
+    if (containerColor == Color.Unspecified) return colorScheme.onSurfaceVariant
     return when (iconStyle) {
-        AppIconStyle.THEME_CONTAINER -> colorScheme.onSecondaryContainer
+        AppIconStyle.THEME_CONTAINER -> colorScheme.onPrimaryContainer
         AppIconStyle.MD3_STANDARD -> colorScheme.onSurfaceVariant
-        AppIconStyle.AUTO -> {
+        AppIconStyle.AUTO, AppIconStyle.SOFT_COLORFUL, AppIconStyle.VIVID_COLORFUL -> {
             val opaqueContainer = containerColor.copy(alpha = 1f)
-            when (opaqueContainer) {
-                colorScheme.primary.copy(alpha = 1f) -> colorScheme.onPrimary
-                colorScheme.secondary.copy(alpha = 1f) -> colorScheme.onSecondary
-                colorScheme.tertiary.copy(alpha = 1f) -> colorScheme.onTertiary
-                colorScheme.error.copy(alpha = 1f) -> colorScheme.onError
-                colorScheme.primaryContainer.copy(alpha = 1f) -> colorScheme.onPrimaryContainer
-                colorScheme.secondaryContainer.copy(alpha = 1f) -> colorScheme.onSecondaryContainer
-                colorScheme.tertiaryContainer.copy(alpha = 1f) -> colorScheme.onTertiaryContainer
-                colorScheme.errorContainer.copy(alpha = 1f) -> colorScheme.onErrorContainer
-                else -> if (opaqueContainer.luminance() >= 0.72f) Color.Black else Color.White
+            when {
+                containerColor.alpha == 0f -> colorScheme.onSurfaceVariant
+                opaqueContainer == colorScheme.surfaceContainerHigh.copy(alpha = 1f) -> colorScheme.onSurface
+                else -> when (opaqueContainer) {
+                    colorScheme.primary.copy(alpha = 1f) -> if (opaqueContainer.luminance() >= 0.72f) Color.Black else Color.White
+                    colorScheme.secondary.copy(alpha = 1f) -> if (opaqueContainer.luminance() >= 0.72f) Color.Black else Color.White
+                    colorScheme.tertiary.copy(alpha = 1f) -> if (opaqueContainer.luminance() >= 0.72f) Color.Black else Color.White
+                    colorScheme.error.copy(alpha = 1f) -> if (opaqueContainer.luminance() >= 0.72f) Color.Black else Color.White
+                    colorScheme.primaryContainer.copy(alpha = 1f) -> colorScheme.onPrimaryContainer
+                    colorScheme.secondaryContainer.copy(alpha = 1f) -> colorScheme.onSecondaryContainer
+                    colorScheme.tertiaryContainer.copy(alpha = 1f) -> colorScheme.onTertiaryContainer
+                    colorScheme.errorContainer.copy(alpha = 1f) -> colorScheme.onErrorContainer
+                    else -> if (opaqueContainer.luminance() >= 0.72f) Color.Black else Color.White
+                }
             }
         }
     }
@@ -397,7 +401,7 @@ internal fun resolveAdaptivePreferenceIconBackgroundAlpha(
 ): Float = when (iconStyle) {
     AppIconStyle.THEME_CONTAINER -> 1f
     AppIconStyle.MD3_STANDARD -> 0f
-    AppIconStyle.AUTO -> if (treatment == AppPreferenceIconTreatment.FILLED) 1f else tonalAlpha
+    AppIconStyle.AUTO, AppIconStyle.SOFT_COLORFUL, AppIconStyle.VIVID_COLORFUL -> if (treatment == AppPreferenceIconTreatment.FILLED) 1f else tonalAlpha
 }
 
 @Composable
@@ -407,6 +411,13 @@ fun rememberAdaptiveSemanticIconTint(
     dynamicColorActive: Boolean = LocalDynamicColorActive.current
 ): Color {
     val colorScheme = MaterialTheme.colorScheme
+    val cursor = LocalAppEntryIconColorCursor.current
+    val neutralEntryColor = AppContentColors.secondaryText()
+    val requestsNeutralEntryColor = iconTint == Color.Unspecified || iconTint == neutralEntryColor
+    // Miuix 分组内的中性图标请求按声明顺序取多彩入口色；其余情况保持语义解析结果
+    if (uiStyle == AppUiStyle.MIUIX && cursor != null && requestsNeutralEntryColor) {
+        return remember(cursor) { cursor.nextColor() }
+    }
     return remember(iconTint, uiStyle, dynamicColorActive, colorScheme) {
         resolveAdaptiveSemanticIconTint(
             iconTint = iconTint,
@@ -419,7 +430,7 @@ fun rememberAdaptiveSemanticIconTint(
 
 /**
  * 与 [AdaptivePreferenceContent] 图标最终呈现一致的颜色：MD3 官方推荐预设
- * 下为 onSurfaceVariant 单色，其余预设保留传入的多彩/语义色。
+ * 下为 onSurfaceVariant 单色，Miuix 默认同样使用中性色；主题容器样式显式使用主题色。
  * 用于无容器图标（如 WindowSpinnerPreference 的 startAction、发布渠道卡片），
  * 避免仅经 [rememberAdaptiveSemanticIconTint] 落到主题主色、与其他条目不一致。
  */
@@ -431,8 +442,8 @@ fun rememberAdaptivePreferenceIconTint(
     val colorScheme = MaterialTheme.colorScheme
     return remember(iconTint, iconStyle, colorScheme) {
         when (iconStyle) {
-            AppIconStyle.MD3_STANDARD -> colorScheme.onSurfaceVariant
-            else -> iconTint
+            AppIconStyle.THEME_CONTAINER -> colorScheme.primary
+            else -> colorScheme.onSurfaceVariant
         }
     }
 }
@@ -441,6 +452,7 @@ fun rememberAdaptivePreferenceIconTint(
 fun rememberAdaptivePreferenceIconContentColor(
     containerColor: Color,
 ): Color {
+    if (useColorfulPreferenceIcons()) return Color.White
     val colorScheme = MaterialTheme.colorScheme
     val iconStyle = rememberResolvedAppIconStyle()
     return remember(containerColor, colorScheme, iconStyle) {
@@ -451,9 +463,13 @@ fun rememberAdaptivePreferenceIconContentColor(
 @Composable
 fun rememberAdaptivePreferenceIconContainerColor(
     iconTint: Color,
+    colorKey: String? = null,
 ): Color {
     val treatment = LocalAppPreferenceIconTreatment.current
     val semanticTint = rememberAdaptiveSemanticIconTint(iconTint)
+    if (useColorfulPreferenceIcons()) {
+        return colorfulPreferenceIconColor(colorKey, semanticTint)
+    }
     val iconStyle = rememberResolvedAppIconStyle()
     val colorScheme = MaterialTheme.colorScheme
     return remember(iconTint, semanticTint, treatment, iconStyle, colorScheme) {
@@ -497,9 +513,9 @@ fun AdaptivePreferenceSectionTitleRenderer(title: String) {
         return
     }
     Text(
-        text = title,
+        text = appSearchHighlightedText(title),
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = AppContentColors.secondaryText(),
         letterSpacing = 0.sp,
         modifier = Modifier.padding(
             start = visualSpec.sectionStartPaddingDp.dp,
@@ -535,11 +551,7 @@ fun AdaptivePreferenceGroupRenderer(
     val colorScheme = MaterialTheme.colorScheme
     val defaultShape = RoundedCornerShape(visualSpec.groupCornerRadiusDp.dp)
     val appliedShape = shape ?: defaultShape
-    val resolvedContainerColor = resolveAdaptiveGroupContainerColor(
-        uiStyle = uiStyle,
-        colorScheme = colorScheme,
-        globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current && !isMiuixNonGlassEnabled()
-    )
+    val resolvedContainerColor = adaptivePreferenceGroupContainerColor()
 
     if (uiStyle == AppUiStyle.MIUIX) {
         MiuixCard(
@@ -552,7 +564,7 @@ fun AdaptivePreferenceGroupRenderer(
         }
         return
     }
-    
+
     Surface(
         modifier = modifier.padding(horizontal = 12.dp),
         shape = appliedShape,
@@ -576,24 +588,53 @@ internal fun AdaptiveSwitchPreferenceContent(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
-    textColor: Color = MaterialTheme.colorScheme.onSurface,
-    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
+    iconTint: Color = AppContentColors.secondaryText(),
+    textColor: Color = AppContentColors.primaryText(),
+    subtitleColor: Color = AppContentColors.secondaryText(),
+    titleTrailingContent: (@Composable () -> Unit)? = null,
+) {
+    val intent = remember { LiquidSwitchIntent() }
+    androidx.compose.runtime.CompositionLocalProvider(LocalLiquidSwitchIntent provides intent) {
+        AdaptiveSwitchPreferenceBody(
+            icon = icon, title = title, subtitle = subtitle, checked = checked,
+            onCheckedChange = { next ->
+                intent.requested = next
+                onCheckedChange(next)
+            },
+            enabled = enabled, iconTint = iconTint, textColor = textColor,
+            subtitleColor = subtitleColor,
+            titleTrailingContent = titleTrailingContent,
+        )
+    }
+}
+
+@Composable
+private fun AdaptiveSwitchPreferenceBody(
+    icon: ImageVector? = null,
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+    iconTint: Color = AppContentColors.secondaryText(),
+    textColor: Color = AppContentColors.primaryText(),
+    subtitleColor: Color = AppContentColors.secondaryText(),
+    titleTrailingContent: (@Composable () -> Unit)? = null,
 ) {
     val uiStyle = LocalAppUiStyle.current
     val visualSpec = rememberAdaptiveListComponentVisualSpec()
     val rowSpec = rememberAdaptiveListRowVisualSpec()
     val iconTreatment = LocalAppPreferenceIconTreatment.current
     val iconStyle = rememberResolvedAppIconStyle()
-    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
+    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint, colorKey = title)
     val filledIconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
-    val iconContentColor = resolveAdaptivePreferenceIconGlyphColor(
+    val iconContentColor = if (useColorfulPreferenceIcons()) Color.White else resolveAdaptivePreferenceIconGlyphColor(
         treatment = iconTreatment,
         iconStyle = iconStyle,
         containerContentColor = filledIconContentColor,
         semanticIconColor = effectiveIconTint,
     )
-    val iconBackgroundAlpha = resolveAdaptivePreferenceIconBackgroundAlpha(
+    val iconBackgroundAlpha = if (useColorfulPreferenceIcons()) 1f else resolveAdaptivePreferenceIconBackgroundAlpha(
         iconTreatment,
         visualSpec.iconBackgroundAlpha,
         iconStyle,
@@ -603,18 +644,32 @@ internal fun AdaptiveSwitchPreferenceContent(
         // MD3 原生:ListItem + M3 Switch
         val haptic = LocalHapticFeedback.current
         val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
+        // 与 AppSingleChoicePreference 的禁用态保持一致：整行 alpha 0.6。
+        // 只给文字降透明度会和开关的禁用态不同步。
         ListItem(
             headlineContent = {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = textColor,
-                )
+                if (titleTrailingContent == null) {
+                    Text(
+                        text = appSearchHighlightedText(title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = textColor,
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = appSearchHighlightedText(title),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = textColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                        titleTrailingContent()
+                    }
+                }
             },
             supportingContent = subtitle?.let { subtitleText ->
                 {
                     Text(
-                        text = subtitleText,
+                        text = appSearchHighlightedText(subtitleText),
                         style = MaterialTheme.typography.bodySmall,
                         color = subtitleColor,
                     )
@@ -625,8 +680,8 @@ internal fun AdaptiveSwitchPreferenceContent(
                     Box(
                         modifier = Modifier
                             .size(visualSpec.iconContainerSizeDp.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .background(effectiveIconTint.copy(alpha = iconBackgroundAlpha)),
+                            .clip(if (useColorfulPreferenceIcons()) RoundedCornerShape(10.dp) else MaterialTheme.shapes.small)
+                            .then(if (useColorfulPreferenceIcons()) Modifier.appPreferenceIconBackground(effectiveIconTint, 10.dp) else Modifier.background(effectiveIconTint.copy(alpha = iconBackgroundAlpha))),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
@@ -650,6 +705,7 @@ internal fun AdaptiveSwitchPreferenceContent(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             modifier = Modifier
                 .fillMaxWidth()
+                .alpha(if (enabled) 1f else 0.6f)
                 .heightIn(min = rowSpec.minTouchTargetHeightDp.dp)
                 .clickable(enabled = enabled) {
                     if (hapticsEnabled) {
@@ -660,59 +716,18 @@ internal fun AdaptiveSwitchPreferenceContent(
         )
         return
     }
-    if (
-        listItemStyle == AppListItemStyle.NATIVE &&
-        shouldRouteSwitchItemToMiuixSwitchPreference(uiStyle)
-    ) {
-        val platformHaptic = LocalHapticFeedback.current
-        val effectiveHaptic = if (LocalAppThemeConfig.current.hapticFeedbackEnabled) {
-            platformHaptic
-        } else {
-            NoOpHapticFeedback
-        }
-        CompositionLocalProvider(LocalHapticFeedback provides effectiveHaptic) {
-            MiuixSwitchPreference(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                title = title,
-                titleColor = BasicComponentDefaults.titleColor(color = textColor),
-                summary = subtitle,
-                summaryColor = BasicComponentDefaults.summaryColor(color = subtitleColor),
-                enabled = enabled,
-                insideMargin = PaddingValues(
-                    horizontal = rowSpec.insideHorizontalPaddingDp.dp,
-                    vertical = rowSpec.insideVerticalPaddingDp.dp
-                ),
-                startAction = {
-                    if (icon != null) {
-                        Box(
-                            modifier = Modifier
-                                .size(visualSpec.iconContainerSizeDp.dp)
-                                .adaptiveSquircleBackground(
-                                    color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
-                                    cornerRadius = visualSpec.iconCornerRadiusDp.dp,
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = iconContentColor,
-                                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
-                            )
-                        }
-                    }
-                }
-            )
-        }
-        return
-    }
+    // The preference row is shared; only AppSwitch selects its native or glass material.
+    val haptic = LocalHapticFeedback.current
+    val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = rowSpec.minTouchTargetHeightDp.dp)
             .alpha(if (enabled) 1f else 0.6f)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .clickable(enabled = enabled) {
+                if (hapticsEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onCheckedChange(!checked)
+            }
             .padding(
                 horizontal = rowSpec.insideHorizontalPaddingDp.dp,
                 vertical = rowSpec.insideVerticalPaddingDp.dp
@@ -723,7 +738,7 @@ internal fun AdaptiveSwitchPreferenceContent(
             Box(
                 modifier = Modifier
                     .size(visualSpec.iconContainerSizeDp.dp)
-                    .adaptiveSquircleBackground(
+                    .appPreferenceIconBackground(
                         color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
                         cornerRadius = visualSpec.iconCornerRadiusDp.dp,
                     ),
@@ -739,10 +754,18 @@ internal fun AdaptiveSwitchPreferenceContent(
             Spacer(modifier = Modifier.width(14.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = textColor)
+            if (titleTrailingContent == null) {
+                Text(text = appSearchHighlightedText(title), style = MaterialTheme.typography.bodyLarge, color = textColor)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = appSearchHighlightedText(title), style = MaterialTheme.typography.bodyLarge,
+                        color = textColor, modifier = Modifier.weight(1f))
+                    titleTrailingContent()
+                }
+            }
             if (subtitle != null) {
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+                Text(text = appSearchHighlightedText(subtitle), style = MaterialTheme.typography.bodySmall, color = subtitleColor)
             }
         }
         Spacer(modifier = Modifier.width(rowSpec.trailingSpacingDp.dp))
@@ -764,68 +787,29 @@ fun AdaptiveSliderPreferenceRenderer(
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int = 0,
     valueLabel: String? = null,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
-    textColor: Color = MaterialTheme.colorScheme.onSurface,
-    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    valueColor: Color = MaterialTheme.colorScheme.primary
+    iconTint: Color = AppContentColors.secondaryText(),
+    textColor: Color = AppContentColors.primaryText(),
+    subtitleColor: Color = AppContentColors.secondaryText(),
+    valueColor: Color = AppContentColors.primaryText()
 ) {
-    val uiStyle = LocalAppUiStyle.current
     val visualSpec = rememberAdaptiveListComponentVisualSpec()
     val rowSpec = rememberAdaptiveListRowVisualSpec()
     val iconTreatment = LocalAppPreferenceIconTreatment.current
     val iconStyle = rememberResolvedAppIconStyle()
-    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
+    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint, colorKey = title)
     val filledIconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
-    val iconContentColor = resolveAdaptivePreferenceIconGlyphColor(
+    val iconContentColor = if (useColorfulPreferenceIcons()) Color.White else resolveAdaptivePreferenceIconGlyphColor(
         treatment = iconTreatment,
         iconStyle = iconStyle,
         containerContentColor = filledIconContentColor,
         semanticIconColor = effectiveIconTint,
     )
-    val iconBackgroundAlpha = resolveAdaptivePreferenceIconBackgroundAlpha(
+    val iconBackgroundAlpha = if (useColorfulPreferenceIcons()) 1f else resolveAdaptivePreferenceIconBackgroundAlpha(
         iconTreatment,
         visualSpec.iconBackgroundAlpha,
         iconStyle,
     )
     val iconCornerRadius = visualSpec.iconCornerRadiusDp.dp
-    if (shouldRouteSliderPreferenceToMiuixSliderPreference(uiStyle)) {
-        MiuixSliderPreference(
-            value = value,
-            onValueChange = onValueChange,
-            title = title,
-            titleColor = BasicComponentDefaults.titleColor(color = textColor),
-            summary = subtitle,
-            summaryColor = BasicComponentDefaults.summaryColor(color = subtitleColor),
-            valueText = valueLabel,
-            valueRange = valueRange,
-            steps = steps,
-            insideMargin = PaddingValues(
-                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
-                vertical = rowSpec.insideVerticalPaddingDp.dp
-            ),
-            startAction = {
-                if (icon != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(visualSpec.iconContainerSizeDp.dp)
-                            .adaptiveSquircleBackground(
-                                color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
-                                cornerRadius = visualSpec.iconCornerRadiusDp.dp,
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = iconContentColor,
-                            modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
-                        )
-                    }
-                }
-            }
-        )
-        return
-    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -842,7 +826,7 @@ fun AdaptiveSliderPreferenceRenderer(
                 Box(
                     modifier = Modifier
                         .size(visualSpec.iconContainerSizeDp.dp)
-                        .adaptiveSquircleBackground(
+                        .appPreferenceIconBackground(
                             color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
                             cornerRadius = iconCornerRadius,
                         ),
@@ -858,11 +842,11 @@ fun AdaptiveSliderPreferenceRenderer(
                 Spacer(modifier = Modifier.width(14.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = textColor)
+                Text(text = appSearchHighlightedText(title), style = MaterialTheme.typography.bodyLarge, color = textColor)
                 if (subtitle != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = subtitle,
+                        text = appSearchHighlightedText(subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = subtitleColor
                     )
@@ -878,7 +862,7 @@ fun AdaptiveSliderPreferenceRenderer(
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Slider(
+        AppSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
@@ -911,10 +895,10 @@ private fun Md3NativeListItemContent(
 ) {
     val haptic = LocalHapticFeedback.current
     val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
-    ListItem(
+    androidx.compose.material3.ListItem(
         headlineContent = {
             Text(
-                text = title,
+                text = appSearchHighlightedText(title),
                 style = MaterialTheme.typography.bodyLarge,
                 color = textColor,
             )
@@ -922,7 +906,7 @@ private fun Md3NativeListItemContent(
         supportingContent = subtitle?.let { subtitleText ->
             {
                 Text(
-                    text = subtitleText,
+                    text = appSearchHighlightedText(subtitleText),
                     style = MaterialTheme.typography.bodySmall,
                     color = subtitleColor,
                 )
@@ -933,8 +917,8 @@ private fun Md3NativeListItemContent(
                 Box(
                     modifier = Modifier
                         .size(iconContainerSize)
-                        .clip(MaterialTheme.shapes.small)
-                        .background(iconContainerColor.copy(alpha = iconBackgroundAlpha)),
+                        .clip(if (useColorfulPreferenceIcons()) RoundedCornerShape(10.dp) else MaterialTheme.shapes.small)
+                        .then(if (useColorfulPreferenceIcons()) Modifier.appPreferenceIconBackground(iconContainerColor, 10.dp) else Modifier.background(iconContainerColor.copy(alpha = iconBackgroundAlpha))),
                     contentAlignment = Alignment.Center,
                 ) {
                     when {
@@ -1006,11 +990,11 @@ internal fun AdaptivePreferenceContent(
     value: String? = null,
     copyValue: String? = null,
     onClick: (() -> Unit)? = null,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
-    textColor: Color = MaterialTheme.colorScheme.onSurface,
-    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    chevronTint: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+    iconTint: Color = AppContentColors.secondaryText(),
+    textColor: Color = AppContentColors.primaryText(),
+    subtitleColor: Color = AppContentColors.secondaryText(),
+    valueColor: Color = AppContentColors.secondaryText(),
+    chevronTint: Color = AppContentColors.secondaryText().copy(alpha = 0.72f),
     centered: Boolean = false,
     enableCopy: Boolean = false,
     onCopyRequest: ((text: String, label: String?) -> Unit)? = null,
@@ -1022,21 +1006,21 @@ internal fun AdaptivePreferenceContent(
     val rowSpec = rememberAdaptiveListRowVisualSpec()
     val iconTreatment = LocalAppPreferenceIconTreatment.current
     val iconStyle = rememberResolvedAppIconStyle()
-    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
+    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint, colorKey = title)
     val filledIconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
-    val iconContentColor = resolveAdaptivePreferenceIconGlyphColor(
+    val iconContentColor = if (useColorfulPreferenceIcons()) Color.White else resolveAdaptivePreferenceIconGlyphColor(
         treatment = iconTreatment,
         iconStyle = iconStyle,
         containerContentColor = filledIconContentColor,
         semanticIconColor = effectiveIconTint,
     )
-    val iconBackgroundAlpha = resolveAdaptivePreferenceIconBackgroundAlpha(
+    val iconBackgroundAlpha = if (useColorfulPreferenceIcons()) 1f else resolveAdaptivePreferenceIconBackgroundAlpha(
         iconTreatment,
         visualSpec.iconBackgroundAlpha,
         iconStyle,
     )
     val iconCornerRadius = visualSpec.iconCornerRadiusDp.dp
-    val clickableRenderer = resolveAppClickableItemRenderer(
+    val clickableRenderer = if (hasAppTextSearchMatch(title, subtitle)) AppClickableItemRenderer.MD3_BASIC else resolveAppClickableItemRenderer(
         uiStyle = uiStyle,
         onClick = onClick,
         showChevron = showChevron,
@@ -1068,7 +1052,11 @@ internal fun AdaptivePreferenceContent(
         return
     }
     if (nativeListItem && clickableRenderer == AppClickableItemRenderer.MIUIX_ARROW) {
-        BasicComponent(
+        MiuixArrowPreference(
+            title = title,
+            titleColor = BasicComponentDefaults.titleColor(color = textColor),
+            summary = subtitle?.takeIf { it.isNotBlank() },
+            summaryColor = BasicComponentDefaults.summaryColor(color = subtitleColor),
             onClick = onClick,
             insideMargin = PaddingValues(
                 horizontal = rowSpec.insideHorizontalPaddingDp.dp,
@@ -1080,7 +1068,7 @@ internal fun AdaptivePreferenceContent(
                         Box(
                             modifier = Modifier
                                 .size(visualSpec.iconContainerSizeDp.dp)
-                                .adaptiveSquircleBackground(
+                                .appPreferenceIconBackground(
                                     color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
                                     cornerRadius = visualSpec.iconCornerRadiusDp.dp,
                                 ),
@@ -1099,7 +1087,7 @@ internal fun AdaptivePreferenceContent(
                         Box(
                             modifier = Modifier
                                 .size(visualSpec.iconContainerSizeDp.dp)
-                                .adaptiveSquircleBackground(
+                                .appPreferenceIconBackground(
                                     color = if (effectiveIconTint == Color.Unspecified) {
                                         Color.Transparent
                                     } else {
@@ -1139,31 +1127,8 @@ internal fun AdaptivePreferenceContent(
                             )
                     )
                 }
-                if (showChevron && onClick != null) {
-                    if (trailingContent != null || !value.isNullOrBlank()) Spacer(Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = chevronTint,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
             },
-        ) {
-            Text(
-                text = title,
-                color = textColor,
-                fontSize = MiuixTheme.textStyles.headline1.fontSize,
-                fontWeight = FontWeight.Medium,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    color = subtitleColor,
-                    fontSize = MiuixTheme.textStyles.body2.fontSize,
-                )
-            }
-        }
+        )
         return
     }
     if (clickableRenderer == AppClickableItemRenderer.MD3_BASIC) {
@@ -1189,7 +1154,7 @@ internal fun AdaptivePreferenceContent(
                 Box(
                     modifier = Modifier
                         .size(visualSpec.iconContainerSizeDp.dp)
-                        .adaptiveSquircleBackground(
+                        .appPreferenceIconBackground(
                             color = if (effectiveIconTint == Color.Unspecified) {
                                 Color.Transparent
                             } else {
@@ -1210,7 +1175,7 @@ internal fun AdaptivePreferenceContent(
                         Icon(
                             painter = iconPainter,
                             contentDescription = null,
-                            tint = effectiveIconTint,
+                            tint = if (useColorfulPreferenceIcons()) Color.White else effectiveIconTint,
                             modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                         )
                     }
@@ -1219,14 +1184,14 @@ internal fun AdaptivePreferenceContent(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = title,
+                    text = appSearchHighlightedText(title),
                     style = MaterialTheme.typography.bodyLarge,
                     color = textColor,
                 )
                 if (subtitle != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = subtitle,
+                        text = appSearchHighlightedText(subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = subtitleColor,
                     )
@@ -1285,7 +1250,7 @@ internal fun AdaptivePreferenceContent(
                         Box(
                             modifier = Modifier
                                 .size(visualSpec.iconContainerSizeDp.dp)
-                                .adaptiveSquircleBackground(
+                                .appPreferenceIconBackground(
                                     color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
                                     cornerRadius = visualSpec.iconCornerRadiusDp.dp,
                                 ),
@@ -1304,7 +1269,7 @@ internal fun AdaptivePreferenceContent(
                         Box(
                             modifier = Modifier
                                 .size(visualSpec.iconContainerSizeDp.dp)
-                                .adaptiveSquircleBackground(
+                                .appPreferenceIconBackground(
                                     color = if (effectiveIconTint == Color.Unspecified) {
                                         Color.Transparent
                                     } else {
@@ -1361,7 +1326,7 @@ internal fun AdaptivePreferenceContent(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = rowSpec.insideHorizontalPaddingDp.dp, vertical = rowSpec.insideVerticalPaddingDp.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start
     ) {
@@ -1371,7 +1336,7 @@ internal fun AdaptivePreferenceContent(
                     Box(
                         modifier = Modifier
                             .size(visualSpec.iconContainerSizeDp.dp)
-                            .adaptiveSquircleBackground(
+                            .appPreferenceIconBackground(
                                 color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
                                 cornerRadius = iconCornerRadius,
                             ),
@@ -1418,10 +1383,10 @@ internal fun AdaptivePreferenceContent(
                 Spacer(modifier = Modifier.width(14.dp))
             }
         }
-        
+
         if (centered) {
             Text(
-                text = title,
+                text = appSearchHighlightedText(title),
                 style = MaterialTheme.typography.bodyLarge,
                 color = textColor,
                 modifier = Modifier,
@@ -1429,29 +1394,26 @@ internal fun AdaptivePreferenceContent(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         } else {
-            // Title stays single-line so long search labels don't wrap under the trailing section path.
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = title,
+                    text = appSearchHighlightedText(title),
                     style = MaterialTheme.typography.bodyLarge,
                     color = textColor,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    softWrap = true,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Start
                 )
                 if (subtitle != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = subtitle,
+                        text = appSearchHighlightedText(subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = subtitleColor,
-                        maxLines = 2,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        softWrap = true,
                     )
                 }
             }
         }
-        
+
         if (!centered) {
             Spacer(modifier = Modifier.width(rowSpec.trailingSpacingDp.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1502,24 +1464,24 @@ fun AdaptivePreferenceGridItemRenderer(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
+    iconTint: Color = AppContentColors.secondaryText(),
     containerColor: Color = MaterialTheme.colorScheme.surface,
-    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    contentColor: Color = AppContentColors.primaryText(),
     modifier: Modifier = Modifier
 ) {
     val uiStyle = LocalAppUiStyle.current
     val visualSpec = rememberAdaptiveListComponentVisualSpec()
     val iconTreatment = LocalAppPreferenceIconTreatment.current
     val iconStyle = rememberResolvedAppIconStyle()
-    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
+    val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint, colorKey = title)
     val filledIconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
-    val iconContentColor = resolveAdaptivePreferenceIconGlyphColor(
+    val iconContentColor = if (useColorfulPreferenceIcons()) Color.White else resolveAdaptivePreferenceIconGlyphColor(
         treatment = iconTreatment,
         iconStyle = iconStyle,
         containerContentColor = filledIconContentColor,
         semanticIconColor = effectiveIconTint,
     )
-    val iconBackgroundAlpha = resolveAdaptivePreferenceIconBackgroundAlpha(
+    val iconBackgroundAlpha = if (useColorfulPreferenceIcons()) 1f else resolveAdaptivePreferenceIconBackgroundAlpha(
         iconTreatment,
         visualSpec.iconBackgroundAlpha,
         iconStyle,
@@ -1543,8 +1505,8 @@ fun AdaptivePreferenceGridItemRenderer(
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .adaptiveSquircleBackground(
+                .size(if (useColorfulPreferenceIcons()) 32.dp else 48.dp)
+                .appPreferenceIconBackground(
                     color = effectiveIconTint.copy(alpha = iconBackgroundAlpha),
                     cornerRadius = AppShapes.containerCornerDp(ContainerLevel.Field),
                 ),
@@ -1554,14 +1516,14 @@ fun AdaptivePreferenceGridItemRenderer(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconContentColor,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(if (useColorfulPreferenceIcons()) 22.dp else 26.dp)
             )
         }
-        
+
         Spacer(modifier = Modifier.height(12.dp))
-        
+
         Text(
-            text = title,
+            text = appSearchHighlightedText(title),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             color = contentColor,
@@ -1572,16 +1534,14 @@ fun AdaptivePreferenceGridItemRenderer(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AdaptiveSearchFieldRenderer(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "搜索",
     containerColor: Color = Color.Unspecified,
-    shapeOverride: Shape? = null,
-    heightOverride: Dp? = null,
     forceExpandedInput: Boolean = false,
-    topBarChrome: Boolean = false,
     onSearch: () -> Unit = {},
     onClear: () -> Unit = { onQueryChange("") },
     showClearAction: Boolean = true,
@@ -1590,293 +1550,62 @@ fun AdaptiveSearchFieldRenderer(
     interactionSource: MutableInteractionSource? = null,
     leadingIconHorizontalOffset: Dp = 0.dp,
 ) {
-    val uiStyle = LocalAppUiStyle.current
-    val colorScheme = MaterialTheme.colorScheme
-    val visualSpec = rememberAdaptiveListComponentVisualSpec()
-    val searchBarCornerRadius = visualSpec.searchBarCornerRadiusDp.dp
-    val searchBarShape = shapeOverride ?: RoundedCornerShape(searchBarCornerRadius)
-    val resolvedContainerColor = resolveAdaptiveSearchBarContainerOverride(
-        requestedColor = containerColor,
-        defaultColor = resolveAdaptiveSearchBarContainerColor(
-            uiStyle = uiStyle,
-            colorScheme = colorScheme,
-            globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
-        ),
-    )
-    val resolvedHeight = heightOverride ?: visualSpec.searchBarHeightDp.dp
-
-    if (forceExpandedInput) {
-        val fallbackFocusRequester = remember { FocusRequester() }
-        val resolvedFocusRequester = focusRequester ?: fallbackFocusRequester
-        LaunchedEffect(resolvedFocusRequester, autoFocusEnabled) {
-            if (autoFocusEnabled) {
-                delay(80)
-                runCatching { resolvedFocusRequester.requestFocus() }
-            }
-        }
-        val focusModifier = Modifier.focusRequester(resolvedFocusRequester)
-        if (shouldUseNativeMiuixSearchBar(uiStyle) && leadingIconHorizontalOffset == 0.dp) {
-            MiuixAdaptiveSearchBar(
-                query = query,
-                onQueryChange = onQueryChange,
-                modifier = modifier.then(focusModifier),
-                placeholder = placeholder,
-                containerColor = resolvedContainerColor,
-                height = resolvedHeight,
-                forceExpandedInput = true,
-                onSearch = onSearch,
-                interactionSource = interactionSource,
-            )
-            return
-        }
-        // 顶栏固定高度不能用 OutlinedTextField：默认 contentPadding 会把字裁掉（平板尤其明显）。
-        // 用 BasicTextField + 可选聚焦描边，保证 44–56dp 内文字完整可见。
-        if (topBarChrome) {
-            val textStyle = MaterialTheme.typography.bodyLarge
-            val resolvedInteraction = interactionSource ?: remember { MutableInteractionSource() }
-            val isFocused by resolvedInteraction.collectIsFocusedAsState()
-            val fieldShape = searchBarShape
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = modifier
-                    .fillMaxWidth()
-                    .height(resolvedHeight)
-                    .clip(fieldShape)
-                    .background(resolvedContainerColor, fieldShape)
-                    .then(
-                        if (isFocused) {
-                            Modifier.border(
-                                width = 1.5.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = fieldShape,
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .then(focusModifier),
-                textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
-                singleLine = true,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                interactionSource = resolvedInteraction,
-                decorationBox = { innerTextField ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.CenterStart,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            if (query.isEmpty()) {
-                                Text(
-                                    text = placeholder,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    style = textStyle,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            innerTextField()
-                        }
-                        if (showClearAction && query.isNotEmpty()) {
-                            IconButton(
-                                onClick = onClear,
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
-                    }
-                },
-            )
-            return
-        }
-        val textStyle = MaterialTheme.typography.bodyMedium
-        val sizeModifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = resolvedHeight)
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = modifier
-                .then(sizeModifier)
-                .then(focusModifier),
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    style = textStyle,
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            },
-            trailingIcon = if (showClearAction && query.isNotEmpty()) {
-                {
-                    IconButton(onClick = onClear) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            } else {
-                null
-            },
-            singleLine = true,
-            textStyle = textStyle.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-            ),
-            shape = searchBarShape,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                disabledBorderColor = Color.Transparent,
-                focusedContainerColor = resolvedContainerColor,
-                unfocusedContainerColor = resolvedContainerColor,
-                disabledContainerColor = resolvedContainerColor,
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            interactionSource = interactionSource,
-        )
-        return
-    }
-
-    if (shouldUseNativeMiuixSearchBar(uiStyle) && leadingIconHorizontalOffset == 0.dp) {
-        MiuixAdaptiveSearchBar(
-            query = query,
-            onQueryChange = onQueryChange,
-            modifier = modifier,
-            placeholder = placeholder,
-            containerColor = resolvedContainerColor,
-            height = resolvedHeight,
-            forceExpandedInput = forceExpandedInput,
-            onSearch = { onSearch() },
-            interactionSource = interactionSource,
-        )
-        return
-    }
-
-    BasicTextField(
+    // Compact geometry is shared by MD3 and Miuix. Avoid constraining the stock
+    // SearchBar input (56dp minimum), which crops its decoration instead of shrinking it.
+    AppCompactInputField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(resolvedHeight)
-            .clip(searchBarShape)
-            .background(resolvedContainerColor, searchBarShape),
-        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-        singleLine = true,
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        modifier = modifier.fillMaxWidth().appSearchElasticPress(),
+        placeholder = placeholder,
+        containerColor = if (containerColor == Color.Unspecified) AppSurfaceTokens.searchContainer() else containerColor,
+        autoFocusEnabled = autoFocusEnabled,
+        focusRequester = focusRequester,
         interactionSource = interactionSource,
-        decorationBox = { innerTextField ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(start = leadingIconHorizontalOffset)
-                        .size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.weight(1f)) {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    innerTextField()
-                }
-                if (showClearAction && query.isNotEmpty()) {
-                    IconButton(
-                        onClick = onClear,
-                        modifier = Modifier.size(20.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch() }),
+        leadingIcon = {
+            AppIcon(Icons.Default.Search, contentDescription = null,
+                modifier = Modifier.padding(start = leadingIconHorizontalOffset).size(22.dp))
+        },
+        trailingIcon = if (showClearAction && query.isNotEmpty()) {
+            { AppIconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
+                AppIcon(Icons.Default.Clear, contentDescription = "清除搜索内容")
+            } }
+        } else null,
     )
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AppSearchEntry(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "搜索",
     containerColor: Color = Color.Unspecified,
+    centeredContent: Boolean = false,
+    openOnFocus: Boolean = true,
 ) {
     val uiStyle = LocalAppUiStyle.current
-    val colorScheme = MaterialTheme.colorScheme
-    val visualSpec = rememberAdaptiveListVisualCapabilities().componentSpec
-    val resolvedContainerColor = resolveAdaptiveSearchBarContainerOverride(
-        requestedColor = containerColor,
-        defaultColor = resolveAdaptiveSearchBarContainerColor(
-            uiStyle = uiStyle,
-            colorScheme = colorScheme,
-            globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current,
-        ),
-    )
-    val contentColor = AppSurfaceTokens.searchContent()
-    val cornerRadius = visualSpec.searchBarCornerRadiusDp.dp
-    val searchIcon = Icons.Default.Search
-
+    val hintColor = AppContentColors.secondaryText()
+    val shape = if (uiStyle == AppUiStyle.MIUIX) androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+        else androidx.compose.foundation.shape.CircleShape
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = visualSpec.searchBarHeightDp.dp)
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(resolvedContainerColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
+            .heightIn(min = 40.dp)
+            .appSearchElasticPress()
+            .clip(shape)
+            .background(if (containerColor == Color.Unspecified) AppSurfaceTokens.searchContainer() else containerColor)
+            .onFocusChanged { if (openOnFocus && it.isFocused) onClick() }
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = if (centeredContent) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = searchIcon,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = placeholder,
-            style = MaterialTheme.typography.bodyMedium,
-            color = contentColor,
-        )
+        AppIcon(Icons.Default.Search, contentDescription = null, tint = hintColor, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(8.dp))
+        AppText(placeholder, color = hintColor, style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
@@ -1891,6 +1620,7 @@ fun AdaptiveTextFieldRenderer(
     minLines: Int = 1,
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
     isError: Boolean = false,
+    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
     supportingText: @Composable (() -> Unit)? = null,
 ) {
     val uiStyle = LocalAppUiStyle.current
@@ -1902,12 +1632,13 @@ fun AdaptiveTextFieldRenderer(
                 modifier = Modifier.fillMaxWidth(),
                 label = label ?: placeholder.orEmpty(),
                 useLabelAsPlaceholder = label == null,
+                keyboardOptions = keyboardOptions,
                 singleLine = singleLine,
                 minLines = minLines,
                 maxLines = maxLines,
                 colors = MiuixTextFieldDefaults.textFieldColors(
                     borderColor = if (isError) {
-                        MaterialTheme.colorScheme.error
+                        AppContentColors.error()
                     } else {
                         MiuixTheme.colorScheme.primary
                     },
@@ -1923,6 +1654,7 @@ fun AdaptiveTextFieldRenderer(
         modifier = modifier.fillMaxWidth(),
         label = label?.let { { Text(it) } },
         placeholder = placeholder?.let { { Text(it) } },
+        keyboardOptions = keyboardOptions,
         singleLine = singleLine,
         minLines = minLines,
         maxLines = maxLines,
@@ -1959,7 +1691,7 @@ private fun MiuixAdaptiveSearchBar(
         )
         return
     }
-    var expanded by rememberSaveable(query.isNotBlank()) {
+    var expanded by rememberSaveable {
         mutableStateOf(query.isNotBlank())
     }
     InputField(

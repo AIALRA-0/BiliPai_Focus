@@ -10,8 +10,6 @@ class VideoCardCompleteContentStructureTest {
     private val completeContentCardSources = listOf(
         "feature/home/components/cards/VideoCard.kt",
         "feature/home/components/cards/StoryVideoCard.kt",
-        "feature/home/components/cards/GlassVideoCard.kt",
-        "feature/home/components/cards/CinematicVideoCard.kt",
         "feature/home/components/cards/HomeStyleSingleColumnVideoCard.kt",
         "feature/dynamic/components/VideoCards.kt",
         "feature/list/FavoritePersonalCard.kt",
@@ -57,7 +55,7 @@ class VideoCardCompleteContentStructureTest {
         assertTrue(source.contains("metaMaxLines = Int.MAX_VALUE"))
         assertFalse(
             source.substringAfter("if (scrollLitePolicy.showSecondaryStatsRow)")
-                .substringBefore("VideoCardOwnerMetadata(")
+                .substringBefore("VideoCardDurationPublishRow(")
                 .contains("overflow = TextOverflow.Ellipsis")
         )
     }

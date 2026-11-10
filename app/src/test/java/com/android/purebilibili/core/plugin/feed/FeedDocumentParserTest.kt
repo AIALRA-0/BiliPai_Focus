@@ -2,10 +2,71 @@ package com.android.purebilibili.core.plugin.feed
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FeedDocumentParserTest {
+    @Test
+    fun `HTTP enclosure without MIME type and encoded body retain separate images`() {
+        val item = parseFeedDocument(
+            xml = """
+                <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+                  <channel><title>订阅</title><item>
+                    <title>文章</title><link>https://www.jintiankansha.me/post/one</link>
+                    <enclosure url="https://example.com/audio.mp3" type="audio/mpeg"/>
+                    <enclosure url="http://example.com/cover.jpg?size=large"/>
+                    <content:encoded><![CDATA[<p>正文</p><a href="/photo"><span><img src="http://example.com/body.jpg"></span></a>]]></content:encoded>
+                  </item></channel>
+                </rss>
+            """.trimIndent(),
+            sourceId = "s",
+            sourceTitle = "订阅",
+        ).items.single()
+
+        assertEquals("http://example.com/cover.jpg?size=large", item.imageUrl)
+        assertEquals(
+            listOf("http://example.com/body.jpg"),
+            parseFeedHtml(item.htmlContent, item.link).filterIsInstance<FeedBlock.Image>().map { it.url },
+        )
+    }
+
+    @Test
+    fun `untyped extensionless HTTP cover enclosure is accepted`() {
+        val item = parseFeedDocument(
+            """<rss><channel><item><title>文章</title><link>https://example.com/post</link><enclosure url="http://mmbiz.qpic.cn/mmbiz_jpg/cover/0?wx_fmt=jpeg"/><description><![CDATA[<img src="http://example.com/body.jpg">]]></description></item></channel></rss>""",
+            sourceId = "s",
+            sourceTitle = "订阅",
+        ).items.single()
+        assertEquals("http://mmbiz.qpic.cn/mmbiz_jpg/cover/0?wx_fmt=jpeg", item.imageUrl)
+    }
+
+    @Test
+    fun `podcast enclosure is not used as a cover`() {
+        val item = parseFeedDocument(
+            """<rss><channel><item><title>播客</title><link>https://example.com/post</link><enclosure url="https://example.com/audio.mp3" type="audio/mpeg"/><description><![CDATA[<img src="/cover.png">]]></description></item></channel></rss>""",
+            sourceId = "s",
+            sourceTitle = "订阅",
+        ).items.single()
+        assertEquals("https://example.com/cover.png", item.imageUrl)
+    }
+
+    @Test
+    fun `linked images keep order and surrounding inline formatting`() {
+        val blocks = parseFeedHtml(
+            """<p><strong>甲<a href="/post">链接<span><img src="http://example.com/a.jpg"></span>乙</a>丙</strong></p>""",
+            "https://example.com/",
+        )
+        assertEquals(3, blocks.size)
+        val before = (blocks[0] as FeedBlock.Paragraph).inlines
+        assertEquals(FeedInline.Text("甲", bold = true), before[0])
+        assertEquals(FeedInline.Link("链接", "https://example.com/post"), before[1])
+        assertEquals("http://example.com/a.jpg", (blocks[1] as FeedBlock.Image).url)
+        val after = (blocks[2] as FeedBlock.Paragraph).inlines
+        assertEquals(FeedInline.Link("乙", "https://example.com/post"), after[0])
+        assertEquals(FeedInline.Text("丙", bold = true), after[1])
+    }
+
     @Test
     fun `rss keeps encoded body enclosure image and author`() {
         val feed = parseFeedDocument(
@@ -147,6 +208,17 @@ class FeedDocumentParserTest {
         assertEquals(listOf("https://a.example/feed", "https://b.example/atom.xml"), imported.map { it.url })
         assertEquals("甲站", imported.first().title)
         assertEquals(2, parseSubscriptionImport("https://a.example/rss\nhttps://b.example/atom.xml\nnot-a-url").size)
+
+        val opml = buildSubscriptionOpml(
+            listOf(
+                SavedSubscriptionFeed(id = "1", title = "甲\"站\"<&>", url = "https://a.example/feed?a=1&b=2"),
+                SavedSubscriptionFeed(id = "2", title = "", url = "https://b.example/atom.xml", enabled = false),
+            ),
+        )
+        val roundTrip = parseSubscriptionImport(opml)
+        assertEquals(listOf("https://a.example/feed?a=1&b=2", "https://b.example/atom.xml"), roundTrip.map { it.url })
+        assertEquals("甲\"站\"<&>", roundTrip.first().title)
+        assertEquals("https://b.example/atom.xml", roundTrip.last().title)
     }
 
     @Test
@@ -244,6 +316,50 @@ class FeedDocumentParserTest {
         assertEquals("阮一峰的网络日志", chooseSubscriptionTitle("", parsed.title, url))
         assertEquals("我的命名", chooseSubscriptionTitle("我的命名", parsed.title, url))
         assertEquals("v2ex.com", chooseSubscriptionTitle("", null, "https://v2ex.com/index.xml"))
+    }
+
+    @Test
+    fun `placeholder titles are queued for background resolution`() {
+        assertTrue(needsTitleResolution(SavedSubscriptionFeed(id = "1", title = "", url = "https://v2ex.com/index.xml")))
+        assertTrue(
+            needsTitleResolution(
+                SavedSubscriptionFeed(id = "1", title = "https://v2ex.com/index.xml", url = "https://v2ex.com/index.xml")
+            )
+        )
+        assertFalse(
+            needsTitleResolution(SavedSubscriptionFeed(id = "1", title = "V2EX", url = "https://v2ex.com/index.xml"))
+        )
+    }
+
+    @Test
+    fun `opml folders become groups and round trip through export`() {
+        val opml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <opml version="2.0">
+              <body>
+                <outline text="技术">
+                  <outline type="rss" text="阮一峰" title="阮一峰" xmlUrl="https://www.ruanyifeng.com/blog/atom.xml"/>
+                  <outline type="rss" text="V2EX" title="V2EX" xmlUrl="https://v2ex.com/index.xml"/>
+                </outline>
+                <outline type="rss" text="散列" title="散列" xmlUrl="https://example.com/feed"/>
+              </body>
+            </opml>
+        """.trimIndent()
+        val imported = parseOpmlSubscriptions(opml)
+
+        val ruanyifeng = imported.first { it.url == "https://www.ruanyifeng.com/blog/atom.xml" }
+        assertEquals("技术", ruanyifeng.group)
+        assertEquals("", imported.first { it.url == "https://example.com/feed" }.group)
+
+        val exported = buildSubscriptionOpml(
+            listOf(
+                SavedSubscriptionFeed(id = "a", title = "阮一峰", url = "https://www.ruanyifeng.com/blog/atom.xml", group = "技术"),
+                SavedSubscriptionFeed(id = "b", title = "散列", url = "https://example.com/feed"),
+            )
+        )
+        val reparsed = parseOpmlSubscriptions(exported)
+        assertEquals("技术", reparsed.first { it.url == "https://www.ruanyifeng.com/blog/atom.xml" }.group)
+        assertEquals("", reparsed.first { it.url == "https://example.com/feed" }.group)
     }
 
     @Test

@@ -24,6 +24,15 @@ internal object PureApplicationRuntimeConfig {
 
     fun resolveImageMemoryCachePercent(): Double = 0.10
 
+    fun resolveImageMemoryCacheMaxBytes(memoryClassMb: Int, isLowRamDevice: Boolean): Long {
+        val proportionalBudget = (
+            memoryClassMb.coerceAtLeast(1).toLong() * 1024 * 1024 * resolveImageMemoryCachePercent()
+        ).toLong()
+        // App cache budgets, not Android 17's process limits. Leave room for video and danmaku.
+        val absoluteLimit = (if (isLowRamDevice) 32L else 96L) * 1024 * 1024
+        return minOf(proportionalBudget, absoluteLimit)
+    }
+
     fun resolveBackgroundMemoryTrimPlan(level: Int): BackgroundMemoryTrimPlan {
         return resolveTrimPlan(level)
     }
@@ -42,6 +51,14 @@ internal object PureApplicationRuntimeConfig {
 
     fun shouldRequestIdlePlaybackReleaseOnTrimLevel(level: Int): Boolean {
         return resolveTrimPlan(level).requestIdlePlaybackRelease
+    }
+
+    fun shouldReleaseDerivedCachesOnTrimLevel(level: Int): Boolean {
+        return resolveTrimPlan(level).releaseDerivedCaches
+    }
+
+    fun shouldReleaseIdleNetworkConnectionsOnTrimLevel(level: Int): Boolean {
+        return resolveTrimPlan(level).releaseIdleNetworkConnections
     }
 
     fun createTelemetryBackgroundStateListener(): BackgroundManager.BackgroundStateListener =

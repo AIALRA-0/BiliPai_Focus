@@ -8,16 +8,6 @@ import kotlin.test.assertTrue
 class HomeCoverReturnPrefetchStructureTest {
 
     @Test
-    fun videoCardRegistersVisibleCoverOnComposition() {
-        val source = videoCardSource()
-
-        assertTrue(source.contains("HomeCoverReturnPrefetchRegistry.onCardVisible("))
-        assertTrue(source.contains("HomeCoverReturnPrefetchEntry("))
-        // 使用与 AsyncImage 相同的 cacheKey 来源，保证命中同一缓存条目
-        assertTrue(source.contains("cacheKey = coverCacheKey"))
-    }
-
-    @Test
     fun appNavigationTriggersPrefetchOnGestureAndCommit() {
         val source = appNavigationSource()
 
@@ -30,20 +20,6 @@ class HomeCoverReturnPrefetchStructureTest {
         assertTrue(source.contains("onPrepareVideoCardSharedReturn = {"))
         assertFalse(source.contains("shouldUseClassicBackForVideoSharedElementReturn("))
     }
-
-    @Test
-    fun miuixVideoGestureProgressFeedsThePrefetchCallbackOnlyDuringDirectGesture() {
-        val source = navHostSource()
-
-        assertTrue(source.contains("videoCardTransitionProgress.isGestureInProgress()"))
-        assertTrue(source.contains("videoCardTransitionProgress.gestureBackProgress()"))
-        assertTrue(source.contains("latestNativeVideoBackProgress(currentKey, currentBackTarget, progress)"))
-    }
-
-    private fun videoCardSource(): String = listOf(
-        File("app/src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt"),
-        File("src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
-    ).first { it.exists() }.readText()
 
     private fun appNavigationSource(): String = listOf(
         File("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"),

@@ -1,16 +1,15 @@
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.math.max
 
-internal const val DynamicTopBarReservedHeightDp = 60
 // 头像、名称基线及字体下行（如英文 y）都需要落在裁切边界内。
 internal const val DynamicHorizontalUserListReservedHeightDp = 96
-internal const val DynamicHorizontalExpandedHeaderReservedHeightDp =
-    DynamicTopBarReservedHeightDp + DynamicHorizontalUserListReservedHeightDp
 internal const val DynamicHeaderCollapseTriggerPx = 0
 
 internal fun normalizeDynamicNotInterestedIds(
@@ -30,8 +29,7 @@ internal data class DynamicPagePresentation(
     val hasMore: Boolean,
     val isSelectedUserFeed: Boolean,
     val incrementalRefreshBoundaryKey: String?,
-    val incrementalPrependedCount: Int,
-    val focusAutoFillPaused: Boolean = false
+    val incrementalPrependedCount: Int
 )
 
 internal fun resolveDynamicPagePresentation(
@@ -40,14 +38,14 @@ internal fun resolveDynamicPagePresentation(
     selectedUserId: Long?
 ): DynamicPagePresentation {
     val isSelectedUserFeed = shouldUseSelectedUserDynamicFeed(logicalTab, selectedUserId)
-    if (logicalTab == 4) {
-        if (!isSelectedUserFeed) {
-            return DynamicPagePresentation(emptyList(), false, null, false, false, null, 0)
-        }
-        val items = resolveSelectedUserVisibleItems(
-            timelineItems = state.timelinePage("all").items,
-            remoteUserItems = state.userItems,
-            selectedUid = selectedUserId
+    if (isSelectedUserFeed) {
+        val items = filterSelectedUserDynamicItems(
+            items = resolveSelectedUserVisibleItems(
+                timelineItems = state.timelinePage(resolveDynamicFeedRequestType(logicalTab)).items,
+                remoteUserItems = state.userItems,
+                selectedUid = selectedUserId
+            ),
+            logicalTab = logicalTab
         )
             .filter { it.visible }
             .filterNot { it.id_str in state.tempBannedDynamicIds }
@@ -82,32 +80,38 @@ internal fun resolveDynamicPagePresentation(
         hasMore = page.hasMore,
         isSelectedUserFeed = false,
         incrementalRefreshBoundaryKey = page.incrementalRefreshBoundaryKey,
-        incrementalPrependedCount = page.incrementalPrependedCount,
-        focusAutoFillPaused = page.focusAutoFillPaused
+        incrementalPrependedCount = page.incrementalPrependedCount
     )
 }
 
 internal fun resolveDynamicListTopPaddingExtraDp(
     isHorizontalMode: Boolean,
+    actionDockCollapsed: Boolean,
+    fontScale: Float,
     shouldShowHorizontalUserList: Boolean = true,
-): Int {
-    // Keep the lazy grid's coordinate space stable while chrome collapses. Feeding scroll-driven
-    // collapse state back into contentPadding forces a staggered-grid remeasure; uneven cards can
-    // then move the visible anchor because each lane has a different accumulated height.
-    return when {
-        // 横向关注列表展开时，头像下方可能同时有直播标记和 UP 名称两行。
-        isHorizontalMode && shouldShowHorizontalUserList -> DynamicHorizontalExpandedHeaderReservedHeightDp
-        else -> DynamicTopBarReservedHeightDp
+): Float {
+    // Only explicit action expansion changes this inset. Scroll-driven chrome collapse
+    // must not remeasure the staggered grid or disturb its restored anchors.
+    val topBarHeightDp = resolveDynamicTopBarTabHeightDp(fontScale) +
+        AppSpacingTokens.Small.value +
+        if (actionDockCollapsed) 0f else AppChromeSizeTokens.MinimumTouchTarget.value
+    return topBarHeightDp + if (isHorizontalMode && shouldShowHorizontalUserList) {
+        DynamicHorizontalUserListReservedHeightDp
+    } else {
+        0
     }
+}
+
+internal fun shouldShowDynamicUpPanel(selectedTab: Int): Boolean {
+    // 番剧是官方内容流，不提供关注作者筛选；此边界覆盖横条、侧栏和抽屉。
+    return selectedTab != 2
 }
 
 internal fun shouldShowDynamicHorizontalUserList(
     isHorizontalMode: Boolean,
-    selectedTab: Int,
-    allTabHorizontalUserListVisible: Boolean
+    selectedTab: Int
 ): Boolean {
-    if (!isHorizontalMode) return false
-    return selectedTab == 4 || allTabHorizontalUserListVisible
+    return isHorizontalMode && shouldShowDynamicUpPanel(selectedTab)
 }
 
 internal fun shouldCollapseDynamicHorizontalUserList(
@@ -160,8 +164,13 @@ internal const val DYNAMIC_UP_PANEL_ALL_UID = -1L
 internal fun resolveDynamicUpPanelUsers(
     users: List<SidebarUser>,
     selfUid: Long,
-    selfFace: String = ""
+    selfFace: String
 ): List<SidebarUser> {
+    val allItem = SidebarUser(
+        uid = DYNAMIC_UP_PANEL_ALL_UID,
+        name = "全部动态",
+        face = ""
+    )
     val selfItem = selfUid.takeIf { it > 0L }?.let { uid ->
         SidebarUser(
             uid = uid,
@@ -172,7 +181,7 @@ internal fun resolveDynamicUpPanelUsers(
     val rest = users.filterNot { user ->
         user.uid == DYNAMIC_UP_PANEL_ALL_UID || (selfUid > 0L && user.uid == selfUid)
     }
-    return listOfNotNull(selfItem) + rest
+    return listOfNotNull(allItem, selfItem) + rest
 }
 
 internal fun isDynamicUpPanelAllShortcut(uid: Long?): Boolean {
@@ -199,9 +208,8 @@ internal fun resolveDynamicSelectedUserIdAfterClick(
     clickedUserId: Long?
 ): Long? {
     if (clickedUserId == null || isDynamicUpPanelAllShortcut(clickedUserId)) return null
-    // UP selection behaves like a filter/indicator, not a toggle. Re-selecting the
-    // active author must keep the scoped feed intact; the top-level “全部” tab is the
-    // explicit way back to the mixed timeline.
+    // 作者选择是当前分类内的筛选，不作为开关；“全部动态”清除作者筛选，
+    // 但保留当前的全部、投稿或专栏分类。
     return selectedUserId.takeIf { it == clickedUserId } ?: clickedUserId
 }
 
@@ -209,15 +217,9 @@ internal fun shouldUseSelectedUserDynamicFeed(
     selectedTab: Int,
     selectedUserId: Long?
 ): Boolean {
-    return selectedTab == 4 && selectedUserId != null
+    return selectedUserId != null && (selectedTab == 0 || selectedTab == 1 || selectedTab == 3)
 }
 
-internal fun resolveDynamicSelectedUserForTab(
-    selectedTab: Int,
-    selectedUserId: Long?
-): Long? {
-    return selectedUserId.takeIf { selectedTab == 4 }
-}
 
 internal fun shouldResetDynamicFeedScrollOnSourceChange(
     previousTab: Int,
@@ -226,19 +228,6 @@ internal fun shouldResetDynamicFeedScrollOnSourceChange(
     nextSelectedUserId: Long?
 ): Boolean {
     return previousTab != nextTab || previousSelectedUserId != nextSelectedUserId
-}
-
-internal fun resolveDynamicTabAfterUserSelection(
-    selectedUserId: Long?,
-    clickedUserId: Long?,
-    currentTab: Int
-): Int {
-    val nextUserId = resolveDynamicSelectedUserIdAfterClick(selectedUserId, clickedUserId)
-    return when {
-        nextUserId != null -> 4
-        currentTab == 4 -> 0
-        else -> currentTab
-    }
 }
 
 internal fun resolveDynamicSelectedTab(
@@ -299,9 +288,9 @@ internal fun shouldLoadMoreDynamicFeed(
     isLoading: Boolean,
     hasMore: Boolean,
     prefetchDistance: Int = 3,
-    focusAutoFillPaused: Boolean = false,
+    error: String? = null,
 ): Boolean {
-    if (!allowAutomaticLoadMore || isLoading || !hasMore || focusAutoFillPaused || totalItemsCount <= 0) return false
+    if (!allowAutomaticLoadMore || isLoading || !hasMore || totalItemsCount <= 0 || error != null) return false
     val visibleIndex = furthestVisibleItemIndex ?: return false
     return visibleIndex >= totalItemsCount - prefetchDistance.coerceAtLeast(1)
 }
@@ -569,8 +558,7 @@ internal fun resolveDynamicTimelinePageForLoadStart(
 ): DynamicTimelinePageState {
     val basePage = currentPage.copy(
         error = null,
-        errorSource = DynamicFeedErrorSource.NONE,
-        focusAutoFillPaused = if (refresh) false else currentPage.focusAutoFillPaused
+        errorSource = DynamicFeedErrorSource.NONE
     )
     return when {
         refresh && showLoading -> basePage.copy(isLoading = true)
@@ -688,10 +676,7 @@ internal fun resolveDynamicFeedStateAfterSuccess(
     hasMore: Boolean
 ): DynamicUiState {
     val currentItems = currentState.items
-    val currentRequestMatches = currentState.timelineRequestType == requestType
-    val shouldPreserveRefreshList = isRefresh && currentRequestMatches &&
-        currentItems.isNotEmpty() && incomingItems.isNotEmpty() && incomingItems.size < currentItems.size
-    val upstreamIncrementalMerge = currentRequestMatches &&
+    val canUseIncrementalRefresh = currentState.timelineRequestType == requestType &&
         canPerformIncrementalTimelineRefresh(
             isRefresh = isRefresh,
             incrementalRefreshEnabled = incrementalRefreshEnabled,
@@ -699,8 +684,6 @@ internal fun resolveDynamicFeedStateAfterSuccess(
             existingItems = currentItems,
             incomingItems = incomingItems
         )
-    val canUseIncrementalRefresh = upstreamIncrementalMerge || shouldPreserveRefreshList
-    val shouldTrackIncrementalBoundary = upstreamIncrementalMerge
     val mergedItems = when {
         canUseIncrementalRefresh -> sortDynamicTimelineItemsByPublishTime(
             prependDistinctByKey(
@@ -717,7 +700,7 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         )
     }
     val boundary = when {
-        shouldTrackIncrementalBoundary -> resolveIncrementalRefreshBoundary(
+        canUseIncrementalRefresh -> resolveIncrementalRefreshBoundary(
             existingKeys = currentItems.map(::dynamicFeedItemKey),
             mergedKeys = mergedItems.map(::dynamicFeedItemKey)
         )

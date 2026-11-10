@@ -3,9 +3,10 @@ package com.android.purebilibili.core.theme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
+import com.android.purebilibili.core.ui.AppShapeTokens
 
-internal const val MD3_CORNER_RADIUS_SCALE = 0.9f
-internal const val MIUIX_CORNER_RADIUS_SCALE = 1.15f
+internal const val MD3_CORNER_RADIUS_SCALE = AppShapeTokens.MaterialCornerRadiusScale
+internal const val MIUIX_CORNER_RADIUS_SCALE = AppShapeTokens.MiuixCornerRadiusScale
 
 data class AndroidNativeChromeTokens(
     val containerCornerRadiusDp: Int,
@@ -66,16 +67,13 @@ fun shouldUseMiuixSmoothRounding(
 fun resolveMaterialTypography(
     uiStyle: AppUiStyle,
     liquidGlassEnabled: Boolean = true,
-): Typography = when (uiStyle) {
-    // Miuix 主题始终使用完整的标准字阶（正文 17sp），液态玻璃仅作用于局部 Dock 与指示器，不压缩全局排版
-    AppUiStyle.MIUIX -> BiliMiuixTypography
-    AppUiStyle.MATERIAL3 -> Md3Typography
-}
+): Typography = Md3Typography
 
 fun resolveMaterialMotionScheme(
     uiStyle: AppUiStyle
 ): MotionScheme = when (uiStyle) {
-    AppUiStyle.MATERIAL3 -> MotionScheme.expressive()
+    // 普通 MD3 组件在两种玻璃状态下共用标准动效；玻璃 dock 自行管理材质反馈。
+    AppUiStyle.MATERIAL3 -> MotionScheme.standard()
     AppUiStyle.MIUIX -> MotionScheme.standard()
 }
 

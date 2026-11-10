@@ -4,7 +4,8 @@ import com.android.purebilibili.data.model.response.SplashItem
 
 enum class WallpaperPickerTarget {
     SPLASH,
-    HOME
+    HOME,
+    SUBSCRIPTION_ARTICLE
 }
 
 internal fun normalizeSplashWallpaperUrl(url: String?): String {

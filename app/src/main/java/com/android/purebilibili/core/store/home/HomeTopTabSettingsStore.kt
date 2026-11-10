@@ -18,7 +18,7 @@ import com.android.purebilibili.core.store.KEY_HOME_TOP_RIGHT_ACTION
 import com.android.purebilibili.core.store.KEY_TOP_TAB_LABEL_MODE
 import com.android.purebilibili.core.store.KEY_TOP_TAB_ORDER
 import com.android.purebilibili.core.store.KEY_TOP_TAB_VISIBLE_TABS
-import com.android.purebilibili.core.store.resolveFocusHomeTopTabMigration
+import com.android.purebilibili.core.store.resolveFocusHomeTopTabMigrationBoundary
 import com.android.purebilibili.core.store.settingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -77,6 +77,19 @@ object HomeTopTabSettingsStore {
         migrateLegacyFocusHomeTopTabs(context)
         context.settingsDataStore.edit { preferences -> preferences[KEY_TOP_TAB_ORDER] = order.joinToString(",") }
     }
+    suspend fun setTopTabConfiguration(
+        context: Context,
+        order: List<String>,
+        visibleTabs: Set<String>,
+    ) {
+        migrateLegacyFocusHomeTopTabs(context)
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_TOP_TAB_ORDER] = order.joinToString(",")
+            val orderedSelection = (order.filter { it in visibleTabs } + visibleTabs).distinct()
+            preferences[KEY_TOP_TAB_VISIBLE_TABS] =
+                orderedSelection.take(MAX_HOME_TOP_TABS).joinToString(",")
+        }
+    }
     fun getTopTabVisibleTabs(context: Context): Flow<Set<String>> = afterLegacyMigration(context) {
         context.settingsDataStore.data.map { preferences -> mapFromPreferences(preferences).visibleIds }
     }
@@ -114,10 +127,12 @@ object HomeTopTabSettingsStore {
                 ?.split(",")
                 ?.filter { it.isNotBlank() }
                 ?.toSet()
-            val migration = resolveFocusHomeTopTabMigration(
+            val migration = resolveFocusHomeTopTabMigrationBoundary(
                 orderIds = legacyOrder,
                 visibleIds = legacyVisible,
                 focusSettings = FocusSettingsStore.mapLegacyHomeTabVisibilityFromPreferences(preferences),
+                hasLegacyFocusVisibilitySettings =
+                    FocusSettingsStore.hasLegacyHomeTabVisibilityPreferences(preferences),
             )
             preferences[KEY_TOP_TAB_ORDER] = migration.orderIds.joinToString(",")
             preferences[KEY_TOP_TAB_VISIBLE_TABS] = migration.visibleIds.joinToString(",")

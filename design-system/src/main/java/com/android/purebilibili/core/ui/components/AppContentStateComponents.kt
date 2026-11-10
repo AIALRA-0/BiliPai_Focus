@@ -1,5 +1,7 @@
 package com.android.purebilibili.core.ui.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -141,9 +143,9 @@ private fun AppContentState(
                     imageVector = icon,
                     contentDescription = null,
                     tint = if (isError) {
-                        androidx.compose.material3.MaterialTheme.colorScheme.error
+                        AppContentColors.error()
                     } else {
-                        androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                        AppContentColors.secondaryText()
                     },
                     modifier = Modifier
                         .height(AppSpacingTokens.TripleExtraLarge)
@@ -163,7 +165,7 @@ private fun AppContentState(
                 AppText(
                     text = message,
                     style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                     textAlign = TextAlign.Center,
                 )
             }

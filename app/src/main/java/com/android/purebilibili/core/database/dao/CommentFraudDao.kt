@@ -13,6 +13,9 @@ interface CommentFraudDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(records: List<CommentFraudRecord>)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun importMissing(records: List<CommentFraudRecord>): List<Long>
+
     /** 
      * 优先按真实的官方发评时间 post_time 倒序排列；
      * 复检老评论只会更新状态，防止老条目跳到列表顶部！

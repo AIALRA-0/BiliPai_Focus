@@ -102,3 +102,7 @@ internal fun resolveSearchLandingSectionMode(
     itemCount == 0 -> SearchLandingSectionMode.EMPTY
     else -> SearchLandingSectionMode.CONTENT
 }
+
+/** Search-only preference can never override the global privacy switch. */
+internal fun shouldRecordSearchHistory(recordingEnabled: Boolean, globalPrivacyMode: Boolean): Boolean =
+    recordingEnabled && !globalPrivacyMode

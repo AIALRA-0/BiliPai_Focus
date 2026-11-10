@@ -26,14 +26,14 @@ class SettingsRootCategoryPolicyTest {
     fun `root categories expose the agreed user facing titles`() {
         assertEquals(
             listOf(
-                "外观与主题",
-                "播放与画质",
-                "首页与推荐",
-                "导航与交互",
+                "外观与动画",
+                "播放设置",
+                "首页与动态",
+                "导航布局",
                 "隐私与权限",
-                "存储与备份",
-                "插件与扩展",
-                "系统与关于",
+                "下载与备份",
+                "插件中心",
+                "帮助与关于",
             ),
             resolveSettingsRootCategoryOrder().map { it.title },
         )
@@ -58,7 +58,8 @@ class SettingsRootCategoryPolicyTest {
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.INTERACTION_COMMENT),
         )
         assertEquals(
-            SettingsRootCategory.NAVIGATION_INTERACTION,
+            // 动画与触感页的导航父级是外观设置,搜索归属保持一致
+            SettingsRootCategory.APPEARANCE_THEME,
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.ANIMATION),
         )
         assertEquals(

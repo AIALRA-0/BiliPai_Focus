@@ -1,23 +1,27 @@
 package com.android.purebilibili.feature.plugin.dlna
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
 import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Tv
-import com.android.purebilibili.core.plugin.CastPluginApi
-import com.android.purebilibili.core.plugin.CastDiscoveryRequirement
-import com.android.purebilibili.core.plugin.CastPluginMediaRequest
-import com.android.purebilibili.core.plugin.CastPluginPlaybackState
-import com.android.purebilibili.core.plugin.CastPluginRoute
-import com.android.purebilibili.core.plugin.PluginCapability
-import com.android.purebilibili.core.plugin.PluginCapabilityManifest
+import com.android.purebilibili.plugin.sdk.CastPluginApi
+import com.android.purebilibili.core.plugin.BuiltinPlugin
+import com.android.purebilibili.plugin.sdk.CastDiscoveryRequirement
+import com.android.purebilibili.plugin.sdk.CastPluginMediaRequest
+import com.android.purebilibili.plugin.sdk.CastPluginPlaybackState
+import com.android.purebilibili.plugin.sdk.CastPluginRoute
+import com.android.purebilibili.plugin.sdk.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 import com.android.purebilibili.core.util.Logger
-import com.android.purebilibili.feature.cast.associateNotNullBy
+import com.android.purebilibili.feature.cast.preferSsdpDeviceAdvertisement
 import com.android.purebilibili.feature.cast.hasRawLocalNetworkAccess
 import com.android.purebilibili.feature.cast.LocalProxyServer
 import com.android.purebilibili.feature.cast.SsdpCastClient
 import com.android.purebilibili.feature.cast.SsdpDiscovery
 import com.android.purebilibili.feature.cast.resolveVisibleSsdpDevices
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -26,12 +30,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
-const val DLNA_CAST_PLUGIN_ID = "dlna_cast"
 
-class DlnaCastPlugin : CastPluginApi {
+class DlnaCastPlugin : BuiltinPlugin, CastPluginApi {
 
-    override val id = DLNA_CAST_PLUGIN_ID
+    override val id = BuiltinPluginIds.DLNA_CAST
     override val name = "DLNA"
     override val description = "通过 DLNA 协议将视频投屏到智能电视等设备"
     override val version = "0.1.1"
@@ -66,6 +74,7 @@ class DlnaCastPlugin : CastPluginApi {
 
     private var discoveryJob: Job? = null
     private var ssdpJob: Job? = null
+    private var discoveryGeneration = 0L
     private var ssdpCache = emptyMap<String, SsdpDiscovery.SsdpDevice>()
 
     override fun startRouteDiscovery(context: Context) {
@@ -76,10 +85,8 @@ class DlnaCastPlugin : CastPluginApi {
         }
 
         startRouteCollector()
-        // DeviceListDialog is recreated whenever the user opens another video.
-        // Keep the last valid routes available and only scan on an explicit refresh
-        // or when there is no cached route yet.
-        if (_routes.value.isNotEmpty() || ssdpJob?.isActive == true) return
+        // 先展示缓存，同时重新搜索，避免换网络或设备上下线后只显示旧列表。
+        if (ssdpJob?.isActive == true) return
         refreshSsdpDevices(appContext)
     }
 
@@ -106,38 +113,66 @@ class DlnaCastPlugin : CastPluginApi {
     }
 
     private fun refreshSsdpDevices(context: Context) {
+        val generation = ++discoveryGeneration
         ssdpJob?.cancel()
         ssdpJob = scope.launch {
             _isDiscovering.value = true
             try {
-                val discovered = SsdpDiscovery.discover(context, timeoutMs = 8_000)
-                val profiles = discovered.associateNotNullBy(
-                    keySelector = { it.location },
-                    valueSelector = { SsdpCastClient.fetchDeviceProfile(it) }
-                )
-                val visible = resolveVisibleSsdpDevices(discovered, profiles)
-                Logger.i(
-                    "DlnaCastPlugin",
-                    "📺 [DLNA] Discovery summary: ssdp=${discovered.size}, profiles=${profiles.size}, castable=${visible.size}"
-                )
-                _ssdpDevices.value = discovered
-                _ssdpProfiles.value = profiles
+                coroutineScope {
+                    val events = Channel<SsdpDiscovery.SsdpDevice>(Channel.UNLIMITED)
+                    val devices = linkedMapOf<String, SsdpDiscovery.SsdpDevice>()
+                    val profiles = mutableMapOf<String, SsdpCastClient.SsdpDeviceProfile>()
+                    val profileJobs = mutableListOf<Job>()
+                    val permits = Semaphore(4)
+                    val scan = launch {
+                        try {
+                            SsdpDiscovery.discover(context, timeoutMs = 8_000) { events.trySend(it) }
+                        } finally {
+                            events.close()
+                        }
+                    }
+                    for (device in events) {
+                        val previous = devices[device.location]
+                        val preferred = preferSsdpDeviceAdvertisement(previous, device)
+                        if (previous == preferred) continue
+                        devices[device.location] = preferred
+                        if (previous == null) {
+                            if (devices.size == 1) _ssdpProfiles.value = emptyMap()
+                            profileJobs += launch {
+                                val profile = permits.withPermit { SsdpCastClient.fetchDeviceProfile(device) }
+                                if (profile != null) {
+                                    profiles[device.location] = profile
+                                    _ssdpProfiles.value = profiles.toMap()
+                                }
+                            }
+                        }
+                        _ssdpDevices.value = devices.values.toList()
+                    }
+                    scan.join()
+                    if (devices.isEmpty()) {
+                        _ssdpDevices.value = emptyList()
+                        _ssdpProfiles.value = emptyMap()
+                    }
+                    profileJobs.joinAll()
+                    Logger.i("DlnaCastPlugin", "📺 [DLNA] Discovery summary: ssdp=${devices.size}, profiles=${profiles.size}")
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 // Leave current values on failure
             } finally {
-                _isDiscovering.value = false
+                if (generation == discoveryGeneration) _isDiscovering.value = false
             }
         }
     }
 
     override fun stopRouteDiscovery() {
+        discoveryGeneration++
         discoveryJob?.cancel()
         discoveryJob = null
         ssdpJob?.cancel()
         ssdpJob = null
-        // Keep the last successful discovery result. The next cast dialog can
-        // render it immediately; the refresh button remains the explicit way
-        // to invalidate it.
+        // 保留上次结果供下次打开时立即显示；重新打开会启动新的搜索。
         _isDiscovering.value = false
     }
 
@@ -169,7 +204,8 @@ class DlnaCastPlugin : CastPluginApi {
                     title = media.title,
                     creator = media.creator,
                     startPositionMs = media.startPositionMs,
-                    autoplay = media.autoplay
+                    autoplay = media.autoplay,
+                    contentType = media.contentType,
                 )
             }
             null -> Result.failure(IllegalArgumentException("未知的 DLNA 设备: ${route.routeId}"))

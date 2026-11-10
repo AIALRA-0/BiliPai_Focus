@@ -83,10 +83,11 @@ internal fun resolveSpaceContributionTabChromeSpec(
 internal fun resolveSpaceSecondarySwitchChromeSpec(
     items: List<SpaceSecondarySwitchItem>,
     selectedId: String,
-    uiStyle: AppUiStyle = AppUiStyle.MIUIX,
+    @Suppress("UNUSED_PARAMETER") uiStyle: AppUiStyle = AppUiStyle.MIUIX,
 ): SpaceSegmentedTabChromeSpec {
     val itemWidthDp = resolveSpaceContributionTabItemWidthDpFromTitles(items.map { it.title })
-    val horizontalPaddingDp = if (uiStyle == AppUiStyle.MATERIAL3) 0 else SPACE_SEGMENTED_TAB_HORIZONTAL_PADDING_DP
+    // 页面列表已经提供左右边距，二级标签不再额外缩窄横向滚动视口。
+    val horizontalPaddingDp = 0
     return SpaceSegmentedTabChromeSpec(
         selectedIndex = items.indexOfFirst { it.id == selectedId }.coerceAtLeast(0),
         heightDp = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp,

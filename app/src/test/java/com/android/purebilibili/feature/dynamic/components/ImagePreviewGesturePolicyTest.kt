@@ -51,6 +51,22 @@ class ImagePreviewGesturePolicyTest {
     }
 
     @Test
+    fun diagonalStart_waitsForDirectionThenAllowsUpwardDismiss() {
+        assertEquals(
+            ZoomableImageGestureMode.UNDECIDED,
+            resolveZoomableImageGestureMode(false, 1f, 24f, -24f)
+        )
+        assertEquals(
+            ZoomableImageGestureMode.VERTICAL_DISMISS,
+            resolveZoomableImageGestureMode(false, 1f, 24f, -80f)
+        )
+        assertEquals(
+            ZoomableImageGestureMode.HORIZONTAL_PAGER,
+            resolveZoomableImageGestureMode(false, 1f, 80f, -24f)
+        )
+    }
+
+    @Test
     fun resolveImagePreviewVerticalDismissDecision_dismissesLargeDownwardDrag() {
         val decision = resolveImagePreviewVerticalDismissDecision(
             dragOffsetYPx = 220f,

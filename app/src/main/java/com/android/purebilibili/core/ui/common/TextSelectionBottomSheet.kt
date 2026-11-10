@@ -72,7 +72,7 @@ fun TextSelectionBottomSheet(
     if (!TextSelectionPolicy.shouldShowActions(text)) return
 
     val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
+    val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.TEXT)
     val resolvedTitle = TextSelectionPolicy.resolveTitle(title)
     val focusRequester = remember { FocusRequester() }
 
@@ -128,6 +128,8 @@ fun TextSelectionBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // M3 路径的 modalWindowInsets 已消费导航栏 insets（此处为 0）；
+                    // 这层 padding 是给 CenteredDialog/平板限宽弹层路径兜底的，勿删。
                     .navigationBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
@@ -140,8 +142,7 @@ fun TextSelectionBottomSheet(
                 AppText(
                     text = resolvedTitle,
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
+                        fontWeight = FontWeight.SemiBold
                     )
                 )
                 AppIconButton(
@@ -170,6 +171,8 @@ fun TextSelectionBottomSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Measure the title and actions first; only the text viewport may shrink.
+                    .weight(1f, fill = false)
                     .heightIn(min = 90.dp, max = 340.dp)
                     .background(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -184,8 +187,6 @@ fun TextSelectionBottomSheet(
                     onValueChange = { textFieldValue = it },
                     readOnly = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 17.sp,
-                        lineHeight = 26.sp,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Normal
                     ),

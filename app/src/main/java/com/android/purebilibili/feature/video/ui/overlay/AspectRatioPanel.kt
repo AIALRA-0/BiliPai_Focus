@@ -1,6 +1,8 @@
 // 文件路径: feature/video/ui/overlay/AspectRatioPanel.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,11 +29,11 @@ import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
  *  画面比例选择面板（官方 B 站样式）
- * 
+ *
  * 从左侧滑入的面板，支持：
  * - 点击选择比例
  * - 上下滑动快速切换
- * 
+ *
  * 选项：适应 | 填充 | 16:9 | 4:3
  */
 @Composable
@@ -43,17 +45,17 @@ fun AspectRatioPanel(
     modifier: Modifier = Modifier
 ) {
     data class RatioOption(val ratio: VideoAspectRatio, val label: String)
-    
+
     val ratioOptions = listOf(
         RatioOption(VideoAspectRatio.FIT, "适应"),
         RatioOption(VideoAspectRatio.FILL, "填充"),
         RatioOption(VideoAspectRatio.RATIO_16_9, "16:9"),
         RatioOption(VideoAspectRatio.RATIO_4_3, "4:3")
     )
-    
+
     // 滑动检测状态
     var accumulatedDrag by remember { mutableFloatStateOf(0f) }
-    
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn() + slideInHorizontally { -it },
@@ -79,7 +81,7 @@ fun AspectRatioPanel(
                             onVerticalDrag = { _, dragAmount ->
                                 accumulatedDrag += dragAmount
                                 val threshold = 50f
-                                
+
                                 if (accumulatedDrag > threshold) {
                                     // 向下滑动 -> 下一个选项
                                     val currentIndex = ratioOptions.indexOfFirst { it.ratio == currentRatio }
@@ -113,17 +115,17 @@ fun AspectRatioPanel(
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    
+
                     // 选项列表
                     ratioOptions.forEach { option ->
                         val isSelected = currentRatio == option.ratio
-                        
+
                         AppSurface(
-                            onClick = { 
+                            onClick = {
                                 onRatioChange(option.ratio)
                                 onDismiss()
                             },
-                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent,
+                            color = if (isSelected) AppContentColors.accent().copy(alpha = 0.2f) else Color.Transparent,
                             shape = AppShapes.container(ContainerLevel.Chip),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -131,7 +133,7 @@ fun AspectRatioPanel(
                         ) {
                             AppText(
                                 text = option.label,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                                color = if (isSelected) AppContentColors.accent() else Color.White,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 ),

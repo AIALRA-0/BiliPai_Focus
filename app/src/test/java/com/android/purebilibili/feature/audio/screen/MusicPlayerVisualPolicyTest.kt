@@ -152,6 +152,39 @@ class MusicPlayerVisualPolicyTest {
     }
 
     @Test
+    fun `immersive lyric focus uses stronger alpha contrast and lighter blur`() {
+        assertEquals(
+            MusicLyricFocusStyle(blurRadiusDp = 0, alphaPercent = 100),
+            resolveMusicLyricFocusStyle(
+                lineIndex = 4,
+                currentIndex = 4,
+                blurEnabled = true,
+                immersive = true,
+            )
+        )
+        assertEquals(
+            MusicLyricFocusStyle(blurRadiusDp = 0, alphaPercent = 48),
+            resolveMusicLyricFocusStyle(
+                lineIndex = 5,
+                currentIndex = 4,
+                blurEnabled = true,
+                immersive = true,
+            )
+        )
+        assertEquals(
+            MusicLyricFocusStyle(blurRadiusDp = 5, alphaPercent = 14),
+            resolveMusicLyricFocusStyle(
+                lineIndex = 8,
+                currentIndex = 4,
+                blurEnabled = true,
+                immersive = true,
+            )
+        )
+        assertEquals(0.38f, resolveMusicLyricFocusFraction(immersive = true))
+        assertEquals(0.30f, resolveMusicLyricFocusFraction(immersive = false))
+    }
+
+    @Test
     fun `lyric blur falls back to opacity when renderer or motion policy disables it`() {
         assertFalse(resolveMusicLyricsBlurEnabled(sdkInt = 30, effectsEnabled = true, reduceMotion = false))
         assertTrue(resolveMusicLyricsBlurEnabled(sdkInt = 31, effectsEnabled = true, reduceMotion = false))

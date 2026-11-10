@@ -2,169 +2,161 @@ package com.android.purebilibili.feature.space
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.android.purebilibili.core.store.HomeSettings
-import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
-import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
-import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse
-import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.responsiveContentWidth
-import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
-import kotlin.math.roundToInt
 
-/** UP 空间首屏骨架：资料头、主标签和投稿网格均与真实 SpaceContent 同构。 */
-@Composable
-internal fun SpaceLoadingSkeleton(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val settings by SettingsManager.getHomeSettings(context)
-        .collectAsStateWithLifecycle(
-            initialValue = HomeSettings(androidNativeLiquidGlassEnabled = false)
-        )
-    val windowSizeClass = LocalWindowSizeClass.current
-    val windowWidthDp = windowSizeClass.widthDp.value.roundToInt().coerceAtLeast(0)
-    val adaptiveLayoutSpec = remember(windowWidthDp, windowSizeClass.widthSizeClass) {
-        resolveSpaceAdaptiveLayoutSpec(
-            widthDp = windowWidthDp,
-            widthSizeClass = windowSizeClass.widthSizeClass,
+/** 骨架投稿卡共用的 contentType：骨架 item 彼此同型，LazyGrid 可复用其内部状态。 */
+internal const val SPACE_SKELETON_CARD_CONTENT_TYPE = "space_skeleton_card"
+
+/**
+ * UP 空间首屏骨架的 item 提供者：资料头、主标签条、分段标题和投稿网格都与真实
+ * [SpaceContent] 同构。
+ *
+ * 关键点：它**不再自建 `LazyVerticalStaggeredGrid`**，而是把骨架 item 铺进 [SpaceContent]
+ * 的内容网格（同一个 LazyVerticalStaggeredGrid、同一个 `gridState`）。Loading → Success 因此
+ * 只是 item 原地替换，网格与滚动锚点都不会重建，首屏不再跳。
+ *
+ * 列数、封面比例、内边距、头部形态都由调用方按真实内容同规则算好传入；色块用固定色
+ * 而非呼吸脉冲（`rememberStaticSkeletonBlockColor`），避免「灰块呼吸 + 内容淡入」叠成闪烁。
+ */
+internal fun LazyStaggeredGridScope.SpaceLoadingSkeleton(
+    columns: Int,
+    coverAspectRatio: Float,
+    bannerHeightDp: Float,
+    useExpandedHeader: Boolean,
+    blockColor: Color,
+) {
+    item(key = "space_skeleton_header", span = StaggeredGridItemSpan.FullLine) {
+        SpaceHeaderSkeleton(
+            bannerHeightDp = bannerHeightDp,
+            useExpandedHeader = useExpandedHeader,
+            blockColor = blockColor,
         )
     }
-    val columns = resolveSpaceContentGridColumnCount(
-        widthDp = windowWidthDp,
-        fixedColumnCount = settings.gridColumnCount,
-        cardWidthPreset = settings.homeFeedCardWidthPreset,
-        contentMaxWidthDp = adaptiveLayoutSpec.contentMaxWidthDp,
-        widthSizeClass = windowSizeClass.widthSizeClass,
-    )
-    val cardLayout = resolveHomeFeedCardLayout(
-        style = settings.homeFeedCardStyle,
-        gridColumns = columns,
-        widthSizeClass = windowSizeClass.widthSizeClass,
-    )
-    val pulse = rememberContentSkeletonPulse()
-    val blockColor = rememberContentSkeletonBlockColor(pulse)
+    // 主标签条占位：与真实 SpaceContentTabs 行同高，避免标签出现时整页下移。
+    item(key = "space_skeleton_tabs", span = StaggeredGridItemSpan.FullLine) {
+        ContentSkeletonBlock(
+            blockColor,
+            Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp),
+            AppShapes.container(ContainerLevel.Pill),
+        )
+    }
+    item(key = "space_skeleton_section", span = StaggeredGridItemSpan.FullLine) {
+        ContentSkeletonBlock(blockColor, Modifier.width(92.dp).height(20.dp))
+    }
+    items(
+        count = columns * 4,
+        key = { index -> "space_skeleton_card_$index" },
+        contentType = { SPACE_SKELETON_CARD_CONTENT_TYPE },
+    ) { index ->
+        SpaceVideoCardSkeleton(
+            slotIndex = index,
+            coverAspectRatio = coverAspectRatio,
+            blockColor = blockColor,
+        )
+    }
+}
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        modifier = modifier
-            .responsiveContentWidth(maxWidth = adaptiveLayoutSpec.contentMaxWidthDp.dp)
-            .fillMaxSize(),
-        contentPadding = PaddingValues(
-            horizontal = cardLayout.outerPaddingDp.dp,
-            vertical = 8.dp,
-        ),
-        userScrollEnabled = false,
-        horizontalArrangement = Arrangement.spacedBy(cardLayout.itemSpacingDp.dp),
-        verticalArrangement = Arrangement.spacedBy(cardLayout.verticalItemSpacingDp.dp),
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            val bannerMetrics = remember(
-                windowWidthDp,
-                windowSizeClass.widthDp,
-                windowSizeClass.heightDp,
-            ) {
-                resolveSpaceBannerMetrics(
-                    renderedBannerWidthDp = windowWidthDp.toFloat(),
-                    windowWidthDp = windowSizeClass.widthDp.value,
-                    windowHeightDp = windowSizeClass.heightDp.value,
-                )
+@Composable
+private fun SpaceHeaderSkeleton(
+    bannerHeightDp: Float,
+    useExpandedHeader: Boolean,
+    blockColor: Color,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        ContentSkeletonBlock(
+            blockColor,
+            Modifier.fillMaxWidth().height(bannerHeightDp.dp),
+            AppShapes.container(ContainerLevel.Card),
+        )
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ContentSkeletonBlock(blockColor, Modifier.size(76.dp), CircleShape)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.36f).height(20.dp))
+                ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.62f).height(13.dp))
+                ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.48f).height(13.dp))
             }
-            Column(Modifier.fillMaxWidth()) {
-                ContentSkeletonBlock(
-                    blockColor,
-                    Modifier.fillMaxWidth().height(bannerMetrics.heightDp.dp),
-                    AppShapes.container(ContainerLevel.Card),
-                )
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            if (useExpandedHeader) {
+                Spacer(Modifier.width(24.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(0.8f, fill = false)
+                        .widthIn(max = 480.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp),
                 ) {
-                    ContentSkeletonBlock(blockColor, Modifier.size(76.dp), CircleShape)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.36f).height(20.dp))
-                        ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.62f).height(13.dp))
-                        ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.48f).height(13.dp))
-                    }
-                    if (adaptiveLayoutSpec.useExpandedHeader) {
-                        Spacer(Modifier.width(24.dp))
-                        Column(
-                            modifier = Modifier
-                                .weight(0.8f, fill = false)
-                                .widthIn(max = 480.dp),
-                            verticalArrangement = Arrangement.spacedBy(9.dp),
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                repeat(3) {
-                                    ContentSkeletonBlock(
-                                        blockColor,
-                                        Modifier.weight(1f).height(24.dp),
-                                    )
-                                }
-                            }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        repeat(3) {
                             ContentSkeletonBlock(
                                 blockColor,
-                                Modifier.fillMaxWidth().height(40.dp),
-                                AppShapes.container(ContainerLevel.Pill),
+                                Modifier.weight(1f).height(24.dp),
                             )
                         }
-                    } else {
-                        ContentSkeletonBlock(
-                            blockColor,
-                            Modifier.width(88.dp).height(40.dp),
-                            AppShapes.container(ContainerLevel.Pill),
-                        )
                     }
+                    ContentSkeletonBlock(
+                        blockColor,
+                        Modifier.fillMaxWidth().height(40.dp),
+                        AppShapes.container(ContainerLevel.Pill),
+                    )
                 }
-            }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            ContentSkeletonBlock(
-                blockColor,
-                Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp),
-                AppShapes.container(ContainerLevel.Pill),
-            )
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            ContentSkeletonBlock(blockColor, Modifier.width(92.dp).height(20.dp))
-        }
-        items(List(columns * 4) { it }) {
-            Column(Modifier.fillMaxWidth()) {
+            } else {
                 ContentSkeletonBlock(
                     blockColor,
-                    Modifier.fillMaxWidth().aspectRatio(cardLayout.coverAspectRatio),
-                    AppShapes.container(ContainerLevel.Card),
+                    Modifier.width(88.dp).height(40.dp),
+                    AppShapes.container(ContainerLevel.Pill),
                 )
-                Spacer(Modifier.height(8.dp))
-                ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.9f).height(15.dp))
-                Spacer(Modifier.height(6.dp))
-                ContentSkeletonBlock(blockColor, Modifier.fillMaxWidth(0.52f).height(12.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun SpaceVideoCardSkeleton(
+    slotIndex: Int,
+    coverAspectRatio: Float,
+    blockColor: Color,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        ContentSkeletonBlock(
+            blockColor,
+            Modifier.fillMaxWidth().aspectRatio(coverAspectRatio),
+            AppShapes.container(ContainerLevel.Card),
+        )
+        Spacer(Modifier.height(8.dp))
+        ContentSkeletonBlock(
+            blockColor,
+            Modifier
+                .fillMaxWidth(if (slotIndex % 2 == 0) 0.9f else 0.78f)
+                .height(15.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+        ContentSkeletonBlock(
+            blockColor,
+            Modifier
+                .fillMaxWidth(if (slotIndex % 3 == 0) 0.52f else 0.44f)
+                .height(12.dp),
+        )
     }
 }

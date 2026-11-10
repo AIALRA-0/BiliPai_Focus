@@ -9,6 +9,88 @@ import org.junit.Test
 class VideoDetailReturnLoadBudgetPolicyTest {
 
     @Test
+    fun actualOwnershipOverridesFrameReadinessForReturnBudget() {
+        val resident = resolveVideoDetailReturnVisualBudget(
+            phase = VideoDetailReturnSessionPhase.Morph,
+            hasRenderableLiveFrame = true,
+            ownership = VideoCardReturnCoverOwnership.RESIDENT_COVER,
+        )
+        assertEquals(VideoDetailReturnPlayerMode.ResidentCover, resident.playerMode)
+        assertTrue(shouldPauseHideDanmakuForReturnBudget(resident))
+        assertTrue(shouldSuppressOverlayControlsForReturnBudget(resident))
+        assertFalse(shouldDetachSecondaryContentForReturnBudget(resident))
+
+        val live = resolveVideoDetailReturnVisualBudget(
+            phase = VideoDetailReturnSessionPhase.Morph,
+            hasRenderableLiveFrame = false,
+            secondaryContentAlpha = 0f,
+            ownership = VideoCardReturnCoverOwnership.LIVE_SURFACE,
+        )
+        assertEquals(VideoDetailReturnPlayerMode.LiveMorph, live.playerMode)
+        assertFalse(shouldPauseHideDanmakuForReturnBudget(live))
+        assertFalse(shouldDetachSecondaryContentForReturnBudget(live))
+        assertFalse(live.allowPlaybackStopIntent)
+    }
+
+    @Test
+    fun predictiveCancelMapsPreviewRestoreThenIdle() {
+        fun phase(gesture: Boolean, restoring: Boolean) = resolveVideoDetailReturnSessionPhase(
+            isCommittedCardReturn = false,
+            isExitTransitionInProgress = false,
+            settleProgress = 0.5f,
+            isReturnGestureInProgress = gesture,
+            isGestureRestoreInProgress = restoring,
+        )
+        assertEquals(VideoDetailReturnSessionPhase.Preview, phase(true, false))
+        assertEquals(VideoDetailReturnSessionPhase.Restoring, phase(true, true))
+        assertEquals(VideoDetailReturnSessionPhase.Restoring, phase(false, true))
+        assertEquals(VideoDetailReturnSessionPhase.Idle, phase(false, false))
+    }
+
+    @Test
+    fun previewAndRestoreNeverDetachOrRequestPlaybackStopEvenAtInvisibleAlpha() {
+        for (phase in listOf(VideoDetailReturnSessionPhase.Preview, VideoDetailReturnSessionPhase.Restoring)) {
+            for (ownership in listOf(VideoCardReturnCoverOwnership.RESIDENT_COVER, VideoCardReturnCoverOwnership.LIVE_SURFACE)) {
+                val budget = resolveVideoDetailReturnVisualBudget(
+                    phase = phase,
+                    hasRenderableLiveFrame = true,
+                    secondaryContentAlpha = 0f,
+                    ownership = ownership,
+                )
+                assertFalse(shouldDetachSecondaryContentForReturnBudget(budget))
+                assertFalse(budget.allowPlaybackStopIntent)
+            }
+        }
+    }
+
+    @Test
+    fun residentCommittedReturnDetachesOnlyAfterBodyBecomesInvisible() {
+        fun budget(alpha: Float) = resolveVideoDetailReturnVisualBudget(
+            phase = VideoDetailReturnSessionPhase.Morph,
+            hasRenderableLiveFrame = true,
+            secondaryContentAlpha = alpha,
+            ownership = VideoCardReturnCoverOwnership.RESIDENT_COVER,
+        )
+        assertEquals(VideoDetailReturnSecondaryContentMode.Freeze, budget(0.021f).secondaryContentMode)
+        assertTrue(shouldDetachSecondaryContentForReturnBudget(budget(0.02f)))
+        assertTrue(shouldDetachSecondaryContentForReturnBudget(budget(0f)))
+    }
+
+    @Test
+    fun cancellationRestoresResidentContentAndOverlayBudget() {
+        val budget = resolveVideoDetailReturnVisualBudget(
+            phase = VideoDetailReturnSessionPhase.Idle,
+            hasRenderableLiveFrame = true,
+            secondaryContentAlpha = 0f,
+            ownership = VideoCardReturnCoverOwnership.RESIDENT_COVER,
+        )
+        assertEquals(VideoDetailReturnSecondaryContentMode.Keep, budget.secondaryContentMode)
+        assertFalse(shouldPauseHideDanmakuForReturnBudget(budget))
+        assertFalse(shouldSuppressOverlayControlsForReturnBudget(budget))
+        assertFalse(budget.allowPlaybackStopIntent)
+    }
+
+    @Test
     fun playerMode_forcesLiveMorphWhenRenderableFrameAvailable() {
         assertEquals(
             VideoDetailReturnPlayerMode.LiveMorph,

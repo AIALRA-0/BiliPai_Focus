@@ -15,17 +15,25 @@
  */
 package com.bytedance.danmaku.render.engine.data
 
+import android.os.SystemClock
 import androidx.annotation.UiThread
+import com.bytedance.danmaku.render.engine.render.sortOnlyIfOutOfOrder
+import com.bytedance.danmaku.render.engine.render.draw.mask.MaskData
 import com.bytedance.danmaku.render.engine.control.DanmakuConfig
 import com.bytedance.danmaku.render.engine.control.DanmakuController
 import com.bytedance.danmaku.render.engine.render.cache.LayerBuffer
 import kotlin.math.max
+import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_MASK
 
 /**
  * Created by dss886 on 2018/11/6.
  * DataManager is the timeline controller for the danmakus
  */
-class DataManager(controller: DanmakuController) {
+class DataManager(
+    private val mConfig: DanmakuConfig,
+    private val clockMs: () -> Long = { SystemClock.uptimeMillis() },
+) {
+    constructor(controller: DanmakuController) : this(controller.config)
 
     // The upstream implementation used LinkedList but indexed it from the frame loop.
     // ArrayList keeps cursor access O(1) for long timelines.
@@ -38,7 +46,10 @@ class DataManager(controller: DanmakuController) {
      * See [LayerBuffer]
      */
     private val mFakeList = ArrayList<DanmakuData>()
-    private val mConfig: DanmakuConfig = controller.config
+    private val mMaskQueryList = ArrayList<DanmakuData>()
+    private val mMasks = ArrayList<DanmakuData>()
+    private var mMaskIndex = 0
+    private val timeOrder = compareBy(DanmakuData::showAtTime)
 
     private var mIsPlaying = false
     private var mCurrentIndex = 0
@@ -49,21 +60,62 @@ class DataManager(controller: DanmakuController) {
     @UiThread
     fun setData(dataList: List<DanmakuData>) {
         mList.clear()
-        mList.addAll(dataList.sortedBy(DanmakuData::showAtTime))
+        mMasks.clear()
+        for (item in dataList) {
+            if (item.layerType == LAYER_TYPE_MASK) mMasks.add(item) else mList.add(item)
+        }
+        sortOnlyIfOutOfOrder(mList, timeOrder)
+        sortOnlyIfOutOfOrder(mMasks, timeOrder)
         mCurrentIndex = lowerBound(mCurrentPlayTime)
+        mMaskIndex = maskIndexForTime(mCurrentPlayTime)
     }
 
     @UiThread
     fun appendData(dataList: List<DanmakuData>) {
         if (dataList.isEmpty()) return
-        val sortedIncoming = dataList.sortedBy(DanmakuData::showAtTime)
-        if (mList.isEmpty() || mList.last().showAtTime <= sortedIncoming.first().showAtTime) {
-            mList.addAll(sortedIncoming)
-            return
+        var previousTextTime = mList.lastOrNull()?.showAtTime ?: Long.MIN_VALUE
+        var previousMaskTime = mMasks.lastOrNull()?.showAtTime ?: Long.MIN_VALUE
+        var textOutOfOrder = false
+        var masksOutOfOrder = false
+        var needsReindex = false
+        for (item in dataList) {
+            if (item.layerType == LAYER_TYPE_MASK) {
+                masksOutOfOrder = masksOutOfOrder || item.showAtTime < previousMaskTime
+                previousMaskTime = item.showAtTime
+                mMasks.add(item)
+            } else {
+                textOutOfOrder = textOutOfOrder || item.showAtTime < previousTextTime
+                needsReindex = needsReindex || item.showAtTime < mCurrentPlayTime
+                previousTextTime = item.showAtTime
+                mList.add(item)
+            }
         }
-        mList.addAll(sortedIncoming)
-        mList.sortBy(DanmakuData::showAtTime)
+        // Chronological segment/live appends do not rescan the retained timeline.
+        if (textOutOfOrder) mList.sortWith(timeOrder)
+        if (masksOutOfOrder) {
+            mMasks.sortWith(timeOrder)
+            mMaskIndex = maskIndexForTime(mCurrentPlayTime)
+        }
+        if (needsReindex) mCurrentIndex = lowerBound(mCurrentPlayTime)
+    }
+
+    /** Updating mask prefetch must not copy, sort or reset the ordinary timeline. */
+    @UiThread
+    fun replaceMasks(dataList: List<DanmakuData>, playTime: Long) {
+        mMasks.clear()
+        mMasks.addAll(dataList)
+        sortOnlyIfOutOfOrder(mMasks, timeOrder)
+        mMaskIndex = maskIndexForTime(playTime)
+    }
+
+    /** Explicit seeks reset both cursors; soft sync never replays consumed ordinary items. */
+    @UiThread
+    fun seekTo(playTime: Long) {
+        mStartPlayTime = max(0, playTime)
+        mCurrentPlayTime = mStartPlayTime
+        mStartTimestamp = clockMs()
         mCurrentIndex = lowerBound(mCurrentPlayTime)
+        mMaskIndex = maskIndexForTime(mCurrentPlayTime)
     }
 
     /**
@@ -72,11 +124,16 @@ class DataManager(controller: DanmakuController) {
      */
     @UiThread
     fun discardBefore(playTime: Long) {
-        if (mList.isEmpty()) return
         val firstRetained = lowerBound(playTime)
-        if (firstRetained <= 0) return
-        mList.subList(0, firstRetained).clear()
-        mCurrentIndex = (mCurrentIndex - firstRetained).coerceAtLeast(0)
+        if (firstRetained > 0) {
+            mList.subList(0, firstRetained).clear()
+            mCurrentIndex = (mCurrentIndex - firstRetained).coerceAtLeast(0)
+        }
+        val firstMaskRetained = maskIndexForTime(playTime)
+        if (firstMaskRetained > 0) {
+            mMasks.subList(0, firstMaskRetained).clear()
+            mMaskIndex = (mMaskIndex - firstMaskRetained).coerceAtLeast(0)
+        }
     }
 
     @UiThread
@@ -92,10 +149,7 @@ class DataManager(controller: DanmakuController) {
     @UiThread
     fun onPlay(playTime: Long) {
         mIsPlaying = true
-        mStartPlayTime = max(0, playTime)
-        mStartTimestamp = System.currentTimeMillis()
-        mCurrentPlayTime = mStartPlayTime
-        mCurrentIndex = lowerBound(playTime)
+        seekTo(playTime)
     }
 
     /**
@@ -106,15 +160,16 @@ class DataManager(controller: DanmakuController) {
     fun synchronizePlayTime(playTime: Long) {
         val safePlayTime = max(0, playTime)
         mStartPlayTime = safePlayTime
-        mStartTimestamp = System.currentTimeMillis()
+        mStartTimestamp = clockMs()
         mCurrentPlayTime = safePlayTime
         mCurrentIndex = max(mCurrentIndex, lowerBound(safePlayTime))
+        mMaskIndex = maskIndexForTime(safePlayTime)
     }
 
     @UiThread
     fun onPlaySpeedChanged() {
         mStartPlayTime = mCurrentPlayTime
-        mStartTimestamp = System.currentTimeMillis()
+        mStartTimestamp = clockMs()
     }
 
     @UiThread
@@ -122,7 +177,7 @@ class DataManager(controller: DanmakuController) {
         if (!mIsPlaying) {
             return mCurrentPlayTime
         }
-        val now = System.currentTimeMillis()
+        val now = clockMs()
         val playTime = ((now - mStartTimestamp) * mConfig.common.playSpeed / 100f + mStartPlayTime).toLong()
         mCurrentPlayTime = playTime
         return mCurrentPlayTime
@@ -147,21 +202,34 @@ class DataManager(controller: DanmakuController) {
             mQueryList.add(item)
             mCurrentIndex++
         }
+        mQueryList.addAll(queryMasks(mCurrentPlayTime))
         return mQueryList
     }
 
     @UiThread
-    fun getRemainDanmakuCount(): Int {
-        return mList.size - mCurrentIndex
+    fun queryMasks(playTime: Long): List<DanmakuData> {
+        mMaskQueryList.clear()
+        while (mMaskIndex < mMasks.size && mMasks[mMaskIndex].showAtTime <= playTime) {
+            mMaskQueryList.add(mMasks[mMaskIndex++])
+        }
+        return mMaskQueryList
     }
 
     @UiThread
-    fun nextDanmakuShowAfter(): Long {
-        return if (mList.size > 0 && mCurrentIndex < mList.size) {
-            mList[mCurrentIndex].showAtTime - mCurrentPlayTime
-        } else {
-            -1
+    fun getRemainDanmakuCount(): Int {
+        return mList.size - mCurrentIndex + mMasks.size - mMaskIndex
+    }
+
+    @UiThread
+    fun nextDanmakuShowAfter(includeMask: Boolean = true): Long {
+        val nextText = mList.getOrNull(mCurrentIndex)?.showAtTime
+        val nextMask = if (includeMask) mMasks.getOrNull(mMaskIndex)?.showAtTime else null
+        val next = when {
+            nextText == null -> nextMask
+            nextMask == null -> nextText
+            else -> minOf(nextText, nextMask)
         }
+        return next?.minus(mCurrentPlayTime) ?: -1L
     }
 
     @UiThread
@@ -173,6 +241,9 @@ class DataManager(controller: DanmakuController) {
     fun onStop() {
         mIsPlaying = false
         mList.clear()
+        mMasks.clear()
+        mMaskQueryList.clear()
+        mMaskIndex = 0
         mQueryList.clear()
         mFakeList.clear()
         mCurrentIndex = 0
@@ -181,16 +252,20 @@ class DataManager(controller: DanmakuController) {
         mCurrentPlayTime = 0L
     }
 
-    private fun lowerBound(playTime: Long): Int {
+    private fun maskIndexForTime(playTime: Long): Int {
+        val next = lowerBound(mMasks, playTime)
+        val previous = mMasks.getOrNull(next - 1) as? MaskData
+        return if (previous != null && previous.end >= playTime) next - 1 else next
+    }
+
+    private fun lowerBound(playTime: Long): Int = lowerBound(mList, playTime)
+
+    private fun lowerBound(items: List<DanmakuData>, playTime: Long): Int {
         var low = 0
-        var high = mList.size
+        var high = items.size
         while (low < high) {
             val middle = (low + high) ushr 1
-            if (mList[middle].showAtTime < playTime) {
-                low = middle + 1
-            } else {
-                high = middle
-            }
+            if (items[middle].showAtTime < playTime) low = middle + 1 else high = middle
         }
         return low
     }

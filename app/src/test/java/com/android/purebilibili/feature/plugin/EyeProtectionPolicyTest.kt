@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.plugin.sdk.EyeProtectionPluginApi
+import kotlinx.coroutines.test.runTest
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -7,6 +10,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EyeProtectionPolicyTest {
+
+    @Test
+    fun `disabled plugin can preview through SDK and disable clears every visual effect`() = runTest {
+        val plugin = EyeProtectionPlugin()
+        val capability: EyeProtectionPluginApi = plugin
+
+        assertFalse(capability.isNightModeActive.value)
+        plugin.setSettingsPreviewEnabled(true)
+        assertTrue(capability.settingsPreviewEnabled.value)
+        assertTrue(capability.isNightModeActive.value)
+        assertTrue(capability.brightnessLevel.value < 1f)
+        assertTrue(capability.warmFilterStrength.value > 0f)
+
+        capability.onDisable()
+
+        assertFalse(capability.settingsPreviewEnabled.value)
+        assertFalse(capability.isNightModeActive.value)
+        assertEquals(1f, capability.brightnessLevel.value)
+        assertEquals(0f, capability.warmFilterStrength.value)
+        assertNull(capability.careReminder.value)
+    }
 
     @Test
     fun `isWithinProtectionWindow handles cross-day time ranges`() {
@@ -49,6 +73,15 @@ class EyeProtectionPolicyTest {
                 lastReminderMinute = 30
             )
         )
+    }
+
+    @Test
+    fun `snooze fires at requested time and next interval follows that reminder`() {
+        assertFalse(shouldTriggerCareReminder(39, 30, 40, 30))
+        assertTrue(shouldTriggerCareReminder(40, 30, 40, 30))
+        assertFalse(shouldTriggerCareReminder(60, 30, null, 40))
+        assertTrue(shouldTriggerCareReminder(70, 30, null, 40))
+        assertEquals(10, resolveMinutesUntilReminder(60, 30, null, true, 40))
     }
 
     @Test

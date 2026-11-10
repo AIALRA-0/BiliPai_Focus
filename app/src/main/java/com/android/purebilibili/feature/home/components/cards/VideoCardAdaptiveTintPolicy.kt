@@ -1,6 +1,9 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.wallpaper.WallpaperReadabilityProfile
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -14,7 +17,8 @@ data class WallpaperPalette(
     val topColor: Color,
     val bottomColor: Color,
     val dominantColor: Color = topColor,
-    val stops: List<Color> = listOf(topColor, bottomColor)
+    val stops: List<Color> = listOf(topColor, bottomColor),
+    val readability: WallpaperReadabilityProfile? = null,
 )
 
 /**
@@ -23,14 +27,22 @@ data class WallpaperPalette(
 val LocalWallpaperPalette = staticCompositionLocalOf<WallpaperPalette?> { null }
 
 /**
- * CompositionLocal 控制卡片毛玻璃与动态取色开关
+ * CompositionLocal 分别控制卡片动态取色和毛玻璃。
  */
-val LocalHomeCardDynamicTintEnabled = staticCompositionLocalOf { true }
+val LocalHomeCardDynamicTintEnabled = staticCompositionLocalOf { false }
+val LocalHomeCardFrostedGlassEnabled = staticCompositionLocalOf { false }
 
 /**
  * CompositionLocal 提供实时滚动 Tick（在 DrawPhase 中按需读取，零重组实现 120fps 极速刷新）
  */
 val LocalHomeScrollTickProvider = staticCompositionLocalOf<(() -> Int)?> { null }
+
+// Keep the state objects stable; only blur consumers subscribe to motion boundaries.
+val LocalHomeCardScrolling = compositionLocalOf<State<Boolean>?> { null }
+val LocalHomeCardTransitionRunning = compositionLocalOf<State<Boolean>?> { null }
+
+/** Only home defers optional network/color work; other card callers keep normal behavior. */
+internal val LocalHomeCardAuxiliaryWorkAllowed = compositionLocalOf { true }
 
 /**
  * 纯 Kotlin 采样区域定义（无 Android 运行库依赖，便于快速单元测试）
@@ -93,6 +105,22 @@ fun interpolateWallpaperColor(
 }
 
 /**
+ * 壁纸联动玻璃的不透明度。单独取色（无模糊层）时接近不透明，保证读清文字；
+ * 有模糊层时也保留足够下限，避免壁纸细节从文字底下透出。
+ */
+fun resolveWallpaperGlassAlpha(
+    frostedGlassEnabled: Boolean,
+    isDarkTheme: Boolean,
+    isDataSaverActive: Boolean = false,
+): Float = if (!frostedGlassEnabled) {
+    0.88f
+} else if (isDarkTheme) {
+    if (isDataSaverActive) 0.65f else 0.56f
+} else {
+    if (isDataSaverActive) 0.70f else 0.52f
+}
+
+/**
  * 综合决策卡片底部组件的着色方案（兼顾图一壁纸与图二封面）
  */
 fun resolveVideoCardAmbientDrawSpec(
@@ -104,14 +132,22 @@ fun resolveVideoCardAmbientDrawSpec(
     defaultContainerColor: Color,
     defaultBorderColor: Color,
     isDataSaverActive: Boolean = false,
-    frostedGlassEnabled: Boolean = true
+    frostedGlassEnabled: Boolean = true,
+    dynamicTintEnabled: Boolean = true,
 ): VideoCardAmbientDrawSpec {
-    if (!frostedGlassEnabled || (!wallpaperTintEnabled && wallpaperPalette == null && coverTint == null)) {
+    if (!dynamicTintEnabled) {
         return VideoCardAmbientDrawSpec(
-            containerColor = defaultContainerColor,
+            containerColor = if (frostedGlassEnabled) {
+                defaultContainerColor.copy(alpha = if (isDarkTheme) 0.38f else 0.34f)
+            } else {
+                defaultContainerColor
+            },
             coverGlowAlpha = 0f,
             borderColor = defaultBorderColor
         )
+    }
+    if (!wallpaperTintEnabled && wallpaperPalette == null && coverTint == null) {
+        return VideoCardAmbientDrawSpec(defaultContainerColor, 0f, defaultBorderColor)
     }
 
     val hasValidCoverTint = shouldUseCoverTintForCard(
@@ -119,12 +155,12 @@ fun resolveVideoCardAmbientDrawSpec(
         coverTint = coverTint,
     )
 
-    // 核心质感：适度透明度以“直接透出背后的高斯模糊”，同时保留浓郁饱和色彩，杜绝发白发灰的厚重白雾
-    val glassTransparency = if (isDarkTheme) {
-        if (isDataSaverActive) 0.65f else 0.38f
-    } else {
-        if (isDataSaverActive) 0.70f else 0.34f
-    }
+    // 毛玻璃使用半透明着色；透明度下限保证壁纸细节不会从文字底下透出。
+    val glassTransparency = resolveWallpaperGlassAlpha(
+        frostedGlassEnabled = frostedGlassEnabled,
+        isDarkTheme = isDarkTheme,
+        isDataSaverActive = isDataSaverActive
+    )
 
     // 1. 壁纸色彩联动（图一）：直接采用壁纸取色插值后的真实色彩，杜绝与白色容器底色混合稀释
     val baseColor = if (wallpaperTintEnabled && wallpaperPalette != null) {
@@ -187,6 +223,8 @@ fun resolveVideoCardAdaptiveContentColors(
     defaultOnSurface: Color,
     defaultOnSurfaceVariant: Color,
     homeCardDynamicTintEnabled: Boolean = true,
+    wallpaperYFraction: Float = 0.5f,
+    wallpaperGlassAlpha: Float = 0f,
 ): VideoCardAdaptiveContentColors {
     if (!homeCardDynamicTintEnabled) {
         return VideoCardAdaptiveContentColors(
@@ -201,7 +239,22 @@ fun resolveVideoCardAdaptiveContentColors(
     } else {
         val hasDarkWallpaper = wallpaperTintEnabled &&
             wallpaperPalette != null &&
-            wallpaperPalette.dominantColor.luminance() < 0.45f
+            run {
+                // 与容器同一来源的局部取色色值，而不是整张壁纸的主导色：
+                // 主导色偏深而卡片所在区域偏浅时，会把浅色表面误判成深色，
+                // 套上白色文字导致可读性问题。合成时计入玻璃不透明度下的底色。
+                val localLuminance = interpolateWallpaperColor(
+                    wallpaperPalette,
+                    wallpaperYFraction
+                ).luminance()
+                if (wallpaperGlassAlpha > 0f) {
+                    val baseLuminance = if (isDarkTheme) 0.05f else 0.92f
+                    localLuminance * wallpaperGlassAlpha +
+                        baseLuminance * (1f - wallpaperGlassAlpha)
+                } else {
+                    localLuminance
+                }
+            } < 0.45f
 
         val hasValidCover = shouldUseCoverTintForCard(
             wallpaperTintEnabled = wallpaperTintEnabled,

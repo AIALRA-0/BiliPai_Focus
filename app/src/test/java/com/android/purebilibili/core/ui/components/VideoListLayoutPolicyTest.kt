@@ -9,11 +9,20 @@ import kotlin.test.assertTrue
 class VideoListLayoutPolicyTest {
     @Test
     fun explicitColumnChoiceWorksOnPhonesAndTabletsWithNarrowWindowFallback() {
-        listOf(320f, 360f, 600f, 840f, 1200f).forEach { width ->
+        listOf(320f, 360f, 600f, 840f).forEach { width ->
             assertEquals(1, resolveVideoListColumns(true, width))
             assertEquals(2, resolveVideoListColumns(false, width))
         }
         assertEquals(1, resolveVideoListColumns(false, 280f))
+    }
+
+    @Test
+    fun wideWindowsDeriveThirdColumnFromMinReadableCardWidth() {
+        // 每列至少 320dp：960dp 以下保持 2 列；≥960dp 推导第 3 列并封顶。
+        assertEquals(2, resolveVideoListColumns(false, 950f))
+        assertEquals(3, resolveVideoListColumns(false, 960f))
+        assertEquals(3, resolveVideoListColumns(false, 1200f))
+        assertEquals(3, resolveVideoListColumns(false, 1920f))
     }
 
     @Test

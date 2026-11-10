@@ -1,6 +1,9 @@
 // 文件路径: feature/dynamic/components/ImagePreviewDialog.kt
 package com.android.purebilibili.feature.dynamic.components
 
+import kotlinx.coroutines.ensureActive
+import com.android.purebilibili.core.ui.AppContentColors
+
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 
@@ -11,22 +14,21 @@ import com.android.purebilibili.core.ui.components.AppText
 
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
-import com.android.purebilibili.core.ui.AppSurfaceTokens
 
 import com.android.purebilibili.core.ui.MediaContrastPalette
 
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 
+import android.animation.ValueAnimator
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
+import android.view.Window
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -38,9 +40,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
+import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,10 +57,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RenderEffect as ComposeRenderEffect
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,20 +67,25 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import coil3.compose.AsyncImage
+import coil3.Image
 import coil3.imageLoader
+import com.android.purebilibili.core.util.originalBiliImage
 import coil3.request.ImageRequest
-import coil3.request.SuccessResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import android.app.Activity
 import android.content.ClipData
@@ -105,7 +112,6 @@ import com.android.purebilibili.core.ui.rememberAppDownloadIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
-import com.android.purebilibili.core.ui.motion.continuityTween
 import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
 import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
@@ -130,19 +136,44 @@ internal const val IMAGE_PREVIEW_ORIGINAL_CHIP_TAG = "image_preview_original_chi
 internal const val IMAGE_PREVIEW_PAGE_INDICATOR_TAG = "image_preview_page_indicator"
 private const val IMAGE_PREVIEW_SHARE_CACHE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
 
-private class ImagePreviewBlurEffectCache {
-    private val effects = mutableMapOf<Int, ComposeRenderEffect>()
+/**
+ * 按轴分别给出水平/垂直圆角的轮廓，抵消 graphicsLayer 非均匀缩放造成的椭圆拉伸。
+ * 圆角值逐帧变化，Outline 在 createOutline 内按当帧 px 生成。
+ */
+private class CounterScaledCornerShape(
+    private val horizontalDp: Float,
+    private val verticalDp: Float
+) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density
+    ): androidx.compose.ui.graphics.Outline {
+        val horizontalPx = with(density) { horizontalDp.dp.toPx() }
+        val verticalPx = with(density) { verticalDp.dp.toPx() }
+        return androidx.compose.ui.graphics.Outline.Rounded(
+            androidx.compose.ui.geometry.RoundRect(
+                rect = androidx.compose.ui.geometry.Rect(
+                    left = 0f,
+                    top = 0f,
+                    right = size.width,
+                    bottom = size.height
+                ),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(horizontalPx, verticalPx)
+            )
+        )
+    }
+}
 
-    fun resolve(radiusPx: Float): ComposeRenderEffect? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || radiusPx <= 0.01f) return null
-        val radiusKey = radiusPx.toInt().coerceAtLeast(1)
-        return effects.getOrPut(radiusKey) {
-            RenderEffect.createBlurEffect(
-                radiusKey.toFloat(),
-                radiusKey.toFloat(),
-                Shader.TileMode.CLAMP,
-            ).asComposeRenderEffect()
-        }
+/** 导航栏颜色用短动画过渡，替代进出场瞬间的硬切。Android 15+ 强制透明时自动短路。 */
+private fun animateWindowNavigationBarColor(window: Window?, targetColor: Int, durationMillis: Long = 180L) {
+    if (window == null) return
+    val from = window.navigationBarColor
+    if (from == targetColor) return
+    ValueAnimator.ofArgb(from, targetColor).apply {
+        this.duration = durationMillis
+        addUpdateListener { setWindowNavigationBarColor(window, it.animatedValue as Int) }
+        start()
     }
 }
 
@@ -152,25 +183,144 @@ private data class ImagePreviewOverlayRequest(
     val livePhotoVideos: Map<String, String>,
     val initialIndex: Int,
     val sourceRect: androidx.compose.ui.geometry.Rect?,
+    val sourceRects: Map<Int, androidx.compose.ui.geometry.Rect>,
+    val activeSourceRect: androidx.compose.ui.geometry.Rect? = sourceRect,
+    val sourceKey: String? = null,
     val sourceCornerRadiusDp: Float,
     val textContent: ImagePreviewTextContent?,
     val defaultTextVisible: Boolean,
     val onImageLongPress: ((String) -> Unit)?,
+    val publicContent: Boolean = false,
     val onDismiss: () -> Unit
 )
 
+/**
+ * 源缩略图在图片预览打开期间应隐藏，否则飞出的图片会与原位卡片重影；
+ * overlay request 在回位动画结束后才清空，因此卡片等「飞回落地」才恢复。
+ * 匹配规则：捕获的 bounds 中心落在当前页来源矩形外扩 8px 范围内。
+ */
+@Composable
+fun isImagePreviewSourceHidden(
+    bounds: androidx.compose.ui.geometry.Rect?,
+    sourceKey: String? = null,
+): Boolean {
+    val activeKey by ImagePreviewOverlayController.activeSourceKey.collectAsStateWithLifecycle()
+    // 身份匹配优先：九宫格等入口用图片 URL 判定，不受窗口坐标/缩放差异影响。
+    if (sourceKey != null && activeKey != null) {
+        return sourceKey == activeKey
+    }
+    val activeSourceRect by ImagePreviewOverlayController.activeSourceRect.collectAsStateWithLifecycle()
+    val sourceRect = activeSourceRect ?: return false
+    if (bounds == null) return false
+    return sourceRect.inflate(8f).contains(bounds.center)
+}
+
+@Composable
+internal fun rememberImagePreviewSourceImage(sourceKey: String): Image? {
+    val sourceImages by ImagePreviewOverlayController.sourceImages.collectAsStateWithLifecycle()
+    var retainedImage by remember(sourceKey) { mutableStateOf<Image?>(null) }
+    val sourceImage = sourceImages[sourceKey]
+    if (sourceImage != null && retainedImage !== sourceImage) {
+        SideEffect { retainedImage = sourceImage }
+    }
+    return sourceImage ?: retainedImage
+}
+
+@Composable
+internal fun isImagePreviewOpen(): Boolean {
+    val request by ImagePreviewOverlayController.request.collectAsStateWithLifecycle()
+    return request != null
+}
+
+internal fun prepareImagePreviewSourceTransition(
+    sourceRect: androidx.compose.ui.geometry.Rect?,
+    sourceKey: String? = null,
+) {
+    ImagePreviewOverlayController.prepareSourceTransition(sourceRect, sourceKey)
+}
+
 private object ImagePreviewOverlayController {
     private val _request = MutableStateFlow<ImagePreviewOverlayRequest?>(null)
+    private val _activeSourceRect = MutableStateFlow<androidx.compose.ui.geometry.Rect?>(null)
+    private val _preparedSourceRect = MutableStateFlow<androidx.compose.ui.geometry.Rect?>(null)
+    private val _activeSourceKey = MutableStateFlow<String?>(null)
+    private val _sourceImages = MutableStateFlow<Map<String, Image>>(emptyMap())
     val request = _request.asStateFlow()
+    val activeSourceRect = _activeSourceRect.asStateFlow()
+    val activeSourceKey = _activeSourceKey.asStateFlow()
+    val sourceImages = _sourceImages.asStateFlow()
+
+    fun recordSourceImage(token: Long, sourceKey: String, image: Image) {
+        if (_request.value?.token != token) return
+        // Keep only the current pager window; source tiles retain their own image reference.
+        val images = LinkedHashMap(_sourceImages.value)
+        images.remove(sourceKey)
+        images[sourceKey] = image
+        if (images.size > 3) images.remove(images.keys.first())
+        _sourceImages.value = images
+    }
+
+    fun prepareSourceTransition(
+        sourceRect: androidx.compose.ui.geometry.Rect?,
+        sourceKey: String? = null,
+    ) {
+        // Stage the anchor without hiding the source yet. The source stays painted until
+        // the preview request is committed, avoiding a blank frame between the click and
+        // the first Dialog composition.
+        _preparedSourceRect.value = sourceRect
+        _activeSourceKey.value = sourceKey
+    }
 
     fun show(request: ImagePreviewOverlayRequest) {
-        _request.value = request
+        _sourceImages.value = emptyMap()
+        val activeSourceRect = request.activeSourceRect ?: _preparedSourceRect.value
+        _request.value = request.copy(activeSourceRect = activeSourceRect)
+        // 不在这里发布 activeSourceRect：Dialog 窗口要晚 1-2 帧才画出第一帧，
+        // 若提交时立刻隐藏源缩略图，窗口出现前会露出一个"洞"（感知为顿挫）。
+        // 发布动作延迟到 overlay 首次组合的 SideEffect（同帧绘制，无缝衔接）。
+        _preparedSourceRect.value = null
+    }
+
+    fun updateActiveSourceRect(
+        token: Long,
+        sourceRect: androidx.compose.ui.geometry.Rect?,
+        sourceKey: String? = _activeSourceKey.value,
+    ) {
+        val current = _request.value ?: return
+        if (current.token != token) return
+        // 翻到无身份键的页时清空键，回退到几何判定。
+        if (_activeSourceKey.value != sourceKey) {
+            _activeSourceKey.value = sourceKey
+        }
+        if (current.activeSourceRect != sourceRect) {
+            _request.value = current.copy(activeSourceRect = sourceRect)
+        }
+        if (_activeSourceRect.value != sourceRect) {
+            _activeSourceRect.value = sourceRect
+        }
     }
 
     fun dismiss(token: Long? = null) {
         val current = _request.value ?: return
         if (token == null || current.token == token) {
             _request.value = null
+            _activeSourceRect.value = null
+            _preparedSourceRect.value = null
+            _activeSourceKey.value = null
+            _sourceImages.value = emptyMap()
+        }
+    }
+
+    /**
+     * 回位落位后的交接第一步：在 Dialog 仍显示 Hero 末帧时先恢复源缩略图，
+     * 网格在其下方完成一帧重绘后再移除窗口。若把 request 清空与恢复缩略图
+     * 合在同一次状态变更，两个窗口的重绘帧不对齐，落点会漏出一帧空档（闪一下）。
+     */
+    fun revealSourceBeforeRemoval(token: Long) {
+        val current = _request.value ?: return
+        if (current.token == token && _activeSourceRect.value != null) {
+            _activeSourceRect.value = null
+            _activeSourceKey.value = null
         }
     }
 }
@@ -181,23 +331,29 @@ fun ImagePreviewDialog(
     initialIndex: Int,
     livePhotoVideos: Map<String, String> = emptyMap(),
     sourceRect: androidx.compose.ui.geometry.Rect? = null,
+    sourceRects: Map<Int, androidx.compose.ui.geometry.Rect> = emptyMap(),
+    sourceKey: String? = null,
     sourceCornerRadiusDp: Float = resolveDrawGridCornerRadiusDp().toFloat(),
     textContent: ImagePreviewTextContent? = null,
     defaultTextVisible: Boolean = true,
     onImageLongPress: ((String) -> Unit)? = null,
+    publicContent: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    val requestToken = remember(images, initialIndex, sourceRect, sourceCornerRadiusDp, livePhotoVideos) { System.nanoTime() }
+    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceCornerRadiusDp, livePhotoVideos, publicContent) { System.nanoTime() }
 
-    LaunchedEffect(requestToken) {
+    DisposableEffect(requestToken) {
         ImagePreviewOverlayController.show(
             ImagePreviewOverlayRequest(
                 token = requestToken,
                 images = images,
+                publicContent = publicContent,
                 livePhotoVideos = livePhotoVideos,
                 initialIndex = initialIndex,
                 sourceRect = sourceRect,
+                sourceRects = sourceRects,
+                sourceKey = sourceKey,
                 sourceCornerRadiusDp = sourceCornerRadiusDp,
                 textContent = textContent,
                 defaultTextVisible = defaultTextVisible,
@@ -205,9 +361,6 @@ fun ImagePreviewDialog(
                 onDismiss = { latestOnDismiss() }
             )
         )
-    }
-
-    DisposableEffect(requestToken) {
         onDispose {
             ImagePreviewOverlayController.dismiss(requestToken)
         }
@@ -220,33 +373,54 @@ fun ImagePreviewOverlayHost(
 ) {
     val activeRequest by ImagePreviewOverlayController.request.collectAsStateWithLifecycle()
     activeRequest?.let { request ->
-        Dialog(
-            onDismissRequest = {
-                ImagePreviewOverlayController.dismiss(request.token)
-                request.onDismiss()
-            },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        ) {
-            ImagePreviewOverlayContent(
-                images = request.images,
-                livePhotoVideos = request.livePhotoVideos,
-                initialIndex = request.initialIndex,
-                sourceRect = request.sourceRect,
-                sourceCornerRadiusDp = request.sourceCornerRadiusDp,
-                textContent = request.textContent,
-                defaultTextVisible = request.defaultTextVisible,
-                onImageLongPress = request.onImageLongPress,
-                onDismiss = {
-                    ImagePreviewOverlayController.dismiss(request.token)
-                    request.onDismiss()
+        key(request.token) {
+            var dismissRequestCount by remember(request.token) { mutableIntStateOf(0) }
+            Dialog(
+                onDismissRequest = {
+                    dismissRequestCount++
                 },
-                modifier = modifier
-                    .fillMaxSize()
-                    .zIndex(100f)
-            )
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false
+                )
+            ) {
+                val dialogView = LocalView.current
+                SideEffect {
+                    // The image itself already performs the return morph. The platform Dialog
+                    // window animation would scale it a second time when the window is removed.
+                    ((dialogView.parent as? DialogWindowProvider) ?: (dialogView as? DialogWindowProvider))
+                        ?.window?.let { window ->
+                            window.setWindowAnimations(0)
+                            // 平台 Dialog 默认 FLAG_DIM_BEHIND 会在窗口挂上时把整个屏幕压暗、
+                            // 关闭时瞬间变亮；画廊自带进度 scrim，这层额外 dim 表现为点击
+                            // 放大/返回时的变暗闪烁，必须清掉。
+                            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                            window.setDimAmount(0f)
+                        }
+                }
+                ImagePreviewOverlayContent(
+                    images = request.images,
+                    publicContent = request.publicContent,
+                    livePhotoVideos = request.livePhotoVideos,
+                    initialIndex = request.initialIndex,
+                    sourceRect = request.sourceRect,
+                    sourceRects = request.sourceRects,
+                    sourceKey = request.sourceKey,
+                    requestToken = request.token,
+                    sourceCornerRadiusDp = request.sourceCornerRadiusDp,
+                    textContent = request.textContent,
+                    defaultTextVisible = request.defaultTextVisible,
+                    onImageLongPress = request.onImageLongPress,
+                    dismissRequestCount = dismissRequestCount,
+                    onDismiss = {
+                        ImagePreviewOverlayController.dismiss(request.token)
+                        request.onDismiss()
+                    },
+                    modifier = modifier
+                        .fillMaxSize()
+                        .zIndex(100f)
+                )
+            }
         }
     }
 }
@@ -257,10 +431,15 @@ private fun ImagePreviewOverlayContent(
     initialIndex: Int,
     livePhotoVideos: Map<String, String> = emptyMap(),
     sourceRect: androidx.compose.ui.geometry.Rect? = null,
+    sourceRects: Map<Int, androidx.compose.ui.geometry.Rect> = emptyMap(),
+    sourceKey: String? = null,
+    requestToken: Long,
     sourceCornerRadiusDp: Float = resolveDrawGridCornerRadiusDp().toFloat(),
     textContent: ImagePreviewTextContent? = null,
     defaultTextVisible: Boolean = true,
     onImageLongPress: ((String) -> Unit)? = null,
+    publicContent: Boolean = false,
+    dismissRequestCount: Int = 0,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -268,7 +447,7 @@ private fun ImagePreviewOverlayContent(
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
-    val haptic = rememberHapticFeedback()
+    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.RESULTS)
     val shareIcon = rememberAppShareIcon()
     val likeIcon = rememberAppLikeIcon()
     val likeFilledIcon = rememberAppLikeFilledIcon()
@@ -278,7 +457,7 @@ private fun ImagePreviewOverlayContent(
     var isSaving by remember { mutableStateOf(false) }
     var isSharing by remember { mutableStateOf(false) }
     var showOrdinaryImageActions by remember { mutableStateOf(false) }
-    
+
     //  获取 Activity 和 Window 用于沉浸式控制
     val activity = remember {
         var ctx = context
@@ -292,24 +471,28 @@ private fun ImagePreviewOverlayContent(
     val insetsController = remember {
         window?.let { WindowCompat.getInsetsController(it, it.decorView) }
     }
-    
+
     //  保存原始导航栏颜色
     val originalNavBarColor = remember { window?.navigationBarColor ?: android.graphics.Color.BLACK }
-    
-    //  进入时设置沉浸式导航栏（透明黑色），退出时恢复
+    //  [修复] 同步保存原始导航栏图标明暗，退出时一并还原
+    val originalNavBarsLight = remember { insetsController?.isAppearanceLightNavigationBars }
+
+    //  进入时动画过渡到沉浸式导航栏（透明黑色），退出时动画恢复，避免颜色瞬间跳变
     DisposableEffect(Unit) {
-        window?.let { setWindowNavigationBarColor(it, Color.Transparent.toArgb()) }
+        animateWindowNavigationBarColor(window, Color.Transparent.toArgb())
         insetsController?.isAppearanceLightNavigationBars = false
-        
+
         onDispose {
-            window?.let { setWindowNavigationBarColor(it, originalNavBarColor) }
+            animateWindowNavigationBarColor(window, originalNavBarColor)
+            originalNavBarsLight?.let { light ->
+                insetsController?.isAppearanceLightNavigationBars = light
+            }
         }
     }
-    
+
     //  动画状态控制
     // 0f = 关闭/初始状态 (at sourceRect), 1f = 打开状态 (Fullscreen)
     val animateTrigger = remember { androidx.compose.animation.core.Animatable(0f) }
-    val blurEffectCache = remember { ImagePreviewBlurEffectCache() }
     val backEventState = rememberNavigationEventState(NavigationEventInfo.None)
     val predictiveBackGestureEnabled = LocalPredictiveBackGestureEnabled.current
     val backProgress = if (predictiveBackGestureEnabled) {
@@ -321,9 +504,26 @@ private fun ImagePreviewOverlayContent(
         0f
     }
     var isDismissing by remember { mutableStateOf(false) }
+    var dismissBackdropStartAlpha by remember { mutableFloatStateOf(1f) }
+    // Viewport-local image geometry. Window coordinates here would include the Hero transform
+    // and get applied a second time by the pager's counter-scale/translation during back scrub.
     var currentImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var dismissImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    // 关闭起飞时冻结源缩略图 rect: dismiss 窗口内不再跟读 currentSourceRect,
+    // 防止动画中途目标改道(切页/新页无 rect 时 flight 中断退化成淡出)。
+    var dismissSourceRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var dismissStartProgress by remember { mutableFloatStateOf(1f) }
+    var dismissStartCornerRadiusDp by remember { mutableFloatStateOf(0f) }
+    var dismissFallbackScale by remember { mutableFloatStateOf(1f) }
+    var dismissOffsetXPx by remember { mutableFloatStateOf(0f) }
+    var dismissOffsetYPx by remember { mutableFloatStateOf(0f) }
+    var dismissStartImageScale by remember { mutableFloatStateOf(1f) }
+    var dismissTargetImageScale by remember { mutableFloatStateOf(1f) }
+    var dismissImageContentRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var isPreparingDismiss by remember { mutableStateOf(false) }
     var activeZoomScale by remember { mutableFloatStateOf(1f) }
+    // 放大态退出: 先把 ZoomableImage 子层缩放回弹到 fit,再开始飞回。
+    var zoomResetTrigger by remember { mutableIntStateOf(0) }
     var isVerticalDismissDragging by remember { mutableStateOf(false) }
     val longPressSaveEnabled by SettingsManager.getImagePreviewLongPressSaveEnabled(context)
         .collectAsStateWithLifecycle(initialValue = true)
@@ -337,10 +537,13 @@ private fun ImagePreviewOverlayContent(
             )
         )
     }
-    
+
     // 竖滑跟手用状态值，避免每帧 launch snapTo 竞态导致滑不动。
     var verticalDismissOffsetYPx by remember { mutableFloatStateOf(0f) }
+    // 竖滑退出时手指横向漂移的实时位移：图片跟随手指移动到屏幕各处
+    var verticalDismissOffsetXPx by remember { mutableFloatStateOf(0f) }
     val verticalDismissSnapAnim = remember { androidx.compose.animation.core.Animatable(0f) }
+    val verticalDismissSnapAnimX = remember { androidx.compose.animation.core.Animatable(0f) }
 
     fun handleImageSaveResult(success: Boolean, successMessage: String = "图片已保存到相册") {
         haptic(resolveImagePreviewSaveFeedback(success))
@@ -359,7 +562,7 @@ private fun ImagePreviewOverlayContent(
     }
 
     //  GIF 图片加载器
-    val gifImageLoader = context.imageLoader
+    val gifImageLoader = if (publicContent) com.android.purebilibili.core.plugin.feed.PublicContentImageLoader.get(context) else context.imageLoader
 
     //  使用 HorizontalPager 实现滑动切换
     val pagerState = rememberPagerState(
@@ -367,18 +570,36 @@ private fun ImagePreviewOverlayContent(
         pageCount = { images.size }
     )
 
-    // 已通过「查看原图」切换为全分辨率加载的页（按页索引记录）。
-    var originalQualityPages by remember { mutableStateOf(setOf<Int>()) }
+    fun sourceRectForPage(page: Int): androidx.compose.ui.geometry.Rect? =
+        sourceRect.takeIf { page == initialIndex } ?: sourceRects[page]
+
+    SideEffect {
+        // dismiss 期间源缩略图隐藏区即将被 revealSourceBeforeRemoval 交接,
+        // 不再跟翻页更新,避免隐藏区错位。
+        if (isDismissing) return@SideEffect
+        ImagePreviewOverlayController.updateActiveSourceRect(
+            token = requestToken,
+            sourceRect = sourceRectForPage(pagerState.currentPage),
+            // 身份键仅在起始页有效；翻到无锚点的页回退几何判定。
+            sourceKey = sourceKey?.takeIf { pagerState.currentPage == initialIndex }
+        )
+    }
+
+    // 图片身份变化后不沿用上一组图片的原图模式。
+    var originalQualityPages by remember(images) { mutableStateOf(setOf<Int>()) }
 
     LaunchedEffect(pagerState.currentPage) {
         activeZoomScale = 1f
         if (!isDismissing) {
             isVerticalDismissDragging = false
             verticalDismissOffsetYPx = 0f
+            verticalDismissOffsetXPx = 0f
             verticalDismissSnapAnim.snapTo(0f)
+            verticalDismissSnapAnimX.snapTo(0f)
+            currentImageDisplayRect = null
         }
     }
-    
+
     val currentLiveVideoUrl = remember(pagerState.currentPage, livePhotoVideos, images) {
         val raw = images.getOrNull(pagerState.currentPage).orEmpty()
         resolveLivePhotoVideoUrl(raw, pagerState.currentPage, livePhotoVideos)
@@ -407,9 +628,9 @@ private fun ImagePreviewOverlayContent(
         if (storagePermission.isGranted) {
             isSaving = true
             scope.launch {
-                val success = saveImageToGallery(context, imageUrl)
+                val success = saveImageToGallery(context, imageUrl, publicContent = publicContent)
                 isSaving = false
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     handleImageSaveResult(success)
                 }
             }
@@ -426,7 +647,7 @@ private fun ImagePreviewOverlayContent(
             scope.launch {
                 val success = saveMotionPhotoToGallery(context, imageUrl, videoUrl)
                 isSaving = false
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     handleImageSaveResult(success, successMessage = "实况照片已保存到相册")
                 }
             }
@@ -443,7 +664,7 @@ private fun ImagePreviewOverlayContent(
             scope.launch {
                 val success = saveLivePhotoVideoToGallery(context, videoUrl)
                 isSaving = false
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     handleImageSaveResult(success, successMessage = "实况视频已保存到相册")
                 }
             }
@@ -459,9 +680,9 @@ private fun ImagePreviewOverlayContent(
         if (storagePermission.isGranted) {
             isSaving = true
             scope.launch {
-                val success = urls.map { saveImageToGallery(context, it) }.all { it }
+                val success = urls.map { saveImageToGallery(context, it, publicContent = publicContent) }.all { it }
                 isSaving = false
-                withContext(Dispatchers.Main) { handleImageSaveResult(success) }
+                withContext(Dispatchers.Main.immediate) { handleImageSaveResult(success) }
             }
         } else {
             pendingSaveAction = { requestSaveAllImages() }
@@ -473,19 +694,20 @@ private fun ImagePreviewOverlayContent(
         if (imageUrl.isEmpty() || isSharing) return
         isSharing = true
         scope.launch {
-            val success = shareImageFromPreview(context, imageUrl)
-            isSharing = false
-            withContext(Dispatchers.Main) {
+            try {
+                val success = shareImageFromPreview(context, imageUrl, publicContent = publicContent)
                 handleImageShareResult(success)
+            } finally {
+                isSharing = false
             }
         }
     }
-    
+
     // 当前页的图片 URL
     val currentImageUrl = remember(pagerState.currentPage, images) {
         normalizeImageUrl(images.getOrNull(pagerState.currentPage) ?: "")
     }
-    
+
     BoxWithConstraints(
         modifier = modifier.fillMaxSize()
     ) {
@@ -494,58 +716,35 @@ private fun ImagePreviewOverlayContent(
             val fullHeight = constraints.maxHeight
             val fullWidthPx = with(density) { fullWidth.toPx() }
             val fullHeightPx = with(density) { fullHeight.toPx() }
-            val maxBlurRadiusPx = with(density) {
-                (AppSpacingTokens.Large + AppSpacingTokens.Micro).toPx()
+
+            // 手势 scrub 期间画面由 backProgress 驱动；transitionState 离开 InProgress 的
+            // 瞬间 backProgress 归零而 animateTrigger 仍为 1f，若直接回落会让画面先跳回
+            // 全屏再重新飞出（双重回弹）。记住最后一帧 scrub 值，在此过渡窗口内保持。
+            var lastScrubRawProgress by remember { mutableFloatStateOf(1f) }
+            var backRecovering by remember { mutableStateOf(false) }
+            // 恢复动画的所有权纪元:被新 scrub/dismiss 接管后,旧协程 finally 里的
+            // 状态复位全部作废,防止晚到的写覆盖当前手势进度。
+            var backRecoverEpoch by remember { mutableIntStateOf(0) }
+            SideEffect {
+                if (backProgress > 0f) {
+                    lastScrubRawProgress = 1f - backProgress
+                }
             }
-            
-            val rawProgress = if (!isDismissing && backProgress > 0f) {
-                1f - backProgress
-            } else {
-                animateTrigger.value
+
+            // Read frame-rate state inside the graphics/draw modifier blocks below. This keeps
+            // the pager and its image subtree out of composition on every animation frame.
+            fun currentTransitionProgress(): Float = when {
+                isDismissing || backRecovering -> animateTrigger.value
+                backProgress > 0f -> 1f - backProgress
+                lastScrubRawProgress < 1f -> lastScrubRawProgress
+                else -> animateTrigger.value
             }
-            val verticalDragFrame = resolveImagePreviewVerticalDragFrame(
-                dragOffsetYPx = verticalDismissOffsetYPx,
-                containerHeightPx = fullHeightPx
-            )
-            
-            //  计算容器位置和大小
-            // 如果切走了或者没有源矩形，则全屏显示（仅淡入淡出）
-            // 有缩略图源矩形时始终做尺寸落位，保证返回大小匹配预览格。
-            val shouldUseRectAnim = sourceRect != null
-            val transitionFrame = resolveImagePreviewTransitionFrame(
-                rawProgress = rawProgress,
-                hasSourceRect = shouldUseRectAnim,
-                sourceCornerRadiusDp = sourceCornerRadiusDp
-            )
-            val presentedCornerRadiusDp = resolveImagePreviewPresentedCornerRadiusDp(
-                visualProgress = transitionFrame.visualProgress,
-                verticalDragProgress = if (isDismissing) 0f else verticalDragFrame.progress,
-                hasSourceRect = shouldUseRectAnim,
-                sourceCornerRadiusDp = sourceCornerRadiusDp
-            )
-            val visualFrame = resolveImagePreviewVisualFrame(
-                visualProgress = transitionFrame.visualProgress,
-                transitionEnabled = true,
-                maxBlurRadiusPx = maxBlurRadiusPx,
-                // Returning should stay optically sharp while the image morphs back
-                // into its source rect. Blur made the source image look unfocused.
-                blurEnabled = !isDismissing && backProgress <= 0f,
-            )
-            val backdropAlpha = if (isDismissing) {
-                resolveImagePreviewDismissBackdropAlpha(transitionFrame.visualProgress)
-            } else {
-                visualFrame.backdropAlpha * verticalDragFrame.backdropAlphaMultiplier
-            }
-            val dismissRectFrame = resolveImagePreviewDismissRectFrame(
-                transitionProgress = transitionFrame.layoutProgress,
-                sourceRect = if (shouldUseRectAnim && isDismissing) sourceRect else null,
-                displayedImageRect = if (shouldUseRectAnim && isDismissing) dismissImageDisplayRect else null
-            )
-            
-            val targetLeft = AppSpacingTokens.None
-            val targetTop = AppSpacingTokens.None
-            val targetWidth = fullWidth
-            val targetHeight = fullHeight
+
+            fun dismissRemainingProgress(): Float =
+                (animateTrigger.value / dismissStartProgress.coerceAtLeast(0.001f)).coerceIn(0f, 1f)
+
+            val currentSourceRect = sourceRectForPage(pagerState.currentPage)
+            val shouldUseRectAnim = currentSourceRect != null && !pagerState.isScrollInProgress
             val previewSurfaceRect = remember(constraints.maxWidth, constraints.maxHeight) {
                 androidx.compose.ui.geometry.Rect(
                     left = 0f,
@@ -555,133 +754,295 @@ private fun ImagePreviewOverlayContent(
                 )
             }
 
+            fun currentFlightRect(progress: Float): androidx.compose.ui.geometry.Rect? {
+                if (!shouldUseRectAnim && !isDismissing) return null
+                // dismiss 起飞时已冻结源 rect,动画中途不再跟读(防切页改道)。
+                val source = (if (isDismissing) dismissSourceRect else currentSourceRect)
+                    ?: return null
+                return if (isDismissing) {
+                    val start = dismissImageDisplayRect ?: previewSurfaceRect
+                    val normalizedProgress = (progress / dismissStartProgress.coerceAtLeast(0.001f))
+                        .coerceIn(0f, 1f)
+                    resolveImagePreviewDismissRectFrame(
+                        transitionProgress = normalizedProgress,
+                        sourceRect = source,
+                        displayedImageRect = start
+                    )?.rect
+                } else {
+                    resolveImagePreviewOpenRect(
+                        transitionProgress = progress,
+                        sourceRect = source,
+                        previewSurfaceRect = previewSurfaceRect
+                    )
+                }
+            }
+
             LaunchedEffect(Unit) {
-                val openMotion = imagePreviewDismissMotion()
                 animateTrigger.snapTo(0f)
-                // 进场与退场同系 Continuity，一镜对称。
                 animateTrigger.animateTo(
                     targetValue = 1f,
-                    animationSpec = continuityTween(durationMillis = openMotion.openDurationMillis)
+                    animationSpec = imagePreviewOpenTween()
                 )
             }
 
-            fun triggerDismiss(
-                startRect: androidx.compose.ui.geometry.Rect? = resolveImagePreviewDismissStartRect(
-                    previewSurfaceRect = previewSurfaceRect,
-                    displayedImageRect = currentImageDisplayRect,
-                    // 从真实显示图区域飞回缩略图，黑边不参与 morph，观感更干净。
-                    preferPreviewSurface = false
-                )
+            fun beginDismiss(
+                startRect: androidx.compose.ui.geometry.Rect? = null,
+                backdropStartAlpha: Float? = null,
+                initialVelocityY: Float = 0f,
             ) {
                 if (isDismissing) return
-                dismissImageDisplayRect = startRect
+                val startProgress = currentTransitionProgress().coerceIn(0f, 1f)
+                val dragFrame = resolveImagePreviewVerticalDragFrame(verticalDismissOffsetYPx, fullHeightPx)
+                dismissStartProgress = startProgress
+                val flightRect = currentFlightRect(startProgress)
+                dismissImageDisplayRect = startRect ?: resolveImagePreviewDraggedDisplayRect(
+                    displayedImageRect = flightRect ?: previewSurfaceRect,
+                    translationYPx = verticalDismissOffsetYPx,
+                    translationXPx = verticalDismissOffsetXPx,
+                    scale = dragFrame.scale,
+                )
+                // A partially scrolled pager has no single thumbnail to return to.
+                dismissSourceRect = currentSourceRect.takeIf { shouldUseRectAnim }
+                val displayed = currentImageDisplayRect?.takeIf { it.width > 0f && it.height > 0f }
+                val fillScale = if (currentSourceRect != null && displayed != null) {
+                    maxOf(currentSourceRect.width / displayed.width, currentSourceRect.height / displayed.height)
+                } else {
+                    maxOf(
+                        (flightRect ?: previewSurfaceRect).width / fullWidthPx,
+                        (flightRect ?: previewSurfaceRect).height / fullHeightPx,
+                    )
+                }
+                dismissTargetImageScale = fillScale
+                dismissStartImageScale = (fillScale + (1f - fillScale) * startProgress) * dragFrame.scale
+                dismissImageContentRect = currentImageDisplayRect
+                dismissStartCornerRadiusDp = resolveImagePreviewPresentedCornerRadiusDp(
+                    visualProgress = startProgress,
+                    verticalDragProgress = dragFrame.progress,
+                    hasSourceRect = shouldUseRectAnim,
+                    sourceCornerRadiusDp = sourceCornerRadiusDp,
+                )
+                dismissFallbackScale = resolveImagePreviewTransitionFrame(
+                    rawProgress = startProgress,
+                    hasSourceRect = false,
+                    sourceCornerRadiusDp = sourceCornerRadiusDp,
+                ).fallbackScale * dragFrame.scale
+                dismissOffsetXPx = verticalDismissOffsetXPx
+                dismissOffsetYPx = verticalDismissOffsetYPx
+                dismissBackdropStartAlpha = if (backdropStartAlpha != null) {
+                    backdropStartAlpha.coerceIn(0f, 1f)
+                } else {
+                    startProgress * dragFrame.backdropAlphaMultiplier
+                }
                 isVerticalDismissDragging = false
+                backRecoverEpoch += 1
+                backRecovering = false
                 isDismissing = true
                 scope.launch {
                     verticalDismissOffsetYPx = 0f
+                    verticalDismissOffsetXPx = 0f
                     verticalDismissSnapAnim.snapTo(0f)
+                    verticalDismissSnapAnimX.snapTo(0f)
                     val dismissMotion = imagePreviewDismissMotion()
-                    // 单段 morph：几何线性 + Continuity 速度曲线，无 overshoot / spring 二次落点。
+                    // Convert pixel velocity to progress velocity along the frozen return path.
                     animateTrigger.animateTo(
                         targetValue = dismissMotion.settleTarget,
-                        animationSpec = continuityTween(
-                            durationMillis = dismissMotion.collapseDurationMillis
-                        )
+                        animationSpec = imagePreviewCloseSpring(),
+                        initialVelocity = resolveImagePreviewDismissProgressVelocity(
+                            velocityY = initialVelocityY,
+                            startRect = dismissImageDisplayRect,
+                            targetRect = dismissSourceRect,
+                            containerHeightPx = fullHeightPx,
+                            startProgress = startProgress,
+                        ),
                     )
+                    // Keep the final Hero frame in the Dialog for one display frame so
+                    // the source list can become visible before this window is removed.
+                    withFrameNanos { }
+                    // 交接两步走：先恢复源缩略图（Hero 末帧仍覆盖落点），让网格先重绘，
+                    // 再移除 Dialog 窗口，消除落位处两窗口重绘错帧的闪烁。
+                    ImagePreviewOverlayController.revealSourceBeforeRemoval(requestToken)
+                    withFrameNanos { }
                     onDismiss()
                 }
             }
 
+            val latestBeginDismiss by rememberUpdatedState<(androidx.compose.ui.geometry.Rect?, Float?, Float) -> Unit>(
+                { rect, alpha, velocity -> beginDismiss(rect, alpha, velocity) }
+            )
+            fun triggerDismiss(
+                startRect: androidx.compose.ui.geometry.Rect? = null,
+                backdropStartAlpha: Float? = null,
+                initialVelocityY: Float = 0f,
+            ) {
+                if (isDismissing || isPreparingDismiss) return
+                if (activeZoomScale <= 1.01f) {
+                    beginDismiss(startRect, backdropStartAlpha, initialVelocityY)
+                    return
+                }
+                // Only one reset can own this phase; repeated back/taps cannot restart it.
+                isPreparingDismiss = true
+                zoomResetTrigger += 1
+                scope.launch {
+                    try {
+                        val resetCompleted = withTimeoutOrNull(450L) {
+                            snapshotFlow { activeZoomScale }.first { it <= 1.01f }
+                        }
+                        if (resetCompleted != null) latestBeginDismiss(null, backdropStartAlpha, 0f)
+                    } finally {
+                        isPreparingDismiss = false
+                    }
+                }
+            }
+            val latestTriggerDismiss by rememberUpdatedState<() -> Unit>({ triggerDismiss() })
+
+            LaunchedEffect(dismissRequestCount) {
+                if (dismissRequestCount > 0) triggerDismiss()
+            }
+
             NavigationBackHandler(
                 state = backEventState,
-                isBackEnabled = !isDismissing,
+                isBackEnabled = !isDismissing && !isPreparingDismiss,
                 onBackCancelled = {
-                    scope.launch {
-                        val dismissMotion = imagePreviewDismissMotion()
-                        animateTrigger.snapTo(rawProgress)
-                        animateTrigger.animateTo(
-                            targetValue = 1f,
-                            animationSpec = emphasizedEnterTween(
-                                durationMillis = dismissMotion.cancelRecoverDurationMillis
-                            ),
-                        )
+                    if (!isDismissing) {
+                        scope.launch {
+                            if (isDismissing) return@launch
+                            backRecoverEpoch += 1
+                            val epoch = backRecoverEpoch
+                            backRecovering = true
+                            try {
+                                val dismissMotion = imagePreviewDismissMotion()
+                                animateTrigger.snapTo(lastScrubRawProgress)
+                                animateTrigger.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = emphasizedEnterTween(
+                                        durationMillis = dismissMotion.cancelRecoverDurationMillis
+                                    ),
+                                )
+                            } finally {
+                                // animateTo 被新的 dismiss / scrub 动画取消时(CancellationException)
+                                // 也必须复位,否则 currentTransitionProgress 的读口残留
+                                // backRecovering=true,后续 scrub 进度错乱、画面跳变。
+                                // 纪元不匹配说明已被接管,状态由接管方负责。
+                                if (backRecoverEpoch == epoch) {
+                                    backRecovering = false
+                                    lastScrubRawProgress = animateTrigger.value.coerceIn(0f, 1f)
+                                }
+                            }
+                        }
                     }
                 },
                 onBackCompleted = {
                     scope.launch {
-                        animateTrigger.snapTo(rawProgress)
+                        if (isDismissing) return@launch
+                        backRecovering = false
+                        animateTrigger.snapTo(lastScrubRawProgress)
                         triggerDismiss()
                     }
                 },
             )
-            
-            val (currentLeft, currentTop, currentWidth, currentHeight) = if (shouldUseRectAnim) {
-                val source = sourceRect
-                val sourceLeft = with(density) { source.left.toDp() }
-                val sourceTop = with(density) { source.top.toDp() }
-                val sourceWidth = with(density) { source.width.toDp() }
-                val sourceHeight = with(density) { source.height.toDp() }
-                
-                val l = androidx.compose.ui.unit.lerp(sourceLeft, targetLeft, transitionFrame.layoutProgress)
-                val t = androidx.compose.ui.unit.lerp(sourceTop, targetTop, transitionFrame.layoutProgress)
-                val w = androidx.compose.ui.unit.lerp(sourceWidth, targetWidth, transitionFrame.layoutProgress)
-                val h = androidx.compose.ui.unit.lerp(sourceHeight, targetHeight, transitionFrame.layoutProgress)
-                
-                Quad(l, t, w, h)
-            } else {
-                Quad(AppSpacingTokens.None, AppSpacingTokens.None, fullWidth, fullHeight)
+
+            // 新一轮预测返回 scrub 开始时立即交还进度读口:
+            // 恢复动画若还在跑,backProgress 分支必须优先,否则恢复动画与手势双驱动跳变。
+            // 纪元 +1 使被接管协程的 finally 复位全部作废。
+            LaunchedEffect(backProgress) {
+                if (backProgress > 0f && backRecovering) {
+                    backRecoverEpoch += 1
+                    backRecovering = false
+                }
             }
-            
+
             // 1. 背景层 (淡入淡出)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(IMAGE_PREVIEW_BACKDROP_TAG)
-                    .background(MediaContrastPalette.Scrim.copy(alpha = backdropAlpha))
+                    .drawBehind {
+                        val progress = currentTransitionProgress().coerceIn(0f, 1f)
+                        val dragFrame = resolveImagePreviewVerticalDragFrame(
+                            dragOffsetYPx = verticalDismissOffsetYPx,
+                            containerHeightPx = fullHeightPx
+                        )
+                        val alpha = if (isDismissing) {
+                            resolveImagePreviewDismissBackdropAlpha(
+                                visualProgress = dismissRemainingProgress(),
+                                startAlpha = dismissBackdropStartAlpha
+                            )
+                        } else {
+                            progress * dragFrame.backdropAlphaMultiplier
+                        }
+                        drawRect(MediaContrastPalette.Scrim.copy(alpha = alpha))
+                    }
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onTap = { triggerDismiss() }
+                            onTap = { latestTriggerDismiss() }
                         )
                     }
             )
-            
+
             // 2. 内容层 (缩放位移)
-            val contentModifier = if (isDismissing && shouldUseRectAnim && dismissRectFrame != null) {
-                Modifier
-                    .offset(
-                        x = with(density) { dismissRectFrame.rect.left.toDp() },
-                        y = with(density) { dismissRectFrame.rect.top.toDp() }
+            // Keep the page measured at viewport size. The outer layer animates the clipping
+            // rect, while the pager layer counters non-uniform rect scaling so image pixels
+            // retain their aspect ratio throughout the Hero flight.
+            val contentModifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val progress = currentTransitionProgress().coerceIn(0f, 1f)
+                    val flightRect = currentFlightRect(progress)
+                    alpha = resolveImagePreviewDismissContentAlpha(
+                        hasRectFlight = flightRect != null,
+                        isDismissing = isDismissing,
+                        visualProgress = if (isDismissing) dismissRemainingProgress() else progress
                     )
-                    .size(
-                        width = with(density) { dismissRectFrame.rect.width.toDp() },
-                        height = with(density) { dismissRectFrame.rect.height.toDp() }
+                    val dragFrame = resolveImagePreviewVerticalDragFrame(
+                        dragOffsetYPx = verticalDismissOffsetYPx,
+                        containerHeightPx = fullHeightPx
                     )
-                    .clip(RoundedCornerShape(presentedCornerRadiusDp.dp))
-                    .graphicsLayer {
-                        alpha = visualFrame.contentAlpha
-                        renderEffect = blurEffectCache.resolve(visualFrame.blurRadiusPx)
+                    val presentedCornerRadius = if (isDismissing) resolveImagePreviewDismissCornerRadiusDp(
+                        remainingProgress = dismissRemainingProgress(),
+                        startCornerRadiusDp = dismissStartCornerRadiusDp,
+                        targetCornerRadiusDp = if (dismissSourceRect != null) sourceCornerRadiusDp else 0f,
+                    ) else resolveImagePreviewPresentedCornerRadiusDp(
+                        visualProgress = progress,
+                        verticalDragProgress = if (isDismissing) 0f else dragFrame.progress,
+                        hasSourceRect = shouldUseRectAnim,
+                        sourceCornerRadiusDp = sourceCornerRadiusDp
+                    )
+                    if (flightRect != null) {
+                        val baseScaleX = (flightRect.width / size.width).coerceAtLeast(0.01f)
+                        val baseScaleY = (flightRect.height / size.height).coerceAtLeast(0.01f)
+                        val dragScale = if (isDismissing) 1f else dragFrame.scale
+                        scaleX = baseScaleX * dragScale
+                        scaleY = baseScaleY * dragScale
+                        // 竖滑拖拽期间双轴跟手（X/Y），dismiss 动画接管后由 flightRect 驱动
+                        translationX = (flightRect.left + flightRect.right - size.width) / 2f +
+                            if (isDismissing) 0f else verticalDismissOffsetXPx
+                        translationY = (flightRect.top + flightRect.bottom - size.height) / 2f +
+                            if (isDismissing) 0f else verticalDismissOffsetYPx
+                        val cornerRadii = resolveImagePreviewCounterScaledCornerRadii(
+                            cornerRadiusDp = presentedCornerRadius,
+                            scaleX = baseScaleX * dragScale,
+                            scaleY = baseScaleY * dragScale
+                        )
+                        shape = CounterScaledCornerShape(cornerRadii.horizontalDp, cornerRadii.verticalDp)
+                        clip = true
+                        transformOrigin = TransformOrigin.Center
+                    } else {
+                        val fallbackScale = if (isDismissing) {
+                            dismissFallbackScale * (0.96f + 0.04f * dismissRemainingProgress())
+                        } else resolveImagePreviewTransitionFrame(
+                            rawProgress = progress,
+                            hasSourceRect = false,
+                            sourceCornerRadiusDp = sourceCornerRadiusDp
+                        ).fallbackScale * dragFrame.scale
+                        scaleX = fallbackScale
+                        scaleY = fallbackScale
+                        translationX = if (isDismissing) dismissOffsetXPx else verticalDismissOffsetXPx
+                        translationY = if (isDismissing) dismissOffsetYPx else verticalDismissOffsetYPx
+                        shape = RoundedCornerShape(presentedCornerRadius.dp)
+                        clip = true
+                        transformOrigin = TransformOrigin.Center
                     }
-            } else {
-                Modifier
-                    .offset(x = currentLeft, y = currentTop)
-                    .size(width = currentWidth, height = currentHeight)
-                    .clip(RoundedCornerShape(presentedCornerRadiusDp.dp))
-                    .graphicsLayer {
-                        alpha = visualFrame.contentAlpha
-                        renderEffect = blurEffectCache.resolve(visualFrame.blurRadiusPx)
-                        if (!shouldUseRectAnim) {
-                            scaleX = transitionFrame.fallbackScale
-                            scaleY = transitionFrame.fallbackScale
-                        }
-                        if (!isDismissing) {
-                            translationY = verticalDismissOffsetYPx
-                            val dragScale = verticalDragFrame.scale
-                            scaleX *= dragScale
-                            scaleY *= dragScale
-                            transformOrigin = TransformOrigin.Center
-                        }
-                    }
-            }
+                }
 
             Box(
                  modifier = contentModifier
@@ -689,16 +1050,64 @@ private fun ImagePreviewOverlayContent(
                 //  使用 HorizontalPager 实现滑动切换 + 3D立体动画
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val flightRect = currentFlightRect(currentTransitionProgress())
+                            if (flightRect != null) {
+                                val baseScaleX = (flightRect.width / size.width).coerceAtLeast(0.01f)
+                                val baseScaleY = (flightRect.height / size.height).coerceAtLeast(0.01f)
+                                val sourceFillScale = currentSourceRect
+                                    ?.let { source ->
+                                        currentImageDisplayRect
+                                            ?.takeIf { it.width > 0f && it.height > 0f }
+                                            ?.let { displayed ->
+                                                maxOf(
+                                                    source.width / displayed.width,
+                                                    source.height / displayed.height
+                                                )
+                                            }
+                                    }
+                                    ?: maxOf(baseScaleX, baseScaleY)
+                                val imageScale = if (isDismissing) {
+                                    dismissTargetImageScale +
+                                        (dismissStartImageScale - dismissTargetImageScale) * dismissRemainingProgress()
+                                } else {
+                                    sourceFillScale + (1f - sourceFillScale) * currentTransitionProgress().coerceIn(0f, 1f)
+                                }
+                                scaleX = imageScale / baseScaleX
+                                scaleY = imageScale / baseScaleY
+                                val imageRect = if (isDismissing) {
+                                    dismissImageContentRect
+                                } else {
+                                    currentImageDisplayRect
+                                }
+                                if (imageRect != null) {
+                                    val remainingFlight = 1f - currentTransitionProgress().coerceIn(0f, 1f)
+                                    val viewportCenterX = (previewSurfaceRect.left + previewSurfaceRect.right) / 2f
+                                    val viewportCenterY = (previewSurfaceRect.top + previewSurfaceRect.bottom) / 2f
+                                    translationX = -scaleX * (imageRect.center.x - viewportCenterX) * remainingFlight
+                                    translationY = -scaleY * (imageRect.center.y - viewportCenterY) * remainingFlight
+                                } else {
+                                    translationX = 0f
+                                    translationY = 0f
+                                }
+                                transformOrigin = TransformOrigin.Center
+                            } else {
+                                scaleX = 1f
+                                scaleY = 1f
+                                translationX = 0f
+                                translationY = 0f
+                            }
+                        },
                     beyondViewportPageCount = 1,  // 预加载相邻页面
-                    userScrollEnabled = !isVerticalDismissDragging &&
-                        !isDismissing &&
+                    // The image recognizer consumes vertical moves. Do not restart Pager's
+                    // scrollable node when a drag starts; its hit path must survive until release.
+                    userScrollEnabled = !isDismissing && !isPreparingDismiss &&
                         activeZoomScale <= 1.01f,
                     key = { images.getOrElse(it) { "" } }
                 ) { page ->
                     // 所有图片默认平面横滑，可由同一个设置启用轻量 3D。
-                    val apply3D = transitionFrame.visualProgress > 0.92f
-
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -710,29 +1119,42 @@ private fun ImagePreviewOverlayContent(
                                 // 放进 graphicsLayer lambda 后只触发重绘，不触发重组。
                                 val pageOffset =
                                     (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                                if (apply3D && gallery3dPageEnabled) {
+                                // 3D 强度随进度平滑进入，替代 >0.92 硬阈值开关的尾段跳变。
+                                val gallery3dBlend = if (gallery3dPageEnabled) {
+                                    resolveImagePreviewGallery3DBlend(currentTransitionProgress())
+                                } else {
+                                    0f
+                                }
+                                if (gallery3dBlend > 0f) {
                                     val transform = resolveImagePreviewGalleryPageTransform(
                                         pageOffsetFraction = pageOffset,
                                         containerWidthPx = fullWidthPx
                                     )
-                                    rotationY = transform.rotationY
-                                    translationX = transform.translationXPx
+                                    rotationY = transform.rotationY * gallery3dBlend
+                                    translationX = transform.translationXPx * gallery3dBlend
                                     cameraDistance = 16f * density.density
                                     transformOrigin = TransformOrigin(
                                         pivotFractionX = transform.pivotFractionX,
                                         pivotFractionY = 0.5f
                                     )
-                                    scaleX = transform.scale
-                                    scaleY = transform.scale
-                                    alpha = transform.alpha
+                                    scaleX = 1f + (transform.scale - 1f) * gallery3dBlend
+                                    scaleY = 1f + (transform.scale - 1f) * gallery3dBlend
+                                    alpha = 1f + (transform.alpha - 1f) * gallery3dBlend
+                                } else {
+                                    rotationY = 0f
+                                    translationX = 0f
+                                    scaleX = 1f
+                                    scaleY = 1f
+                                    alpha = 1f
+                                    transformOrigin = TransformOrigin.Center
                                 }
                             }
                             .pointerInput(Unit) {
                                 // 阻止点击穿透到关闭手势
-                                detectTapGestures { 
+                                detectTapGestures {
                                      if (!useCommentPreviewChrome) {
                                          // 点击图片也关闭
-                                         triggerDismiss()
+                                         latestTriggerDismiss()
                                      }
                                 }
                             },
@@ -740,6 +1162,12 @@ private fun ImagePreviewOverlayContent(
                     ) {
                         val imageUrl = remember(images.getOrNull(page)) {
                             normalizeImageUrl(images.getOrNull(page) ?: "")
+                        }
+                        // 缩略图与预览图的 URL 不同（预览剥离 @尺寸后缀），内存缓存键对不上，
+                        // 原图下载前内容层只剩黑底。把网格已加载的缩略图 URL 设为
+                        // placeholderMemoryCacheKey，morph 期间立即垫图，杜绝「先黑后图」。
+                        val placeholderCacheKey = remember(images.getOrNull(page)) {
+                            resolveImagePreviewPlaceholderCacheKey(images.getOrNull(page).orEmpty())
                         }
                         val decodeSize = remember(page, imageUrl, page in originalQualityPages) {
                             resolveImageDecodeSize(
@@ -750,21 +1178,54 @@ private fun ImagePreviewOverlayContent(
                                 }
                             )
                         }
-                        
-                        ZoomableImage(
-                            model = ImageRequest.Builder(context)
-                                .data(imageUrl)
+                        val previewQuality = com.android.purebilibili.core.ui.components.LocalContentImageSettings.current.previewQuality
+                        val showOriginal = page in originalQualityPages
+                        val displayedImageUrl = remember(imageUrl, previewQuality, showOriginal) {
+                            com.android.purebilibili.core.util.BiliImageQualityPolicy.resolvePreviewUrl(imageUrl, previewQuality, showOriginal)
+                        }
+                        val previewRequest = remember(context, displayedImageUrl, decodeSize, placeholderCacheKey, requestToken, publicContent) {
+                            ImageRequest.Builder(context)
+                                .data(displayedImageUrl)
+                                .originalBiliImage()
+                                .diskCacheKey(displayedImageUrl)
                                 // 预览必须采样解码，避免超大原图超过 Canvas 单位图绘制上限。
                                 .size(decodeSize.widthPx, decodeSize.heightPx)
-                                .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
-                                // 退出 morph 时关闭 crossfade，避免尺寸变化触发二次淡入发黏。
-                                .crossfade(!isDismissing)
-                                .build(),
+                                .placeholderMemoryCacheKey(placeholderCacheKey)
+                                // B 站图片需要固定 Referer；公开内容（RSS 正文）改由匿名图片链路按图片站点补 Referer。
+                                .apply {
+                                    if (!publicContent) {
+                                        httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+                                    }
+                                }
+                                // 进出场由画廊自身的 morph 控制，图片请求不能随退出状态重建。
+                                .crossfade(false)
+                                .listener(
+                                    onSuccess = { _, result ->
+                                        if (placeholderCacheKey != null) {
+                                            ImagePreviewOverlayController.recordSourceImage(
+                                                requestToken,
+                                                placeholderCacheKey,
+                                                result.image,
+                                            )
+                                        }
+                                    }
+                                )
+                                .build()
+                        }
+
+                        ZoomableImage(
+                            model = previewRequest,
+                            originalImageUrl = imageUrl,
+                            originalQuality = page in originalQualityPages,
+                            publicContent = publicContent,
                             contentDescription = null,
                             imageLoader = gifImageLoader,  //  使用 GIF 加载器
                             modifier = Modifier.fillMaxSize(),
+                            resetZoomTrigger = if (page == pagerState.currentPage) zoomResetTrigger else 0,
+                            gesturesEnabled = !isDismissing && !isPreparingDismiss,
+                            displayRectTrackingEnabled = page == pagerState.currentPage && !isDismissing,
                             onZoomChange = {
-                                activeZoomScale = it
+                                if (page == pagerState.currentPage) activeZoomScale = it
                             },
                             onDisplayRectChange = { rect ->
                                 if (!isDismissing && page == pagerState.currentPage) {
@@ -774,21 +1235,32 @@ private fun ImagePreviewOverlayContent(
                             onVerticalDismissDragStart = {
                                 if (page == pagerState.currentPage && !isDismissing) {
                                     isVerticalDismissDragging = true
-                                    scope.launch { verticalDismissSnapAnim.stop() }
+                                    scope.launch {
+                                        verticalDismissSnapAnim.stop()
+                                        verticalDismissSnapAnimX.stop()
+                                    }
                                 }
                             },
                             onVerticalDismissDrag = { dragDelta ->
                                 if (page == pagerState.currentPage && !isDismissing && isVerticalDismissDragging) {
-                                    verticalDismissOffsetYPx += dragDelta
+                                    verticalDismissOffsetYPx += dragDelta.y
+                                    verticalDismissOffsetXPx += dragDelta.x
                                 }
                             },
-                            onVerticalDismissDragEnd = {
+                            onVerticalDismissDragEnd = { releaseVelocityY ->
                                 if (page == pagerState.currentPage && !isDismissing && isVerticalDismissDragging) {
                                     isVerticalDismissDragging = false
+                                    val dragFrame = resolveImagePreviewVerticalDragFrame(
+                                        dragOffsetYPx = verticalDismissOffsetYPx,
+                                        containerHeightPx = fullHeightPx
+                                    )
                                     val draggedRect = resolveImagePreviewDraggedDisplayRect(
-                                        displayedImageRect = currentImageDisplayRect,
+                                        displayedImageRect = currentFlightRect(
+                                            currentTransitionProgress()
+                                        ) ?: previewSurfaceRect,
                                         translationYPx = verticalDismissOffsetYPx,
-                                        scale = verticalDragFrame.scale
+                                        translationXPx = verticalDismissOffsetXPx,
+                                        scale = dragFrame.scale
                                     )
                                     when (
                                         resolveImagePreviewVerticalDismissDecision(
@@ -796,15 +1268,31 @@ private fun ImagePreviewOverlayContent(
                                             containerHeightPx = fullHeightPx
                                         )
                                     ) {
-                                        ImagePreviewVerticalDismissDecision.DISMISS -> triggerDismiss(draggedRect)
+                                        ImagePreviewVerticalDismissDecision.DISMISS -> triggerDismiss(
+                                            startRect = draggedRect,
+                                            backdropStartAlpha = dragFrame.backdropAlphaMultiplier,
+                                            initialVelocityY = releaseVelocityY,
+                                        )
                                         ImagePreviewVerticalDismissDecision.SNAP_BACK -> {
                                             scope.launch {
-                                                verticalDismissSnapAnim.snapTo(verticalDismissOffsetYPx)
-                                                verticalDismissSnapAnim.animateTo(
-                                                    targetValue = 0f,
-                                                    animationSpec = interactiveSnapSpring()
-                                                ) {
-                                                    verticalDismissOffsetYPx = value
+                                                launch {
+                                                    verticalDismissSnapAnim.snapTo(verticalDismissOffsetYPx)
+                                                    verticalDismissSnapAnim.animateTo(
+                                                        targetValue = 0f,
+                                                        animationSpec = interactiveSnapSpring(),
+                                                        initialVelocity = clampImagePreviewDismissVelocity(releaseVelocityY),
+                                                    ) {
+                                                        verticalDismissOffsetYPx = value
+                                                    }
+                                                }
+                                                launch {
+                                                    verticalDismissSnapAnimX.snapTo(verticalDismissOffsetXPx)
+                                                    verticalDismissSnapAnimX.animateTo(
+                                                        targetValue = 0f,
+                                                        animationSpec = interactiveSnapSpring()
+                                                    ) {
+                                                        verticalDismissOffsetXPx = value
+                                                    }
                                                 }
                                             }
                                         }
@@ -812,20 +1300,30 @@ private fun ImagePreviewOverlayContent(
                                 }
                             },
                             onExtremeAspectRatioDetected = {
-                                // 长条图在 4096 方形采样档下短边像素不足，放大后仍会发糊。
-                                // 自动提升到现有原图解码档；极端长宽比下实际内存远低于方形上限。
+                                // 长条图自动启用原图区域解码，放大和滚动时按视口补充高清内容。
                                 originalQualityPages = originalQualityPages + page
                             },
                             onVerticalDismissDragCancel = {
                                 if (page == pagerState.currentPage && !isDismissing) {
                                     isVerticalDismissDragging = false
                                     scope.launch {
-                                        verticalDismissSnapAnim.snapTo(verticalDismissOffsetYPx)
-                                        verticalDismissSnapAnim.animateTo(
-                                            targetValue = 0f,
-                                            animationSpec = interactiveSnapSpring()
-                                        ) {
-                                            verticalDismissOffsetYPx = value
+                                        launch {
+                                            verticalDismissSnapAnim.snapTo(verticalDismissOffsetYPx)
+                                            verticalDismissSnapAnim.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = interactiveSnapSpring()
+                                            ) {
+                                                verticalDismissOffsetYPx = value
+                                            }
+                                        }
+                                        launch {
+                                            verticalDismissSnapAnimX.snapTo(verticalDismissOffsetXPx)
+                                            verticalDismissSnapAnimX.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = interactiveSnapSpring()
+                                            ) {
+                                                verticalDismissOffsetXPx = value
+                                            }
                                         }
                                     }
                                 }
@@ -842,10 +1340,8 @@ private fun ImagePreviewOverlayContent(
                                     haptic(resolveImagePreviewLongPressSaveStartFeedback())
                                     if (onImageLongPress != null) {
                                         onImageLongPress(imageUrl)
-                                    } else if (!useCommentPreviewChrome) {
-                                        showOrdinaryImageActions = true
                                     } else {
-                                        requestSaveCurrentImage(imageUrl)
+                                        showOrdinaryImageActions = true
                                     }
                                 }
                             },
@@ -862,16 +1358,30 @@ private fun ImagePreviewOverlayContent(
                             pageIndex = page,
                             livePhotoVideos = livePhotoVideos
                         )
+                        // 实况照片按进度平滑淡入；0.7 前不合成，避免飞行早期白白挂播放器。
+                        // 门限用 derivedStateOf 供组合期判断，alpha 在 graphicsLayer 内逐帧读取，不触发重组。
+                        val livePhotoProgressReady by remember {
+                            derivedStateOf {
+                                val progress = if (backProgress > 0f) 1f - backProgress else animateTrigger.value
+                                progress >= 0.7f
+                            }
+                        }
                         if (
                             !liveVideoUrl.isNullOrBlank() &&
                             isLivePhotoEnabled &&
                             page == pagerState.currentPage &&
                             !isDismissing &&
-                            transitionFrame.visualProgress >= 0.85f && activeZoomScale <= 1.05f
+                            livePhotoProgressReady && activeZoomScale <= 1.05f
                         ) {
                             LivePhotoPlayback(
                                 videoUrl = liveVideoUrl,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        alpha = resolveImagePreviewLivePhotoAlpha(
+                                            if (backProgress > 0f) 1f - backProgress else currentTransitionProgress()
+                                        )
+                                    },
                                 isPlaying = isLivePhotoPlaying,
                                 isMuted = isLivePhotoMuted,
                                 playerRef = { livePhotoPlayer = it },
@@ -894,10 +1404,8 @@ private fun ImagePreviewOverlayContent(
                                         haptic(resolveImagePreviewLongPressSaveStartFeedback())
                                         if (onImageLongPress != null) {
                                             onImageLongPress(imageUrl)
-                                        } else if (!useCommentPreviewChrome) {
-                                            showOrdinaryImageActions = true
                                         } else {
-                                            requestSaveCurrentImage(imageUrl)
+                                            showOrdinaryImageActions = true
                                         }
                                     }
                                 }
@@ -906,16 +1414,17 @@ private fun ImagePreviewOverlayContent(
                     }
                 }
             }
-            
+
             // 3. UI 覆盖层 - 退出时先于图片清掉 chrome，只剩干净一镜 morph
-            val chromeAlpha = resolveImagePreviewChromeAlpha(
-                visualProgress = transitionFrame.visualProgress,
-                isDismissing = isDismissing
-            )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = chromeAlpha }
+                    .graphicsLayer {
+                        alpha = resolveImagePreviewChromeAlpha(
+                            visualProgress = currentTransitionProgress(),
+                            isDismissing = isDismissing
+                        )
+                    }
             ) {
                 val safeDrawingPadding = WindowInsets.safeDrawing.asPaddingValues()
                 val overlayPadding = resolveImagePreviewOverlayPadding(
@@ -1068,12 +1577,12 @@ private fun ImagePreviewOverlayContent(
                     ) {
                         AppText(
                             text = "${pagerState.currentPage + 1}/${images.size}",
-                            color = MediaContrastPalette.Foreground,
+                            color = Color.White,
                             fontSize = MaterialTheme.typography.bodyMedium.fontSize
                         )
                     }
                 }
-                
+
                 val chromeModifier = Modifier.graphicsLayer {
                     // 同上：横滑期间 currentPageOffsetFraction 每帧变化，
                     // 原先在组合期读取会让整个 chrome（顶栏 + 底栏 + 页码）每帧重组。
@@ -1090,7 +1599,7 @@ private fun ImagePreviewOverlayContent(
                     val isOriginalQuality = currentPage in originalQualityPages
                     ImagePreviewCommentTopBar(
                         label = if (isOriginalQuality) {
-                            "原图已加载"
+                            "原图模式"
                         } else {
                             commentContext.originalSizeLabels.getOrNull(currentPage)
                                 ?: resolveCommentImageOriginalSizeLabel(null)
@@ -1101,8 +1610,7 @@ private fun ImagePreviewOverlayContent(
                         onDismiss = { triggerDismiss() },
                         onShare = { requestShareCurrentImage(currentImageUrl) },
                         onViewOriginal = {
-                            // 按 API 文档：去掉 @ 尺寸参数即为原图 URL（预览已用该 URL），
-                            // 此处切换为全分辨率解码重新加载，突破预览采样限制。
+                            // 原图保留安全的整图底图，高清细节由可见区域解码提供。
                             originalQualityPages = originalQualityPages + currentPage
                         },
                         modifier = Modifier
@@ -1258,7 +1766,7 @@ private fun ImagePreviewOverlayContent(
                         }
                         Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
                     }
-                    
+
                     // 分享按钮
                     AppFilledIconButton(
                         onClick = {
@@ -1355,81 +1863,72 @@ private fun ImagePreviewOverlayContent(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(
-                                start = maxOf(
-                                    AppSpacingTokens.Medium,
-                                    safeDrawingPadding.calculateStartPadding(layoutDirection) + AppSpacingTokens.ExtraSmall,
-                                ),
+                                start = maxOf(12.dp, safeDrawingPadding.calculateStartPadding(layoutDirection) + 4.dp),
                                 top = overlayPadding.top
                             )
                     ) {
                         Column {
                             Row(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(IMAGE_PREVIEW_LIVE_PHOTO_CONTROL_CORNER_RADIUS_DP.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(MediaContrastPalette.Scrim.copy(alpha = 0.65f))
-                                    .clickable { showLivePhotoMenu = !showLivePhotoMenu }
-                                    .padding(
-                                        horizontal = AppSpacingTokens.Small + AppSpacingTokens.Micro,
-                                        vertical = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro,
-                                    ),
+                                    .appActionClickable { showLivePhotoMenu = !showLivePhotoMenu }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 if (isLivePhotoEnabled) {
-                                    LivePhotoIcon(tint = MediaContrastPalette.Foreground)
+                                    LivePhotoIcon(tint = Color.White)
                                 } else {
-                                    LivePhotoOffIcon(tint = MediaContrastPalette.Foreground.copy(alpha = 0.8f))
+                                    LivePhotoOffIcon(tint = Color.White.copy(alpha = 0.8f))
                                 }
-                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 AppText(
                                     text = if (isLivePhotoEnabled) "实况" else "实况已关",
-                                    color = MediaContrastPalette.Foreground,
+                                    color = Color.White,
                                     fontSize = MaterialTheme.typography.labelMedium.fontSize,
                                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                                 )
-                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 AppIcon(
                                     imageVector = if (showLivePhotoMenu) rememberAppChevronUpIcon() else rememberAppChevronDownIcon(),
                                     contentDescription = "实况菜单",
-                                    tint = MediaContrastPalette.Foreground,
-                                    modifier = Modifier.size(AppSpacingTokens.Large)
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
 
                             if (showLivePhotoMenu) {
-                                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(IMAGE_PREVIEW_LIVE_PHOTO_MENU_CORNER_RADIUS_DP.dp))
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(MediaContrastPalette.Scrim.copy(alpha = 0.88f))
-                                        .padding(vertical = AppSpacingTokens.ExtraSmall)
+                                        .padding(vertical = 4.dp)
                                         .width(IntrinsicSize.Max)
                                 ) {
                                     Column {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clickable {
+                                                .appActionClickable {
                                                     isLivePhotoEnabled = !isLivePhotoEnabled
                                                     if (isLivePhotoEnabled) {
                                                         isLivePhotoPlaying = true
                                                     }
                                                     showLivePhotoMenu = false
                                                 }
-                                                .padding(
-                                                    horizontal = AppSpacingTokens.Large - AppSpacingTokens.Micro,
-                                                    vertical = AppSpacingTokens.Small + AppSpacingTokens.Micro,
-                                                ),
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (isLivePhotoEnabled) {
-                                                LivePhotoOffIcon(tint = MediaContrastPalette.Foreground)
+                                                LivePhotoOffIcon(tint = Color.White)
                                             } else {
-                                                LivePhotoIcon(tint = MediaContrastPalette.Foreground)
+                                                LivePhotoIcon(tint = Color.White)
                                             }
-                                            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
+                                            Spacer(modifier = Modifier.width(10.dp))
                                             AppText(
                                                 text = if (isLivePhotoEnabled) "关闭实况" else "开启实况",
-                                                color = MediaContrastPalette.Foreground,
+                                                color = Color.White,
                                                 fontSize = MaterialTheme.typography.bodyMedium.fontSize
                                             )
                                         }
@@ -1437,36 +1936,33 @@ private fun ImagePreviewOverlayContent(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(AppSurfaceTokens.OutlineWidth / 2f)
-                                                .background(MediaContrastPalette.Foreground.copy(alpha = 0.15f))
+                                                .height(0.5.dp)
+                                                .background(Color.White.copy(alpha = 0.15f))
                                         )
 
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clickable {
+                                                .appActionClickable {
                                                     isLivePhotoEnabled = true
                                                     isLivePhotoPlaying = true
                                                     livePhotoPlayer?.seekTo(0)
                                                     livePhotoPlayer?.play()
                                                     showLivePhotoMenu = false
                                                 }
-                                                .padding(
-                                                    horizontal = AppSpacingTokens.Large - AppSpacingTokens.Micro,
-                                                    vertical = AppSpacingTokens.Small + AppSpacingTokens.Micro,
-                                                ),
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             AppIcon(
                                                 imageVector = rememberAppRefreshIcon(),
                                                 contentDescription = null,
-                                                tint = MediaContrastPalette.Foreground,
-                                                modifier = Modifier.size(AppSpacingTokens.Large)
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
+                                            Spacer(modifier = Modifier.width(10.dp))
                                             AppText(
                                                 text = "重新播放",
-                                                color = MediaContrastPalette.Foreground,
+                                                color = Color.White,
                                                 fontSize = MaterialTheme.typography.bodyMedium.fontSize
                                             )
                                         }
@@ -1483,16 +1979,13 @@ private fun ImagePreviewOverlayContent(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(
-                                end = maxOf(
-                                    AppSpacingTokens.Medium,
-                                    safeDrawingPadding.calculateEndPadding(layoutDirection) + AppSpacingTokens.ExtraSmall,
-                                ),
+                                end = maxOf(12.dp, safeDrawingPadding.calculateEndPadding(layoutDirection) + 4.dp),
                                 bottom = overlayPadding.bottom
                             )
                             .clip(CircleShape)
                             .background(MediaContrastPalette.Scrim.copy(alpha = 0.65f))
-                            .clickable { isLivePhotoMuted = !isLivePhotoMuted }
-                            .padding(AppSpacingTokens.Small)
+                            .appActionClickable { isLivePhotoMuted = !isLivePhotoMuted }
+                            .padding(8.dp)
                     ) {
                         AppIcon(
                             imageVector = if (isLivePhotoMuted) {
@@ -1501,8 +1994,8 @@ private fun ImagePreviewOverlayContent(
                                 Icons.AutoMirrored.Filled.VolumeUp
                             },
                             contentDescription = if (isLivePhotoMuted) "开启声音" else "静音",
-                            tint = MediaContrastPalette.Foreground,
-                            modifier = Modifier.size(AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall)
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -1514,6 +2007,13 @@ private fun ImagePreviewOverlayContent(
             onDismissRequest = { showOrdinaryImageActions = false },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    ImagePreviewActionButton(
+                        label = "查看原图",
+                        onClick = {
+                            showOrdinaryImageActions = false
+                            originalQualityPages = originalQualityPages + pagerState.currentPage
+                        }
+                    )
                     ImagePreviewActionButton(
                         label = "分享",
                         onClick = {
@@ -1580,7 +2080,7 @@ private fun ImagePreviewActionButton(
             .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
         contentPadding = PaddingValues(horizontal = AppSpacingTokens.Medium),
         colors = ButtonDefaults.textButtonColors(
-            contentColor = MaterialTheme.colorScheme.onSurface
+            contentColor = AppContentColors.primaryText()
         )
     ) {
         AppText(
@@ -1632,7 +2132,7 @@ private fun ImagePreviewCommentTopBar(
                     .background(MediaContrastPalette.Foreground.copy(alpha = 0.16f))
                     .then(
                         if (onViewOriginal != null) {
-                            Modifier.clickable(
+                            Modifier.appActionClickable(
                                 enabled = enabled,
                                 onClick = onViewOriginal
                             )
@@ -1741,7 +2241,7 @@ private fun ImagePreviewCommentPanel(
                     .height(AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro)
                     .clip(AppShapes.container(ContainerLevel.Floating))
                     .background(MediaContrastPalette.Foreground.copy(alpha = 0.12f))
-                    .clickable(enabled = context.onReplyClick != null, onClick = onReply)
+                    .appActionClickable(enabled = context.onReplyClick != null, onClick = onReply)
                     .padding(horizontal = AppSpacingTokens.Medium + AppSpacingTokens.Micro),
                 contentAlignment = Alignment.CenterStart
             ) {
@@ -1795,7 +2295,7 @@ private fun ImagePreviewCommentActionButton(
     Column(
         modifier = Modifier
             .size(width = AppSpacingTokens.TripleExtraLarge - AppSpacingTokens.Micro, height = AppSpacingTokens.TripleExtraLarge)
-            .clickable(enabled = enabled && !busy, onClick = onClick),
+            .appActionClickable(enabled = enabled && !busy, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -1809,7 +2309,7 @@ private fun ImagePreviewCommentActionButton(
             AppIcon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (selected) MaterialTheme.colorScheme.primary else MediaContrastPalette.Foreground,
+                tint = if (selected) AppContentColors.accent() else MediaContrastPalette.Foreground,
                 modifier = Modifier.size(AppSpacingTokens.ExtraLarge)
             )
         }
@@ -1823,9 +2323,6 @@ private fun ImagePreviewCommentActionButton(
     }
 }
 
-// 辅助数据类
-data class Quad(val left: androidx.compose.ui.unit.Dp, val top: androidx.compose.ui.unit.Dp, val width: androidx.compose.ui.unit.Dp, val height: androidx.compose.ui.unit.Dp)
-
 /**
  *  规范化图片 URL
  * 1. 修复协议头（http -> https, // -> https://）
@@ -1833,6 +2330,7 @@ data class Quad(val left: androidx.compose.ui.unit.Dp, val top: androidx.compose
  */
 internal fun normalizeImageUrl(rawSrc: String): String {
     val trimmed = rawSrc.trim()
+    if (trimmed.startsWith("file://") || trimmed.startsWith("content://")) return trimmed
     var result = when {
         trimmed.startsWith("https://") -> trimmed
         trimmed.startsWith("http://") -> trimmed.replace("http://", "https://")
@@ -1840,13 +2338,27 @@ internal fun normalizeImageUrl(rawSrc: String): String {
         trimmed.isNotEmpty() -> "https://$trimmed"
         else -> ""
     }
-    
+
     //  移除 Bilibili 图片尺寸参数（例如 @640w_400h.webp）以获取最高质量
     if (result.contains("@")) {
         result = result.substringBefore("@")
     }
-    
+
     return result
+}
+
+/** Stable cache identity shared by a source thumbnail and its preview placeholder. */
+internal fun resolveImagePreviewPlaceholderCacheKey(rawSrc: String): String? {
+    val trimmed = rawSrc.trim()
+    if (trimmed.startsWith("file://") || trimmed.startsWith("content://")) return trimmed
+    val normalized = when {
+        trimmed.startsWith("https://") -> trimmed
+        trimmed.startsWith("http://") -> trimmed.replace("http://", "https://")
+        trimmed.startsWith("//") -> "https:$trimmed"
+        trimmed.isNotEmpty() -> "https://$trimmed"
+        else -> ""
+    }
+    return normalized.takeIf { it.isNotEmpty() }
 }
 
 internal fun resolveImageShareMimeType(imageUrl: String): String {
@@ -1859,25 +2371,24 @@ internal fun resolveImageShareMimeType(imageUrl: String): String {
     }
 }
 
-private fun resolveImageShareExtension(mimeType: String): String = when (mimeType) {
-    "image/gif" -> "gif"
-    "image/webp" -> "webp"
-    "image/png" -> "png"
-    else -> "jpg"
-}
 
 /**
  *  分享图片 - 下载原始图片到应用缓存，再通过 FileProvider 交给系统分享面板
  */
-suspend fun shareImageFromPreview(context: Context, imageUrl: String): Boolean {
+suspend fun shareImageFromPreview(context: Context, imageUrl: String, publicContent: Boolean = false): Boolean {
     val normalizedUrl = normalizeImageUrl(imageUrl)
     if (normalizedUrl.isEmpty()) return false
-    val mimeType = resolveImageShareMimeType(normalizedUrl)
-    val sharedFile = withContext(Dispatchers.IO) {
-        createImagePreviewShareFile(context, normalizedUrl, mimeType)
+    val prepared = try {
+        createImagePreviewShareFile(context, normalizedUrl, publicContent)
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        Log.e("ImagePreview", "Error preparing original image share", error)
+        null
     } ?: return false
+    val (sharedFile, mimeType) = prepared
 
-    return withContext(Dispatchers.Main) {
+    return withContext(Dispatchers.Main.immediate) {
         try {
             val uri = FileProvider.getUriForFile(
                 context,
@@ -1906,36 +2417,25 @@ suspend fun shareImageFromPreview(context: Context, imageUrl: String): Boolean {
     }
 }
 
-private fun createImagePreviewShareFile(
+/** 分享文件与保存原图共用原始字节来源，MIME 和后缀依据文件内容识别。 */
+private suspend fun createImagePreviewShareFile(
     context: Context,
     imageUrl: String,
-    mimeType: String
-): File? {
-    return try {
-        val cacheDir = File(context.cacheDir, "shared_images").apply { mkdirs() }
-        cleanupImagePreviewShareCache(cacheDir)
-        val extension = resolveImageShareExtension(mimeType)
-        val outputFile = File(cacheDir, "BiliPai_${System.currentTimeMillis()}.$extension")
-        val connection = java.net.URL(imageUrl).openConnection() as java.net.HttpURLConnection
-        try {
-            connection.setRequestProperty("Referer", "https://www.bilibili.com/")
-            connection.connect()
-            if (connection.responseCode !in 200..299) {
-                Log.e("ImagePreview", "Failed to download for sharing: ${connection.responseCode}")
-                return null
-            }
-            connection.inputStream.use { inputStream ->
-                outputFile.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-            outputFile
-        } finally {
-            connection.disconnect()
+    publicContent: Boolean,
+): Pair<File, String> = withOriginalImageFile(context, imageUrl, publicContent) { original ->
+    val mimeType = originalImageMimeType(original)
+    val cacheDir = File(context.cacheDir, "shared_images").apply { mkdirs() }
+    cleanupImagePreviewShareCache(cacheDir)
+    val outputFile = File.createTempFile("BiliPai_", ".${originalImageExtension(mimeType)}", cacheDir)
+    try {
+        original.inputStream().use { source ->
+            outputFile.outputStream().use { target -> source.copyTo(target, 64 * 1024) }
         }
-    } catch (e: Exception) {
-        Log.e("ImagePreview", "Error preparing image share", e)
-        null
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        outputFile to mimeType
+    } catch (error: Throwable) {
+        outputFile.delete()
+        throw error
     }
 }
 
@@ -1948,122 +2448,19 @@ private fun cleanupImagePreviewShareCache(cacheDir: File) {
     }
 }
 
-/**
- *  保存图片到相册 - 支持 GIF/WebP 等格式保留
- */
-suspend fun saveImageToGallery(context: android.content.Context, imageUrl: String): Boolean {
-    return withContext(Dispatchers.IO) {
-        try {
-            //  检测图片格式
-            val isGif = imageUrl.contains(".gif", ignoreCase = true)
-            val isWebp = imageUrl.contains(".webp", ignoreCase = true)
-            val isPng = imageUrl.contains(".png", ignoreCase = true)
-            
-            //  对于 GIF/WebP，直接下载原始字节流保留动画
-            if (isGif || isWebp) {
-                val url = java.net.URL(imageUrl)
-                val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.setRequestProperty("Referer", "https://www.bilibili.com/")
-                connection.connect()
-                
-                if (connection.responseCode != 200) {
-                    Log.e("ImagePreview", "Failed to download: ${connection.responseCode}")
-                    return@withContext false
-                }
-                
-                val inputStream = connection.inputStream
-                val bytes = inputStream.readBytes()
-                inputStream.close()
-                connection.disconnect()
-                
-                // 生成文件名
-                val extension = when {
-                    isGif -> "gif"
-                    isWebp -> "webp"
-                    else -> "jpg"
-                }
-                val mimeType = when {
-                    isGif -> "image/gif"
-                    isWebp -> "image/webp"
-                    else -> "image/jpeg"
-                }
-                val fileName = "BiliPai_${System.currentTimeMillis()}.$extension"
-
-                if (saveBytesToCustomImageSaveDirectory(context, bytes, fileName, mimeType)) {
-                    Log.d("ImagePreview", "Image saved to custom directory: $fileName")
-                    return@withContext true
-                }
-                
-                // 使用 MediaStore 保存
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
-                    put(MediaStore.Images.Media.MIME_TYPE, mimeType)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        put(MediaStore.Images.Media.RELATIVE_PATH, resolveDefaultImageMediaStoreRelativePath())
-                        put(MediaStore.Images.Media.IS_PENDING, 1)
-                    }
-                }
-                
-                val uri = context.contentResolver.insert(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    contentValues
-                ) ?: return@withContext false
-                
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(bytes)
-                }
-                
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    contentValues.clear()
-                    contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
-                    context.contentResolver.update(uri, contentValues, null, null)
-                }
-                
-                Log.d("ImagePreview", "Image saved successfully: $fileName")
-                return@withContext true
-            }
-            
-            //  对于 JPEG/PNG 等静态图片，使用 Coil 下载并转换
-            val imageLoader = context.imageLoader
-            val request = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
-                .build()
-            
-            val result = imageLoader.execute(request)
-            if (result !is SuccessResult) {
-                Log.e("ImagePreview", "Failed to download image: $imageUrl")
-                return@withContext false
-            }
-            
-            val bitmap = (result.image as? coil3.BitmapImage)?.bitmap
-            if (bitmap == null) {
-                Log.e("ImagePreview", "Failed to convert drawable to bitmap")
-                return@withContext false
-            }
-            
-            // 生成文件名
-            val extension = if (isPng) "png" else "jpg"
-            val mimeType = if (isPng) "image/png" else "image/jpeg"
+/** 保存原始图片文件，保留长图分辨率、动图帧和编码格式。 */
+suspend fun saveImageToGallery(context: android.content.Context, imageUrl: String, publicContent: Boolean = false): Boolean {
+    return try {
+        withOriginalImageFile(context, imageUrl, publicContent) { file ->
+            val mimeType = originalImageMimeType(file)
+            val extension = originalImageExtension(mimeType)
             val fileName = "BiliPai_${System.currentTimeMillis()}.$extension"
-            val format = if (isPng) android.graphics.Bitmap.CompressFormat.PNG else android.graphics.Bitmap.CompressFormat.JPEG
+            if (file.inputStream().use { input ->
+                    saveStreamToCustomImageSaveDirectory(context, input, fileName, mimeType)
+                }) return@withOriginalImageFile true
 
-            if (
-                saveBitmapToCustomImageSaveDirectory(
-                    context = context,
-                    bitmap = bitmap,
-                    fileName = fileName,
-                    format = format,
-                    quality = 95,
-                    mimeType = mimeType
-                )
-            ) {
-                Log.d("ImagePreview", "Image saved to custom directory: $fileName")
-                return@withContext true
-            }
-            
-            // 使用 MediaStore 保存图片
-            val contentValues = ContentValues().apply {
+            val resolver = context.contentResolver
+            val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
                 put(MediaStore.Images.Media.MIME_TYPE, mimeType)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -2071,29 +2468,29 @@ suspend fun saveImageToGallery(context: android.content.Context, imageUrl: Strin
                     put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
             }
-            
-            val uri = context.contentResolver.insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            ) ?: return@withContext false
-            
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                bitmap.compress(format, 95, outputStream)
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return@withOriginalImageFile false
+            var saved = false
+            try {
+                val output = resolver.openOutputStream(uri) ?: return@withOriginalImageFile false
+                output.use { sink -> file.inputStream().use { it.copyTo(sink, 64 * 1024) } }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    check(resolver.update(uri, values, null, null) > 0)
+                }
+                saved = true
+                true
+            } finally {
+                if (!saved) resolver.delete(uri, null, null)
             }
-            
-            // 标记保存完成
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentValues.clear()
-                contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
-                context.contentResolver.update(uri, contentValues, null, null)
-            }
-            
-            Log.d("ImagePreview", "Image saved successfully: $fileName")
-            true
-        } catch (e: Exception) {
-            Log.e("ImagePreview", "Error saving image", e)
-            false
         }
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        Log.e("ImagePreview", "Error saving original image", error)
+        false
     }
 }
 
@@ -2140,7 +2537,7 @@ suspend fun saveMotionPhotoToGallery(
 ): Boolean {
     return withContext(Dispatchers.IO) {
         try {
-            // 1. 下载实况视频 MP4 数据
+            // 1. 下载实况视频 MP4 数据——直接落盘临时文件，避免把上百 MB 视频整体读进 Java 堆
             val videoConn = java.net.URL(videoUrl).openConnection() as java.net.HttpURLConnection
             videoConn.setRequestProperty("Referer", "https://www.bilibili.com/")
             videoConn.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
@@ -2149,8 +2546,24 @@ suspend fun saveMotionPhotoToGallery(
                 Log.e("ImagePreview", "Failed to download live video: ${videoConn.responseCode}")
                 return@withContext false
             }
-            val videoBytes = videoConn.inputStream.use { it.readBytes() }
-            videoConn.disconnect()
+            val tempVideoFile = File.createTempFile("motion_photo_video_", ".mp4", context.cacheDir)
+            var videoSize = 0L
+            try {
+                videoConn.inputStream.use { input ->
+                    tempVideoFile.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+                }
+                videoSize = tempVideoFile.length()
+                if (videoSize <= 0L) {
+                    tempVideoFile.delete()
+                    Log.e("ImagePreview", "Live video download produced an empty file")
+                    return@withContext false
+                }
+            } catch (e: Exception) {
+                tempVideoFile.delete()
+                throw e
+            } finally {
+                videoConn.disconnect()
+            }
 
             // 2. 下载并转码静态图片为标准 JPEG
             val imageConn = java.net.URL(normalizeImageUrl(imageUrl)).openConnection() as java.net.HttpURLConnection
@@ -2158,12 +2571,17 @@ suspend fun saveMotionPhotoToGallery(
             imageConn.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
             imageConn.connect()
             if (imageConn.responseCode !in 200..299) {
+                imageConn.disconnect()
+                tempVideoFile.delete()
                 Log.e("ImagePreview", "Failed to download image: ${imageConn.responseCode}")
                 return@withContext false
             }
             val bitmap = imageConn.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }
             imageConn.disconnect()
-            if (bitmap == null) return@withContext false
+            if (bitmap == null) {
+                tempVideoFile.delete()
+                return@withContext false
+            }
 
             val rawJpegStream = java.io.ByteArrayOutputStream()
             bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, rawJpegStream)
@@ -2191,7 +2609,7 @@ suspend fun saveMotionPhotoToGallery(
             }
 
             // 4. 构建 Google / Android 官方 Motion Photo 1.0 标准 XMP 元数据（兼容 MicroVideo、小米 MiCamera 与新版 Container 规范）
-            val videoSize = videoBytes.size
+            // videoSize 已在下载落盘时确定（XMP 的 MicroVideoOffset / Container Length 用）
             val xmpString = """
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -2285,19 +2703,31 @@ suspend fun saveMotionPhotoToGallery(
                 offset += 2 + segLen
             }
 
-            // 7. 组装 Motion Photo：JPEG头部 + APP1 XMP + JPEG剩余数据与EOI + MP4视频数据
-            val motionPhotoStream = java.io.ByteArrayOutputStream(jpegWithExif.size + app1Segment.size + videoBytes.size)
-            motionPhotoStream.write(jpegWithExif, 0, insertPos)
-            motionPhotoStream.write(app1Segment)
-            motionPhotoStream.write(jpegWithExif, insertPos, jpegWithExif.size - insertPos)
-            motionPhotoStream.write(videoBytes)
-            val finalBytes = motionPhotoStream.toByteArray()
+            // 7. 组装 Motion Photo：JPEG头部 + APP1 XMP + JPEG剩余数据与EOI；
+            //    MP4 视频数据不再进堆，写输出时从临时文件流式追加。
+            val jpegSegmentBytes = java.io.ByteArrayOutputStream(jpegWithExif.size + app1Segment.size).apply {
+                write(jpegWithExif, 0, insertPos)
+                write(app1Segment)
+                write(jpegWithExif, insertPos, jpegWithExif.size - insertPos)
+            }.toByteArray()
 
             // 8. 保存到相册
             val fileName = "BiliPai_Live_${System.currentTimeMillis()}.jpg"
 
-            // 8.1 优先检查是否配置了自定义 SAF 保存目录
-            if (saveBytesToCustomImageSaveDirectory(context, finalBytes, fileName, "image/jpeg")) {
+            // 8.1 优先检查是否配置了自定义 SAF 保存目录（JPEG 段 + 视频流顺序拼接，不进堆）
+            val motionPhotoCombinedStream = java.io.SequenceInputStream(
+                java.util.Collections.enumeration(
+                    listOf(
+                        jpegSegmentBytes.inputStream(),
+                        tempVideoFile.inputStream()
+                    )
+                )
+            )
+            val savedToCustomDirectory = motionPhotoCombinedStream.use { input ->
+                saveStreamToCustomImageSaveDirectory(context, input, fileName, "image/jpeg")
+            }
+            if (savedToCustomDirectory) {
+                tempVideoFile.delete()
                 Log.d("ImagePreview", "Motion photo saved to custom directory: $fileName")
                 return@withContext true
             }
@@ -2360,17 +2790,24 @@ suspend fun saveMotionPhotoToGallery(
                 }
             }
 
-            val uri = insertedUri ?: return@withContext false
+            val uri = insertedUri ?: run {
+                tempVideoFile.delete()
+                return@withContext false
+            }
 
             val writeSuccess = runCatching {
                 context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(finalBytes)
+                    outputStream.write(jpegSegmentBytes)
+                    tempVideoFile.inputStream().use { videoInput ->
+                        videoInput.copyTo(outputStream, 64 * 1024)
+                    }
                     outputStream.flush()
                 }
                 true
             }.getOrDefault(false)
 
             if (!writeSuccess) {
+                tempVideoFile.delete()
                 try { context.contentResolver.delete(uri, null, null) } catch (_: Exception) {}
                 return@withContext false
             }
@@ -2412,7 +2849,8 @@ suspend fun saveMotionPhotoToGallery(
                 Log.w("ImagePreview", "MediaScanner scanFile failed", e)
             }
 
-            Log.d("ImagePreview", "Motion photo saved successfully: $fileName, size: ${finalBytes.size}")
+            tempVideoFile.delete()
+            Log.d("ImagePreview", "Motion photo saved successfully: $fileName, size: ${jpegSegmentBytes.size + videoSize}")
             true
         } catch (e: Exception) {
             Log.e("ImagePreview", "Error saving motion photo", e)
@@ -2441,11 +2879,6 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
                 return@withContext false
             }
 
-            val inputStream = connection.inputStream
-            val bytes = inputStream.readBytes()
-            inputStream.close()
-            connection.disconnect()
-
             val fileName = "BiliPai_Live_${System.currentTimeMillis()}.mp4"
             val mimeType = "video/mp4"
 
@@ -2461,11 +2894,19 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
             val uri = context.contentResolver.insert(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                 contentValues
-            ) ?: return@withContext false
-
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                outputStream.write(bytes)
+            ) ?: run {
+                connection.inputStream.close()
+                connection.disconnect()
+                return@withContext false
             }
+
+            // 视频直接从下载流写入 MediaStore，避免把整段 MP4 读进 Java 堆。
+            connection.inputStream.use { input ->
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    input.copyTo(outputStream, 64 * 1024)
+                }
+            }
+            connection.disconnect()
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 contentValues.clear()
@@ -2485,9 +2926,9 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
 @Composable
 private fun LivePhotoIcon(
     modifier: Modifier = Modifier,
-    tint: Color = MediaContrastPalette.Foreground
+    tint: Color = Color.White
 ) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(AppSpacingTokens.Large)) {
+    androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val outerRadius = size.minDimension / 2f - 1.5f
         val innerRadius = outerRadius * 0.46f
@@ -2508,9 +2949,9 @@ private fun LivePhotoIcon(
 @Composable
 private fun LivePhotoOffIcon(
     modifier: Modifier = Modifier,
-    tint: Color = MediaContrastPalette.Foreground
+    tint: Color = Color.White
 ) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(AppSpacingTokens.Large)) {
+    androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val outerRadius = size.minDimension / 2f - 1.5f
         val innerRadius = outerRadius * 0.46f
@@ -2533,4 +2974,3 @@ private fun LivePhotoOffIcon(
         )
     }
 }
-

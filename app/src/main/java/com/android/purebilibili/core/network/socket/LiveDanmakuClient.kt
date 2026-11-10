@@ -3,11 +3,13 @@ package com.android.purebilibili.core.network.socket
 import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.core.network.NetworkModule
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -18,349 +20,303 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
-import java.nio.ByteBuffer
 import kotlin.math.min
 import kotlin.math.pow
 
 internal val LIVE_DANMAKU_AUTH_PROTOCOL_VERSION = DanmakuProtocol.PROTO_VER_BROTLI
 
-/**
- * Bilibili 直播弹幕 WebSocket 客户端
- * 
- * 功能：
- * 1. 自动重连 (Exponential Backoff)
- * 2. 鉴权 (Auth)
- * 3. 心跳保活 (Heartbeat)
- * 4. 消息分发 (Backpressure Support)
- */
+/** Bilibili live danmaku socket with authentication, heartbeats and bounded message decoding. */
 class LiveDanmakuClient(
     private val scope: CoroutineScope,
-    private val clockMs: () -> Long = { SystemClock.elapsedRealtime() }
+    private val clockMs: () -> Long = { SystemClock.elapsedRealtime() },
+    private val webSocketFactory: WebSocket.Factory = NetworkModule.okHttpClient,
+    private val workerDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val TAG = "LiveDanmakuClient"
-    private var webSocket: WebSocket? = null
-    
-    // 连接状态
+    // OkHttp callbacks, decoder and UI calls can run on different threads. All lifecycle
+    // transitions and emissions share this lock so disconnect invalidates even in-flight decoding.
+    private val connectionLock = Any()
+    private class Connection {
+        var socket: WebSocket? = null
+        var authenticated = false
+    }
+    private data class IncomingFrame(val connection: Connection, val data: ByteArray)
+    private var activeConnection: Connection? = null
     private val _isConnected = AtomicBoolean(false)
     val isConnected: Boolean get() = _isConnected.get()
-    
-    // 重连参数
+    private var generation = 0L
+    private var reconnectAllowed = false
     private var retryCount = 0
-    private val MAX_RETRY_DELAY = 10_000L // 最大重连间隔 10秒
     private var reconnectJob: Job? = null
-    
-    companion object {
-        private const val HEARTBEAT_INTERVAL = 30_000L // 30秒一次心跳
-    }
-    
-    // 心跳任务
     private var heartbeatJob: Job? = null
-
-    // 健康检查任务：直播间安静时仍应收到心跳回复，长时间无任何服务端帧视为静默断流。
     private var healthCheckJob: Job? = null
-    @Volatile
     private var connectionHealth = LiveDanmakuConnectionHealth()
-    
-    // 当前连接参数
-    private var currentHostUrl: String = ""
-    private var currentAuthBody: String = ""
-    private var suppressReconnect: Boolean = false
-
-    // 入站消息队列：串行解码，避免高频 onMessage 创建大量并发协程
-    private val incomingFrames = Channel<ByteArray>(
-        capacity = 24,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
+    private var currentHostUrl = ""
+    private var initialHostUrls: List<String> = emptyList()
+    private var initialHostIndex = 0
+    private var hasConnectedOnce = false
+    private var currentAuthBody = ""
+    private val incomingFrames = Channel<IncomingFrame>(24, BufferOverflow.DROP_OLDEST)
     private var decodeJob: Job? = null
-    
-    // 消息流 - 使用 ExtraBufferCapacity + DROP_OLDEST 防止爆内存 (Backpressure)
-    // 当缓冲满时丢弃旧消息，保证 UI 不会因为积压而卡死
     private val _messageFlow = MutableSharedFlow<DanmakuProtocol.Packet>(
         replay = 0,
-        extraBufferCapacity = 200, // 缓冲区容纳 200 条消息
+        extraBufferCapacity = 200,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val messageFlow = _messageFlow.asSharedFlow()
-    
-    private val listener = object : WebSocketListener() {
-        override fun onOpen(webSocket: WebSocket, response: Response) {
-            Log.d(TAG, "🟢 WebSocket Connected: $currentHostUrl")
-            _isConnected.set(true)
-            retryCount = 0 // 重置重连计数
-            suppressReconnect = false
-            connectionHealth = markLiveDanmakuConnected(connectionHealth, clockMs())
-            
-            // 发送认证包
-            sendAuthPacket()
-            
-            // 启动心跳
-            startHeartbeat()
-            startHealthCheck()
-        }
 
-        override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-            onIncomingMessage(bytes)
-        }
-
-        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            Log.d(TAG, "🔴 WebSocket Closed: $code - $reason")
-            _isConnected.set(false)
-            stopHeartbeat()
-            stopHealthCheck()
-            // 只有非正常关闭且未标记抑制重连才重连
-            if (code != 1000 && !suppressReconnect) {
-                scheduleReconnect()
-            }
-            suppressReconnect = false
-        }
-
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log.e(TAG, "❌ WebSocket Failure: ${t.message}")
-            _isConnected.set(false)
-            stopHeartbeat()
-            stopHealthCheck()
-            if (!suppressReconnect) {
-                scheduleReconnect()
-            }
-        }
+    companion object {
+        private const val HEARTBEAT_INTERVAL = 30_000L
+        private const val MAX_RETRY_DELAY = 10_000L
     }
 
-    init {
-        startDecodeLoop()
-    }
-    
-    /**
-     * 连接直播弹幕服务器
-     * 
-     * @param url WebSocket 地址 (wss://...)
-     * @param token 认证 Token
-     * @param roomId 真实房间 ID
-     */
     fun connect(url: String, token: String, roomId: Long, uid: Long = 0) {
-        // 构建认证包 JSON
-        val authJson = JSONObject().apply {
-            put("uid", uid) // 使用传入的真实 UID (未登录为 0)
+        connect(listOf(url), token, roomId, uid)
+    }
+
+    /** Tries each server until authentication succeeds, then reconnects that host normally. */
+    fun connect(urls: List<String>, token: String, roomId: Long, uid: Long = 0) {
+        val candidates = urls.filter(String::isNotBlank).distinct()
+        if (candidates.isEmpty()) return
+        val authBody = JSONObject().apply {
+            put("uid", uid)
             put("roomid", roomId)
             put("protover", LIVE_DANMAKU_AUTH_PROTOCOL_VERSION)
             put("platform", "web")
             put("type", 2)
             put("key", token)
+        }.toString()
+        synchronized(connectionLock) {
+            generation++
+            reconnectAllowed = true
+            reconnectJob?.cancel()
+            reconnectJob = null
+            retryCount = 0
+            initialHostUrls = candidates
+            initialHostIndex = 0
+            hasConnectedOnce = false
+            currentHostUrl = candidates.first()
+            currentAuthBody = authBody
+            startDecodeLoop()
+            internalConnect()
         }
-        
-        this.currentHostUrl = url
-        this.currentAuthBody = authJson.toString()
-
-        reconnectJob?.cancel()
-        internalConnect()
     }
-    
+
     private fun internalConnect() {
-        closeCurrentConnection(
-            suppressNextReconnect = true,
-            markUserDisconnect = false,
-            cancelReconnectJob = false
-        )
-        suppressReconnect = false
-        
-        Log.d(TAG, "🔗 Connecting to $currentHostUrl...")
+        closeCurrentConnection()
+        if (!reconnectAllowed) return
+        val connection = Connection()
+        activeConnection = connection
         val request = Request.Builder()
             .url(currentHostUrl)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
             .header("Origin", "https://live.bilibili.com")
             .build()
-            
-        webSocket = NetworkModule.okHttpClient.newWebSocket(request, listener)
-    }
-    
-    /**
-     * 断开连接
-     */
-    fun disconnect() {
-        Log.d(TAG, "🔌 Disconnecting...")
-        closeCurrentConnection(
-            suppressNextReconnect = true,
-            markUserDisconnect = true,
-            cancelReconnectJob = true
-        )
-        // Client 实例不会在主动断开后复用；结束常驻解码协程并释放队列中仍持有的帧。
-        decodeJob?.cancel()
-        decodeJob = null
-        incomingFrames.cancel()
+        val socket = webSocketFactory.newWebSocket(request, listenerFor(connection))
+        // A factory can call its listener before returning; never resurrect a failed attempt.
+        if (activeConnection === connection) connection.socket = socket else socket.cancel()
     }
 
-    private fun closeCurrentConnection(
-        suppressNextReconnect: Boolean,
-        markUserDisconnect: Boolean,
-        cancelReconnectJob: Boolean
-    ) {
-        stopHeartbeat()
-        stopHealthCheck()
-        if (cancelReconnectJob) {
-            reconnectJob?.cancel()
-        }
-        suppressReconnect = suppressNextReconnect
-        if (markUserDisconnect) {
-            connectionHealth = markLiveDanmakuDisconnectedByUser(connectionHealth)
-        }
-        webSocket?.close(1000, "Normal Closure")
-        webSocket = null
-        _isConnected.set(false)
-    }
-    
-    /**
-     * 发送认证包 (Op=7)
-     */
-    private fun sendAuthPacket() {
-        Log.d(TAG, "🔐 Sending Auth Packet...")
-        val packet = DanmakuProtocol.Packet(
-            version = DanmakuProtocol.PROTO_VER_HEARTBEAT,
-            operation = DanmakuProtocol.OP_AUTH,
-            body = currentAuthBody.toByteArray()
-        )
-        sendPacket(packet)
-    }
-    
-    /**
-     * 启动心跳任务 (Op=2)
-     */
-    private fun startHeartbeat() {
-        stopHeartbeat()
-        heartbeatJob = scope.launch(Dispatchers.IO) {
-            while (isActive && isConnected) {
-                // 每 30 秒发送一次心跳
-                Log.d(TAG, "💓 Sending Heartbeat...")
-                val packet = DanmakuProtocol.Packet(
+    private fun listenerFor(connection: Connection) = object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) {
+            synchronized(connectionLock) {
+                if (activeConnection !== connection) {
+                    webSocket.cancel()
+                    return
+                }
+                connection.socket = webSocket
+                _isConnected.set(true)
+                connectionHealth = markLiveDanmakuConnected(connectionHealth, clockMs())
+                Log.d(TAG, "WebSocket opened: $currentHostUrl")
+                sendPacket(connection, DanmakuProtocol.Packet(
                     version = DanmakuProtocol.PROTO_VER_HEARTBEAT,
-                    operation = DanmakuProtocol.OP_HEARTBEAT,
-                    body = "[object Object]".toByteArray()
-                )
-                sendPacket(packet)
+                    operation = DanmakuProtocol.OP_AUTH,
+                    body = currentAuthBody.toByteArray(Charsets.UTF_8)
+                ))
+                if (activeConnection === connection) startHealthCheck(connection)
+            }
+        }
+
+        override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            synchronized(connectionLock) {
+                if (activeConnection !== connection || !isConnected) return
+                if (!shouldAcceptLiveDanmakuFrame(bytes.size)) return
+                incomingFrames.trySend(IncomingFrame(connection, bytes.toByteArray()))
+            }
+        }
+
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            synchronized(connectionLock) {
+                if (activeConnection !== connection) return
+                // Reply to the peer's close frame; onClosed alone is never guaranteed.
+                // 1005 denotes a valid empty close frame, but cannot itself be sent on the wire.
+                closeCurrentConnection(if (code == 1005) 1000 else code, reason)
+                scheduleReconnect()
+            }
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            synchronized(connectionLock) {
+                if (activeConnection !== connection) return
+                closeCurrentConnection()
+                scheduleReconnect()
+            }
+        }
+
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            synchronized(connectionLock) {
+                if (activeConnection !== connection) return
+                Log.w(TAG, "WebSocket failed: ${t.message}")
+                closeCurrentConnection()
+                scheduleReconnect()
+            }
+        }
+    }
+
+    fun disconnect() {
+        synchronized(connectionLock) {
+            generation++
+            reconnectAllowed = false
+            reconnectJob?.cancel()
+            reconnectJob = null
+            connectionHealth = markLiveDanmakuDisconnectedByUser(connectionHealth)
+            closeCurrentConnection()
+            decodeJob?.cancel()
+            decodeJob = null
+            while (incomingFrames.tryReceive().isSuccess) { /* Release queued old-room frames. */ }
+        }
+    }
+
+    private fun closeCurrentConnection(code: Int = 1000, reason: String = "Normal Closure") {
+        val previous = activeConnection
+        activeConnection = null
+        _isConnected.set(false)
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+        healthCheckJob?.cancel()
+        healthCheckJob = null
+        previous?.socket?.close(code, reason)
+    }
+
+    private fun startHeartbeat(connection: Connection) {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch(workerDispatcher) {
+            while (isActive) {
+                synchronized(connectionLock) {
+                    if (activeConnection !== connection || !connection.authenticated) return@launch
+                    sendPacket(connection, DanmakuProtocol.Packet(
+                        version = DanmakuProtocol.PROTO_VER_HEARTBEAT,
+                        operation = DanmakuProtocol.OP_HEARTBEAT,
+                        body = "[object Object]".toByteArray(Charsets.UTF_8)
+                    ))
+                }
                 delay(HEARTBEAT_INTERVAL)
             }
         }
     }
-    
-    private fun stopHeartbeat() {
-        heartbeatJob?.cancel()
-    }
 
-    private fun startHealthCheck() {
-        stopHealthCheck()
-        healthCheckJob = scope.launch(Dispatchers.IO) {
-            while (isActive && isConnected) {
+    private fun startHealthCheck(connection: Connection) {
+        healthCheckJob?.cancel()
+        healthCheckJob = scope.launch(workerDispatcher) {
+            while (isActive) {
                 delay(LIVE_DANMAKU_HEALTH_CHECK_INTERVAL_MS)
-                if (!isActive || !isConnected) break
-                val action = resolveLiveDanmakuHealthAction(
-                    health = connectionHealth,
-                    nowMs = clockMs()
-                )
-                if (action == LiveDanmakuHealthAction.RECONNECT) {
-                    Log.w(TAG, "⚠️ Live danmaku silent, reconnecting...")
-                    _isConnected.set(false)
-                    stopHeartbeat()
-                    webSocket?.close(4000, "Silent Connection")
-                    scheduleReconnect()
-                    break
+                synchronized(connectionLock) {
+                    if (activeConnection !== connection) return@launch
+                    if (resolveLiveDanmakuHealthAction(connectionHealth, clockMs()) == LiveDanmakuHealthAction.RECONNECT) {
+                        closeCurrentConnection(4000, "Silent Connection")
+                        scheduleReconnect()
+                        return@launch
+                    }
                 }
             }
         }
     }
 
-    private fun stopHealthCheck() {
-        healthCheckJob?.cancel()
-    }
-    
-    /**
-     * 调度重连 (指数退避)
-     */
     private fun scheduleReconnect() {
-        if (reconnectJob?.isActive == true) return
-        
-        reconnectJob = scope.launch {
-            val delayMs = min(1000.0 * 2.0.pow(retryCount), MAX_RETRY_DELAY.toDouble()).toLong()
-            Log.d(TAG, "🔄 Reconnecting in ${delayMs}ms (Attempt ${retryCount + 1})...")
-            delay(delayMs)
-            retryCount++
+        if (!reconnectAllowed || reconnectJob?.isActive == true) return
+        if (!hasConnectedOnce && initialHostIndex + 1 < initialHostUrls.size) {
+            initialHostIndex++
+            currentHostUrl = initialHostUrls[initialHostIndex]
             internalConnect()
+            return
+        }
+        val expectedGeneration = generation
+        reconnectJob = scope.launch(workerDispatcher) {
+            val delayMs = min(1000.0 * 2.0.pow(retryCount), MAX_RETRY_DELAY.toDouble()).toLong()
+            delay(delayMs)
+            synchronized(connectionLock) {
+                if (generation != expectedGeneration || !reconnectAllowed) return@launch
+                // A new attempt may fail immediately; it must be allowed to schedule its own retry.
+                reconnectJob = null
+                retryCount++
+                internalConnect()
+            }
         }
     }
-    
-    /**
-     * 发送数据包
-     */
-    private fun sendPacket(packet: DanmakuProtocol.Packet) {
-        val bytes = DanmakuProtocol.encode(packet)
-        webSocket?.send(ByteString.of(*bytes))
+
+    private fun sendPacket(connection: Connection, packet: DanmakuProtocol.Packet) {
+        if (activeConnection !== connection) return
+        if (connection.socket?.send(DanmakuProtocol.encode(packet).toByteString()) != true) {
+            closeCurrentConnection()
+            scheduleReconnect()
+        }
     }
 
     private fun startDecodeLoop() {
-        decodeJob?.cancel()
-        decodeJob = scope.launch(Dispatchers.Default) {
-            while (isActive) {
-                val frame = incomingFrames.receive()
-                handleMessage(frame)
-            }
-        }
-    }
-    
-    /**
-     * 处理接收到的二进制消息
-     */
-    private suspend fun handleMessage(data: ByteArray) {
-        try {
-            // 解码数据包 (可能包含 recursive decompression)
-            val packets = DanmakuProtocol.decode(data)
-
-            packets.forEach { packet ->
-                when (packet.operation) {
-                    DanmakuProtocol.OP_HEARTBEAT_REPLY -> {
-                        connectionHealth = markLiveDanmakuHeartbeatReply(connectionHealth, clockMs())
-                        // 心跳回应，Body 前4字节为人气值
-                        if (packet.body.size >= 4) {
-                            val popularity = ByteBuffer.wrap(packet.body).order(java.nio.ByteOrder.BIG_ENDIAN).int
-                            Log.d(TAG, "🔥 Popularity: $popularity")
+        if (decodeJob?.isActive == true) return
+        decodeJob = scope.launch(workerDispatcher) {
+            for (frame in incomingFrames) {
+                if (!synchronized(connectionLock) { activeConnection === frame.connection }) continue
+                try {
+                    val packets = DanmakuProtocol.decode(frame.data)
+                    synchronized(connectionLock) {
+                        for (packet in packets) {
+                            if (activeConnection !== frame.connection) break
+                            handlePacket(frame.connection, packet)
                         }
                     }
-                    DanmakuProtocol.OP_AUTH_REPLY -> {
-                        val authCode = runCatching {
-                            JSONObject(String(packet.body, Charsets.UTF_8)).optInt("code", -1)
-                        }.getOrDefault(-1)
-                        if (authCode == 0) {
-                            Log.d(TAG, "✅ Auth Success")
-                        } else {
-                            Log.e(TAG, "❌ Auth Failed: code=$authCode")
-                            // 认证失败通常不是网络抖动，避免进入无效重连风暴
-                            suppressReconnect = true
-                            webSocket?.close(4001, "Auth Failed: $authCode")
-                        }
-                    }
-                    DanmakuProtocol.OP_MESSAGE -> {
-                        connectionHealth = markLiveDanmakuBusinessMessage(connectionHealth, clockMs())
-                        // 所有的业务消息通知 (弹幕、礼物等)
-                        // 缓冲区满时丢弃最旧消息，优先保留最新弹幕
-                        _messageFlow.tryEmit(packet)
-                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (e: Exception) {
+                    Log.w(TAG, "Message handling failed: ${e.message}")
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "⚠️ Message handling failed: ${e.message}")
         }
     }
 
-    private fun enqueueMessageFrame(data: ByteArray) {
-        if (!incomingFrames.trySend(data).isSuccess) {
-            Log.w(TAG, "⚠️ Incoming frame dropped due to backpressure")
+    private fun handlePacket(connection: Connection, packet: DanmakuProtocol.Packet) {
+        when (packet.operation) {
+            DanmakuProtocol.OP_HEARTBEAT_REPLY -> {
+                if (packet.body.size >= 4) {
+                    connectionHealth = markLiveDanmakuHeartbeatReply(connectionHealth, clockMs())
+                }
+            }
+            DanmakuProtocol.OP_AUTH_REPLY -> {
+                val authCode = runCatching {
+                    JSONObject(String(packet.body, Charsets.UTF_8)).getInt("code")
+                }.getOrNull() ?: return // Damaged auth data is not an explicit server rejection.
+                if (authCode == 0) {
+                    connectionHealth = markLiveDanmakuServerFrameReceived(connectionHealth, clockMs())
+                    if (!connection.authenticated) {
+                        connection.authenticated = true
+                        hasConnectedOnce = true
+                        retryCount = 0
+                        startHeartbeat(connection)
+                    }
+                } else {
+                    Log.w(TAG, "Auth failed: code=$authCode")
+                    reconnectAllowed = false
+                    closeCurrentConnection(4001, "Auth Failed")
+                }
+            }
+            DanmakuProtocol.OP_MESSAGE -> {
+                if (!connection.authenticated) return
+                connectionHealth = markLiveDanmakuBusinessMessage(connectionHealth, clockMs())
+                _messageFlow.tryEmit(packet)
+            }
         }
-    }
-
-    private fun onIncomingMessage(bytes: ByteString) {
-        connectionHealth = markLiveDanmakuServerFrameReceived(connectionHealth, clockMs())
-        if (!shouldAcceptLiveDanmakuFrame(bytes.size)) {
-            Log.w(TAG, "⚠️ Oversized incoming frame dropped: ${bytes.size} bytes")
-            return
-        }
-        enqueueMessageFrame(bytes.toByteArray())
     }
 }

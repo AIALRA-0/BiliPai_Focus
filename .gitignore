@@ -14,8 +14,16 @@
 .cxx
 local.properties
 
-# 🔥 忽略所有 build 目录
+# 🔥 忽略 Gradle 构建产物目录。
+#
+# 注意：`**/build/` 同时会匹配 Java 包目录（例如
+# `com/android/purebilibili/build/`），因此必须紧跟以下否定规则，
+# 否则 build-logic 的插件源码会被静默忽略、无法提交。
 **/build/
+!build-logic/src/main/java/com/android/purebilibili/build/
+!build-logic/src/main/java/com/android/purebilibili/build/**
+!app/src/main/java/com/android/purebilibili/build/
+!app/src/main/java/com/android/purebilibili/build/**
 
 # 🔥 忽略 Kotlin 编译器临时文件和错误日志
 *.compiler.options
@@ -60,6 +68,11 @@ app/release/
 .worktrees/
 *.ai.md
 *.txt
+# 发布所需的手写与交互采集优化规则必须随源码保存。
+!app/src/main/baseline-prof.txt
+!app/src/main/baselineProfiles/startup-prof.txt
+!app/src/main/generated/baselineProfiles/baseline-prof.txt
+!app/src/main/generated/baselineProfiles/startup-prof.txt
 bilipai_log_*.txt
 !AI.txt
 !llm.txt
@@ -95,11 +108,20 @@ report.md
 !README_EN.md
 !AGENTS.md
 !CHANGELOG.md
+!miuix-navigation/UPGRADE_REVIEW.md
 !docs/
 docs/*
 !docs/GOOGLE_CAST_PLUGIN.md
 !docs/DLNA_CAST_PLUGIN.md
 !docs/android17-verification.md
+!docs/telegram-thanos-port.md
+!docs/performance/
+docs/performance/*
+!docs/performance/video-card-transition/
+!docs/performance/video-card-transition/*.md
+!docs/video-startup-comparison.md
+!docs/recommendation-and-part-resume-analysis.md
+!docs/TV_ADAPTATION.md
 !docs/images/
 !docs/images/screenshot*.png
 !docs/images/focus-0.2.3-alpha.2/
@@ -126,3 +148,50 @@ app/src/test/java/com/android/purebilibili/docs/UiDesignDocumentationStructureTe
 # Local Reasonix session settings and metadata
 .reasonix/
 reasonix.toml
+.zcodeignore
+
+# WorkBuddy AI local workspace metadata
+.workbuddy-ai/
+
+# Local-only AI instructions and supplementary documentation
+/AGENTS.md
+/AI.txt
+/STRUCTURE_GUIDELINES.adoc
+/app-tv/README.md
+/app/src/main/java/com/android/purebilibili/feature/video/ambient/README.md
+/artwork/brand-motion/AGENTS.md
+/artwork/brand-motion/README.md
+/artwork/settings-icons/README.md
+/baselineprofile/README.md
+/design-tokens/README.md
+/docs/BPSKIN_DEVELOPMENT.md
+/docs/NATIVE_PLUGIN_DEVELOPMENT.md
+/docs/PLUGIN_DEVELOPMENT.md
+/docs/TV_ADAPTATION.md
+/docs/android17-verification.md
+/docs/liquid-glass-reuse-audit.md
+/docs/wiki/AI.md
+/docs/wiki/ARCHITECTURE.md
+/docs/wiki/CHANGELOG_GUIDE.md
+/docs/wiki/COLOR_SPEC_2026_AUDIT.md
+/docs/wiki/FAQ.md
+/docs/wiki/FEATURE_MATRIX.md
+/docs/wiki/GLOBAL_COLOR_PAIR_AUDIT.md
+/docs/wiki/QA.md
+/docs/wiki/README.md
+/docs/wiki/RELEASE_WORKFLOW.md
+/docs/wiki/ROADMAP.md
+/docs/wiki/STARTUP_DIAGNOSTICS.md
+/docs/wiki/UPDATE_HIGHLIGHTS.md
+/docs/wiki/VERSIONING.md
+/docs/wiki/VIDEO_DETAIL_LOADING.md
+/examples/plugins/README.md
+/llms.txt
+/miuix-navigation/README.md
+/miuix-navigation/UPGRADE_REVIEW.md
+/plugins/community/README.md
+/plugins/samples/blue-snow-maid-skin/README.md
+/plugins/samples/today-watch-remix/README.md
+/plugins/samples/watch-compass/README.md
+/plugins/samples/winter-cloud-skin/README.md
+/plugins/sdk/README.md

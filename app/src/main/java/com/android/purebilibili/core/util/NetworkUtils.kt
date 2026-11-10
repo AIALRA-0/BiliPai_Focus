@@ -70,8 +70,8 @@ object NetworkUtils {
     /**
      * 获取当前账号实际可用于首播的默认清晰度。
      *
-     * 持久化配置保留用户原始选择，但在首播时需要规避
-     * 1080P60 / 4K / HDR 等高权限档位对非 VIP 场景的误伤。
+     * 保留用户的默认画质上限；服务器实际返回的流决定最终画质，
+     * 不使用可能滞后的本地会员状态提前截断偏好。
      */
     fun getPlayableDefaultQualityId(
         context: Context,
@@ -133,16 +133,11 @@ internal fun shouldRefreshVipStatusBeforeResolvingDefaultQuality(
     return autoHighestEnabled || storedQuality > 80
 }
 
+// Preserve the preferred ceiling even when cached membership is stale. The discovered
+// playable streams determine the actual fallback, as in PiliPlus.
+@Suppress("UNUSED_PARAMETER")
 internal fun resolvePlayableDefaultQualityId(
     storedQuality: Int,
     isLoggedIn: Boolean,
     isVip: Boolean
-): Int {
-    if (isVip) return storedQuality
-
-    return when {
-        isLoggedIn && storedQuality > 80 -> 80
-        !isLoggedIn && storedQuality > 64 -> 64
-        else -> storedQuality
-    }
-}
+): Int = storedQuality.takeIf { it > 0 } ?: 64

@@ -197,7 +197,7 @@ class SpaceTabChromePolicyTest {
     }
 
     @Test
-    fun `secondary contribution switch in Material 3 removes container horizontal padding for edge alignment`() {
+    fun `secondary contribution switch uses page padding without narrowing either native viewport`() {
         val items = listOf(
             SpaceSecondarySwitchItem("video", "视频", SpaceMainTab.CONTRIBUTION),
             SpaceSecondarySwitchItem("article", "图文", SpaceMainTab.CONTRIBUTION),
@@ -205,7 +205,7 @@ class SpaceTabChromePolicyTest {
         val m3Spec = resolveSpaceSecondarySwitchChromeSpec(items, "video", uiStyle = AppUiStyle.MATERIAL3)
         assertEquals(0, m3Spec.horizontalPaddingDp)
         val miuixSpec = resolveSpaceSecondarySwitchChromeSpec(items, "video", uiStyle = AppUiStyle.MIUIX)
-        assertEquals(16, miuixSpec.horizontalPaddingDp)
+        assertEquals(0, miuixSpec.horizontalPaddingDp)
     }
 
     @Test

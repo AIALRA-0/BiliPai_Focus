@@ -10,6 +10,85 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PlaybackSeekControllerTest {
+    @Test
+    fun playbackEnded_clearsSeekWaitingForResumeAndUsesFinalPosition() {
+        val pending = PlaybackSeekSessionState(
+            playbackPositionMs = 58_000L,
+            sliderPositionMs = 58_000L,
+            pendingSeekPositionMs = 58_000L,
+            pendingSeekOriginPositionMs = 10_000L,
+            shouldResumePlayback = true,
+        )
+        val ended = syncPlaybackSeekSession(
+            state = pending,
+            playbackPositionMs = 60_000L,
+            hasPlaybackResumedAfterPendingSeek = false,
+            playbackEnded = true,
+        )
+        assertNull(ended.pendingSeekPositionMs)
+        assertNull(ended.shouldResumePlayback)
+        assertEquals(60_000L, ended.sliderPositionMs)
+        assertFalse(shouldUsePlaybackSeekSessionPosition(ended))
+    }
+
+    @Test
+    fun playbackEnded_keepsNewDragPreviewSoUserCanSeekBack() {
+        val dragging = startPlaybackSeekInteraction(
+            PlaybackSeekSessionState(playbackPositionMs = 60_000L),
+            positionMs = 20_000L,
+        )
+        val synced = syncPlaybackSeekSession(
+            state = dragging,
+            playbackPositionMs = 60_000L,
+            hasPlaybackResumedAfterPendingSeek = false,
+            playbackEnded = true,
+        )
+        assertTrue(synced.isSliderMoving)
+        assertEquals(20_000L, synced.sliderPositionMs)
+    }
+
+    @Test
+    fun rapidDragUpdates_commitLatestPositionAndPreservePauseIntent() {
+        var state = startPlaybackSeekInteraction(
+            PlaybackSeekSessionState(playbackPositionMs = 10_000L),
+            positionMs = 10_000L, shouldResumePlayback = false, nowMs = 1_000L
+        )
+        repeat(120) { index ->
+            state = updatePlaybackSeekInteraction(state, 20_000L + index, nowMs = 1_001L + index)
+        }
+        val result = finishPlaybackSeekInteraction(state, nowMs = 1_200L)
+        assertEquals(20_119L, result.committedPositionMs)
+        assertEquals(false, result.shouldResumePlayback)
+        assertFalse(result.state.isSliderMoving)
+        assertEquals(20_119L, result.state.pendingSeekPositionMs)
+    }
+
+    @Test
+    fun cancelAfterRapidDrag_restoresLatestPlaybackPosition() {
+        val dragging = updatePlaybackSeekInteraction(
+            startPlaybackSeekInteraction(PlaybackSeekSessionState(playbackPositionMs = 10_000L)),
+            positionMs = 60_000L
+        )
+        val synced = syncPlaybackSeekSession(dragging, playbackPositionMs = 11_000L)
+        val cancelled = cancelPlaybackSeekInteraction(synced)
+        assertEquals(11_000L, cancelled.sliderPositionMs)
+        assertFalse(cancelled.isSliderMoving)
+        assertNull(cancelled.pendingSeekPositionMs)
+    }
+
+    @Test
+    fun switchingPlaybackDuringDrag_discardsOldPreviewAndPendingSeek() {
+        val dragging = updatePlaybackSeekInteraction(
+            startPlaybackSeekInteraction(PlaybackSeekSessionState(playbackPositionMs = 10_000L)),
+            positionMs = 60_000L
+        )
+        val reset = resetPlaybackSeekSessionForActivePlayback(dragging, playbackPositionMs = 0L)
+        assertEquals(0L, reset.sliderPositionMs)
+        assertFalse(reset.isSliderMoving)
+        assertNull(reset.pendingSeekPositionMs)
+        assertNull(reset.shouldResumePlayback)
+    }
+
 
     @Test
     fun syncFromPlayback_initializesSliderPositionWhenIdle() {

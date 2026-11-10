@@ -38,7 +38,7 @@ internal fun resolveHiResCodecMaxInputSize(
  * 音轨的单帧可能超过该大小，最终触发 Media3 `InsufficientCapacityException`。
  */
 @OptIn(UnstableApi::class)
-internal class HiResCompatibleRenderersFactory(
+internal open class HiResCompatibleRenderersFactory(
     context: Context
 ) : DefaultRenderersFactory(context) {
 
@@ -52,13 +52,23 @@ internal class HiResCompatibleRenderersFactory(
         eventListener: AudioRendererEventListener,
         out: ArrayList<Renderer>
     ) {
+        // 普通视频、竖屏连播、番剧和迷你条复用同一入口；关闭律动只做原样转发，
+        // 不修改各播放器原有处理器和格式支持，PCM 会话内切换开关无需重建播放器。
+        val preferences = context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+        val waveformAudioSink = com.android.purebilibili.core.player.waveform.WaveformAudioSink(
+            delegate = audioSink,
+            enabled = {
+                preferences.getBoolean("audio_spectrum_enabled", false) &&
+                    com.android.purebilibili.core.player.waveform.AudioWaveformSource.isAnalysisRequested()
+            },
+        )
         val firstAudioRendererIndex = out.size
         super.buildAudioRenderers(
             context,
             extensionRendererMode,
             mediaCodecSelector,
             enableDecoderFallback,
-            audioSink,
+            waveformAudioSink,
             eventHandler,
             eventListener,
             out
@@ -73,7 +83,7 @@ internal class HiResCompatibleRenderersFactory(
             enableDecoderFallback = enableDecoderFallback,
             eventHandler = eventHandler,
             eventListener = eventListener,
-            audioSink = audioSink
+            audioSink = waveformAudioSink
         )
     }
 }

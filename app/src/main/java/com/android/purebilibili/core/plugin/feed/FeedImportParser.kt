@@ -9,6 +9,8 @@ import javax.xml.parsers.DocumentBuilderFactory
 data class ImportedSubscription(
     val title: String,
     val url: String,
+    /** 分组（OPML 父级文件夹名），空串表示未分组。 */
+    val group: String = "",
 )
 
 fun parseSubscriptionImport(text: String): List<ImportedSubscription> {
@@ -44,22 +46,72 @@ fun parseOpmlSubscriptions(xml: String): List<ImportedSubscription> {
     val document = factory.newDocumentBuilder()
         .parse(ByteArrayInputStream(xml.toByteArray(Charsets.UTF_8)))
     val found = linkedMapOf<String, ImportedSubscription>()
-    fun walk(node: Node) {
+    fun walk(node: Node, folderPath: List<String>) {
         if (node.nodeType == Node.ELEMENT_NODE) {
             val element = node as Element
             if (element.tagName.equals("outline", ignoreCase = true)) {
                 val url = element.getAttribute("xmlUrl").ifBlank { element.getAttribute("xmlurl") }.trim()
                 if (isHttpFeedUrl(url)) {
                     val title = element.getAttribute("title").ifBlank { element.getAttribute("text") }.trim()
-                    found.putIfAbsent(url, ImportedSubscription(title = title.ifBlank { url }, url = url))
+                    found.putIfAbsent(
+                        url,
+                        ImportedSubscription(
+                            title = title.ifBlank { url },
+                            url = url,
+                            group = folderPath.lastOrNull().orEmpty(),
+                        )
+                    )
+                } else {
+                    // 无 xmlUrl 的 outline 是文件夹，文件夹名作为其子订阅的分组。
+                    val folder = element.getAttribute("title").ifBlank { element.getAttribute("text") }.trim()
+                    if (folder.isNotEmpty()) {
+                        val children = node.childNodes
+                        for (index in 0 until children.length) {
+                            walk(children.item(index), folderPath + folder)
+                        }
+                        return
+                    }
                 }
             }
         }
         val children = node.childNodes
         for (index in 0 until children.length) {
-            walk(children.item(index))
+            walk(children.item(index), folderPath)
         }
     }
-    walk(document.documentElement)
+    walk(document.documentElement, emptyList())
     return found.values.toList()
 }
+
+fun buildSubscriptionOpml(feeds: List<SavedSubscriptionFeed>): String {
+    fun outline(feed: SavedSubscriptionFeed): String {
+        val title = escapeOpmlAttribute(feed.title.ifBlank { feed.url })
+        val url = escapeOpmlAttribute(feed.url)
+        return "        <outline type=\"rss\" text=\"$title\" title=\"$title\" xmlUrl=\"$url\"/>"
+    }
+    val grouped = feeds.filter { it.group.isNotBlank() }.groupBy { it.group }
+    val ungrouped = feeds.filter { it.group.isBlank() }
+    return buildString {
+        appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        appendLine("<opml version=\"2.0\">")
+        appendLine("  <head>")
+        appendLine("    <title>BiliPai 订阅</title>")
+        appendLine("  </head>")
+        appendLine("  <body>")
+        ungrouped.forEach { appendLine(outline(it)) }
+        grouped.forEach { (group, feedsInGroup) ->
+            val folder = escapeOpmlAttribute(group)
+            appendLine("    <outline text=\"$folder\" title=\"$folder\">")
+            feedsInGroup.forEach { appendLine(outline(it)) }
+            appendLine("    </outline>")
+        }
+        appendLine("  </body>")
+        appendLine("</opml>")
+    }
+}
+
+internal fun escapeOpmlAttribute(value: String): String =
+    value.replace("&", "&amp;")
+        .replace("\"", "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")

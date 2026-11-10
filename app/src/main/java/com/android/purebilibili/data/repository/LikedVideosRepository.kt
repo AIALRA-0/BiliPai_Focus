@@ -1,6 +1,7 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.network.getSpaceCoinArchive
 import com.android.purebilibili.core.network.getSpaceLikedArchive
 import com.android.purebilibili.core.util.IdUtils
 import com.android.purebilibili.data.model.response.VideoItem
@@ -17,12 +18,28 @@ object LikedVideosRepository {
         mid: Long,
         page: Int = 1,
         pageSize: Int = 20,
+    ): Result<Page> = getInteractionVideos(mid, page, pageSize, isCoinArchive = false)
+
+    suspend fun getCoinVideos(
+        mid: Long,
+        page: Int = 1,
+        pageSize: Int = 20,
+    ): Result<Page> = getInteractionVideos(mid, page, pageSize, isCoinArchive = true)
+
+    private suspend fun getInteractionVideos(
+        mid: Long,
+        page: Int,
+        pageSize: Int,
+        isCoinArchive: Boolean,
     ): Result<Page> = withContext(Dispatchers.IO) {
         runCatching {
-            // 对齐桌面版 PiliPlus (MemberHttp.likeArc):
-            // 优先使用客户端 /x/v2/space/likearc 接口进行分页拉取，突破 Web 接口只返回最近 20 条且不支持翻页的限制
+            // 对齐桌面版 PiliPlus 的 MemberHttp.coinArc / likeArc，走客户端分页接口。
             val appResponse = runCatching {
-                NetworkModule.spaceApi.getSpaceLikedArchive(mid = mid, page = page, pageSize = pageSize)
+                if (isCoinArchive) {
+                    NetworkModule.spaceApi.getSpaceCoinArchive(mid = mid, page = page, pageSize = pageSize)
+                } else {
+                    NetworkModule.spaceApi.getSpaceLikedArchive(mid = mid, page = page, pageSize = pageSize)
+                }
             }.getOrNull()
 
             val response = if (
@@ -31,13 +48,17 @@ object LikedVideosRepository {
                 (appResponse.data?.item?.isNotEmpty() == true || (appResponse.data?.count ?: 0) > 0 || page > 1)
             ) {
                 appResponse
+            } else if (isCoinArchive) {
+                appResponse ?: error("获取投币视频失败")
             } else {
                 // 降级使用 Web 接口 /x/space/like/video
                 NetworkModule.api.getLikedVideos(mid = mid, page = page, pageSize = pageSize)
             }
 
             check(response.code == 0) {
-                response.message.ifBlank { "获取点赞视频失败：${response.code}" }
+                response.message.ifBlank {
+                    "获取${if (isCoinArchive) "投币" else "点赞"}视频失败：${response.code}"
+                }
             }
             val data = response.data
             val detailedItems = data?.list.orEmpty().map { it.toVideoItem() }

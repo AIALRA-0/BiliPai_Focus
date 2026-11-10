@@ -17,9 +17,21 @@ class BiliPaiPredictiveBackAnimationPolicyTest {
     @Test
     fun `all transition storage values are stable`() {
         assertEquals(
-            listOf("none", "aosp", "miuix", "scale", "bilipai_classic"),
+            listOf(
+                "none", "aosp", "miuix", "scale", "bilipai_classic",
+                "fade", "right_to_left", "left_to_right", "up_to_down", "down_to_up",
+                "right_to_left_fade", "left_to_right_fade", "zoom", "circular_reveal", "ios",
+                "fade_in", "size", "shared_axis", "no_transition",
+            ),
             BiliPaiPredictiveBackAnimationStyle.entries.map { it.storageValue },
         )
+    }
+
+    @Test
+    fun `saved transition styles round trip without changing existing choices`() {
+        BiliPaiPredictiveBackAnimationStyle.entries.forEach { style ->
+            assertEquals(style, BiliPaiPredictiveBackAnimationStyle.fromStorageValue(style.storageValue))
+        }
     }
 
     @Test

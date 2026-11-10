@@ -50,6 +50,9 @@ data class CommentFraudRecord(
     @SerialName("post_time")
     val post_time: Long = 0L, // B站服务器官方 ctime (毫秒)，0 表示未记录
 
+    @SerialName("proto3_payload")
+    val proto3_payload: String? = null,
+
     @SerialName("timestamp")
     val timestamp: Long = System.currentTimeMillis() // 本地最后检查时间
 ) {
@@ -83,7 +86,7 @@ data class CommentFraudRecord(
 
             return when {
                 // 0. 初检进行中
-                curr == CommentFraudStatus.UNKNOWN -> "⏳ 状态检测中 (等待系统处理...)"
+                curr == CommentFraudStatus.UNKNOWN -> "⚪ 尚未检查或状态暂未确认"
 
                 // 1. 状态健康公开
                 curr == CommentFraudStatus.NORMAL -> "🟢 评论正常显示 (路人视角可见)"

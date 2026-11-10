@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.UgcEpisode
+import com.android.purebilibili.data.model.response.UgcEpisodeArc
 import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.UgcSection
 import kotlin.test.Test
@@ -107,5 +108,49 @@ class VideoNavigationCidPolicyTest {
         )
 
         assertEquals(0L, resolved)
+    }
+
+    @Test
+    fun `navigation target cover prefers season episode over related video`() {
+        val season = UgcSeason(
+            sections = listOf(
+                UgcSection(
+                    episodes = listOf(
+                        UgcEpisode(
+                            bvid = "BV1A",
+                            cid = 1001L,
+                            arc = UgcEpisodeArc(pic = "season.jpg")
+                        )
+                    )
+                )
+            )
+        )
+        val related = listOf(RelatedVideo(bvid = "BV1A", cid = 1001L, pic = "related.jpg"))
+
+        assertEquals(
+            "season.jpg",
+            resolveNavigationTargetCoverUrl(
+                targetBvid = "BV1A",
+                relatedVideos = related,
+                ugcSeason = season,
+                targetCid = 1001L
+            )
+        )
+        assertEquals(
+            "related.jpg",
+            resolveNavigationTargetCoverUrl(
+                targetBvid = "BV1A",
+                relatedVideos = related,
+                ugcSeason = null
+            )
+        )
+        assertEquals(
+            "",
+            resolveNavigationTargetCoverUrl(
+                targetBvid = "  ",
+                relatedVideos = related,
+                ugcSeason = season
+            )
+        )
     }
 }

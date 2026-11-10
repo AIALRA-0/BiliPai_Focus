@@ -14,7 +14,28 @@ data class FeedReadingSnapshot(
     val items: List<ParsedFeedItem> = emptyList(),
     val readKeys: List<String> = emptyList(),
     val fullBodies: Map<String, String> = emptyMap(),
+    //  [回顾] key→已读时间戳(ms) 与 阅读进度(0-100)，供"今日/七天/一月"回顾与续读。
+    val readTimestamps: Map<String, Long> = emptyMap(),
+    val readProgress: Map<String, Int> = emptyMap(),
 )
+
+internal fun updateReadTimestamps(
+    timestamps: Map<String, Long>,
+    key: String,
+    read: Boolean,
+    atMs: Long,
+): Map<String, Long> {
+    val next = timestamps.filterNot { it.key == key }
+    return if (read) (next + (key to atMs)).toList().sortedByDescending { it.second }.take(2_000).toMap()
+    else next
+}
+
+internal fun updateReadProgress(progress: Map<String, Int>, key: String, percent: Int): Map<String, Int> {
+    val clamped = percent.coerceIn(0, 100)
+    val next = progress.filterNot { it.key == key }
+    if (clamped <= 0) return next
+    return (next + (key to clamped)).toList().takeLast(200).toMap()
+}
 
 internal fun feedItemKey(item: ParsedFeedItem): String = "${item.sourceId}\u001f${item.id}"
 
@@ -50,6 +71,38 @@ object FeedReadingStore {
             val previous = read(context)
             write(context, previous.copy(readKeys = updateReadKeys(previous.readKeys, key, read)))
     }
+
+    /** 打开/标记已读时记录时间戳，供回顾板块按今日/七天/一月统计。 */
+    suspend fun recordRead(context: Context, key: String, atMs: Long = System.currentTimeMillis()) = lockedIo {
+        val previous = read(context)
+        write(
+            context,
+            previous.copy(
+                readKeys = updateReadKeys(previous.readKeys, key, true),
+                readTimestamps = updateReadTimestamps(previous.readTimestamps, key, true, atMs),
+            ),
+        )
+    }
+
+    suspend fun recordProgress(context: Context, key: String, percent: Int) = lockedIo {
+        val previous = read(context)
+        write(context, previous.copy(readProgress = updateReadProgress(previous.readProgress, key, percent)))
+    }
+
+    /** 按时间倒序返回窗口内已读条目（key→readAtMs）。 */
+    suspend fun recentReads(context: Context, windowStartMs: Long): List<Pair<String, Long>> = lockedIo {
+        read(context).readTimestamps
+            .filterValues { it >= windowStartMs }
+            .toList()
+            .sortedByDescending { it.second }
+    }
+
+    suspend fun readProgress(context: Context, key: String): Int = lockedIo {
+        read(context).readProgress[key] ?: 0
+    }
+
+    suspend fun loadTimestamps(context: Context): Map<String, Long> =
+        lockedIo { read(context).readTimestamps }
 
     suspend fun saveFullBody(context: Context, key: String, html: String) = lockedIo {
         if (html.length <= 100_000) {

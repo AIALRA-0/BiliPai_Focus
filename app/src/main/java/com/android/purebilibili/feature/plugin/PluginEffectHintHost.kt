@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -110,7 +112,7 @@ private fun PluginEffectHintChip(
             AppIcon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = AppContentColors.accent(),
                 modifier = Modifier.size(18.dp)
             )
             Column(modifier = Modifier.weight(1f, fill = false)) {
@@ -118,7 +120,7 @@ private fun PluginEffectHintChip(
                     text = hint.title,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = AppContentColors.primaryText()
                 )
                 val subtitle = hint.subtitle
                 if (!subtitle.isNullOrBlank()) {

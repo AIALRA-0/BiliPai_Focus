@@ -6,6 +6,14 @@ import kotlin.test.assertEquals
 class FormatUtilsImageUrlPolicyTest {
 
     @Test
+    fun fixImageUrl_doesNotForceAvatarIntoLandscapeDimensions() {
+        assertEquals(
+            "https://i0.hdslb.com/bfs/face/avatar.jpg",
+            FormatUtils.fixImageUrl("//i0.hdslb.com/bfs/face/avatar.jpg@640w_400h.webp")
+        )
+    }
+
+    @Test
     fun resolveVideoCoverUrl_usesOriginalImageForHighQualityMode() {
         assertEquals(
             "https://i0.hdslb.com/bfs/archive/demo.jpg",

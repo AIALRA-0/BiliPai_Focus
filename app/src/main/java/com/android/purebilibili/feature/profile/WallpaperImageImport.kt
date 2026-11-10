@@ -19,18 +19,33 @@ internal suspend fun importWallpaperImage(
     var imported: File? = null
     try {
         return withContext(Dispatchers.IO) {
+            var mimeType: String? = null
             val file = copyWallpaperImage(
                 destinationDirectory = destinationDirectory,
                 openSource = { context.contentResolver.openInputStream(source) },
                 validateImage = { candidate ->
                     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeFile(candidate.absolutePath, options)
+                    mimeType = options.outMimeType
                     options.outWidth > 0 && options.outHeight > 0
                 },
             )
             imported = file
+            val extension = when (mimeType) {
+                "image/gif" -> "gif"
+                "image/webp" -> "webp"
+                "image/png" -> "png"
+                "image/jpeg" -> "jpg"
+                else -> "img"
+            }
+            val renamed = File(file.parentFile, "${file.nameWithoutExtension}.$extension")
+            val result = if (renamed == file) file else {
+                check(file.renameTo(renamed)) { "无法保存壁纸文件" }
+                renamed
+            }
+            imported = result
             ensureActive()
-            file
+            result
         }
     } catch (error: Throwable) {
         // Also handles cancellation during the dispatch back to the UI thread.

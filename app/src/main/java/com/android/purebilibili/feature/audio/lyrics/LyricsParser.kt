@@ -1,9 +1,9 @@
 package com.android.purebilibili.feature.audio.lyrics
 
 private val metadataPattern = Regex("^\\[([A-Za-z]+):(.*)]$")
-private val leadingTimestampPattern = Regex("^(?:\\[-?\\d{1,3}:[-?\\d]{1,2}\\.\\d{1,6}])+")
-private val timestampPattern = Regex("\\[(-?\\d{1,3}):(-?\\d{1,2})\\.(\\d{1,6})]")
-private val spanTimestampPattern = Regex("<(-?\\d{1,3}):(-?\\d{1,2})\\.(\\d{1,6})>")
+private val leadingTimestampPattern = Regex("^(?:\\[-?\\d{1,3}:[-?\\d]{1,2}(?:\\.\\d{1,6})?])+")
+private val timestampPattern = Regex("\\[(-?\\d{1,3}):(-?\\d{1,2})(?:\\.(\\d{1,6}))?]")
+private val spanTimestampPattern = Regex("<(-?\\d{1,3}):(-?\\d{1,2})(?:\\.(\\d{1,6}))?>")
 
 private data class ParsedRawLine(
     val startTimeMs: Long,
@@ -53,8 +53,14 @@ internal fun parseSplLyrics(
                 startTimeMs = raw.startTimeMs,
                 endTimeMs = endTime.coerceAtLeast(raw.startTimeMs),
                 text = raw.text,
-                translations = translationMap[raw.startTimeMs].orEmpty(),
-                romanization = romanizationMap[raw.startTimeMs]?.firstOrNull(),
+                translations = translationMap[raw.startTimeMs]
+                    .orEmpty()
+                    .filterNot { isPseudoSecondaryLine(raw.text, it) },
+                romanization = romanizationMap[raw.startTimeMs]
+                    ?.firstOrNull()
+                    ?.takeIf {
+                        needsPhoneticAnnotation(raw.text) && !isPseudoSecondaryLine(raw.text, it)
+                    },
                 spans = raw.spans
                     .filter { span -> span.startTimeMs < endTime }
                     .map { span ->
@@ -172,7 +178,7 @@ private fun parseTimestampMs(groups: List<String>): Long? {
     val minutes = groups.getOrNull(1)?.toLongOrNull() ?: return null
     val seconds = groups.getOrNull(2)?.toLongOrNull() ?: return null
     val fraction = groups.getOrNull(3).orEmpty()
-    if (seconds !in 0L..59L || fraction.isEmpty()) return null
-    val millis = fraction.padEnd(3, '0').take(3).toLongOrNull() ?: return null
+    if (seconds !in 0L..59L) return null
+    val millis = if (fraction.isEmpty()) 0L else fraction.padEnd(3, '0').take(3).toLongOrNull() ?: return null
     return (minutes * 60_000L) + (seconds * 1_000L) + millis
 }

@@ -21,29 +21,49 @@ internal fun resolveDynamicFoldStatement(fold: DynamicFoldModule?): String? {
     return statement.ifEmpty { null }
 }
 
-/**
- * Reveal the hidden cards that Bilibili folded under [anchorId], matching PiliPlus
- * `onUnfold`: keep them in the list, flip `visible`, and drop the fold bar.
- */
+internal fun resolveDynamicFoldIds(item: DynamicItem): List<String> =
+    item.modules.module_fold?.ids.orEmpty()
+        .map(String::trim)
+        .filter { it.isNotBlank() && it != item.id_str }
+        .distinct()
+
+/** Expand exact IDs only; missing cards keep a retry entry instead of silently disappearing. */
 internal fun unfoldRelatedDynamicItems(
     items: List<DynamicItem>,
     anchorId: String,
+    loadedItems: List<DynamicItem> = emptyList(),
+    resolvedFold: DynamicFoldModule? = null,
 ): List<DynamicItem> {
     if (items.isEmpty() || anchorId.isBlank()) return items
     val anchorIndex = items.indexOfFirst { it.id_str == anchorId }
     if (anchorIndex < 0) return items
-    val fold = items[anchorIndex].modules.module_fold ?: return items
-    val foldedIds = fold.ids.map(String::trim).filter(String::isNotBlank).toSet()
+    val anchor = items[anchorIndex]
+    val originalFold = anchor.modules.module_fold ?: return items
+    val fold = resolvedFold ?: originalFold
+    val foldedIds = resolveDynamicFoldIds(anchor.copy(modules = anchor.modules.copy(module_fold = fold)))
     if (foldedIds.isEmpty()) return items
-    val positionalEnd = (anchorIndex + foldedIds.size).coerceAtMost(items.lastIndex)
-    return items.mapIndexed { index, item ->
-        when {
-            index == anchorIndex -> item.copy(
-                modules = item.modules.copy(module_fold = null),
-            )
-            item.id_str in foldedIds -> item.copy(visible = true)
-            index in (anchorIndex + 1)..positionalEnd && !item.visible -> item.copy(visible = true)
-            else -> item
+
+    // The live list wins over downloaded snapshots (likes and other interactions may change).
+    val available = (loadedItems + items).associateBy { it.id_str }
+    val related = foldedIds.mapNotNull { available[it]?.copy(visible = true) }
+    if (related.isEmpty()) return items
+    val remainingIds = foldedIds.filterNot(available::containsKey)
+    val nextFold = if (remainingIds.isEmpty()) null else fold.copy(
+        // Keep the full group order; retries fetch missing IDs but must not move them
+        // ahead of cards that were already revealed by a partial success.
+        ids = foldedIds,
+        statement = "重试加载${remainingIds.size}条相关动态",
+    )
+    val relatedIds = related.map { it.id_str }.toSet()
+    return buildList {
+        items.forEach { item ->
+            when {
+                item.id_str == anchorId -> {
+                    add(item.copy(modules = item.modules.copy(module_fold = nextFold)))
+                    addAll(related)
+                }
+                item.id_str !in relatedIds -> add(item)
+            }
         }
     }
 }

@@ -1,5 +1,8 @@
 package com.android.purebilibili.core.plugin
 
+import com.android.purebilibili.plugin.sdk.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
+
 data class ExternalPluginPackageDescriptor(
     val manifest: PluginCapabilityManifest,
     val packageSha256: String,

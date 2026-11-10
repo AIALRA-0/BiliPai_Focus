@@ -16,7 +16,7 @@ internal object HomeFeedMergePolicy {
      * 交错合并 web 与 app 两条推荐流，返回去重后的列表。
      *
      * - 按索引交替取 app[i]、web[i]（app 在前）。
-     * - 按 [keyOf] 生成每种视频的唯一 key，重复项只保留首个。
+     * - 按 [keyOf] 去重，保留首个卡片的位置和展示字段，后续副本可补全服务器反馈信息。
      * - 一方耗尽后，将另一方剩余项追加到末尾。
      * - 任一输入为空时安全返回另一侧（或空列表）。
      */
@@ -24,21 +24,41 @@ internal object HomeFeedMergePolicy {
         if (web.isEmpty()) return app
         if (app.isEmpty()) return web
 
-        val seen = hashSetOf<String>()
+        val indices = HashMap<String, Int>()
         val merged = ArrayList<VideoItem>(web.size + app.size)
+
+        fun appendOrEnrichFeedback(item: VideoItem) {
+            val key = keyOf(item)
+            val index = indices[key]
+            if (index == null) {
+                indices[key] = merged.size
+                merged.add(item)
+            } else {
+                val retained = merged[index]
+                if (!retained.hasServerFeedback() && item.hasServerFeedback()) {
+                    merged[index] = retained.copy(recommendationFeedback = item.recommendationFeedback)
+                }
+            }
+        }
 
         val maxLen = maxOf(web.size, app.size)
         for (i in 0 until maxLen) {
             if (i < app.size) {
-                val item = app[i]
-                if (seen.add(keyOf(item))) merged.add(item)
+                appendOrEnrichFeedback(app[i])
             }
             if (i < web.size) {
-                val item = web[i]
-                if (seen.add(keyOf(item))) merged.add(item)
+                appendOrEnrichFeedback(web[i])
             }
         }
         return merged
+    }
+
+    private fun VideoItem.hasServerFeedback(): Boolean {
+        val feedback = recommendationFeedback ?: return false
+        return feedback.supportsServerSync &&
+            feedback.goto.isNotBlank() &&
+            feedback.param.isNotBlank() &&
+            feedback.reasons.any { (it.id ?: 0L) > 0L && it.name.isNotBlank() }
     }
 
     /**

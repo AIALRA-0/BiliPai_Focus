@@ -47,7 +47,9 @@ fun UpBadgeName(
     metaOverflow: TextOverflow = TextOverflow.Ellipsis,
     // 名称右侧留白：名称占满可用宽度后，省略号与后续元素之间保留的空隙。
     // 默认 0 不影响未显式传入的调用方。
-    nameEndPadding: Dp = 0.dp
+    nameEndPadding: Dp = 0.dp,
+    /** 作者信息最前方的状态标签，位于 UP 标识、头像和名称之前。 */
+    nameLeadingContent: (@Composable () -> Unit)? = null
 ) {
     val shouldShowMeta = !metaText.isNullOrBlank()
     // null = 跟随全局「UP 认证徽章」开关(设置 > 外观 > 首页与列表),
@@ -62,6 +64,11 @@ fun UpBadgeName(
             modifier = modifier,
             verticalAlignment = if (shouldShowMeta) Alignment.Top else Alignment.CenterVertically
         ) {
+            nameLeadingContent?.let {
+                it()
+                Spacer(modifier = Modifier.width(spacing))
+            }
+
             if (shouldRenderUserUpBadge(effectiveShowUpBadge)) {
                 UserUpBadge(
                     containerColor = badgeBackgroundColor,

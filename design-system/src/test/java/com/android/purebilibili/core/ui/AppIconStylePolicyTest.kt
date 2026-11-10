@@ -36,6 +36,8 @@ class AppIconStylePolicyTest {
     fun `preference parsing falls back to auto`() {
         assertEquals(AppIconStyle.THEME_CONTAINER, resolveAppIconStylePreference("THEME_CONTAINER"))
         assertEquals(AppIconStyle.MD3_STANDARD, resolveAppIconStylePreference("MD3_STANDARD"))
+        assertEquals(AppIconStyle.SOFT_COLORFUL, resolveAppIconStylePreference("SOFT_COLORFUL"))
+        assertEquals(AppIconStyle.VIVID_COLORFUL, resolveAppIconStylePreference("VIVID_COLORFUL"))
         assertEquals(AppIconStyle.AUTO, resolveAppIconStylePreference(null))
         assertEquals(AppIconStyle.AUTO, resolveAppIconStylePreference("UNKNOWN_VALUE"))
     }

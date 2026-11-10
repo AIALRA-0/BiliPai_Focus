@@ -21,8 +21,8 @@ class AdaptiveListComponentPolicyTest {
     fun `material3 style should use more native material search and group geometry`() {
         val spec = resolveAdaptiveListComponentVisualSpec(AppUiStyle.MATERIAL3)
 
-        assertEquals(56, spec.searchBarHeightDp)
-        assertEquals(28, spec.searchBarCornerRadiusDp)
+        assertEquals(48, spec.searchBarHeightDp)
+        assertEquals(14, spec.searchBarCornerRadiusDp)
         assertEquals(40, spec.iconContainerSizeDp)
         assertEquals(22, spec.iconGlyphSizeDp)
         assertEquals(24, spec.groupCornerRadiusDp)
@@ -32,64 +32,51 @@ class AdaptiveListComponentPolicyTest {
         assertEquals(3, spec.groupTonalElevationDp)
     }
 
-    @Test
-    fun `miuix style should soften grouped settings geometry`() {
-        val spec = resolveAdaptiveListComponentVisualSpec(AppUiStyle.MIUIX)
-
-        assertEquals(48, spec.searchBarHeightDp)
-        assertEquals(22, spec.searchBarCornerRadiusDp)
-        assertEquals(20, spec.groupCornerRadiusDp)
-        assertEquals(16, spec.sectionStartPaddingDp)
-        assertEquals(16, spec.dividerStartIndentDp)
-        assertEquals(10, spec.iconCornerRadiusDp)
-        assertEquals(38, spec.iconContainerSizeDp)
-        assertEquals(20, spec.iconGlyphSizeDp)
-        assertEquals(0.18f, spec.iconBackgroundAlpha, 0.0001f)
-    }
 
     @Test
-    fun `miuix style should use denser list row spacing`() {
+    fun `miuix style should use compact list row spacing`() {
         val spec = resolveAdaptiveListRowVisualSpec(AppUiStyle.MIUIX)
 
         assertEquals(16, spec.insideHorizontalPaddingDp)
-        assertEquals(14, spec.insideVerticalPaddingDp)
+        assertEquals(12, spec.insideVerticalPaddingDp)
         assertEquals(14, spec.trailingIconSizeDp)
         assertEquals(6, spec.trailingSpacingDp)
     }
 
     @Test
-    fun `material3 style should keep roomier shared list row spacing`() {
+    fun `material3 style should use compact app authored list row spacing`() {
         val spec = resolveAdaptiveListRowVisualSpec(AppUiStyle.MATERIAL3)
 
-        assertEquals(18, spec.insideHorizontalPaddingDp)
-        assertEquals(16, spec.insideVerticalPaddingDp)
+        assertEquals(16, spec.insideHorizontalPaddingDp)
+        assertEquals(12, spec.insideVerticalPaddingDp)
         assertEquals(16, spec.trailingIconSizeDp)
         assertEquals(8, spec.trailingSpacingDp)
-        assertEquals(48, spec.minTouchTargetHeightDp)
+        assertEquals(44, spec.minTouchTargetHeightDp)
     }
 
+
     @Test
-    fun `material3 style should map all settings icon tints to theme primary`() {
+    fun `material3 style should map all settings icon tints to neutral content`() {
         val colorScheme = darkColorScheme()
 
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSBlue, AppUiStyle.MATERIAL3, colorScheme)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSGreen, AppUiStyle.MATERIAL3, colorScheme)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSPurple, AppUiStyle.MATERIAL3, colorScheme)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSRed, AppUiStyle.MATERIAL3, colorScheme)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSSystemGray, AppUiStyle.MATERIAL3, colorScheme)
         )
     }
@@ -114,21 +101,22 @@ class AdaptiveListComponentPolicyTest {
             resolveAdaptivePreferenceIconContentColor(iOSBlue, colorScheme),
         )
         assertEquals(
-            colorScheme.secondary,
+            iOSBlue,
             resolveAdaptivePreferenceIconContainerColor(
                 iconTint = iOSBlue,
-                semanticTint = colorScheme.secondary,
+                semanticTint = iOSBlue,
                 treatment = AppPreferenceIconTreatment.FILLED,
+                colorScheme = colorScheme,
             ),
         )
     }
 
     @Test
-    fun `theme container icon style uses opaque secondary container with on color glyphs`() {
+    fun `theme container icon style uses opaque primary container with on color glyphs`() {
         val colorScheme = lightColorScheme()
 
         assertEquals(
-            colorScheme.secondaryContainer,
+            colorScheme.primaryContainer,
             resolveAdaptivePreferenceIconContainerColor(
                 iconTint = iOSBlue,
                 semanticTint = colorScheme.primary,
@@ -146,20 +134,20 @@ class AdaptiveListComponentPolicyTest {
             ),
         )
         assertEquals(
-            colorScheme.onSecondaryContainer,
+            colorScheme.onPrimaryContainer,
             resolveAdaptivePreferenceIconContentColor(
-                containerColor = colorScheme.secondaryContainer,
+                containerColor = colorScheme.primaryContainer,
                 colorScheme = colorScheme,
                 iconStyle = AppIconStyle.THEME_CONTAINER,
             ),
         )
         assertEquals(
-            colorScheme.onSecondaryContainer,
+            colorScheme.onPrimaryContainer,
             resolveAdaptivePreferenceIconGlyphColor(
                 treatment = AppPreferenceIconTreatment.TONAL,
                 iconStyle = AppIconStyle.THEME_CONTAINER,
-                containerContentColor = colorScheme.onSecondaryContainer,
-                semanticIconColor = colorScheme.secondaryContainer,
+                containerContentColor = colorScheme.onPrimaryContainer,
+                semanticIconColor = colorScheme.primaryContainer,
             ),
         )
     }
@@ -228,33 +216,33 @@ class AdaptiveListComponentPolicyTest {
     }
 
     @Test
-    fun `material3 style without dynamic color should collapse legacy accent tints to primary`() {
+    fun `material3 style without dynamic color should collapse legacy accent tints to neutral content`() {
         val colorScheme = darkColorScheme()
 
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSBlue, AppUiStyle.MATERIAL3, colorScheme, useSemanticAccentRoles = false)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSPurple, AppUiStyle.MATERIAL3, colorScheme, useSemanticAccentRoles = false)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSGreen, AppUiStyle.MATERIAL3, colorScheme, useSemanticAccentRoles = false)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSRed, AppUiStyle.MATERIAL3, colorScheme, useSemanticAccentRoles = false)
         )
         assertEquals(
-            colorScheme.primary,
+            colorScheme.onSurfaceVariant,
             resolveAdaptiveSemanticIconTint(iOSSystemGray, AppUiStyle.MATERIAL3, colorScheme, useSemanticAccentRoles = false)
         )
     }
 
     @Test
-    fun `miuix style should preserve colorful settings icon tints`() {
+    fun `miuix style preserves per entry settings icon colors`() {
         val colorScheme = darkColorScheme()
 
         assertEquals(
@@ -402,16 +390,29 @@ class AdaptiveListComponentPolicyTest {
     }
 
     @Test
-    fun `force expanded search bar uses outlined text field on material3`() {
+    fun `top bar search uses the shared compact field with native miuix input`() {
+        val apiSource = listOf(
+            java.io.File("design-system/src/main/java/com/android/purebilibili/core/ui/components/AppPreferenceComponents.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AppPreferenceComponents.kt"),
+        ).first { it.exists() }.readText()
         val source = listOf(
             java.io.File("design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt"),
             java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt"),
         ).first { it.exists() }.readText()
-        val forceExpandedStart = source.indexOf("if (forceExpandedInput) {")
-        val outlinedFieldStart = source.indexOf("OutlinedTextField(", forceExpandedStart)
-        assertTrue(forceExpandedStart >= 0)
-        assertTrue(outlinedFieldStart > forceExpandedStart)
-        assertTrue(source.substring(forceExpandedStart, outlinedFieldStart).contains("focusRequester"))
+        val compactSource = listOf(
+            java.io.File("design-system/src/main/java/com/android/purebilibili/core/ui/components/AppCompactInputField.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AppCompactInputField.kt"),
+        ).first { it.exists() }.readText()
+        val rendererStart = source.indexOf("fun AdaptiveSearchFieldRenderer(")
+        assertTrue(rendererStart >= 0)
+        val renderer = source.substring(rendererStart).substringBefore("fun AppSearchEntry(")
+
+        assertTrue(apiSource.contains("forceExpandedInput = presentation == AppSearchFieldPresentation.TOP_BAR"))
+        assertTrue(renderer.contains("AppCompactInputField("))
+        assertTrue(renderer.contains("autoFocusEnabled: Boolean = forceExpandedInput"))
+        assertTrue(compactSource.contains("if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled())"))
+        assertTrue(compactSource.contains("top.yukonga.miuix.kmp.basic.TextField("))
+        assertTrue(compactSource.contains("BasicTextField("))
     }
 
     @Test
@@ -444,43 +445,39 @@ class AdaptiveListComponentPolicyTest {
     }
 
     @Test
-    fun `settings search bar uses expanded miuix input field`() {
-        val neutralApiSource = listOf(
-            java.io.File("design-system/src/main/java/com/android/purebilibili/core/ui/components/AppPreferenceComponents.kt"),
-            java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AppPreferenceComponents.kt"),
-        ).first { it.exists() }.readText()
+    fun `miuix settings search stays on the shared compact renderer`() {
         val rendererSource = listOf(
             java.io.File("design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt"),
             java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt"),
         ).first { it.exists() }.readText()
-        assertTrue(neutralApiSource.contains("fun AppSearchField("))
-        assertTrue(
-            neutralApiSource.contains(
-                "forceExpandedInput = presentation == AppSearchFieldPresentation.TOP_BAR"
-            )
-        )
-        assertTrue(rendererSource.contains("InputField("))
-        assertTrue(rendererSource.contains("expanded = true"))
-        assertTrue(rendererSource.contains("OutlinedTextField("))
-        assertTrue(rendererSource.contains("BasicTextField("))
+        val compactSource = listOf(
+            java.io.File("design-system/src/main/java/com/android/purebilibili/core/ui/components/AppCompactInputField.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AppCompactInputField.kt"),
+        ).first { it.exists() }.readText()
+        val rendererStart = rendererSource.indexOf("fun AdaptiveSearchFieldRenderer(")
+        assertTrue(rendererStart >= 0)
+        val renderer = rendererSource.substring(rendererStart).substringBefore("fun AppSearchEntry(")
+
+        assertTrue(renderer.contains("AppCompactInputField("))
+        assertFalse(renderer.contains("MiuixAdaptiveSearchBar("))
+        assertTrue(compactSource.contains("isMiuixNonGlassEnabled()"))
+        assertTrue(compactSource.contains("top.yukonga.miuix.kmp.basic.TextField("))
     }
 
     @Test
-    fun `miuix generic search bar does not auto expand before user interaction`() {
+    fun `forced top bar input keeps the compact renderer instead of switching material fields`() {
         val source = java.io.File("design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt")
             .takeIf { it.exists() }
             ?: java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt")
         val text = source.readText()
-        val miuixSearchBarStart = text.indexOf("private fun MiuixAdaptiveSearchBar")
-        assertTrue(miuixSearchBarStart >= 0)
-        val collapsedPathStart = text.indexOf("var expanded by rememberSaveable(query.isNotBlank())", miuixSearchBarStart)
-        assertTrue(collapsedPathStart >= 0)
-        val collapsedPathEnd = text.indexOf("InputField(", collapsedPathStart)
-        assertTrue(collapsedPathEnd > collapsedPathStart)
-        val collapsedPathBlock = text.substring(collapsedPathStart, collapsedPathEnd)
+        val rendererStart = text.indexOf("fun AdaptiveSearchFieldRenderer(")
+        assertTrue(rendererStart >= 0)
+        val renderer = text.substring(rendererStart).substringBefore("fun AppSearchEntry(")
 
-        assertTrue(collapsedPathBlock.contains("var expanded by rememberSaveable(query.isNotBlank())"))
-        assertTrue(text.substring(collapsedPathStart).contains("expanded = expanded || query.isNotBlank()"))
-        assertTrue(text.contains("forceExpandedInput"))
+        assertTrue(renderer.contains("forceExpandedInput: Boolean = false"))
+        assertTrue(renderer.contains("autoFocusEnabled: Boolean = forceExpandedInput"))
+        assertTrue(renderer.contains("AppCompactInputField("))
+        assertTrue(renderer.contains("autoFocusEnabled = autoFocusEnabled"))
+        assertFalse(renderer.contains("OutlinedTextField("))
     }
 }

@@ -3,22 +3,16 @@ package com.android.purebilibili.feature.video
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.PendingIntent
 import android.app.PictureInPictureParams
-import android.app.RemoteAction
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
 import com.android.purebilibili.core.util.Logger
-import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -55,22 +49,17 @@ import com.android.purebilibili.core.util.resolveAppDisplayContext
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
 import com.android.purebilibili.core.util.LARGE_SCREEN_SMALLEST_WIDTH_DP
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.player.buildPipPlaybackRemoteActions
+import com.android.purebilibili.feature.video.screen.isActivityInMultiWindowOrFloatingMode
 import androidx.window.layout.WindowMetricsCalculator
 // Imports for moved classes
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
-import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 
 private const val TAG = "BiliPlayerActivity"
 
-
-//  PiP 控制 Action 常量
-private const val ACTION_PIP_CONTROL = "com.android.purebilibili.PIP_CONTROL"
-private const val EXTRA_CONTROL_TYPE = "control_type"
-private const val CONTROL_TYPE_PLAY = 1
-private const val CONTROL_TYPE_PAUSE = 2
 
 class VideoActivity : ComponentActivity() {
 
@@ -80,23 +69,6 @@ class VideoActivity : ComponentActivity() {
     private var runtimeJankStats: JankStats? = null
     private val runtimeVisualGuardSession = Any()
     
-    //  PiP 广播接收器
-    private val pipReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == ACTION_PIP_CONTROL) {
-                when (intent.getIntExtra(EXTRA_CONTROL_TYPE, 0)) {
-                    CONTROL_TYPE_PLAY -> {
-                        Logger.d(TAG, "PiP: Play")
-                        // 由 Compose 状态自动处理播放
-                    }
-                    CONTROL_TYPE_PAUSE -> {
-                        Logger.d(TAG, "PiP: Pause")
-                        // 由 Compose 状态自动处理暂停
-                    }
-                }
-            }
-        }
-    }
 
     //  1. 权限回调
     private val requestPermissionLauncher = registerForActivityResult(
@@ -113,8 +85,15 @@ class VideoActivity : ComponentActivity() {
         enableEdgeToEdge()
         AppWindowSystemUiController.configureEdgeToEdgeHost(this)
         val entryDisplayContext = resolveAppDisplayContext()
+        val entryIsInMultiWindowOrFloatingMode = isActivityInMultiWindowOrFloatingMode(
+            activity = this,
+            displayContext = entryDisplayContext,
+        )
+        // 分屏 / 系统小窗（freeform）下窗口可以跟随横竖屏，不再强制竖屏，
+        // 让视频以横屏打开；普通手机窗口维持既有竖屏策略。
         if (
             savedInstanceState == null &&
+            !entryIsInMultiWindowOrFloatingMode &&
             (entryDisplayContext.isFoldableCoverWindow ||
                 minOf(
                     entryDisplayContext.currentWindowWidthDp,
@@ -132,16 +111,6 @@ class VideoActivity : ComponentActivity() {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         
-        //  注册 PiP 控制广播 (使用 ContextCompat 兼容所有版本)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val filter = IntentFilter(ACTION_PIP_CONTROL)
-            androidx.core.content.ContextCompat.registerReceiver(
-                this,
-                pipReceiver,
-                filter,
-                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
-            )
-        }
 
         val bvid = intent.getStringExtra("bvid")
         if (bvid.isNullOrBlank()) {
@@ -201,13 +170,24 @@ class VideoActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = true)
             val cardDynamicTintEnabled by SettingsManager
                 .getHomeCardDynamicTintEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
+                .collectAsStateWithLifecycle(initialValue = false)
+            val cardFrostedGlassEnabled by SettingsManager
+                .getHomeCardFrostedGlassEnabled(this@VideoActivity)
+                .collectAsStateWithLifecycle(initialValue = false)
+            val commentReplyPreviewVisible by remember(this@VideoActivity) {
+                SettingsManager.getCommentReplyPreviewVisible(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val hapticSettings by remember(this@VideoActivity) { SettingsManager.getHapticSettings(this@VideoActivity) }
+                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppHapticSettings())
             val hapticFeedbackEnabled by SettingsManager
                 .getHapticFeedbackEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
             val globalTextTapCopyEnabled by SettingsManager
                 .getGlobalTextTapCopyEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = false)
+            val globalDragFeedbackEnabled by SettingsManager
+                .getGlobalDragFeedbackEnabled(this@VideoActivity)
+                .collectAsStateWithLifecycle(initialValue = true)
             val uiEntranceAnimationEnabled by SettingsManager
                 .getUiEntranceAnimationEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
@@ -216,28 +196,36 @@ class VideoActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = true)
             val liquidGlassEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
+            val liquidSwitchThumbMode by SettingsManager.getLiquidSwitchThumbMode(this@VideoActivity)
+                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
             val appThemeConfig = remember(
                 liquidGlassEnabled,
+                liquidSwitchThumbMode,
                 blurIntensity,
                 headerBlurEnabled,
                 bottomBarBlurEnabled,
                 progressiveTopBlurEnabled,
                 progressiveTopFadeEnabled,
                 hapticFeedbackEnabled,
+                hapticSettings,
                 globalTextTapCopyEnabled,
                 uiEntranceAnimationEnabled,
+                globalDragFeedbackEnabled,
                 runtimeVisualGuardEnabled,
             ) {
                 AppThemeConfig(
                     liquidGlassEnabled = liquidGlassEnabled,
+                    liquidSwitchThumbMode = liquidSwitchThumbMode,
                     blurIntensity = blurIntensity,
                     headerBlurEnabled = headerBlurEnabled,
                     bottomBarBlurEnabled = bottomBarBlurEnabled,
                     progressiveTopBlurEnabled = progressiveTopBlurEnabled,
                     progressiveTopFadeEnabled = progressiveTopFadeEnabled,
                     hapticFeedbackEnabled = hapticFeedbackEnabled,
+                    hapticSettings = hapticSettings,
                     globalTextTapCopyEnabled = globalTextTapCopyEnabled,
                     uiEntranceAnimationEnabled = uiEntranceAnimationEnabled,
+                    globalDragFeedbackEnabled = globalDragFeedbackEnabled,
                     runtimeVisualGuardEnabled = runtimeVisualGuardEnabled,
                 )
             }
@@ -249,6 +237,7 @@ class VideoActivity : ComponentActivity() {
                 com.android.purebilibili.core.ui.blur.ProvideUnifiedBlurIntensity {
                 ProvideAppTextSelectionHost {
                 CompositionLocalProvider(
+                    com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
                         startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
                             putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,
@@ -256,27 +245,63 @@ class VideoActivity : ComponentActivity() {
                         })
                     },
                     LocalWindowSizeClass provides windowSizeClass,
+                    com.android.purebilibili.core.ui.LocalAdaptiveScaffoldHazeFactory provides
+                        { userEnabled -> com.android.purebilibili.core.ui.blur.rememberAppScaffoldHazeHandle(userEnabled) },
                     LocalAppWindowAdaptiveInfo provides appWindowAdaptiveInfo,
+                    com.android.purebilibili.core.ui.LocalHingeSafeOverlayRegions provides
+                        com.android.purebilibili.core.ui.adaptive.rememberHingeSafeOverlayRegions(
+                            adaptiveInfo = appWindowAdaptiveInfo
+                        ),
                     LocalVideoTransitionAdaptiveInfo provides videoTransitionAdaptiveInfo,
+                    // 与主导航一致：玻璃态下独立播放窗口的对话框也使用统一玻璃表面渲染。
+                    com.android.purebilibili.core.ui.LocalAppPopupSurfaceRenderer provides
+                        com.android.purebilibili.core.ui.components.BiliPaiPopupSurfaceRenderer,
                     com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled provides
                         cardDynamicTintEnabled,
+                    com.android.purebilibili.feature.home.components.cards.LocalHomeCardFrostedGlassEnabled provides
+                        cardFrostedGlassEnabled,
                 ) {
                 // VideoDetailScreen handles its own UI state and player initialization
+                var nearbyVideo by remember { mutableStateOf<com.android.purebilibili.feature.nearby.NearbyVideo?>(null) }
+                // 独立播放窗口同样装配同窗玻璃菜单宿主：玻璃态的播放器菜单不再降级到
+                // Miuix 独立窗口弹窗在视频面上空采样 backdrop；关闭玻璃时不提供
+                // presenter，原生 Miuix / MD3 菜单路径保持不变。
+                com.android.purebilibili.core.ui.popup.AppGlassPopupHost(
+                    glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+                        com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(
+                            android.os.Build.VERSION.SDK_INT,
+                        ),
+                    tuning = com.android.purebilibili.feature.home.components.LocalLiquidGlassRenderConfig.current.tuning,
+                ) {
+                com.android.purebilibili.feature.nearby.NearbyHandoffHost(
+                    miniPlayer = MiniPlayerManager.getInstance(this@VideoActivity),
+                    onOpenVideo = { nearbyVideo = it },
+                ) {
                 com.android.purebilibili.feature.video.screen.VideoDetailScreen(
-                    bvid = bvid,
-                    coverUrl = "", // Will be updated when video info loads
+                    bvid = nearbyVideo?.bvid ?: bvid,
+                    cid = nearbyVideo?.cid ?: 0L,
+                    resumePositionMsFromRoute = nearbyVideo?.positionMs ?: 0L,
+                    coverUrl = nearbyVideo?.cover.orEmpty(),
                     onBack = { onBackPressedDispatcher.onBackPressed() },
+                    onHomeClick = {
+                        startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE, com.android.purebilibili.navigation.ScreenRoutes.Home.route)
+                        })
+                        finish()
+                    },
                     onNavigateToAudioMode = {
                         viewModel.setAudioMode(true)
                     },
                     onVideoClick = { vid, options ->
                         VideoActivity.start(this, vid, options)
-                    }
-                    // We don't need to pass external player here as VideoDetailScreen manages it via VideoPlayerState
-                    // But if we wanted to support smooth transition from notification (which might be playing), 
-                    // VideoPlayerState's reuse logic handles checking MiniPlayerManager if applicable.
-                    // For pure Activity launch, it creates/reuses logic internally.
+                    },
+                    miniPlayerManager = MiniPlayerManager.getInstance(this@VideoActivity),
+                    isInPipMode = isInPipMode ||
+                        MiniPlayerManager.getInstance(this@VideoActivity).shouldKeepPlaybackForPipTransition()
                 )
+                }
+                }
                 }
                 }
                 }
@@ -288,7 +313,9 @@ class VideoActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        AppRuntimeVisualGuardTracker.activateSession(runtimeVisualGuardSession)
+        // 会话级重置：独立播放器每次可见都视为新会话，清掉跨会话累积的降级记账；
+        // 否则一次偶发掉帧会让后续进入长期停留在 Reduced 档位（「越进越卡」）。
+        AppRuntimeVisualGuardTracker.beginSession(runtimeVisualGuardSession)
         val existingJankStats = runtimeJankStats
         if (existingJankStats != null) {
             existingJankStats.isTrackingEnabled = true
@@ -304,6 +331,17 @@ class VideoActivity : ComponentActivity() {
             }.onFailure { throwable ->
                 Logger.w(TAG, "无法启动独立播放器性能采样", throwable)
             }.getOrNull()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val mini = MiniPlayerManager.getInstance(this)
+        mini.clearUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+            mini.updateSystemPipActive(true)
+        } else {
+            mini.clearPlaybackRoutePipState()
         }
     }
 
@@ -332,14 +370,6 @@ class VideoActivity : ComponentActivity() {
         runtimeJankStats?.isTrackingEnabled = false
         runtimeJankStats = null
         super.onDestroy()
-        //  注销广播接收器
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                unregisterReceiver(pipReceiver)
-            } catch (e: Exception) {
-                com.android.purebilibili.core.util.Logger.w(TAG, "Failed to unregister PiP receiver", e)
-            }
-        }
     }
 
     // --- 配置与全屏逻辑保持不变 ---
@@ -376,72 +406,48 @@ class VideoActivity : ComponentActivity() {
         }
     }
 
-    //  构建 PiP 参数 (带播放控制按钮)
-    private fun buildPipParams(isPlaying: Boolean = true): PictureInPictureParams {
+    private fun buildPipParams(): PictureInPictureParams {
         val mini = MiniPlayerManager.getInstance(this)
-        val builder = PictureInPictureParams.Builder()
+        return PictureInPictureParams.Builder()
             .setAspectRatio(resolveSafeAndroidPipRational(mini.videoWidth, mini.videoHeight))
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val actions = mutableListOf<RemoteAction>()
-            
-            // 播放/暂停按钮
-            val playPauseAction = if (isPlaying) {
-                RemoteAction(
-                    Icon.createWithResource(this, android.R.drawable.ic_media_pause),
-                    "暂停",
-                    "暂停播放",
-                    PendingIntent.getBroadcast(
-                        this,
-                        CONTROL_TYPE_PAUSE,
-                        Intent(ACTION_PIP_CONTROL).putExtra(EXTRA_CONTROL_TYPE, CONTROL_TYPE_PAUSE),
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                )
-            } else {
-                RemoteAction(
-                    Icon.createWithResource(this, android.R.drawable.ic_media_play),
-                    "播放",
-                    "继续播放",
-                    PendingIntent.getBroadcast(
-                        this,
-                        CONTROL_TYPE_PLAY,
-                        Intent(ACTION_PIP_CONTROL).putExtra(EXTRA_CONTROL_TYPE, CONTROL_TYPE_PLAY),
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                )
+            .setActions(buildPipPlaybackRemoteActions(this, mini.player))
+            .apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setAutoEnterEnabled(mini.shouldEnterPip() && mini.player?.isPlaying == true)
+                    setSeamlessResizeEnabled(true)
+                }
             }
-            actions.add(playPauseAction)
-            
-            builder.setActions(actions)
-            
-            // Android 12+: 自动进入 PiP 模式
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                builder.setAutoEnterEnabled(true)
-                builder.setSeamlessResizeEnabled(true)
-            }
-        }
-        
-        return builder.build()
+            .build()
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        //  [修复] 使用 SettingsManager 读取正确的小窗模式设置
-        val mode = com.android.purebilibili.core.store.SettingsManager.getMiniPlayerModeSync(this)
-        val shouldEnterPip = mode.supportsSystemPip
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && shouldEnterPip) {
-            val state = viewModel.uiState.value
-            if (state is VideoPlaybackUiState.Success) {
-                enterPictureInPictureMode(buildPipParams(true))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
+        val mini = MiniPlayerManager.getInstance(this)
+        mini.markUserLeaveHint()
+        mini.refreshMediaSessionBinding()
+        mini.updatePlaybackRoutePipRequest(false)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            !mini.shouldEnterPip() || mini.player?.isPlaying != true
+        ) return
+
+        try {
+            val params = buildPipParams()
+            mini.updatePlaybackRoutePipRequest(true)
+            if (!enterPictureInPictureMode(params)) {
+                mini.updatePlaybackRoutePipRequest(false)
+                Logger.w(TAG, "System rejected PiP entry")
             }
+        } catch (error: Exception) {
+            mini.updatePlaybackRoutePipRequest(false)
+            Logger.e(TAG, "Failed to enter PiP", error)
         }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
+        MiniPlayerManager.getInstance(this).updateSystemPipActive(isInPictureInPictureMode)
         Logger.d(TAG, "PiP mode changed: $isInPictureInPictureMode")
     }
 

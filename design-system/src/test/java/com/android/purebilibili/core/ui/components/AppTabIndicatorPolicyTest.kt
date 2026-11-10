@@ -1,9 +1,38 @@
 package com.android.purebilibili.core.ui.components
 
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class AppTabIndicatorPolicyTest {
+
+    @Test
+    fun `equal width tabs use glyph bounds for the settled underline`() {
+        val slots = resolveMeasuredTabContentSlots(
+            listOf(AppTabSlot(0.dp, 160.dp, 128.dp), AppTabSlot(160.dp, 160.dp, 128.dp)),
+            listOf(32.dp, 48.dp),
+        )
+        assertEquals(
+            ElasticTabIndicatorBounds(64f, 32f),
+            resolveElasticTabIndicatorBounds(
+                position = 0f,
+                tabLeftsDp = slots.map { it.left.value },
+                tabWidthsDp = slots.map { it.width.value },
+                contentWidthsDp = slots.map { it.contentWidth.value },
+                matchContentSize = true,
+            ),
+        )
+        assertEquals(160.dp, slots[0].width)
+    }
+
+    @Test
+    fun `label underline keeps native minimum and stays within its tab`() {
+        val slots = listOf(AppTabSlot(0.dp, 80.dp, 48.dp), AppTabSlot(80.dp, 80.dp, 48.dp))
+        val measured = resolveMeasuredTabContentSlots(slots, listOf(10.dp, 200.dp))
+        assertEquals(24.dp, measured[0].contentWidth)
+        assertEquals(80.dp, measured[1].contentWidth)
+        assertEquals(slots, resolveMeasuredTabContentSlots(slots, null))
+    }
 
     @Test
     fun `elastic underline sits on the current label when settled`() {

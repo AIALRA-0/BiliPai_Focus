@@ -1,29 +1,40 @@
 package com.android.purebilibili.feature.plugin.googlecast
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
 import android.content.Context
+import android.os.Build
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.android.purebilibili.core.plugin.CastPluginApi
-import com.android.purebilibili.core.plugin.CastPluginMediaRequest
-import com.android.purebilibili.core.plugin.CastPluginPlaybackState
-import com.android.purebilibili.core.plugin.CastPluginRoute
-import com.android.purebilibili.core.plugin.PluginCapability
-import com.android.purebilibili.core.plugin.PluginCapabilityManifest
+import com.android.purebilibili.plugin.sdk.CastPluginApi
+import com.android.purebilibili.core.plugin.BuiltinPlugin
+import com.android.purebilibili.plugin.sdk.CastDiscoveryRequirement
+import com.android.purebilibili.feature.cast.hasRawLocalNetworkAccess
+import com.android.purebilibili.plugin.sdk.CastPluginMediaRequest
+import com.android.purebilibili.plugin.sdk.CastPluginPlaybackState
+import com.android.purebilibili.plugin.sdk.CastPluginRoute
+import com.android.purebilibili.plugin.sdk.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 import com.android.purebilibili.core.util.Logger
 import com.google.android.gms.cast.framework.CastContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cast
 import kotlinx.coroutines.flow.StateFlow
 
-const val GOOGLE_CAST_PLUGIN_ID = "google_cast"
 private const val TAG = "GoogleCastPlugin"
 
-class GoogleCastPlugin : CastPluginApi {
+internal fun resolveGoogleCastDiscoveryRequirement(sdkInt: Int): CastDiscoveryRequirement =
+    if (sdkInt >= 37) CastDiscoveryRequirement.RAW_LOCAL_NETWORK else CastDiscoveryRequirement.NONE
 
-    override val id = GOOGLE_CAST_PLUGIN_ID
+class GoogleCastPlugin : BuiltinPlugin, CastPluginApi {
+
+    override val id = BuiltinPluginIds.GOOGLE_CAST
     override val name = "Google Cast"
     override val description = "将视频投屏到 Chromecast / Google Cast 设备"
     override val version = "0.1.1"
     override val author = "Leko (lekoOwO)"
+    // This plugin uses an app-owned route list, not the system Output Switcher.
+    override val discoveryRequirement: CastDiscoveryRequirement
+        get() = resolveGoogleCastDiscoveryRequirement(Build.VERSION.SDK_INT)
     override val icon: ImageVector = Icons.Rounded.Cast
     override val capabilityManifest: PluginCapabilityManifest = PluginCapabilityManifest(
         pluginId = id,
@@ -56,6 +67,10 @@ class GoogleCastPlugin : CastPluginApi {
         route: CastPluginRoute,
         media: CastPluginMediaRequest
     ): Result<Unit> {
+        if (Build.VERSION.SDK_INT >= 37 && !hasRawLocalNetworkAccess(context)) {
+            onDiscoveryAccessRevoked()
+            return Result.failure(SecurityException("请先允许本地网络权限，再连接 Google Cast 设备"))
+        }
         val result = GoogleCastMediaLoader.loadMedia(
             context = context,
             routeId = route.routeId,

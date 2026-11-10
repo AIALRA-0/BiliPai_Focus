@@ -70,9 +70,4 @@ class TextSelectionPolicyTest {
         assertEquals("", TextSelectionPolicy.formatSelectedCountBadge(-1))
     }
 
-    @Test
-    fun resolveSelectedTextFromCopyCallback_handlesNullSafely() {
-        assertEquals(null, TextSelectionPolicy.resolveSelectedTextFromCopyCallback(null))
-        assertEquals(null, TextSelectionPolicy.resolveSelectedTextFromCopyCallback("not_a_callback"))
-    }
 }

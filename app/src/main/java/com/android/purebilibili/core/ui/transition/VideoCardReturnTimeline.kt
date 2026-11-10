@@ -34,6 +34,10 @@ internal object VideoCardTransitionVisualTimeline {
     const val DETAIL_CHROME_ENTER_END = 0.72f
     const val SECONDARY_CONTENT_ENTER_START = 0.24f
     const val SECONDARY_CONTENT_ENTER_END = 0.82f
+    // Keep content readable at gesture pickup, then yield alongside viewport contraction.
+    // Finish at the source chrome handoff, without an empty shell between the two.
+    const val NATIVE_BODY_RETURN_START = 0.10f
+    const val NATIVE_BODY_RETURN_END = 0.82f
     // The frozen background page starts yielding before the flying card's internal content morph.
     // This only refreshes the backdrop; it never reveals the source card as a stationary substitute.
     const val WHOLE_SOURCE_CARD_RETURN_START = 0.55f
@@ -42,6 +46,9 @@ internal object VideoCardTransitionVisualTimeline {
     // Live player → cover. Keep the live frame dominant until the card is very close to landing.
     const val MEDIA_RETURN_START = 0.82f
     const val MEDIA_RETURN_END = 0.98f
+    // 整卡位图比单独封面更早接管，完整像素与媒体在同一几何端点完成交接。
+    const val WHOLE_CARD_RETURN_START = WHOLE_SOURCE_CARD_RETURN_START
+    const val WHOLE_CARD_RETURN_END = MEDIA_RETURN_END
     // Cover pixels and the info band under the cover must hand off together. Opening still
     // uses [DETAIL_CHROME_ENTER_*] for the detail body; return chrome shares the live → cover
     // window so title/stats never appear on an empty cover slot.
@@ -90,11 +97,17 @@ internal const val VIDEO_CARD_RETURN_CHROME_REVEAL_START =
  */
 internal fun resolveVideoCardSourceChromeReturnAlpha(
     morphDepthProgress: Float,
-): Float = resolveVideoCardTimelineWindowProgress(
-    progress = resolveVideoCardReturnSettleFromMorphDepth(morphDepthProgress),
-    start = VideoCardTransitionVisualTimeline.SOURCE_CHROME_RETURN_START,
-    end = VideoCardTransitionVisualTimeline.SOURCE_CHROME_RETURN_END,
-)
+): Float = resolveVideoCardLiveReturnVisualHandoffAlpha(morphDepthProgress)
+
+/** 交接窗两端斜率归零；只用于内容叠化，不改变跟手几何。 */
+private fun resolveVideoCardSmoothHandoffProgress(
+    progress: Float,
+    start: Float,
+    end: Float,
+): Float {
+    val u = resolveVideoCardTimelineWindowProgress(progress, start, end)
+    return u * u * (3f - 2f * u)
+}
 
 /**
  * 飞行卡内部内容形变窗口。详情控制器/信息在此窗口退出，来源卡标题/统计按互补
@@ -120,23 +133,41 @@ internal const val VIDEO_CARD_LIVE_RETURN_VISUAL_HANDOFF_START =
  */
 internal fun resolveVideoCardLiveReturnVisualHandoffAlpha(
     morphDepthProgress: Float,
-): Float = resolveVideoCardTimelineWindowProgress(
+): Float = resolveVideoCardSmoothHandoffProgress(
     progress = resolveVideoCardReturnSettleFromMorphDepth(morphDepthProgress),
     start = VideoCardTransitionVisualTimeline.MEDIA_RETURN_START,
     end = VideoCardTransitionVisualTimeline.MEDIA_RETURN_END,
 )
 
+/** 整卡快照的交接与媒体共用深度、平滑端点和完成边界，反向 seek 可直接恢复。 */
+internal fun resolveVideoCardWholeCardReturnHandoffAlpha(
+    morphDepthProgress: Float,
+): Float = resolveVideoCardSmoothHandoffProgress(
+    progress = resolveVideoCardReturnSettleFromMorphDepth(morphDepthProgress),
+    start = VideoCardTransitionVisualTimeline.WHOLE_CARD_RETURN_START,
+    end = VideoCardTransitionVisualTimeline.WHOLE_CARD_RETURN_END,
+)
+
 /**
- * Flying media remesure progress. Reaches 1 at chrome reveal so cover crop already matches
- * the frozen cover box when title/stats fade in.
+ * Stacked media reaches its cover slot before chrome reveal. Horizontal media and its
+ * adjacent info region share one handoff, so shrinking media never exposes an empty panel.
  */
 internal fun resolveVideoDetailReturnMediaLayoutHandoffProgress(
     morphDepthProgress: Float,
     phase: VideoCardTransitionBackgroundPhase,
     isReturnGestureInProgress: Boolean,
     sourceLayout: VideoCardSourceLayout,
+    sourceChromeAlpha: Float? = null,
 ): Float {
     val depth = morphDepthProgress.coerceIn(0f, 1f)
+    if (sourceLayout == VideoCardSourceLayout.SIDE_BY_SIDE) {
+        return sourceChromeAlpha?.coerceIn(0f, 1f) ?: (1f - resolveVideoCardDetailChromeAlpha(
+            morphDepthProgress = depth,
+            phase = phase,
+            isReturnGestureInProgress = isReturnGestureInProgress,
+            sourceLayout = sourceLayout,
+        ))
+    }
     // Remeasure only on an actual return. HELD with a tiny depth dip is enough to squash a
     // 16:9 inline player toward a related-card 16:10 cover while the user is still watching.
     if (
@@ -196,6 +227,16 @@ internal fun resolveVideoCardTimelineWindowProgress(
     return ((value - safeStart) / (safeEnd - safeStart)).coerceIn(0f, 1f)
 }
 
+/** Shared, reversible envelope for native body opacity and the flying viewport's height. */
+internal fun resolveVideoCardNativeBodyPresence(morphDepthProgress: Float): Float {
+    val progress = resolveVideoCardTimelineWindowProgress(
+        progress = 1f - morphDepthProgress,
+        start = VideoCardTransitionVisualTimeline.NATIVE_BODY_RETURN_START,
+        end = VideoCardTransitionVisualTimeline.NATIVE_BODY_RETURN_END,
+    )
+    return 1f - progress * progress * (3f - 2f * progress)
+}
+
 /**
  * Whether detail body / controls must yield to source-card chrome on the flying entry.
  *
@@ -241,8 +282,24 @@ internal fun resolveVideoCardDetailChromeAlpha(
     morphDepthProgress: Float,
     phase: VideoCardTransitionBackgroundPhase,
     isReturnGestureInProgress: Boolean,
+    /**
+     * 卡片返回是否**已提交**（`markReturning` / 用户点返回）。
+     *
+     * 提交后 morph 会走到 `phase == IDLE`，但此时详情 entry 往往还没被卸载
+     * （NavHost 退场动画仍在跑）。若不区分，`else -> 1f` 会把已经让位的详情 chrome
+     * 重新弹成不透明，表现为「飞行壳已落位、详情 chrome 却整块闪现在卡槽」。
+     */
+    isCommittedCardReturn: Boolean = false,
+    sourceLayout: VideoCardSourceLayout? = null,
 ): Float {
     val depth = resolveVisualProgress(morphDepthProgress, phase, VideoSharedTransitionDirection.ENTER)
+    // Horizontal cover geometry and right-hand chrome must follow the same envelope as
+    // the native shell height. A late chrome-only handoff leaves a full-width player
+    // inside an already short clip, cutting faces and turning the cover into a strip.
+    if (sourceLayout == VideoCardSourceLayout.SIDE_BY_SIDE &&
+        (phase == VideoCardTransitionBackgroundPhase.OPENING ||
+            isVideoCardReturnContentYieldActive(phase, isReturnGestureInProgress, depth))
+    ) return resolveVideoCardNativeBodyPresence(depth)
     val handoff = resolveVideoCardContentHandoffProgress(
         morphDepthProgress = depth,
         phase = phase,
@@ -262,6 +319,8 @@ internal fun resolveVideoCardDetailChromeAlpha(
                 start = VideoCardTransitionVisualTimeline.DETAIL_CHROME_ENTER_START,
                 end = VideoCardTransitionVisualTimeline.DETAIL_CHROME_ENTER_END,
             )
+        // IDLE 且返回已提交：morph 已 settle，详情页正在退场，chrome 必须保持让位。
+        isCommittedCardReturn && phase == VideoCardTransitionBackgroundPhase.IDLE -> 0f
         else -> 1f
     }
 }
@@ -272,6 +331,14 @@ internal fun resolveVideoCardSecondaryContentVisualFrame(
     isReturnGestureInProgress: Boolean,
     motionTier: MotionTier,
     sourceLayout: VideoCardSourceLayout = VideoCardSourceLayout.STACKED,
+    followProgressEnabled: Boolean = true,
+    /**
+     * 卡片返回是否**已提交**（`markReturning` / 用户点返回）。见
+     * [resolveVideoCardDetailChromeAlpha] 的同名参数：用于堵住 `phase == IDLE`
+     * 时 `else -> 1f` 把已让位的正文弹回不透明的缺口。
+     */
+    isCommittedCardReturn: Boolean = false,
+    preserveNativeViewport: Boolean = false,
 ): VideoCardSecondaryContentVisualFrame {
     val depth = resolveVisualProgress(morphDepthProgress, phase, VideoSharedTransitionDirection.ENTER)
     val returning = isVideoCardReturnContentYieldActive(
@@ -279,14 +346,20 @@ internal fun resolveVideoCardSecondaryContentVisualFrame(
         isReturnGestureInProgress = isReturnGestureInProgress,
         morphDepthProgress = depth,
     )
-    // Match landing chrome alpha so detail body and source-card text crossfade as a pair.
-    val handoff = resolveVideoCardSourceChromeVisualFrame(
+    // Only the existing native-viewport path uses the shared envelope. Other material /
+    // shared-bounds paths keep their own timing; media and source chrome keep the late handoff.
+    val handoff = if (!followProgressEnabled && depth > 0f) 0f else resolveVideoCardSourceChromeVisualFrame(
         morphDepthProgress = depth,
         phase = phase,
         isReturnGestureInProgress = isReturnGestureInProgress,
         sourceLayout = sourceLayout,
     ).handoffProgress
     val alpha = when {
+        preserveNativeViewport && motionTier != MotionTier.Reduced && returning && followProgressEnabled ->
+            resolveVideoCardNativeBodyPresence(depth)
+        preserveNativeViewport && motionTier != MotionTier.Reduced &&
+            phase == VideoCardTransitionBackgroundPhase.OPENING ->
+            resolveVideoCardNativeBodyPresence(depth)
         // Detail body yields in the exact live → cover/source-card chrome window.
         returning -> 1f - handoff
         motionTier == MotionTier.Reduced -> depth
@@ -296,6 +369,9 @@ internal fun resolveVideoCardSecondaryContentVisualFrame(
                 start = VideoCardTransitionVisualTimeline.SECONDARY_CONTENT_ENTER_START,
                 end = VideoCardTransitionVisualTimeline.SECONDARY_CONTENT_ENTER_END,
             )
+        // IDLE 且返回已提交：morph 已 settle 但详情 entry 可能仍在退场动画里。
+        // 此时正文必须保持让位（0），否则标题/简介/评论会以不透明整块闪现在卡槽。
+        isCommittedCardReturn && phase == VideoCardTransitionBackgroundPhase.IDLE -> 0f
         else -> 1f
     }
     val scale = if (returning && motionTier != MotionTier.Reduced) {

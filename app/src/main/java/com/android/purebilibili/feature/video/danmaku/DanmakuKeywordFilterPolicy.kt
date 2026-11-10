@@ -391,7 +391,8 @@ fun appendDanmakuUserHashBlockRule(
     rawRules: String,
     userHash: String
 ): String {
-    val normalizedUserHash = normalizeDanmakuUserHashManagerInput(userHash) ?: return parseDanmakuBlockRules(rawRules)
+    val hashInput = userHash.trim().let { if (it.isNotEmpty() && it.all(Char::isDigit)) "hash:$it" else it }
+    val normalizedUserHash = normalizeDanmakuUserHashManagerInput(hashInput) ?: return parseDanmakuBlockRules(rawRules)
         .joinToString(separator = "\n")
     return appendDanmakuBlockRule(rawRules = rawRules, rule = normalizedUserHash)
 }
@@ -423,7 +424,8 @@ private fun compileDanmakuBlockRuleMatcher(normalizedRule: String): DanmakuBlock
     val normalizedUserHashRule = normalizeDanmakuUserHashRule(normalized)
     if (normalizedUserHashRule != null) {
         return DanmakuUserHashMatcher(
-            userHashRule = normalizedUserHashRule.substringAfter(USER_HASH_RULE_PREFIX)
+            userHashRule = DanmakuCloudRuleSyncPolicy.localUidRuleToCloudFilter(normalizedUserHashRule)
+                ?: return null
         )
     }
 
@@ -514,7 +516,8 @@ private fun normalizeDanmakuUserHashRule(rule: String): String? {
             normalized.substring(HASH_RULE_PREFIX.length)
         else -> normalized.takeIf { it.startsWith("@") }?.substring(1)
     }?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return "$USER_HASH_RULE_PREFIX$body"
+    return if (normalized.startsWith(HASH_RULE_PREFIX, ignoreCase = true)) "$HASH_RULE_PREFIX$body"
+        else "$USER_HASH_RULE_PREFIX$body"
 }
 
 internal fun normalizeDanmakuUserHashManagerInput(rule: String): String? {

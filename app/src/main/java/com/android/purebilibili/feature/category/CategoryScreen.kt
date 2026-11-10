@@ -1,11 +1,13 @@
 // 文件路径: feature/category/CategoryScreen.kt
 package com.android.purebilibili.feature.category
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.*
@@ -46,77 +48,111 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.shouldShowScrollToTop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+data class CategoryUiState(
+    val tid: Int = 0,
+    val videos: List<VideoItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val error: String? = null,
+    val generation: Long = 0L
+)
 
 /**
  *  分类视频 ViewModel
  */
 class CategoryViewModel : ViewModel() {
-    private val _videos = MutableStateFlow<List<VideoItem>>(emptyList())
-    val videos = _videos.asStateFlow()
-    
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    private val _uiState = MutableStateFlow(CategoryUiState())
+    val uiState = _uiState.asStateFlow()
 
-    private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing = _isRefreshing.asStateFlow()
-    
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
-    
+    private data class CachedCategory(
+        val state: CategoryUiState,
+        val nextPage: Int,
+        val hasMore: Boolean
+    )
+
+    private val categoryCache = object : LinkedHashMap<Int, CachedCategory>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedCategory>): Boolean = size > 4
+    }
     private var currentTid: Int = 0
     private var currentPage: Int = 1
     private var hasMore: Boolean = true
-    
+    private var loadJob: Job? = null
+    private var generation = 0L
+
     fun loadCategory(tid: Int) {
-        if (currentTid == tid && _videos.value.isNotEmpty()) return
+        if (currentTid == tid && (loadJob?.isActive == true || categoryCache.containsKey(tid))) return
+        ++generation
+        loadJob?.cancel()
         currentTid = tid
-        currentPage = 1
-        hasMore = true
-        _videos.value = emptyList()
-        loadVideos(replace = true)
-    }
-    
-    private fun loadVideos(replace: Boolean = false, isRefresh: Boolean = false) {
-        if (_isRefreshing.value) return
-        if (!isRefresh && (_isLoading.value || !hasMore)) return
-        
-        viewModelScope.launch {
-            val pageToFetch = if (isRefresh) {
-                resolveReplaceRefreshPage(nextLoadPage = currentPage, hasMore = hasMore)
-            } else {
-                currentPage
-            }
-            if (isRefresh) {
-                _isRefreshing.value = true
-            } else {
-                _isLoading.value = true
-            }
-            _error.value = null
-            
-            VideoRepository.getRegionVideos(tid = currentTid, page = pageToFetch)
-                .onSuccess { newVideos ->
-                    if (newVideos.isEmpty()) {
-                        hasMore = false
-                        if (isRefresh) {
-                            currentPage = 1
-                        }
-                    } else {
-                        hasMore = true
-                        _videos.value = if (replace || isRefresh) newVideos else _videos.value + newVideos
-                        currentPage = pageToFetch + 1
-                    }
-                }
-                .onFailure { e ->
-                    _error.value = e.message ?: "加载失败"
-                }
-            
-            _isLoading.value = false
-            _isRefreshing.value = false
+        val cached = categoryCache[tid]
+        currentPage = cached?.nextPage ?: 1
+        hasMore = cached?.hasMore ?: true
+        if (cached != null) {
+            _uiState.update { cached.state.copy(tid = tid, isLoading = false, isRefreshing = false, generation = generation) }
+        } else {
+            loadVideos(replace = true, reset = true)
         }
     }
-    
+
+    private fun loadVideos(
+        replace: Boolean = false,
+        isRefresh: Boolean = false,
+        reset: Boolean = false
+    ) {
+        val state = _uiState.value
+        if (!reset && state.isRefreshing) return
+        if (!reset && !isRefresh && (state.isLoading || !hasMore)) return
+        val requestedTid = currentTid
+        val requestGeneration = ++generation
+        loadJob?.cancel()
+        val pageToFetch = if (isRefresh) {
+            resolveReplaceRefreshPage(nextLoadPage = currentPage, hasMore = hasMore)
+        } else currentPage
+        _uiState.update {
+            it.copy(
+                tid = requestedTid,
+                videos = if (reset) emptyList() else it.videos,
+                isLoading = !isRefresh,
+                isRefreshing = isRefresh,
+                error = null,
+                generation = requestGeneration
+            )
+        }
+        loadJob = viewModelScope.launch {
+            val result = VideoRepository.getRegionVideos(tid = requestedTid, page = pageToFetch)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (requestGeneration != generation || requestedTid != currentTid) return@launch
+            result.fold(
+                onSuccess = { newVideos ->
+                    hasMore = newVideos.isNotEmpty()
+                    currentPage = if (newVideos.isNotEmpty()) pageToFetch + 1
+                        else if (isRefresh) 1 else currentPage
+                    val nextState = _uiState.value.copy(
+                        tid = requestedTid,
+                        videos = if (replace || isRefresh) newVideos else _uiState.value.videos + newVideos,
+                        isLoading = false,
+                        isRefreshing = false,
+                        error = null,
+                        generation = requestGeneration
+                    )
+                    _uiState.value = nextState
+                    categoryCache[requestedTid] = CachedCategory(nextState, currentPage, hasMore)
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(isLoading = false, isRefreshing = false, error = error.message ?: "加载失败")
+                    }
+                }
+            )
+        }
+    }
+
     fun loadMore() {
         loadVideos(replace = false)
     }
@@ -141,10 +177,11 @@ fun CategoryScreen(
     isQuickReturningFromVideoDetail: Boolean = false,
     viewModel: CategoryViewModel = viewModel()
 ) {
-    val videos by viewModel.videos.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val videos = uiState.videos
+    val isLoading = uiState.isLoading
+    val isRefreshing = uiState.isRefreshing
+    val error = uiState.error
     val gridState = rememberLazyGridState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -157,7 +194,7 @@ fun CategoryScreen(
             )
         }
     }
-    
+
     //  [修复] 读取首页设置，保持显示模式一致
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = HomeSettings()
     )
@@ -167,9 +204,9 @@ fun CategoryScreen(
     val cardLayout = remember(homeFeedCardStyle) {
         resolveHomeFeedCardLayout(homeFeedCardStyle)
     }
-    val showOnlineCount by SettingsManager.getShowOnlineCount(context).collectAsStateWithLifecycle(initialValue = false)
+    val showOnlineCount by SettingsManager.getShowCardOnlineCount(context).collectAsStateWithLifecycle(initialValue = false)
     val displayMode = homeSettings.displayMode
-    
+
     // 📐 [Tablet Adaptation] Calculate adaptive columns
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
@@ -186,7 +223,7 @@ fun CategoryScreen(
     } else {
         windowSizeClass.widthDp
     }
-    
+
     val gridColumns = remember(contentWidth, displayMode) {
         if (windowSizeClass.isExpandedScreen) {
             val minColumnWidth = if (displayMode == 1) 240.dp else 180.dp
@@ -197,28 +234,28 @@ fun CategoryScreen(
             if (displayMode == 1) 1 else 2
         }
     }
-    
+
     // 首次加载
     LaunchedEffect(tid) {
         viewModel.loadCategory(tid)
     }
-    
+
     // 滚动到底部时加载更多
     val shouldLoadMore = remember {
         derivedStateOf {
             val lastVisibleItem = gridState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && lastVisibleItem.index >= videos.size - 4
+            lastVisibleItem != null && lastVisibleItem.index >= gridState.layoutInfo.totalItemsCount - 4
         }
     }
-    
-    LaunchedEffect(shouldLoadMore.value) {
-        if (shouldLoadMore.value && !isLoading) {
+
+    LaunchedEffect(shouldLoadMore.value, isLoading, isRefreshing, videos.size, error) {
+        if (shouldLoadMore.value && !isLoading && !isRefreshing && error == null && videos.isNotEmpty()) {
             viewModel.loadMore()
         }
     }
 
     val categoryBackdrop = rememberLayerBackdrop()
-    
+
     AppScaffold(
         topBar = {
             AppTopBar(
@@ -252,7 +289,7 @@ fun CategoryScreen(
                 AppText(
                     text = error ?: "加载失败",
                     modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.error
+                    color = AppContentColors.error()
                 )
             } else {
                 // Scaffold body already below topBar.
@@ -265,6 +302,7 @@ fun CategoryScreen(
                         .layerBackdrop(categoryBackdrop)
                 ) {
                     // 视频网格
+                    val alignRows = gridColumns > 1 && !homeSettings.showFullVideoCardContent
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(gridColumns),
                         state = gridState,
@@ -275,25 +313,21 @@ fun CategoryScreen(
                             .fillMaxSize()
                             .responsiveContentWidth(maxWidth = 1000.dp)
                     ) {
-                        itemsIndexed(
-                            items = videos,
-                            key = { index, video ->
-                                resolveIndexedVideoLazyKey(
-                                    namespace = "category_video",
-                                    index = index,
-                                    bvid = video.bvid,
-                                    id = video.id,
-                                    aid = video.aid,
-                                    cid = video.cid
-                                )
-                            }
-                        ) { index, video ->
+                        val videoKeys = videos.mapIndexed { index, video ->
+                            resolveIndexedVideoLazyKey(
+                                namespace = "category_video", index = index, bvid = video.bvid,
+                                id = video.id, aid = video.aid, cid = video.cid,
+                            )
+                        }
+                        val renderCard: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
+                            val video = videos[index]
                             //  [修复] 根据首页设置选择卡片样式（与 HomeScreen 一致）
                             when (displayMode) {
                                 1 -> {
                                     //  故事卡片（影院海报风格）
                                     StoryVideoCard(
                                         video = video,
+                                        modifier = cardModifier,
                                         index = index,  //  动画索引
                                         animationEnabled = homeSettings.cardAnimationEnabled,
                                         motionTier = cardMotionTier,
@@ -302,7 +336,6 @@ fun CategoryScreen(
                                         cardHorizontalPadding = cardLayout.storyCardHorizontalPaddingDp.dp,
                                         compactMetadata = cardLayout.compactMetadata,
                                         homeDurationStyle = homeSettings.homeDurationStyle,
-                                        showOnlineCount = showOnlineCount,
                                         isReturningFromVideoDetail = isReturningFromVideoDetail,
                                         isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                                         onClick = { bvid, _ ->
@@ -314,6 +347,7 @@ fun CategoryScreen(
                                     //  默认网格卡片
                                     ElegantVideoCard(
                                         video = video,
+                                        modifier = cardModifier,
                                         index = index,
                                         animationEnabled = homeSettings.cardAnimationEnabled,
                                         motionTier = cardMotionTier,
@@ -333,7 +367,24 @@ fun CategoryScreen(
                                 }
                             }
                         }
-                        
+                        if (!alignRows) {
+                            itemsIndexed(videos, key = { index, _ -> videoKeys[index] }) { index, _ -> renderCard(index, Modifier) }
+                        } else {
+                            com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(videos.size, gridColumns)
+                                .forEach { row ->
+                                    item(key = "category_row_${videoKeys[row.first]}", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                                        com.android.purebilibili.feature.home.HomeAlignedVideoRow(
+                                            indices = row,
+                                            itemKeys = videoKeys,
+                                            columns = gridColumns,
+                                            horizontalArrangement = Arrangement.spacedBy(cardLayout.itemSpacingDp.dp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            content = renderCard,
+                                        )
+                                    }
+                                }
+                        }
+
                         // 加载更多指示器
                         if (isLoading) {
                             item {
@@ -360,7 +411,15 @@ fun CategoryScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(20.dp),
+                    .padding(
+                        end = 20.dp,
+                        bottom = 20.dp + if (com.android.purebilibili.core.ui.rememberNowPlayingBarOverlayVisible()) {
+                            // 听视频小横条悬浮时统一上浮避让（与首页/稍后再看一致）
+                            com.android.purebilibili.core.ui.NowPlayingBarOverlayAvoidancePadding
+                        } else {
+                            0.dp
+                        }
+                    ),
                 backdrop = categoryBackdrop,
             )
         }

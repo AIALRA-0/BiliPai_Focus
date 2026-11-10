@@ -13,6 +13,17 @@ class PlayUrlResponseParsingTest {
     }
 
     @Test
+    fun `code zero verification payload keeps risk marker instead of losing it`() {
+        val response = json.decodeFromString<PlayUrlResponse>(
+            """{"code":0,"data":{"v_voucher":"test-voucher"}}"""
+        )
+        val data = assertNotNull(response.data)
+        assertEquals("test-voucher", data.vVoucher)
+        assertEquals(0, data.quality)
+        assertEquals(null, data.dash)
+    }
+
+    @Test
     fun `ugc playurl parsing keeps snake case dash fields playable`() {
         val payload = json.decodeFromString<PlayUrlResponse>(
             """

@@ -1,6 +1,10 @@
 // 文件路径: feature/plugin/BiliPaiFeedFilterPlugin.kt
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
+import com.android.purebilibili.core.ui.AppContentColors
+
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,8 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.plugin.FeedKind
-import com.android.purebilibili.core.plugin.FeedPlugin
+import com.android.purebilibili.core.plugin.BuiltinPlugin
+import com.android.purebilibili.plugin.sdk.FeedKind
+import com.android.purebilibili.plugin.sdk.FeedPlugin
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -41,9 +46,6 @@ import kotlinx.serialization.json.Json
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 
-/** 插件 ID: 供启动阶段等待启用态与配置回填, 避免冷启动首次展示漏过滤 */
-internal const val BILIPAI_FEED_FILTER_PLUGIN_ID = "bilipai_feed_filter"
-
 /**
  * 推荐流过滤插件(移植自 BiliPai 的「推荐流设置」RecommendFilter)。
  *
@@ -52,9 +54,9 @@ internal const val BILIPAI_FEED_FILTER_PLUGIN_ID = "bilipai_feed_filter"
  *
  * 默认关闭, 可在插件中心启用; 各规则阈值与 BiliPai 默认值一致(0 = 不过滤)。
  */
-class BiliPaiFeedFilterPlugin : FeedPlugin {
+class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
-    override val id = BILIPAI_FEED_FILTER_PLUGIN_ID
+    override val id = BuiltinPluginIds.FEED_FILTER
     override val name = "推荐流过滤"
     override val description = "移植自 BiliPai 的推荐流过滤: 时长/播放量/点赞率/标题关键词/屏蔽用户/白名单"
     override val version = "1.0.0"
@@ -78,8 +80,6 @@ class BiliPaiFeedFilterPlugin : FeedPlugin {
     }
 
     // ==================== 过滤规则(还原 BiliPai RecommendFilter) ====================
-
-    override fun shouldShowItem(item: VideoItem): Boolean = shouldShowItem(item, FeedKind.HOME_RECOMMEND)
 
     override fun shouldShowItem(item: VideoItem, feedKind: FeedKind): Boolean {
         return shouldShowFeedItem(
@@ -267,7 +267,7 @@ class BiliPaiFeedFilterPlugin : FeedPlugin {
             AppText(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = AppContentColors.primaryText()
             )
             Surface(
                 modifier = Modifier.fillMaxWidth().clip(AppShapes.container(ContainerLevel.Card)),
@@ -351,13 +351,13 @@ class BiliPaiFeedFilterPlugin : FeedPlugin {
             AppText(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = AppContentColors.primaryText()
             )
             if (subtitle.isNotEmpty()) {
                 AppText(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppContentColors.secondaryText()
                 )
             }
             AppOutlinedTextField(
@@ -460,12 +460,13 @@ internal fun shouldShowFeedItem(
     }
 
     // 时长过滤: duration > 0 && < minDuration
-    if (item.duration > 0 && item.duration < config.minDurationForRcmd) return false
+    val hasVideoStatistics = item.contentType !in setOf("bangumi", "picture")
+    if (hasVideoStatistics && item.duration > 0 && item.duration < config.minDurationForRcmd) return false
 
     // 播放量 / 点赞率(整数乘法, 避免浮点)
     val view = item.stat.view.toLong()
     val like = item.stat.like.toLong()
-    if (view >= 0 && (view < config.minPlayForRcmd ||
+    if (hasVideoStatistics && view >= 0 && (view < config.minPlayForRcmd ||
             (like > -1 && like * 100L < config.minLikeRatioForRecommend * view))) {
         return false
     }

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.aicu
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -7,13 +9,13 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.SelectionContainer
+import com.android.purebilibili.core.ui.common.AppSelectionContainer as SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -199,7 +201,11 @@ internal fun AicuScreen(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
-            Column(Modifier.widthIn(max = 840.dp).fillMaxSize()) {
+            Column(
+                Modifier
+                    .widthIn(max = com.android.purebilibili.core.util.resolveSingleColumnFeedMaxWidth())
+                    .fillMaxSize()
+            ) {
                 if (state.consent == AicuConsentState.CHECKING) {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { AdaptiveLoadingIndicator() }
                 } else if (state.consent == AicuConsentState.ERROR) {
@@ -228,7 +234,7 @@ internal fun AicuScreen(
                                         AppTextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) { AppText("取消") }
                                     }
                                 }
-                                state.error?.let { AppText(it, color = MaterialTheme.colorScheme.error) }
+                                state.error?.let { AppText(it, color = AppContentColors.error()) }
                                 if (state.loadState == AicuLoadState.ERROR || state.retrySeconds > 0) {
                                     AppTextButton(onClick = onRetry, enabled = state.retrySeconds == 0 && !state.busy, modifier = Modifier.heightIn(min = 48.dp)) {
                                         AppText(if (state.retrySeconds > 0) "${state.retrySeconds} 秒后可重试" else "重试")
@@ -278,8 +284,15 @@ internal fun AicuScreen(
             onDismissRequest = { showTrending = false },
             title = { AppText("Aicu 24 小时热搜") },
             text = {
-                if (state.trendingLoading) AdaptiveLoadingIndicator()
-                else if (state.trendingError != null) AppText(state.trendingError, color = MaterialTheme.colorScheme.error)
+                if (state.trendingLoading) {
+                    Box(
+                        Modifier.fillMaxWidth().height(96.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AdaptiveLoadingIndicator()
+                    }
+                }
+                else if (state.trendingError != null) AppText(state.trendingError, color = AppContentColors.error())
                 else Column(Modifier.verticalScroll(rememberScrollState())) {
                     state.trending.forEachIndexed { index, item ->
                         Row(
@@ -319,6 +332,9 @@ private fun AicuCategoryTabs(category: AicuCategory, liquidEnabled: Boolean, onS
             // Let the shared dock own its bounded fallback backdrop. Supplying a synthetic
             // gradient here separates the shell and moving indicator capture pipelines.
             AppThemeAdaptiveTabRow(
+                // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
                 options = options,
                 selectedValue = category,
                 onSelectionChange = onSelect,
@@ -329,7 +345,7 @@ private fun AicuCategoryTabs(category: AicuCategory, liquidEnabled: Boolean, onS
                 tapPressRefractionEnabled = true,
             )
         } else {
-            AppNativeTabRow(options, category, onSelectionChange = onSelect, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            AppNativeTabRow(options, category, onSelectionChange = onSelect, indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 scrollable = maxWidth < 360.dp || fontScale > 1.3f, allowLabelOverflow = true, minTabWidth = 96.dp)
         }
     }
@@ -390,6 +406,9 @@ private fun AicuCommentModeDock(
         )
         if (useGlass) {
             AppThemeAdaptiveTabRow(
+                // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
                 options = options,
                 selectedValue = selectedMode,
                 onSelectionChange = onSelect,
@@ -424,7 +443,7 @@ private fun AicuDisclaimerDialog(seconds: Int, saving: Boolean, error: String?, 
                 SelectionContainer {
                     AppText(AICU_DISCLAIMER_TEXT)
                 }
-                error?.let { AppText(it, color = MaterialTheme.colorScheme.error) }
+                error?.let { AppText(it, color = AppContentColors.error()) }
             }
         },
         confirmButton = { AppTextButton(onClick = onAccept, enabled = seconds == 0 && !saving, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -443,18 +462,19 @@ private fun AicuRecordCard(
     onCopy: () -> Unit,
 ) {
     val target = remember(category, record) { aicuNativeTarget(category, record) }
+    val progressMs = record.progressMs
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AppText(formatAicuTime(record.timestampSeconds) + when {
                 category == AicuCategory.COMMENT && record.rank in 1..2 -> " · ${if (record.rank == 1) "一级" else "二级"}评论"
-                category == AicuCategory.VIDEO_DANMAKU && record.progressMs != null -> " · 视频内 ${record.progressMs / 1000.0} 秒"
+                category == AicuCategory.VIDEO_DANMAKU && progressMs != null -> " · 视频内 ${progressMs / 1000.0} 秒"
                 else -> ""
             }, style = MaterialTheme.typography.bodySmall)
             if (record.authorName.isNotBlank()) AppText(record.authorName, style = MaterialTheme.typography.labelLarge)
             RichCommentText(
                 text = record.text.ifBlank { "（正文缺失）" },
                 fontSize = MaterialTheme.typography.bodyLarge.fontSize,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = AppContentColors.primaryText(),
                 emoteMap = emoteMap,
             )
             if (target != null && category == AicuCategory.COMMENT && (record.objectType == 12 || (record.rank == 2 && record.rootId.toLongOrNull() == null))) {

@@ -34,12 +34,36 @@ class VideoSubjectSnapshotTest {
         )
     }
 
+    @Test
+    fun `copyright passthrough marks repost and defaults to original`() {
+        assertFalse(
+            readyState(bvid = "BV1", copyright = 1).toSubjectSnapshot(generation = 1L).isRepost
+        )
+        assertTrue(
+            readyState(bvid = "BV1", copyright = 2).toSubjectSnapshot(generation = 1L).isRepost
+        )
+        // 历史遗留脏数据 0 与缺失字段都按原创处理
+        assertFalse(
+            readyState(bvid = "BV1", copyright = 0).toSubjectSnapshot(generation = 1L).isRepost
+        )
+        assertFalse(
+            VideoPlaybackUiState.Success(
+                info = ViewInfo(bvid = "BV1"),
+                playUrl = "https://example.test/video"
+            ).toEngagementSeed().isRepost
+        )
+        assertTrue(
+            readyState(bvid = "BV1", copyright = 2).toEngagementSeed().isRepost
+        )
+    }
+
     private fun readyState(
         bvid: String,
-        cid: Long,
-        aid: Long
+        cid: Long = 10L,
+        aid: Long = 20L,
+        copyright: Int = 1
     ): VideoPlaybackUiState.Success = VideoPlaybackUiState.Success(
-        info = ViewInfo(bvid = bvid, cid = cid, aid = aid),
+        info = ViewInfo(bvid = bvid, cid = cid, aid = aid, copyright = copyright),
         playUrl = "https://example.test/video"
     )
 }

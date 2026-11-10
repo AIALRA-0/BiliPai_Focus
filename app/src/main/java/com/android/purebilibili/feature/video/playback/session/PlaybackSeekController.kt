@@ -7,6 +7,9 @@ import com.android.purebilibili.feature.video.usecase.shouldResumePlaybackAfterU
 private const val DEFAULT_PLAYBACK_SEEK_PENDING_TOLERANCE_MS = 500L
 private const val STALE_SEEK_INTERACTION_TIMEOUT_MS = 5_000L
 private const val STALE_SEEK_INTERACTION_DRIFT_MS = 3_000L
+
+/** pending 锁定的上限：超过后放弃锁定、回到播放器的真实位置。 */
+private const val PENDING_SEEK_LOCK_TIMEOUT_MS = 2_000L
 internal const val SEEK_PLAYBACK_RECOVERY_DELAY_MS = 450L
 
 internal data class PlaybackSeekSessionState(
@@ -16,7 +19,8 @@ internal data class PlaybackSeekSessionState(
     val pendingSeekPositionMs: Long? = null,
     val pendingSeekOriginPositionMs: Long? = null,
     val shouldResumePlayback: Boolean? = null,
-    val sliderInteractionUpdatedAtMs: Long = 0L
+    val sliderInteractionUpdatedAtMs: Long = 0L,
+    val pendingSeekCreatedAtMs: Long = 0L,
 )
 
 internal data class PlaybackSeekSessionCommitResult(
@@ -30,9 +34,14 @@ internal fun syncPlaybackSeekSession(
     playbackPositionMs: Long,
     toleranceMs: Long = DEFAULT_PLAYBACK_SEEK_PENDING_TOLERANCE_MS,
     hasPlaybackResumedAfterPendingSeek: Boolean = true,
-    nowMs: Long = currentMonotonicMs()
+    nowMs: Long = currentMonotonicMs(),
+    playbackEnded: Boolean = false,
 ): PlaybackSeekSessionState {
     val safePlaybackPositionMs = playbackPositionMs.coerceAtLeast(0L)
+    // 结束态不会再次 isPlaying；清除等待恢复，避免进度永久锁在拖动目标。
+    if (playbackEnded && !state.isSliderMoving) {
+        return expirePendingPlaybackSeek(state, safePlaybackPositionMs)
+    }
     val syncedState = state.copy(playbackPositionMs = safePlaybackPositionMs)
     if (syncedState.isSliderMoving) {
         if (
@@ -52,7 +61,9 @@ internal fun syncPlaybackSeekSession(
             playerPositionMs = safePlaybackPositionMs,
             pendingSeekPositionMs = syncedState.pendingSeekPositionMs,
             pendingSeekOriginPositionMs = syncedState.pendingSeekOriginPositionMs,
-            toleranceMs = toleranceMs
+            toleranceMs = toleranceMs,
+            pendingSeekCreatedAtMs = syncedState.pendingSeekCreatedAtMs,
+            nowMs = nowMs,
         )
     ) {
         return syncedState
@@ -131,7 +142,8 @@ internal fun finishPlaybackSeekInteraction(
             isSliderMoving = false,
             pendingSeekPositionMs = committedPositionMs,
             pendingSeekOriginPositionMs = state.playbackPositionMs.coerceAtLeast(0L),
-            sliderInteractionUpdatedAtMs = nowMs
+            sliderInteractionUpdatedAtMs = nowMs,
+            pendingSeekCreatedAtMs = nowMs,
         ),
         committedPositionMs = committedPositionMs,
         shouldResumePlayback = state.shouldResumePlayback
@@ -203,7 +215,8 @@ internal fun shouldUsePlaybackSeekSessionPosition(
             playerPositionMs = state.playbackPositionMs,
             pendingSeekPositionMs = state.pendingSeekPositionMs,
             pendingSeekOriginPositionMs = state.pendingSeekOriginPositionMs,
-            toleranceMs = toleranceMs
+            toleranceMs = toleranceMs,
+            pendingSeekCreatedAtMs = state.pendingSeekCreatedAtMs,
         )
 }
 
@@ -228,9 +241,18 @@ private fun shouldHoldPendingSeekPosition(
     playerPositionMs: Long,
     pendingSeekPositionMs: Long?,
     pendingSeekOriginPositionMs: Long?,
-    toleranceMs: Long
+    toleranceMs: Long,
+    pendingSeekCreatedAtMs: Long = 0L,
+    nowMs: Long = currentMonotonicMs(),
 ): Boolean {
     val targetPositionMs = pendingSeekPositionMs ?: return false
+    // 超时兜底：播放器迟迟没跳到目标位置时放弃锁定，否则进度条会永久停在目标值。
+    if (
+        pendingSeekCreatedAtMs > 0L &&
+        nowMs - pendingSeekCreatedAtMs >= PENDING_SEEK_LOCK_TIMEOUT_MS
+    ) {
+        return false
+    }
     if (
         !shouldHoldPlaybackTransitionPosition(
             playerPositionMs = playerPositionMs,

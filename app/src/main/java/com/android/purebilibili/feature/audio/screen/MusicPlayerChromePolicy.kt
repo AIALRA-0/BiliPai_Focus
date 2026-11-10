@@ -28,7 +28,7 @@ internal fun resolveMusicPlayerChromeSpec(
         usePaletteImmersiveBackdrop = true,
         coverShapeIsCircle = true,
         horizontalPaddingDp = tokens.denseHorizontalSpacingDp,
-        playButtonSizeDp = if (uiStyle == AppUiStyle.MIUIX) 72 else 80,
+        playButtonSizeDp = if (uiStyle == AppUiStyle.MIUIX) 68 else 76,
         skipButtonSizeDp = if (uiStyle == AppUiStyle.MIUIX) 48 else 56,
         coverStyle = coverStyle
     )

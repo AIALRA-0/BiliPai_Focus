@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -15,10 +15,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * 移植自 Telegram/Nagram 的核心非线性渐变停靠点算法 (BlurredBackgroundWithFadeDrawable)。
+ * 基于非线性透明度停靠点的渐进淡出。
  *
  * 普通线性渐变（LinearGradient）由于感知亮度变化不均匀，会产生明显的马赫带效应（Mach-Band Effect），
- * 视觉上有生硬的切面感。Telegram 采用 5 阶非线性缓动停靠点（0 -> 0x60 -> 0xB0 -> 0xE8 -> 0xFF），
+ * 视觉上有生硬的切面感。这里采用 5 阶非线性缓动停靠点（0 -> 0x60 -> 0xB0 -> 0xE8 -> 0xFF），
  * 使透明度在靠近顶部时迅速收敛为纯色，在离开顶部时极其平滑柔和地消散。
  */
 object ProgressiveFadeDefaults {
@@ -39,15 +39,21 @@ object ProgressiveFadeDefaults {
     /**
      * 生成非线性缓动颜色停靠点列表，依据 [baseColor] 的固有 Alpha 动态缩放。
      */
-    fun createStops(baseColor: Color): List<Pair<Float, Color>> {
+    fun createStops(baseColor: Color, protectedFraction: Float = 0f): List<Pair<Float, Color>> {
         val baseAlpha = baseColor.alpha
-        return listOf(
+        val stops = listOf(
             STOP_TOP to baseColor.copy(alpha = baseAlpha * ALPHA_FACTORS[0]),
             STOP_QUARTER to baseColor.copy(alpha = baseAlpha * ALPHA_FACTORS[1]),
             STOP_HALF to baseColor.copy(alpha = baseAlpha * ALPHA_FACTORS[2]),
             STOP_THREE_QUARTERS to baseColor.copy(alpha = baseAlpha * ALPHA_FACTORS[3]),
             STOP_BOTTOM to baseColor.copy(alpha = baseAlpha * ALPHA_FACTORS[4]),
         )
+        val plateauEnd = protectedFraction.takeIf(Float::isFinite)?.coerceIn(0f, 0.85f) ?: 0f
+        if (plateauEnd == 0f) return stops
+        // Keep controls on a protected plateau; only the trailing edge fades to the clear image.
+        return listOf(0f to baseColor) + stops.map { (position, color) ->
+            (plateauEnd + (1f - plateauEnd) * position) to color
+        }
     }
 
     /**
@@ -82,19 +88,23 @@ fun Modifier.topSolidProgressiveFade(
     enabled: Boolean = true,
 ): Modifier {
     if (!enabled || surfaceColor.alpha <= 0.001f || fadeHeight <= 0.dp) return this
-    return this.drawWithContent {
-        drawContent()
+    return this.drawWithCache {
         val fadePx = fadeHeight.toPx().coerceAtMost(size.height)
-        if (fadePx > 0f) {
-            val brush = ProgressiveFadeDefaults.createVerticalBrush(
+        val brush = if (fadePx > 0f) {
+            ProgressiveFadeDefaults.createVerticalBrush(
                 baseColor = surfaceColor,
                 startY = 0f,
-                endY = fadePx
+                endY = fadePx,
             )
-            drawRect(
-                brush = brush,
-                size = Size(width = size.width, height = fadePx)
-            )
+        } else null
+        onDrawWithContent {
+            drawContent()
+            if (brush != null) {
+                drawRect(
+                    brush = brush,
+                    size = Size(width = size.width, height = fadePx),
+                )
+            }
         }
     }
 }
@@ -108,11 +118,12 @@ fun TopSolidProgressiveFadeOverlay(
     modifier: Modifier = Modifier,
     fadeHeight: Dp = 80.dp,
     enabled: Boolean = true,
+    protectedFraction: Float = 0f,
 ) {
     if (!enabled || surfaceColor.alpha <= 0.001f || fadeHeight <= 0.dp) return
-    val brush = remember(surfaceColor) {
+    val brush = remember(surfaceColor, protectedFraction) {
         Brush.verticalGradient(
-            colorStops = ProgressiveFadeDefaults.createStops(surfaceColor).toTypedArray()
+            colorStops = ProgressiveFadeDefaults.createStops(surfaceColor, protectedFraction).toTypedArray()
         )
     }
     Box(

@@ -17,10 +17,6 @@ internal fun shouldRefreshOnlineCount(
         currentCid > 0L
 }
 
-internal fun resolveOnlineCountPollingDelayMs(isInBackground: Boolean): Long {
-    return if (isInBackground) 90_000L else 30_000L
-}
-
 internal fun shouldSendPlaybackHeartbeat(
     isPlaying: Boolean,
     isInBackground: Boolean,
@@ -76,16 +72,18 @@ internal fun resolvePlaybackHeartbeatSnapshot(
 }
 
 internal fun shouldFlushPlaybackHeartbeatSnapshot(
+    hasStartedPlayback: Boolean,
     currentBvid: String,
     currentCid: Long,
     snapshot: PlaybackHeartbeatSnapshot,
     lastReportedSnapshot: PlaybackHeartbeatSnapshot?
 ): Boolean {
-    if (currentBvid.isBlank() || currentCid <= 0L || snapshot.playedTimeSec <= 0L) {
+    if (!hasStartedPlayback || currentBvid.isBlank() || currentCid <= 0L ||
+        (snapshot.playedTimeSec <= 0L && lastReportedSnapshot == null)) {
         return false
     }
 
     return lastReportedSnapshot == null ||
-        snapshot.playedTimeSec > lastReportedSnapshot.playedTimeSec ||
+        snapshot.playedTimeSec != lastReportedSnapshot.playedTimeSec ||
         snapshot.realPlayedTimeSec > lastReportedSnapshot.realPlayedTimeSec
 }

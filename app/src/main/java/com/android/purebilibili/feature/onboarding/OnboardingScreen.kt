@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.onboarding
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +53,7 @@ import com.android.purebilibili.core.ui.components.AppOutlinedButton
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.R
 import com.android.purebilibili.feature.settings.OFFICIAL_GITHUB_URL
 import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_CHANNEL_URL
 import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_GROUP_URL
@@ -119,7 +123,7 @@ fun OnboardingScreen(
                         ),
                     ) {
                         AppText(
-                            text = "我不同意",
+                            text = stringResource(R.string.onboarding_disagree),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -135,7 +139,7 @@ fun OnboardingScreen(
                             .testTag("onboarding_action_button"),
                     ) {
                         AppText(
-                            text = "我已知晓",
+                            text = stringResource(R.string.onboarding_acknowledge),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -156,21 +160,21 @@ fun OnboardingScreen(
                     AppIcon(
                         imageVector = Icons.Outlined.Policy,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = AppContentColors.accent(),
                         modifier = Modifier.size(28.dp),
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     AppText(
-                        text = "使用须知",
+                        text = stringResource(R.string.onboarding_notice_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = AppContentColors.primaryText(),
                     )
                 }
                 AppText(
-                    text = userAgreementIntroText(),
+                    text = stringResource(R.string.onboarding_notice_intro),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                 )
 
                 AppHorizontalDivider()
@@ -196,23 +200,23 @@ fun OnboardingScreen(
                                 AppIcon(
                                     imageVector = clause.icon(),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = AppContentColors.accent(),
                                     modifier = Modifier.size(20.dp),
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 AppText(
-                                    text = clause.title,
+                                    text = stringResource(clause.titleResource()),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    color = AppContentColors.primaryText(),
                                 )
                             }
                         },
                         supportingContent = {
                             AppText(
-                                text = clause.body,
+                                text = stringResource(clause.bodyResource()),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = AppContentColors.secondaryText(),
                             )
                         },
                     )
@@ -224,24 +228,31 @@ fun OnboardingScreen(
                     AppIcon(
                         imageVector = Icons.Outlined.Public,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = AppContentColors.accent(),
                         modifier = Modifier.size(22.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     AppText(
-                        text = "官方渠道",
+                        text = stringResource(R.string.onboarding_official_channels),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = AppContentColors.primaryText(),
                     )
                 }
                 AppText(
-                    text = "更新与交流请仅通过以下官方渠道。",
+                    text = stringResource(R.string.onboarding_channels_description),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                 )
 
-                channels.forEach { channel ->
+                channels.forEachIndexed { index, channel ->
+                    val channelLabel = stringResource(
+                        when (index) {
+                            0 -> R.string.onboarding_telegram_channel
+                            1 -> R.string.onboarding_telegram_group
+                            else -> R.string.onboarding_open_source
+                        }
+                    )
                     AppListItem(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -251,21 +262,21 @@ fun OnboardingScreen(
                             AppIcon(
                                 imageVector = channel.icon(),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = AppContentColors.accent(),
                                 modifier = Modifier.size(22.dp),
                             )
                         },
                         headlineContent = {
                             AppText(
-                                text = channel.label,
+                                text = channelLabel,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = AppContentColors.accent(),
                             )
                         },
                         trailingContent = {
                             AppTextButton(onClick = { uriHandler.openUri(channel.url) }) {
-                                AppText("打开")
+                                AppText(stringResource(R.string.common_open))
                             }
                         },
                     )
@@ -277,15 +288,27 @@ fun OnboardingScreen(
     }
 }
 
+private fun UserAgreementClause.titleResource(): Int = when (this) {
+    UserAgreementClause.OPEN_SOURCE_FREE -> R.string.onboarding_clause_open_source_title
+    UserAgreementClause.NO_DOMESTIC_PROMO -> R.string.onboarding_clause_promotion_title
+    UserAgreementClause.FEEDBACK_WITH_LOGS -> R.string.onboarding_clause_feedback_title
+}
+
+private fun UserAgreementClause.bodyResource(): Int = when (this) {
+    UserAgreementClause.OPEN_SOURCE_FREE -> R.string.onboarding_clause_open_source_body
+    UserAgreementClause.NO_DOMESTIC_PROMO -> R.string.onboarding_clause_promotion_body
+    UserAgreementClause.FEEDBACK_WITH_LOGS -> R.string.onboarding_clause_feedback_body
+}
+
 private fun UserAgreementClause.icon(): ImageVector = when (this) {
     UserAgreementClause.OPEN_SOURCE_FREE -> Icons.Outlined.Code
     UserAgreementClause.NO_DOMESTIC_PROMO -> Icons.Outlined.Campaign
     UserAgreementClause.FEEDBACK_WITH_LOGS -> Icons.Outlined.BugReport
 }
 
-private fun UserAgreementChannelLink.icon(): ImageVector = when (label) {
-    "Telegram 频道" -> Icons.Outlined.Campaign
-    "Telegram 交流群" -> Icons.Outlined.Groups
-    "开源地址" -> Icons.Outlined.Code
+private fun UserAgreementChannelLink.icon(): ImageVector = when (url) {
+    OFFICIAL_TELEGRAM_CHANNEL_URL -> Icons.Outlined.Campaign
+    OFFICIAL_TELEGRAM_GROUP_URL -> Icons.Outlined.Groups
+    OFFICIAL_GITHUB_URL -> Icons.Outlined.Code
     else -> Icons.Outlined.OpenInNew
 }

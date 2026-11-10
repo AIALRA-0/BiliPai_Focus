@@ -12,6 +12,7 @@ internal fun VideoDetailScreenContent(
     isFullscreenMode: Boolean,
     backgroundColor: Color,
     modifier: Modifier,
+    backgroundAlphaProvider: () -> Float = { 1f },
     mainContent: @Composable BoxScope.() -> Unit,
     overlayContent: @Composable BoxScope.() -> Unit
 ) {
@@ -20,7 +21,7 @@ internal fun VideoDetailScreenContent(
         motion = routeSheetMotion,
         isFullscreenMode = isFullscreenMode,
         backgroundColor = backgroundColor,
-        backgroundAlpha = 1f,
+        backgroundAlphaProvider = backgroundAlphaProvider,
         modifier = modifier,
         content = mainContent,
         overlayContent = overlayContent

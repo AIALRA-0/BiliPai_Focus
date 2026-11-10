@@ -13,6 +13,36 @@ class SearchModelsParsingTest {
     }
 
     @Test
+    fun defaultSearch_usesCanonicalKeywordInsteadOfDecoratedHint() {
+        val response = json.decodeFromString<SearchDefaultResponse>(
+            """{"code":0,"data":{"show_name":"番剧 · 3小时前更新","name":" 番剧 "}}"""
+        )
+
+        assertEquals("番剧", response.data?.keyword)
+        assertEquals("番剧 · 3小时前更新", response.data?.hint)
+    }
+
+    @Test
+    fun defaultSearch_doesNotStripUpdateWordsFromCanonicalKeyword() {
+        val response = json.decodeFromString<SearchDefaultResponse>(
+            """{"code":0,"data":{"name":"3小时前更新是什么梗"}}"""
+        )
+
+        assertEquals("3小时前更新是什么梗", response.data?.keyword)
+        assertEquals("3小时前更新是什么梗", response.data?.hint)
+    }
+
+    @Test
+    fun defaultSearch_keepsLegacyHintWhenCanonicalKeywordIsUnavailable() {
+        val response = json.decodeFromString<SearchDefaultResponse>(
+            """{"code":0,"data":{"show_name":" 旧接口关键词 ","name":" "}}"""
+        )
+
+        assertEquals("旧接口关键词", response.data?.keyword)
+        assertEquals("旧接口关键词", response.data?.hint)
+    }
+
+    @Test
     fun decodeSearchTypeResponse_acceptsStringAndNumericFields() {
         val payload = """
             {
@@ -137,6 +167,29 @@ class SearchModelsParsingTest {
 
         assertEquals("ketang", video?.contentType)
         assertEquals("https://www.bilibili.com/cheese/play/ss37632", video?.navigationUrl)
+    }
+
+    @Test
+    fun decodeSearchTypeResponse_acceptsBlankAndNumericTypeIds() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "result": [
+                  { "id": 1, "typeid": 24 },
+                  { "id": 2, "typeid": "36" },
+                  { "id": 3 },
+                  { "id": 4, "typeid": 12 },
+                  { "id": 5, "typeid": "" }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val items = json.decodeFromString<SearchTypeResponse>(payload)
+            .data?.result.orEmpty()
+
+        assertEquals(listOf(24, 36, 0, 12, 0), items.map { it.typeId })
     }
 
     @Test

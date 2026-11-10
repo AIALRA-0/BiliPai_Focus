@@ -7,9 +7,9 @@ import com.android.purebilibili.core.ui.transition.VideoCardTransitionVisualTime
 /**
  * Settled 播放态详情 → 列表返回的**运动预算**（纯 Kotlin）。
  *
- * 产品硬门槛：有可绘 live 帧时全程 [VideoDetailReturnPlayerMode.LiveMorph] 一镜到底，
- * 不做 snapshot / 静态帧 / 性能向 forceCover 降级。飞行卡内部形变期间保留弹幕、
- * 次要内容和控制层的 composition，只调整绘制 alpha；不停止实时 surface。
+ * 以实际返回 ownership 决定预算；有首帧不等于当前采用 live 返回。
+ * LiveMorph 不因性能预算降级为封面。预测预览和取消恢复只能暂停附属绘制，
+ * 不得发起停播或卸载正文，以便从当前进度恢复。
  */
 
 /** 与 live return cover handoff 对齐：末段才允许停播意图。 */
@@ -18,6 +18,8 @@ internal const val VIDEO_DETAIL_RETURN_HANDOFF_SETTLE_START =
 
 internal enum class VideoDetailReturnSessionPhase {
     Idle,
+    Preview,
+    Restoring,
     Commit,
     Morph,
     Handoff,
@@ -28,7 +30,7 @@ internal enum class VideoDetailReturnPlayerMode {
     /** 实时 surface 跟壳缩（本专项唯一目标路径）。 */
     LiveMorph,
 
-    /** 无可靠 live 帧时的既有兜底，不为性能主动扩大。 */
+    /** 实际采用封面接管的路径，不因已有首帧误判为 LiveMorph。 */
     ResidentCover,
 }
 
@@ -80,7 +82,7 @@ internal data class VideoDetailReturnVisualBudget(
 /**
  * 由导航/手势信号解析逻辑相位。
  *
- * - 未提交返回 → Idle（含预测 seek 未松手）
+ * - 未提交返回 → Preview / Restoring / Idle
  * - 已提交且 settle 未到 handoff → Commit（刚提交）或 Morph
  * - settle ≥ handoff → Handoff
  * - morph 已结束 → Settle
@@ -90,9 +92,15 @@ internal fun resolveVideoDetailReturnSessionPhase(
     isExitTransitionInProgress: Boolean,
     settleProgress: Float,
     handoffSettleStart: Float = VIDEO_DETAIL_RETURN_HANDOFF_SETTLE_START,
+    isReturnGestureInProgress: Boolean = false,
+    isGestureRestoreInProgress: Boolean = false,
 ): VideoDetailReturnSessionPhase {
     if (!isCommittedCardReturn) {
-        return VideoDetailReturnSessionPhase.Idle
+        return when {
+            isGestureRestoreInProgress -> VideoDetailReturnSessionPhase.Restoring
+            isReturnGestureInProgress -> VideoDetailReturnSessionPhase.Preview
+            else -> VideoDetailReturnSessionPhase.Idle
+        }
     }
     val settle = settleProgress.coerceIn(0f, 1f)
     val handoffStart = handoffSettleStart.coerceIn(0f, 1f)
@@ -110,12 +118,20 @@ internal fun resolveVideoDetailReturnSessionPhase(
 }
 
 /**
- * 有可绘帧 → 强制 LiveMorph；无帧 → ResidentCover（既有兜底）。
- * **禁止**为性能返回其它降级。
+ * 已解析的 ownership 优先；未提供时保持旧的首帧推断。
+ * 此函数只描述当前策略，不为性能切换 surface 或强制改为封面。
  */
 internal fun resolveVideoDetailReturnPlayerMode(
     hasRenderableLiveFrame: Boolean,
+    ownership: VideoCardReturnCoverOwnership? = null,
 ): VideoDetailReturnPlayerMode {
+    if (ownership != null) {
+        return if (ownership == VideoCardReturnCoverOwnership.LIVE_SURFACE) {
+            VideoDetailReturnPlayerMode.LiveMorph
+        } else {
+            VideoDetailReturnPlayerMode.ResidentCover
+        }
+    }
     return if (hasRenderableLiveFrame) {
         VideoDetailReturnPlayerMode.LiveMorph
     } else {
@@ -131,6 +147,9 @@ internal fun shouldAllowPlaybackStopIntentForReturnBudget(
     phase: VideoDetailReturnSessionPhase,
     playerMode: VideoDetailReturnPlayerMode,
 ): Boolean {
+    if (phase == VideoDetailReturnSessionPhase.Preview ||
+        phase == VideoDetailReturnSessionPhase.Restoring
+    ) return false
     if (playerMode != VideoDetailReturnPlayerMode.LiveMorph) {
         // 封面路径可在提交后停播，避免无效解码。
         return phase != VideoDetailReturnSessionPhase.Idle
@@ -139,6 +158,8 @@ internal fun shouldAllowPlaybackStopIntentForReturnBudget(
         VideoDetailReturnSessionPhase.Handoff,
         VideoDetailReturnSessionPhase.Settle -> true
         VideoDetailReturnSessionPhase.Idle,
+        VideoDetailReturnSessionPhase.Preview,
+        VideoDetailReturnSessionPhase.Restoring,
         VideoDetailReturnSessionPhase.Commit,
         VideoDetailReturnSessionPhase.Morph -> false
     }
@@ -149,8 +170,9 @@ internal fun resolveVideoDetailReturnVisualBudget(
     hasRenderableLiveFrame: Boolean,
     reduceMotion: Boolean = false,
     secondaryContentAlpha: Float = 1f,
+    ownership: VideoCardReturnCoverOwnership? = null,
 ): VideoDetailReturnVisualBudget {
-    val playerMode = resolveVideoDetailReturnPlayerMode(hasRenderableLiveFrame)
+    val playerMode = resolveVideoDetailReturnPlayerMode(hasRenderableLiveFrame, ownership)
     if (phase == VideoDetailReturnSessionPhase.Idle) {
         return VideoDetailReturnVisualBudget(
             phase = phase,
@@ -218,7 +240,7 @@ internal fun resolveVideoDetailReturnVisualBudget(
 }
 
 /**
- * 无实时帧的封面回退路径：Commit/Morph 优先 Freeze（保壳尺寸）；alpha 已近 0 时可
+ * 封面接管路径：Commit/Morph 优先 Freeze（保壳尺寸）；alpha 已近 0 时可
  * Detach 省 composition。LiveMorph 会在上层预算中直接 Keep，不进入这里。
  */
 internal fun resolveVideoDetailReturnSecondaryContentMode(
@@ -230,6 +252,8 @@ internal fun resolveVideoDetailReturnSecondaryContentMode(
         VideoDetailReturnSessionPhase.Idle,
         VideoDetailReturnSessionPhase.Settle ->
             VideoDetailReturnSecondaryContentMode.Keep
+        VideoDetailReturnSessionPhase.Preview,
+        VideoDetailReturnSessionPhase.Restoring -> VideoDetailReturnSecondaryContentMode.Freeze
         VideoDetailReturnSessionPhase.Commit,
         VideoDetailReturnSessionPhase.Morph,
         VideoDetailReturnSessionPhase.Handoff -> {

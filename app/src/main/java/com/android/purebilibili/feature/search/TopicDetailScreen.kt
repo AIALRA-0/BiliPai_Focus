@@ -1,9 +1,13 @@
 package com.android.purebilibili.feature.search
 
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.components.appElasticPress
+
+
 import coil3.request.crossfade
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,7 +63,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
-import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
+import com.android.purebilibili.core.ui.skeleton.rememberStaticSkeletonBlockColor
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.util.FormatUtils
@@ -69,10 +74,8 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardInteractionActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardNavigationActions
 import com.android.purebilibili.feature.dynamic.components.DynamicFeedSkeletonCard
-import com.android.purebilibili.feature.dynamic.components.rememberDynamicFeedSkeletonPulse
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.rememberAppChromeLiquidGlassEnabled
@@ -82,6 +85,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicAdaptiveSegmen
 import com.android.purebilibili.feature.dynamic.components.DynamicPublishComposer
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 import com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 
@@ -100,7 +104,8 @@ fun TopicDetailScreen(
     onCollectionClick: (Long, Long, String, String) -> Unit = { _, _, _, _ -> },
     onCourseClick: (String, String) -> Unit = { _, _ -> },
     onArticleClick: (Long, String) -> Unit,
-    onDynamicDetailClick: (String) -> Unit
+    onDynamicDetailClick: (String) -> Unit,
+    onMatchClick: ((Long) -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -113,8 +118,14 @@ fun TopicDetailScreen(
         hasDetails = state.details != null,
         itemCount = state.items.size,
     )
+    // 骨架与真实卡片共用同一个 LazyColumn、同一个 contentType，色块因此用固定色：
+    // 呼吸中的灰块叠在卡片淡入之下，观感上就是「闪」。
+    val skeletonBlockColor = rememberStaticSkeletonBlockColor()
     val topicBackdrop = if (liquidGlassEnabled && !showInitialSkeleton) rememberLayerBackdrop() else null
     var showPublishComposer by remember { mutableStateOf(false) }
+    var composerAccountId by remember { mutableStateOf(0L) }
+    var clearingDraft by remember { mutableStateOf(false) }
+    val draftScope = rememberCoroutineScope()
 
     LaunchedEffect(topicId) {
         viewModel.load(topicId)
@@ -140,7 +151,10 @@ fun TopicDetailScreen(
             TopicParticipateButton(
                 liquidGlassEnabled = liquidGlassEnabled,
                 backdrop = topicBackdrop,
-                onClick = { showPublishComposer = true },
+                onClick = {
+                    composerAccountId = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
+                    showPublishComposer = true
+                },
             )
         },
     ) { padding ->
@@ -150,35 +164,59 @@ fun TopicDetailScreen(
                 .then(if (topicBackdrop != null) Modifier.layerBackdrop(topicBackdrop) else Modifier)
                 .globalWallpaperAwareBackground()
         ) {
-            when {
-                showInitialSkeleton -> {
-                    TopicDetailLoadingSkeleton(modifier = Modifier.fillMaxSize())
-                }
-                state.error != null && state.details == null && state.items.isEmpty() -> {
-                    AppText(
-                        text = state.error ?: "话题加载失败",
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            // 骨架与真实内容共用同一个 LazyColumn 与同一个 contentType：数据到达时
+            // LazyList 在原地替换 item（配合 animateItem 交叉淡入），不再整棵子树重建。
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
+                    top = padding.calculateTopPadding() + 12.dp,
+                    bottom = resolveBottomSafeAreaPadding(
+                        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                        extraBottomPadding = 16.dp
                     )
-                }
-                else -> {
-                    LazyColumn(
-                        state = listState,
-                        contentPadding = PaddingValues(
-                            start = 12.dp,
-                            end = 12.dp,
-                            top = padding.calculateTopPadding() + 12.dp,
-                            bottom = resolveBottomSafeAreaPadding(
-                                navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                                extraBottomPadding = 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .responsiveContentWidth(maxWidth = 960.dp)
+                    .fillMaxSize()
+            ) {
+                when {
+                    showInitialSkeleton -> {
+                        item(key = "topic_header_skeleton") {
+                            TopicHeaderCardSkeleton(modifier = Modifier.animateItem())
+                        }
+                        items(
+                            count = TOPIC_DETAIL_SKELETON_ITEM_COUNT,
+                            key = { index -> "topic_dynamic_skeleton_$index" },
+                            contentType = { TOPIC_DYNAMIC_CARD_CONTENT_TYPE }
+                        ) { _ ->
+                            DynamicFeedSkeletonCard(
+                                modifier = Modifier.animateItem(),
+                                blockColor = skeletonBlockColor,
                             )
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .responsiveContentWidth(maxWidth = 960.dp)
-                            .fillMaxSize()
-                    ) {
-                        item {
+                        }
+                    }
+
+                    state.error != null && state.details == null && state.items.isEmpty() -> {
+                        item(key = "topic_error") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillParentMaxHeight(0.6f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AppText(
+                                    text = state.error ?: "话题加载失败",
+                                    color = AppContentColors.secondaryText()
+                                )
+                            }
+                        }
+                    }
+
+                    else -> {
+                        item(key = "topic_header") {
                             TopicHeaderCard(
                                 details = state.details,
                                 onUserClick = onUserClick,
@@ -201,29 +239,36 @@ fun TopicDetailScreen(
                                 )
                             }
                         }
-                        itemsIndexed(state.items, key = { _, item -> item.id_str }) { index, item ->
-                            DynamicCardV2(
-                                item = item,
-                                gifImageLoader = context.imageLoader,
-                                actions = DynamicCardActions(
-                                    navigation = DynamicCardNavigationActions(
-                                        onVideoClick = onVideoClick,
-                                        onBangumiClick = onBangumiClick,
-                                        onUserClick = onUserClick,
-                                        onTopicClick = onTopicClick,
-                                        onTopicKeywordClick = onTopicKeywordClick,
-                                        onLiveClick = onLiveClick,
-                                        onMusicClick = onMusicClick,
-                                        onCollectionClick = onCollectionClick,
-                                        onCourseClick = onCourseClick,
-                                        onArticleClick = onArticleClick,
-                                        onDynamicDetailClick = onDynamicDetailClick,
+                        itemsIndexed(
+                            state.items,
+                            key = { _, item -> item.id_str },
+                            contentType = { _, _ -> TOPIC_DYNAMIC_CARD_CONTENT_TYPE }
+                        ) { index, item ->
+                            Box(modifier = Modifier.animateItem()) {
+                                DynamicCardV2(
+                                    item = item,
+                                    gifImageLoader = context.imageLoader,
+                                    actions = DynamicCardActions(
+                                        navigation = DynamicCardNavigationActions(
+                                            onVideoClick = onVideoClick,
+                                            onBangumiClick = onBangumiClick,
+                                            onUserClick = onUserClick,
+                                            onTopicClick = onTopicClick,
+                                            onTopicKeywordClick = onTopicKeywordClick,
+                                            onLiveClick = onLiveClick,
+                                            onMusicClick = onMusicClick,
+                                            onCollectionClick = onCollectionClick,
+                                            onCourseClick = onCourseClick,
+                                            onArticleClick = onArticleClick,
+                                            onDynamicDetailClick = onDynamicDetailClick,
+                                            onMatchClick = onMatchClick,
+                                        ),
+                                        interaction = DynamicCardInteractionActions(
+                                            onCommentClick = onDynamicDetailClick,
+                                        ),
                                     ),
-                                    interaction = DynamicCardInteractionActions(
-                                        onCommentClick = onDynamicDetailClick,
-                                    ),
-                                ),
-                            )
+                                )
+                            }
                             if (index == state.items.size - 3 && state.hasMore && !state.isLoadingMore) {
                                 LaunchedEffect(state.offset) {
                                     viewModel.loadMore()
@@ -231,7 +276,7 @@ fun TopicDetailScreen(
                             }
                         }
                         if (state.isLoadingMore) {
-                            item {
+                            item(key = "topic_loading_more") {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -253,15 +298,22 @@ fun TopicDetailScreen(
 
     if (showPublishComposer) {
         val topic = state.details?.topicItem
+        val draftKey = "topic_$topicId"
+        val draft = remember(composerAccountId, topicId) {
+            com.android.purebilibili.feature.dynamic.components.DynamicDraftStore.load(context, composerAccountId, draftKey)
+                ?: com.android.purebilibili.data.model.response.DynamicPublishDraft(
+                    text = "",
+                    topic = topic?.takeIf { it.id > 0L }?.let {
+                        DynamicPublishTopic(id = it.id, name = it.name)
+                    },
+                )
+        }
         DynamicPublishComposer(
-            initialDraft = com.android.purebilibili.data.model.response.DynamicPublishDraft(
-                text = "",
-                topic = topic?.takeIf { it.id > 0L }?.let {
-                    DynamicPublishTopic(id = it.id, name = it.name)
-                },
-            ),
+            initialDraft = draft,
             isEditing = false,
-            submitting = state.isPublishing,
+            submitting = state.isPublishing || clearingDraft,
+            draftAccountId = composerAccountId.takeIf { it > 0 },
+            draftKey = draftKey,
             errorMessage = state.publishError,
             onDismiss = { showPublishComposer = false },
             onSubmit = { draft ->
@@ -271,73 +323,80 @@ fun TopicDetailScreen(
                         message,
                         android.widget.Toast.LENGTH_SHORT,
                     ).show()
-                    if (success) showPublishComposer = false
+                    if (success) {
+                        clearingDraft = true
+                        draftScope.launch {
+                            val result = com.android.purebilibili.feature.dynamic.components.DynamicDraftStore.clear(context, composerAccountId, draftKey)
+                            if (result.isFailure) android.widget.Toast.makeText(context, "发布成功，但草稿清除失败", android.widget.Toast.LENGTH_LONG).show()
+                            clearingDraft = false
+                            showPublishComposer = false
+                        }
+                    }
                 }
             },
         )
     }
 }
 
+/** 话题动态卡的 lazy item 身份。骨架卡与真实卡片共用同一个 contentType，才能原地替换。 */
+private const val TOPIC_DYNAMIC_CARD_CONTENT_TYPE = "topic_dynamic_card"
+
+/** 话题详情首屏骨架卡片数量。 */
+private const val TOPIC_DETAIL_SKELETON_ITEM_COUNT = 6
+
+/**
+ * 话题头卡骨架：对齐真实 [TopicHeaderCard] 的封面块 + 三行文字 + 圆形操作位。
+ *
+ * 色块用固定色（不参与呼吸脉冲）：骨架与真实头卡在同一个 LazyColumn 内原地替换，
+ * 切换时只应看到「内容淡入」。
+ */
 @Composable
-private fun TopicDetailLoadingSkeleton(modifier: Modifier = Modifier) {
-    val dynamicPulse = rememberDynamicFeedSkeletonPulse()
-    val headerBlockColor = rememberContentSkeletonBlockColor(dynamicPulse)
-    LazyColumn(
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        userScrollEnabled = false,
-        modifier = modifier,
+private fun TopicHeaderCardSkeleton(modifier: Modifier = Modifier) {
+    val blockColor = rememberStaticSkeletonBlockColor()
+    AppSurface(
+        shape = AppShapes.container(ContainerLevel.Chip),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        modifier = modifier.fillMaxWidth(),
     ) {
-        item {
-            AppSurface(
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ContentSkeletonBlock(
+                color = blockColor,
                 shape = AppShapes.container(ContainerLevel.Chip),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 1.dp,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.size(58.dp),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ContentSkeletonBlock(
-                        color = headerBlockColor,
-                        shape = AppShapes.container(ContainerLevel.Chip),
-                        modifier = Modifier.size(58.dp),
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ContentSkeletonBlock(
-                            color = headerBlockColor,
-                            modifier = Modifier
-                                .fillMaxWidth(0.62f)
-                                .height(18.dp),
-                        )
-                        ContentSkeletonBlock(
-                            color = headerBlockColor,
-                            modifier = Modifier
-                                .fillMaxWidth(0.88f)
-                                .height(13.dp),
-                        )
-                        ContentSkeletonBlock(
-                            color = headerBlockColor,
-                            modifier = Modifier
-                                .fillMaxWidth(0.56f)
-                                .height(12.dp),
-                        )
-                    }
-                    ContentSkeletonBlock(
-                        color = headerBlockColor,
-                        shape = CircleShape,
-                        modifier = Modifier.size(34.dp),
-                    )
-                }
+                ContentSkeletonBlock(
+                    color = blockColor,
+                    modifier = Modifier
+                        .fillMaxWidth(0.62f)
+                        .height(18.dp),
+                )
+                ContentSkeletonBlock(
+                    color = blockColor,
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .height(13.dp),
+                )
+                ContentSkeletonBlock(
+                    color = blockColor,
+                    modifier = Modifier
+                        .fillMaxWidth(0.56f)
+                        .height(12.dp),
+                )
             }
-        }
-        items(6) {
-            DynamicFeedSkeletonCard(pulse = dynamicPulse)
+            ContentSkeletonBlock(
+                color = blockColor,
+                shape = CircleShape,
+                modifier = Modifier.size(34.dp),
+            )
         }
     }
 }
@@ -364,7 +423,7 @@ private fun TopicSortControl(
             itemWidth = itemWidth,
             height = 40.dp,
             indicatorHeight = 34.dp,
-            labelFontSize = 13.sp,
+            labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
             backdrop = null,
             modifier = Modifier.width(resolveTopicSortControlWidthDp(options.size).dp),
         )
@@ -406,7 +465,7 @@ private fun TopicParticipateButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(AppShapes.container(ContainerLevel.Pill))
-                    .clickable(onClick = onClick)
+                    .appActionClickable(onClick = onClick)
                     .padding(horizontal = AppSpacingTokens.Medium),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -414,22 +473,22 @@ private fun TopicParticipateButton(
                 AppIcon(
                     painter = topicIcon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = AppContentColors.accent(),
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
                 AppText(
                     text = "参与话题",
-                    color = MaterialTheme.colorScheme.primary,
+                    color = AppContentColors.accent(),
                     fontWeight = FontWeight.SemiBold,
                 )
             }
         }
 
-        TopicParticipateChrome.MIUIX_COMPACT_BUTTON -> AppButton(
+        TopicParticipateChrome.MIUIX_COMPACT_BUTTON -> MiuixButton(
             onClick = onClick,
-            modifier = buttonModifier,
-            contentPadding = PaddingValues(horizontal = AppSpacingTokens.Medium),
+            modifier = buttonModifier.appElasticPress(),
+            insideMargin = PaddingValues(horizontal = AppSpacingTokens.Medium),
         ) {
             AppIcon(
                 painter = topicIcon,
@@ -466,13 +525,13 @@ internal fun TopicTagCapsule(
         modifier = modifier
             .size(size)
             .clip(AppShapes.container(ContainerLevel.Chip))
-            .background(MaterialTheme.colorScheme.primary),
+            .background(AppContentColors.accent()),
         contentAlignment = Alignment.Center,
     ) {
         AppIcon(
             painter = painterResource(R.drawable.ms_tag_24),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimary,
+            tint = AppContentColors.onAccent(),
             modifier = Modifier.size(iconSize),
         )
     }
@@ -510,7 +569,7 @@ private fun TopicHeaderCard(
                     text = topic?.name.orEmpty().ifBlank { "话题" },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AppContentColors.primaryText(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -519,7 +578,7 @@ private fun TopicHeaderCard(
                     AppText(
                         text = topicDescription,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -534,7 +593,7 @@ private fun TopicHeaderCard(
                         }
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    color = AppContentColors.secondaryText()
                 )
             }
             if (!creatorFace.isNullOrBlank()) {
@@ -548,7 +607,7 @@ private fun TopicHeaderCard(
                         .size(34.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable(enabled = (creator?.uid ?: 0L) > 0L) {
+                        .appActionClickable(enabled = (creator?.uid ?: 0L) > 0L) {
                             onUserClick(creator?.uid ?: 0L)
                         },
                     contentScale = ContentScale.Crop

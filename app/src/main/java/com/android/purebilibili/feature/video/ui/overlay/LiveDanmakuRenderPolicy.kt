@@ -6,8 +6,3 @@ internal inline fun <T> appendLiveDanmakuBatch(
 ) {
     if (batch.isNotEmpty()) append(batch)
 }
-
-internal fun shouldRenderLiveDanmakuAsBitmap(
-    isSuperChat: Boolean,
-    emoticonUrl: String?
-): Boolean = isSuperChat || !emoticonUrl.isNullOrBlank()

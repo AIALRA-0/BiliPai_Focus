@@ -19,6 +19,7 @@ import com.android.purebilibili.data.model.response.OpusMajor
 import com.android.purebilibili.data.model.response.OpusPic
 import com.android.purebilibili.data.model.response.OpusSummary
 import com.android.purebilibili.feature.article.ArticleContentBlock
+import com.android.purebilibili.feature.dynamic.components.resolveDynamicOpusTextBlockRichDesc
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -578,6 +579,69 @@ class DynamicDetailFallbackPolicyTest {
     }
 
     @Test
+    fun mergeInteractionMetadata_retainsPreviewMentionsWithoutRidForOpusBody() {
+        val mentionA = RichTextNode(
+            type = "RICH_TEXT_NODE_TYPE_AT",
+            text = "@椒椒椒",
+            jump_url = "//space.bilibili.com/123",
+        )
+        val mentionB = RichTextNode(
+            type = "RICH_TEXT_NODE_TYPE_AT",
+            orig_text = "@艾香亦心动",
+            jump_url = "//space.bilibili.com/456",
+        )
+        val fullText = "谢谢@椒椒椒和@艾香亦心动，大家中秋快乐"
+        val seed = DynamicItem(
+            id_str = "dynamic-id",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    desc = DynamicDesc(
+                        text = "谢谢@椒椒椒和@艾香亦心动",
+                        rich_text_nodes = listOf(mentionA, mentionB),
+                    ),
+                ),
+            ),
+        )
+        val detail = DynamicItem(
+            id_str = "dynamic-id",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    desc = DynamicDesc(text = fullText),
+                    major = DynamicMajor(
+                        type = "MAJOR_TYPE_OPUS",
+                        opus = OpusMajor(
+                            summary = OpusSummary(text = fullText),
+                            contentBlocks = listOf(OpusContentBlock.Text(text = fullText)),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val merged = mergeDynamicDetailInteractionMetadata(detail, seed)
+
+        assertEquals(
+            listOf(mentionA, mentionB),
+            merged.modules.module_dynamic?.desc?.rich_text_nodes,
+        )
+        assertEquals(
+            listOf(mentionA, mentionB),
+            merged.modules.module_dynamic?.major?.opus?.summary?.rich_text_nodes,
+        )
+        val body = resolveDynamicOpusTextBlockRichDesc(
+            blockText = fullText,
+            preferredDesc = merged.modules.module_dynamic?.desc,
+            blockRichTextNodes = listOf(RichTextNode(type = "TEXT", text = fullText)),
+        )
+        assertEquals(
+            listOf("@椒椒椒" to mentionA.jump_url, "@艾香亦心动" to mentionB.jump_url),
+            body?.rich_text_nodes
+                ?.filter { it.type.endsWith("AT") }
+                ?.map { it.text to it.jump_url },
+        )
+    }
+
+    @Test
     fun mergeInteractionMetadata_readsEmojiNodesFromOpusSummary() {
         val detailTextNode = RichTextNode(
             type = "RICH_TEXT_NODE_TYPE_TEXT",
@@ -638,6 +702,20 @@ class DynamicDetailFallbackPolicyTest {
             mergeDynamicDetailRichTextNodes(
                 detailNodes = listOf(emojiNode),
                 seedEmojiNodes = listOf(emojiNode),
+            ),
+        )
+    }
+
+    @Test
+    fun mergeDetailRichTextNodes_replacesIdlessMentionWithSeedUserId() {
+        val detailMention = RichTextNode(type = "AT", text = "@叽米")
+        val seedMention = RichTextNode(type = "AT", text = "@叽米", rid = "12345")
+
+        assertEquals(
+            listOf(seedMention),
+            mergeDynamicDetailRichTextNodes(
+                detailNodes = listOf(detailMention),
+                seedEmojiNodes = listOf(seedMention),
             ),
         )
     }

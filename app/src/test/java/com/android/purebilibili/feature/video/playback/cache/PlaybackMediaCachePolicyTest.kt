@@ -73,9 +73,9 @@ class PlaybackMediaCachePolicyTest {
     }
 
     @Test
-    fun playbackMediaCacheBudgetIsFixedTo512MiB() {
+    fun playbackMediaCacheBudgetIsFixedTo128MiB() {
         assertEquals(
-            512L * 1024L * 1024L,
+            128L * 1024L * 1024L,
             resolvePlaybackMediaCacheMaxBytes()
         )
     }

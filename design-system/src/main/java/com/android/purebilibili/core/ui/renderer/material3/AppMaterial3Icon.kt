@@ -15,7 +15,7 @@ internal fun AppMaterial3Icon(
     contentDescription: String?,
     modifier: Modifier,
     tint: Color,
-) = Icon(imageVector, contentDescription, modifier, tint)
+) = Icon(imageVector, contentDescription, modifier, com.android.purebilibili.core.ui.resolveAppButtonSlotColor(tint))
 
 @Composable
 internal fun AppMaterial3Icon(
@@ -23,7 +23,7 @@ internal fun AppMaterial3Icon(
     contentDescription: String?,
     modifier: Modifier,
     tint: Color,
-) = Icon(bitmap, contentDescription, modifier, tint)
+) = Icon(bitmap, contentDescription, modifier, com.android.purebilibili.core.ui.resolveAppButtonSlotColor(tint))
 
 @Composable
 internal fun AppMaterial3Icon(
@@ -31,7 +31,7 @@ internal fun AppMaterial3Icon(
     contentDescription: String?,
     modifier: Modifier,
     tint: Color,
-) = Icon(painter, contentDescription, modifier, tint)
+) = Icon(painter, contentDescription, modifier, com.android.purebilibili.core.ui.resolveAppButtonSlotColor(tint))
 
 @Composable
 internal fun AppMaterial3Icon(
@@ -39,4 +39,4 @@ internal fun AppMaterial3Icon(
     tint: ColorProducer?,
     contentDescription: String?,
     modifier: Modifier,
-) = Icon(painter, tint, contentDescription, modifier)
+) = Icon(painter, tint?.let { com.android.purebilibili.core.ui.resolveAppButtonSlotColor(it) }, contentDescription, modifier)

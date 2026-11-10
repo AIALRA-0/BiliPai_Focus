@@ -11,7 +11,7 @@ object BiliPaiTransferChunks {
     fun split(transferId: String, envelope: String): List<String> {
         val encoded = Base64.encodeToString(envelope.toByteArray(), Base64.NO_WRAP or Base64.URL_SAFE)
         val total = (encoded.length + MAX_CHUNK_DATA - 1) / MAX_CHUNK_DATA
-        require(total in 1..128) { "加密会话过大，无法分片" }
+        require(total in 1..128) { "传输内容过大，请减少所选设置或插件后重试" }
         return (0 until total).map { index ->
             val start = index * MAX_CHUNK_DATA
             val end = minOf(start + MAX_CHUNK_DATA, encoded.length)
@@ -26,7 +26,8 @@ object BiliPaiTransferChunks {
         }.toMap()
         val index = values["i"]?.toIntOrNull() ?: return null
         val total = values["n"]?.toIntOrNull() ?: return null
-        if (values["id"].isNullOrBlank() || total !in 1..128 || index !in 0 until total) return null
+        if (values["id"].isNullOrBlank() || total !in 1..128 || index !in 0 until total ||
+            values["d"].isNullOrEmpty() || values.getValue("d").length > MAX_CHUNK_DATA) return null
         return BiliPaiTransferChunk(values.getValue("id"), index, total, values["d"].orEmpty())
     }
 

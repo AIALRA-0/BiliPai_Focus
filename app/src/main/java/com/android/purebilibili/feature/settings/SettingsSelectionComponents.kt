@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -18,14 +20,20 @@ internal fun <T> SettingsSingleChoicePreference(
     subtitle: String? = null,
     enabled: Boolean = true,
     icon: ImageVector? = null,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
+    iconTint: Color = AppContentColors.accent(),
+    /** 可选的每项前导视觉，例如色彩风格的三色小样；各材质菜单共用前导内容槽。 */
+    optionLeading: (@Composable (T) -> Unit)? = null,
     onSelectionChange: (T) -> Unit,
 ) {
     AppSingleChoicePreference(
-        title = title,
+        title = title.substringBefore("："),
         selectedValue = selectedValue,
         options = options.map { option ->
-            AppChoiceOption(value = option.value, label = option.label)
+            AppChoiceOption(
+                value = option.value,
+                label = option.label,
+                description = option.description,
+            )
         },
         onValueChange = onSelectionChange,
         modifier = modifier,
@@ -33,5 +41,6 @@ internal fun <T> SettingsSingleChoicePreference(
         subtitle = subtitle,
         enabled = enabled,
         iconTint = iconTint,
+        optionLeading = optionLeading,
     )
 }

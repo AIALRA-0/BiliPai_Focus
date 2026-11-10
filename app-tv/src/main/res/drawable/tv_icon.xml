@@ -1,0 +1,4 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape><solid android:color="#10141F" /></shape></item>
+    <item android:drawable="@mipmap/ic_launcher_blue_snow_maid_foreground" />
+</layer-list>

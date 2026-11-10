@@ -28,6 +28,15 @@ class AdaptiveStateRestorationPolicyTest {
         val navigation = read("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
 
         assertTrue(videoDetail.contains("var userRequestedFullscreen by rememberSaveable"))
+        // 同页切集（下一集 / 合集 / 队列）必须保留手动全屏意图：键控在详情路由会话 bvid 上，
+        // 不能回到随 currentBvid 重置，否则方向会回落 SCREEN_ORIENTATION_USER 并退出全屏。
+        assertTrue(videoDetail.contains("var userRequestedFullscreen by rememberSaveable(bvid)"))
+        assertTrue(
+            videoDetail.contains(
+                "var hasHandledStartFullscreenRequest by rememberSaveable(bvid, startInFullscreen)"
+            )
+        )
+        assertFalse(videoDetail.contains("var userRequestedFullscreen by rememberSaveable(currentBvid)"))
         assertFalse(videoDetail.contains("rememberSaveable(windowSizeClass"))
         assertFalse(videoDetail.contains("rememberSaveable(displayContext"))
         assertTrue(bangumi.contains("var userRequestedFullscreen by rememberSaveable(seasonId)"))

@@ -3,6 +3,7 @@ package com.android.purebilibili.core.ui.transition
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
@@ -15,6 +16,73 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class VideoSharedTransitionPolicyTest {
+    @Test
+    fun cardCurveReducesFrontRushAndNearStationaryTailWithoutOvershoot() {
+        val curve = resolveVideoCardSharedTransitionSpatialEasing()
+        assertTrue(curve.transform(0.1f) < 0.3f)
+        assertTrue(curve.transform(0.1f) < AppMotionEasing.Continuity.transform(0.1f))
+        assertTrue(curve.transform(0.6f) < 0.95f)
+        assertTrue(curve.transform(0.8f) > 0.98f)
+        var previous = 0f
+        for (step in 0..100) {
+            val progress = curve.transform(step / 100f)
+            assertTrue(progress in 0f..1f)
+            assertTrue(progress >= previous)
+            previous = progress
+        }
+        assertEquals(0f, curve.transform(0f))
+        assertEquals(1f, curve.transform(1f))
+    }
+
+    @Test
+    fun entryAndCancelKeepTheirCurveWhileAutomaticReturnHasItsOwnPacing() {
+        val curve = resolveVideoCardSharedTransitionSpatialEasing()
+        val hero = resolveVideoHeroMotionSpec(360)
+        val content = resolveVideoCardSharedTransitionMotionSpec("home", true)
+        assertSame(curve, hero.enterSpatialSpec)
+        assertSame(curve, hero.cancelSpatialSpec)
+        assertTrue(hero.returnSpatialSpec.transform(.5f) < curve.transform(.5f))
+        assertSame(curve, content.enterAlphaEasing)
+        assertSame(curve, content.returnAlphaEasing)
+        assertSame(LinearEasing, hero.predictiveSeekSpec)
+        assertSame(LinearEasing, hero.effectsEasing)
+        val reduced = resolveVideoHeroMotionSpec(360, reducedMotion = true)
+        assertSame(curve, reduced.returnSpatialSpec)
+        assertSame(curve, reduced.cancelSpatialSpec)
+    }
+
+    @Test
+    fun automaticReturnKeepsAHandoffWindowAndReducesTheNearStationaryTail() {
+        val hero = resolveVideoHeroMotionSpec(360)
+        fun timeAtProgress(curve: Easing, progress: Float): Float {
+            var low = 0f
+            var high = 1f
+            repeat(24) {
+                val time = (low + high) / 2f
+                if (curve.transform(time) < progress) low = time else high = time
+            }
+            return (low + high) / 2f
+        }
+        val start = timeAtProgress(hero.returnSpatialSpec, VideoCardTransitionVisualTimeline.MEDIA_RETURN_START)
+        val end = timeAtProgress(hero.returnSpatialSpec, VideoCardTransitionVisualTimeline.MEDIA_RETURN_END)
+        // 接管从时间后半段开始，并保留至少四分之一总时长，不能靠骤然换图压缩尾段。
+        assertTrue(start in 0.50f..0.58f)
+        assertTrue(end - start >= .25f)
+        assertTrue(1f - end in 0.10f..0.20f)
+        assertTrue(end > timeAtProgress(hero.enterSpatialSpec, VideoCardTransitionVisualTimeline.MEDIA_RETURN_END))
+        var previous = 0f
+        for (step in 0..1000) {
+            val progress = hero.returnSpatialSpec.transform(step / 1000f)
+            assertTrue(progress in previous..1f)
+            previous = progress
+            val depth = 1f - progress
+            val media = resolveVideoCardLiveReturnVisualHandoffAlpha(depth)
+            assertEquals(media, resolveVideoCardSourceChromeReturnAlpha(depth), .0001f)
+            assertTrue(resolveVideoCardWholeCardReturnHandoffAlpha(depth) + .0001f >= media)
+        }
+        assertEquals(0f, hero.returnSpatialSpec.transform(0f))
+        assertEquals(1f, hero.returnSpatialSpec.transform(1f))
+    }
     @Test
     fun heroGeometryUsesDpNotPixelsAndKeepsMissingBoundsFallback() {
         val card = Rect(0f, 0f, 100f, 60f)
@@ -58,6 +126,9 @@ class VideoSharedTransitionPolicyTest {
         assertEquals(1f, resolveVideoHeroLandingScale(0f, true))
         assertEquals(1f, resolveVideoHeroLandingScale(1f, true))
         assertEquals(0f, VideoHeroMotionTokens.LANDING_COMPRESSION)
+        assertEquals(1f, resolveVideoHeroLandingScale(-0.01f, true), 0.0001f)
+        assertEquals(1f, resolveVideoHeroLandingScale(-0.2f, true), 0.0001f)
+        assertEquals(1f, resolveVideoHeroLandingScale(-0.01f, false))
     }
 
     @Test
@@ -70,11 +141,11 @@ class VideoSharedTransitionPolicyTest {
             interactive = false) as TweenSpec<*>
         assertSame(LinearEasing, seek.easing)
         assertEquals(resolveVideoHeroMotionSpec(motion.durationMillis).returnDurationMillis, auto.durationMillis)
-        assertSame(AppMotionEasing.Continuity, auto.easing)
+        assertSame(resolveVideoHeroMotionSpec(motion.durationMillis).returnSpatialSpec, auto.easing)
     }
 
     @Test
-    fun videoSharedTransitionUsesContinuityCurveForEnterAndReturnAlpha() {
+    fun videoSharedTransitionAlphaSharesCardSpatialCurve() {
         val motion = resolveVideoCardSharedTransitionMotionSpec(
             sourceRoute = "home",
             transitionEnabled = true
@@ -84,7 +155,7 @@ class VideoSharedTransitionPolicyTest {
 
         assertSame(enter, returning)
         assertEquals(
-            AppMotionEasing.Continuity.transform(0.5f),
+            resolveVideoCardSharedTransitionSpatialEasing().transform(0.5f),
             enter.transform(0.5f),
             0.001f,
         )
@@ -92,19 +163,14 @@ class VideoSharedTransitionPolicyTest {
     }
 
     @Test
-    fun videoSharedTransitionSpatialEasing_isContinuityEaseOut() {
+    fun videoSharedTransitionSpatialEasing_hasBoundedEaseOut() {
         val easing = resolveVideoCardSharedTransitionSpatialEasing()
-        assertEquals(
-            AppMotionEasing.Continuity.transform(0.5f),
-            easing.transform(0.5f),
-            0.001f,
-        )
-        // 先快后慢：半程进度应明显超过线性 0.5
-        assertTrue(easing.transform(0.5f) > 0.7f)
+        // Already responsive at halfway, but leaves meaningful travel for the second half.
+        assertTrue(easing.transform(0.5f) in 0.85f..0.90f)
     }
 
     @Test
-    fun videoSharedBoundsUseContinuityEnterAndLinearSeekableReturn() {
+    fun videoSharedBoundsUseCardEnterAndLinearSeekableReturn() {
         val motion = resolveVideoCardSharedTransitionMotionSpec(
             sourceRoute = "home",
             transitionEnabled = true
@@ -119,9 +185,9 @@ class VideoSharedTransitionPolicyTest {
         assertTrue(returning is TweenSpec<*>)
         assertEquals(motion.durationMillis, (enter as TweenSpec<*>).durationMillis)
         assertEquals(motion.durationMillis, (returning as TweenSpec<*>).durationMillis)
-        // 进场：Continuity 先快后慢、无过冲
+        // 进场：卡片专用曲线，先快后慢、无过冲
         assertEquals(
-            AppMotionEasing.Continuity.transform(0.4f),
+            resolveVideoCardSharedTransitionSpatialEasing().transform(0.4f),
             enter.easing.transform(0.4f),
             0.001f,
         )
@@ -132,7 +198,7 @@ class VideoSharedTransitionPolicyTest {
             resolveVideoSharedElementSpatialEasing(detailBounds, cardBounds),
         )
         assertEquals(
-            AppMotionEasing.Continuity,
+            resolveVideoCardSharedTransitionSpatialEasing(),
             resolveVideoSharedElementSpatialEasing(cardBounds, detailBounds),
         )
         // settle buffer 仅覆盖主时长后的短收尾，不再为 spring 过冲预留长窗口
@@ -580,13 +646,9 @@ class VideoSharedTransitionPolicyTest {
             "src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt",
             "src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt",
             "src/main/java/com/android/purebilibili/feature/home/components/cards/HomeStyleSingleColumnVideoCard.kt",
-            "src/main/java/com/android/purebilibili/feature/list/FavoritePersonalCard.kt",
-            "src/main/java/com/android/purebilibili/feature/list/HistoryPersonalCard.kt",
+            "src/main/java/com/android/purebilibili/feature/personal/PersonalCardVideoTransition.kt",
             "src/main/java/com/android/purebilibili/feature/watchlater/WatchLaterScreen.kt",
             "src/main/java/com/android/purebilibili/feature/dynamic/components/VideoCards.kt",
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/GlassVideoCard.kt",
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/CinematicVideoCard.kt",
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/StoryVideoCard.kt",
         )
         cardSources.forEach { path ->
             val source = File(path).readText()
@@ -631,17 +693,17 @@ class VideoSharedTransitionPolicyTest {
         assertEquals(1f, motion.contentInitialScale, 0.0001f)
         assertSame(motion.enterAlphaEasing, motion.returnAlphaEasing)
         assertEquals(
-            AppMotionEasing.Continuity.transform(0.35f),
+            resolveVideoCardSharedTransitionSpatialEasing().transform(0.35f),
             motion.enterAlphaEasing.transform(0.35f),
             0.001f,
         )
         assertEquals(
-            AppMotionEasing.Continuity.transform(0.5f),
+            resolveVideoCardSharedTransitionSpatialEasing().transform(0.5f),
             resolveVideoCardSharedTransitionEnterEasing().transform(0.5f),
             0.001f,
         )
         assertEquals(
-            AppMotionEasing.Continuity.transform(0.5f),
+            resolveVideoCardSharedTransitionSpatialEasing().transform(0.5f),
             resolveVideoCardSharedTransitionReturnEasing().transform(0.5f),
             0.001f,
         )
@@ -766,12 +828,6 @@ class VideoSharedTransitionPolicyTest {
         val relatedCardSource = File(
             "src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt"
         ).readText()
-        val cinematicCardSource = File(
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/CinematicVideoCard.kt"
-        ).readText()
-        val glassCardSource = File(
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/GlassVideoCard.kt"
-        ).readText()
         val dynamicCardSource = File(
             "src/main/java/com/android/purebilibili/feature/dynamic/components/VideoCards.kt"
         ).readText()
@@ -819,10 +875,6 @@ class VideoSharedTransitionPolicyTest {
         assertFalse(relatedCardSource.contains("videoCardShellReturnCoverAlpha("))
         assertFalse(relatedCardSource.contains("followShellMotion = true"))
         assertFalse(partitionSource.contains("videoTitleSharedElementKey("))
-        assertTrue(cinematicCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertFalse(cinematicCardSource.contains("videoTitleSharedElementKey("))
-        assertTrue(glassCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertFalse(glassCardSource.contains("videoTitleSharedElementKey("))
         assertTrue(dynamicCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
         assertFalse(dynamicCardSource.contains("videoTitleSharedElementKey("))
         assertTrue(watchLaterSource.contains("videoCardShellSharedBoundsOrEmpty("))

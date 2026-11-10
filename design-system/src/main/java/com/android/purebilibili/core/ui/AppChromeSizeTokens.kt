@@ -5,11 +5,20 @@ import com.android.purebilibili.core.theme.resolveAndroidNativeChromeTokens
 import androidx.compose.ui.unit.dp
 
 object AppChromeSizeTokens {
+    // Keep the input guideline separate from the app-authored compact visual sizes below.
     val MinimumTouchTarget = 48.dp
+    // Shared density applies to glass and native surfaces; material-specific geometry stays local.
+    val CompactActionHeight = 40.dp
+    const val CompactRowMinHeightDp = 44
+    const val PreferenceVerticalPaddingDp = 12
+    val TopBarIconVisualSize = 40.dp
+    // Glass search visuals have their own height; native search metrics stay unchanged.
+    const val LiquidSearchFieldHeightDp = 40
+    val CompactTabMinWidth = 52.dp
     const val CompactControlHeightDp = 44
     const val CompactControlCornerRadiusDp = 20
-    // Native Miuix controls use compact visual geometry while retaining their
-    // surrounding accessibility hit target.
+    // Visual geometry is independent of the global accessibility default;
+    // compact chrome scopes input to its actual UI bounds.
     const val MiuixNativeCompactControlHeightDp = 36
     const val MiuixNativeCompactControlMinWidthDp = 52
     const val MiuixNativeCompactCornerRadiusDp = 10
@@ -47,23 +56,24 @@ fun resolveCompactCapsuleChromeSpec(
     uiStyle: AppUiStyle
 ): CompactCapsuleChromeSpec {
     val chromeTokens = resolveAndroidNativeChromeTokens(uiStyle)
+    val secondarySize = AppChromeSizeTokens.CompactActionHeight.value.toInt()
     return when (uiStyle) {
         // primaryCornerRadius must stay well below height/2 or search/filter bars
         // become full sausages (same failure mode as 48dp TabRow + 22–28dp Pill).
         AppUiStyle.MIUIX -> {
-            val primaryHeight = 48
+            val primaryHeight = 44
             CompactCapsuleChromeSpec(
                 primaryHeightDp = primaryHeight,
-                secondaryButtonSizeDp = chromeTokens.rowMinTouchTargetDp,
+                secondaryButtonSizeDp = secondarySize,
                 chipHeightDp = 32,
                 compactChipHeightDp = 28,
                 primaryCornerRadiusDp = minOf(
                     chromeTokens.containerCornerRadiusDp, // 20
-                    (primaryHeight * 0.3f).toInt(), // 14
+                    (primaryHeight * 0.3f).toInt(),
                 ),
                 secondaryButtonCornerRadiusDp = minOf(
                     chromeTokens.containerCornerRadiusDp,
-                    (chromeTokens.rowMinTouchTargetDp * 0.3f).toInt(),
+                    (secondarySize * 0.3f).toInt(),
                 ),
                 chipCornerRadiusDp = minOf(16, (32 * 0.3f).toInt()), // 9 → keep 9
                 compactChipCornerRadiusDp = minOf(14, (28 * 0.3f).toInt()),
@@ -76,19 +86,19 @@ fun resolveCompactCapsuleChromeSpec(
             )
         }
         AppUiStyle.MATERIAL3 -> {
-            val primaryHeight = 56
+            val primaryHeight = 48
             CompactCapsuleChromeSpec(
                 primaryHeightDp = primaryHeight,
-                secondaryButtonSizeDp = chromeTokens.rowMinTouchTargetDp,
+                secondaryButtonSizeDp = secondarySize,
                 chipHeightDp = 32,
                 compactChipHeightDp = 28,
                 primaryCornerRadiusDp = minOf(
                     chromeTokens.containerCornerRadiusDp, // 24
-                    (primaryHeight * 0.3f).toInt(), // 16
+                    (primaryHeight * 0.3f).toInt(),
                 ),
                 secondaryButtonCornerRadiusDp = minOf(
                     chromeTokens.containerCornerRadiusDp,
-                    (chromeTokens.rowMinTouchTargetDp * 0.3f).toInt(),
+                    (secondarySize * 0.3f).toInt(),
                 ),
                 chipCornerRadiusDp = 8,
                 compactChipCornerRadiusDp = 8,

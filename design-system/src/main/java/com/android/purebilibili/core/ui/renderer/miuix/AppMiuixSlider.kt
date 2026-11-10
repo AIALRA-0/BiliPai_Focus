@@ -24,7 +24,9 @@ internal fun AppMiuixSlider(
             backgroundColor = it.inactiveTrackColor,
             thumbColor = it.thumbColor,
         )
-    } ?: SliderDefaults.sliderColors()
+    } ?: if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+        SliderDefaults.sliderColors()
+    } else SliderDefaults.sliderColors(thumbColor = com.android.purebilibili.core.ui.components.appControlThumbColor())
     Slider(
         value = value,
         onValueChange = onValueChange,

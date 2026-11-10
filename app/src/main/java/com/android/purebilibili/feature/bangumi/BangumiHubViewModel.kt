@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.bangumi
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.coroutines.AccountScopedRequests
 import com.android.purebilibili.data.model.response.BangumiIndexConditionData
 import com.android.purebilibili.data.model.response.BangumiItem
 import com.android.purebilibili.data.model.response.BangumiSearchItem
@@ -12,6 +13,7 @@ import com.android.purebilibili.data.repository.BangumiRepository
 import com.android.purebilibili.core.store.TokenManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -74,6 +76,7 @@ data class BangumiSearchHubState(
 @Immutable
 data class BangumiHubUiState(
     val isLoggedIn: Boolean = false,
+    val accountGeneration: Long = TokenManager.accountIdentity.value.generation,
     val channel: BangumiChannel = BangumiChannel.BANGUMI,
     val page: BangumiHubPage = BangumiHubPage.HOME,
     val pageBeforeSearch: BangumiHubPage = BangumiHubPage.HOME,
@@ -98,11 +101,51 @@ class BangumiHubViewModel : ViewModel() {
     val messages = _messages.asSharedFlow()
 
     private var initialized = false
+    private val accountRequests = AccountScopedRequests(viewModelScope)
     private val homeJobs = mutableMapOf<String, Job>()
     private val conditionJobs = mutableMapOf<BangumiIndexCategory, Job>()
     private val indexJobs = mutableMapOf<BangumiIndexCategory, Job>()
     private val followJobs = mutableMapOf<Pair<BangumiChannel, BangumiFollowStatus>, Job>()
     private var searchJob: Job? = null
+
+    init {
+        // Timeline follow flags, follows, management and search belong to an account.
+        // Public index and recommendation requests keep their ViewModel lifetime.
+        accountRequests.observe {
+            searchJob = null
+            followJobs.clear()
+            BangumiChannel.entries.forEach {
+                homeJobs.remove("follows_${it.name}")
+                homeJobs.remove("timeline_${it.name}")
+            }
+            _uiState.update { state ->
+                state.copy(
+                    isLoggedIn = !TokenManager.sessDataCache.isNullOrBlank(),
+                    accountGeneration = accountRequests.identity.generation,
+                    homeStates = state.homeStates.mapValues { (_, home) ->
+                        home.copy(
+                            follows = BangumiPagedState(),
+                            followTotal = -1,
+                            timeline = BangumiTimelineHubState(range = home.timeline.range),
+                        )
+                    },
+                    followStates = emptyMap(),
+                    search = BangumiSearchHubState(category = state.search.category),
+                    page = if (state.page == BangumiHubPage.SEARCH) state.pageBeforeSearch else state.page,
+                )
+            }
+            if (initialized) {
+                val state = _uiState.value
+                loadHomeFollows(state.channel, reset = true)
+                if (state.page == BangumiHubPage.HOME && state.showPgcTimeline) {
+                    loadTimeline(state.channel, reset = true)
+                }
+                if (state.page == BangumiHubPage.FOLLOW) {
+                    loadFollowManager(state.channel, state.followStatus, reset = true)
+                }
+            }
+        }
+    }
 
     fun initialize(initialType: Int) {
         if (initialized) return
@@ -263,12 +306,17 @@ class BangumiHubViewModel : ViewModel() {
     }
 
     fun moveSelectedFollowItems(target: BangumiFollowStatus) {
+        if (!_uiState.value.isLoggedIn || !accountRequests.isCurrent()) return
         val key = currentFollowKey()
         val selected = followState(key).selectedIds
         if (selected.isEmpty() || target == key.second) return
         updateFollowState(key) { it.copy(isMutating = true) }
-        viewModelScope.launch {
-            BangumiRepository.updateBangumiFollowStatuses(selected, target.value).fold(
+        accountRequests.launch {
+            val identity = accountRequests.identity
+            val result = BangumiRepository.updateBangumiFollowStatuses(selected, target.value)
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
+            result.fold(
                 onSuccess = {
                     removeFollowItemsAfterMutation(key, selected, decrementTotal = false)
                     refreshFollowStatesAfterMove(key, target)
@@ -286,11 +334,16 @@ class BangumiHubViewModel : ViewModel() {
         seasonId: Long,
         target: BangumiFollowStatus,
     ) {
+        if (!_uiState.value.isLoggedIn || !accountRequests.isCurrent()) return
         val key = currentFollowKey()
         if (seasonId <= 0L || target == key.second) return
         updateFollowState(key) { it.copy(isMutating = true) }
-        viewModelScope.launch {
-            BangumiRepository.updateBangumiFollowStatus(seasonId, target.value).fold(
+        accountRequests.launch {
+            val identity = accountRequests.identity
+            val result = BangumiRepository.updateBangumiFollowStatus(seasonId, target.value)
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
+            result.fold(
                 onSuccess = {
                     removeFollowItemsAfterMutation(key, setOf(seasonId), decrementTotal = false)
                     refreshFollowStatesAfterMove(key, target)
@@ -305,11 +358,16 @@ class BangumiHubViewModel : ViewModel() {
     }
 
     fun unfollowSingleItem(seasonId: Long) {
+        if (!_uiState.value.isLoggedIn || !accountRequests.isCurrent()) return
         val key = currentFollowKey()
         if (seasonId <= 0L) return
         updateFollowState(key) { it.copy(isMutating = true) }
-        viewModelScope.launch {
-            BangumiRepository.unfollowBangumi(seasonId).fold(
+        accountRequests.launch {
+            val identity = accountRequests.identity
+            val result = BangumiRepository.unfollowBangumi(seasonId)
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
+            result.fold(
                 onSuccess = {
                     removeFollowItemsAfterMutation(key, setOf(seasonId), decrementTotal = true)
                     loadFollowManager(key.first, key.second, reset = true)
@@ -370,12 +428,16 @@ class BangumiHubViewModel : ViewModel() {
                 ),
             )
         }
-        searchJob = viewModelScope.launch {
-            BangumiRepository.searchBangumi(
+        searchJob = accountRequests.launch {
+            val identity = accountRequests.identity
+            val result = BangumiRepository.searchBangumi(
                 keyword = normalized,
                 seasonType = resolveBangumiSearchSeasonType(category),
                 page = 1,
-            ).fold(
+            )
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
+            result.fold(
                 onSuccess = { data ->
                     val latest = _uiState.value.search
                     if (latest.query != normalized || latest.category != category) return@fold
@@ -414,12 +476,16 @@ class BangumiHubViewModel : ViewModel() {
         _uiState.update {
             it.copy(search = it.search.copy(results = results.copy(isLoadingMore = true, error = null)))
         }
-        searchJob = viewModelScope.launch {
-            BangumiRepository.searchBangumi(
+        searchJob = accountRequests.launch {
+            val identity = accountRequests.identity
+            val result = BangumiRepository.searchBangumi(
                 keyword = current.query,
                 seasonType = resolveBangumiSearchSeasonType(category),
                 page = nextPage,
-            ).fold(
+            )
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
+            result.fold(
                 onSuccess = { data ->
                     val latest = _uiState.value.search
                     if (latest.query != current.query || latest.category != category) return@fold
@@ -477,9 +543,24 @@ class BangumiHubViewModel : ViewModel() {
         }
     }
 
+    fun prepareHomeChannel(channel: BangumiChannel) {
+        if (initialized) ensureHomeLoaded(channel)
+    }
+
     private fun ensureHomeLoaded(channel: BangumiChannel) {
         val home = homeState(channel)
-        if (home.recommendations.page == 0 && !home.recommendations.isLoading) refreshHome(channel)
+        if (home.recommendations.page == 0 && !home.recommendations.isLoading) {
+            refreshHome(channel)
+            return
+        }
+        if (_uiState.value.isLoggedIn && home.follows.page == 0 && !home.follows.isLoading) {
+            loadHomeFollows(channel, reset = true)
+        }
+        if (_uiState.value.showPgcTimeline && home.timeline.days.isEmpty() &&
+            !home.timeline.isLoading && !home.timeline.isRefreshing
+        ) {
+            loadTimeline(channel, reset = true)
+        }
     }
 
     private fun loadHomeRecommendations(channel: BangumiChannel, reset: Boolean) {
@@ -539,6 +620,7 @@ class BangumiHubViewModel : ViewModel() {
     }
 
     private fun loadHomeFollows(channel: BangumiChannel, reset: Boolean) {
+        if (!_uiState.value.isLoggedIn || !accountRequests.isCurrent()) return
         val current = homeState(channel).follows
         if ((!reset && (!current.hasMore || current.isLoadingMore)) || current.isLoading) return
         val nextPage = if (reset) 1 else current.page + 1
@@ -554,11 +636,15 @@ class BangumiHubViewModel : ViewModel() {
                 ),
             )
         }
-        homeJobs[jobKey] = viewModelScope.launch {
-            BangumiRepository.getMyFollowBangumi(
+        homeJobs[jobKey] = accountRequests.launch {
+            val identity = accountRequests.identity
+            val result = BangumiRepository.getMyFollowBangumi(
                 type = channel.followType,
                 page = nextPage,
-            ).fold(
+            )
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
+            result.fold(
                 onSuccess = { data ->
                     updateHomeState(channel) { home ->
                         val previous = if (reset) emptyList() else home.follows.items
@@ -595,7 +681,7 @@ class BangumiHubViewModel : ViewModel() {
         reset: Boolean,
         range: BangumiTimelineRange = homeState(channel).timeline.range,
     ) {
-        if (!_uiState.value.showPgcTimeline) return
+        if (!_uiState.value.showPgcTimeline || !accountRequests.isCurrent()) return
         val current = homeState(channel).timeline
         val jobKey = "timeline_${channel.name}"
         if (reset) {
@@ -613,7 +699,8 @@ class BangumiHubViewModel : ViewModel() {
                 ),
             )
         }
-        homeJobs[jobKey] = viewModelScope.launch {
+        homeJobs[jobKey] = accountRequests.launch {
+            val identity = accountRequests.identity
             val primary = async {
                 BangumiRepository.getTimeline(
                     type = if (channel == BangumiChannel.CINEMA) 3 else 1,
@@ -634,6 +721,8 @@ class BangumiHubViewModel : ViewModel() {
             }
             val primaryResult = primary.await()
             val secondaryResult = secondary?.await()
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
             val primaryDays = primaryResult.getOrNull()
             val secondaryDays = secondaryResult?.getOrNull()
             if (primaryDays != null || secondaryDays != null) {
@@ -760,6 +849,7 @@ class BangumiHubViewModel : ViewModel() {
         status: BangumiFollowStatus,
         reset: Boolean,
     ) {
+        if (!_uiState.value.isLoggedIn || !accountRequests.isCurrent()) return
         val key = channel to status
         val current = followState(key)
         val content = current.content
@@ -777,12 +867,16 @@ class BangumiHubViewModel : ViewModel() {
                 selectedIds = if (reset) emptySet() else it.selectedIds,
             )
         }
-        followJobs[key] = viewModelScope.launch {
-            BangumiRepository.getMyFollowBangumi(
+        followJobs[key] = accountRequests.launch {
+            val identity = accountRequests.identity
+            val result = BangumiRepository.getMyFollowBangumi(
                 type = channel.followType,
                 followStatus = status.value,
                 page = nextPage,
-            ).fold(
+            )
+            coroutineContext.ensureActive()
+            if (!accountRequests.isCurrent(identity)) return@launch
+            result.fold(
                 onSuccess = { data ->
                     updateFollowState(key) { state ->
                         val previous = if (reset) emptyList() else state.content.items

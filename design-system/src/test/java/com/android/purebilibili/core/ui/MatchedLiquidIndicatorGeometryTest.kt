@@ -7,6 +7,16 @@ import kotlin.test.assertTrue
 class MatchedLiquidIndicatorGeometryTest {
 
     @Test
+    fun `only glass tightens authored horizontal insets and keeps already narrow edges`() {
+        assertEquals(4f, resolveLiquidGlassIndicatorHorizontalInsetDp(4f, true))
+        assertEquals(3f, resolveLiquidGlassIndicatorHorizontalInsetDp(3f, true))
+        assertEquals(1f, resolveLiquidGlassIndicatorHorizontalInsetDp(1f, true))
+        assertEquals(0f, resolveLiquidGlassIndicatorHorizontalInsetDp(0f, true))
+        assertEquals(4f, resolveLiquidGlassIndicatorHorizontalInsetDp(4f, false))
+        assertEquals(8f, resolveLiquidGlassIndicatorHorizontalInsetDp(8f, false))
+    }
+
+    @Test
     fun `home bottom bar keeps flat rest state and visible pressed overflow`() {
         val geometry = resolveMatchedLiquidIndicatorGeometry(
             dockHeightDp = BottomBarReferenceShellHeightDp,
@@ -23,8 +33,8 @@ class MatchedLiquidIndicatorGeometryTest {
         val geometry = resolveMatchedLiquidIndicatorGeometry(dockHeightDp = 40f)
 
         assertEquals(35f, geometry.indicatorHeightDp, 0.0001f)
-        assertEquals(40f * 78f / 56f / 35f, geometry.pressedScale, 0.0001f)
-        assertEquals(40f * 78f / 56f, geometry.pressedHeightDp, 0.0001f)
+        assertEquals(40f * 78f / 64f / 35f, geometry.pressedScale, 0.0001f)
+        assertEquals(40f * 78f / 64f, geometry.pressedHeightDp, 0.0001f)
         assertEquals(35, roundMatchedLiquidIndicatorHeightDp(40f))
     }
 
@@ -35,7 +45,7 @@ class MatchedLiquidIndicatorGeometryTest {
             indicatorHeightDp = 27f,
         )
 
-        assertEquals(40f * 78f / 56f / 27f, geometry.pressedScale, 0.0001f)
+        assertEquals(40f * 78f / 64f / 27f, geometry.pressedScale, 0.0001f)
         assertTrue(geometry.pressedHeightDp > geometry.dockHeightDp)
     }
 
@@ -46,8 +56,8 @@ class MatchedLiquidIndicatorGeometryTest {
             indicatorHeightDp = 56f,
         )
 
-        assertEquals(78f / 56f, geometry.pressedScale, 0.0001f)
-        assertEquals(78f, geometry.pressedHeightDp, 0.0001f)
+        assertEquals(58f * 78f / 64f / 56f, geometry.pressedScale, 0.0001f)
+        assertEquals(58f * 78f / 64f, geometry.pressedHeightDp, 0.0001f)
         assertEquals(51, roundMatchedLiquidIndicatorHeightDp(58f))
     }
 }

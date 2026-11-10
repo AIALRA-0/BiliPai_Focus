@@ -219,13 +219,27 @@ class HomeNotInterestedPolicyTest {
     }
 
     @Test
-    fun `disabled card animation removes not interested card immediately`() {
-        val transition = resolveHomeDismissVisualTransition(
+    fun `unavailable dissolve removes not interested card immediately`() {
+        val transition = resolveHomeNotInterestedVisualTransition(
             isFeedbackRecorded = true,
-            cardAnimationEnabled = false
+            isDissolveAnimationAvailable = false
         )
 
         assertFalse(transition.shouldStartDissolve)
         assertTrue(transition.shouldRemoveImmediately)
     }
+
+    @Test
+    fun `closing reason sheet only records feedback for the removed video`() {
+        val action = resolveHomeNotInterestedAction(
+            video = VideoItem(bvid = "BV1", title = "游戏评测", tname = "游戏",
+                owner = Owner(mid = 42L, name = "UP-X")),
+            reason = resolveDefaultHomeNotInterestedReason(),
+        )
+        assertEquals("BV1", action.bvid)
+        assertFalse(action.shouldBlockCreator)
+        assertFalse(action.shouldSyncCreatorToBilibiliBlockedList)
+        assertTrue(action.keywords.isEmpty())
+    }
+
 }

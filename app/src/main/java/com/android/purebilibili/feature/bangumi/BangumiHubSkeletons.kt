@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -25,15 +25,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
 import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
-import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse
+import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState
 
 @Composable
 internal fun BangumiPosterSkeletonItem(
     modifier: Modifier = Modifier,
-    blockColor: Color? = null,
+    blockColor: (() -> Color)? = null,
 ) {
-    val pulse = if (blockColor == null) rememberContentSkeletonPulse() else 0f
-    val color = blockColor ?: rememberContentSkeletonBlockColor(pulse)
+    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
     Column(modifier = modifier.fillMaxWidth()) {
         ContentSkeletonBlock(
             color = color,
@@ -63,10 +62,9 @@ internal fun BangumiPosterSkeletonItem(
 internal fun BangumiPosterSkeletonRow(
     modifier: Modifier = Modifier,
     itemCount: Int = 4,
-    blockColor: Color? = null,
+    blockColor: (() -> Color)? = null,
 ) {
-    val pulse = if (blockColor == null) rememberContentSkeletonPulse() else 0f
-    val color = blockColor ?: rememberContentSkeletonBlockColor(pulse)
+    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
     LazyRow(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 2.dp),
@@ -87,7 +85,7 @@ internal fun BangumiPosterGridSkeleton(
     modifier: Modifier = Modifier,
     itemCount: Int = 8,
 ) {
-    val pulse = rememberContentSkeletonPulse()
+    val pulse = rememberContentSkeletonPulseState()
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val spacing = 10.dp
@@ -119,7 +117,7 @@ internal fun BangumiPosterGridSkeleton(
 
 @Composable
 internal fun BangumiTimelineSkeleton(modifier: Modifier = Modifier) {
-    val pulse = rememberContentSkeletonPulse()
+    val pulse = rememberContentSkeletonPulseState()
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -145,7 +143,7 @@ internal fun BangumiTimelineSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun BangumiFilterSkeleton(modifier: Modifier = Modifier) {
-    val pulse = rememberContentSkeletonPulse()
+    val pulse = rememberContentSkeletonPulseState()
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -178,7 +176,7 @@ internal fun BangumiFilterSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun BangumiFollowManagerSkeleton(modifier: Modifier = Modifier) {
-    val pulse = rememberContentSkeletonPulse()
+    val pulse = rememberContentSkeletonPulseState()
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyVerticalGrid(
         columns = GridCells.Adaptive(310.dp),
@@ -199,7 +197,7 @@ internal fun BangumiFollowManagerSkeleton(modifier: Modifier = Modifier) {
                     color = blockColor,
                     shape = AppShapes.container(ContainerLevel.Chip),
                     modifier = Modifier
-                        .width(92.dp)
+                        .width(104.dp)
                         .aspectRatio(BANGUMI_POSTER_ASPECT_RATIO),
                 )
                 Column(

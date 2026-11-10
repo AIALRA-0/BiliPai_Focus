@@ -248,36 +248,6 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertTrue(videoClickBlock.contains("sourceRoute = ScreenRoutes.Favorite.route"))
     }
 
-    @Test
-    fun videoReturnEntersMiniPlayerBeforePoppingDestination() {
-        val source = appNavigationSource()
-        val helperBlock = source
-            .substringAfter("fun popVideoDetailWithSharedReturnState(")
-            .substringBefore("val performSystemBackAction")
-        val prepareMiniPlayerIndex = helperBlock.indexOf("prepareVideoPlaybackForNavigationExit(videoKey)")
-        val popIndex = helperBlock.indexOf("popAction()")
-
-        assertTrue(prepareMiniPlayerIndex >= 0)
-        assertTrue(prepareMiniPlayerIndex < popIndex)
-        assertTrue(source.contains("manager.enterMiniMode()"))
-    }
-
-    @Test
-    fun systemBackPreparesVideoMiniPlayerBeforePoppingDestination() {
-        val source = appNavigationSource()
-        val navigateUpBlock = source
-            .substringAfter("AppSystemBackAction.NAVIGATE_UP ->")
-            .substringBefore("AppSystemBackAction.FINISH_ACTIVITY ->")
-        val helperBlock = source
-            .substringAfter("fun popVideoDetailWithSharedReturnState(")
-            .substringBefore("val performSystemBackAction")
-        val prepareIndex = helperBlock.indexOf("prepareVideoPlaybackForNavigationExit")
-        val popIndex = helperBlock.indexOf("popAction()")
-
-        assertTrue(navigateUpBlock.contains("popVideoDetailWithSharedReturnState("))
-        assertTrue(prepareIndex >= 0)
-        assertTrue(prepareIndex < popIndex)
-    }
 
     @Test
     fun seasonSeriesVideosUseMatchingSharedElementSourceRoute() {
@@ -342,28 +312,6 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertTrue(source.contains("isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail"))
     }
 
-    @Test
-    fun classicBackMarksVideoReturnBeforePoppingNavigation3Stack() {
-        val source = appNavigationSource()
-
-        val markerIndex = source.indexOf("fun markNavigation3VideoReturnBeforeBackAction")
-        val navigateUpIndex = source.indexOf("AppSystemBackAction.NAVIGATE_UP ->")
-        val navigateUpBlock = source
-            .substringAfter("AppSystemBackAction.NAVIGATE_UP ->")
-            .substringBefore("AppSystemBackAction.FINISH_ACTIVITY ->")
-        val helperBlock = source
-            .substringAfter("fun popVideoDetailWithSharedReturnState(")
-            .substringBefore("val performSystemBackAction")
-        val markCallIndex = helperBlock.indexOf("markNavigation3VideoReturnBeforeBackAction(targetKey = targetKey)")
-        val prepareIndex = helperBlock.indexOf("prepareVideoPlaybackForNavigationExit(videoKey)")
-
-        assertTrue(markerIndex >= 0)
-        assertTrue(navigateUpIndex >= 0)
-        assertTrue(navigateUpBlock.contains("popVideoDetailWithSharedReturnState("))
-        assertTrue(markCallIndex in 0 until prepareIndex)
-        assertTrue(source.contains("isVideoDetailRoute(fromRoute)"))
-        assertTrue(source.contains("isVideoCardReturnTargetRoute(targetRoute)"))
-    }
 
     @Test
     fun appNavigationUsesUnifiedBackGestureDecision() {

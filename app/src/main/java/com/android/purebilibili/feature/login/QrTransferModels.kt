@@ -31,17 +31,49 @@ data class BiliPaiTransferEnvelope(
     val expiresAt: Long,
 )
 
+typealias BiliPaiSessionBundle = com.android.purebilibili.data.session.BiliPaiSessionBundle
+
+/** Version bump of the encrypted payload; receivers reject mismatches explicitly. */
+const val BILIPAI_TRANSFER_PAYLOAD_VERSION = 2
+
 @Serializable
-data class BiliPaiSessionBundle(
-    val mid: Long,
-    val sessData: String,
-    val csrf: String = "",
-    val accessToken: String = "",
-    val refreshToken: String = "",
-    val accessTokenPlatform: String = "tv",
-    val buvid3: String = "",
-    val isVip: Boolean = false,
+data class BiliPaiTransferredJsPlugin(
+    val manifest: com.android.purebilibili.core.plugin.js.BiliPaiJsPluginManifest,
+    val script: String,
+    val grantedCapabilities: Set<com.android.purebilibili.plugin.sdk.PluginCapability> = emptySet(),
+    val enabled: Boolean = false,
 )
+
+/** Raw installable package (skin or external Kotlin plugin) re-shared from local storage. */
+@Serializable
+data class BiliPaiTransferredPackage(
+    val name: String,
+    val bytesBase64: String,
+)
+
+/** JSON rule plugins: their shared_prefs XML plus per-plugin JSON files. */
+@Serializable
+data class BiliPaiTransferredJsonRules(
+    val sharedPrefsXml: String? = null,
+    val files: List<BiliPaiTransferredFile> = emptyList(),
+)
+
+@Serializable
+data class BiliPaiTransferredFile(val name: String, val content: String)
+
+@Serializable
+data class BiliPaiTransferPayload(
+    val version: Int = BILIPAI_TRANSFER_PAYLOAD_VERSION,
+    val session: BiliPaiSessionBundle,
+    val settingsJson: String? = null,
+    val jsonRules: BiliPaiTransferredJsonRules? = null,
+    val jsPlugins: List<BiliPaiTransferredJsPlugin> = emptyList(),
+    val skins: List<BiliPaiTransferredPackage> = emptyList(),
+    val kotlinPlugins: List<BiliPaiTransferredPackage> = emptyList(),
+) {
+    fun isContentEmpty(): Boolean = settingsJson == null && jsonRules == null &&
+        jsPlugins.isEmpty() && skins.isEmpty() && kotlinPlugins.isEmpty()
+}
 
 object BiliPaiTransferCodec {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = false }
@@ -65,8 +97,15 @@ object BiliPaiTransferCodec {
     fun encodeEnvelope(envelope: BiliPaiTransferEnvelope): String =
         "bilipai://transfer/envelope?payload=${encode(json.encodeToString(BiliPaiTransferEnvelope.serializer(), envelope))}"
 
+    /** Keep the QR capacity decision in the codec, before the UI attempts to draw it. */
+    internal fun encodeEnvelopeQrs(envelope: BiliPaiTransferEnvelope): List<String> {
+        val encoded = encodeEnvelope(envelope)
+        return if (encoded.length <= SINGLE_QR_MAX_CHARS) listOf(encoded)
+            else BiliPaiTransferChunks.split(envelope.transferId, encoded)
+    }
+
     fun decodeEnvelope(raw: String): BiliPaiTransferEnvelope {
-        require(raw.length <= MAX_QR_CHARS) { "二维码内容过大" }
+        require(raw.length <= CHUNKED_ENVELOPE_MAX_CHARS) { "传输内容过大" }
         require(raw.startsWith("bilipai://transfer/envelope?payload=")) { "不是 BiliPai 加密传输二维码" }
         return json.decodeFromString(
             BiliPaiTransferEnvelope.serializer(), decode(raw.substringAfter("payload=")))
@@ -85,4 +124,10 @@ object BiliPaiTransferCodec {
         Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8)
 
     private const val MAX_QR_CHARS = 100_000
+
+    /** Single-QR envelope cap; larger envelopes go through [BiliPaiTransferChunks]. */
+    internal const val SINGLE_QR_MAX_CHARS = 1_800
+
+    /** 128 x 1,500 base64 chunk characters decode to at most 144,000 envelope bytes. */
+    private const val CHUNKED_ENVELOPE_MAX_CHARS = 144_000
 }

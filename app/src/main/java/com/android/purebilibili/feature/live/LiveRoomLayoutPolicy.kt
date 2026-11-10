@@ -1,8 +1,12 @@
 package com.android.purebilibili.feature.live
-
+import android.content.pm.ActivityInfo
 import com.android.purebilibili.core.util.AppDisplayContext
 import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.util.FormatUtils
+
+internal const val LIVE_INPUT_HEIGHT_DP = 70
+internal const val LIVE_CHAT_INPUT_GAP_DP = 55
 
 enum class LiveRoomLayoutMode {
     PortraitPanel,
@@ -11,39 +15,10 @@ enum class LiveRoomLayoutMode {
     LandscapeOverlay
 }
 
-/** White media-overlay chat colors are only valid when chat is drawn over the video. */
-internal fun shouldUseLiveChatMediaOverlay(layoutMode: LiveRoomLayoutMode): Boolean =
-    layoutMode == LiveRoomLayoutMode.LandscapeOverlay ||
-        layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay
-
-data class LivePortraitOverlayMetrics(
-    val panelHeightFraction: Float,
-    val minPanelHeightDp: Int,
-    val minPlayerClearanceDp: Int,
-    val playerControlsGapDp: Int,
-    val topChromeReserveDp: Int,
-    val playerControlsReserveDp: Int
-)
-
-data class LiveOverlayContentInsets(
-    val topDp: Int,
-    val bottomDp: Int
-)
-
-data class LiveLandscapeChatOverlayMetrics(
-    val widthFraction: Float,
-    val heightFraction: Float,
-    val minWidthDp: Int,
-    val maxWidthDp: Int,
-    val minHeightDp: Int,
-    val edgePaddingDp: Int,
-    val topControlReserveDp: Int,
-    val bottomControlReserveDp: Int
-)
-
 enum class LiveRequestedOrientationMode {
     Unspecified,
     SensorLandscape,
+    SensorPortrait,
     Portrait,
 }
 
@@ -54,13 +29,34 @@ enum class LiveRequestedOrientationMode {
 fun resolveLiveRequestedOrientationMode(
     displayContext: AppDisplayContext,
     isFullscreen: Boolean,
+    isPortraitLive: Boolean = false,
 ): LiveRequestedOrientationMode {
     return when {
-        displayContext.usesInWindowFullscreen -> LiveRequestedOrientationMode.Unspecified
+        displayContext.usesInWindowFullscreen || displayContext.isInMultiWindowMode -> LiveRequestedOrientationMode.Unspecified
         !shouldUsePhonePlayerOrientation(displayContext) -> LiveRequestedOrientationMode.Unspecified
+        isFullscreen && isPortraitLive -> LiveRequestedOrientationMode.SensorPortrait
         isFullscreen -> LiveRequestedOrientationMode.SensorLandscape
         else -> LiveRequestedOrientationMode.Portrait
     }
+}
+
+internal fun LiveRequestedOrientationMode.toActivityOrientation(): Int = when (this) {
+    LiveRequestedOrientationMode.Unspecified -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    LiveRequestedOrientationMode.SensorLandscape -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    LiveRequestedOrientationMode.SensorPortrait -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+    LiveRequestedOrientationMode.Portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+}
+
+/** 方向驱动的全屏先等待窗口到达目标方向，避免在旋转前先铺满竖屏；窗口内全屏直接呈现。 */
+internal fun shouldPresentLiveFullscreen(
+    fullscreenRequested: Boolean,
+    isLandscape: Boolean,
+    orientationMode: LiveRequestedOrientationMode,
+): Boolean = fullscreenRequested && when (orientationMode) {
+    LiveRequestedOrientationMode.SensorLandscape -> isLandscape
+    LiveRequestedOrientationMode.SensorPortrait,
+    LiveRequestedOrientationMode.Portrait -> !isLandscape
+    LiveRequestedOrientationMode.Unspecified -> true
 }
 
 fun resolveLiveRequestedOrientationMode(
@@ -68,10 +64,12 @@ fun resolveLiveRequestedOrientationMode(
     isFullscreen: Boolean,
     isFoldableCoverWindow: Boolean = false,
     usesInWindowFullscreen: Boolean = false,
+    isPortraitLive: Boolean = false,
 ): LiveRequestedOrientationMode {
     return when {
         usesInWindowFullscreen -> LiveRequestedOrientationMode.Unspecified
         isTabletDevice && !isFoldableCoverWindow -> LiveRequestedOrientationMode.Unspecified
+        isFullscreen && isPortraitLive -> LiveRequestedOrientationMode.SensorPortrait
         isFullscreen -> LiveRequestedOrientationMode.SensorLandscape
         else -> LiveRequestedOrientationMode.Portrait
     }
@@ -81,91 +79,43 @@ fun resolveLiveRoomLayoutMode(
     isLandscape: Boolean,
     isTablet: Boolean,
     isFullscreen: Boolean,
-    isPortraitLive: Boolean
+    isPortraitLive: Boolean,
+    hasObstructingHinge: Boolean = false,
 ): LiveRoomLayoutMode {
-    return if (isTablet) {
-        if (isFullscreen) {
-            LiveRoomLayoutMode.LandscapeOverlay
-        } else if (isLandscape) {
-            LiveRoomLayoutMode.LandscapeSplit
-        } else if (isPortraitLive) {
-            LiveRoomLayoutMode.PortraitVerticalOverlay
-        } else {
-            LiveRoomLayoutMode.PortraitPanel
-        }
-    } else {
-        if (isLandscape || isFullscreen) {
-            LiveRoomLayoutMode.LandscapeOverlay
-        } else if (isPortraitLive) {
-            LiveRoomLayoutMode.PortraitVerticalOverlay
-        } else {
-            LiveRoomLayoutMode.PortraitPanel
-        }
+    // Hinge panes provide the interaction area even when the window is portrait or compact.
+    if (hasObstructingHinge) {
+        return if (isFullscreen) LiveRoomLayoutMode.LandscapeOverlay else LiveRoomLayoutMode.LandscapeSplit
+    }
+    return when {
+        isFullscreen && isPortraitLive && !isLandscape -> LiveRoomLayoutMode.PortraitVerticalOverlay
+        isFullscreen -> LiveRoomLayoutMode.LandscapeOverlay
+        isLandscape -> LiveRoomLayoutMode.LandscapeSplit
+        isPortraitLive -> LiveRoomLayoutMode.PortraitVerticalOverlay
+        else -> LiveRoomLayoutMode.PortraitPanel
     }
 }
 
-fun shouldShowLiveChatToggle(
-    layoutMode: LiveRoomLayoutMode
-): Boolean {
-    // LandscapeSplit keeps the desktop-style right chat column always on.
-    return layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay ||
-        layoutMode == LiveRoomLayoutMode.LandscapeOverlay
-}
-
-fun defaultLiveInteractionPanelVisible(): Boolean = false
-
-fun shouldShowLiveSplitChatPanel(
-    layoutMode: LiveRoomLayoutMode,
-    isInteractionPanelVisible: Boolean
-): Boolean {
-    @Suppress("UNUSED_PARAMETER")
-    val ignored = isInteractionPanelVisible
-    return layoutMode == LiveRoomLayoutMode.LandscapeSplit
-}
-
-/** PiliPlus desktop: video ~56–70% width, remaining chat column capped at 400dp. */
+/** 横向窗口保留右侧互动区，视频占比随窗口宽高变化，互动区最多 400dp。 */
 internal const val LIVE_SPLIT_CHAT_MAX_WIDTH_DP = 400
-internal const val LIVE_SPLIT_CHAT_MIN_WIDTH_DP = 280
 internal const val LIVE_SPLIT_VIDEO_MIN_FRACTION = 0.56f
 internal const val LIVE_SPLIT_VIDEO_MAX_FRACTION = 0.70f
-internal const val LIVE_SPLIT_VIDEO_PREFERRED_FRACTION = 0.62f
 
 internal fun resolveLiveSplitChatPanelWidthDp(
     screenWidthDp: Int,
-    contentPaddingDp: Int = 24,
+    contentPaddingDp: Int = 0,
+    screenHeightDp: Int = 600,
 ): Int {
     val available = (screenWidthDp - contentPaddingDp).coerceAtLeast(1)
-    val preferredVideo = (available * LIVE_SPLIT_VIDEO_PREFERRED_FRACTION).roundToInt()
-        .coerceIn(
-            (available * LIVE_SPLIT_VIDEO_MIN_FRACTION).roundToInt(),
-            (available * LIVE_SPLIT_VIDEO_MAX_FRACTION).roundToInt(),
-        )
-    val remaining = (available - preferredVideo).coerceAtLeast(0)
-    return remaining.coerceAtMost(LIVE_SPLIT_CHAT_MAX_WIDTH_DP)
-        .coerceAtLeast(minOf(LIVE_SPLIT_CHAT_MIN_WIDTH_DP, remaining))
-}
-
-fun shouldShowLiveLandscapeChatOverlay(
-    layoutMode: LiveRoomLayoutMode,
-    isInteractionPanelVisible: Boolean
-): Boolean {
-    return layoutMode == LiveRoomLayoutMode.LandscapeOverlay && isInteractionPanelVisible
-}
-
-fun shouldReserveLivePortraitInteractionPanel(
-    layoutMode: LiveRoomLayoutMode,
-    isInteractionPanelVisible: Boolean
-): Boolean {
-    return layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay && isInteractionPanelVisible
+    val videoFraction = (screenHeightDp.toFloat() / available * 1.08f)
+        .coerceIn(LIVE_SPLIT_VIDEO_MIN_FRACTION, LIVE_SPLIT_VIDEO_MAX_FRACTION)
+    return (available * (1f - videoFraction)).roundToInt().coerceAtMost(LIVE_SPLIT_CHAT_MAX_WIDTH_DP)
 }
 
 fun shouldApplyLiveTopControlSystemInsets(
     layoutMode: LiveRoomLayoutMode,
     isFullscreen: Boolean
 ): Boolean {
-    return isFullscreen ||
-        layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay ||
-        layoutMode == LiveRoomLayoutMode.LandscapeOverlay
+    return isFullscreen
 }
 
 fun shouldApplyLiveBottomControlSystemInsets(
@@ -173,109 +123,14 @@ fun shouldApplyLiveBottomControlSystemInsets(
     isFullscreen: Boolean,
     hasReservedBottomOverlay: Boolean
 ): Boolean {
-    if (hasReservedBottomOverlay) return false
-    return isFullscreen ||
-        layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay ||
-        layoutMode == LiveRoomLayoutMode.LandscapeOverlay
+    return isFullscreen
 }
 
 fun shouldShowLivePlayerControlsTopBar(
     layoutMode: LiveRoomLayoutMode,
     isFullscreen: Boolean
 ): Boolean {
-    if (isFullscreen) return true
-    return layoutMode == LiveRoomLayoutMode.LandscapeOverlay
-}
-
-fun resolveLivePortraitOverlayMetrics(
-    screenHeightDp: Int
-): LivePortraitOverlayMetrics {
-    val compactHeight = screenHeightDp < 720
-    return LivePortraitOverlayMetrics(
-        panelHeightFraction = if (compactHeight) 0.24f else 0.26f,
-        minPanelHeightDp = if (compactHeight) 144 else 180,
-        minPlayerClearanceDp = if (compactHeight) 380 else 460,
-        playerControlsGapDp = 10,
-        topChromeReserveDp = if (compactHeight) 86 else 96,
-        playerControlsReserveDp = if (compactHeight) 68 else 74
-    )
-}
-
-fun resolveLivePortraitOverlayPanelHeightDp(
-    screenHeightDp: Int,
-    metrics: LivePortraitOverlayMetrics
-): Int {
-    val maxPanelHeight = (screenHeightDp - metrics.minPlayerClearanceDp)
-        .coerceAtLeast(0)
-    val lowerBound = metrics.minPanelHeightDp.coerceAtMost(maxPanelHeight)
-    val preferredHeight = (screenHeightDp * metrics.panelHeightFraction).roundToInt()
-    return preferredHeight.coerceIn(lowerBound, maxPanelHeight)
-}
-
-fun resolveLiveOverlayContentInsets(
-    layoutMode: LiveRoomLayoutMode,
-    portraitPanelHeightDp: Int,
-    portraitMetrics: LivePortraitOverlayMetrics,
-    isInteractionPanelVisible: Boolean
-): LiveOverlayContentInsets {
-    if (layoutMode != LiveRoomLayoutMode.PortraitVerticalOverlay) {
-        return LiveOverlayContentInsets(topDp = 0, bottomDp = 0)
-    }
-    val interactionPanelReserveDp = if (isInteractionPanelVisible) {
-        portraitPanelHeightDp
-    } else {
-        0
-    }
-    return LiveOverlayContentInsets(
-        topDp = portraitMetrics.topChromeReserveDp,
-        bottomDp = interactionPanelReserveDp +
-            portraitMetrics.playerControlsGapDp +
-            portraitMetrics.playerControlsReserveDp
-    )
-}
-
-fun resolveLiveLandscapeChatOverlayMetrics(
-    screenWidthDp: Int,
-    screenHeightDp: Int
-): LiveLandscapeChatOverlayMetrics {
-    val compactHeight = screenHeightDp < 420
-    val compactWidth = screenWidthDp < 700
-    return LiveLandscapeChatOverlayMetrics(
-        widthFraction = if (compactWidth) 0.42f else 0.34f,
-        heightFraction = if (compactHeight) 0.46f else 0.54f,
-        minWidthDp = if (compactWidth) 220 else 260,
-        maxWidthDp = 360,
-        minHeightDp = if (compactHeight) 132 else 180,
-        edgePaddingDp = 16,
-        topControlReserveDp = if (compactHeight) 76 else 86,
-        bottomControlReserveDp = if (compactHeight) 92 else 98
-    )
-}
-
-fun resolveLiveLandscapeChatOverlayWidthDp(
-    screenWidthDp: Int,
-    metrics: LiveLandscapeChatOverlayMetrics
-): Int {
-    val maxAvailableWidth = (screenWidthDp - metrics.edgePaddingDp * 2)
-        .coerceAtLeast(0)
-    val upperBound = minOf(metrics.maxWidthDp, maxAvailableWidth)
-    val lowerBound = metrics.minWidthDp.coerceAtMost(upperBound)
-    val preferredWidth = (maxAvailableWidth * metrics.widthFraction).roundToInt()
-    return preferredWidth.coerceIn(lowerBound, upperBound)
-}
-
-fun resolveLiveLandscapeChatOverlayHeightDp(
-    screenHeightDp: Int,
-    metrics: LiveLandscapeChatOverlayMetrics
-): Int {
-    val maxAvailableHeight = (
-        screenHeightDp -
-            metrics.topControlReserveDp -
-            metrics.bottomControlReserveDp
-        ).coerceAtLeast(0)
-    val lowerBound = metrics.minHeightDp.coerceAtMost(maxAvailableHeight)
-    val preferredHeight = (screenHeightDp * metrics.heightFraction).roundToInt()
-    return preferredHeight.coerceIn(lowerBound, maxAvailableHeight)
+    return true
 }
 
 fun formatLiveDuration(
@@ -297,10 +152,13 @@ fun formatLiveDuration(
 }
 
 fun formatLiveViewerCount(count: Int): String {
-    return when {
-        count >= 100_000_000 -> "%.1f亿".format(count / 100_000_000f)
-        count >= 10_000 -> "%.1f万".format(count / 10_000f)
-        count > 0 -> count.toString()
-        else -> "-"
-    }
+    // 0 表示人数未知/未开播，与真实零值区分，保留 "-" 占位。
+    if (count <= 0) return "-"
+    return FormatUtils.formatStat(count.toLong())
+}
+
+/** 未就绪的尺寸不覆盖详情方向；像素宽高比参与实际画面方向判断。 */
+internal fun resolveLiveVideoIsPortrait(width: Int, height: Int, pixelRatio: Float = 1f): Boolean? {
+    if (width <= 0 || height <= 0 || !pixelRatio.isFinite() || pixelRatio <= 0f) return null
+    return width * pixelRatio < height
 }

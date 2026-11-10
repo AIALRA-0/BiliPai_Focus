@@ -2,7 +2,13 @@ package com.android.purebilibili.core.util
 
 import android.content.Context
 import coil3.SingletonImageLoader
+import coil3.ImageLoader
 import coil3.request.ImageRequest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * 首页封面「返回预热」注册表。
@@ -11,15 +17,25 @@ import coil3.request.ImageRequest
  * 返回落位瞬间首页 live 恢复，封面若需重新解码（网络/磁盘）会出现
  * 「冻结帧有图 → live 占位 → 图加载完成」的闪变窗口。
  *
- * 方案：首页 [VideoCard] 每次组合（即可见）时上报 (bvid, url, cacheKey)，
- * 返回时用与 AsyncImage 完全相同的 url + memoryCacheKey/diskCacheKey 做 prefetch，
- * 落位时命中缓存零等待。
+ * 卡片进入可见工作范围或封面请求变化时上报身份与解码尺寸；
+ * 返回时优先预热源卡，使用与列表相同的请求身份与尺寸。
  */
 internal data class HomeCoverReturnPrefetchEntry(
     val bvid: String,
     val url: String,
     val cacheKey: String,
+    val decodeWidthPx: Int = 0,
+    val decodeHeightPx: Int = 0,
 )
+
+internal const val HOME_COVER_RETURN_PREFETCH_MAX_BYTES = 16L * 1024 * 1024
+
+/** 按 ARGB 上限估算；未测量的封面不得触发原图预热。 */
+internal fun HomeCoverReturnPrefetchEntry.estimatedDecodeBytes(): Long? {
+    if (decodeWidthPx <= 0 || decodeHeightPx <= 0) return null
+    val pixels = decodeWidthPx.toLong() * decodeHeightPx
+    return if (pixels > Long.MAX_VALUE / 4L) null else pixels * 4L
+}
 
 internal object HomeCoverReturnPrefetchRegistry {
 
@@ -32,20 +48,18 @@ internal object HomeCoverReturnPrefetchRegistry {
     /** 首页卡片可见时上报。幂等：同 cacheKey 重复上报只刷新顺序，不产生重复项。 */
     fun onCardVisible(entry: HomeCoverReturnPrefetchEntry) {
         if (entry.url.isBlank() || entry.cacheKey.isBlank()) return
-        // 最新可见的排最前：返回预热候选按注册顺序截断时优先保留最近看到的卡片。
-        val rebuilt = LinkedHashMap<String, HomeCoverReturnPrefetchEntry>(entries.size + 1)
-        rebuilt[entry.cacheKey] = entry
-        for ((key, value) in entries) {
-            if (key != entry.cacheKey) rebuilt[key] = value
-        }
-        entries.clear()
-        entries.putAll(rebuilt)
+        if (entry.estimatedDecodeBytes() == null) return
+        // Maintain oldest-first order in O(1); reverse only when a return requests a snapshot.
+        entries.remove(entry.cacheKey)
+        entries[entry.cacheKey] = entry
         while (entries.size > MAX_REGISTERED_ENTRIES) {
-            entries.remove(entries.keys.last())
+            val oldest = entries.entries.iterator()
+            oldest.next()
+            oldest.remove()
         }
     }
 
-    fun snapshot(): List<HomeCoverReturnPrefetchEntry> = entries.values.toList()
+    fun snapshot(): List<HomeCoverReturnPrefetchEntry> = entries.values.toList().asReversed()
 
     internal fun clearForTest() {
         entries.clear()
@@ -53,48 +67,81 @@ internal object HomeCoverReturnPrefetchRegistry {
 }
 
 /**
- * 返回预热候选决策：源卡封面优先，其余按最近可见序，去重并按 [maxCount] 截断。
+ * 返回预热候选决策：源卡优先，其余按最近可见序，按数量和解码字节预算截断。
  * 纯函数，便于单测锁定。
  */
 internal fun resolveHomeCoverReturnPrefetchCandidates(
     visibleEntries: List<HomeCoverReturnPrefetchEntry>,
     sourceBvid: String?,
     maxCount: Int = 24,
+    maxDecodeBytes: Long = HOME_COVER_RETURN_PREFETCH_MAX_BYTES,
 ): List<HomeCoverReturnPrefetchEntry> {
-    if (maxCount <= 0) return emptyList()
+    if (maxCount <= 0 || maxDecodeBytes <= 0L) return emptyList()
     val normalizedSourceBvid = sourceBvid?.trim()?.takeIf { it.isNotEmpty() }
     val result = LinkedHashMap<String, HomeCoverReturnPrefetchEntry>()
-    val sourceEntry = visibleEntries.firstOrNull { it.bvid == normalizedSourceBvid }
+    var remainingBytes = maxDecodeBytes
+    fun addWithinBudget(entry: HomeCoverReturnPrefetchEntry) {
+        if (entry.url.isBlank() || entry.cacheKey.isBlank() || result.containsKey(entry.cacheKey)) return
+        val bytes = entry.estimatedDecodeBytes() ?: return
+        if (bytes > remainingBytes) return
+        result[entry.cacheKey] = entry
+        remainingBytes -= bytes
+    }
+    val sourceEntry = visibleEntries.firstOrNull {
+        it.bvid == normalizedSourceBvid && it.url.isNotBlank() && it.cacheKey.isNotBlank() &&
+            it.estimatedDecodeBytes()?.let { bytes -> bytes <= maxDecodeBytes } == true
+    }
     if (sourceEntry != null) {
-        result[sourceEntry.cacheKey] = sourceEntry
+        addWithinBudget(sourceEntry)
     }
     for (entry in visibleEntries) {
         if (entry.url.isBlank() || entry.cacheKey.isBlank()) continue
         if (result.size >= maxCount) break
-        if (result.containsKey(entry.cacheKey)) continue
-        result[entry.cacheKey] = entry
+        addWithinBudget(entry)
     }
     return result.values.toList()
 }
 
 /**
- * 执行封面预热：与首页 [coil3.compose.AsyncImage] 完全一致的 data + memoryCacheKey +
- * diskCacheKey，保证命中同一缓存条目。Coil 对相同 key 的并发请求会合并，
- * 重复触发幂等；内存/磁盘命中时不会产生网络请求。
+ * Caller owns cancellation. Limit outstanding decodes instead of enqueueing all covers in the
+ * input callback; sized cards retain their exact decode size and cache identity.
  */
-internal fun prefetchHomeCoverImages(
+internal suspend fun prefetchHomeCoverImages(
     context: Context,
     entries: List<HomeCoverReturnPrefetchEntry>,
+    imageLoader: ImageLoader? = null,
 ) {
     if (entries.isEmpty()) return
-    val imageLoader = SingletonImageLoader.get(context)
-    entries.forEach { entry ->
-        imageLoader.enqueue(
-            ImageRequest.Builder(context)
+    val loader = imageLoader ?: SingletonImageLoader.get(context)
+    // 入口再次校验，避免直接调用绕过尺寸和批次预算。
+    val boundedEntries = resolveHomeCoverReturnPrefetchCandidates(entries, sourceBvid = null)
+    prefetchHomeCoversWithBudget(boundedEntries) { entry ->
+        loader.execute(
+            ImageRequest.Builder(context.applicationContext)
                 .data(entry.url)
+                .size(entry.decodeWidthPx, entry.decodeHeightPx)
+                .homeCoverDecodePolicy()
                 .memoryCacheKey(entry.cacheKey)
                 .diskCacheKey(entry.cacheKey)
                 .build()
         )
+    }
+}
+
+internal const val HOME_COVER_RETURN_PREFETCH_PARALLELISM = 2
+
+internal suspend fun prefetchHomeCoversWithBudget(
+    entries: List<HomeCoverReturnPrefetchEntry>,
+    load: suspend (HomeCoverReturnPrefetchEntry) -> Unit,
+) {
+    val permits = Semaphore(HOME_COVER_RETURN_PREFETCH_PARALLELISM)
+    coroutineScope {
+        entries.map { entry ->
+            async {
+                permits.withPermit {
+                    load(entry)
+                }
+            }
+        }.awaitAll()
     }
 }

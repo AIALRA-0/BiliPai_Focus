@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation3
 
+import com.android.purebilibili.feature.settings.SettingsRootCategory
 import com.android.purebilibili.navigation.ScreenRoutes
 import java.io.File
 import kotlin.test.Test
@@ -8,6 +9,26 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BiliPaiNavBackStackPolicyTest {
+
+    @Test
+    fun animationOpenedFromAppearance_returnsToAppearance() {
+        val appearanceStack = listOf(
+            BiliPaiNavKey.MainHost,
+            BiliPaiNavKey.Settings,
+            BiliPaiNavKey.AppearanceSettings,
+        )
+        val animationStack = pushBiliPaiNavKey(appearanceStack, BiliPaiNavKey.AnimationSettings)
+        assertEquals(appearanceStack, popBiliPaiNavKey(animationStack))
+    }
+
+    @Test
+    fun animationOpenedFromSearch_returnsToSearch() {
+        val searchStack = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.SettingsSearch)
+        assertEquals(
+            searchStack,
+            popBiliPaiNavKey(pushBiliPaiNavKey(searchStack, BiliPaiNavKey.AnimationSettings)),
+        )
+    }
 
     @Test
     fun initialBackStack_usesOnboardingWhenRequired() {
@@ -167,6 +188,55 @@ class BiliPaiNavBackStackPolicyTest {
     @Test
     fun popToRoot_handlesEmptyStack() {
         assertEquals(emptyList(), popBiliPaiNavKeyToRoot(emptyList()))
+    }
+
+    @Test
+    fun settingsSearch_reopeningPlaybackQualityReturnsToExistingPage() {
+        val quality = BiliPaiNavKey.SettingsCategory(SettingsRootCategory.PLAYBACK_QUALITY)
+        val original = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Settings, quality)
+        val searchStack = pushBiliPaiNavKey(original, BiliPaiNavKey.SettingsSearch)
+
+        val result = pushOrReplaceSettingsCategoryNavKey(searchStack, quality)
+
+        assertEquals(original, result)
+        assertEquals(1, result.count { it == quality })
+        assertEquals(listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Settings), popBiliPaiNavKey(result))
+    }
+
+    @Test
+    fun settingsCategory_reusesBuriedPageBeforeAnyReplaceOrAppendBranch() {
+        val quality = BiliPaiNavKey.SettingsCategory(SettingsRootCategory.PLAYBACK_QUALITY)
+        val original = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Settings, quality)
+        val tails = listOf(
+            listOf(BiliPaiNavKey.SettingsSearch, BiliPaiNavKey.SettingsCategory(SettingsRootCategory.SYSTEM_ABOUT)),
+            listOf(BiliPaiNavKey.AppearanceSettings),
+            listOf(BiliPaiNavKey.VideoDetail("BV1", openId = 1L)),
+        )
+
+        tails.forEach { tail ->
+            val result = pushOrReplaceSettingsCategoryNavKey(original + tail, quality)
+            assertEquals(original, result, "Reopening from $tail should return to the existing category")
+            assertEquals(result.size, result.distinct().size)
+        }
+    }
+
+    @Test
+    fun settingsCategory_alreadyOnTopDoesNotAddOrRemovePages() {
+        val quality = BiliPaiNavKey.SettingsCategory(SettingsRootCategory.PLAYBACK_QUALITY)
+        val original = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Settings, quality)
+
+        assertEquals(original, pushOrReplaceSettingsCategoryNavKey(original, quality))
+    }
+
+    @Test
+    fun settingsSearch_openingNewCategoryPreservesReturnToSearch() {
+        val searchStack = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Settings, BiliPaiNavKey.SettingsSearch)
+        val quality = BiliPaiNavKey.SettingsCategory(SettingsRootCategory.PLAYBACK_QUALITY)
+
+        val result = pushOrReplaceSettingsCategoryNavKey(searchStack, quality)
+
+        assertEquals(searchStack + quality, result)
+        assertEquals(searchStack, popBiliPaiNavKey(result))
     }
 
     @Test

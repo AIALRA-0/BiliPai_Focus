@@ -8,6 +8,11 @@ import com.android.purebilibili.data.model.response.VideoNoteInfoData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class VideoNotePublicNotePage(
+    val notes: List<PublicVideoNoteItem>,
+    val total: Int
+)
+
 data class VideoNoteSnapshot(
     val forbidNoteEntrance: Boolean,
     val privateNote: VideoNoteInfoData?,
@@ -104,6 +109,17 @@ object VideoNoteRepository {
             }
         }
     }
+
+    suspend fun getPublicVideoNotePage(aid: Long, page: Int): Result<VideoNotePublicNotePage> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val data = api.getPublicVideoNoteList(oid = aid, pageNumber = page).data
+                VideoNotePublicNotePage(
+                    notes = data?.list.orEmpty(),
+                    total = data?.page?.total ?: data?.list.orEmpty().size
+                )
+            }
+        }
 
     suspend fun getPublicNoteInfo(cvid: Long): Result<PublicVideoNoteInfoData> = withContext(Dispatchers.IO) {
         runCatching {

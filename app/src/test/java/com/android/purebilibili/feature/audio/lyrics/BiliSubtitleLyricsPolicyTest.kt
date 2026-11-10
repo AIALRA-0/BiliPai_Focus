@@ -59,7 +59,6 @@ class BiliSubtitleLyricsPolicyTest {
         assertNotNull(document)
         assertEquals(LyricSource.BILIBILI, document.source)
         assertEquals("ai_subtitle", document.metadata["source_type"])
-        assertEquals("AI 字幕", document.metadata["label"])
     }
 
     @Test
@@ -129,15 +128,88 @@ class BiliSubtitleLyricsPolicyTest {
     }
 
     @Test
-    fun `resolveSourceLabel formats correctly`() {
-        assertEquals("网易云音乐", BiliSubtitleLyricsPolicy.resolveSourceLabel(LyricDocument(source = LyricSource.NETEASE)))
-        assertEquals("QQ音乐", BiliSubtitleLyricsPolicy.resolveSourceLabel(LyricDocument(source = LyricSource.QQ_MUSIC)))
-        assertEquals("酷狗音乐", BiliSubtitleLyricsPolicy.resolveSourceLabel(LyricDocument(source = LyricSource.KUGOU)))
+    fun `resolveSourceLabel preserves subtitle metadata labels`() {
+        val label = "custom-subtitle-track"
+        val document = LyricDocument(
+            source = LyricSource.BILIBILI,
+            metadata = mapOf("label" to label)
+        )
+
+        assertEquals(label, BiliSubtitleLyricsPolicy.resolveSourceLabel(document))
+    }
+
+
+    @Test
+    fun `resolveEffectiveLyricsWithAlignment keeps music lyrics when timelines align`() {
+        val subtitle = buildDocument(LyricSource.BILIBILI, listOf(1000L, 9000L, 17000L))
+        val music = buildDocument(LyricSource.NETEASE, listOf(1100L, 9100L, 17100L))
+
+        val effective = BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(
+            musicLyrics = music,
+            subtitleLyrics = subtitle
+        )
+
+        assertEquals(LyricSource.NETEASE, effective?.source)
+    }
+
+    @Test
+    fun `resolveEffectiveLyricsWithAlignment falls back to subtitles when search lyrics drift`() {
+        val subtitle = buildDocument(LyricSource.BILIBILI, listOf(1000L, 9000L, 17000L))
+        // 串歌：搜索歌词时间轴整体错位数秒
+        val music = buildDocument(LyricSource.NETEASE, listOf(5200L, 13200L, 21200L))
+
+        val effective = BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(
+            musicLyrics = music,
+            subtitleLyrics = subtitle
+        )
+
+        assertEquals(LyricSource.BILIBILI, effective?.source)
+    }
+
+    @Test
+    fun `resolveEffectiveLyricsWithAlignment falls back when only one side exists`() {
+        val subtitle = buildDocument(LyricSource.BILIBILI, listOf(1000L))
+        val music = buildDocument(LyricSource.NETEASE, listOf(1000L))
+
         assertEquals(
-            "AI 字幕",
-            BiliSubtitleLyricsPolicy.resolveSourceLabel(
-                LyricDocument(source = LyricSource.BILIBILI, metadata = mapOf("label" to "AI 字幕"))
-            )
+            LyricSource.NETEASE,
+            BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(music, null)?.source
+        )
+        assertEquals(
+            LyricSource.BILIBILI,
+            BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(null, subtitle)?.source
+        )
+    }
+
+    @Test fun `identical timings cannot align unrelated spoken text to a song`() {
+        val music = buildDocument(LyricSource.NETEASE, listOf(1000L, 9000L, 17000L))
+            .let { it.copy(lines = it.lines.map { line -> line.copy(text = "夜空中的星") }) }
+        val subtitle = buildDocument(LyricSource.BILIBILI, listOf(1000L, 9000L, 17000L))
+            .let { it.copy(lines = it.lines.map { line -> line.copy(text = "今天介绍手机功能") }) }
+        assertEquals(subtitle, BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(music, subtitle))
+    }
+
+    @Test fun `manual lyrics retain their own timeline and offset`() {
+        val music = buildDocument(LyricSource.NETEASE, listOf(5000L, 13000L))
+            .copy(manuallySelected = true, offsetMs = -500L)
+        val subtitle = buildDocument(LyricSource.BILIBILI, listOf(1000L, 9000L))
+        assertEquals(music, BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(music, subtitle))
+        val local = music.copy(source = LyricSource.MANUAL, manuallySelected = false)
+        assertEquals(local, BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(local, subtitle))
+    }
+
+    @Test fun `one lyric line cannot validate multiple repeated subtitle cues`() {
+        val music = buildDocument(LyricSource.NETEASE, listOf(1000L))
+        val subtitle = buildDocument(LyricSource.BILIBILI, listOf(900L, 1000L, 1100L))
+        assertEquals(0.0, BiliSubtitleLyricsPolicy.scoreTimelineAlignment(subtitle, music))
+    }
+
+    private fun buildDocument(source: LyricSource, starts: List<Long>): LyricDocument {
+        return LyricDocument(
+            lines = starts.map { start ->
+                LyricLine(startTimeMs = start, endTimeMs = start + 2000L, text = "line")
+            },
+            source = source
         )
     }
 }

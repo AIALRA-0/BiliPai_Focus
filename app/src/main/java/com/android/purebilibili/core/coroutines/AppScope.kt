@@ -35,4 +35,7 @@ internal object AppScope {
     private val appJob = SupervisorJob()
 
     val ioScope: CoroutineScope = CoroutineScope(appJob + Dispatchers.IO)
+
+    /** 主线程应用级作用域：承载与界面生命周期无关的短时编排，如前台安定窗口计时。 */
+    val mainScope: CoroutineScope = CoroutineScope(appJob + Dispatchers.Main.immediate)
 }

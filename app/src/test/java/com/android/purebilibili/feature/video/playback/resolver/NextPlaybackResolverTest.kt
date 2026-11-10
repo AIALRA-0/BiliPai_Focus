@@ -34,6 +34,7 @@ class NextPlaybackResolverTest {
         assertEquals(
             PlayInOrderNextSource.PAGE_OR_SEASON,
             resolvePlayInOrderNextSource(
+                isExternalPlaylist = false,
                 hasNextPage = false,
                 hasNextSeasonEpisode = true,
                 hasNextPlaylistItem = true
@@ -46,6 +47,7 @@ class NextPlaybackResolverTest {
         assertEquals(
             PlayInOrderNextSource.PLAYLIST,
             resolvePlayInOrderNextSource(
+                isExternalPlaylist = false,
                 hasNextPage = false,
                 hasNextSeasonEpisode = false,
                 hasNextPlaylistItem = true
@@ -58,6 +60,7 @@ class NextPlaybackResolverTest {
         assertEquals(
             PlayInOrderNextSource.NONE,
             resolvePlayInOrderNextSource(
+                isExternalPlaylist = false,
                 hasNextPage = false,
                 hasNextSeasonEpisode = false,
                 hasNextPlaylistItem = false
@@ -70,6 +73,7 @@ class NextPlaybackResolverTest {
         assertEquals(
             PlayInOrderNextSource.PAGE_OR_SEASON,
             resolvePlayInOrderPreviousSource(
+                isExternalPlaylist = false,
                 hasPreviousPage = true,
                 hasPreviousSeasonEpisode = false,
                 hasPreviousPlaylistItem = true
@@ -82,6 +86,7 @@ class NextPlaybackResolverTest {
         assertEquals(
             PlayInOrderNextSource.PLAYLIST,
             resolvePlayInOrderPreviousSource(
+                isExternalPlaylist = false,
                 hasPreviousPage = false,
                 hasPreviousSeasonEpisode = false,
                 hasPreviousPlaylistItem = true
@@ -94,11 +99,72 @@ class NextPlaybackResolverTest {
         assertEquals(
             PlayInOrderNextSource.NONE,
             resolvePlayInOrderPreviousSource(
+                isExternalPlaylist = false,
                 hasPreviousPage = false,
                 hasPreviousSeasonEpisode = false,
                 hasPreviousPlaylistItem = false
             )
         )
+    }
+
+    @Test
+    fun `external order finishes parts but ignores season episodes`() {
+        listOf(true to false, false to true, true to true).forEach { (hasPage, hasSeason) ->
+            assertEquals(
+                if (hasPage) PlayInOrderNextSource.PAGE_OR_SEASON else PlayInOrderNextSource.PLAYLIST,
+                resolvePlayInOrderNextSource(
+                    isExternalPlaylist = true,
+                    hasNextPage = hasPage,
+                    hasNextSeasonEpisode = hasSeason,
+                    hasNextPlaylistItem = true
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `external order at queue end finishes parts then stops before season episodes`() {
+        listOf(true to false, false to true, true to true).forEach { (hasPage, hasSeason) ->
+            assertEquals(
+                if (hasPage) PlayInOrderNextSource.PAGE_OR_SEASON else PlayInOrderNextSource.NONE,
+                resolvePlayInOrderNextSource(
+                    isExternalPlaylist = true,
+                    hasNextPage = hasPage,
+                    hasNextSeasonEpisode = hasSeason,
+                    hasNextPlaylistItem = false
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `external previous finishes parts but ignores season episodes`() {
+        listOf(true to false, false to true, true to true).forEach { (hasPage, hasSeason) ->
+            assertEquals(
+                if (hasPage) PlayInOrderNextSource.PAGE_OR_SEASON else PlayInOrderNextSource.PLAYLIST,
+                resolvePlayInOrderPreviousSource(
+                    isExternalPlaylist = true,
+                    hasPreviousPage = hasPage,
+                    hasPreviousSeasonEpisode = hasSeason,
+                    hasPreviousPlaylistItem = true
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `external previous at queue start keeps remaining parts but never enters season`() {
+        listOf(true to false, false to true, true to true).forEach { (hasPage, hasSeason) ->
+            assertEquals(
+                if (hasPage) PlayInOrderNextSource.PAGE_OR_SEASON else PlayInOrderNextSource.NONE,
+                resolvePlayInOrderPreviousSource(
+                    isExternalPlaylist = true,
+                    hasPreviousPage = hasPage,
+                    hasPreviousSeasonEpisode = hasSeason,
+                    hasPreviousPlaylistItem = false
+                )
+            )
+        }
     }
 
     @Test
@@ -111,7 +177,8 @@ class NextPlaybackResolverTest {
             ),
             resolvePlaybackNavigationTargets(
                 strategy = AudioNextPlaybackStrategy.PAGE_THEN_SEASON_THEN_RELATED,
-                hasPageOrSeasonTarget = true,
+                hasPageTarget = false,
+                hasSeasonTarget = true,
                 hasPlaylistTarget = true
             )
         )
@@ -123,45 +190,45 @@ class NextPlaybackResolverTest {
             listOf(PlaybackNavigationTarget.DIRECT_QUEUE),
             resolvePlaybackNavigationTargets(
                 strategy = AudioNextPlaybackStrategy.PAGE_THEN_SEASON_THEN_RELATED,
-                hasPageOrSeasonTarget = false,
+                hasPageTarget = false,
+                hasSeasonTarget = false,
                 hasPlaylistTarget = false
             )
         )
     }
 
     @Test
-    fun `external playlist navigation should follow queue instead of page or season`() {
+    fun `external navigation completes parts without exposing a queue fallback`() {
         assertContentEquals(
-            listOf(
-                PlaybackNavigationTarget.PLAYLIST,
-                PlaybackNavigationTarget.DIRECT_QUEUE
-            ),
+            listOf(PlaybackNavigationTarget.PAGE_OR_SEASON),
             resolvePlaybackNavigationTargets(
                 strategy = AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST,
-                hasPageOrSeasonTarget = true,
+                hasPageTarget = true,
+                hasSeasonTarget = true,
                 hasPlaylistTarget = true
             )
         )
     }
 
     @Test
-    fun `external playlist navigation should use queue when no page season target exists`() {
+    fun `external navigation crosses queue boundary and ignores season without direct fallback`() {
         assertContentEquals(
             listOf(
-                PlaybackNavigationTarget.PLAYLIST,
-                PlaybackNavigationTarget.DIRECT_QUEUE
+                PlaybackNavigationTarget.PLAYLIST
             ),
             resolvePlaybackNavigationTargets(
                 strategy = AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST,
-                hasPageOrSeasonTarget = false,
+                hasPageTarget = false,
+                hasSeasonTarget = true,
                 hasPlaylistTarget = true
             )
         )
         assertContentEquals(
-            listOf(PlaybackNavigationTarget.DIRECT_QUEUE),
+            emptyList(),
             resolvePlaybackNavigationTargets(
                 strategy = AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST,
-                hasPageOrSeasonTarget = false,
+                hasPageTarget = false,
+                hasSeasonTarget = true,
                 hasPlaylistTarget = false
             )
         )

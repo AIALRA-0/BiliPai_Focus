@@ -3,8 +3,11 @@
 // no legacy backdrop / BottomBarGlassMaterialPreset / LiquidIndicator mix-ins.
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.animation.rememberLiquidIndicatorWobble
+import com.android.purebilibili.core.ui.animation.liquidWobbleScaleX
+import com.android.purebilibili.core.ui.animation.liquidWobbleScaleY
+
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.height
@@ -27,6 +30,8 @@ import androidx.compose.ui.graphics.shadow.Shadow
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.feature.home.HomeVisualPalette
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
@@ -51,7 +56,6 @@ import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
 import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.highlight.LightPosition
 import top.yukonga.miuix.kmp.blur.highlight.LightSource
-import top.yukonga.miuix.kmp.blur.sensor.rememberDeviceTilt
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
@@ -104,8 +108,9 @@ internal fun rememberBiliPaiGravityHighlight(
     base: Highlight = iosIndicatorSpecular,
     extraDegrees: Float = 0f,
     width: Dp = base.width,
+    active: Boolean,
 ): State<Highlight> {
-    val tiltState = rememberDeviceTilt()
+    val tiltState = rememberSharedGlassGravity(active)
     val quantizedDirection = remember(tiltState) {
         derivedStateOf {
             quantizeGravityHighlightDirection(
@@ -160,9 +165,22 @@ internal fun Modifier.biliPaiFloatingDockShell(
     drawLens: Boolean = true,
     lensIntensity: Float = 1f,
     liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
+    interactionLayerBlock: (GraphicsLayerScope.() -> Unit)? = null,
+    interactionState: com.android.purebilibili.core.ui.components.AppElasticPressState? = null,
+    tint: Color = Color.Unspecified,
+    darkTheme: Boolean? = null,
+    // Opt-in for surfaces following an already animated theme palette. Keep the
+    // native/default dock's existing black/white material unchanged.
+    readabilitySurfaceColor: Color = Color.Unspecified,
 ): Modifier {
-    val isDark = isSystemInDarkTheme()
+    val isDark = darkTheme ?: com.android.purebilibili.core.ui.isAppInDarkTheme()
     val density = LocalDensity.current
+    // 玻璃专属：嵌套外壳采样最近的材质层，原生磨砂路径继续使用调用方的背景。
+    val parentGlass = com.android.purebilibili.core.ui.blur.LocalAppGlassContainer.current
+        .takeIf { enabled && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled }
+    val samplingBackdrop = (if (parentGlass != null) parentGlass.backdrop else backdrop)?.let {
+        com.android.purebilibili.core.ui.blur.rememberContinuousBackdrop(it)
+    }
     val shapeBlock = remember(shape) { { shape } }
     val baseModifier = this
         .graphicsLayer { translationX = panelOffsetPx }
@@ -175,20 +193,28 @@ internal fun Modifier.biliPaiFloatingDockShell(
             ),
         )
 
-    if (enabled && backdrop != null) {
-        val baseHighlight = rememberBiliPaiGravityHighlight(extraDegrees = -45f)
+    if (enabled && samplingBackdrop != null) {
+        val gravityGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
         val surfaceColor = containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
-        val readabilityScrimColor = if (isDark) HomeVisualPalette.GlassDark else HomeVisualPalette.GlassLight
+        val readabilityScrimColor = if (readabilitySurfaceColor != Color.Unspecified) {
+            readabilitySurfaceColor
+        } else if (isDark) Color.Black else Color.White
         val resolvedLensIntensity = lensIntensity.coerceIn(0f, 1f) *
             liquidGlassTuning.contentDistortionScale.coerceIn(0f, 1.8f)
-        val shouldDrawLens = drawLens && resolvedLensIntensity > 0.001f
+        val shouldDrawLens = parentGlass == null && drawLens && resolvedLensIntensity > 0.001f
+        val baseHighlight = rememberBiliPaiGravityHighlight(
+            extraDegrees = -45f,
+            active = shouldDrawLens && gravityGate.active,
+        )
         val refractionHeightDp = liquidGlassTuning.refractionHeight * resolvedLensIntensity
         val refractionAmountDp = liquidGlassTuning.refractionAmount * resolvedLensIntensity
         val effectPaddingDp = resolveFloatingDockEffectPaddingDp(
             refractionAmountDp = refractionAmountDp,
             pressBloomDp = MIUIX_UPSTREAM_DOCK_PRESS_BLOOM_DP,
         )
-        val blurRadiusPx = with(density) { liquidGlassTuning.backdropBlurRadius.dp.toPx() }
+        val blurRadiusPx = with(density) {
+            if (parentGlass == null) liquidGlassTuning.backdropBlurRadius.dp.toPx() else 0f
+        }
         val refractionHeightPx = with(density) { refractionHeightDp.dp.toPx() }
         val refractionAmountPx = with(density) { refractionAmountDp.dp.toPx() }
         val effectPaddingPx = with(density) { effectPaddingDp.dp.toPx() }
@@ -200,7 +226,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
         val scrimAlpha = liquidGlassTuning.contentReadabilityScrimAlpha
         val effects = rememberFloatingDockBackdropEffects(
             blurRadiusPx = blurRadiusPx,
-            saturation = liquidGlassTuning.saturation,
+            saturation = if (parentGlass == null) liquidGlassTuning.saturation else 1f,
             shouldDrawLens = shouldDrawLens,
             refractionHeightPx = refractionHeightPx,
             refractionAmountPx = refractionAmountPx,
@@ -213,33 +239,40 @@ internal fun Modifier.biliPaiFloatingDockShell(
             }
             block
         }
-        val layerBlock = remember(pressProgress) {
+        val inheritDeformation = parentGlass?.ownsDeformation == true
+        val layerBlock = remember(pressProgress, inheritDeformation) {
             val block: GraphicsLayerScope.() -> Unit = {
                 val width = size.width.coerceAtLeast(1f)
-                val s = lerp(1f, 1f + FloatingDockChromeSpec.PressScaleTravel.toPx() / width, pressProgress)
+                val s = if (inheritDeformation) 1f else lerp(1f, 1f + 16.dp.toPx() / width, pressProgress)
                 scaleX = s
                 scaleY = s
             }
             block
         }
-        val onDrawSurface = remember(surfaceColor, readabilityScrimColor, scrimAlpha) {
+        val onDrawSurface = remember(surfaceColor, readabilityScrimColor, scrimAlpha, interactionState, tint) {
             val block: DrawScope.() -> Unit = {
+                if (tint != Color.Unspecified) {
+                    drawRect(tint, blendMode = androidx.compose.ui.graphics.BlendMode.Hue)
+                    drawRect(tint.copy(alpha = 0.75f))
+                }
                 drawRect(surfaceColor)
                 if (scrimAlpha > 0f) {
                     drawRect(readabilityScrimColor.copy(alpha = scrimAlpha))
                 }
+                interactionState?.drawHighlight(this)
             }
             block
         }
         return baseModifier
+            .then(gravityGate.modifier)
             .drawBackdrop(
-                backdrop = backdrop,
+                backdrop = samplingBackdrop,
                 shape = shapeBlock,
                 effects = effects,
                 // Inline capsules (search/input) disable the shell lens and its rim highlight
                 // together; keeping the highlight alone leaves a one-pixel "shrimp line".
                 highlight = highlightBlock,
-                layerBlock = layerBlock,
+                layerBlock = interactionLayerBlock ?: layerBlock,
                 onDrawSurface = onDrawSurface,
             )
     }
@@ -258,8 +291,8 @@ internal fun Modifier.biliPaiFloatingDockShell(
                     forceLowBudget = forceLowBlurBudget,
                 )
                 .background(blurSurfaceColor, shape)
-        } else if (backdrop != null) {
-            val blurRadiusPx = with(density) { FloatingDockChromeSpec.ShellBlurRadius.toPx() }
+        } else if (samplingBackdrop != null) {
+            val blurRadiusPx = with(density) { 25.dp.toPx() }
             val blurSurfaceColor = containerColor.copy(alpha = 0.65f)
             val onDrawBlurSurface = remember(blurSurfaceColor) {
                 val block: DrawScope.() -> Unit = {
@@ -268,7 +301,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
                 block
             }
             return baseModifier.drawBackdrop(
-                backdrop = backdrop,
+                backdrop = samplingBackdrop,
                 shape = shapeBlock,
                 effects = {
                     blur(blurRadiusPx, blurRadiusPx)
@@ -294,7 +327,7 @@ internal fun Modifier.biliPaiFloatingDockCaptureSurface(
     shape: Shape = CircleShape,
     liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
 ): Modifier {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.android.purebilibili.core.ui.isAppInDarkTheme()
     val density = LocalDensity.current
     val surfaceColor = containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
     val readabilityScrimColor = if (isDark) HomeVisualPalette.GlassDark else HomeVisualPalette.GlassLight
@@ -359,6 +392,12 @@ private fun rememberFloatingDockBackdropEffects(
         if (effectPaddingPx > 0f) {
             padding = maxOf(padding, effectPaddingPx)
         }
+        // 折射可能扩大采样范围；在模糊之前确定最终边距，避免效果链二次求值。
+        if (shouldDrawLens && top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() &&
+            refractionHeightPx > 0f && refractionAmountPx > 0f
+        ) {
+            padding = maxOf(padding, refractionAmountPx)
+        }
         vibrancy(saturation)
         blur(blurRadiusPx, blurRadiusPx)
         if (shouldDrawLens) {
@@ -368,6 +407,98 @@ private fun rememberFloatingDockBackdropEffects(
                 chromaticAberration = chromaticAberration,
             )
         }
+    }
+}
+
+/** One optical recipe for the home indicator and every compact/vertical reuse. */
+internal fun homeIndicatorOpticalScale(restHeightDp: Float): Float =
+    (restHeightDp / com.android.purebilibili.core.ui.BottomBarReferenceIndicatorHeightDp).coerceIn(0f, 1f)
+
+internal fun BackdropEffectScope.homeIndicatorLens(
+    restHeightDp: Float,
+    progress: Float,
+    tuning: LiquidGlassTuning,
+    shellHeightDp: Float = restHeightDp * 64f / 56f,
+    indicatorScaleY: Float = 1f,
+    shellScaleY: Float = 1f,
+    chromaticBandHorizontal: Boolean = false,
+) {
+    val gapBandDp = resolveFloatingDockChromaticGapBand(
+        indicatorHeight = restHeightDp,
+        shellHeight = shellHeightDp,
+        indicatorScaleY = indicatorScaleY,
+        shellScaleY = shellScaleY,
+    )
+    val reach = homeIndicatorOpticalScale(restHeightDp) * progress.coerceIn(0f, 1f)
+    lens(
+        refractionHeight = 10.dp.toPx() * reach * tuning.indicatorLensBoost * tuning.contentDistortionScale,
+        refractionAmount = 14.dp.toPx() * reach * tuning.indicatorEdgeWarpBoost * tuning.contentDistortionScale,
+        depthEffect = true,
+        chromaticAberration = resolveLiquidGlassIndicatorChromaticAberration(tuning),
+        chromaticEdgeBand = gapBandDp.dp.toPx(),
+        chromaticBandHorizontal = chromaticBandHorizontal,
+    )
+}
+
+internal fun DrawScope.drawHomeIndicatorSurface(
+    progress: Float,
+    darkTheme: Boolean,
+    idleColor: Color? = null,
+) {
+    val pressed = progress.coerceIn(0f, 1f)
+    drawRect(
+        color = idleColor ?: if (darkTheme) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.1f),
+        alpha = 1f - pressed,
+    )
+    drawRect(Color.Black.copy(alpha = 0.03f * pressed))
+}
+
+/** 横纵 dock 共用同一透镜、色散、表面与阴影。形变和光学遮罩在绘制时读取相同的实时尺寸。 */
+@Composable
+internal fun Modifier.floatingDockIndicatorOptics(
+    backdrop: Backdrop,
+    shape: Shape,
+    width: Dp,
+    height: Dp,
+    shellExtent: Dp,
+    tuning: LiquidGlassTuning,
+    darkTheme: Boolean,
+    progressProvider: () -> Float,
+    scaleXProvider: () -> Float,
+    scaleYProvider: () -> Float,
+    highlightProvider: () -> Highlight?,
+    vertical: Boolean = false,
+    shellScaleProvider: () -> Float = { 1f },
+    idleColor: Color? = null,
+): Modifier {
+    val thickness = if (vertical) width.value else height.value
+    return drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            homeIndicatorLens(
+                restHeightDp = thickness,
+                progress = progressProvider(),
+                tuning = tuning,
+                shellHeightDp = shellExtent.value,
+                indicatorScaleY = if (vertical) scaleXProvider() else scaleYProvider(),
+                shellScaleY = shellScaleProvider(),
+                chromaticBandHorizontal = vertical,
+            )
+        },
+        highlight = { highlightProvider() },
+        layerBlock = {
+            this.scaleX = scaleXProvider()
+            this.scaleY = scaleYProvider()
+        },
+        onDrawSurface = { drawHomeIndicatorSurface(progressProvider(), darkTheme, idleColor) },
+    ).innerShadow(shape = shape) {
+        InnerShadow(
+            offset = androidx.compose.ui.unit.DpOffset.Zero,
+            radius = 8.dp * homeIndicatorOpticalScale(thickness) * progressProvider(),
+            color = Color.Black.copy(alpha = 0.15f),
+            alpha = progressProvider(),
+        )
     }
 }
 
@@ -382,6 +513,7 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
     panelOffsetPx: Float,
     width: Dp,
     height: Dp,
+    dockHeight: Dp = height * 64f / 56f,
     combinedBackdrop: Backdrop?,
     pressProgress: Float,
     scaleX: Float,
@@ -391,18 +523,51 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
     shape: Shape = CircleShape,
     alignment: Alignment = Alignment.CenterStart,
     liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
+    highlightEnabled: Boolean = true,
+    wobbleEnabled: Boolean = false,
+    wobblePosition: Float = 0f,
+    wobbleSelection: Int? = null,
+    wobbleLastIndex: Int = -1,
+    wobbleEdgeInset: Dp = 4.dp,
+    wobbleCanSettle: Boolean = true,
+    wobbleInteracting: Boolean = false,
+    wobbleSelectionMotionActive: Boolean? = null,
 ) {
     if (!visible) return
-    val pillHighlight = rememberBiliPaiGravityHighlight(extraDegrees = 90f)
+    val canRecoil = wobbleCanSettle
+    val wobble = rememberLiquidIndicatorWobble(
+        enabled = wobbleEnabled,
+        geometryKey = wobbleLastIndex,
+        canSettle = { canRecoil },
+        selectionKey = { wobbleSelection },
+        interactionActive = { wobbleInteracting },
+        selectionMotionActive = { wobbleSelectionMotionActive },
+    ) { wobblePosition }
+    val recoilStretch: () -> Float = {
+        com.android.purebilibili.core.ui.animation.resolveLiquidIndicatorRecoilStretch(
+            wobble.value, !wobbleInteracting && canRecoil,
+        )
+    }
+    val recoilDirection = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
+    val gravityGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val pillHighlight = rememberBiliPaiGravityHighlight(
+        extraDegrees = 90f,
+        active = highlightEnabled && combinedBackdrop != null && pressProgress > 0.001f && gravityGate.active,
+    )
     Box(
         modifier = Modifier
             .align(alignment)
             .graphicsLayer {
-                translationX = translationXPx + panelOffsetPx
+                translationX = translationXPx + panelOffsetPx +
+                    com.android.purebilibili.core.ui.animation.liquidWobbleEdgeTranslationPx(
+                        recoilStretch(), wobblePosition, wobbleLastIndex, size.width,
+                        wobbleEdgeInset.toPx(), baseScale = scaleX,
+                    ) * recoilDirection
             }
             .width(width)
             .height(height)
             .zIndex(2f)
+            .then(gravityGate.modifier)
             .then(
                 if (combinedBackdrop != null) {
                     Modifier
@@ -411,44 +576,36 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
                             shape = { shape },
                             effects = {
                                 val progress = pressProgress
-                                lens(
-                                    refractionHeight = FloatingDockChromeSpec.IndicatorRefractionHeight.toPx() * progress *
-                                        liquidGlassTuning.indicatorLensBoost *
-                                        liquidGlassTuning.contentDistortionScale,
-                                    refractionAmount = FloatingDockChromeSpec.IndicatorRefractionAmount.toPx() * progress *
-                                        liquidGlassTuning.indicatorEdgeWarpBoost *
-                                        liquidGlassTuning.contentDistortionScale,
-                                    depthEffect = true,
-                                    chromaticAberration =
-                                        resolveLiquidGlassIndicatorChromaticAberration(
-                                            liquidGlassTuning
-                                        ),
+                                homeIndicatorLens(
+                                    restHeightDp = height.value,
+                                    progress = progress,
+                                    tuning = liquidGlassTuning,
+                                    shellHeightDp = dockHeight.value,
+                                    // Match the exact layer transform used below, including
+                                    // velocity compression, so the rim follows the visible pill.
+                                    indicatorScaleY = liquidWobbleScaleY(
+                                        resolveFloatingDockIndicatorLayerScaleY(scaleY, velocity), recoilStretch(),
+                                    ),
                                 )
                             },
-                            highlight = { pillHighlight.value.copy(alpha = pressProgress) },
+                            highlight = { if (highlightEnabled) pillHighlight.value.copy(alpha = pressProgress) else null },
                             layerBlock = {
-                                this.scaleX = scaleX
-                                this.scaleY = scaleY
-                                val v = velocity / 10f
-                                this.scaleX /= 1f - (abs(v) * 0.75f).fastCoerceIn(0f, 0.2f)
+                                this.scaleX = liquidWobbleScaleX(
+                                    com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion.scaleX(scaleX, velocity), recoilStretch(),
+                                )
+                                this.scaleY = liquidWobbleScaleY(
+                                    com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion.scaleY(scaleY, velocity), recoilStretch(),
+                                )
                             },
                             onDrawSurface = {
-                                val progress = pressProgress
-                                drawRect(
-                                    color = if (!isDark) {
-                                        HomeVisualPalette.GlassDark.copy(alpha = 0.1f)
-                                    } else {
-                                        HomeVisualPalette.GlassLight.copy(alpha = 0.1f)
-                                    },
-                                    alpha = 1f - progress,
-                                )
-                                drawRect(HomeVisualPalette.GlassDark.copy(alpha = 0.03f * progress))
+                                drawHomeIndicatorSurface(pressProgress, isDark)
                             },
                         )
                         .innerShadow(shape = shape) {
                             InnerShadow(
-                                radius = FloatingDockChromeSpec.PressInnerShadowRadius * pressProgress,
-                                color = HomeVisualPalette.GlassDark.copy(alpha = 0.15f),
+                                offset = androidx.compose.ui.unit.DpOffset.Zero,
+                                radius = 8.dp * homeIndicatorOpticalScale(height.value) * pressProgress,
+                                color = Color.Black.copy(alpha = 0.15f),
                                 alpha = pressProgress,
                             )
                         }
@@ -459,6 +616,12 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
                         AppSurfaceTokens.surfaceContainerHighest()
                     }
                     Modifier
+                        .then(
+                            if (wobble.enabled) Modifier.graphicsLayer {
+                                this.scaleX = liquidWobbleScaleX(1f, recoilStretch())
+                                this.scaleY = liquidWobbleScaleY(1f, recoilStretch())
+                            } else Modifier
+                        )
                         .then(
                             if (!isDark) {
                                 Modifier.dropShadow(

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -35,9 +37,19 @@ internal fun HorizontalVideoStatRow(
     playIcon: ImageVector = Icons.Outlined.PlayCircleOutline,
     danmakuIcon: ImageVector = Icons.Outlined.Subtitles,
     modifier: Modifier = Modifier,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    contentColor: Color = AppContentColors.secondaryText(),
     textStyle: TextStyle = feedContentTypography().statistic,
+    singleLine: Boolean = false,
 ) {
+    if (singleLine) {
+        Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_ROW_SPACING_DP.dp)) {
+            HorizontalVideoStatItem(playIcon, playText, Modifier.weight(1f), contentColor, textStyle, constrainText = true)
+            if (danmakuText.isNotBlank()) {
+                HorizontalVideoStatItem(danmakuIcon, danmakuText, Modifier.weight(1f), contentColor, textStyle, constrainText = true)
+            }
+        }
+        return
+    }
     FlowRow(
         modifier = modifier,
         itemVerticalAlignment = Alignment.CenterVertically,
@@ -66,8 +78,9 @@ internal fun HorizontalVideoStatItem(
     icon: ImageVector,
     text: String,
     modifier: Modifier = Modifier,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    contentColor: Color = AppContentColors.secondaryText(),
     textStyle: TextStyle = feedContentTypography().statistic,
+    constrainText: Boolean = false,
 ) {
     Row(
         modifier = modifier,
@@ -82,11 +95,12 @@ internal fun HorizontalVideoStatItem(
         )
         AppText(
             text = text,
+            modifier = if (constrainText) Modifier.weight(1f) else Modifier,
             style = textStyle,
             color = contentColor,
             maxLines = 1,
             softWrap = false,
-            overflow = TextOverflow.Clip,
+            overflow = if (constrainText) TextOverflow.Ellipsis else TextOverflow.Clip,
         )
     }
 }

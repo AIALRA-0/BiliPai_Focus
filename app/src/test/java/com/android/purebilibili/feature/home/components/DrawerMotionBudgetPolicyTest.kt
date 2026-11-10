@@ -21,8 +21,7 @@ class DrawerMotionBudgetPolicyTest {
 
     @Test
     fun blurStaysEnabledDuringDrawerTransition() {
-        // Motion budget only lowers blur quality; it must not delay enabling blur
-        // until the drawer settles (that looked like blur "kicking in late").
+        // 开合不能延后启用模糊，也不能切换采样网格。
         assertTrue(
             shouldEnableDrawerBlur(
                 blurActive = true,
@@ -44,8 +43,8 @@ class DrawerMotionBudgetPolicyTest {
     }
 
     @Test
-    fun drawerTransition_forcesLowBlurBudget() {
-        assertTrue(shouldForceLowDrawerBlurBudget(DrawerMotionBudget.REDUCED))
+    fun drawerTransition_keepsBlurAndRefractionBudgetStable() {
+        assertFalse(shouldForceLowDrawerBlurBudget(DrawerMotionBudget.REDUCED))
         assertFalse(shouldForceLowDrawerBlurBudget(DrawerMotionBudget.FULL))
     }
 }

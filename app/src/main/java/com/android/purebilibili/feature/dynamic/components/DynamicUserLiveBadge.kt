@@ -1,8 +1,12 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -18,7 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontWeight
-import com.android.purebilibili.core.ui.motion.AppMotionTokens
+import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.feature.dynamic.resolveDynamicUserLiveBadgeLabel
 import kotlin.math.PI
@@ -28,17 +32,17 @@ import kotlin.math.sin
 fun DynamicUserLiveBadge(
     modifier: Modifier = Modifier
 ) {
-    val color = MaterialTheme.colorScheme.primary
+    val color = AppContentColors.accent()
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(DynamicUserLiveBadgeVisualSpec.HorizontalSpacing),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DynamicLivePulseIndicator(color = color)
         AppText(
             text = resolveDynamicUserLiveBadgeLabel(),
             color = color,
-            fontSize = MaterialTheme.typography.labelSmall.fontSize,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             softWrap = false,
@@ -52,13 +56,14 @@ private fun DynamicLivePulseIndicator(
     modifier: Modifier = Modifier,
 ) {
     val reduceMotion = rememberSystemReduceMotion()
-    val progress = if (!reduceMotion) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val progress = if (!reduceMotion && animationGate.active) {
         val transition = rememberInfiniteTransition(label = "dynamicLivePulse")
         transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = AppMotionTokens.livePulseSpec<Float>(),
+                animation = tween(durationMillis = 1_200, easing = LinearEasing),
             ),
             label = "dynamicLivePulseProgress",
         )
@@ -66,12 +71,7 @@ private fun DynamicLivePulseIndicator(
         null
     }
 
-    Canvas(
-        modifier = modifier.size(
-            width = DynamicUserLiveBadgeVisualSpec.IndicatorWidth,
-            height = DynamicUserLiveBadgeVisualSpec.IndicatorHeight,
-        )
-    ) {
+    Canvas(modifier = modifier.size(width = 11.dp, height = 12.dp).then(animationGate.modifier)) {
         drawDynamicLivePulseBars(
             progress = progress?.value,
             color = color,

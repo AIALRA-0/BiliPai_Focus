@@ -165,35 +165,43 @@ fun AppPlatformNavigationRail(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val latestOnExpandedChange = rememberUpdatedState(onExpandedChange)
-    val state = if (expanded) {
-        rememberMiuixNavigationRailState(
+    if (expanded) {
+        // 可展开重载：state 非空（新版 miuix 将 state 参数改为非空并拆分出非展开重载）。
+        val state = rememberMiuixNavigationRailState(
             if (initiallyExpanded) {
                 MiuixNavigationRailValue.Expanded
             } else {
                 MiuixNavigationRailValue.Collapsed
             }
         )
-    } else {
-        null
-    }
-    LaunchedEffect(state) {
-        if (state != null) {
+        LaunchedEffect(state) {
             snapshotFlow { state.currentValue }
                 .drop(1)
                 .collect {
                     latestOnExpandedChange.value(it == MiuixNavigationRailValue.Expanded)
                 }
         }
+        MiuixNavigationRail(
+            modifier = modifier.focusGroup(),
+            state = state,
+            color = color,
+            showDivider = showDivider,
+            minWidth = minWidth,
+            expandedWidth = expandedWidth,
+            content = content,
+        )
+    } else {
+        // 经典收起布局：非展开重载（等价于旧版 state = null）。
+        MiuixNavigationRail(
+            modifier = modifier.focusGroup(),
+            expanded = false,
+            color = color,
+            showDivider = showDivider,
+            minWidth = minWidth,
+            expandedWidth = expandedWidth,
+            content = content,
+        )
     }
-    MiuixNavigationRail(
-        modifier = modifier.focusGroup(),
-        state = state,
-        color = color,
-        showDivider = showDivider,
-        minWidth = minWidth,
-        expandedWidth = expandedWidth,
-        content = content,
-    )
 }
 
 @Composable

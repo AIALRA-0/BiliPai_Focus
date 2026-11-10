@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.anime4k
 
-import kotlinx.serialization.Serializable
+import com.android.purebilibili.plugin.sdk.Anime4KConfig
+import com.android.purebilibili.plugin.sdk.Anime4KPreset
+import com.android.purebilibili.plugin.sdk.DEFAULT_FSR_SHARPNESS
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -9,30 +11,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** 画质增强的用户可持久化配置。插件总开关由 PluginManager 单独管理。 */
-@Serializable
-data class Anime4KConfig(
-    val algorithm: VideoEnhancementAlgorithm = VideoEnhancementAlgorithm.ANIME4K,
-    val preset: Anime4KPreset = Anime4KPreset.FAST,
-    /** 面向用户的 0～1 锐化强度，内部会转换为 RCAS 的反向 stop 参数。 */
-    val fsrSharpness: Float = DEFAULT_FSR_SHARPNESS,
-    val rememberAcrossVideos: Boolean = false,
-    val rememberedEnabled: Boolean = false
-)
-
-@Serializable
-enum class VideoEnhancementAlgorithm {
-    ANIME4K,
-    FSR_1_0
-}
-
-@Serializable
-enum class Anime4KPreset {
-    FAST,
-    QUALITY
-}
-
-const val DEFAULT_FSR_SHARPNESS: Float = 0.9f
 /** 0 到 1 之间保留 9 个离散点，使锐化滑条每档变化 0.1。 */
 const val FSR_SHARPNESS_SLIDER_STEPS: Int = 9
 const val FSR_MAX_SOURCE_TO_OUTPUT_SCALE: Float = 1.2f

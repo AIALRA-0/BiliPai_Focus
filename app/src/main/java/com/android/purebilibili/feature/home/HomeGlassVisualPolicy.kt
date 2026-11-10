@@ -31,10 +31,20 @@ internal fun resolveGlobalHomeWallpaperRoute(
     return normalized
 }
 
-/**
- * App 根层全局壁纸：GLOBAL 时只为私信聊天页绘制。
- * 首页由 [HomeScreen] 自绘；其它页面保持不接入壁纸。
- */
+// Explicit opt-in keeps players, web content and destinations with their own artwork opaque.
+private val GLOBAL_WALLPAPER_PAGE_ROUTES = setOf(
+    "home", "dynamic", "profile", "settings", "settings_category", "settings_search",
+    "appearance_settings", "home_settings", "icon_settings", "animation_settings",
+    "playback_settings", "permission_settings", "space_privacy_settings", "login_activity_settings", "message_notification_settings",
+    "plugins_settings", "bottom_bar_settings", "settings_share", "webdav_backup", "tips_settings",
+    "history", "history_search", "favorite", "favorite_subscribed", "favorite_search",
+    "liked_videos", "watch_later", "watch_later_search", "following", "download_list",
+    "live_list", "live_search", "live_area", "live_area_detail", "live_following",
+    "inbox", "message", "chat", "partition", "search", "search_trending", "topic",
+    "bangumi", "weekly_series", "season_series_detail",
+)
+
+/** Whether a destination uses the shared wallpaper rather than its own media background. */
 internal fun shouldRenderGlobalHomeWallpaperBackdrop(
     effectScope: HomeWallpaperEffectScope,
     currentRoute: String?,
@@ -45,7 +55,10 @@ internal fun shouldRenderGlobalHomeWallpaperBackdrop(
         currentRoute = currentRoute,
         mainHostTabRoute = mainHostTabRoute,
     )
-    return route?.isChatWallpaperRoute() == true
+    if (route.isNullOrBlank()) return false
+    // bangumi/play is a player even though bangumi itself is a catalog page.
+    if (route == "bangumi/play" || route.startsWith("bangumi/play/")) return false
+    return route.substringBefore('/') in GLOBAL_WALLPAPER_PAGE_ROUTES
 }
 
 /**
@@ -83,9 +96,18 @@ private fun normalizeHomeWallpaperRoute(route: String?): String? {
     return route?.trim()?.takeIf { it.isNotBlank() }?.substringBefore("?")
 }
 
-private fun String.isChatWallpaperRoute(): Boolean =
-    this == HOME_WALLPAPER_CHAT_ROUTE_BASE ||
-        startsWith("$HOME_WALLPAPER_CHAT_ROUTE_BASE/")
+/** Dynamic home/chat already own a media renderer; the root must not start another player. */
+internal fun shouldRenderRootHomeWallpaperMedia(
+    wallpaperVisible: Boolean,
+    isStaticWallpaper: Boolean,
+    currentRoute: String?,
+    mainHostTabRoute: String? = null,
+): Boolean {
+    if (!wallpaperVisible) return false
+    if (isStaticWallpaper) return true
+    val route = resolveGlobalHomeWallpaperRoute(currentRoute, mainHostTabRoute)?.substringBefore('/')
+    return route != HOME_WALLPAPER_HOME_ROUTE_BASE && route != HOME_WALLPAPER_CHAT_ROUTE_BASE
+}
 
 data class HomeGlassChromeStyle(
     val containerAlpha: Float,
@@ -155,6 +177,7 @@ internal enum class HomeCardWallpaperSurfaceMode {
  */
 internal fun resolveHomeCardWallpaperSurfaceMode(
     dynamicTintEnabled: Boolean,
+    frostedGlassEnabled: Boolean,
     wallpaperVisible: Boolean,
     wallpaperIsStatic: Boolean,
     backdropReady: Boolean,
@@ -163,11 +186,12 @@ internal fun resolveHomeCardWallpaperSurfaceMode(
     lowBlurBudgetForced: Boolean,
     sdkInt: Int,
 ): HomeCardWallpaperSurfaceMode {
-    if (!dynamicTintEnabled || !wallpaperVisible) {
+    if (!wallpaperVisible) {
         return HomeCardWallpaperSurfaceMode.STANDARD
     }
     if (
-        wallpaperIsStatic &&
+        frostedGlassEnabled &&
+            wallpaperIsStatic &&
             backdropReady &&
             blurEnabled &&
             !isDataSaverActive &&
@@ -176,7 +200,11 @@ internal fun resolveHomeCardWallpaperSurfaceMode(
     ) {
         return HomeCardWallpaperSurfaceMode.REALTIME_FROSTED
     }
-    return HomeCardWallpaperSurfaceMode.LIGHTWEIGHT_TINT
+    return if (dynamicTintEnabled) {
+        HomeCardWallpaperSurfaceMode.LIGHTWEIGHT_TINT
+    } else {
+        HomeCardWallpaperSurfaceMode.STANDARD
+    }
 }
 
 internal fun resolveHomeGlassChromeStyle(

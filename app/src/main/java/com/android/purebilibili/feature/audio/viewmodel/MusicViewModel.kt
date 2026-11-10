@@ -21,10 +21,15 @@ import com.android.purebilibili.feature.audio.player.MusicPlaybackSource
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import java.io.File
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -34,6 +39,7 @@ internal data class MusicUiState(
     val songInfo: SongInfoData? = null,
     val lyrics: String? = null,
     val lyricsDocument: LyricDocument? = null,
+    val lyricsOwnerKey: String? = null,
     val lyricsError: String? = null,
     val lyricCandidates: List<LyricCandidate> = emptyList(),
     val isLyricsSearching: Boolean = false,
@@ -57,6 +63,14 @@ internal class MusicViewModel : ViewModel() {
     private var lyricsRepository: LyricsRepository? = null
     private var observedPlayer: ExoPlayer? = null
     private var progressJob: Job? = null
+    private val pageActive = MutableStateFlow(false)
+
+    /** UI sampling only; the MiniPlayerManager continues owning audio playback. */
+    fun setPageActive(active: Boolean) {
+        pageActive.value = active
+        if (active) updateProgress()
+    }
+
     private var lyricsJob: Job? = null
     private var lyricsOffsetSaveJob: Job? = null
     private var lastLyricsCacheKey: String? = null
@@ -66,6 +80,11 @@ internal class MusicViewModel : ViewModel() {
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _uiState.update { it.copy(isPlaying = isPlaying) }
+            if (pageActive.value) updateProgress()
+        }
+
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            if (pageActive.value) updateProgress()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -107,13 +126,13 @@ internal class MusicViewModel : ViewModel() {
             }
 
             val infoResponse = AudioRepository.getSongInfo(sid)
-            if (infoResponse.code != 0 || infoResponse.data == null) {
+            val songInfo = infoResponse.data
+            if (infoResponse.code != 0 || songInfo == null) {
                 _uiState.update {
                     it.copy(isLoading = false, error = "加载歌曲信息失败: ${infoResponse.msg}")
                 }
                 return@launch
             }
-            val songInfo = infoResponse.data
             val streamResponse = AudioRepository.getSongStream(sid)
             val streamUrl = streamResponse.data?.cdns?.firstOrNull()
             if (streamResponse.code != 0 || streamUrl.isNullOrBlank()) {
@@ -192,16 +211,25 @@ internal class MusicViewModel : ViewModel() {
         artist: String,
         bvid: String,
         cid: Long,
-        durationMs: Long
+        durationMs: Long,
+        originalTitle: String = title,
+        artistIsUploader: Boolean = true,
     ) {
+        val cacheKey = MusicPlaybackSource.VideoAudio(bvid, cid, title).stableId
+        val query = LyricQuery(title, artist, durationMs, originalTitle, artistIsUploader)
+        if (lastLyricsCacheKey == cacheKey && _uiState.value.lyricsDocument?.manuallySelected == true) {
+            lastLyricsQuery = query
+            return
+        }
         lyricsJob?.cancel()
+        lyricsOffsetSaveJob?.cancel()
         lyricsJob = viewModelScope.launch {
             _uiState.update {
-                it.copy(lyricsDocument = null, lyricsError = null, isLyricsSearching = true)
+                it.copy(lyricsDocument = null, lyricsOwnerKey = cacheKey, lyricsError = null, lyricCandidates = emptyList(), isLyricsSearching = true)
             }
             loadLyrics(
-                cacheKey = MusicPlaybackSource.VideoAudio(bvid, cid, title).stableId,
-                query = LyricQuery(title, artist, durationMs),
+                cacheKey = cacheKey,
+                query = query,
                 bilibiliLyrics = null
             )
         }
@@ -211,12 +239,12 @@ internal class MusicViewModel : ViewModel() {
         val cacheKey = lastLyricsCacheKey ?: return
         val query = lastLyricsQuery ?: return
         lyricsJob?.cancel()
+        lyricsOffsetSaveJob?.cancel()
         lyricsJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(lyricsDocument = null, lyricCandidates = emptyList(), isLyricsSearching = true)
             }
             loadLyrics(cacheKey, query, lastBilibiliLyrics, forceRefresh = true)
-            _uiState.update { it.copy(isLyricsSearching = false) }
         }
     }
 
@@ -225,9 +253,12 @@ internal class MusicViewModel : ViewModel() {
         val previousQuery = lastLyricsQuery ?: return
         val repository = lyricsRepository ?: return
         lyricsJob?.cancel()
+        lyricsOffsetSaveJob?.cancel()
         lyricsJob = viewModelScope.launch {
             _uiState.update { it.copy(isLyricsSearching = true, lyricCandidates = emptyList()) }
             val candidates = repository.search(previousQuery.copy(title = title.ifBlank { previousQuery.title }))
+            currentCoroutineContext().ensureActive()
+            if (lastLyricsCacheKey != cacheKey) return@launch
             lastLyricsCacheKey = cacheKey
             _uiState.update { it.copy(isLyricsSearching = false, lyricCandidates = candidates) }
         }
@@ -238,9 +269,13 @@ internal class MusicViewModel : ViewModel() {
         val candidate = _uiState.value.lyricCandidates.getOrNull(index) ?: return
         val repository = lyricsRepository ?: return
         lyricsJob?.cancel()
+        lyricsOffsetSaveJob?.cancel()
         lyricsJob = viewModelScope.launch {
             _uiState.update { it.copy(isLyricsSearching = true) }
-            when (val result = repository.select(cacheKey, candidate)) {
+            val result = repository.select(cacheKey, candidate)
+            currentCoroutineContext().ensureActive()
+            if (lastLyricsCacheKey != cacheKey) return@launch
+            when (result) {
                 is LyricsLoadResult.Found -> _uiState.update {
                     it.copy(
                         lyricsDocument = result.document,
@@ -264,11 +299,15 @@ internal class MusicViewModel : ViewModel() {
         forceRefresh: Boolean = false
     ) {
         val repository = lyricsRepository ?: return
-        _uiState.update { it.copy(isLyricsSearching = true, lyricsError = null) }
+        currentCoroutineContext().ensureActive()
+        _uiState.update { it.copy(isLyricsSearching = true, lyricsError = null, lyricsOwnerKey = cacheKey) }
         lastLyricsCacheKey = cacheKey
         lastLyricsQuery = query
         lastBilibiliLyrics = bilibiliLyrics
-        when (val result = repository.load(cacheKey, query, bilibiliLyrics, forceRefresh)) {
+        val result = repository.load(cacheKey, query, bilibiliLyrics, forceRefresh)
+        currentCoroutineContext().ensureActive()
+        if (lastLyricsCacheKey != cacheKey) return
+        when (result) {
             is LyricsLoadResult.Found -> {
                 val document = result.document
                 _uiState.update {
@@ -296,10 +335,15 @@ internal class MusicViewModel : ViewModel() {
         player.addListener(playerListener)
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
-            while (isActive) {
-                updateProgress()
-                delay(250L)
-            }
+            combine(pageActive, uiState) { visible, state -> visible && state.isPlaying }
+                .distinctUntilChanged()
+                .collectLatest { active ->
+                    if (!active) return@collectLatest
+                    while (isActive) {
+                        updateProgress()
+                        delay(250L)
+                    }
+                }
         }
     }
 

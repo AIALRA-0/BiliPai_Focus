@@ -209,6 +209,41 @@ class BiliSubtitlePolicyTest {
     }
 
     @Test
+    fun resolveDefaultSubtitleLanguages_keepsAiChineseAheadOfOtherLanguages() {
+        val tracks = listOf(
+            SubtitleTrackMeta(lan = "en-US", lanDoc = "英语", subtitleUrl = "https://a"),
+            SubtitleTrackMeta(
+                lan = "ai-zh",
+                lanDoc = "中文（自动生成）",
+                subtitleUrl = "https://b",
+                aiStatus = 1
+            )
+        )
+
+        val selection = resolveDefaultSubtitleLanguages(tracks)
+
+        // AI 中文也算中文字幕，优先于其它语言
+        assertEquals("ai-zh", selection.primaryLanguage)
+    }
+
+    @Test
+    fun resolveDefaultSubtitleLanguages_prefersOfficialChineseOverAiChinese() {
+        val tracks = listOf(
+            SubtitleTrackMeta(
+                lan = "ai-zh",
+                lanDoc = "中文（自动生成）",
+                subtitleUrl = "https://a",
+                aiStatus = 1
+            ),
+            SubtitleTrackMeta(lan = "zh-CN", lanDoc = "中文（中国）", subtitleUrl = "https://b")
+        )
+
+        val selection = resolveDefaultSubtitleLanguages(tracks)
+
+        assertEquals("zh-CN", selection.primaryLanguage)
+    }
+
+    @Test
     fun mapPlayerInfoSubtitleTracks_keepsAllTrustedLanguages() {
         val tracks = mapPlayerInfoSubtitleTracks(
             listOf(
@@ -469,7 +504,9 @@ class BiliSubtitlePolicyTest {
             hasSecondaryTrack = true,
             primaryTrackLikelyAi = false,
             secondaryTrackLikelyAi = false,
-            isMuted = false
+            isMuted = false,
+            primaryTrackLanguage = "zh-Hans",
+            secondaryTrackLanguage = "en-US"
         )
 
         assertEquals(SubtitleDisplayMode.OFF, mode)
@@ -483,7 +520,9 @@ class BiliSubtitlePolicyTest {
             hasSecondaryTrack = true,
             primaryTrackLikelyAi = false,
             secondaryTrackLikelyAi = true,
-            isMuted = false
+            isMuted = false,
+            primaryTrackLanguage = "zh-Hans",
+            secondaryTrackLanguage = "en-US"
         )
 
         assertEquals(SubtitleDisplayMode.BILINGUAL, mode)
@@ -497,7 +536,9 @@ class BiliSubtitlePolicyTest {
             hasSecondaryTrack = false,
             primaryTrackLikelyAi = true,
             secondaryTrackLikelyAi = false,
-            isMuted = false
+            isMuted = false,
+            primaryTrackLanguage = "zh-Hans",
+            secondaryTrackLanguage = "en-US"
         )
 
         assertEquals(SubtitleDisplayMode.OFF, mode)
@@ -511,7 +552,9 @@ class BiliSubtitlePolicyTest {
             hasSecondaryTrack = false,
             primaryTrackLikelyAi = false,
             secondaryTrackLikelyAi = false,
-            isMuted = false
+            isMuted = false,
+            primaryTrackLanguage = "zh-Hans",
+            secondaryTrackLanguage = "en-US"
         )
 
         assertEquals(SubtitleDisplayMode.PRIMARY_ONLY, mode)
@@ -525,7 +568,9 @@ class BiliSubtitlePolicyTest {
             hasSecondaryTrack = false,
             primaryTrackLikelyAi = true,
             secondaryTrackLikelyAi = false,
-            isMuted = false
+            isMuted = false,
+            primaryTrackLanguage = "zh-Hans",
+            secondaryTrackLanguage = "en-US"
         )
         val muted = resolveSubtitleDisplayModeByAutoPreference(
             preference = SubtitleAutoPreference.AUTO,
@@ -533,11 +578,78 @@ class BiliSubtitlePolicyTest {
             hasSecondaryTrack = false,
             primaryTrackLikelyAi = true,
             secondaryTrackLikelyAi = false,
-            isMuted = true
+            isMuted = true,
+            primaryTrackLanguage = "zh-Hans",
+            secondaryTrackLanguage = "en-US"
         )
 
         assertEquals(SubtitleDisplayMode.OFF, unmuted)
         assertEquals(SubtitleDisplayMode.PRIMARY_ONLY, muted)
+    }
+
+    @Test
+    fun resolveSubtitleDisplayModeByAutoPreference_chineseOnlyKeepsChinesePrimaryTrack() {
+        val mode = resolveSubtitleDisplayModeByAutoPreference(
+            preference = SubtitleAutoPreference.CHINESE_ONLY,
+            hasPrimaryTrack = true,
+            hasSecondaryTrack = true,
+            primaryTrackLikelyAi = false,
+            secondaryTrackLikelyAi = false,
+            isMuted = false,
+            primaryTrackLanguage = "zh-Hans",
+            secondaryTrackLanguage = "en-US"
+        )
+
+        // 只显示中文，不因为存在英文副轨就叠加双语
+        assertEquals(SubtitleDisplayMode.PRIMARY_ONLY, mode)
+    }
+
+    @Test
+    fun resolveSubtitleDisplayModeByAutoPreference_chineseOnlyAcceptsAiChineseTrack() {
+        val mode = resolveSubtitleDisplayModeByAutoPreference(
+            preference = SubtitleAutoPreference.CHINESE_ONLY,
+            hasPrimaryTrack = true,
+            hasSecondaryTrack = false,
+            primaryTrackLikelyAi = true,
+            secondaryTrackLikelyAi = false,
+            isMuted = false,
+            primaryTrackLanguage = "ai-zh",
+            secondaryTrackLanguage = null
+        )
+
+        assertEquals(SubtitleDisplayMode.PRIMARY_ONLY, mode)
+    }
+
+    @Test
+    fun resolveSubtitleDisplayModeByAutoPreference_chineseOnlyDisablesWhenNoChineseTrack() {
+        val mode = resolveSubtitleDisplayModeByAutoPreference(
+            preference = SubtitleAutoPreference.CHINESE_ONLY,
+            hasPrimaryTrack = true,
+            hasSecondaryTrack = true,
+            primaryTrackLikelyAi = false,
+            secondaryTrackLikelyAi = false,
+            isMuted = false,
+            primaryTrackLanguage = "en-US",
+            secondaryTrackLanguage = "ja-JP"
+        )
+
+        assertEquals(SubtitleDisplayMode.OFF, mode)
+    }
+
+    @Test
+    fun resolveSubtitleDisplayModeByAutoPreference_chineseOnlyFallsBackToChineseSecondaryTrack() {
+        val mode = resolveSubtitleDisplayModeByAutoPreference(
+            preference = SubtitleAutoPreference.CHINESE_ONLY,
+            hasPrimaryTrack = true,
+            hasSecondaryTrack = true,
+            primaryTrackLikelyAi = false,
+            secondaryTrackLikelyAi = false,
+            isMuted = false,
+            primaryTrackLanguage = "en-US",
+            secondaryTrackLanguage = "zh-Hans"
+        )
+
+        assertEquals(SubtitleDisplayMode.SECONDARY_ONLY, mode)
     }
 
     @Test

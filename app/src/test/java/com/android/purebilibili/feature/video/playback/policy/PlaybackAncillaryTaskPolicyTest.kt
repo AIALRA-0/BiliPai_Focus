@@ -8,6 +8,25 @@ import kotlin.test.assertTrue
 class PlaybackAncillaryTaskPolicyTest {
 
     @Test
+    fun `restored progress without playback does not create a history heartbeat`() {
+        val restored = PlaybackHeartbeatSnapshot(playedTimeSec = 600L, realPlayedTimeSec = 0L)
+        assertFalse(shouldFlushPlaybackHeartbeatSnapshot(
+            hasStartedPlayback = false,
+            currentBvid = "BV1",
+            currentCid = 1L,
+            snapshot = restored,
+            lastReportedSnapshot = null,
+        ))
+        assertTrue(shouldFlushPlaybackHeartbeatSnapshot(
+            hasStartedPlayback = true,
+            currentBvid = "BV1",
+            currentCid = 1L,
+            snapshot = restored.copy(realPlayedTimeSec = 1L),
+            lastReportedSnapshot = null,
+        ))
+    }
+
+    @Test
     fun `online count refresh should require foreground and enabled setting`() {
         assertTrue(
             shouldRefreshOnlineCount(
@@ -33,12 +52,6 @@ class PlaybackAncillaryTaskPolicyTest {
                 currentCid = 123L
             )
         )
-    }
-
-    @Test
-    fun `online count polling should back off harder in background`() {
-        assertEquals(30_000L, resolveOnlineCountPollingDelayMs(isInBackground = false))
-        assertEquals(90_000L, resolveOnlineCountPollingDelayMs(isInBackground = true))
     }
 
     @Test
@@ -152,6 +165,7 @@ class PlaybackAncillaryTaskPolicyTest {
         )
         assertTrue(
             shouldFlushPlaybackHeartbeatSnapshot(
+                hasStartedPlayback = true,
                 currentBvid = "BV1test",
                 currentCid = 456L,
                 snapshot = advancedSnapshot,
@@ -164,6 +178,7 @@ class PlaybackAncillaryTaskPolicyTest {
 
         assertFalse(
             shouldFlushPlaybackHeartbeatSnapshot(
+                hasStartedPlayback = true,
                 currentBvid = "BV1test",
                 currentCid = 456L,
                 snapshot = PlaybackHeartbeatSnapshot(
@@ -176,11 +191,25 @@ class PlaybackAncillaryTaskPolicyTest {
 
         assertFalse(
             shouldFlushPlaybackHeartbeatSnapshot(
+                hasStartedPlayback = true,
                 currentBvid = "BV1test",
                 currentCid = 456L,
                 snapshot = advancedSnapshot,
                 lastReportedSnapshot = advancedSnapshot
             )
         )
+    }
+
+    @Test
+    fun `backward seek including restart is flushed without extra watch time`() {
+        val previous = PlaybackHeartbeatSnapshot(playedTimeSec = 120L, realPlayedTimeSec = 30L)
+        listOf(60L, 0L).forEach { position ->
+            assertTrue(shouldFlushPlaybackHeartbeatSnapshot(
+                hasStartedPlayback = true,
+                currentBvid = "BV1test", currentCid = 456L,
+                snapshot = PlaybackHeartbeatSnapshot(position, 30L),
+                lastReportedSnapshot = previous,
+            ))
+        }
     }
 }

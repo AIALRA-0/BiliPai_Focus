@@ -12,6 +12,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AppSegmentedControlPolicyTest {
+    @Test
+    fun labelFontSizePreservesThemeScalingForCrowdedControls() {
+        val base = com.android.purebilibili.core.theme.BiliMiuixTypography.labelLarge.fontSize
+        val normal = com.android.purebilibili.core.ui.components.resolveAppSegmentedLabelFontSize(base, 5, 4)
+        val enlarged = com.android.purebilibili.core.ui.components.resolveAppSegmentedLabelFontSize(base * 1.3f, 5, 4)
+        assertEquals(normal.value * 1.3f, enlarged.value, 0.001f)
+    }
 
     @Test
     fun defaultSettingsIndicatorRenderPolicyMatchesCommentSortIndicator() {

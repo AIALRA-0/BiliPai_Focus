@@ -57,8 +57,10 @@ internal fun resolveSegmentedSwipeTargetIndex(
 internal fun resolveDefaultPlaybackQualityOptions(): List<AppSegmentOption<Int>> {
     return listOf(
         AppSegmentOption(126, "杜比视界"),
-        AppSegmentOption(125, "4K HDR"),
+        AppSegmentOption(125, "HDR"),
+        AppSegmentOption(120, "4K"),
         AppSegmentOption(116, "1080P60"),
+        AppSegmentOption(112, "1080P+"),
         AppSegmentOption(80, "1080P"),
         AppSegmentOption(64, "720P"),
         AppSegmentOption(32, "480P"),
@@ -66,22 +68,31 @@ internal fun resolveDefaultPlaybackQualityOptions(): List<AppSegmentOption<Int>>
     )
 }
 
-internal fun resolveDefaultAudioQualityOptions(): List<AppSegmentOption<Int>> {
-    return listOf(
+internal fun resolveDefaultAudioQualityOptions(
+    storedPreference: Int = DEFAULT_AUDIO_QUALITY_FOLLOW_LAST
+): List<AppSegmentOption<Int>> {
+    val options = listOf(
         AppSegmentOption(DEFAULT_AUDIO_QUALITY_FOLLOW_LAST, "跟随上次"),
         AppSegmentOption(30251, "Hi-Res 无损"),
         AppSegmentOption(30250, "杜比全景声"),
         AppSegmentOption(-1, "AAC")
     )
+    if (storedPreference <= 0 || options.any { it.value == storedPreference }) return options
+    val label = when (storedPreference) {
+        30216 -> "64K"
+        30232 -> "132K"
+        30280 -> "192K"
+        30255 -> "杜比全景声 · 30255"
+        else -> storedPreference.toString()
+    }
+    return options + AppSegmentOption(storedPreference, label)
 }
 
 internal fun normalizeDefaultAudioQualityOption(value: Int): Int {
-    return when (value) {
-        DEFAULT_AUDIO_QUALITY_FOLLOW_LAST,
-        -1,
-        30250,
-        30251 -> value
-        else -> -1
+    return if (value == DEFAULT_AUDIO_QUALITY_FOLLOW_LAST || value == -1 || value > 0) {
+        value
+    } else {
+        -1
     }
 }
 

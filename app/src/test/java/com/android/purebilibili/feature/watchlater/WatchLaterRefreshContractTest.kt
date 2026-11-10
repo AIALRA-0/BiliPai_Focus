@@ -75,13 +75,10 @@ class WatchLaterRefreshContractTest {
             .substringAfter("state.items.isEmpty() ->")
             .substringBefore("if (showBatchDeleteConfirm)")
 
-        assertTrue(listBranch.contains("resolveVideoListColumns("))
-        assertTrue(listBranch.contains("LazyVerticalGrid("))
-        assertTrue(listBranch.contains("columns = GridCells.Fixed(columns)"))
-        assertFalse(
-            listBranch.contains("GridCells.Adaptive"),
-            "稍后再看应按用户布局偏好选定列数，不依赖自适应网格导致卡片尺寸漂移"
-        )
+        assertTrue(listBranch.contains("val columns = pinchListColumns"))
+        assertTrue(listBranch.contains("AppLazyVerticalStaggeredGrid("))
+        assertTrue(listBranch.contains("columns = StaggeredGridCells.Fixed(columns)"))
+        assertFalse(listBranch.contains("StaggeredGridCells.Adaptive"))
         assertTrue(
             listBranch.contains("WatchLaterVideoCard("),
             "长条列表必须复用稍后再看专用卡片"

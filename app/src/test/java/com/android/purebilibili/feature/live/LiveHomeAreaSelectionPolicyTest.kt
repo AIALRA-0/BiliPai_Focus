@@ -7,6 +7,21 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class LiveHomeAreaSelectionPolicyTest {
+    @Test
+    fun categoryRefreshFollowsIdentityRatherThanPreviousPosition() {
+        val entries = listOf(
+            LiveFeedAreaEntry(title = "手游", areaId = 86, parentAreaId = 3),
+            LiveFeedAreaEntry(title = "网游", areaId = 10, parentAreaId = 2),
+        )
+        assertEquals(resolveLiveHomeSelectedIndexForArea(1),
+            resolveRefreshedLiveHomeAreaIndex(2, 2, 10, entries))
+        assertEquals(-1, resolveRefreshedLiveHomeAreaIndex(2, 2, 11, entries))
+        assertEquals(resolveLiveHomeSelectedIndexForArea(0),
+            resolveRefreshedLiveHomeAreaIndex(-1, 3, 86, entries))
+        assertEquals(LIVE_HOME_RECOMMEND_INDEX,
+            resolveRefreshedLiveHomeAreaIndex(LIVE_HOME_RECOMMEND_INDEX, 0, 0, entries))
+    }
+
 
     @Test
     fun areaListFallbackCreatesDocumentedParentAreaQueries() {

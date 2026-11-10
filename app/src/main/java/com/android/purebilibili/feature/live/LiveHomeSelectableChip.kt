@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -7,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
@@ -25,13 +28,23 @@ fun LiveHomeSelectableChip(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
+    if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+        com.android.purebilibili.core.ui.components.AppFilterChip(
+            selected = selected,
+            onClick = onClick,
+            modifier = modifier,
+            miuixNavigationColors = true,
+            label = { AppText(text = label) },
+        )
+        return
+    }
     val container = if (selected) {
-        AppSurfaceTokens.cardContainer()
+        MaterialTheme.colorScheme.secondaryContainer
     } else {
         Color.Transparent
     }
     val content = if (selected) {
-        MaterialTheme.colorScheme.onSurface
+        MaterialTheme.colorScheme.onSecondaryContainer
     } else {
         AppSurfaceTokens.onSurfaceVariantSummary()
     }
@@ -40,22 +53,26 @@ fun LiveHomeSelectableChip(
         modifier = modifier,
         color = container,
         contentColor = content,
-        shape = AppShapes.container(ContainerLevel.Pill),
+        // 原生 MD3 与同类 tonal 标签共用胶囊圆角；其他材质保留自身几何。
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(
+            if (com.android.purebilibili.core.theme.LocalAppUiStyle.current ==
+                com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3 &&
+                !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+            ) {
+                com.android.purebilibili.core.ui.renderer.material3.resolveTonalPillTabCornerRadius()
+            } else 8.dp
+        ),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
         AppText(
             text = label,
             color = content,
-            style = if (compact) {
-                MaterialTheme.typography.labelMedium
-            } else {
-                MaterialTheme.typography.labelLarge
-            },
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = if (compact) 13.sp else 14.sp, lineHeight = if (compact) 13.sp else 14.sp),
+            fontWeight = FontWeight.Normal,
             modifier = Modifier.padding(
                 horizontal = AppSpacingTokens.Small,
-                vertical = if (compact) 5.dp else AppSpacingTokens.ExtraSmall,
+                vertical = 5.dp,
             ),
         )
     }

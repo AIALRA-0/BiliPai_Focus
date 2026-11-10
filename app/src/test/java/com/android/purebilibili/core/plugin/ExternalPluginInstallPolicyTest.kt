@@ -1,5 +1,8 @@
 package com.android.purebilibili.core.plugin
 
+import com.android.purebilibili.plugin.sdk.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

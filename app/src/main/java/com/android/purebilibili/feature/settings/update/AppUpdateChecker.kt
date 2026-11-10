@@ -96,13 +96,6 @@ internal data class AppUpdateReleaseCandidate(
     val buildMetadata: AppReleaseBuildMetadata? = null
 )
 
-internal data class AppUpdateEndpointSet(
-    val releasesApi: String,
-    val repositoryBuildGradleUrl: String,
-    val repositoryUrl: String,
-    val releasesPageUrl: String
-)
-
 object AppUpdateChecker {
     private const val FALLBACK_FOCUS_REPOSITORY_PATH = "AIALRA-0/BiliPai_Focus"
     private const val CONNECT_TIMEOUT_MS = 6000
@@ -115,45 +108,24 @@ object AppUpdateChecker {
         includePrerelease: Boolean = false
     ): Result<AppUpdateCheckResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val endpointErrors = mutableListOf<String>()
-            val resolved = resolveEndpointCandidates().firstNotNullOfOrNull { endpoints ->
-                runCatching {
-                    val releaseCandidate = fetchRemoteText(endpoints.releasesApi, required = false)
-                        ?.let { body ->
-                            selectLatestReleaseCandidate(
-                                rawReleaseJson = body,
-                                includePrerelease = includePrerelease,
-                                releasesPageUrl = endpoints.releasesPageUrl
-                            )
-                        }
-                    val repositoryCandidate = fetchRemoteText(
-                        url = endpoints.repositoryBuildGradleUrl,
-                        required = false
-                    )?.let { body ->
-                        parseRepositoryVersionCandidate(
-                            rawBuildGradle = body,
-                            repositoryUrl = endpoints.repositoryUrl
-                        )
-                    }?.takeIf { candidate -> includePrerelease || !candidate.isPrerelease }
-                    val candidate = selectPreferredUpdateCandidate(
-                        releaseCandidate = releaseCandidate,
-                        repositoryCandidate = repositoryCandidate
-                    ) ?: return@runCatching null
-                    endpoints to candidate
-                }.onFailure { error ->
-                    endpointErrors += "${endpoints.repositoryUrl}: ${error.message ?: "未知错误"}"
-                }.getOrNull()
-            } ?: throw IllegalStateException(
-                buildString {
-                    append(if (includePrerelease) "未获取到有效测试版版本信息" else "未获取到有效稳定版版本信息")
-                    if (endpointErrors.isNotEmpty()) append("（${endpointErrors.joinToString("；")}）")
+            val release = resolveEndpointCandidates().firstNotNullOfOrNull { endpoint ->
+                fetchRemoteText(endpoint.releasesApi, required = false)?.let { body ->
+                    selectLatestReleaseCandidate(
+                        rawReleaseJson = body,
+                        includePrerelease = includePrerelease,
+                        releasesPageUrl = endpoint.releasesPageUrl,
+                    )
                 }
-            )
-            val release = resolved.second
+            } ?: throw IllegalStateException(
+                    if (includePrerelease) {
+                        "未获取到包含安装包的测试版 Release"
+                    } else {
+                        "未获取到包含安装包的稳定版 Release"
+                    }
+                )
 
             val latestTag = release.tagName
-            val latestVersion = normalizeVersion(latestTag)
-            if (latestVersion.isEmpty()) {
+            if (normalizeVersion(latestTag).isEmpty()) {
                 throw IllegalStateException("未获取到有效版本号")
             }
 
@@ -175,6 +147,7 @@ object AppUpdateChecker {
                     fetchRemoteText(metadataUrl, required = false)
                 }
                 ?.let(::parseVerificationMetadata)
+            val latestVersion = resolvePublishedVersionName(latestTag, buildMetadata)
             val updateAvailable = shouldOfferUpdate(
                 currentVersion = currentVersion,
                 currentVersionCode = currentVersionCode,
@@ -203,36 +176,6 @@ object AppUpdateChecker {
         }
     }
 
-    internal fun resolveEndpointCandidates(
-        primary: AppUpdateEndpointSet = AppUpdateEndpointSet(
-            releasesApi = BuildConfig.FOCUS_RELEASES_API_URL,
-            repositoryBuildGradleUrl = BuildConfig.FOCUS_REPOSITORY_BUILD_GRADLE_URL,
-            repositoryUrl = BuildConfig.FOCUS_REPOSITORY_URL,
-            releasesPageUrl = BuildConfig.FOCUS_RELEASES_URL
-        )
-    ): List<AppUpdateEndpointSet> {
-        val fallback = buildEndpointSetFromRepositoryPath(FALLBACK_FOCUS_REPOSITORY_PATH)
-        return listOf(primary, fallback)
-            .filter { endpoint ->
-                endpoint.releasesApi.isNotBlank() &&
-                    endpoint.repositoryBuildGradleUrl.isNotBlank() &&
-                    endpoint.repositoryUrl.isNotBlank() &&
-                    endpoint.releasesPageUrl.isNotBlank()
-            }
-            .distinctBy { endpoint -> endpoint.repositoryUrl.trim().lowercase() }
-    }
-
-    private fun buildEndpointSetFromRepositoryPath(path: String): AppUpdateEndpointSet {
-        val normalizedPath = path.trim().removePrefix("https://github.com/").removeSuffix(".git")
-        val repositoryUrl = "https://github.com/$normalizedPath"
-        return AppUpdateEndpointSet(
-            releasesApi = "https://api.github.com/repos/$normalizedPath/releases",
-            repositoryBuildGradleUrl = "https://raw.githubusercontent.com/$normalizedPath/main/app/build.gradle.kts",
-            repositoryUrl = repositoryUrl,
-            releasesPageUrl = "$repositoryUrl/releases"
-        )
-    }
-
     private fun fetchRemoteText(
         url: String,
         required: Boolean
@@ -259,19 +202,64 @@ object AppUpdateChecker {
         }
     }
 
-    internal fun normalizeVersion(version: String): String {
-        return version
-            .trim()
-            .removePrefix("v")
-            .removePrefix("V")
-            .trim()
+    internal fun normalizeVersion(version: String): String = com.android.purebilibili.data.repository.ReleaseVersionPolicy.normalizeVersion(version)
+    internal fun isRemoteNewer(localVersion: String, remoteVersion: String): Boolean {
+        if ("focus" in localVersion.lowercase() || "focus" in remoteVersion.lowercase()) {
+            compareLegacyFocusVersions(localVersion, remoteVersion)?.let { return it < 0 }
+        }
+        return com.android.purebilibili.data.repository.ReleaseVersionPolicy.isRemoteNewer(
+            localVersion,
+            remoteVersion,
+        )
     }
 
-    internal fun isRemoteNewer(localVersion: String, remoteVersion: String): Boolean {
-        return compareVersions(
-            localVersion = normalizeVersion(localVersion),
-            remoteVersion = normalizeVersion(remoteVersion)
-        ) < 0
+    internal fun resolvePublishedVersionName(
+        releaseTag: String,
+        buildMetadata: AppReleaseBuildMetadata?,
+    ): String = normalizeVersion(
+        buildMetadata?.versionName?.takeIf { it.isNotBlank() } ?: releaseTag
+    )
+
+    private data class LegacyFocusVersion(
+        val numericParts: List<Int>,
+        val stabilityRank: Int,
+        val qualifierNumber: Int,
+    )
+
+    private fun compareLegacyFocusVersions(localVersion: String, remoteVersion: String): Int? {
+        // 旧 Focus 标签使用“主版本号-focus.补丁号”；缺少元数据时，新检查器仍要按它比较。
+        fun parse(version: String): LegacyFocusVersion? {
+            val normalized = normalizeVersion(version)
+            val match = Regex(
+                pattern = """^(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc|focus)[\s._-]*(\d+)?)?(?:-(?:debug|dev|smooth))?$""",
+                option = RegexOption.IGNORE_CASE,
+            ).matchEntire(normalized) ?: return null
+            val qualifier = match.groupValues[2].lowercase()
+            return LegacyFocusVersion(
+                numericParts = parseVersionParts(match.groupValues[1]),
+                stabilityRank = when (qualifier) {
+                    "alpha" -> 0
+                    "beta" -> 1
+                    "rc" -> 2
+                    "focus" -> 4
+                    else -> 3
+                },
+                qualifierNumber = match.groupValues[3].toIntOrNull() ?: 0,
+            )
+        }
+
+        val local = parse(localVersion) ?: return null
+        val remote = parse(remoteVersion) ?: return null
+        val maxSize = maxOf(local.numericParts.size, remote.numericParts.size)
+        for (index in 0 until maxSize) {
+            val localPart = local.numericParts.getOrElse(index) { 0 }
+            val remotePart = remote.numericParts.getOrElse(index) { 0 }
+            if (localPart != remotePart) return localPart.compareTo(remotePart)
+        }
+        if (local.stabilityRank != remote.stabilityRank) {
+            return local.stabilityRank.compareTo(remote.stabilityRank)
+        }
+        return local.qualifierNumber.compareTo(remote.qualifierNumber)
     }
 
     internal fun shouldOfferUpdate(
@@ -292,79 +280,38 @@ object AppUpdateChecker {
             isRemoteNewer(currentVersion, latestVersion)
     }
 
-    internal fun parseVersionParts(version: String): List<Int> {
-        if (version.isBlank()) return emptyList()
-        return version
-            .split('.')
-            .mapNotNull { part -> part.toIntOrNull() }
-    }
-
-    private data class ParsedVersion(
-        val numericParts: List<Int>,
-        val stabilityRank: Int,
-        val qualifierNumber: Int
-    )
-
-    private fun parseComparableVersion(version: String): ParsedVersion {
-        val normalized = normalizeVersion(version)
-        val match = Regex(
-            pattern = """^(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc|focus)[\s._-]*(\d+)?)?(?:-(?:debug|dev|smooth))?$""",
-            option = RegexOption.IGNORE_CASE
-        ).matchEntire(normalized)
-        if (match != null) {
-            val numeric = parseVersionParts(match.groupValues[1])
-            val qualifier = match.groupValues[2].lowercase()
-            val qualifierNumber = match.groupValues[3].toIntOrNull() ?: 0
-            val stabilityRank = when (qualifier) {
-                "alpha" -> 0
-                "beta" -> 1
-                "rc" -> 2
-                "focus" -> 4
-                else -> 3
-            }
-            return ParsedVersion(
-                numericParts = numeric,
-                stabilityRank = stabilityRank,
-                qualifierNumber = qualifierNumber
-            )
-        }
-
-        val numericPrefix = normalized
-            .takeWhile { it.isDigit() || it == '.' }
-            .trimEnd('.')
-        return ParsedVersion(
-            numericParts = parseVersionParts(numericPrefix),
-            stabilityRank = 3,
-            qualifierNumber = 0
-        )
-    }
-
-    private fun compareVersions(localVersion: String, remoteVersion: String): Int {
-        val local = parseComparableVersion(localVersion)
-        val remote = parseComparableVersion(remoteVersion)
-        val maxSize = maxOf(local.numericParts.size, remote.numericParts.size)
-        for (index in 0 until maxSize) {
-            val localPart = local.numericParts.getOrElse(index) { 0 }
-            val remotePart = remote.numericParts.getOrElse(index) { 0 }
-            if (localPart != remotePart) {
-                return localPart.compareTo(remotePart)
-            }
-        }
-        if (local.stabilityRank != remote.stabilityRank) {
-            return local.stabilityRank.compareTo(remote.stabilityRank)
-        }
-        return local.qualifierNumber.compareTo(remote.qualifierNumber)
-    }
+    internal fun parseVersionParts(version: String): List<Int> = com.android.purebilibili.data.repository.ReleaseVersionPolicy.parseVersionParts(version)
 
     private fun isPrereleaseVersion(version: String): Boolean {
         val normalized = normalizeVersion(version).lowercase()
         return normalized.contains("alpha") || normalized.contains("beta") || normalized.contains("rc")
     }
 
+    internal data class UpdateEndpoint(
+        val releasesApi: String,
+        val releasesPageUrl: String,
+    )
+
+    internal fun resolveEndpointCandidates(
+        primary: UpdateEndpoint = UpdateEndpoint(
+            releasesApi = BuildConfig.FOCUS_RELEASES_API_URL,
+            releasesPageUrl = BuildConfig.FOCUS_RELEASES_URL,
+        ),
+    ): List<UpdateEndpoint> {
+        val fallbackRepository = "https://github.com/$FALLBACK_FOCUS_REPOSITORY_PATH"
+        val fallback = UpdateEndpoint(
+            releasesApi = "https://api.github.com/repos/$FALLBACK_FOCUS_REPOSITORY_PATH/releases",
+            releasesPageUrl = "$fallbackRepository/releases",
+        )
+        return listOf(primary, fallback)
+            .filter { it.releasesApi.isNotBlank() && it.releasesPageUrl.isNotBlank() }
+            .distinctBy { it.releasesApi.trim().lowercase() }
+    }
+
     internal fun selectLatestReleaseCandidate(
         rawReleaseJson: String,
         includePrerelease: Boolean = false,
-        releasesPageUrl: String = BuildConfig.FOCUS_RELEASES_URL
+        releasesPageUrl: String = BuildConfig.FOCUS_RELEASES_URL,
     ): AppUpdateReleaseCandidate? {
         val releasesJson = runCatching {
             releaseJson.parseToJsonElement(rawReleaseJson).jsonArray
@@ -387,44 +334,9 @@ object AppUpdateChecker {
             ?: candidates.firstOrNull()
     }
 
-    internal fun parseRepositoryVersionCandidate(
-        rawBuildGradle: String,
-        repositoryUrl: String = BuildConfig.FOCUS_REPOSITORY_URL
-    ): AppUpdateReleaseCandidate? {
-        val versionName = Regex("""versionName\s*=\s*"([^"]+)"""")
-            .find(rawBuildGradle)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.trim()
-            .orEmpty()
-        if (versionName.isBlank()) return null
-        return AppUpdateReleaseCandidate(
-            tagName = versionName,
-            releaseUrl = "$repositoryUrl/releases",
-            releaseNotes = "仓库默认分支提供了更新版本，尚未发布 GitHub Release。",
-            publishedAt = null,
-            assets = emptyList(),
-            isPrerelease = isPrereleaseVersion(versionName)
-        )
-    }
-
-    internal fun selectPreferredUpdateCandidate(
-        releaseCandidate: AppUpdateReleaseCandidate?,
-        repositoryCandidate: AppUpdateReleaseCandidate?
-    ): AppUpdateReleaseCandidate? {
-        if (releaseCandidate == null) return repositoryCandidate
-        if (repositoryCandidate == null) return releaseCandidate
-        return if (
-            compareVersions(
-                localVersion = normalizeVersion(releaseCandidate.tagName),
-                remoteVersion = normalizeVersion(repositoryCandidate.tagName)
-            ) >= 0
-        ) releaseCandidate else repositoryCandidate
-    }
-
     private fun parseReleaseCandidateElement(
         releaseElement: JsonElement,
-        releasesPageUrl: String
+        releasesPageUrl: String,
     ): AppUpdateReleaseCandidate? {
         val releaseObject = releaseElement.jsonObject
         val isDraft = releaseObject["draft"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false

@@ -94,14 +94,26 @@ class NativeThemeMigrationBoundaryTest {
     fun appDirectButtonCallsUseFacade() {
         val nativeCalls = kotlinFiles("app/src/main/java")
             .nativeWidgetCalls(NATIVE_COMPONENT_PACKAGES, NATIVE_BUTTON_NAMES)
-        val allowedMiuixRendererCalls = nativeCalls.filter { it.exceptionKey in MIUIX_TEXT_BUTTON_EXCEPTIONS }
+        val allowedMiuixRendererCallKeys = setOf(
+            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
+                "MiuixAppUpdateDialog.kt#MiuixDownloadChannels#TextButton@1",
+            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
+                "MiuixAppUpdateDialog.kt#MiuixDownloadChannels#TextButton@2",
+            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
+                "MiuixAppUpdateDialog.kt#MiuixUpdateActions#TextButton@1",
+            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
+                "MiuixAppUpdateDialog.kt#MiuixUpdateActions#TextButton@2",
+        )
+        val allowedMiuixRendererCalls = nativeCalls.filter {
+            it.exceptionKey in allowedMiuixRendererCallKeys
+        }
         val offenders = nativeCalls
-            .filterNot { it.exceptionKey in MIUIX_TEXT_BUTTON_EXCEPTIONS }
+            .filterNot { it.exceptionKey in allowedMiuixRendererCallKeys }
             .map(NativeWidgetCall::display)
 
         assertEquals(
-            MIUIX_TEXT_BUTTON_EXCEPTIONS,
-            allowedMiuixRendererCalls.map(NativeWidgetCall::exceptionKey).sorted(),
+            allowedMiuixRendererCallKeys,
+            allowedMiuixRendererCalls.map(NativeWidgetCall::exceptionKey).toSet(),
             "Only the four Miuix update dialog TextButton renderer sites are exempt.",
         )
 
@@ -187,7 +199,7 @@ class NativeThemeMigrationBoundaryTest {
     }
 
     @Test
-    fun appNativeCardCallsStayWithinTheExactMd3PreviewException() {
+    fun appNativeCardCallsUseOnlyAppFacades() {
         val directCalls = kotlinFiles("app/src/main/java")
             .flatMap { file ->
                 val material3CardNames = file.material3CardImportNames()
@@ -1040,23 +1052,9 @@ class NativeThemeMigrationBoundaryTest {
         )
         val FUNCTION_DECLARATION = Regex("\\bfun\\s+([A-Za-z0-9_]+)\\s*\\(")
 
-        // This exact Miuix renderer surface uses text-as-parameter actions with platform labels.
-        // Each site remains visible by owner function and occurrence, so a fifth call cannot hide.
-        val MIUIX_TEXT_BUTTON_EXCEPTIONS = listOf(
-            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
-                "MiuixAppUpdateDialog.kt#MiuixDownloadChannels#TextButton@1",
-            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
-                "MiuixAppUpdateDialog.kt#MiuixDownloadChannels#TextButton@2",
-            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
-                "MiuixAppUpdateDialog.kt#MiuixUpdateActions#TextButton@1",
-            "app/src/main/java/com/android/purebilibili/feature/settings/update/" +
-                "MiuixAppUpdateDialog.kt#MiuixUpdateActions#TextButton@2",
-        )
-
-        val MD3_CARD_PREVIEW_EXCEPTIONS = listOf(
-            "app/src/main/java/com/android/purebilibili/feature/settings/screen/" +
-                "AppearanceSettingsScreen.kt#Md3ThemeColorPreview#ElevatedCard",
-        )
+        // 首页配色预览重做后，原 Md3ThemeColorPreview 的 ElevatedCard 例外已移除：
+        // app 源码不应再直接调用原生 Card / ElevatedCard / OutlinedCard，一律走 App* 外观。
+        val MD3_CARD_PREVIEW_EXCEPTIONS = emptyList<String>()
 
         // Exact post-merge widget-import ratchet; baseline theme/token imports are excluded above.
         const val MAX_FEATURE_MATERIAL3_FILES = 126

@@ -27,7 +27,7 @@ class PluginEffectHintPolicyTest {
 
     @Test
     fun enabledHintUsesPluginName() {
-        val hint = resolvePluginEnabledEffectHint("eye_protection", "夜间护眼")
+        val hint = resolvePluginEnabledEffectHint(BuiltinPluginIds.EYE_PROTECTION, "夜间护眼")
         assertEquals("夜间护眼已启用", hint.title)
         assertEquals(PluginEffectHintKind.GENERIC, hint.kind)
     }

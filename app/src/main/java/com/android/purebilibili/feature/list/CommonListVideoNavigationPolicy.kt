@@ -27,7 +27,9 @@ internal fun resolveCommonListVideoNavigationRequest(
         cid = video.cid.takeIf { it > 0L } ?: 0L,
         coverUrl = video.pic,
         isVertical = resolveKnownVerticalVideo(
-            isVerticalVideo = video.isVertical,
+            // 列表预取已判定过的优先用缓存结论，未命中时回退列表字段 + 封面比例推断。
+            isVerticalVideo = com.android.purebilibili.data.repository.VideoRepository
+                .getCachedVerticalFlag(video.bvid) ?: video.isVertical,
             coverUrl = video.pic
         )
     )

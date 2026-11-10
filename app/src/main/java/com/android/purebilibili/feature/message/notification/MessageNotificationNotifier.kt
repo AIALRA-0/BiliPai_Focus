@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.message.notification
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -47,27 +48,78 @@ internal object MessageNotificationNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    fun postAll(context: Context, mid: Long, items: List<PendingMessageNotification>, isCurrentSession: () -> Boolean) {
-        if (items.isEmpty() || !canPost(context)) return
+    fun postAll(context: Context, mid: Long, result: MessageNotificationCheckResult, isCurrentSession: () -> Boolean) {
+        val items = result.notifications
+        if ((items.isEmpty() && result.cancelNotificationKeys.isEmpty()) || !canPost(context)) return
         ensureChannels(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val prefix = "message:$mid:"
+        // Cancel/notify are queued by Android. Build summaries from this snapshot plus the plan,
+        // not from an immediate re-read that might still contain cancelled notifications.
+        val active = manager.activeNotifications.filter { it.tag?.startsWith(prefix) == true }
+        val affectedGroups = items.mapTo(linkedSetOf()) { it.group }
+        for (key in result.cancelNotificationKeys) {
+            affectedGroups += when {
+                key.startsWith("dynamic:") -> "dynamic"
+                key.startsWith("dm:") -> "dm"
+                else -> "interactions"
+            }
+        }
+        for (notification in active) {
+            if (!isCurrentSession()) return
+            if (notification.tag!!.removePrefix(prefix) in result.cancelNotificationKeys) {
+                manager.cancel(notification.tag, notification.id)
+            }
+        }
+        val replacedKeys = items.mapTo(hashSetOf()) { it.key }
         for (item in items) {
             if (!isCurrentSession()) return
-            post(context, mid, item)
+            if (!item.isGroupSummary) post(context, mid, item)
         }
-        // Explicit Android groups require a stable summary even below the per-run overflow cap.
-        for ((group, children) in items.groupBy { it.group }) {
+        for (group in affectedGroups) {
             if (!isCurrentSession()) return
-            if (children.any { it.isGroupSummary }) continue
+            val survivors = active.filter {
+                val key = it.tag!!.removePrefix(prefix)
+                it.notification.group == "message:$mid:$group" &&
+                    it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 &&
+                    key !in result.cancelNotificationKeys && key !in replacedKeys
+            }
+            val incoming = items.filter { it.group == group && !it.isGroupSummary }
+            if (survivors.isEmpty() && incoming.isEmpty() &&
+                active.none { it.notification.group == "message:$mid:$group" }) continue
+            val pendingCount = when (group) {
+                "dynamic" -> result.state.pendingDynamicIds.size
+                "dm" -> result.state.pendingPrivateSessionKeys.size
+                else -> 0
+            }
+            val count = maxOf(pendingCount, survivors.size + incoming.size)
             val (id, route, title) = when (group) {
                 "dm" -> Triple(5106, ScreenRoutes.Inbox.route, "新私信")
                 "dynamic" -> Triple(5105, ScreenRoutes.Dynamic.route, "关注更新")
                 "live" -> Triple(5107, ScreenRoutes.LiveFollowing.route, "开播提醒")
                 else -> Triple(5108, ScreenRoutes.Inbox.route, "消息中心")
             }
+            if (count == 0) {
+                manager.cancel("${prefix}$group:summary", id)
+                continue
+            }
+            val previews = buildList {
+                for (item in incoming) add("${item.title}：${item.text}")
+                for (notification in survivors) {
+                    val extras = notification.notification.extras
+                    add("${extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""}：" +
+                        (extras.getCharSequence(Notification.EXTRA_TEXT) ?: ""))
+                }
+            }.joinToString("\n")
+            val text = when (group) {
+                "dynamic" -> "有 $count 条关注更新"
+                "dm" -> "有 $count 个会话有未读消息"
+                else -> previews
+            }
             post(context, mid, PendingMessageNotification(
                 "$group:summary", id, route, title,
-                children.joinToString("\n") { "${it.title}：${it.text}" }, group,
-                isGroupSummary = true,
+                if ((group == "dynamic" || group == "dm") && previews.isNotBlank()) "$text\n$previews" else text,
+                group, isGroupSummary = true,
             ))
         }
     }
@@ -87,6 +139,7 @@ internal object MessageNotificationNotifier {
             .setGroup("message:$mid:${item.group}")
             .setGroupSummary(item.isGroupSummary)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setOnlyAlertOnce(item.isGroupSummary)
             .apply { if (item.isGroupSummary) setSilent(true) }
             .setContentIntent(contentIntent(context, item.notificationId, key, item.route))
             .build()
@@ -95,6 +148,21 @@ internal object MessageNotificationNotifier {
         } catch (_: SecurityException) {
             // Permission can be revoked between the eligibility check and notify().
         }
+    }
+
+    fun activeMessageKeys(context: Context, mid: Long): Set<String> {
+        val prefix = "message:$mid:"
+        return context.getSystemService(NotificationManager::class.java).activeNotifications
+            .mapNotNullTo(linkedSetOf()) { it.tag?.takeIf { tag -> tag.startsWith(prefix) }?.removePrefix(prefix) }
+    }
+
+    fun cancelOtherAccounts(context: Context, currentMid: Long?) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val currentPrefix = currentMid?.let { "message:$it:" }
+        manager.activeNotifications.filter {
+            val tag = it.tag
+            tag != null && tag.startsWith("message:") && (currentPrefix == null || !tag.startsWith(currentPrefix))
+        }.forEach { manager.cancel(it.tag, it.id) }
     }
 
     fun cancelMessages(context: Context) {

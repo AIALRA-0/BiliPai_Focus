@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.components.rememberFollowActionWithConfirmation
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -10,6 +12,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,6 +79,8 @@ import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
@@ -88,6 +96,7 @@ fun UpPreviewSheet(
     visible: Boolean,
     owner: Owner,
     isFollowing: Boolean,
+    followStatusKnown: Boolean,
     followerCount: Int? = null,
     videoCount: Int? = null,
     likeCount: Int? = null,
@@ -196,10 +205,18 @@ fun UpPreviewSheet(
     val dismissThresholdPx = with(density) { 96.dp.toPx() }
     val maxSheetDragPx = with(density) { sheetHeightDp.toPx() }
     var sheetDragOffsetPx by remember(owner.mid) { mutableFloatStateOf(0f) }
+    val settleScope = rememberCoroutineScope()
+    var settleJob by remember(owner.mid) { mutableStateOf<Job?>(null) }
+    val latestSheetMotion by rememberUpdatedState(sheetMotion)
+    val latestVisible by rememberUpdatedState(visible)
     val latestOnDismiss by rememberUpdatedState(onDismiss)
     val hostVisibilityProgress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = 280),
+        animationSpec = tween(durationMillis = if (visible) {
+            sheetMotion.contentEnterFadeDurationMillis
+        } else {
+            sheetMotion.contentExitFadeDurationMillis
+        }),
         label = "upPreviewHostVisibility",
     )
     val presentationProgress = resolveUpPreviewSheetVisibilityProgress(
@@ -229,6 +246,7 @@ fun UpPreviewSheet(
                     return Offset.Zero
                 }
 
+                settleJob?.cancel()
                 val consumedY = available.y.coerceAtLeast(-sheetDragOffsetPx)
                 sheetDragOffsetPx = (sheetDragOffsetPx + consumedY).coerceAtLeast(0f)
                 return Offset(x = 0f, y = consumedY)
@@ -243,6 +261,7 @@ fun UpPreviewSheet(
                     return Offset.Zero
                 }
                 if (available.y > 0f) {
+                    settleJob?.cancel()
                     sheetDragOffsetPx =
                         (sheetDragOffsetPx + available.y).coerceAtMost(maxSheetDragPx)
                 }
@@ -257,10 +276,17 @@ fun UpPreviewSheet(
                     velocityYPxPerSecond = available.y,
                     dismissThresholdPx = dismissThresholdPx,
                 )
-                if (shouldDismiss) {
-                    latestOnDismiss()
-                } else {
-                    sheetDragOffsetPx = 0f
+                settleJob?.cancel()
+                settleJob = settleScope.launch {
+                    animate(
+                        initialValue = sheetDragOffsetPx,
+                        targetValue = if (shouldDismiss) maxSheetDragPx else 0f,
+                        initialVelocity = available.y,
+                        animationSpec = latestSheetMotion.dragSettleSpec,
+                    ) { value, _ ->
+                        sheetDragOffsetPx = value.coerceIn(0f, maxSheetDragPx)
+                    }
+                    if (shouldDismiss && latestVisible) latestOnDismiss()
                 }
                 return Velocity(x = 0f, y = available.y)
             }
@@ -272,8 +298,12 @@ fun UpPreviewSheet(
         }
     }
 
-    LaunchedEffect(visible, owner.mid) {
+    LaunchedEffect(visible, owner.mid, maxSheetDragPx) {
+        settleJob?.cancel()
         if (visible) sheetDragOffsetPx = 0f
+    }
+    androidx.compose.runtime.DisposableEffect(owner.mid) {
+        onDispose { settleJob?.cancel() }
     }
     // Ensure progress clears after fully hidden (host animation finished).
     LaunchedEffect(visible, hostVisibilityProgress) {
@@ -327,6 +357,7 @@ fun UpPreviewSheet(
                 val bottomPad = WindowInsets.navigationBars
                     .asPaddingValues()
                     .calculateBottomPadding()
+                val alignVideos = !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     state = gridState,
@@ -350,6 +381,7 @@ fun UpPreviewSheet(
                         UpPreviewSheetHeader(
                             owner = owner,
                             isFollowing = isFollowing,
+                            followStatusKnown = followStatusKnown,
                             followerCount = resolvedFollower,
                             videoCount = resolvedVideoCount,
                             likeCount = resolvedLikeCount,
@@ -399,25 +431,37 @@ fun UpPreviewSheet(
                             }
                         }
                         else -> {
-                            itemsIndexed(
-                                items = videos,
-                                key = { index, item ->
-                                    resolveIndexedVideoLazyKey(
-                                        namespace = "up_preview_video",
-                                        index = index,
-                                        bvid = item.bvid,
-                                    )
-                                },
-                            ) { _, item ->
+                            val videoKeys = videos.mapIndexed { index, item ->
+                                resolveIndexedVideoLazyKey(namespace = "up_preview_video", index = index, bvid = item.bvid)
+                            }
+                            val renderVideo: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
+                                val video = videos[index]
                                 UpPreviewVideoCard(
-                                    item = item,
+                                    item = video,
+                                    modifier = cardModifier,
                                     colors = colors,
                                     onClick = {
-                                        resolveUpPreviewVideoClickTarget(item.bvid)?.let {
+                                        resolveUpPreviewVideoClickTarget(video.bvid)?.let {
                                             onVideoClick(it.first, it.second)
                                         }
                                     },
                                 )
+                            }
+                            if (!alignVideos) {
+                                itemsIndexed(videos, key = { index, _ -> videoKeys[index] }) { index, _ -> renderVideo(index, Modifier) }
+                            } else {
+                                com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(videos.size, 2).forEach { row ->
+                                    item(key = "up_preview_row_${videoKeys[row.first]}", span = { GridItemSpan(maxLineSpan) }) {
+                                        com.android.purebilibili.feature.home.HomeAlignedVideoRow(
+                                            indices = row,
+                                            itemKeys = videoKeys,
+                                            columns = 2,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            content = renderVideo,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -434,10 +478,12 @@ private data class UpPreviewFetchResult(
     val likes: Int?,
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun UpPreviewSheetHeader(
     owner: Owner,
     isFollowing: Boolean,
+    followStatusKnown: Boolean,
     followerCount: Int?,
     videoCount: Int?,
     likeCount: Int?,
@@ -470,56 +516,75 @@ private fun UpPreviewSheetHeader(
             )
         }
 
-        Row(
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .padding(top = 4.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            AsyncImage(
-                model = FormatUtils.fixImageUrl(owner.face),
-                contentDescription = "UP主头像",
+            Row(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(colors.coverPlaceholderColor),
-                contentScale = ContentScale.Crop,
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                AppText(
-                    text = owner.name.ifBlank { "UP主" },
-                    color = colors.titleColor,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    overflow = TextOverflow.Visible,
+                    .weight(1f)
+                    .widthIn(min = 160.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AsyncImage(
+                    model = FormatUtils.fixImageUrl(owner.face),
+                    contentDescription = "UP主头像",
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(colors.coverPlaceholderColor),
+                    contentScale = ContentScale.Crop,
                 )
-                Spacer(Modifier.height(4.dp))
-                AppText(
-                    text = resolveUpPreviewStatLine(
-                        followerCount = followerCount,
-                        videoCount = videoCount,
-                        likeCount = likeCount,
-                    ).ifBlank { " " },
-                    color = colors.supportingColor,
-                    style = MaterialTheme.typography.bodySmall,
-                    overflow = TextOverflow.Visible,
-                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    AppText(
+                        text = owner.name.ifBlank { "UP主" },
+                        color = colors.titleColor,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    AppText(
+                        text = resolveUpPreviewStatLine(
+                            followerCount = followerCount,
+                            videoCount = videoCount,
+                            likeCount = likeCount,
+                        ).ifBlank { " " },
+                        color = colors.supportingColor,
+                        style = MaterialTheme.typography.bodySmall,
+                        overflow = TextOverflow.Visible,
+                    )
+                }
             }
-            Spacer(Modifier.width(8.dp))
             AppSurface(
-                onClick = onFollowClick,
+                modifier = Modifier.clickable(
+                    onClickLabel = if (followStatusKnown) null else "重新确认状态并关注",
+                    onClick = rememberFollowActionWithConfirmation(
+                        targetKey = owner.mid,
+                        userName = owner.name,
+                        isFollowing = isFollowing,
+                        onFollowClick = onFollowClick,
+                    ),
+                ),
                 shape = CircleShape,
-                color = if (isFollowing) {
+                color = if (!followStatusKnown || isFollowing) {
                     colors.followingFillColor
                 } else {
                     colors.followFillColor
                 },
             ) {
                 AppText(
-                    text = if (isFollowing) "已关注" else "+ 关注",
-                    color = if (isFollowing) {
+                    text = if (!followStatusKnown) "待确认" else if (isFollowing) "已关注" else "+ 关注",
+                    maxLines = 1,
+                    softWrap = false,
+                    color = if (!followStatusKnown || isFollowing) {
                         colors.followingContentColor
                     } else {
                         colors.followContentColor
@@ -529,9 +594,10 @@ private fun UpPreviewSheetHeader(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
-            Spacer(Modifier.width(8.dp))
             AppText(
                 text = "进入空间  >",
+                maxLines = 1,
+                softWrap = false,
                 color = colors.enterSpaceColor,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Medium,

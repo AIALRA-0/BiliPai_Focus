@@ -1,12 +1,18 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.components.appActionClickable
+import com.android.purebilibili.core.ui.components.appActionWithFeedback
+
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,6 +34,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.appElasticPress
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
@@ -46,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
@@ -131,10 +139,12 @@ internal fun shouldShowBottomInputBarActionButtons(
 fun BottomInputBar(
     modifier: Modifier = Modifier,
     isLiked: Boolean,
+    likeStatusKnown: Boolean,
     isFavorited: Boolean,
     isCoined: Boolean,
     onLikeClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onFavoriteLongClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onShareClick: () -> Unit,
     onCommentClick: () -> Unit,
@@ -206,10 +216,12 @@ fun BottomInputBar(
                     modifier = Modifier,
                     backdrop = backdrop,
                     isLiked = isLiked,
+                    likeStatusKnown = likeStatusKnown,
                     isFavorited = isFavorited,
                     isCoined = isCoined,
                     onLikeClick = onLikeClick,
                     onFavoriteClick = onFavoriteClick,
+                    onFavoriteLongClick = onFavoriteLongClick,
                     onCoinClick = onCoinClick,
                     onShareClick = onShareClick,
                     onCommentClick = onCommentClick,
@@ -222,10 +234,12 @@ fun BottomInputBar(
                     hazeState = hazeState,
                     frostedBottomBar = frostedBottomBar,
                     isLiked = isLiked,
+                    likeStatusKnown = likeStatusKnown,
                     isFavorited = isFavorited,
                     isCoined = isCoined,
                     onLikeClick = onLikeClick,
                     onFavoriteClick = onFavoriteClick,
+                    onFavoriteLongClick = onFavoriteLongClick,
                     onCoinClick = onCoinClick,
                     onShareClick = onShareClick,
                     onCommentClick = onCommentClick,
@@ -242,10 +256,12 @@ private fun DockedSolidBottomInputBar(
     hazeState: HazeState?,
     frostedBottomBar: Boolean,
     isLiked: Boolean,
+    likeStatusKnown: Boolean,
     isFavorited: Boolean,
     isCoined: Boolean,
     onLikeClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onFavoriteLongClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onShareClick: () -> Unit,
     onCommentClick: () -> Unit,
@@ -260,8 +276,8 @@ private fun DockedSolidBottomInputBar(
     val inputContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val inputTextColor = resolveBottomInputBarPlaceholderTextColor(
         inputContainerColor = inputContainerColor,
-        onSurfaceColor = MaterialTheme.colorScheme.onSurface,
-        onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+        onSurfaceColor = AppContentColors.primaryText(),
+        onSurfaceVariantColor = AppContentColors.secondaryText()
     )
 
     AppSurface(
@@ -288,10 +304,12 @@ private fun DockedSolidBottomInputBar(
             inputContainerColor = inputContainerColor,
             inputTextColor = inputTextColor,
             isLiked = isLiked,
+                    likeStatusKnown = likeStatusKnown,
             isFavorited = isFavorited,
             isCoined = isCoined,
             onLikeClick = onLikeClick,
             onFavoriteClick = onFavoriteClick,
+            onFavoriteLongClick = onFavoriteLongClick,
             onCoinClick = onCoinClick,
             onShareClick = onShareClick,
             onCommentClick = onCommentClick,
@@ -301,122 +319,149 @@ private fun DockedSolidBottomInputBar(
 }
 
 @Composable
+internal fun CommentEntryBarContent(
+    textColor: Color,
+    iconSize: Dp,
+    iconSpacing: Dp,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(iconSpacing),
+    ) {
+        AppIcon(
+            imageVector = Icons.Outlined.Edit,
+            contentDescription = null,
+            tint = textColor,
+            modifier = Modifier.size(iconSize),
+        )
+        AppText(
+            text = "发评论",
+            color = textColor,
+            style = textStyle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 private fun FloatingLiquidBottomInputBar(
     modifier: Modifier,
     backdrop: Backdrop?,
     isLiked: Boolean,
+    likeStatusKnown: Boolean,
     isFavorited: Boolean,
     isCoined: Boolean,
     onLikeClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onFavoriteLongClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onShareClick: () -> Unit,
     onCommentClick: () -> Unit,
     isScrollInProgressProvider: () -> Boolean,
     showActionButtons: Boolean = true,
 ) {
-    val shellShape = resolveSharedBottomBarCapsuleShape()
-    val inputTextColor = resolveBottomInputBarPlaceholderTextColor(
-        inputContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-        onSurfaceColor = MaterialTheme.colorScheme.onSurface,
-        onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    val navigationBarBottomPadding = WindowInsets.navigationBars
-        .asPaddingValues()
-        .calculateBottomPadding()
-    val bottomInset = 12.dp + navigationBarBottomPadding
+    com.android.purebilibili.core.ui.components.ProvideAppElasticFeedback {
+        val shellShape = resolveSharedBottomBarCapsuleShape()
+        val inputTextColor = resolveBottomInputBarPlaceholderTextColor(
+            inputContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            onSurfaceColor = AppContentColors.primaryText(),
+            onSurfaceVariantColor = AppContentColors.secondaryText()
+        )
+        val navigationBarBottomPadding = WindowInsets.navigationBars
+            .asPaddingValues()
+            .calculateBottomPadding()
+        val bottomInset = 12.dp + navigationBarBottomPadding
 
-    Box(
-        modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        // Keep the gesture area transparent so the detail list can draw beneath it.
-        // Only the interactive capsules are inset; the page already owns the background.
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 24.dp)
-                .padding(bottom = bottomInset)
-                .widthIn(max = if (showActionButtons) 360.dp else 420.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = if (showActionButtons) Arrangement.spacedBy(8.dp) else Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            modifier = modifier.fillMaxWidth(),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            // 黑虾线防回归：左右是两个视觉上独立的胶囊，必须分别渲染，不能合成长壳；
-            // 两边都保留 lens，并按 44dp 实际高度缩放折射。直接关 lens 会损失液态玻璃，
-            // 使用满强度 64dp 几何则会让上下 refraction 在短胶囊中线相撞。
-            BottomBarMatchedReusableLiquidDock(
-                shape = shellShape,
-                modifier = if (showActionButtons) {
-                    Modifier
-                        .weight(0.9f)
-                        .height(44.dp)
-                } else {
-                    Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                },
-                backdrop = backdrop,
-                reuseEnabled = true,
-                drawShellLens = true,
-                shellLensIntensity = resolveFloatingDockGeometryScale(44f),
-                isScrollInProgressProvider = isScrollInProgressProvider,
+            // Keep the gesture area transparent so the detail list can draw beneath it.
+            // Only the interactive capsules are inset; the page already owns the background.
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = bottomInset)
+                    .widthIn(max = if (showActionButtons) 360.dp else 420.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = if (showActionButtons) Arrangement.spacedBy(8.dp) else Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(role = Role.Button) { onCommentClick() }
-                        .padding(horizontal = if (showActionButtons) 12.dp else 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    AppIcon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = null,
-                        tint = inputTextColor,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    AppText(
-                        text = "发评论",
-                        color = inputTextColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-
-            if (showActionButtons) {
+                // 黑虾线防回归：左右是两个视觉上独立的胶囊，必须分别渲染，不能合成长壳；
+                // 两边都保留 lens，并按 44dp 实际高度缩放折射。直接关 lens 会损失液态玻璃，
+                // 使用满强度 64dp 几何则会让上下 refraction 在短胶囊中线相撞。
                 BottomBarMatchedReusableLiquidDock(
                     shape = shellShape,
-                    modifier = Modifier
-                        .weight(1.1f)
-                        .height(44.dp),
+                    // Wrap the whole shell, not just its clickable content.
+                    modifier = (if (showActionButtons) {
+                        Modifier
+                            .weight(0.9f)
+                            .height(44.dp)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    }),
                     backdrop = backdrop,
                     reuseEnabled = true,
+                    elasticFeedbackEnabled = true,
                     drawShellLens = true,
                     shellLensIntensity = resolveFloatingDockGeometryScale(44f),
                     isScrollInProgressProvider = isScrollInProgressProvider,
                 ) {
-                    BottomInputBarActionButtons(
+                    CommentEntryBarContent(
+                        textColor = inputTextColor,
+                        iconSize = 20.dp,
+                        iconSpacing = 6.dp,
+                        textStyle = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 2.dp, vertical = 6.dp),
-                        itemSize = 32.dp,
-                        iconSize = 19.dp,
-                        spreadItems = true,
-                        favoriteIcon = rememberAppBookmarkIcon(),
-                        coinIcon = rememberAppCoinIcon(),
-                        likeIcon = rememberAppLikeIcon(),
-                        likeFilledIcon = rememberAppLikeFilledIcon(),
-                        shareIcon = rememberAppShareIcon(),
-                        isLiked = isLiked,
-                        isFavorited = isFavorited,
-                        isCoined = isCoined,
-                        onLikeClick = onLikeClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onCoinClick = onCoinClick,
-                        onShareClick = onShareClick,
+                            .fillMaxSize()
+                            .appActionClickable(role = Role.Button) { onCommentClick() }
+                            .padding(horizontal = if (showActionButtons) 12.dp else 16.dp),
                     )
+                }
+
+                if (showActionButtons) {
+                    BottomBarMatchedReusableLiquidDock(
+                        shape = shellShape,
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .height(44.dp),
+                        backdrop = backdrop,
+                        reuseEnabled = true,
+                        elasticFeedbackEnabled = true,
+                        drawShellLens = true,
+                        shellLensIntensity = resolveFloatingDockGeometryScale(44f),
+                        isScrollInProgressProvider = isScrollInProgressProvider,
+                    ) {
+                        BottomInputBarActionButtons(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp, vertical = 6.dp),
+                            itemSize = 32.dp,
+                            iconSize = 19.dp,
+                            spreadItems = true,
+                            elasticFeedbackEnabled = false,
+                            favoriteIcon = rememberAppBookmarkIcon(),
+                            coinIcon = rememberAppCoinIcon(),
+                            likeIcon = rememberAppLikeIcon(),
+                            likeFilledIcon = rememberAppLikeFilledIcon(),
+                            shareIcon = rememberAppShareIcon(),
+                            isLiked = isLiked,
+                    likeStatusKnown = likeStatusKnown,
+                            isFavorited = isFavorited,
+                            isCoined = isCoined,
+                            onLikeClick = onLikeClick,
+                            onFavoriteClick = onFavoriteClick,
+                            onFavoriteLongClick = onFavoriteLongClick,
+                            onCoinClick = onCoinClick,
+                            onShareClick = onShareClick,
+                        )
+                    }
                 }
             }
         }
@@ -429,72 +474,67 @@ private fun BottomInputBarContentRow(
     inputContainerColor: Color,
     inputTextColor: Color,
     isLiked: Boolean,
+    likeStatusKnown: Boolean,
     isFavorited: Boolean,
     isCoined: Boolean,
     onLikeClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onFavoriteLongClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onShareClick: () -> Unit,
     onCommentClick: () -> Unit,
     showActionButtons: Boolean = true,
 ) {
-    val favoriteIcon = rememberAppBookmarkIcon()
-    val coinIcon = rememberAppCoinIcon()
-    val likeIcon = rememberAppLikeIcon()
-    val likeFilledIcon = rememberAppLikeFilledIcon()
-    val shareIcon = rememberAppShareIcon()
+    com.android.purebilibili.core.ui.components.ProvideAppElasticFeedback {
+        val favoriteIcon = rememberAppBookmarkIcon()
+        val coinIcon = rememberAppCoinIcon()
+        val likeIcon = rememberAppLikeIcon()
+        val likeFilledIcon = rememberAppLikeFilledIcon()
+        val shareIcon = rememberAppShareIcon()
 
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-                .clip(AppShapes.container(ContainerLevel.Card))
-                .background(inputContainerColor)
-                .clickable(role = Role.Button) { onCommentClick() }
-                .padding(horizontal = 12.dp),
-            contentAlignment = Alignment.CenterStart
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .appElasticPress()
+                    .clip(AppShapes.container(ContainerLevel.Card))
+                    .background(inputContainerColor)
+                    .appActionClickable(role = Role.Button) { onCommentClick() }
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
-                AppIcon(
-                    imageVector = Icons.Outlined.Edit,
-                    contentDescription = null,
-                    tint = inputTextColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                AppText(
-                    text = "发评论",
-                    color = inputTextColor,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                CommentEntryBarContent(
+                    textColor = inputTextColor,
+                    iconSize = 18.dp,
+                    iconSpacing = 8.dp,
+                    textStyle = MaterialTheme.typography.bodySmall,
                 )
             }
-        }
 
-        if (showActionButtons) {
-            Spacer(modifier = Modifier.width(8.dp))
+            if (showActionButtons) {
+                Spacer(modifier = Modifier.width(8.dp))
 
-            BottomInputBarActionButtons(
-                favoriteIcon = favoriteIcon,
-                coinIcon = coinIcon,
-                likeIcon = likeIcon,
-                likeFilledIcon = likeFilledIcon,
-                shareIcon = shareIcon,
-                isLiked = isLiked,
-                isFavorited = isFavorited,
-                isCoined = isCoined,
-                onLikeClick = onLikeClick,
-                onFavoriteClick = onFavoriteClick,
-                onCoinClick = onCoinClick,
-                onShareClick = onShareClick
-            )
+                BottomInputBarActionButtons(
+                    favoriteIcon = favoriteIcon,
+                    coinIcon = coinIcon,
+                    likeIcon = likeIcon,
+                    likeFilledIcon = likeFilledIcon,
+                    shareIcon = shareIcon,
+                    isLiked = isLiked,
+                    likeStatusKnown = likeStatusKnown,
+                    isFavorited = isFavorited,
+                    isCoined = isCoined,
+                    onLikeClick = onLikeClick,
+                    onFavoriteClick = onFavoriteClick,
+                    onFavoriteLongClick = onFavoriteLongClick,
+                    onCoinClick = onCoinClick,
+                    onShareClick = onShareClick
+                )
+            }
         }
     }
 }
@@ -506,16 +546,19 @@ private fun BottomInputBarActionButtons(
     iconSize: Dp = 24.dp,
     itemSpacing: Dp = 4.dp,
     spreadItems: Boolean = false,
+    elasticFeedbackEnabled: Boolean = true,
     favoriteIcon: ImageVector,
     coinIcon: ImageVector,
     likeIcon: ImageVector,
     likeFilledIcon: ImageVector,
     shareIcon: ImageVector,
     isLiked: Boolean,
+    likeStatusKnown: Boolean,
     isFavorited: Boolean,
     isCoined: Boolean,
     onLikeClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onFavoriteLongClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onShareClick: () -> Unit,
 ) {
@@ -529,44 +572,52 @@ private fun BottomInputBarActionButtons(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconActionButton(
-            icon = if (isLiked) likeFilledIcon else likeIcon,
-            label = "点赞",
-            tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            icon = if (likeStatusKnown && isLiked) likeFilledIcon else likeIcon,
+            label = if (likeStatusKnown) "点赞" else "点赞状态待确认",
+            tint = if (likeStatusKnown && isLiked) AppContentColors.accent() else AppContentColors.primaryText(),
             onClick = onLikeClick,
             itemSize = itemSize,
+            elasticFeedbackEnabled = elasticFeedbackEnabled,
             iconSize = iconSize,
             showLabel = false
         )
         IconActionButton(
             icon = coinIcon,
             label = "投币",
-            tint = if (isCoined) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            tint = if (isCoined) AppContentColors.accent() else AppContentColors.primaryText(),
             onClick = onCoinClick,
             itemSize = itemSize,
+            elasticFeedbackEnabled = elasticFeedbackEnabled,
             iconSize = iconSize,
             showLabel = false
         )
         IconActionButton(
             icon = favoriteIcon,
             label = "收藏",
-            tint = if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            tint = if (isFavorited) AppContentColors.accent() else AppContentColors.primaryText(),
             onClick = onFavoriteClick,
+            onLongClick = onFavoriteLongClick,
             itemSize = itemSize,
+            elasticFeedbackEnabled = elasticFeedbackEnabled,
             iconSize = iconSize,
             showLabel = false
         )
-        IconActionButton(
-            icon = shareIcon,
-            label = "分享",
-            tint = MaterialTheme.colorScheme.onSurface,
-            onClick = onShareClick,
-            itemSize = itemSize,
-            iconSize = iconSize,
-            showLabel = false
-        )
+        com.android.purebilibili.feature.video.share.VideoShareActionAnchor(onShareClick) { anchoredShare ->
+            IconActionButton(
+                icon = shareIcon,
+                label = "分享",
+                tint = AppContentColors.primaryText(),
+                onClick = anchoredShare,
+                itemSize = itemSize,
+                elasticFeedbackEnabled = elasticFeedbackEnabled,
+                iconSize = iconSize,
+                showLabel = false
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun IconActionButton(
     icon: ImageVector,
@@ -575,29 +626,49 @@ private fun IconActionButton(
     onClick: () -> Unit,
     itemSize: Dp,
     iconSize: Dp,
-    showLabel: Boolean = false
+    showLabel: Boolean = false,
+    elasticFeedbackEnabled: Boolean = true,
+    enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .sizeIn(minWidth = itemSize, minHeight = itemSize)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(4.dp)
-    ) {
-        AppIcon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = tint,
-            modifier = Modifier.size(iconSize)
-        )
-        if (showLabel) {
-            Spacer(modifier = Modifier.height(2.dp))
-            AppText(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = tint
+    com.android.purebilibili.core.ui.components.ProvideAppElasticFeedback {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .sizeIn(minWidth = itemSize, minHeight = itemSize)
+                .appElasticPress(
+                    enabled = elasticFeedbackEnabled && enabled,
+                    dragEnabled = onLongClick == null,
+                )
+                .then(
+                    if (onLongClick != null) {
+                        Modifier.combinedClickable(
+                            enabled = enabled,
+                            role = Role.Button,
+                            onClick = appActionWithFeedback(onClick),
+                            onLongClick = onLongClick,
+                        )
+                    } else {
+                        Modifier.appActionClickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                    }
+                )
+                .padding(4.dp)
+        ) {
+            AppIcon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = Modifier.size(iconSize)
             )
+            if (showLabel) {
+                Spacer(modifier = Modifier.height(2.dp))
+                AppText(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tint
+                )
+            }
         }
     }
 }

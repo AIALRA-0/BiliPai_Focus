@@ -10,6 +10,30 @@ import kotlin.test.assertTrue
 class InboxSessionPaginationPolicyTest {
 
     @Test
+    fun readAckClearsOnlyTheAcknowledgedConversationWithoutLosingOtherPages() {
+        val first = SessionItem(talker_id = 1L, max_seqno = 20L, unread_count = 2)
+        val second = SessionItem(talker_id = 2L, max_seqno = 30L, unread_count = 3)
+        val group = SessionItem(talker_id = 2L, session_type = 2, max_seqno = 30L, unread_count = 4)
+
+        val updated = listOf(first, second, group).map {
+            InboxSessionPaginationPolicy.applyReadAck(it, 2L, 1, 30L)
+        }
+
+        assertEquals(listOf(first, second.copy(ack_seqno = 30L, unread_count = 0), group), updated)
+    }
+
+    @Test
+    fun olderAckDoesNotClearMessagesArrivingAfterIt() {
+        val newerMessages = SessionItem(talker_id = 1L, ack_seqno = 10L, max_seqno = 30L, unread_count = 5)
+
+        val updated = InboxSessionPaginationPolicy.applyReadAck(newerMessages, 1L, 1, 20L)
+
+        assertEquals(20L, updated.ack_seqno)
+        assertEquals(5, updated.unread_count)
+        assertEquals(updated, InboxSessionPaginationPolicy.applyReadAck(updated, 1L, 1, 15L))
+    }
+
+    @Test
     fun resolveNextEndTs_returnsStrictlyOlderMicrosecondCursor() {
         val sessions = listOf(SessionItem(talker_id = 1L, session_ts = 1_712_305_278_098_351L))
 

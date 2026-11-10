@@ -12,15 +12,15 @@ class BlurIntensityVisualPolicyTest {
     }
 
     @Test
-    fun `rich style keeps background visible with lighter haze material`() {
-        assertEquals(BlurHazeMaterial.ULTRA_THIN, resolveBlurHazeMaterial(BlurIntensity.THICK))
-        assertEquals(0.15f, resolveBlurBackgroundAlpha(BlurIntensity.THICK))
+    fun `medium tier stays between light and heavy`() {
+        assertEquals(BlurHazeMaterial.THIN, resolveBlurHazeMaterial(BlurIntensity.THICK))
+        assertEquals(0.4f, resolveBlurBackgroundAlpha(BlurIntensity.THICK))
     }
 
     @Test
-    fun `standard blur stays in the middle tier`() {
-        assertEquals(BlurHazeMaterial.THIN, resolveBlurHazeMaterial(BlurIntensity.THIN))
-        assertEquals(0.4f, resolveBlurBackgroundAlpha(BlurIntensity.THIN))
+    fun `light tier keeps background most visible`() {
+        assertEquals(BlurHazeMaterial.ULTRA_THIN, resolveBlurHazeMaterial(BlurIntensity.THIN))
+        assertEquals(0.15f, resolveBlurBackgroundAlpha(BlurIntensity.THIN))
     }
 
     @Test

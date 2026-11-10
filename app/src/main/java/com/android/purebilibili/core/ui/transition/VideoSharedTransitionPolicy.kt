@@ -1,6 +1,7 @@
 package com.android.purebilibili.core.ui.transition
 
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.SpringSpec
@@ -12,7 +13,6 @@ import com.android.purebilibili.core.ui.adaptive.AdaptiveFoldPosture
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfileSpec
 import com.android.purebilibili.core.ui.adaptive.toAdaptiveWidthClass
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.navigation.isVideoCardReturnTargetRoute
 import kotlin.math.roundToInt
 import kotlin.math.hypot
@@ -30,13 +30,26 @@ internal object VideoHeroMotionTokens {
     // Must stay 0: a flying-layer pulse undershoots the frozen card and the stationary
     // list card then pops in at full size (cover / info scale-jump on land).
     const val LANDING_COMPRESSION = 0f
-    // Bound effect changes during entry while keeping finer steps than return.
+    // 开合共用半径网格，避免中断或反向时仅因 phase 改变而跳档。
     const val OPEN_BLUR_QUANTUM_PX = 2f
-    const val RETURN_BLUR_QUANTUM_PX = 4f
+    const val RETURN_BLUR_QUANTUM_PX = OPEN_BLUR_QUANTUM_PX
+    // 清晰附近的小半径变化更显眼；只在此区间细分，保留大半径缓存预算。
+    const val CLEAR_BLUR_QUANTUM_PX = 0.5f
+    const val CLEAR_BLUR_RANGE_PX = 4f
     const val SPRING_DAMPING = 1f
     // Critical spring reaches the Nav driver's 0.0025 threshold at ~8.3 / omega seconds.
     const val SPRING_SETTLING_FACTOR = 8.3f
 }
+
+// Card-only curve: distribute more travel across the middle and shorten the nearly
+// stationary tail. Do not change global motion tokens or re-ease interactive progress.
+private val VIDEO_CARD_SPATIAL_EASING: Easing =
+    CubicBezierEasing(0.24f, 0.60f, 0.32f, 1f)
+
+// 自动返回将更多行程留给中后段，缩短最后 2% 几何位移的低速尾段。
+// 只缓动导航驱动一次；媒体、标题和景深继续读取同一深度，不另建时间时钟。
+private val VIDEO_CARD_RETURN_SPATIAL_EASING: Easing =
+    CubicBezierEasing(0.24f, 0.60f, 0.58f, 1f)
 
 internal data class VideoHeroMotionSpec(
     val enterDurationMillis: Int,
@@ -44,10 +57,13 @@ internal data class VideoHeroMotionSpec(
     val cancelDurationMillis: Int,
     val reducedMotion: Boolean = false,
 ) {
-    val enterSpatialSpec: Easing get() = AppMotionEasing.Continuity
+    val enterSpatialSpec: Easing get() = VIDEO_CARD_SPATIAL_EASING
     // The driver itself must NOT overshoot: Miuix unloads an entry at relativeDepth <= -1.
     // Do not add a flying-layer landing pulse; it drifts off the frozen card bounds.
-    val returnSpatialSpec: Easing get() = AppMotionEasing.Continuity
+    val returnSpatialSpec: Easing get() =
+        if (reducedMotion) VIDEO_CARD_SPATIAL_EASING else VIDEO_CARD_RETURN_SPATIAL_EASING
+    // 取消恢复与自动返回分开，调落位节奏不改变恢复到详情的手感。
+    val cancelSpatialSpec: Easing get() = VIDEO_CARD_SPATIAL_EASING
     val predictiveSeekSpec: Easing get() = LinearEasing
     val effectsEasing: Easing get() = LinearEasing // progress is already eased by the owner
     val handoffTimeline get() = VideoCardTransitionVisualTimeline
@@ -208,8 +224,8 @@ private const val VIDEO_CARD_HERO_SPRING_MAX_STIFFNESS = 500f
 internal const val VIDEO_CARD_RETURN_SPRING_SETTLE_BUFFER_MS = 48
 // 约 1px：遗留 spring API 收敛阈值。
 private val VIDEO_CARD_HERO_BOUNDS_VISIBILITY_THRESHOLD = Rect(1f, 1f, 1f, 1f)
-// 透明度与进场空间统一 Continuity，避免淡入淡出和位移抢拍。
-private val VIDEO_CARD_ALPHA_EASING = AppMotionEasing.Continuity
+// Alpha and automatic spatial motion share the card curve to keep content in phase.
+private val VIDEO_CARD_ALPHA_EASING = VIDEO_CARD_SPATIAL_EASING
 
 enum class VideoSharedTransitionSpeed(val value: Int, val label: String) {
     FAST(0, "快速"),
@@ -282,14 +298,13 @@ internal fun resolveVideoCardSharedTransitionReturnEasing(): Easing =
 /**
  * 卡片景深返回清晰曲线。
  *
- * **必须与 sharedBounds 返回 morph 一致用 Linear**：
- * morph 已是 Linear tween（可 seek / remainingDuration 可算），景深若用 SoftClear
- * 会在卡片将落位时仍「挂糊」，观感上模糊层和壳不同步。
+ * 导航主路径读取已经缓动的 morph 深度，此处保持恒等映射，不能再缓动一次。
+ * 兼容 sharedBounds 返回本身采用 Linear；两条路径都避免景深与卡片落位脱节。
  */
 internal fun resolveVideoCardTransitionBackgroundReturnClearEasing(): Easing =
     LinearEasing
 
-internal fun resolveVideoCardSharedTransitionSpatialEasing(): Easing = AppMotionEasing.Continuity
+internal fun resolveVideoCardSharedTransitionSpatialEasing(): Easing = VIDEO_CARD_SPATIAL_EASING
 
 internal fun resolveVideoSharedTransitionSpatialStiffness(durationMillis: Int): Float {
     val safeDurationMillis = durationMillis.coerceAtLeast(1).toFloat()
@@ -674,12 +689,12 @@ internal fun resolveVideoMetadataSharedTransitionMotionSpec(
 
 /**
  * Hero 空间曲线：
- * - 进场（卡片→详情）：Continuity，先快后慢
+ * - 进场（卡片→详情）：卡片专用减速曲线
  * - 返回（详情→卡片）：Linear，保证预测返回 seek 与手指进度 1:1，
  *   松手后 remainingDuration 可按固定时长推算，避免 soft spring 导致
  *   「划一半有特效、松手一闪落位」以及完整加载后返回动画被瞬时掐掉
  *
- * 景深 / alpha 仍用 Continuity，落位柔和感由它们承担。
+ * 景深 / 内容读取统一进度；alpha 与自动空间动画共用卡片曲线。
  */
 internal fun resolveVideoSharedElementSpatialEasing(
     initialBounds: Rect,
@@ -708,6 +723,15 @@ internal fun videoSharedElementReturnSpringSpec(
 }
 
 /**
+ * 返回 morph 时长/缓动的单一事实来源：bounds spec（下方）与详情 progress
+ * 时钟（VideoDetailTransitionHost）必须共用这里，杜绝两处手写漂移。
+ */
+internal fun videoSharedElementReturnMorphDurationMillis(durationMillis: Int): Int =
+    resolveVideoHeroMotionSpec(durationMillis).enterDurationMillis
+
+internal fun videoSharedElementReturnMorphEasing(): Easing = LinearEasing
+
+/**
  * 返回 morph 固定时长 tween（Linear）：
  * - 可 seek：预测拖动 progress 与 bounds 进度一致
  * - 可打断：OPENING 中途返回可从当前 fraction 反转
@@ -719,8 +743,16 @@ internal fun videoSharedElementReturnTweenSpec(
 ): FiniteAnimationSpec<Rect> {
     val hero = resolveVideoHeroMotionSpec(durationMillis)
     return tween(
-        durationMillis = if (interactive) hero.enterDurationMillis else hero.returnDurationMillis,
-        easing = if (interactive) hero.predictiveSeekSpec else hero.returnSpatialSpec,
+        durationMillis = if (interactive) {
+            videoSharedElementReturnMorphDurationMillis(durationMillis)
+        } else {
+            hero.returnDurationMillis
+        },
+        easing = if (interactive) {
+            videoSharedElementReturnMorphEasing()
+        } else {
+            hero.returnSpatialSpec
+        },
     )
 }
 
@@ -768,10 +800,12 @@ internal fun resolveVideoMetadataSharedBoundsDurationMillis(
     if (!motion.enabled) return 0
     return (motion.durationMillis * VIDEO_METADATA_SHARED_BOUNDS_RATIO)
         .roundToInt()
-        .coerceIn(
-            VIDEO_METADATA_SHARED_BOUNDS_MIN_MILLIS,
-            VIDEO_METADATA_SHARED_BOUNDS_MAX_MILLIS
+        // 下界跟随主时长：reduced-motion 等场景主时长本身可能低于固定下限，
+        // 否则标题/UP 会比详情壳更晚落位。
+        .coerceAtLeast(
+            minOf(VIDEO_METADATA_SHARED_BOUNDS_MIN_MILLIS, motion.durationMillis)
         )
+        .coerceAtMost(VIDEO_METADATA_SHARED_BOUNDS_MAX_MILLIS)
 }
 
 internal fun resolveHomeVideoSharedTransitionCornerSpec(

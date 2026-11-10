@@ -22,9 +22,7 @@ class VideoCardDurationBadgeVisualPolicyTest {
         ).first { it.exists() }
         val sources = listOf(
             "VideoCard.kt",
-            "StoryVideoCard.kt",
-            "GlassVideoCard.kt",
-            "CinematicVideoCard.kt"
+            "StoryVideoCard.kt"
         ).joinToString(separator = "\n") { fileName ->
             sourceRoot.resolve(fileName).readText()
         }

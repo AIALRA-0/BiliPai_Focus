@@ -448,6 +448,19 @@ class HomeInteractionMotionBudgetPolicyTest {
     }
 
     @Test
+    fun shouldAnimateMd3TopTabUnderline_pagerKeepsOwnershipAfterRelease() {
+        for (dragging in listOf(true, false)) {
+            assertFalse(
+                shouldAnimateMd3TopTabUnderline(
+                    pagerIsDragging = dragging,
+                    topTabIndicatorOwnsPosition = false,
+                    pagerDrivesIndicator = true,
+                )
+            )
+        }
+    }
+
+    @Test
     fun resolveMd3TopTabTargetBounds_centersIndicatorOverTargetSlot() {
         val bounds = resolveMd3TopTabTargetBounds(
             targetIndex = 2,

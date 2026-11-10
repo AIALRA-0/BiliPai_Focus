@@ -2,26 +2,92 @@ package com.android.purebilibili.feature.download
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DownloadQueuePolicyTest {
 
     @Test
-    fun activeTask_blocksQueuedTaskDispatch() {
-        val tasks = listOf(
-            baseTask.copy(status = DownloadStatus.DOWNLOADING, createdAt = 1L),
-            baseTask.copy(cid = 2L, status = DownloadStatus.QUEUED, createdAt = 2L)
-        )
+    fun staleUrlRefresh_triggersAfterThreshold() {
+        val createdAt = 1_000_000L
+        val threshold = STALE_DOWNLOAD_URL_REFRESH_THRESHOLD_MS
 
-        assertNull(resolveNextQueuedDownloadTaskId(tasks))
+        assertEquals(
+            true,
+            shouldRefreshStaleDownloadUrls(
+                createdAtMs = createdAt,
+                nowMs = createdAt + threshold
+            )
+        )
+        assertEquals(
+            false,
+            shouldRefreshStaleDownloadUrls(
+                createdAtMs = createdAt,
+                nowMs = createdAt + threshold - 1L
+            )
+        )
+        // 刚入队/时钟异常时不刷新
+        assertEquals(
+            false,
+            shouldRefreshStaleDownloadUrls(createdAtMs = createdAt, nowMs = createdAt)
+        )
+        assertEquals(
+            false,
+            shouldRefreshStaleDownloadUrls(createdAtMs = createdAt, nowMs = createdAt - 1L)
+        )
     }
 
     @Test
-    fun idleQueue_dispatchesOldestQueuedTask() {
-        val older = baseTask.copy(cid = 2L, status = DownloadStatus.QUEUED, createdAt = 10L)
-        val newer = baseTask.copy(cid = 3L, status = DownloadStatus.QUEUED, createdAt = 20L)
+    fun activeSlots_fillUpToConcurrencyLimit() {
+        val tasks = listOf(
+            baseTask.copy(cid = 1L, status = DownloadStatus.DOWNLOADING, createdAt = 1L),
+            baseTask.copy(cid = 2L, status = DownloadStatus.QUEUED, createdAt = 2L),
+            baseTask.copy(cid = 3L, status = DownloadStatus.QUEUED, createdAt = 3L)
+        )
 
-        assertEquals(older.id, resolveNextQueuedDownloadTaskId(listOf(newer, older)))
+        // 1 个活跃 + 并发 2 → 只补最老的 1 个
+        val dispatched = resolveNextQueuedDownloadTaskIds(tasks)
+        assertEquals(1, dispatched.size)
+        assertEquals(baseTask.copy(cid = 2L).id, dispatched.first())
+    }
+
+    @Test
+    fun idleQueue_dispatchesUpToLimitOldestFirst() {
+        val tasks = listOf(
+            baseTask.copy(cid = 1L, status = DownloadStatus.QUEUED, createdAt = 30L),
+            baseTask.copy(cid = 2L, status = DownloadStatus.QUEUED, createdAt = 10L),
+            baseTask.copy(cid = 3L, status = DownloadStatus.QUEUED, createdAt = 20L)
+        )
+
+        val dispatched = resolveNextQueuedDownloadTaskIds(tasks)
+        assertEquals(DEFAULT_MAX_CONCURRENT_DOWNLOADS, dispatched.size)
+        assertEquals(
+            listOf(baseTask.copy(cid = 2L).id, baseTask.copy(cid = 3L).id),
+            dispatched
+        )
+    }
+
+    @Test
+    fun atConcurrencyCapacity_returnsEmpty() {
+        val tasks = listOf(
+            baseTask.copy(cid = 1L, status = DownloadStatus.DOWNLOADING, createdAt = 1L),
+            baseTask.copy(cid = 2L, status = DownloadStatus.MERGING, createdAt = 2L),
+            baseTask.copy(cid = 3L, status = DownloadStatus.QUEUED, createdAt = 3L)
+        )
+
+        assertTrue(resolveNextQueuedDownloadTaskIds(tasks).isEmpty())
+    }
+
+    @Test
+    fun pausedTasks_freeConcurrencySlots() {
+        val tasks = listOf(
+            baseTask.copy(cid = 1L, status = DownloadStatus.PAUSED, createdAt = 1L),
+            baseTask.copy(cid = 2L, status = DownloadStatus.QUEUED, createdAt = 2L)
+        )
+
+        assertEquals(
+            listOf(baseTask.copy(cid = 2L).id),
+            resolveNextQueuedDownloadTaskIds(tasks)
+        )
     }
 
     @Test

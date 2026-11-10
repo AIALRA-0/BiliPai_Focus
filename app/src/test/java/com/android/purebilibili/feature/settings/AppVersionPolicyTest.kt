@@ -7,15 +7,20 @@ import kotlin.test.assertTrue
 class AppVersionPolicyTest {
 
     @Test
-    fun appVersion_keepsFocusUpgradeVersionAboveExistingClients() {
+    fun appVersion_keepsTheUpstreamNameEpochAndRaisesFocusVersionCode() {
         val buildFile = listOf(
             File("app/build.gradle.kts"),
             File("build.gradle.kts")
         ).first { it.exists() }.readText()
+        val defaultConfig = buildFile.substringAfter("defaultConfig {").substringBefore("}")
+        val versionCode = Regex("versionCode\\s*=\\s*(\\d+)")
+            .find(defaultConfig)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
 
-        assertTrue(buildFile.contains("versionCode = 389"))
-        assertTrue(buildFile.contains("versionName = \"0.2.3-alpha.2.focus.1\""))
-        // Keep Focus release identity and advance beyond both existing Focus and upstream codes.
+        assertTrue((versionCode ?: 0) > 389)
+        assertTrue(defaultConfig.contains("versionName = \"0.7.9-beta.7.focus.1\""))
         assertTrue(
             buildFile.contains("语义化") ||
                 buildFile.contains("MAJOR.MINOR.PATCH") ||

@@ -8,6 +8,231 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FloatingBottomBarGeometryTest {
+    @Test
+    fun navigationIndicatorGeometryUsesTheSameAxesAndInsetContour() {
+        val shellThickness = 64f
+        val slotExtent = 48f
+        val thickness = resolveFloatingDockIndicatorHeightDp(
+            requestedHeightDp = 56f,
+            tabWidthDp = slotExtent,
+            geometryMode = FloatingBottomBarGeometryMode.TopNavigation,
+            shellHeightDp = shellThickness,
+        )
+        assertEquals(56f, thickness)
+        assertEquals(4f, (shellThickness - thickness) / 2f)
+        assertEquals(24f, resolveFloatingDockIndicatorCornerRadiusDp(shellThickness, thickness, slotExtent))
+        assertEquals(28f, resolveFloatingDockIndicatorCornerRadiusDp(shellThickness, thickness, 80f))
+        val geometry = resolveFloatingDockIndicatorGeometry(
+            shellThickness, thickness, FloatingBottomBarGeometryMode.TopNavigation,
+        )
+        assertEquals(78f / 56f, geometry.pressedScale, 0.0001f)
+    }
+
+    @Test
+    fun chromaticBandFollowsExpansionAndReturnsThroughTheSameSizes() {
+        val scales = listOf(1f, 1.15f, 1.25f, 78f / 56f)
+        val bands = scales.map { resolveFloatingDockChromaticGapBand(56f, 64f, it) }
+        assertEquals(0f, bands.first())
+        assertTrue(bands.zipWithNext().all { (before, after) -> after >= before })
+        assertTrue(bands.last() > 0f)
+        assertEquals(bands.reversed(), scales.reversed().map {
+            resolveFloatingDockChromaticGapBand(56f, 64f, it)
+        })
+    }
+
+    @Test
+    fun nativeForegroundStaysVisibleWhileGlassCaptureOwnsCoveredContent() {
+        for (coverage in listOf(-0.2f, 0f, 0.5f, 1f, 1.2f)) {
+            assertEquals(1f, resolveFloatingDockBaseContentAlpha(isLiquidGlass = false, coverage = coverage))
+        }
+        assertEquals(1f, resolveFloatingDockBaseContentAlpha(isLiquidGlass = true, coverage = 0f))
+        assertEquals(0.5f, resolveFloatingDockBaseContentAlpha(isLiquidGlass = true, coverage = 0.5f))
+        assertEquals(0f, resolveFloatingDockBaseContentAlpha(isLiquidGlass = true, coverage = 1f))
+    }
+
+
+    @Test
+    fun `top glass minimum slots keep horizontal capsules across content modes`() {
+        // Compact text, docked icon+text, floating icon+text and icon-only shells.
+        for (shell in listOf(40.dp, 48.dp, 52.dp)) {
+            val indicatorHeight = resolveBiliPaiBottomBarIndicatorHeight(shell)
+            for (contentWidth in listOf(24.dp, 48.dp, 88.dp, 160.dp)) {
+                val slot = resolveHomeTopDockMinimumSlotWidth(shell, contentWidth, true)
+                val fittedHeight = resolveFloatingDockIndicatorHeightDp(
+                    indicatorHeight.value, slot.value,
+                    FloatingBottomBarGeometryMode.TopNavigation, shell.value,
+                )
+                assertTrue(slot >= contentWidth)
+                assertTrue(slot.value / fittedHeight >= FLOATING_DOCK_MIN_INDICATOR_ASPECT - 0.001f)
+                assertEquals(indicatorHeight.value, fittedHeight, 0.001f)
+            }
+        }
+    }
+
+    @Test
+    fun `top native minimum slots preserve content sizing`() {
+        for (shell in listOf(40.dp, 48.dp, 52.dp)) {
+            for (contentWidth in listOf(24.dp, 48.dp, 88.dp)) {
+                assertEquals(contentWidth, resolveHomeTopDockMinimumSlotWidth(shell, contentWidth, false))
+            }
+        }
+    }
+
+    @Test
+    fun `compact dock reuses bottom dock inset and press geometry`() {
+        for (shellHeight in listOf(40f, 48f, 56f, 64f)) {
+            val requestedHeight = resolveBiliPaiBottomBarIndicatorHeight(shellHeight.dp).value
+            val compactHeight = resolveFloatingDockIndicatorHeightDp(
+                requestedHeight, 80f, FloatingBottomBarGeometryMode.CompactDock, shellHeight,
+            )
+            val bottomHeight = resolveFloatingDockIndicatorHeightDp(
+                requestedHeight, 80f, FloatingBottomBarGeometryMode.Dock, shellHeight,
+            )
+            assertEquals(shellHeight * 56f / 64f, compactHeight, 0.001f)
+            assertEquals(bottomHeight, compactHeight, 0.001f)
+            assertEquals(
+                resolveFloatingDockIndicatorGeometry(shellHeight, bottomHeight, FloatingBottomBarGeometryMode.Dock),
+                resolveFloatingDockIndicatorGeometry(shellHeight, compactHeight, FloatingBottomBarGeometryMode.CompactDock),
+            )
+        }
+    }
+
+    @Test
+    fun `browsing a date rail never relocates selection onto a visible neighbour`() {
+        val selected = 2f
+        for (scroll in listOf(0f, 100f, 250f, 500f)) {
+            val visual = resolveFloatingDockViewportIndicatorPosition(
+                position = selected,
+                tabWidthPx = 100f,
+                tabsCount = 10,
+                indicatorWidthPx = 80f,
+                scrollOffsetPx = scroll,
+                viewportWidthPx = 308f,
+                horizontalPaddingPx = 4f,
+                clampToViewport = false,
+            )
+            assertEquals(selected, visual)
+            val offset = resolveFloatingDockIndicatorOffsetPx(visual, 100f, 10, 80f)
+            assertEquals(210f, offset)
+            assertEquals(-offset, resolveFloatingDockClippedContentTranslationPx(visual, 100f, 10, 80f))
+        }
+    }
+
+    @Test
+    fun `content shell trims endpoint whitespace without changing label spacing`() {
+        for (widths in listOf(listOf(56f, 56f, 56f), listOf(56f, 120f, 88f))) {
+            val slot = 160f
+            val padding = 4f
+            val totalWidth = slot * widths.size + padding * 2f
+            val leading = resolveFloatingDockContentShellInsetPx(slot, widths.first())
+            val trailing = resolveFloatingDockContentShellInsetPx(slot, widths.last())
+            val first = padding + resolveFloatingDockIndicatorOffsetPx(0f, slot, 3, widths.first())
+            val last = padding + resolveFloatingDockIndicatorOffsetPx(2f, slot, 3, widths.last())
+            assertEquals(padding, first - leading, 0.001f)
+            assertEquals(padding, totalWidth - trailing - last - widths.last(), 0.001f)
+            val centers = widths.mapIndexed { index, width ->
+                val offset = resolveFloatingDockIndicatorOffsetPx(index.toFloat(), slot, 3, width)
+                assertEquals(0f, resolveFloatingDockIndicatorContentAlignmentPx(
+                    index.toFloat(), slot, 3, width,
+                ), 0.001f)
+                padding + offset + width / 2f
+            }
+            centers.zipWithNext().forEach { (before, after) ->
+                assertEquals(slot, after - before, 0.001f)
+            }
+        }
+    }
+
+    @Test
+    fun `full slot capsules do not trim the shell`() {
+        assertEquals(0f, resolveFloatingDockContentShellInsetPx(80f, 80f))
+        assertEquals(0f, resolveFloatingDockContentShellInsetPx(80f, 120f))
+        assertEquals(0f, resolveFloatingDockContentShellInsetPx(0f, 56f))
+    }
+
+    @Test
+    fun `content capsule grows and shrinks continuously between labels`() {
+        val widths = listOf(56f, 120f, 72f)
+        fun width(position: Float) = resolveFloatingDockContentIndicatorWidthPx(position, widths, 160f)
+        assertEquals(56f, width(0f))
+        assertEquals(88f, width(0.5f))
+        assertEquals(120f, width(1f))
+        assertEquals(96f, width(1.5f))
+        assertEquals(72f, width(2f))
+        assertEquals(56f, width(-1f))
+        assertEquals(72f, width(3f))
+        assertEquals(80f, resolveFloatingDockContentIndicatorWidthPx(1f, widths, 80f))
+        assertEquals(160f, resolveFloatingDockContentIndicatorWidthPx(1f, emptyList(), 160f))
+    }
+
+    @Test
+    fun `scrolling rail keeps indicator inside visible dock with end padding`() {
+        for (scroll in listOf(0f, 75f, 200f, 500f)) {
+            for (position in listOf(0f, 0.5f, 2f, 4.5f, 7f)) {
+                val visual = resolveFloatingDockViewportIndicatorPosition(
+                    position = position,
+                    tabWidthPx = 100f,
+                    tabsCount = 8,
+                    indicatorWidthPx = 80f,
+                    scrollOffsetPx = scroll,
+                    viewportWidthPx = 308f,
+                    horizontalPaddingPx = 4f,
+                )
+                val screenLeft = 4f + resolveFloatingDockIndicatorOffsetPx(
+                    visual, 100f, 8, 80f,
+                ) - scroll
+                assertTrue(screenLeft >= 4f - 0.001f)
+                assertTrue(screenLeft + 80f <= 304f + 0.001f)
+            }
+        }
+    }
+
+    @Test
+    fun `viewport clamp preserves visible motion and follows rail at either edge`() {
+        fun visual(position: Float, scroll: Float) = resolveFloatingDockViewportIndicatorPosition(
+            position, 100f, 8, 80f, scroll, 308f, 4f,
+        )
+        assertEquals(3f, visual(3f, 200f), 0.001f)
+        assertEquals(1.9f, visual(0f, 200f), 0.001f)
+        assertEquals(4.1f, visual(7f, 200f), 0.001f)
+        assertTrue(visual(7f, 210f) > visual(7f, 200f))
+    }
+
+    @Test
+    fun `chromatic gap stays outside the track at each indicator size`() {
+        for ((indicatorHeight, shellHeight, pressedHeight) in listOf(
+            Triple(56f, 64f, 78f),
+            Triple(35f, 40f, 48.75f),
+            Triple(28f, 32f, 39f),
+        )) {
+            assertEquals(0f, resolveFloatingDockChromaticGapBand(indicatorHeight, shellHeight, 1f))
+            val scale = pressedHeight / indicatorHeight
+            val band = resolveFloatingDockChromaticGapBand(indicatorHeight, shellHeight, scale)
+            assertTrue(band > 0f)
+            // The two colored bands end exactly at the track boundaries, leaving
+            // the label and central glass area outside the dispersion mask.
+            assertEquals(shellHeight, (indicatorHeight - 2f * band) * scale, 0.001f)
+            assertTrue(resolveFloatingDockChromaticGapBand(indicatorHeight, shellHeight, scale, 1.05f) < band)
+        }
+        assertEquals(0f, resolveFloatingDockChromaticGapBand(56f, 64f, 0f))
+        assertEquals(0f, resolveFloatingDockChromaticGapBand(56f, 64f, Float.NaN))
+    }
+
+    @Test
+    fun `drag autoscroll is stationary in center and proportional at edges`() {
+        assertEquals(0f, resolveDockDragEdgeScrollFraction(150f, 300f, 60f))
+        assertEquals(-0.5f, resolveDockDragEdgeScrollFraction(30f, 300f, 60f), 0.001f)
+        assertEquals(0.5f, resolveDockDragEdgeScrollFraction(270f, 300f, 60f), 0.001f)
+        assertEquals(-1f, resolveDockDragEdgeScrollFraction(-20f, 300f, 60f))
+        assertEquals(1f, resolveDockDragEdgeScrollFraction(320f, 300f, 60f))
+    }
+
+    @Test
+    fun `drag autoscroll rejects unmeasured and invalid viewport geometry`() {
+        assertEquals(0f, resolveDockDragEdgeScrollFraction(0f, 0f, 60f))
+        assertEquals(0f, resolveDockDragEdgeScrollFraction(0f, 300f, 0f))
+        assertEquals(0f, resolveDockDragEdgeScrollFraction(Float.NaN, 300f, 60f))
+    }
 
     @Test
     fun `home dock restores original 56 to 78 press bloom ratio`() {
@@ -15,29 +240,29 @@ class FloatingBottomBarGeometryTest {
     }
 
     @Test
-    fun `home top icon text and combined modes keep fuller flat indicators`() {
-        // 0: icon + label, 1: icon only, 2: label only. Use the actual dock width policy.
+    fun `home top label modes preserve equal shell insets without width flattening`() {
+        // Cover both top shell styles and all label modes under constrained widths.
         for (mode in listOf(0, 1, 2)) {
-            val width = resolveHomeTopTabFloatingDockWidth(393.dp, 5, mode)
-            val slot = resolveFloatingDockSlotWidthPx(width.value, 4f, 5)
-            val height = resolveFloatingDockIndicatorHeightDp(
-                52f, slot, FloatingBottomBarGeometryMode.TopNavigation, 56f,
-            )
-            val previous = resolveFloatingDockIndicatorHeightDp(
-                52f, slot, FloatingBottomBarGeometryMode.Segmented, 56f,
-            )
-            assertTrue(height >= previous, "label mode $mode")
-            assertEquals(minOf(52f, slot / 1.35f), height, 0.001f)
-            assertTrue(slot / height >= 1.35f - 0.001f)
+            for (floating in listOf(false, true)) {
+                val shell = resolveHomeTopDockShellHeight(floating)
+                for (container in listOf(240.dp, 393.dp)) {
+                    val width = resolveHomeTopTabFloatingDockWidth(container, 5, mode, shell)
+                    val slot = resolveFloatingDockSlotWidthPx(width.value, 8f, 5)
+                    val height = resolveFloatingDockIndicatorHeightDp(
+                        shell.value - 8f, slot, FloatingBottomBarGeometryMode.TopNavigation, shell.value,
+                    )
+                    assertEquals(4f, (shell.value - height) / 2f, 0.001f, "label mode $mode")
+                }
+            }
         }
     }
 
     @Test
     fun `dynamic top navigation fills its shell while comment controls stay compact`() {
-        assertEquals(46f, resolveFloatingDockIndicatorHeightDp(
+        assertEquals(38f, resolveFloatingDockIndicatorHeightDp(
             38f, 70f, FloatingBottomBarGeometryMode.TopNavigation, 50f,
         ), 0.001f)
-        assertEquals(36f, resolveFloatingDockIndicatorHeightDp(
+        assertEquals(30f, resolveFloatingDockIndicatorHeightDp(
             30f, 66f, FloatingBottomBarGeometryMode.Segmented, 40f,
         ), 0.001f)
     }
@@ -51,10 +276,10 @@ class FloatingBottomBarGeometryTest {
                 geometryMode = FloatingBottomBarGeometryMode.Segmented,
                 shellHeightDp = shell,
             )
-            assertEquals(2f, (shell - height) / 2, 0.001f)
+            assertEquals(minOf(30f, shell - 6f), height, 0.001f)
             assertTrue(slot / height >= 1.6f)
         }
-        assertEquals(30f, resolveFloatingDockIndicatorHeightDp(
+        assertEquals(36f, resolveFloatingDockIndicatorHeightDp(
             30f, 48f, FloatingBottomBarGeometryMode.Segmented, 40f,
         ), 0.001f)
         // Dock 模式也留静止边距（56dp 壳 → 56 × 4/64 = 3.5dp/侧 → 49dp 指示器）。
@@ -85,6 +310,28 @@ class FloatingBottomBarGeometryTest {
     }
 
     @Test
+    fun `click selection and external fractional follow keep optics active without a pointer press`() {
+        for ((position, target) in listOf(0.5f to 1f, 1.5f to 1.5f, 2.75f to 3f)) {
+            val motion = resolveFloatingDockSelectionMotionProgress(position, target)
+            assertEquals(1f, resolveFloatingDockRefractionProgress(
+                pressProgress = 0f,
+                tapPressRefractionEnabled = false,
+                isDragging = false,
+                isPagerScrolling = false,
+                selectionMotionProgress = motion,
+            ))
+        }
+        assertEquals(0f, resolveFloatingDockSelectionMotionProgress(3f, 3f))
+        assertEquals(0f, resolveFloatingDockSelectionMotionProgress(3.005f, 3f))
+        assertEquals(0f, resolveFloatingDockSelectionMotionProgress(Float.NaN, 1f))
+        // Reversing a selection reuses current geometry; it does not need a new press.
+        assertEquals(
+            resolveFloatingDockSelectionMotionProgress(0.5f, 1f),
+            resolveFloatingDockSelectionMotionProgress(0.5f, 0f),
+        )
+    }
+
+    @Test
     fun `tap refraction opt out preserves drag and pager effects`() {
         assertEquals(0.6f, resolveFloatingDockRefractionProgress(0.6f, true, false, false))
         assertEquals(0f, resolveFloatingDockRefractionProgress(0.6f, false, false, false))
@@ -94,15 +341,29 @@ class FloatingBottomBarGeometryTest {
     }
 
     @Test
-    fun `segmented geometry flattens narrow slots without changing dock geometry`() {
+    fun `segmented resting capsules stay oval with shared shell relative bloom`() {
         for (width in listOf(40f, 48f, 56f, 64f, 108f)) {
             val height = resolveFloatingDockIndicatorHeightDp(
                 requestedHeightDp = 52f,
                 tabWidthDp = width,
                 geometryMode = FloatingBottomBarGeometryMode.Segmented,
             )
-            assertEquals(minOf(52f, width / 1.6f), height, 0.001f)
-            assertTrue(width / height >= 1.6f - 0.001f)
+            assertEquals(resolveSegmentedControlIndicatorHeightDp(width, 52f), height, 0.001f)
+            assertTrue(width / height >= 1.6f)
+            val pressed = resolveFloatingDockIndicatorGeometry(
+                shellHeightDp = 56f,
+                indicatorHeightDp = height,
+                geometryMode = FloatingBottomBarGeometryMode.Segmented,
+            )
+            assertEquals(56f * 78f / 64f, pressed.pressedHeightDp, 0.001f)
+            assertTrue(pressed.pressedHeightDp > 56f)
+            val overflow = resolveFloatingDockCaptureInsets(
+                shellHeightDp = 56f,
+                requestedIndicatorHeightDp = 52f,
+                indicatorWidthDp = width,
+                geometryMode = FloatingBottomBarGeometryMode.Segmented,
+            )
+            assertTrue(overflow.verticalDp >= (pressed.pressedHeightDp - 56f) / 2f)
             assertEquals(0f, resolveFloatingDockIndicatorOffsetPx(0f, width, 3, width))
             assertEquals(width * 2, resolveFloatingDockIndicatorOffsetPx(2f, width, 3, width))
         }
@@ -391,46 +652,7 @@ class FloatingBottomBarGeometryTest {
         )
     }
 
-    @Test
-    fun `tight shell-height constraints do not steal rest inset for press overflow`() {
-        val overflowPx = 7
-        assertFalse(
-            shouldReserveFloatingDockScaleOverflow(
-                incomingMaxHeightPx = 64,
-                shellHeightPx = 64,
-                overflowPx = overflowPx,
-            )
-        )
-        assertTrue(
-            shouldReserveFloatingDockScaleOverflow(
-                incomingMaxHeightPx = 64 + overflowPx * 2,
-                shellHeightPx = 64,
-                overflowPx = overflowPx,
-            )
-        )
-        assertTrue(
-            shouldReserveFloatingDockScaleOverflow(
-                incomingMaxHeightPx = androidx.compose.ui.unit.Constraints.Infinity,
-                shellHeightPx = 64,
-                overflowPx = overflowPx,
-            )
-        )
-    }
 
-    @Test
-    fun `pressed indicator overflow is reserved so compact docks are not clipped`() {
-        val homeOverflow = resolveCompactDockScaleOverflowDp(
-            shellHeightDp = 64f,
-            indicatorHeightDp = 48f,
-        )
-        val compactOverflow = resolveCompactDockScaleOverflowDp(
-            shellHeightDp = 40f,
-            indicatorHeightDp = 30f,
-        )
-        assertEquals((78f - 64f) / 2f, homeOverflow, 0.001f)
-        assertEquals((40f * 78f / 56f - 40f) / 2f, compactOverflow, 0.001f)
-        assertTrue(compactOverflow > 0f)
-    }
 
     @Test
     fun `narrow fitted indicator still grows beyond the dock while dragging`() {
@@ -471,4 +693,19 @@ class FloatingBottomBarGeometryTest {
         assertEquals(24f, resolveFloatingDockDragEdgeInsetPx(systemInsetPx = 0f, fallbackPx = 24f))
         assertEquals(80f, resolveFloatingDockDragEdgeInsetPx(systemInsetPx = 80f, fallbackPx = 24f))
     }
+
+    @Test
+    fun `adaptive scroll shell keeps endpoint inset constant while approaching content edge`() {
+        // A 60px capsule is centered inside a 100px slot: the extra 20px is
+        // outside the visible shell until scrolling carries that content edge away.
+        for (distance in listOf(0f, 4f, 10f, 20f)) {
+            val trim = resolveFloatingDockScrollableShellInsetPx(100f, 60f, distance)
+            assertEquals(20f - distance, trim, 0.001f)
+            assertEquals(0f, 20f - distance - trim, 0.001f)
+        }
+        assertEquals(0f, resolveFloatingDockScrollableShellInsetPx(100f, 60f, 40f))
+        assertEquals(0f, resolveFloatingDockScrollableShellInsetPx(100f, 100f, 0f))
+        assertEquals(0f, resolveFloatingDockScrollableShellInsetPx(100f, 160f, 0f))
+    }
+
 }

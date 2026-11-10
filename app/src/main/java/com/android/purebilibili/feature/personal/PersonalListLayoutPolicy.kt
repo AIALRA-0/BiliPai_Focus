@@ -40,4 +40,4 @@ internal fun resolvePersonalListItemWidthDp(
 }
 
 internal fun resolvePersonalMediaCardMinHeightDp(fontScale: Float): Float =
-    PERSONAL_LIST_BASE_MIN_HEIGHT_DP * max(1f, fontScale)
+    com.android.purebilibili.feature.home.components.cards.resolveHorizontalVideoCardMinimumHeightDp(fontScale)

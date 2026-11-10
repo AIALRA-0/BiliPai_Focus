@@ -1,6 +1,15 @@
-// 根目录 build.gradle.kts
-// AGP 9.3 ships R8 9.3.x (newer than the previous Kotlin-2.4 pin of 9.1.31).
-// Do not force an older com.android.tools:r8 override unless AGP's bundled R8 regresses.
+// R8 与 AGP 分开固定，便于更新优化器而保持当前 Studio 支持的 AGP 9.3 系列。
+// 历史记录涉及的视频卡片文件类由 app/proguard-rules.pro 暂作合并隔离。
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools:r8:9.5.28")
+    }
+}
 
 plugins {
     // 1. Android 插件 (版本号要固定)
@@ -16,8 +25,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.0" apply false
     // 序列化插件
     id("org.jetbrains.kotlin.plugin.serialization") version "2.4.0" apply false
-    
+
     // 3. Firebase 相关插件
     id("com.google.gms.google-services") version "4.4.2" apply false
     id("com.google.firebase.crashlytics") version "3.0.2" apply false
+}
+
+// Custom policies must also run during each library's partial Lint analysis.
+// App-only lintChecks would miss models moved into core-data.
+subprojects {
+    plugins.withId("com.android.library") {
+        dependencies.add("lintChecks", project(":ci-lint"))
+    }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -112,71 +113,62 @@ object TextSelectionPolicy {
     fun formatSelectedCountBadge(characterCount: Int): String {
         return if (characterCount > 0) "已选 ${characterCount} 字" else ""
     }
-
-    /**
-     * 从 Compose 的 TextToolbar 复制回调中安全提取当前选中的文本内容
-     */
-    fun resolveSelectedTextFromCopyCallback(onCopyRequested: Any?): String? {
-        if (onCopyRequested == null) return null
-        return try {
-            var receiver = (onCopyRequested as? kotlin.jvm.internal.CallableReference)?.boundReceiver
-            if (receiver == null) {
-                for (field in onCopyRequested.javaClass.declaredFields) {
-                    field.isAccessible = true
-                    val value = field.get(onCopyRequested) ?: continue
-                    if (value.javaClass.name.contains("SelectionManager")) {
-                        receiver = value
-                        break
-                    }
-                    if (field.name == "this$0") {
-                        receiver = value
-                    }
-                }
-            }
-            if (receiver != null) {
-                val method = receiver.javaClass.methods.firstOrNull {
-                    it.name.startsWith("getSelectedText") && it.parameterCount == 0
-                } ?: receiver.javaClass.declaredMethods.firstOrNull {
-                    it.name.startsWith("getSelectedText") && it.parameterCount == 0
-                }
-                if (method != null) {
-                    method.isAccessible = true
-                    val result = method.invoke(receiver)
-                    val text = (result as? androidx.compose.ui.text.AnnotatedString)?.text ?: result?.toString()
-                    if (!text.isNullOrEmpty()) return text
-                }
-                for (f in receiver.javaClass.declaredFields) {
-                    f.isAccessible = true
-                    val obj = f.get(receiver) ?: continue
-                    if (obj is androidx.compose.ui.text.AnnotatedString) {
-                        return obj.text
-                    }
-                }
-            }
-            null
-        } catch (_: Throwable) {
-            null
-        }
-    }
 }
 
 /**
  * 兼容原生文本选区的轻触手势检测器。
  * 区别于系统 [androidx.compose.foundation.gestures.detectTapGestures] 会在按下 (down) 时立即消耗事件导致文本无法被划选，
  * 此检测器在 down 时绝不消耗事件，仅当手指在超时时间 ([androidx.compose.ui.platform.ViewConfiguration.longPressTimeoutMillis]) 内正常抬起时才触发点击。
- * 若用户长按超过超时阈值或拖拽划选手势，事件直接完整放行给 Compose 原生 TextSelection 划选体系与游标。
+ * 可选长按回调供带链接的富文本打开复制面板；未提供时长按与拖拽仍交给原生划选。
  */
 suspend fun PointerInputScope.detectTapWithSelectionFriendly(
-    onTap: (Offset) -> Unit
+    onLongPress: (() -> Unit)? = null,
+    onTap: ((Offset) -> Unit)? = null,
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
-        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-            waitForUpOrCancellation()
-        }
-        if (up != null && !up.isConsumed) {
-            up.consume()
-            onTap(up.position)
+        if (onLongPress == null) {
+            val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                waitForUpOrCancellation()
+            }
+            if (up != null && !up.isConsumed && onTap != null) {
+                up.consume()
+                onTap(up.position)
+            }
+        } else {
+            // Observe the Initial pass so a link consuming the press in BasicText does not
+            // cancel the long press. Movement beyond touch slop still yields to scrolling.
+            var released = false
+            var dragged = false
+            val finishedBeforeTimeout = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                while (!released && !dragged) {
+                    val change = awaitPointerEvent(PointerEventPass.Initial)
+                        .changes.firstOrNull { it.id == down.id }
+                    released = change == null || !change.pressed
+                    dragged = change != null &&
+                        (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+                }
+                true
+            } == true
+            if (!finishedBeforeTimeout) {
+                onLongPress()
+                while (true) {
+                    val release = awaitPointerEvent(PointerEventPass.Initial)
+                        .changes.firstOrNull { it.id == down.id }
+                    if (release == null || !release.pressed) {
+                        release?.consume()
+                        break
+                    }
+                }
+            } else if (released && onTap != null) {
+                // Let BasicText consume a link click during Main before handling blank text.
+                val up = awaitPointerEvent(PointerEventPass.Final)
+                    .changes.firstOrNull { it.id == down.id }
+                if (up != null && !up.isConsumed) {
+                    up.consume()
+                    onTap(up.position)
+                }
+            }
         }
     }
 }

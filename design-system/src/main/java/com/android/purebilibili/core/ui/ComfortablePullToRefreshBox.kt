@@ -19,6 +19,7 @@ fun ComfortablePullToRefreshBox(
     modifier: Modifier = Modifier,
     state: PullToRefreshState = rememberPullToRefreshState(),
     contentAlignment: Alignment = Alignment.TopStart,
+    enabled: Boolean = true,
     indicator: @Composable BoxScope.() -> Unit = {
         AdaptivePullToRefreshDefaultIndicator(
             isRefreshing = isRefreshing,
@@ -32,11 +33,12 @@ fun ComfortablePullToRefreshBox(
             state = state,
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
+            enabled = enabled,
             threshold = resolvePullRefreshThresholdDp().dp
         ),
         contentAlignment = contentAlignment,
     ) {
         content()
-        indicator()
+        if (enabled || isRefreshing) indicator()
     }
 }

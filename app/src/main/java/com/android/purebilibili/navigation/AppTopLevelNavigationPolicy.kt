@@ -1,5 +1,7 @@
 package com.android.purebilibili.navigation
 
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import com.android.purebilibili.feature.home.components.BottomNavItem
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.toLegacyRoute
@@ -29,8 +31,56 @@ internal data class BottomPagerRenderBudget(
 
 internal const val BOTTOM_TAB_RENDER_BUDGET_HOLD_MILLIS = 220L
 internal const val BOTTOM_BAR_MAX_VISIBLE_ITEMS = 5
-// 底栏最多有 5 个栏目；预组合其余 4 页，避免跨多页动画途中临时创建中间页面。
+// 底栏最多有 5 个栏目；保留其余页的轻量布局槽，内容按各页预加载许可创建。
 internal const val BOTTOM_PAGER_MAX_PRELOAD_DISTANCE = BOTTOM_BAR_MAX_VISIBLE_ITEMS - 1
+// 预热会创建真实组合树、状态收集与 ViewModel，并非没有成本的占位。
+// 数据与图片另有页面活跃门控；后台挂载还必须等待帧完成后的消息队列空闲机会，
+// 并在提交前重新检查交互状态。时间间隔本身不能证明这一帧有足够预算。
+internal const val BOTTOM_PAGER_PRELOAD_IDLE_MILLIS = 120L
+internal const val BOTTOM_PAGER_PRELOAD_INTERVAL_MILLIS = 16L
+
+/**
+ * 点击底栏后先让出若干帧，让目标页在动画启动前完成首次组合与测量。
+ *
+ * 目标页在 selectedPage 更新后立刻成为转场参与者并开始组合；如果动画与这次冷组合抢
+ * 同一帧预算，首帧就会超时，表现为切页动画掉帧。让出一帧即可把这笔成本提前付掉。
+ * 只让一帧：更多会让底栏指示器的手感明显变迟钝。
+ */
+internal const val BOTTOM_PAGER_TARGET_PREWARM_FRAMES = 1
+
+/**
+ * 已预热栏目集合的跨重建保留策略。
+ *
+ * rememberSaveable 也会在进程死亡后恢复，不能把保存过的栏目当成仍在内存中的热页面。
+ * 只保留同一进程中的挂载记录；跨进程恢复仍优先挂载当前页，再逐页预热。
+ */
+private val bottomPagerProcessSession = "${System.currentTimeMillis()}:${System.nanoTime()}"
+
+internal fun bottomPagerPreloadedItemsSaver(processSession: String): Saver<Set<BottomNavItem>, Any> =
+    listSaver(
+        save = { items -> listOf(processSession) + items.map { it.name } },
+        restore = { names ->
+            if (names.firstOrNull() != processSession) emptySet() else {
+                names.drop(1).mapNotNull { name -> BottomNavItem.entries.firstOrNull { it.name == name } }
+                    .toSet()
+            }
+        }
+    )
+
+internal val BottomPagerPreloadedItemsSaver = bottomPagerPreloadedItemsSaver(bottomPagerProcessSession)
+
+internal fun shouldAllowBottomPagerBackgroundWork(
+    isMainHostTop: Boolean,
+    isCardTransitionIdle: Boolean,
+    isPagerNavigating: Boolean,
+): Boolean = isMainHostTop && isCardTransitionIdle && !isPagerNavigating
+
+internal fun nextBottomPagerPreloadItem(
+    visibleItems: List<BottomNavItem>,
+    preloadedItems: Set<BottomNavItem>,
+): BottomNavItem? = visibleItems.firstOrNull {
+    it != BottomNavItem.STORY && it !in preloadedItems
+}
 
 internal fun resolveTopLevelNavigationAction(
     currentRoute: String?,
@@ -125,7 +175,9 @@ internal fun resolveVisibleBottomBarItems(
 ): List<BottomNavItem> {
     return orderedVisibleTabIds
         .mapNotNull { id -> BottomNavItem.entries.find { it.name == id } }
+        .distinct()
         .take(BOTTOM_BAR_MAX_VISIBLE_ITEMS)
+        .ifEmpty { listOf(BottomNavItem.HOME) }
 }
 
 internal fun resolveActiveBottomTabRoute(
@@ -204,6 +256,13 @@ internal fun resolveBottomPagerSaveableStateKey(item: BottomNavItem): String {
     return "bottom:${item.route}"
 }
 
+internal fun resolveBottomPagerLayoutKey(page: Int, visibleItems: List<BottomNavItem>): String {
+    // 设置缩减底栏时，Pager 的旧布局/预取仍可能查询已移除的页。
+    // 临时空槽必须有独立键，不能复用首页键造成重复。
+    return visibleItems.getOrNull(page)?.let(::resolveBottomPagerSaveableStateKey)
+        ?: "bottom:removed-slot:$page"
+}
+
 internal fun resolveBottomPagerNavigationDurationMillis(pageDistance: Int): Int {
     val distance = pageDistance.coerceAtLeast(2)
     return distance * 100 + 100
@@ -231,7 +290,7 @@ internal fun shouldEnableBottomPagerUserScroll(): Boolean = false
  * BiliPai MainScreen composition:
  * `if (isCurrentPage || contentReady) XxxPager(...)`
  *
- * After first-frame ready, lightweight bottom-tab slots stay mounted so
+ * After an individual page is ready, its bottom-tab slot stays mounted so
  * [MainBottomPagerState.switchToPage] `animateScrollBy` far jumps
  * (rightmost → home) scroll across real pages instead of empty Boxes.
  * Story is intentionally excluded while inactive: mounting it creates a real media player and

@@ -3,8 +3,19 @@ package com.android.purebilibili.feature.video.playback.loader
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 
 class PlaybackRequestPolicyTest {
+    @Test
+    fun `resolved cid and playback intent reconcile without restarting metadata`() {
+        val active = PlaybackRequest.create(bvid = "BV1request", cid = 0L, autoPlay = false)
+        assertTrue(active.matchesInFlight(active.copy(cid = 2233L, autoPlay = true), resolvedCid = 2233L))
+        assertFalse(active.matchesInFlight(active.copy(cid = 9999L), resolvedCid = 2233L))
+        assertFalse(active.matchesInFlight(active.copy(force = true), resolvedCid = 2233L))
+        assertFalse(active.matchesInFlight(active.copy(audioLang = "jp"), resolvedCid = 2233L))
+        assertFalse(active.matchesInFlight(active.copy(bvid = "BV2other"), resolvedCid = 2233L))
+    }
 
     @Test
     fun `create preserves explicit playback load arguments`() {

@@ -591,6 +591,52 @@ class UiSkinPackageReaderTest {
     }
 
     @Test
+    fun mikaStyleArchiveUsesSkinMetadataAndOuterSquaredBackground() {
+        val themeJson = """
+            {
+              "user_equip": {
+                "id": 1782464353001,
+                "name": "弥咔Mika",
+                "ver": "1782718438",
+                "package_url": "https://i0.hdslb.com/bfs/garb/mika.zip",
+                "data": {
+                  "color": "#000000",
+                  "color_second_page": "#DBBEC1",
+                  "tail_color": "#503B3B",
+                  "tail_color_selected": "#C48E8F",
+                  "tail_icon_mode": "img"
+                }
+              }
+            }
+        """.trimIndent()
+        val bytes = bilibiliThemeArchive(
+            "data.json" to """{"data":{"name":"套装总信息","item_id":417751501}}""".toByteArray(),
+            "skin/弥咔Mika.json" to themeJson.toByteArray(),
+            "skin/package_url7116d7468abf9543b0d96995daa2979f6d95ada8.zip" to skinPackage(
+                "tail_bg.png" to pngBytes(),
+                "head_bg.jpg" to jpegBytes(),
+                "tail_icon_main.png" to pngBytes(),
+                "tail_icon_selected_main.png" to pngBytes(),
+                "head_myself_bg.jpg" to jpegBytes(),
+            ),
+            "skin/head_myself_squared_bg0ef5e090de4f4a6c0842e3b571dcba00586efd1a.jpg" to jpegBytes(),
+        )
+
+        val preview = UiSkinPackageReader.preview(
+            UiSkinImportPackageResolver.resolve(bytes).getOrThrow().packageBytes
+        ).getOrThrow()
+
+        assertEquals("local.bilibili_skin.1782464353001", preview.manifest.skinId)
+        assertEquals("弥咔Mika", preview.manifest.displayName)
+        assertEquals("1782718438", preview.manifest.version)
+        assertEquals("#503B3B", preview.manifest.colors.bottomBarTrimTint)
+        assertEquals("#C48E8F", preview.manifest.colors.bottomBarSelectedTint)
+        assertEquals("#DBBEC1", preview.manifest.colors.topAtmosphereTint)
+        assertEquals("assets/head_myself_squared_bg.jpg", preview.manifest.assets.homeProfileSquaredBackground)
+        assertEquals("assets/tail_icon_selected_main.png", preview.manifest.assets.bottomBarIcons["home_selected"])
+    }
+
+    @Test
     fun bilibiliSkinDirectGb18030JsonPreservesChineseThemeName() {
         val packageBytes = skinPackage("tail_bg.png" to pngBytes())
         val input = officialUserEquipJson().toByteArray(java.nio.charset.Charset.forName("GB18030"))

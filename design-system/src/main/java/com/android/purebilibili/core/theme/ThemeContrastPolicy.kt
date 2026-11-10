@@ -47,13 +47,13 @@ fun resolveAccessibleContainerColors(
     val resolvedContainer = opaqueCompositeOver(containerColor, backgroundColor)
     val candidates = (listOf(contentColor) + fallbackContentColors).distinct()
     val resolvedContent = candidates.firstOrNull {
-        calculateContrastRatio(it, resolvedContainer) >= minimumContrast
+        calculateContrastRatio(opaqueCompositeOver(it, resolvedContainer), resolvedContainer) >= minimumContrast
     } ?: candidates.maxByOrNull {
-        calculateContrastRatio(it, resolvedContainer)
+        calculateContrastRatio(opaqueCompositeOver(it, resolvedContainer), resolvedContainer)
     } ?: contentColor
     return AccessibleContainerColors(
         containerColor = resolvedContainer,
-        contentColor = resolvedContent.copy(alpha = 1f),
+        contentColor = opaqueCompositeOver(resolvedContent, resolvedContainer),
     )
 }
 
@@ -85,16 +85,17 @@ internal fun resolveReadableThemeTextColor(
     fallbacks: List<Color>,
     minimumContrast: Float
 ): Color {
-    if (calculateContrastRatio(candidate, background) >= minimumContrast) {
-        return candidate
-    }
-
-    return fallbacks.firstOrNull { fallback ->
-        calculateContrastRatio(fallback, background) >= minimumContrast
+    val candidates = listOf(candidate) + fallbacks + listOf(Color.Black, Color.White)
+    return candidates.map { opaqueCompositeOver(it, background) }.firstOrNull {
+        calculateContrastRatio(it, background) >= minimumContrast
     } ?: candidate
 }
 
-fun enforceDynamicLightTextContrast(
+/**
+ * 浅色与深色模式通用的正文对比度兜底：候选文字与其底色不足 [ACCESSIBLE_TEXT_MIN_CONTRAST]
+ * 时，依序回退到可读的语义角色，避免自定义种子色/覆盖色产生不可读文本。
+ */
+fun enforceDynamicTextContrast(
     scheme: ColorScheme
 ): ColorScheme {
     val accentFallbacks = listOf(
@@ -184,4 +185,17 @@ fun enforceDynamicLightTextContrast(
             minimumContrast = PRIMARY_TEXT_MIN_CONTRAST
         )
     )
+}
+
+/** Keep a readable native glyph unchanged; repair only a failed glyph/background pair.
+ * The caller supplies the actual control fill and the surface underneath transparency. */
+fun resolveControlGlyphColor(candidate: Color, container: Color, surface: Color): Color {
+    if (container == Color.Unspecified || candidate == Color.Unspecified) return candidate
+    val background = opaqueCompositeOver(container, surface)
+    if (calculateContrastRatio(opaqueCompositeOver(candidate, background), background) >= ACCESSIBLE_UI_MIN_CONTRAST) {
+        return candidate
+    }
+    return resolveAccessibleContainerColors(
+        container, candidate, surface, listOf(Color.Black, Color.White), ACCESSIBLE_UI_MIN_CONTRAST,
+    ).contentColor
 }

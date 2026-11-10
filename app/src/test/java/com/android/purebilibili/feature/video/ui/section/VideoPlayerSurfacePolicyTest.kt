@@ -9,25 +9,12 @@ import kotlin.test.assertTrue
 class VideoPlayerSurfacePolicyTest {
 
     @Test
-    fun relatedBackPreviewKeepsTextureSurfaceStableAfterLanding() {
-        val source = java.io.File(
-            "src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt"
-        ).readText()
-
-        assertTrue(source.contains("hasUsedLiveBackPreviewTexture"))
-        assertTrue(
-            source.contains(
-                "liveBackPreview = liveBackPreview || hasUsedLiveBackPreviewTexture"
-            )
-        )
-    }
-
-    @Test
     fun `flip disabled keeps default surface type`() {
         assertFalse(
             shouldUseTextureSurfaceForFlip(
                 isFlippedHorizontal = false,
-                isFlippedVertical = false
+                isFlippedVertical = false,
+                preferCompatibleTextureSurface = false,
             )
         )
     }
@@ -37,7 +24,8 @@ class VideoPlayerSurfacePolicyTest {
         assertTrue(
             shouldUseTextureSurfaceForFlip(
                 isFlippedHorizontal = true,
-                isFlippedVertical = false
+                isFlippedVertical = false,
+                preferCompatibleTextureSurface = false,
             )
         )
     }
@@ -47,7 +35,8 @@ class VideoPlayerSurfacePolicyTest {
         assertTrue(
             shouldUseTextureSurfaceForFlip(
                 isFlippedHorizontal = false,
-                isFlippedVertical = true
+                isFlippedVertical = true,
+                preferCompatibleTextureSurface = false,
             )
         )
     }
@@ -58,7 +47,8 @@ class VideoPlayerSurfacePolicyTest {
             shouldUseTextureSurfaceForFlip(
                 isFlippedHorizontal = false,
                 isFlippedVertical = false,
-                liveBackPreview = true
+                liveBackPreview = true,
+                preferCompatibleTextureSurface = false,
             )
         )
     }
@@ -69,7 +59,8 @@ class VideoPlayerSurfacePolicyTest {
             shouldUseTextureSurfaceForFlip(
                 isFlippedHorizontal = false,
                 isFlippedVertical = false,
-                navigationTransformEnabled = true
+                navigationTransformEnabled = true,
+                preferCompatibleTextureSurface = false,
             )
         )
     }
@@ -81,16 +72,27 @@ class VideoPlayerSurfacePolicyTest {
                 isFlippedHorizontal = false,
                 isFlippedVertical = false,
                 navigationTransformEnabled = true,
-                requiresHdrSurfaceOutput = true
+                requiresHdrSurfaceOutput = true,
+                preferCompatibleTextureSurface = true,
             )
         )
-        // Flip still needs TextureView for matrix transforms under HDR.
-        assertTrue(
+        // 请求翻转也不能让 HDR 输出降为纹理合成的 SDR。
+        assertFalse(
             shouldUseTextureSurfaceForFlip(
                 isFlippedHorizontal = true,
                 isFlippedVertical = false,
                 navigationTransformEnabled = true,
-                requiresHdrSurfaceOutput = true
+                requiresHdrSurfaceOutput = true,
+                preferCompatibleTextureSurface = true,
+            )
+        )
+        assertFalse(
+            shouldUseTextureSurfaceForFlip(
+                isFlippedHorizontal = false,
+                isFlippedVertical = true,
+                liveBackPreview = true,
+                requiresHdrSurfaceOutput = true,
+                preferCompatibleTextureSurface = true,
             )
         )
     }
@@ -154,6 +156,7 @@ class VideoPlayerSurfacePolicyTest {
     fun `hdr surface required for quality 125 126 and pq hlg transfer`() {
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 125))
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 126))
+        assertTrue(requiresHdrSurfaceOutput(currentQualityId = 129))
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 80, colorTransfer = 6))
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 80, colorTransfer = 7))
         assertFalse(requiresHdrSurfaceOutput(currentQualityId = 80, colorTransfer = 0))
@@ -169,7 +172,6 @@ class VideoPlayerSurfacePolicyTest {
         )
 
         assertEquals(0f, spec.alpha)
-        assertEquals(0.985f, spec.scale)
     }
 
     @Test
@@ -181,7 +183,6 @@ class VideoPlayerSurfacePolicyTest {
         )
 
         assertEquals(1f, spec.alpha)
-        assertEquals(1f, spec.scale)
     }
 
     @Test
@@ -198,9 +199,7 @@ class VideoPlayerSurfacePolicyTest {
         )
 
         assertEquals(0f, forcedReturnSpec.alpha)
-        assertEquals(1f, forcedReturnSpec.scale)
         assertEquals(0f, manualStartSpec.alpha)
-        assertEquals(1f, manualStartSpec.scale)
     }
 
     @Test

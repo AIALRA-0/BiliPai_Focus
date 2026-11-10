@@ -30,16 +30,6 @@ internal fun resolveHomeNotInterestedVisualTransition(
     )
 }
 
-internal fun resolveHomeDismissVisualTransition(
-    isFeedbackRecorded: Boolean,
-    cardAnimationEnabled: Boolean
-): HomeNotInterestedVisualTransition {
-    return resolveHomeNotInterestedVisualTransition(
-        isFeedbackRecorded = isFeedbackRecorded,
-        isDissolveAnimationAvailable = cardAnimationEnabled
-    )
-}
-
 internal fun resolveHomeNotInterestedAction(
     video: VideoItem,
     reason: RecommendationFeedbackReason
@@ -75,6 +65,13 @@ private fun RecommendationFeedbackReason.withInferredLocalActionIfNeeded(): Reco
     } else {
         copy(localAction = inferred)
     }
+}
+
+internal fun resolveDefaultHomeNotInterestedReason(): RecommendationFeedbackReason {
+    return RecommendationFeedbackReason(
+        name = "这个内容",
+        localAction = RecommendationFeedbackLocalAction.VIDEO_ONLY,
+    )
 }
 
 internal fun resolveHomeNotInterestedReasons(video: VideoItem): List<RecommendationFeedbackReason> {

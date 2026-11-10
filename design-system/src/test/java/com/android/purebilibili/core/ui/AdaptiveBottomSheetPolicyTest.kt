@@ -17,7 +17,7 @@ class AdaptiveBottomSheetPolicyTest {
             ?.readText()
             ?: error("Cannot locate AppSheetComponents.kt from ${File(".").absolutePath}")
 
-        assertTrue(source.contains("contentColor: Color = MaterialTheme.colorScheme.onSurface"))
+        assertTrue(source.contains("contentColor: Color = AppContentColors.primaryText()"))
         assertTrue(source.contains("contentColor = contentColor"))
         assertTrue(source.contains("content: @Composable ColumnScope.() -> Unit"))
     }
@@ -58,6 +58,17 @@ class AdaptiveBottomSheetPolicyTest {
     }
 
     @Test
+    fun `reduced custom sheet motion uses brief consistent fades for both themes`() {
+        listOf(AppUiStyle.MATERIAL3, AppUiStyle.MIUIX).forEach { style ->
+            val spec = resolveAdaptiveBottomSheetMotionSpec(style, reducedMotion = true)
+            assertEquals(120, spec.scrimEnterDurationMillis)
+            assertEquals(120, spec.contentEnterFadeDurationMillis)
+            assertEquals(90, spec.scrimExitDurationMillis)
+            assertEquals(90, spec.contentExitFadeDurationMillis)
+        }
+    }
+
+    @Test
     fun `non glass Miuix wide windows keep a compact centered sheet`() {
         val phone = resolveAppModalLayoutSpec(windowWidthDp = 412, miuixNonGlass = true)
         val tablet = resolveAppModalLayoutSpec(windowWidthDp = 840, miuixNonGlass = true)
@@ -81,29 +92,31 @@ class AdaptiveBottomSheetPolicyTest {
     }
 
     @Test
-    fun `host contract resolves miuix to overlay host and material3 to material host`() {
-        assertEquals(BottomSheetHost.MIUIX_OVERLAY, resolveBottomSheetHost(AppUiStyle.MIUIX))
+    fun `host contract resolves miuix to window host and material3 to material host`() {
+        assertEquals(BottomSheetHost.MIUIX_WINDOW, resolveBottomSheetHost(AppUiStyle.MIUIX))
         assertEquals(BottomSheetHost.MATERIAL3, resolveBottomSheetHost(AppUiStyle.MATERIAL3))
     }
 
     @Test
-    fun `app sheet facade stays on neutral material host instead of mechanical overlay swap`() {
+    fun `app sheet keeps native predictive back and binds fallback dialogs to their window`() {
         val path = "src/main/java/com/android/purebilibili/core/ui/AppSheetComponents.kt"
         val source = listOf(File(path), File("design-system/$path"))
             .firstOrNull(File::exists)
             ?.readText()
             ?: error("Cannot locate AppSheetComponents.kt from ${File(".").absolutePath}")
 
-        // OverlayBottomSheet 依赖 Miuix popup host（仅 AdaptiveScaffold 的 MIUIX
-        // 模式挂载），AppModalBottomSheet 调用点无法保证处于该宿主之下 —— 宿主契约
-        // 由 resolveBottomSheetHost 独立承担，facade 本身禁止机械替换。
-        assertTrue(source.contains("ModalBottomSheet("))
-        assertTrue(source.contains("isMiuixNonGlassEnabled()"))
-        assertTrue(source.contains("blurActive = !miuixNonGlass"))
-        assertFalse(source.contains("OverlayBottomSheet("))
-        assertFalse(source.contains("import top.yukonga.miuix.kmp.overlay"))
-        assertTrue(source.contains("fun resolveBottomSheetHost("))
-        assertTrue(source.contains("enum class BottomSheetHost"))
+        // MD3 使用原生预测返回；居中/折叠屏 Dialog 单独绑定窗口并提供跟手反馈。
+        assertTrue(source.contains("fun AppModalSheetNavigationHost("))
+        assertTrue(source.contains("findViewTreeNavigationEventDispatcherOwner()"))
+        assertTrue(source.contains("LocalNavigationEventDispatcherOwner provides owner"))
+        assertTrue(source.contains("NavigationBackHandler("))
+        assertTrue(source.contains("ModalSheetNavigationHost("))
+        assertTrue(source.contains("shouldDismissOnBackPress = dismissOnBackPress"))
+        assertFalse(source.contains("ModalSheetNavigationHost(dismissOnBackPress, requestMaterialDismiss)"))
+        assertTrue(source.contains("NavigationEventTransitionState.TRANSITIONING_BACK"))
+        assertTrue(source.contains("val progress = backProgress.value"))
+        assertTrue(source.contains("DialogProperties("))
+        assertTrue(source.contains("dismissOnBackPress = false"))
     }
 
     @Test

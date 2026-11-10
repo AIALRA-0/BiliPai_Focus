@@ -1,7 +1,7 @@
 package com.android.purebilibili.core.plugin
 
-typealias PluginCapability = com.android.purebilibili.plugin.sdk.PluginCapability
-typealias PluginCapabilityManifest = com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
+import com.android.purebilibili.plugin.sdk.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 
 data class PluginCapabilityGrants(
     val granted: Set<PluginCapability>

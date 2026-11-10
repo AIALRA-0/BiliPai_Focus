@@ -100,7 +100,7 @@ internal fun resolveEyeProtectionEffectHint(
         "将持续至 ${formatClockHour(endHour)}，色温会缓慢变暖"
     }
     return PluginEffectHint(
-        pluginId = "eye_protection",
+        pluginId = BuiltinPluginIds.EYE_PROTECTION,
         title = "夜间护眼已开启",
         subtitle = subtitle,
         kind = PluginEffectHintKind.EYE_CARE

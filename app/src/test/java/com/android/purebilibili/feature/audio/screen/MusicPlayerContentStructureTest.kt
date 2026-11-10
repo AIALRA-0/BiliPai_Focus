@@ -16,6 +16,10 @@ class MusicPlayerContentStructureTest {
 
         assertTrue(compactBranch.contains("BottomBarLiquidSegmentedControl("))
         assertTrue(compactBranch.contains("resolveMusicPlayerPageTabs()"))
+        assertTrue(compactBranch.contains("onPageTap = openCoverPage"))
+        assertTrue(compactBranch.contains("showBottomControls = false"))
+        assertTrue(compactBranch.contains("playButtonSizeDp = 56"))
+        assertTrue(compactBranch.contains("LyricsImmersiveProgress(state = state)"))
         assertTrue(compactBranch.contains("height = 48.dp"))
         assertTrue(compactBranch.contains("indicatorHeight = 36.dp"))
         assertTrue(compactBranch.contains("containerVerticalPadding = 6.dp"))
@@ -28,8 +32,8 @@ class MusicPlayerContentStructureTest {
         assertTrue(!compactBranch.contains("forceLiquidChrome = true"))
         assertTrue(!compactBranch.contains("containerColorOverride"))
         assertTrue(!compactBranch.contains("indicatorIdleSurfaceColorOverride"))
-        assertTrue(compactBranch.contains("selectedTextColorOverride = MaterialTheme.colorScheme.onSurface"))
-        assertTrue(compactBranch.contains("unselectedTextColorOverride = MaterialTheme.colorScheme.onSurface"))
+        assertTrue(compactBranch.contains("selectedTextColorOverride = AppContentColors.primaryText()"))
+        assertTrue(compactBranch.contains("unselectedTextColorOverride = AppContentColors.primaryText()"))
     }
 
     @Test
@@ -142,10 +146,11 @@ class MusicPlayerContentStructureTest {
             .substringAfter("private fun MusicTopBar(")
             .substringBefore("private fun GlassIconButton(")
 
-        assertTrue(lyricsPage.contains("MusicProgress("))
+        assertTrue(lyricsPage.contains("showProgress = !immersiveLyrics"))
         assertTrue(lyricsPage.contains("PlaybackControls("))
         assertTrue(lyricsPage.contains("AnimatedVisibility("))
         assertTrue(lyricsPage.contains("LyricsImmersiveProgress("))
+        assertTrue(lyricsPage.contains("!immersiveLyrics"))
         assertTrue(lyricsPage.contains("歌词设置"))
         assertTrue(lyricsPage.contains("收起"))
         assertTrue(lyricsPage.contains("onControlsVisibleChange(false)"))
@@ -181,6 +186,24 @@ class MusicPlayerContentStructureTest {
         assertTrue(settings.contains("onLyricsOffsetChange(250L)"))
         assertTrue(settings.contains("onLyricsOffsetChange(-lyricsOffsetMs)"))
         assertTrue(settings.contains("formatLyricsOffset(lyricsOffsetMs)"))
+    }
+
+    @Test
+    fun `lyrics ui style switches from more menu and supports karaoke fill`() {
+        val source = loadSource()
+        val lyricsPage = source.substringAfter("private fun LyricsPage(")
+
+        assertTrue(source.contains("歌词界面："))
+        assertTrue(source.contains("lyricsUiStyle.next().label"))
+        assertTrue(source.contains("SettingsManager.setMusicLyricsUiStyle"))
+        assertTrue(lyricsPage.contains("lyricsUiStyle: SettingsManager.MusicLyricsUiStyle"))
+        assertTrue(lyricsPage.contains("immersiveLyrics"))
+        assertTrue(lyricsPage.contains("resolveMusicLyricFocusStyle("))
+        assertTrue(lyricsPage.contains("immersive = immersiveLyrics"))
+        assertTrue(source.contains("appendKaraokeFill("))
+        assertTrue(source.contains("resolveSpanHighlightProgress"))
+        assertTrue(source.contains("resolveLineSweepProgress"))
+        assertTrue(source.contains("resolveCharHighlightAlpha"))
     }
 
     @Test

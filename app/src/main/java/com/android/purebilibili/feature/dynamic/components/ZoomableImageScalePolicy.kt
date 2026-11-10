@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntSize
 import kotlin.math.max
 import kotlin.math.min
 
@@ -12,6 +14,28 @@ private const val DEFAULT_DOUBLE_TAP_SCALE = 2.5f
 private const val DEFAULT_MAX_SCALE = 5f
 private const val EXTRA_DETAIL_SCALE = 2f
 private const val EXTREME_ASPECT_RATIO = 3f
+
+/** Untransformed viewport coordinates; parent Hero layers must never feed back into this rect. */
+internal fun resolveZoomableImageLocalDisplayRect(
+    imageSize: IntSize,
+    containerSize: IntSize,
+    scale: Float = 1f,
+    offsetX: Float = 0f,
+    offsetY: Float = 0f,
+): Rect? {
+    if (imageSize.width <= 0 || imageSize.height <= 0 ||
+        containerSize.width <= 0 || containerSize.height <= 0
+    ) return null
+    val fitScale = min(
+        containerSize.width.toFloat() / imageSize.width,
+        containerSize.height.toFloat() / imageSize.height,
+    )
+    val width = imageSize.width * fitScale * scale
+    val height = imageSize.height * fitScale * scale
+    val centerX = containerSize.width / 2f + offsetX
+    val centerY = containerSize.height / 2f + offsetY
+    return Rect(centerX - width / 2f, centerY - height / 2f, centerX + width / 2f, centerY + height / 2f)
+}
 
 /**
  * The image starts with ContentScale.Fit. For a very tall or wide image that can make the

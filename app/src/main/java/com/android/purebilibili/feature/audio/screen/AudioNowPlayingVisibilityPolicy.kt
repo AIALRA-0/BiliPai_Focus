@@ -20,7 +20,8 @@ internal fun resolveAudioNowPlayingVisible(
     isInMiniMode: Boolean = false,
     isVideoDetailDestination: Boolean = false,
     isLandscape: Boolean = false,
-    isPlayerDestination: Boolean = false
+    isPlayerDestination: Boolean = false,
+    isTabletLayout: Boolean = false,
 ): Boolean {
     return barEnabled &&
         sessionActive &&
@@ -29,6 +30,6 @@ internal fun resolveAudioNowPlayingVisible(
         !isInMiniMode &&
         hasCurrentItem &&
         !isVideoDetailDestination &&
-        !isLandscape &&
+        (!isLandscape || isTabletLayout) &&
         !isPlayerDestination
 }

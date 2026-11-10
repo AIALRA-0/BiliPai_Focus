@@ -1,10 +1,13 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.data.model.response.EmoticonPkg
+
 data class LivePagedResult<T>(
     val items: List<T>,
     val hasMore: Boolean,
     val nextPage: Int,
-    val totalCount: Int = 0
+    // 未返回总数时保留未知，避免将缺失数据展示为无人开播。
+    val totalCount: Int? = null
 )
 
 data class LiveDanmakuSendRequest(
@@ -33,7 +36,8 @@ data class LiveDanmakuReportRequest(
     val dmid: String,
     val reportTime: Long,
     val sign: String,
-    val reason: LiveReportReason
+    val reason: LiveReportReason,
+    val dmType: Int = 0
 )
 
 data class LiveSuperChatReportRequest(
@@ -79,17 +83,87 @@ data class LiveShieldUser(
 data class LiveEmoticonPackage(
     val id: Int,
     val name: String,
-    val items: List<LiveEmoticonItem>
+    val items: List<LiveEmoticonItem>,
+    val pkgType: Int = 0
 )
 
 data class LiveEmoticonItem(
     val emoji: String,
     val url: String,
     val description: String = "",
-    // 表情唯一标识（emoticon_unique），用于发送表情弹幕
+    // 独立大表情使用此 ID；普通表情发送 emoji 文本。
     val emoticonUnique: String = "",
-    val emoticonOptions: String? = null
+    val dmType: Int = 1,
+    val width: Int = 80,
+    val height: Int = 80,
+) {
+    val displayText: String get() = emoji.ifBlank { description.ifBlank { "表情" } }
+}
+
+fun EmoticonPkg.toLiveEmoticonPackage(): LiveEmoticonPackage = LiveEmoticonPackage(
+    id = pkg_id,
+    name = pkg_name.ifBlank { "表情" },
+    pkgType = pkg_type,
+    items = emoticons.orEmpty().mapNotNull { emotion ->
+        if (emotion.emoji.isBlank() && emotion.url.isBlank()) return@mapNotNull null
+        LiveEmoticonItem(
+            emoji = emotion.emoji,
+            url = emotion.url,
+            description = emotion.des,
+            emoticonUnique = emotion.emoticon_unique,
+            dmType = if (pkg_type == 3) 0 else 1,
+            width = emotion.width?.takeIf { it > 0 } ?: 80,
+            height = emotion.height?.takeIf { it > 0 } ?: 80
+        )
+    }
 )
+
+fun buildLiveEmoticonSendRequest(
+    roomId: Long,
+    item: LiveEmoticonItem,
+    replyMid: Long = 0,
+    replayDmid: String = ""
+): Result<LiveDanmakuSendRequest> {
+    if (item.dmType == 0) {
+        if (item.emoji.isBlank()) {
+            return Result.failure(IllegalArgumentException("表情文字为空，无法发送"))
+        }
+        return Result.success(
+            LiveDanmakuSendRequest(
+                roomId = roomId,
+                message = item.emoji,
+                replyMid = replyMid,
+                replayDmid = replayDmid
+            )
+        )
+    }
+    if (item.emoticonUnique.isBlank()) {
+        return Result.failure(IllegalArgumentException("该独立表情缺少发送标识，无法发送"))
+    }
+    return Result.success(
+        LiveDanmakuSendRequest(
+            roomId = roomId,
+            message = item.emoticonUnique,
+            dmType = 1,
+            emoticonOptions = "[object Object]"
+        )
+    )
+}
+
+fun appendLiveTextEmoticon(
+    draft: String,
+    item: LiveEmoticonItem,
+    maxLength: Int
+): Result<String> {
+    if (item.dmType != 0 || item.emoji.isBlank()) {
+        return Result.failure(IllegalArgumentException("该表情不能作为文字插入"))
+    }
+    val limit = maxLength.takeIf { it > 0 } ?: 40
+    if (draft.length + item.emoji.length > limit) {
+        return Result.failure(IllegalArgumentException("插入表情后超过弹幕字数限制"))
+    }
+    return Result.success(draft + item.emoji)
+}
 
 data class LiveVoteOption(val id: Int = 0, val description: String = "", val percent: Float = 0f)
 
@@ -112,10 +186,11 @@ data class LiveVoteSnapshot(
 )
 
 val DefaultLiveReportReasons = listOf(
-    LiveReportReason(id = 1, label = "违法违禁", apiReason = "违法违禁"),
-    LiveReportReason(id = 2, label = "色情低俗", apiReason = "色情低俗"),
-    LiveReportReason(id = 3, label = "赌博诈骗", apiReason = "赌博诈骗"),
-    LiveReportReason(id = 4, label = "人身攻击", apiReason = "人身攻击"),
-    LiveReportReason(id = 5, label = "垃圾广告", apiReason = "垃圾广告"),
-    LiveReportReason(id = 6, label = "其他", apiReason = "其他")
+    LiveReportReason(id = 1, label = "违法违规", apiReason = "违法违规"),
+    LiveReportReason(id = 2, label = "低俗色情", apiReason = "低俗色情"),
+    LiveReportReason(id = 3, label = "垃圾广告", apiReason = "垃圾广告"),
+    LiveReportReason(id = 4, label = "辱骂引战", apiReason = "辱骂引战"),
+    LiveReportReason(id = 5, label = "政治敏感", apiReason = "政治敏感"),
+    LiveReportReason(id = 6, label = "青少年不良信息", apiReason = "青少年不良信息"),
+    LiveReportReason(id = 0, label = "其他", apiReason = "其他")
 )

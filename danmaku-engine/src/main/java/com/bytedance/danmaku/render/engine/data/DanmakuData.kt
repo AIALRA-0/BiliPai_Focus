@@ -28,6 +28,8 @@ abstract class DanmakuData {
     open var showAtTime: Long = 0
     open var layerType: Int = LAYER_TYPE_UNDEFINE
     open var drawType: Int = DRAW_TYPE_UNDEFINE
+    /** Dynamic presentation state; hidden items retain their timing and layout. */
+    open val isVisible: Boolean get() = true
     /**
      * The order danmaku will be drawn.
      * The larger the value, the later the danmaku is drawn.

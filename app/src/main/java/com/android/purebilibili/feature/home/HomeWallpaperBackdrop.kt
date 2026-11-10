@@ -1,5 +1,14 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperUri
+import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
+import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
+import com.android.purebilibili.core.ui.wallpaper.LocalHomeWallpaperSelection
+import com.android.purebilibili.core.ui.wallpaper.WallpaperTransform
+import com.android.purebilibili.core.ui.wallpaper.WallpaperMediaLoadState
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import androidx.compose.ui.unit.IntSize
 import coil3.request.crossfade
 
 import com.android.purebilibili.core.ui.MediaContrastPalette
@@ -7,6 +16,14 @@ import com.android.purebilibili.core.ui.MediaContrastPalette
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.wallpaper.WallpaperReadabilityProfile
+import com.android.purebilibili.core.ui.wallpaper.resolveWallpaperBodyTintAlpha
+import com.android.purebilibili.core.ui.wallpaper.resolveWallpaperProtectionAlpha
+import com.android.purebilibili.feature.home.components.cards.LocalWallpaperPalette
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -45,6 +62,7 @@ internal fun DepthSyncedGlobalHomeWallpaperBackdrop(
     isDataSaverActive: Boolean = false,
     isLightBackground: Boolean = false,
     realtimeBlurEnabled: Boolean = true,
+    playbackEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val phase = depthPhaseProvider()
@@ -85,6 +103,9 @@ internal fun DepthSyncedGlobalHomeWallpaperBackdrop(
             appearance = appearance,
             baseColor = baseColor,
             isDataSaverActive = isDataSaverActive,
+            playbackEnabled = playbackEnabled,
+            reuseGlobalSource = false,
+            playbackPriority = -10,
         )
     }
 }
@@ -96,8 +117,25 @@ internal fun HomeWallpaperBackdrop(
     baseColor: Color,
     isDataSaverActive: Boolean = false,
     playbackEnabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    reuseGlobalSource: Boolean = true,
+    transformProvider: (() -> WallpaperTransform)? = null,
+    playbackPriority: Int = 0,
+    onMediaLoadState: (WallpaperMediaLoadState) -> Unit = {},
+    onMediaSourceSize: (IntSize) -> Unit = {},
+    readabilityOverride: WallpaperReadabilityProfile? = null,
+    localProtectionScale: Float = 1f,
 ) {
+    // Static GLOBAL wallpapers are decoded and treated once by the app root. Replaying the
+    // same recording also aligns home/card sources with every other destination.
+    if (reuseGlobalSource && appearance.visible &&
+        LocalGlobalWallpaperBackdropVisible.current &&
+        LocalGlobalWallpaperBackdropSource.current != null &&
+        wallpaperUri == LocalGlobalWallpaperUri.current
+    ) {
+        Box(modifier.fillMaxSize().sharedGlobalWallpaperBackground(baseColor))
+        return
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -105,6 +143,22 @@ internal fun HomeWallpaperBackdrop(
     ) {
         if (!appearance.visible) return@Box
 
+        val selection = LocalHomeWallpaperSelection.current
+        val isTablet = LocalWindowSizeClass.current.isTablet
+        val usesHomeSelection = selection.uri == wallpaperUri ||
+            (selection.uri.isBlank() && wallpaperUri == LocalGlobalWallpaperUri.current)
+        val savedTransform = if (usesHomeSelection) {
+            if (isTablet) selection.tabletTransform else selection.mobileTransform
+        } else WallpaperTransform()
+        val mediaTransform = transformProvider ?: { savedTransform }
+        val readability = readabilityOverride ?: LocalWallpaperPalette.current?.readability
+            ?.takeIf { usesHomeSelection && transformProvider == null }
+        val bodyAlpha = if (readability != null) resolveWallpaperBodyTintAlpha(appearance.baseBackgroundAlpha)
+            else appearance.baseBackgroundAlpha
+        val scrimAlpha = if (readability != null) appearance.scrimAlpha * 0.35f else appearance.scrimAlpha
+        val bottomAlpha = readability?.bottom?.let {
+            resolveWallpaperProtectionAlpha(it, baseColor, MaterialTheme.colorScheme.onSurface, appearance.blurRadiusDp > 0f)
+        } ?: appearance.bottomScrimAlpha
         val context = LocalContext.current
         val configuration = LocalConfiguration.current
         val density = LocalDensity.current
@@ -148,26 +202,36 @@ internal fun HomeWallpaperBackdrop(
             uri = wallpaperUri,
             imageModel = imageRequest,
             playbackEnabled = playbackEnabled && !isDataSaverActive,
+            transformProvider = mediaTransform,
+            playbackPriority = playbackPriority,
+            onLoadState = onMediaLoadState,
+            onSourceSize = onMediaSourceSize,
             modifier = imageModifier
         )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(baseColor.copy(alpha = appearance.baseBackgroundAlpha))
+                .background(baseColor.copy(alpha = bodyAlpha))
         )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MediaContrastPalette.Scrim.copy(alpha = appearance.scrimAlpha))
+                .background(MediaContrastPalette.Scrim.copy(alpha = scrimAlpha))
         )
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .then(
+                    if (readability != null) Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height((160f * localProtectionScale.coerceIn(0.05f, 1f)).dp)
+                    else Modifier.fillMaxSize()
+                )
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            baseColor.copy(alpha = appearance.bottomScrimAlpha)
+                            baseColor.copy(alpha = bottomAlpha)
                         )
                     )
                 )

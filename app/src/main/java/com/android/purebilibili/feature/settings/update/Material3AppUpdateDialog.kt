@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.components.appElasticPress
+
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,11 +14,17 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -23,13 +33,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.components.AppButton
-import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
-import com.android.purebilibili.core.ui.components.AppOutlinedButton
-import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.ContainerLevel
 
@@ -58,17 +62,17 @@ internal fun Material3AppUpdateDialog(
                     Text(
                         text = "版本 ${state.update.latestVersion}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                AppIconButton(
+                IconButton(
                     onClick = actions.onDismissRequest,
-                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).appElasticPress(),
                 ) {
                     Icon(
-                        imageVector = rememberMaterialSymbol(R.drawable.ms_close_24),
+                        imageVector = Icons.Outlined.Close,
                         contentDescription = "关闭",
                     )
                 }
@@ -79,11 +83,9 @@ internal fun Material3AppUpdateDialog(
         },
         confirmButton = {
             if (!state.showReleaseNotesOnly) {
-                AppButton(
+                Button(
                     onClick = actions.onPrimaryAction,
-                    enabled = !state.downloadState.isActiveDownload(),
-                    colors = ButtonDefaults.buttonColors(),
-                    elevation = ButtonDefaults.buttonElevation(),
+                    enabled = !state.downloadState.isActiveDownload(), modifier = Modifier.appElasticPress(enabled = !state.downloadState.isActiveDownload()),
                 ) {
                     Text(
                         text = appUpdatePrimaryLabel(state.downloadState, state.hasAsset),
@@ -97,12 +99,13 @@ internal fun Material3AppUpdateDialog(
             null
         } else {
             {
-                AppTextButton(
+                TextButton(
                     onClick = if (state.downloadState.isActiveDownload()) {
                         actions.onCancelDownload
                     } else {
                         actions.onDismissRequest
                     },
+                    modifier = Modifier.appElasticPress(),
                 ) {
                     Text(
                         text = if (state.downloadState.isActiveDownload()) "取消下载" else "稍后",
@@ -138,6 +141,8 @@ private fun Material3UpdateContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 容器高度受限时让出空间给下载渠道按钮，日志自身滚动。
+                .weight(1f, fill = false)
                 .heightIn(max = contentMaxHeightDp.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -186,7 +191,7 @@ private fun Material3VersionCard(
                 Text(
                     text = "安装包  $assetName",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     softWrap = false,
@@ -207,13 +212,13 @@ private fun Material3VersionValue(
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = AppContentColors.secondaryText(),
             maxLines = 1,
         )
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium,
-            color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            color = if (emphasized) AppContentColors.accent() else AppContentColors.primaryText(),
             fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -244,12 +249,12 @@ private fun Material3DownloadStatus(
             )
             if (state.isActiveDownload()) {
                 if (state.totalBytes > 0L) {
-                    AppLinearProgressIndicator(
+                    LinearProgressIndicator(
                         progress = { state.progress },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
-                    AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
             if (state.status == AppUpdateDownloadStatus.COMPLETED) {
@@ -292,19 +297,19 @@ private fun Material3ReleaseNotes(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(text = "•", color = MaterialTheme.colorScheme.primary)
+                    Text(text = "•", color = AppContentColors.accent())
                     Text(
                         text = block.text,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                     )
                 }
                 AppUpdateReleaseNotesBlock.Divider -> androidx.compose.material3.HorizontalDivider()
                 is AppUpdateReleaseNotesBlock.Paragraph -> Text(
                     text = block.text,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                 )
             }
         }
@@ -320,7 +325,7 @@ private fun Material3DownloadChannels(
         Text(
             text = "其他下载渠道",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = AppContentColors.secondaryText(),
         )
         Row(
             modifier = Modifier
@@ -328,19 +333,21 @@ private fun Material3DownloadChannels(
                 .widthIn(max = 320.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AppOutlinedButton(
+            OutlinedButton(
                 onClick = actions.onOpenRelease,
                 modifier = Modifier
                     .weight(1f)
-                    .sizeIn(minHeight = 48.dp),
+                    .sizeIn(minHeight = 48.dp)
+                    .appElasticPress(),
             ) {
                 Text("正式版下载", maxLines = 1, softWrap = false)
             }
-            AppOutlinedButton(
+            OutlinedButton(
                 onClick = actions.onOpenTestRelease,
                 modifier = Modifier
                     .weight(1f)
-                    .sizeIn(minHeight = 48.dp),
+                    .sizeIn(minHeight = 48.dp)
+                    .appElasticPress(),
             ) {
                 Text("测试版下载", maxLines = 1, softWrap = false)
             }

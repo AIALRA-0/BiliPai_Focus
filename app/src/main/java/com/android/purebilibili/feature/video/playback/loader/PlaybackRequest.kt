@@ -10,6 +10,12 @@ internal data class PlaybackRequest(
     val audioLang: String? = null,
     val videoCodecOverride: String? = null
 ) {
+    fun matchesInFlight(other: PlaybackRequest, resolvedCid: Long): Boolean =
+        !other.force && bvid == other.bvid && (bvid.isNotBlank() || aid == other.aid) &&
+            (cid == other.cid || other.cid <= 0L || (cid <= 0L && resolvedCid > 0L && resolvedCid == other.cid)) &&
+            audioLang == other.audioLang && videoCodecOverride == other.videoCodecOverride &&
+            ignoreSavedProgress == other.ignoreSavedProgress
+
 
     fun resolveProgressCid(
         currentBvid: String,

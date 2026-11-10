@@ -52,11 +52,15 @@ fun AppCard(
     onLongClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val resolvedColors = colors ?: AppCardColors(
+        containerColor = com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer(),
+        contentColor = com.android.purebilibili.core.ui.AppContentColors.primaryText(),
+    )
     when (LocalAppUiStyle.current) {
         AppUiStyle.MATERIAL3 -> AppMaterial3Card(
             modifier = modifier,
             shape = shape,
-            colors = colors,
+            colors = resolvedColors,
             variant = variant,
             onClick = onClick,
             onLongClick = onLongClick,
@@ -66,7 +70,7 @@ fun AppCard(
             // Miuix exposes one native Card variant; both app variants map to that component.
             modifier = modifier,
             shape = shape,
-            colors = colors,
+            colors = resolvedColors,
             onClick = onClick,
             onLongClick = onLongClick,
             content = content,

@@ -4,6 +4,25 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class VideoPlaybackUseCaseBootstrapPolicyTest {
+    @Test
+    fun missingCidCanReuseKnownCachedCidWithoutAnotherRequest() {
+        assertEquals(1234L, resolvePlaybackBootstrapCid(requestCid = 0L, cachedCid = 1234L))
+    }
+
+    @Test
+    fun explicitPageCidAlwaysWinsOverCachedDefaultPage() {
+        assertEquals(5678L, resolvePlaybackBootstrapCid(requestCid = 5678L, cachedCid = 1234L))
+    }
+
+    @Test
+    fun missingAndInvalidCachedCidsStayInDetailFirstMode() {
+        assertEquals(0L, resolvePlaybackBootstrapCid(requestCid = 0L, cachedCid = -1L))
+    }
+
+    @Test
+    fun avRouteResolvesCanonicalBvidBeforeRequestingPlaybackEvenWithKnownCid() {
+        assertEquals(PlaybackBootstrapMode.DETAIL_ONLY, resolvePlaybackBootstrapMode("av123", 1234L))
+    }
 
     @Test
     fun knownBvidAndCid_enableParallelDetailAndPlayUrlBootstrap() {

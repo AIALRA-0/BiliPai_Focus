@@ -31,17 +31,17 @@ class DanmakuSendDialogLayoutPolicyTest {
     }
 
     @Test
-    fun `invalid remembered send options should fall back to safe defaults`() {
+    fun `custom RGB survives while invalid mode and size use safe defaults`() {
         val selection = resolveDanmakuSendSelectionState(
             initialColor = 123,
             initialMode = 99,
             initialFontSize = 77,
             colorOptions = listOf(16777215, 16646914),
             modeOptions = listOf(1, 4, 5),
-            fontSizeOptions = listOf(18, 25, 36)
+            fontSizeOptions = listOf(18, 25)
         )
 
-        assertEquals(16777215, selection.color)
+        assertEquals(123, selection.color)
         assertEquals(1, selection.mode)
         assertEquals(25, selection.fontSize)
     }

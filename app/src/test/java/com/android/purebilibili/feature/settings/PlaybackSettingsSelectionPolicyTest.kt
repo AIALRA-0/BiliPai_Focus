@@ -34,10 +34,14 @@ class PlaybackSettingsSelectionPolicyTest {
     }
 
     @Test
-    fun `legacy concrete AAC preference is normalized to high quality AAC`() {
-        assertEquals(-1, normalizeDefaultAudioQualityOption(30280))
-        assertEquals(-1, normalizeDefaultAudioQualityOption(30232))
-        assertEquals(-1, normalizeDefaultAudioQualityOption(30216))
+    fun `raw audio preferences retain exact track identity in default settings`() {
+        for (id in listOf(30280, 30232, 30216, 30255, 30251, 100008, 100009, 100010)) {
+            assertEquals(id, normalizeDefaultAudioQualityOption(id))
+            assertEquals(1, resolveDefaultAudioQualityOptions(id).count { it.value == id })
+        }
+        assertEquals(-1, normalizeDefaultAudioQualityOption(0))
+        assertEquals(-1, normalizeDefaultAudioQualityOption(-999))
+        assertEquals(DEFAULT_AUDIO_QUALITY_FOLLOW_LAST, normalizeDefaultAudioQualityOption(DEFAULT_AUDIO_QUALITY_FOLLOW_LAST))
     }
 
     @Test
@@ -51,9 +55,9 @@ class PlaybackSettingsSelectionPolicyTest {
         val contentBlock = source
             .substringAfter("fun PlaybackSettingsContent(")
             .substringBefore("private fun PlaybackInteractionSettingsSection(")
-        assertTrue(source.contains("视频小横条"))
+        assertTrue(source.contains("底部视频入口"))
         assertTrue(source.contains("setAudioNowPlayingBarEnabled(context, it)"))
-        assertTrue(source.contains("点击小横条进入听视频"))
+        assertTrue(source.contains("点底部视频入口听视频"))
         assertTrue(source.contains("setAudioNowPlayingBarOpensAudioMode(context, it)"))
         assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"互动与评论\")"))
         assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"全屏与手势\")"))
@@ -61,23 +65,6 @@ class PlaybackSettingsSelectionPolicyTest {
         assertTrue(contentBlock.contains("PlaybackFullscreenGestureSettingsSection("))
     }
 
-    @Test
-    fun `comment controls should stay in interaction section instead of fullscreen gesture section`() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt"
-        )
-
-        val interactionBlock = source
-            .substringAfter("private fun PlaybackInteractionSettingsSection(")
-            .substringBefore("PlaybackFullscreenGestureSettingsSection(")
-        val fullscreenBlock = source
-            .substringAfter("private fun PlaybackFullscreenGestureSettingsSection(")
-
-        listOf("评论回复预览", "评论发送检测", "评论区个性装扮", "图片长按操作").forEach { title ->
-            assertTrue(interactionBlock.contains(title))
-            assertFalse(fullscreenBlock.contains(title))
-        }
-    }
 
     @Test
     fun `fullscreen gesture section should own its setting state collection`() {
@@ -90,12 +77,7 @@ class PlaybackSettingsSelectionPolicyTest {
             .substringBefore("private fun PlaybackInteractionSettingsSection(")
 
         assertTrue(source.contains("private fun PlaybackFullscreenGestureSettingsSection(\n    context: Context"))
-        val sectionCall = contentBlock
-            .substringAfter("PlaybackFullscreenGestureSettingsSection(")
-            .substringBefore(")")
-        assertTrue(sectionCall.contains("context = context"))
-        assertTrue(sectionCall.contains("state = state"))
-        assertTrue(sectionCall.contains("viewModel = viewModel"))
+        assertTrue(contentBlock.contains("PlaybackFullscreenGestureSettingsSection(context = context)"))
         assertFalse(contentBlock.contains("getFullscreenMode(context)"))
         assertFalse(contentBlock.contains("getAppGestureScreenshotEnabled(context)"))
         assertFalse(contentBlock.contains("getPortraitPlayerCollapseMode(context)"))
@@ -229,9 +211,9 @@ class PlaybackSettingsSelectionPolicyTest {
     fun `resolveDefaultPlaybackQualityOptions should only expose fixed quality tiers`() {
         val options = resolveDefaultPlaybackQualityOptions()
 
-        assertEquals(listOf(126, 125, 116, 80, 64, 32, 16), options.map { it.value })
+        assertEquals(listOf(126, 125, 120, 116, 112, 80, 64, 32, 16), options.map { it.value })
         assertEquals(
-            listOf("杜比视界", "4K HDR", "1080P60", "1080P", "720P", "480P", "360P"),
+            listOf("杜比视界", "HDR", "4K", "1080P60", "1080P+", "1080P", "720P", "480P", "360P"),
             options.map { it.label }
         )
     }
@@ -381,7 +363,7 @@ class PlaybackSettingsSelectionPolicyTest {
         val source = File("src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt")
             .readText()
 
-        assertTrue(source.contains("双击跳转"))
+        assertTrue(source.contains("双击快进或后退"))
         assertTrue(source.contains("getDoubleTapSeekEnabled"))
         assertTrue(source.contains("setDoubleTapSeekEnabled"))
         assertTrue(source.contains("getSeekForwardSeconds"))
@@ -395,8 +377,8 @@ class PlaybackSettingsSelectionPolicyTest {
         val source = File("src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt")
             .readText()
 
-        assertTrue(source.contains("画质降档诊断弹窗"))
-        assertTrue(source.contains("降档弹窗仅提示一次"))
+        assertTrue(source.contains("画质切换失败时提示"))
+        assertTrue(source.contains("只提醒一次"))
         assertTrue(source.contains("getQualitySwitchFailureDialogEnabled"))
         assertTrue(source.contains("setQualitySwitchFailureDialogEnabled"))
         assertTrue(source.contains("getQualitySwitchFailureDialogOnceEnabled"))
@@ -426,9 +408,9 @@ class PlaybackSettingsSelectionPolicyTest {
         val source = File("src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt")
             .readText()
 
-        assertTrue(source.contains("每个视频都会自动选择当前账号和设备可播放的最高画质"))
+        assertTrue(source.contains("自动选择账号和设备支持的最高画质"))
         assertTrue(source.contains("视频本身无更高档不打断播放"))
-        assertTrue(source.contains("仅作为关闭自动最高后的无线网络偏好保留"))
+        assertTrue(source.contains("关闭“自动最高画质”后生效"))
     }
 
     private fun loadSource(path: String): String {

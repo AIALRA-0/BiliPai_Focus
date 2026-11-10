@@ -58,7 +58,7 @@ internal fun hasExceededLongPressCopySlop(
 @Composable
 fun rememberClipboardCopyHandler(): (String, String?) -> Unit {
     val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
+    val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.TEXT)
     return remember(context, haptic) {
         { rawText: String, label: String? ->
             val text = rawText.trim()

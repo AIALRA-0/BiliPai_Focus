@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.PixelCopy
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.Composable
@@ -16,6 +17,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.layout.findRootCoordinates
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlin.coroutines.suspendCoroutine
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
@@ -28,17 +35,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.resume
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private const val ADAPTIVE_READABILITY_SAMPLE_INTERVAL_MILLIS = 500L
-private const val ADAPTIVE_READABILITY_INITIAL_DELAY_MILLIS = 350L
 private const val ADAPTIVE_READABILITY_SAMPLE_WIDTH = 24
 private const val ADAPTIVE_READABILITY_SAMPLE_HEIGHT = 8
 private const val ADAPTIVE_READABILITY_LIGHT_TO_DARK_THRESHOLD = 0.58f
@@ -84,6 +89,8 @@ internal class LiquidGlassAdaptiveReadabilityState {
     internal var sampleBounds: Rect? by mutableStateOf(null)
         private set
 
+    internal var inViewport by mutableStateOf(false)
+
     internal var foregroundTone: LiquidGlassAdaptiveForegroundTone? by mutableStateOf(null)
         private set
 
@@ -115,30 +122,56 @@ internal class LiquidGlassAdaptiveReadabilityState {
 @Composable
 internal fun rememberLiquidGlassAdaptiveReadabilityState(
     enabled: Boolean,
+    samplingAllowed: Boolean = true,
 ): LiquidGlassAdaptiveReadabilityState {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val activity = remember(context) { context.findLiquidGlassHostActivity() }
     val state = remember { LiquidGlassAdaptiveReadabilityState() }
-    androidx.compose.runtime.LaunchedEffect(enabled, activity, lifecycle, state) {
+    val visualActive = com.android.purebilibili.core.ui.rememberVisualWorkActive() && samplingAllowed
+    androidx.compose.runtime.LaunchedEffect(enabled, activity, lifecycle, state, visualActive) {
         if (!enabled || activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             state.reset()
             return@LaunchedEffect
         }
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            delay(ADAPTIVE_READABILITY_INITIAL_DELAY_MILLIS)
-            while (isActive) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            snapshotFlow {
+                visualActive && state.inViewport && state.sampleBounds != null
+            }.collectLatest { active ->
+                if (!active) return@collectLatest
                 val decorView = activity.window.decorView
-                val sourceBounds = state.sampleBounds?.clampedTo(
-                    width = decorView.width,
-                    height = decorView.height,
-                )
-                if (sourceBounds != null) {
-                    adaptiveReadabilityPixelCopyMutex.withLock {
-                        sampleWindowLuminance(activity, sourceBounds)
-                    }?.let(state::updateLuminance)
+                val draws = Channel<Unit>(Channel.CONFLATED)
+                val stopObserving = observeLiquidGlassReadabilityDraws(decorView.viewTreeObserver) {
+                    draws.trySend(Unit)
                 }
-                delay(ADAPTIVE_READABILITY_SAMPLE_INTERVAL_MILLIS)
+                // 恢复可见时先更新当前背景；之后只响应窗口实际绘制。
+                draws.trySend(Unit)
+                val bitmap = Bitmap.createBitmap(
+                    ADAPTIVE_READABILITY_SAMPLE_WIDTH,
+                    ADAPTIVE_READABILITY_SAMPLE_HEIGHT,
+                    Bitmap.Config.ARGB_8888,
+                )
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                try {
+                    sampleLiquidGlassReadabilityOnDraw(draws, SystemClock::uptimeMillis) {
+                        val sourceBounds = state.sampleBounds?.clampedTo(
+                            width = decorView.width,
+                            height = decorView.height,
+                        )
+                        if (sourceBounds != null) {
+                            val luminance = adaptiveReadabilityPixelCopyMutex.withLock {
+                                sampleWindowLuminance(activity, sourceBounds, bitmap, pixels)
+                            }
+                            // PixelCopy 不可取消；已隐藏的会话只回收结果，不再更新文字。
+                            currentCoroutineContext().ensureActive()
+                            luminance?.let(state::updateLuminance)
+                        }
+                    }
+                } finally {
+                    stopObserving()
+                    draws.close()
+                    bitmap.recycle()
+                }
             }
         }
     }
@@ -149,7 +182,12 @@ internal fun Modifier.trackLiquidGlassAdaptiveReadability(
     state: LiquidGlassAdaptiveReadabilityState,
     enabled: Boolean,
 ): Modifier = if (enabled) {
-    onGloballyPositioned { coordinates -> state.updateBounds(coordinates.boundsInWindow()) }
+    onGloballyPositioned { coordinates ->
+        val bounds = coordinates.boundsInWindow()
+        val viewport = coordinates.findRootCoordinates().boundsInWindow()
+        state.inViewport = coordinates.isAttached && bounds.width > 0f && bounds.height > 0f && bounds.overlaps(viewport)
+        state.updateBounds(bounds)
+    }
 } else {
     this
 }
@@ -209,36 +247,29 @@ private fun liquidGlassContrastRatio(foreground: Color, background: Color): Floa
 private suspend fun sampleWindowLuminance(
     activity: Activity,
     sourceBounds: Rect,
-): Float? = suspendCancellableCoroutine { continuation ->
-    val bitmap = Bitmap.createBitmap(
-        ADAPTIVE_READABILITY_SAMPLE_WIDTH,
-        ADAPTIVE_READABILITY_SAMPLE_HEIGHT,
-        Bitmap.Config.ARGB_8888,
-    )
-    try {
-        PixelCopy.request(
-            activity.window,
-            sourceBounds,
-            bitmap,
-            { result ->
-                val luminance = if (result == PixelCopy.SUCCESS) {
-                    bitmap.averageRelativeLuminance()
-                } else {
-                    null
-                }
-                bitmap.recycle()
-                if (continuation.isActive) continuation.resume(luminance)
-            },
-            adaptiveReadabilityPixelCopyHandler,
-        )
-    } catch (_: IllegalArgumentException) {
-        bitmap.recycle()
-        if (continuation.isActive) continuation.resume(null)
+    bitmap: Bitmap,
+    pixels: IntArray,
+): Float? = withContext(NonCancellable) {
+    // 等 PixelCopy 回调后才结束会话，避免取消时回收仍在写入的缓冲。
+    suspendCoroutine { continuation ->
+        try {
+            PixelCopy.request(
+                activity.window,
+                sourceBounds,
+                bitmap,
+                { result ->
+                    val luminance = if (result == PixelCopy.SUCCESS) bitmap.averageRelativeLuminance(pixels) else null
+                    continuation.resume(luminance)
+                },
+                adaptiveReadabilityPixelCopyHandler,
+            )
+        } catch (_: IllegalArgumentException) {
+            continuation.resume(null)
+        }
     }
 }
 
-private fun Bitmap.averageRelativeLuminance(): Float {
-    val pixels = IntArray(width * height)
+private fun Bitmap.averageRelativeLuminance(pixels: IntArray): Float {
     getPixels(pixels, 0, width, 0, 0, width, height)
     if (pixels.isEmpty()) return 0.5f
     var total = 0.0

@@ -36,7 +36,26 @@ class ThemeRoleOverrideUiRegressionTest {
         composeTestRule.onNodeWithText("#FFFFFF").assertIsDisplayed()
         composeTestRule.onNode(hasText("对比度：", substring = true)).assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("当前文字与背景对比度偏低，仍可按精确颜色保存。")
+            .onNodeWithText("你选的文字色与背景比较接近，预览已自动调整文字，让它更容易看清；仍可保存。")
             .assertIsDisplayed()
     }
+    @Test
+    fun explicitReadabilityRepairInvokesTheSaveCallback() {
+        var repaired = false
+        composeTestRule.setContent {
+            MaterialTheme {
+                ThemeRoleModeEditor(
+                    title = "浅色模式",
+                    roles = ThemeModeRoleOverrides("#FFFFFF", "#EEEEEE", "#F2F2F2", "#34C759"),
+                    targets = emptyList(),
+                    onColorClick = {},
+                    onRepair = { repaired = true },
+                    repairAvailable = true,
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("修正可读性").assertIsEnabled().performClick()
+        org.junit.Assert.assertTrue(repaired)
+    }
+
 }

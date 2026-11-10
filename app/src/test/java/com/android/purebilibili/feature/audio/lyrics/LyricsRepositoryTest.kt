@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.audio.lyrics
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -129,6 +131,49 @@ class LyricsRepositoryTest {
         assertEquals(2_000L, cache.saved?.offsetMs)
     }
 
+    @Test fun `provider cancellation propagates without writing a failure or cache`() = runTest {
+        val cache = FakeLyricsCache()
+        val provider = FakeLyricsProvider(LyricSource.NETEASE, failure = CancellationException("changed video"))
+        val repository = LyricsRepository(listOf(provider), cache)
+        assertFailsWith<CancellationException> {
+            repository.load("video:BV1:2", query(), bilibiliLyrics = null)
+        }
+        assertEquals(null, cache.saved)
+    }
+
+    @Test fun `automatic candidates keep original recording version after query cleanup`() = runTest {
+        val provider = FakeLyricsProvider(
+            LyricSource.NETEASE,
+            candidates = listOf(candidate(LyricSource.NETEASE, "studio")),
+            rawLyrics = RawLyrics("[00:01.00]Wrong version"),
+        )
+        val repository = LyricsRepository(listOf(provider), FakeLyricsCache())
+        assertIs<LyricsLoadResult.NotFound>(repository.load(
+            "video:BV1:2", query().copy(originalTitle = "Song Live"), bilibiliLyrics = null,
+        ))
+        assertEquals(0, provider.fetchCalls)
+    }
+
+    @Test fun `automatic cache is reevaluated when actual duration changes`() = runTest {
+        val provider = FakeLyricsProvider(
+            LyricSource.NETEASE,
+            candidates = listOf(candidate(LyricSource.NETEASE, "song")),
+            rawLyrics = RawLyrics("[00:01.00]Matched"),
+        )
+        val repository = LyricsRepository(listOf(provider), FakeLyricsCache())
+        assertIs<LyricsLoadResult.Found>(repository.load("video:BV1:2", query(), null))
+        val previousSearches = provider.searchCalls
+        assertIs<LyricsLoadResult.NotFound>(repository.load("video:BV1:2", query().copy(durationMs = 210_000L), null))
+        assertTrue(provider.searchCalls > previousSearches)
+    }
+
+    @Test fun `manual search still offers versions excluded from automatic duration matching`() = runTest {
+        val live = candidate(LyricSource.NETEASE, "live").copy(title = "Song Live", durationMs = 260_000L)
+        val provider = FakeLyricsProvider(LyricSource.NETEASE, candidates = listOf(live))
+        val repository = LyricsRepository(listOf(provider), FakeLyricsCache())
+        assertTrue(live in repository.search(query()))
+    }
+
     private fun query() = LyricQuery("Song", "Artist", 180_000L)
 
     private fun candidate(
@@ -143,7 +188,7 @@ private class FakeLyricsCache(
 ) : LyricsCache {
     var saved: LyricDocument? = null
 
-    override suspend fun read(key: String): LyricDocument? = initial
+    override suspend fun read(key: String): LyricDocument? = saved ?: initial
 
     override suspend fun write(key: String, document: LyricDocument) {
         saved = document

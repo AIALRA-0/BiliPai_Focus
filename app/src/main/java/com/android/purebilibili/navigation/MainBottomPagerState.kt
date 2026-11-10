@@ -15,7 +15,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 
 /**
- * 底栏 HorizontalPager 状态。切页由 UserInput 优先级接管 Pager。
+ * 底栏 HorizontalPager 状态。点击指示器与内容翻页分别连续运动。
  */
 @Stable
 internal class MainBottomPagerState(
@@ -33,7 +33,7 @@ internal class MainBottomPagerState(
 
     /** Continuous position shared by the pager and the bottom-bar indicator. */
     val indicatorPosition: Float
-        get() = pagerState.currentPage + pagerState.currentPageOffsetFraction
+        get() = pagerState.tabIndicatorPosition
 
     /** True for both user-driven and programmatic pager movement. */
     val isScrollInProgress: Boolean
@@ -42,13 +42,17 @@ internal class MainBottomPagerState(
     /** Stable adapters for UI components that observe values from snapshotFlow. */
     val indicatorPositionProvider: () -> Float = { indicatorPosition }
     val scrollInProgressProvider: () -> Boolean = { isScrollInProgress }
+    val programmaticNavigationProvider: () -> Boolean = { isNavigating }
+    val targetPositionProvider: () -> Float = {
+        (if (isNavigating) selectedPage else pagerState.targetPage).toFloat()
+    }
 
     private var navJob: Job? = null
 
     /**
      * MainPagerState 目标页切换：
-     * - 先更新 [selectedPage]（底栏指示器跟目标页）；
-     * - 再在 Pager 的 UserInput mutation 中逐帧滚动到目标，避免反向切页被旧状态取消。
+     * - 先更新 [selectedPage]（底栏指示器跟目标页），并让目标页先完成一次组合；
+     * - 再驱动 Pager 到目标，远距离切换允许跳过中间页，指示器独立连续移动。
      */
     fun switchToPage(targetIndex: Int) {
         val lastPage = pagerState.pageCount - 1
@@ -65,6 +69,9 @@ internal class MainBottomPagerState(
         navJob = coroutineScope.launch {
             val myJob = coroutineContext.job
             try {
+                // 目标页此刻已成为转场参与者并开始组合。先让出一帧把它挂载 / 测量的成本
+                // 付掉，动画再启动，避免动画首帧与冷组合抢同一帧预算而掉帧。
+                awaitPagerTargetPagePrewarm()
                 animatePagerSelection(pagerState, safeTargetIndex)
             } finally {
                 if (navJob == myJob) {

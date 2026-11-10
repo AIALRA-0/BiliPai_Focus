@@ -12,6 +12,8 @@ const val DANMAKU_LAYER_REVERSE = 2001
 /** Renderer-neutral standard danmaku model used by the app and parser layers. */
 open class DanmakuItem {
     var danmakuId: Long = 0L
+    /** Original merged content before adding a display count suffix. */
+    var mergedOriginalText: String? = null
     var userHash: String = ""
     var text: String? = null
     var showAtTime: Long = 0L
@@ -33,12 +35,14 @@ open class DanmakuItem {
     var isVipGradualColor: Boolean = false
     var duplicateCount: Int = 0
     var isSelf: Boolean = false
+    var isUpOwner: Boolean = false
     var bitmap: Bitmap? = null
     var bitmapWidth: Float = 0f
     var bitmapHeight: Float = 0f
 
     fun copy(): DanmakuItem = DanmakuItem().also { target ->
         target.danmakuId = danmakuId
+        target.mergedOriginalText = mergedOriginalText
         target.userHash = userHash
         target.text = text
         target.showAtTime = showAtTime
@@ -58,6 +62,7 @@ open class DanmakuItem {
         target.isVipGradualColor = isVipGradualColor
         target.duplicateCount = duplicateCount
         target.isSelf = isSelf
+        target.isUpOwner = isUpOwner
         target.bitmap = bitmap
         target.bitmapWidth = bitmapWidth
         target.bitmapHeight = bitmapHeight
@@ -93,8 +98,7 @@ data class DanmakuRenderConfig(
     val strokeColor: Int = 0x61000000,
     val scrollDurationMs: Long = 7_000L,
     val lineHeightPx: Float = 64f,
-    val lineMarginPx: Float = 18f,
-    val viewportScale: Float = 1f,
+    val lineMarginPx: Float = 0f,
     val lineCount: Int = 8,
     val topMarginPx: Float = 0f,
     val bottomMarginPx: Float = 0f,

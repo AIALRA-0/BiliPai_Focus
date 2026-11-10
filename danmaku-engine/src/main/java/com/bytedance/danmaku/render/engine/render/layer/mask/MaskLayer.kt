@@ -61,12 +61,21 @@ class MaskLayer: IRenderLayer {
     override fun addItems(playTime: Long, list: List<DrawItem<DanmakuData>>) {
         if (list.isNotEmpty()) {
             mCurrentItem?.let(::releaseItem)
-            list.dropLast(1).forEach(::releaseItem)
+            for (index in 0 until list.lastIndex) releaseItem(list[index])
             mCurrentItem = list.last()
             (mCurrentItem as? MaskDrawItem)?.let {
                 generateDrawPath(it)
             }
         }
+    }
+
+    override fun addData(
+        playTime: Long,
+        list: List<DanmakuData>,
+        createItem: (DanmakuData) -> DrawItem<DanmakuData>,
+    ) {
+        // Only the latest due mask is visible; intermediate paths need no DrawItem.
+        list.lastOrNull()?.let { addItems(playTime, listOf(createItem(it))) }
     }
 
     override fun releaseItem(item: DrawItem<DanmakuData>) {

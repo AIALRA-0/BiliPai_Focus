@@ -24,11 +24,12 @@ class ImagePreviewDecodePolicyTest {
     }
 
     @Test
-    fun originalQuality_exceedsPreviewBudgetForFullResolution() {
+    fun originalQuality_staysBelowCanvasBitmapLimit() {
         val previewSize = resolveImageDecodeSize(ImageDecodeTarget.FULLSCREEN_PREVIEW)
         val originalSize = resolveImageDecodeSize(ImageDecodeTarget.ORIGINAL_QUALITY)
 
-        assertEquals(ImageDecodeSize(widthPx = 8192, heightPx = 8192), originalSize)
+        assertEquals(ImageDecodeSize(widthPx = 4608, heightPx = 4608), originalSize)
         assertTrue(estimateArgb8888ByteCount(originalSize) > estimateArgb8888ByteCount(previewSize))
+        assertTrue(estimateArgb8888ByteCount(originalSize) < 100L * 1024L * 1024L)
     }
 }

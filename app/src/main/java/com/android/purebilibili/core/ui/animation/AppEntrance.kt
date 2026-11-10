@@ -31,6 +31,7 @@ import com.android.purebilibili.core.ui.motion.resolveEntranceFrame
 import com.android.purebilibili.core.ui.motion.resolveEntranceStaggerDelayMs
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -97,8 +98,12 @@ fun EntranceGroup(
 ) {
     val spec = rememberEffectiveEntranceMotionSpec()
     val controller = remember(spec) { AppEntranceController(spec) }
-    LaunchedEffect(controller, startWhen) {
-        if (startWhen) controller.start()
+    val navigationReady = LocalAppNavigationEntranceReady.current
+    LaunchedEffect(controller, startWhen, navigationReady) {
+        if (startWhen && spec.animate) {
+            snapshotFlow { navigationReady.value }.first { it }
+            controller.start()
+        }
     }
     CompositionLocalProvider(LocalAppEntrance provides controller) {
         content()
@@ -130,15 +135,21 @@ private class EntranceNode :
 
     private val progress = Animatable(0f)
     private var controller: AppEntranceController? = null
+    private var animationJob: Job? = null
+    private var skipEntrance = false
 
     override fun onAttach() {
         observeController()
-        val currentController = controller ?: return
+        val currentController = controller
+        if (skipEntrance || currentController == null || !currentController.spec.animate) {
+            // 已直接显示的内容不能在开关、窗口档位变化后重新退回透明的起始帧。
+            skipEntrance = true
+            return
+        }
         val spec = currentController.spec
-        if (!spec.animate) return
         val index = currentController.allocateIndex()
         val delayMs = resolveEntranceStaggerDelayMs(index, spec)
-        coroutineScope.launch {
+        animationJob = coroutineScope.launch {
             currentController.awaitStart()
             if (delayMs > 0) delay(delayMs.toLong())
             progress.animateTo(targetValue = 1f, animationSpec = spec.progressSpring())
@@ -146,7 +157,14 @@ private class EntranceNode :
     }
 
     override fun onObservedReadsChanged() {
+        val previousController = controller
         observeController()
+        if (previousController !== controller) {
+            // 参数变化只影响新挂载内容；当前节点落在终态，取消旧协调器的等待与动画。
+            animationJob?.cancel()
+            animationJob = null
+            skipEntrance = true
+        }
         invalidateMeasurement()
     }
 
@@ -163,7 +181,7 @@ private class EntranceNode :
         val spec = controller?.spec
         val placeable = measurable.measure(constraints)
         return layout(placeable.width, placeable.height) {
-            if (spec == null || !spec.animate) {
+            if (skipEntrance || spec == null || !spec.animate) {
                 placeable.place(0, 0)
                 return@layout
             }

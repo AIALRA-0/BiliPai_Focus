@@ -10,7 +10,7 @@ internal enum class ZoomableImageGestureMode {
 }
 
 /**
- * 单指、未缩放时优先按轴锁定：竖直 → 下滑退出，水平 → 交给 Pager。
+ * 单指、未缩放时优先按轴锁定：竖直 → 上下滑退出，水平 → 交给 Pager。
  * 不把微小 pinch 噪声当成缩放，避免竖滑被吞掉。
  */
 internal fun resolveZoomableImageGestureMode(
@@ -28,6 +28,6 @@ internal fun resolveZoomableImageGestureMode(
     return when {
         absY > absX * verticalBias -> ZoomableImageGestureMode.VERTICAL_DISMISS
         absX > absY * verticalBias -> ZoomableImageGestureMode.HORIZONTAL_PAGER
-        else -> ZoomableImageGestureMode.IMAGE_INTERACTION
+        else -> ZoomableImageGestureMode.UNDECIDED
     }
 }

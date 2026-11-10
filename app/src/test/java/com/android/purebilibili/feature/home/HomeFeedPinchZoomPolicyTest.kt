@@ -21,7 +21,18 @@ class HomeFeedPinchZoomPolicyTest {
             widthSizeClass = WindowWidthSizeClass.Compact,
             contentWidthDp = 340,
         )
-        assertEquals(1..3, bounds)
+        assertEquals(1..2, bounds)
+    }
+
+    @Test
+    fun splitWindowBounds_followWidthEvenOnTabletAndRestoreAfterExpansion() {
+        val widths = listOf(840, 379, 299, 220, 0, 300, 380, 840)
+        val maxima = listOf(6, 2, 1, 1, 1, 2, 4, 6)
+        widths.zip(maxima).forEach { (width, maximum) ->
+            assertEquals(maximum, resolveHomeFeedPinchColumnBounds(
+                WindowWidthSizeClass.Expanded, width,
+            ).last)
+        }
     }
 
     @Test

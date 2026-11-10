@@ -3,6 +3,7 @@ package com.android.purebilibili.data.model.response
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,6 +28,18 @@ class DynamicInteractionModelParsingTest {
         assertEquals(101L, response.data?.reserve_update)
         assertEquals(1, response.data?.final_btn_status)
         assertEquals("101 人预约", response.data?.desc_update)
+    }
+
+    @Test
+    fun missingReserveCountIsDifferentFromRealZero() {
+        val missing = json.decodeFromString<DynamicReserveClickResponse>(
+            """{"code":0,"data":{"final_btn_status":1}}"""
+        )
+        val zero = json.decodeFromString<DynamicReserveClickResponse>(
+            """{"code":0,"data":{"reserve_update":0,"final_btn_status":0}}"""
+        )
+        assertNull(missing.data?.reserve_update)
+        assertEquals(0L, zero.data?.reserve_update)
     }
 
     @Test

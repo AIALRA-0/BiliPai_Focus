@@ -168,14 +168,20 @@ internal fun resolveDanmakuActionForForegroundRecovery(
     isPlayerPlaying: Boolean,
     playbackState: Int,
     danmakuEnabled: Boolean,
-    hasData: Boolean
+    hasData: Boolean,
+    preserveTimeline: Boolean = false,
+    timelineAlreadySynced: Boolean = false
 ): DanmakuSyncAction {
     if (!danmakuEnabled || !hasData) return DanmakuSyncAction.None
     if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
         return DanmakuSyncAction.PauseOnly
     }
     return if (playWhenReady || isPlayerPlaying) {
-        DanmakuSyncAction.HardResync
+        if (preserveTimeline && timelineAlreadySynced) {
+            DanmakuSyncAction.SoftResync
+        } else {
+            DanmakuSyncAction.HardResync
+        }
     } else {
         DanmakuSyncAction.None
     }

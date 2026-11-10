@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.list
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
-import com.android.purebilibili.core.store.HomeHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
 import com.android.purebilibili.core.ui.AppTopChromePolicy
@@ -16,7 +15,8 @@ internal data class CommonListVideoCardAppearance(
     val showInfoGlassBadges: Boolean
 )
 
-internal fun resolveCommonListSingleColumnMaxWidth(): Dp = 840.dp
+internal fun resolveCommonListSingleColumnMaxWidth(): Dp =
+    com.android.purebilibili.core.util.resolveSingleColumnFeedMaxWidth()
 
 internal fun resolveCommonListGridMinColumnWidth(isExpandedScreen: Boolean): Dp =
     if (isExpandedScreen) 240.dp else 170.dp
@@ -56,8 +56,23 @@ internal fun shouldUseCommonListHeaderLocalBlur(
 
 internal fun shouldUseFloatingCommonListHeaderChrome(
     isHistoryPage: Boolean,
+    isFavoritePage: Boolean = false,
     globalLiquidGlassReuseEnabled: Boolean,
-): Boolean = isHistoryPage && globalLiquidGlassReuseEnabled
+): Boolean = (isHistoryPage || isFavoritePage) && globalLiquidGlassReuseEnabled
+
+/**
+ * 通用列表页折叠位移上限：独立折叠开关开启后，标题/搜索/标签 Dock
+ * 收起至状态栏安全区下方；「始终显示」则不产生折叠位移。
+ */
+internal fun resolveCommonListHeaderMaxCollapsePxForMode(
+    collapseMode: CommonListHeaderCollapseMode,
+    fixedTopBarHeightPx: Int,
+    statusBarHeightPx: Float,
+): Float = if (collapseMode == CommonListHeaderCollapseMode.ALWAYS_VISIBLE) {
+    0f
+} else {
+    (fixedTopBarHeightPx.toFloat() - statusBarHeightPx).coerceAtLeast(0f)
+}
 
 internal fun resolveCommonListViewportTopPadding(headerHeight: Dp): Dp {
     return headerHeight.coerceAtLeast(0.dp)
@@ -95,22 +110,12 @@ internal fun resolveCommonListHeaderOffsetPx(
     mode: CommonListHeaderCollapseMode
 ): Float {
     if (mode == CommonListHeaderCollapseMode.ALWAYS_VISIBLE || maxCollapsePx <= 0f) return 0f
-    if (isAtTop && scrollDeltaYPx >= 0f) return 0f
+    // 到顶后的展开由页面动画接管，保留当前位置，避免滚动回调抢先归零。
+    if (isAtTop && scrollDeltaYPx >= 0f) return currentOffsetPx.coerceIn(-maxCollapsePx, 0f)
     if (mode == CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY && scrollDeltaYPx > 0f) {
         return currentOffsetPx.coerceIn(-maxCollapsePx, 0f)
     }
     return (currentOffsetPx + scrollDeltaYPx).coerceIn(-maxCollapsePx, 0f)
-}
-
-/** Maps the shared home/header switch onto history, favorites, and other common lists. */
-internal fun resolveCommonListHeaderCollapseModeForScreen(
-    homeHeaderMode: HomeHeaderCollapseMode,
-): CommonListHeaderCollapseMode {
-    return if (homeHeaderMode.hasAnyCollapse) {
-        CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY
-    } else {
-        CommonListHeaderCollapseMode.ALWAYS_VISIBLE
-    }
 }
 
 internal fun resolveCommonListHeaderOffsetAfterContentScroll(

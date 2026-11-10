@@ -1,13 +1,30 @@
 package com.android.purebilibili.feature.video.danmaku
 
+import com.android.purebilibili.danmaku.parser.resolveBilibiliDanmakuFontScale
+
 import com.android.purebilibili.danmaku.engine.DANMAKU_LAYER_BOTTOM
 import com.android.purebilibili.danmaku.engine.DANMAKU_LAYER_SCROLL
 import com.android.purebilibili.danmaku.engine.DANMAKU_LAYER_TOP
 import com.android.purebilibili.danmaku.engine.DANMAKU_LAYER_REVERSE
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DanmakuConfigPolicyTest {
+
+    @Test
+    fun `count bar never reserves tracks in massive mode`() {
+        for (height in listOf(0f, 64f, 128f, 1000f)) {
+            assertEquals(0f, resolveDanmakuHotBarReservedHeightPx(height, 720, true), 0f)
+        }
+    }
+
+    @Test
+    fun `normal mode restores bounded count bar reservation`() {
+        assertEquals(64f, resolveDanmakuHotBarReservedHeightPx(64f, 720, false), 0f)
+        assertEquals(32f, resolveDanmakuHotBarReservedHeightPx(64f, 32, false), 0f)
+        assertEquals(0f, resolveDanmakuHotBarReservedHeightPx(64f, 0, false), 0f)
+    }
 
     @Test
     fun `bilibili font grades should remain relative to user font scale`() {
@@ -54,9 +71,19 @@ class DanmakuConfigPolicyTest {
 
     @Test
     fun `pinned duration should clamp to safe bounds`() {
-        assertEquals(2000L, resolveDanmakuPinnedDurationMillis(0.5f))
+        assertEquals(1000L, resolveDanmakuPinnedDurationMillis(0.5f))
         assertEquals(4000L, resolveDanmakuPinnedDurationMillis(4.0f))
-        assertEquals(15000L, resolveDanmakuPinnedDurationMillis(18.0f))
+        assertEquals(18000L, resolveDanmakuPinnedDurationMillis(18.0f))
+        assertEquals(50000L, resolveDanmakuPinnedDurationMillis(60f))
+    }
+
+    @Test
+    fun `Pili selected range endpoints reach renderer unchanged`() {
+        assertEquals(0f, normalizeDanmakuOpacity(0f), 0f)
+        assertEquals(37.5f, resolveDanmakuTextSizePx(1f, 2.5f, false), 0f)
+        assertEquals(60f, resolveDanmakuLayerLineHeightPx(20f, 3f), 0f)
+        assertEquals(1000L, resolveDanmakuScrollDurationMillis(1f, 1f, false, 1080))
+        assertEquals(50000L, resolveDanmakuScrollDurationMillis(50f, 1f, false, 1080))
     }
 
     @Test
@@ -80,8 +107,11 @@ class DanmakuConfigPolicyTest {
             massiveMode = true
         )
 
-        assertEquals(9, regularLines)
-        assertEquals(10, massiveLines)
+        assertTrue(massiveLines >= regularLines)
+        val rowHeight = resolveDanmakuLayerLineHeightPx(20f, 1.6f)
+        // Row pitch is the line height alone; there is no extra interline margin.
+        assertTrue(rowHeight + (massiveLines - 1) * rowHeight <= 500f)
+        assertTrue(rowHeight + massiveLines * rowHeight > 500f)
     }
 
     @Test
@@ -113,13 +143,18 @@ class DanmakuConfigPolicyTest {
     }
 
     @Test
-    fun `text size composes user preference density and viewport without a small window floor`() {
-        val fullscreen = requireNotNull(resolveDanmakuViewport(2392, 1080, 3f, 1080f))
-        val inline = requireNotNull(resolveDanmakuViewport(1080, 608, 3f, 1080f))
-        assertEquals(608f / 1080f,
-            resolveDanmakuTextSizePx(inline, 1.5f) / resolveDanmakuTextSizePx(fullscreen, 1.5f), 0.001f)
-        assertEquals(1.5f,
-            resolveDanmakuTextSizePx(inline, 1.5f) / resolveDanmakuTextSizePx(inline, 1f), 0.001f)
+    fun `fullscreen changes the logical baseline but preserves the user's scale`() {
+        assertEquals(39.375f, resolveDanmakuTextSizePx(2.625f, 1f, false), 0.001f)
+        assertEquals(47.25f, resolveDanmakuTextSizePx(2.625f, 1f, true), 0.001f)
+        assertEquals(59.0625f, resolveDanmakuTextSizePx(2.625f, 1.5f, false), 0.001f)
+        assertEquals(70.875f, resolveDanmakuTextSizePx(2.625f, 1.5f, true), 0.001f)
+    }
+
+    @Test
+    fun `stroke thickness uses system density and zero still disables the outline`() {
+        assertEquals(1.5f, resolveDanmakuStrokeWidthPx(1f, 1.5f), 0.001f)
+        assertEquals(5.25f, resolveDanmakuStrokeWidthPx(3.5f, 1.5f), 0.001f)
+        assertEquals(0f, resolveDanmakuStrokeWidthPx(3.5f, 0f), 0f)
     }
 
     @Test

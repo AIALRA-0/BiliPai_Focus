@@ -1,4 +1,11 @@
 package com.android.purebilibili.feature.download
+
+import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
+import com.android.purebilibili.core.player.withAppVideoDecoderPreference
+
+import com.android.purebilibili.core.ui.AppContentColors
+
+import com.android.purebilibili.feature.video.ui.overlay.NextWatchOverlay
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -7,6 +14,7 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
+import com.android.purebilibili.core.util.layoutHinges
 import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.Uri
@@ -17,6 +25,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -43,6 +53,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
@@ -51,12 +62,14 @@ import com.android.purebilibili.core.ui.rememberAppCommentIcon
 import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
 import com.android.purebilibili.core.ui.rememberAppPlayIcon
 import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.store.DanmakuSettings
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.DEFAULT_LONG_PRESS_SPEED
 import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
@@ -67,6 +80,7 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayCont
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelIcon
 import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
 import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
+import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FastForward
@@ -75,13 +89,20 @@ import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.abs
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 
@@ -89,6 +110,9 @@ import com.android.purebilibili.core.ui.ContainerLevel
  * 手势模式枚举
  */
 private enum class GestureMode { None, Brightness, Volume, Seek }
+
+// Persists playback progress independently of the composable lifecycle.
+private val playbackPersistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
  * 🔧 [重构] 离线视频播放器
@@ -104,6 +128,7 @@ fun OfflineVideoPlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val displayContext = LocalAppWindowAdaptiveInfo.current.displayContext
+    val appWindowAdaptiveInfo = LocalAppWindowAdaptiveInfo.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     val miniPlayerManager = remember(context) { MiniPlayerManager.getInstance(context) }
@@ -113,7 +138,7 @@ fun OfflineVideoPlayerScreen(
     val playIcon = rememberAppPlayIcon()
     val gestureLevelOverlayStyle =
         rememberGestureLevelOverlayStyle(playerChromeProfile.tabPresentation)
-    
+
     val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
     var currentTaskId by remember(taskId) { mutableStateOf(taskId) }
     val danmakuManager = rememberDanmakuManager("offline:$currentTaskId")
@@ -126,8 +151,16 @@ fun OfflineVideoPlayerScreen(
     val danmakuSettings by SettingsManager
         .getDanmakuSettings(context, danmakuSettingsScope)
         .collectAsStateWithLifecycle(initialValue = DanmakuSettings())
+    val longPressSpeed by SettingsManager
+        .getLongPressSpeed(context)
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_LONG_PRESS_SPEED)
+    val playerInteractionSettings by SettingsManager
+        .getPlayerInteractionSettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings()
+        )
     val task = tasks[currentTaskId]
-    
+
     // === 状态管理 ===
     var isFullscreen by remember(currentTaskId, task?.isAudioOnly, task?.isVerticalVideo) {
         mutableStateOf(
@@ -140,13 +173,13 @@ fun OfflineVideoPlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
     var initialOrientationResolved by remember(currentTaskId) { mutableStateOf(false) }
-    
+
     // 手势状态
     var gestureMode by remember { mutableStateOf(GestureMode.None) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var gesturePercent by remember { mutableFloatStateOf(0f) }
     var isGestureVisible by remember { mutableStateOf(false) }
-    
+
     // 进度拖动状态
     var seekTargetTime by remember { mutableLongStateOf(0L) }
     var startPosition by remember { mutableLongStateOf(0L) }
@@ -154,16 +187,15 @@ fun OfflineVideoPlayerScreen(
     var totalDragDistanceY by remember { mutableFloatStateOf(0f) }
     var startVolume by remember { mutableIntStateOf(0) }
     var startBrightness by remember { mutableFloatStateOf(0.5f) }
-    
+
     // 双击跳转反馈
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
     var seekFeedbackVisible by remember { mutableStateOf(false) }
-    
+
     // 长按倍速状态
     var isLongPressing by remember { mutableStateOf(false) }
     var originalSpeed by remember { mutableFloatStateOf(1.0f) }
     var longPressSpeedVisible by remember { mutableStateOf(false) }
-    val longPressSpeed = 2.0f
     var danmakuEnabled by remember(currentTaskId) { mutableStateOf(true) }
 
     LaunchedEffect(danmakuManager, danmakuSettings) {
@@ -172,11 +204,11 @@ fun OfflineVideoPlayerScreen(
     LaunchedEffect(currentTaskId, danmakuSettings.enabled) {
         danmakuEnabled = danmakuSettings.enabled
     }
-    
+
     // 双击跳转秒数
     val seekForwardSeconds = 10
     val seekBackwardSeconds = 10
-    
+
     if (task == null || task.filePath == null) {
         Box(
             modifier = Modifier.fillMaxSize().background(Color.Black),
@@ -190,7 +222,7 @@ fun OfflineVideoPlayerScreen(
         }
         return
     }
-    
+
     val file = File(task.filePath)
     if (!file.exists()) {
         Box(
@@ -215,10 +247,62 @@ fun OfflineVideoPlayerScreen(
     val currentEpisodeIndex = remember(episodeQueue, task.id) {
         episodeQueue.indexOfFirst { it.id == task.id }
     }
-    
+
     // 创建播放器
-    val player = remember(file.absolutePath) {
-        ExoPlayer.Builder(context).build()
+    val player = remember(context, task.id, file.absolutePath) {
+        ExoPlayer.Builder(context)
+            .setRenderersFactory(
+                com.android.purebilibili.core.player.HiResCompatibleRenderersFactory(context)
+                    .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                    .withAppVideoDecoderPreference(context)
+            )
+            .build().withAppVideoDecoderDiagnostics(context)
+    }
+    var playerView by remember(player) { mutableStateOf<PlayerView?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var foregroundRecoveryGeneration by remember(player) { mutableIntStateOf(0) }
+
+    DisposableEffect(lifecycleOwner, player) {
+        var hasObservedPause = false
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> hasObservedPause = true
+                Lifecycle.Event.ON_RESUME -> if (hasObservedPause) {
+                    hasObservedPause = false
+                    foregroundRecoveryGeneration++
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(lifecycleOwner, player, playerView, foregroundRecoveryGeneration) {
+        if (foregroundRecoveryGeneration == 0) return@LaunchedEffect
+        val view = playerView ?: return@LaunchedEffect
+        // 等前台轨道恢复与当前布局提交后再重绑；横竖屏共用此恢复入口。
+        withFrameNanos { }
+        if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            return@LaunchedEffect
+        }
+        val needsSurfaceRecovery = miniPlayerManager.consumeForegroundSurfaceRecoveryNeed()
+        if (!task.isAudioOnly && needsSurfaceRecovery) {
+            // PlayerView 仍持有同一个 player 时，直接赋值不会恢复已被后台清除的输出。
+            rebindPlayerSurfaceIfNeeded(view, player)
+        }
+        danmakuManager.recoverAfterForeground(
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+            playWhenReady = player.playWhenReady,
+            playbackState = player.playbackState,
+            preserveTimeline = !needsSurfaceRecovery,
+        )
+    }
+
+    var playbackFailure by remember(player) { mutableStateOf<OfflinePlaybackFailure?>(null) }
+    var retryVersion by remember(player) { mutableIntStateOf(0) }
+    var lastKnownPlaybackPosition by remember(player) {
+        mutableLongStateOf(task.lastPlaybackPositionMs.coerceAtLeast(0L))
     }
     val offlineSessionRegistered = remember(file.exists(), task.filePath) {
         shouldRegisterOfflinePlaybackSession(
@@ -253,15 +337,25 @@ fun OfflineVideoPlayerScreen(
     )
 
     fun persistCurrentPlaybackPosition(activeTask: DownloadTask, activePlayer: ExoPlayer) {
-        DownloadManager.updatePlaybackPosition(
-            taskId = activeTask.id,
-            positionMs = resolveOfflinePersistedPlaybackPosition(
-                currentPositionMs = activePlayer.currentPosition,
-                durationMs = activePlayer.duration
-            )
+        // Read ExoPlayer state on its application thread before dispatching persistence.
+        val positionMs = resolveOfflinePersistedPlaybackPosition(
+            currentPositionMs = if (
+                activePlayer.playerError != null || activePlayer.playbackState == Player.STATE_IDLE
+            ) {
+                lastKnownPlaybackPosition
+            } else {
+                activePlayer.currentPosition
+            },
+            durationMs = activePlayer.duration
         )
+        playbackPersistenceScope.launch {
+            DownloadManager.updatePlaybackPosition(
+                taskId = activeTask.id,
+                positionMs = positionMs
+            )
+        }
     }
-    
+
     // 进度状态
     val progressState by produceState(
         initialValue = ProgressInfo(0L, 0L, 0L),
@@ -276,10 +370,13 @@ fun OfflineVideoPlayerScreen(
                 buffered = player.bufferedPosition
             )
             isPlaying = player.isPlaying
+            if (player.playbackState == Player.STATE_READY && player.playerError == null) {
+                lastKnownPlaybackPosition = player.currentPosition.coerceAtLeast(0L)
+            }
             delay(if (showControls) 200L else 500L)
         }
     }
-    
+
     // 自动隐藏控制栏
     LaunchedEffect(showControls, isPlaying) {
         if (showControls && isPlaying) {
@@ -287,7 +384,7 @@ fun OfflineVideoPlayerScreen(
             showControls = false
         }
     }
-    
+
     // 双击反馈自动消失
     LaunchedEffect(seekFeedbackVisible) {
         if (seekFeedbackVisible) {
@@ -295,7 +392,7 @@ fun OfflineVideoPlayerScreen(
             seekFeedbackVisible = false
         }
     }
-    
+
     // 长按倍速提示自动消失
     LaunchedEffect(longPressSpeedVisible) {
         if (longPressSpeedVisible) {
@@ -303,10 +400,10 @@ fun OfflineVideoPlayerScreen(
             longPressSpeedVisible = false
         }
     }
-    
+
     // 获取 Activity
     fun getActivity(): Activity? = activity
-    
+
     fun applyWindowMode(fullscreen: Boolean) {
         val act = getActivity() ?: return
         val requestedOrientation = when (
@@ -362,10 +459,10 @@ fun OfflineVideoPlayerScreen(
         currentTaskId = targetTaskId
         showControls = true
     }
-    
+
     // 返回键处理
     LocalNavigationBackHandler(enabled = isFullscreen) { toggleFullscreen() }
-    
+
     var previousOfflineDisplayRole by remember {
         mutableStateOf(displayContext.foldableDisplayRole)
     }
@@ -387,10 +484,34 @@ fun OfflineVideoPlayerScreen(
         applyWindowMode(isFullscreen)
     }
 
-    LaunchedEffect(player, file.absolutePath, task.id) {
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                playbackFailure = resolveOfflinePlaybackFailure(error.errorCode)
+                isPlaying = false
+                showControls = true
+                isGestureVisible = false
+                seekFeedbackVisible = false
+                longPressSpeedVisible = false
+                if (isLongPressing) {
+                    player.setPlaybackSpeed(originalSpeed)
+                    isLongPressing = false
+                }
+                player.pause()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) playbackFailure = null
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    LaunchedEffect(player, file.absolutePath, task.id, retryVersion) {
         player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
         player.prepare()
-        val restoredPosition = task.lastPlaybackPositionMs.coerceAtLeast(0L)
+        val restoredPosition = if (retryVersion > 0) lastKnownPlaybackPosition else task.lastPlaybackPositionMs.coerceAtLeast(0L)
         if (restoredPosition > 0L) {
             player.seekTo(restoredPosition)
         } else {
@@ -429,11 +550,9 @@ fun OfflineVideoPlayerScreen(
     }
 
     LaunchedEffect(danmakuManager, showDanmakuLayer) {
-        if (showDanmakuLayer) {
-            danmakuManager.show()
-        } else {
-            danmakuManager.hide()
-        }
+        // Data commits and player callbacks also consult the engine's enabled state.
+        // Hiding only the View lets an asynchronous load turn it visible again.
+        danmakuManager.isEnabled = showDanmakuLayer
     }
 
     DisposableEffect(player, offlineSessionRegistered, offlineMiniPlayerPayload) {
@@ -490,549 +609,628 @@ fun OfflineVideoPlayerScreen(
                 currentPositionMs = player.currentPosition,
                 durationMs = player.duration
             )
-            if (abs(resolvedPosition - lastPersistedPosition) >= 2_000L) {
+            if (
+                player.playerError == null && player.playbackState == Player.STATE_READY &&
+                abs(resolvedPosition - lastPersistedPosition) >= 2_000L
+            ) {
                 DownloadManager.updatePlaybackPosition(task.id, resolvedPosition)
                 lastPersistedPosition = resolvedPosition
             }
             delay(2_000L)
         }
     }
-    
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            // 🎛️ 拖拽手势：亮度/音量/进度
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        // 边缘防误触
-                        val density = context.resources.displayMetrics.density
-                        val safeZonePx = 48 * density
-                        val screenHeight = size.height
-                        val isEdgeGesture = offset.y < safeZonePx || offset.y > (screenHeight - safeZonePx)
-                        
-                        if (isEdgeGesture) {
+
+    // 半开折叠姿态：媒体与控件整体收进首个安全区，不跨物理铰链（对齐主视频/番剧/直播）。
+    val offlinePlayerSurface: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                // 🎛️ 拖拽手势：亮度/音量/进度
+                .pointerInput(player, playbackFailure, isFullscreen, playerInteractionSettings) {
+                    if (gestureMode == GestureMode.Seek) {
+                        isGestureVisible = false
+                        gestureMode = GestureMode.None
+                    }
+                    if (playbackFailure != null) return@pointerInput
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            // 边缘防误触
+                            val density = context.resources.displayMetrics.density
+                            val safeZonePx = 48 * density
+                            val screenHeight = size.height
+                            val isEdgeGesture = offset.y < safeZonePx || offset.y > (screenHeight - safeZonePx)
+
+                            if (isEdgeGesture) {
+                                isGestureVisible = false
+                                gestureMode = GestureMode.None
+                            } else {
+                                isGestureVisible = true
+                                gestureMode = GestureMode.None
+                                totalDragDistanceY = 0f
+                                totalDragDistanceX = 0f
+
+                                startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                startPosition = player.currentPosition
+                                seekTargetTime = startPosition
+
+                                val attributes = getActivity()?.window?.attributes
+                                val currentWindowBrightness = attributes?.screenBrightness ?: -1f
+
+                                if (currentWindowBrightness < 0) {
+                                    try {
+                                        val sysBrightness = Settings.System.getInt(
+                                            context.contentResolver,
+                                            Settings.System.SCREEN_BRIGHTNESS
+                                        )
+                                        startBrightness = sysBrightness / 255f
+                                    } catch (e: Exception) {
+                                        startBrightness = 0.5f
+                                    }
+                                } else {
+                                    startBrightness = currentWindowBrightness
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            if (gestureMode == GestureMode.Seek) {
+                                seekToPosition(seekTargetTime)
+                            }
                             isGestureVisible = false
                             gestureMode = GestureMode.None
-                        } else {
-                            isGestureVisible = true
+                        },
+                        onDragCancel = {
+                            isGestureVisible = false
                             gestureMode = GestureMode.None
-                            totalDragDistanceY = 0f
-                            totalDragDistanceX = 0f
-                            
-                            startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                            startPosition = player.currentPosition
-                            
-                            val attributes = getActivity()?.window?.attributes
-                            val currentWindowBrightness = attributes?.screenBrightness ?: -1f
-                            
-                            if (currentWindowBrightness < 0) {
-                                try {
-                                    val sysBrightness = Settings.System.getInt(
-                                        context.contentResolver,
-                                        Settings.System.SCREEN_BRIGHTNESS
-                                    )
-                                    startBrightness = sysBrightness / 255f
-                                } catch (e: Exception) {
-                                    startBrightness = 0.5f
-                                }
+                        },
+                        onDrag = { change, dragAmount ->
+                            if (!isGestureVisible && gestureMode == GestureMode.None) {
+                                // 在 safe zone 中启动被忽略
                             } else {
-                                startBrightness = currentWindowBrightness
-                            }
-                        }
-                    },
-                    onDragEnd = {
-                        if (gestureMode == GestureMode.Seek) {
-                            seekToPosition(seekTargetTime)
-                        }
-                        isGestureVisible = false
-                        gestureMode = GestureMode.None
-                    },
-                    onDragCancel = {
-                        isGestureVisible = false
-                        gestureMode = GestureMode.None
-                    },
-                    onDrag = { change, dragAmount ->
-                        if (!isGestureVisible && gestureMode == GestureMode.None) {
-                            // 在 safe zone 中启动被忽略
-                        } else {
-                            // 确定手势类型
-                            if (gestureMode == GestureMode.None) {
-                                if (abs(dragAmount.x) > abs(dragAmount.y)) {
-                                    gestureMode = GestureMode.Seek
-                                } else {
-                                    val screenWidth = context.resources.displayMetrics.widthPixels
-                                    gestureMode = if (change.position.x < screenWidth / 2) {
-                                        GestureMode.Brightness
+                                // 确定手势类型
+                                if (gestureMode == GestureMode.None) {
+                                    if (abs(dragAmount.x) > abs(dragAmount.y)) {
+                                        gestureMode = GestureMode.Seek
                                     } else {
-                                        GestureMode.Volume
-                                    }
-                                }
-                            }
-                            
-                            when (gestureMode) {
-                                GestureMode.Seek -> {
-                                    totalDragDistanceX += dragAmount.x
-                                    val duration = player.duration.coerceAtLeast(0L)
-                                    val seekDelta = (totalDragDistanceX * 200).toLong()
-                                    seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
-                                }
-                                GestureMode.Brightness -> {
-                                    totalDragDistanceY -= dragAmount.y
-                                    val screenHeight = context.resources.displayMetrics.heightPixels
-                                    val deltaPercent = totalDragDistanceY / screenHeight
-                                    val newBrightness = (startBrightness + deltaPercent).coerceIn(0f, 1f)
-                                    
-                                    if (abs(newBrightness - gesturePercent) > 0.02f) {
-                                        getActivity()?.window?.attributes = getActivity()?.window?.attributes?.apply {
-                                            screenBrightness = newBrightness
+                                        val screenWidth = size.width
+                                        gestureMode = if (change.position.x < screenWidth / 2) {
+                                            GestureMode.Brightness
+                                        } else {
+                                            GestureMode.Volume
                                         }
-                                        gesturePercent = newBrightness
                                     }
-                                    gestureIcon = resolveGestureLevelIcon(
-                                        style = gestureLevelOverlayStyle,
-                                        kind = GestureLevelKind.Brightness,
-                                        percent = gesturePercent
-                                    )
                                 }
-                                GestureMode.Volume -> {
-                                    totalDragDistanceY -= dragAmount.y
-                                    val screenHeight = context.resources.displayMetrics.heightPixels
-                                    val deltaPercent = totalDragDistanceY / screenHeight
-                                    val newVolPercent = ((startVolume.toFloat() / maxVolume) + deltaPercent).coerceIn(0f, 1f)
-                                    val targetVol = (newVolPercent * maxVolume).toInt()
-                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
-                                    gesturePercent = newVolPercent
-                                    
-                                    gestureIcon = resolveGestureLevelIcon(
-                                        style = gestureLevelOverlayStyle,
-                                        kind = GestureLevelKind.Volume,
-                                        percent = gesturePercent
-                                    )
-                                }
-                                else -> {}
-                            }
-                        }
-                    }
-                )
-            }
-            // 🖱️ 点击/双击/长按手势
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { showControls = !showControls },
-                    onLongPress = {
-                        // 长按倍速
-                        originalSpeed = player.playbackParameters.speed
-                        player.setPlaybackSpeed(longPressSpeed)
-                        isLongPressing = true
-                        longPressSpeedVisible = true
-                    },
-                    onDoubleTap = { offset ->
-                        val screenWidth = size.width
-                        when {
-                            // 右侧 1/3：快进
-                            offset.x > screenWidth * 2 / 3 -> {
-                                val seekMs = seekForwardSeconds * 1000L
-                                val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
-                                seekToPosition(newPos)
-                                seekFeedbackText = "+${seekForwardSeconds}s"
-                                seekFeedbackVisible = true
-                            }
-                            // 左侧 1/3：后退
-                            offset.x < screenWidth / 3 -> {
-                                val seekMs = seekBackwardSeconds * 1000L
-                                val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
-                                seekToPosition(newPos)
-                                seekFeedbackText = "-${seekBackwardSeconds}s"
-                                seekFeedbackVisible = true
-                            }
-                            // 中间：暂停/播放
-                            else -> {
-                                player.playWhenReady = !player.playWhenReady
-                            }
-                        }
-                    },
-                    onPress = {
-                        tryAwaitRelease()
-                        // 松开时恢复原速度
-                        if (isLongPressing) {
-                            player.setPlaybackSpeed(originalSpeed)
-                            isLongPressing = false
-                            longPressSpeedVisible = false
-                        }
-                    }
-                )
-            }
-    ) {
-        // 1. PlayerView
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    this.player = player
-                    useController = false
-                    keepScreenOn = true
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
 
-        if (danmakuAvailable) {
+                                when (gestureMode) {
+                                    GestureMode.Seek -> {
+                                        totalDragDistanceX += dragAmount.x
+                                        val duration = player.duration.coerceAtLeast(0L)
+                                        val seekDelta = resolveHorizontalSeekDeltaMs(
+                                            totalDragDistanceX = totalDragDistanceX,
+                                            containerWidthPx = size.width.toFloat(),
+                                            gestureSensitivity = playerInteractionSettings.gestureSensitivity,
+                                            durationMs = duration,
+                                        )
+                                        if (seekDelta != null) {
+                                            seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
+                                        }
+                                    }
+                                    GestureMode.Brightness -> {
+                                        totalDragDistanceY -= dragAmount.y
+                                        val screenHeight = context.resources.displayMetrics.heightPixels
+                                        val deltaPercent = totalDragDistanceY / screenHeight
+                                        val newBrightness = (startBrightness + deltaPercent).coerceIn(0f, 1f)
+
+                                        if (abs(newBrightness - gesturePercent) > 0.02f) {
+                                            getActivity()?.window?.attributes = getActivity()?.window?.attributes?.apply {
+                                                screenBrightness = newBrightness
+                                            }
+                                            gesturePercent = newBrightness
+                                        }
+                                        gestureIcon = resolveGestureLevelIcon(
+                                            style = gestureLevelOverlayStyle,
+                                            kind = GestureLevelKind.Brightness,
+                                            percent = gesturePercent
+                                        )
+                                    }
+                                    GestureMode.Volume -> {
+                                        totalDragDistanceY -= dragAmount.y
+                                        val screenHeight = context.resources.displayMetrics.heightPixels
+                                        val deltaPercent = totalDragDistanceY / screenHeight
+                                        val newVolPercent = ((startVolume.toFloat() / maxVolume) + deltaPercent).coerceIn(0f, 1f)
+                                        val targetVol = (newVolPercent * maxVolume).toInt()
+                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                                        gesturePercent = newVolPercent
+
+                                        gestureIcon = resolveGestureLevelIcon(
+                                            style = gestureLevelOverlayStyle,
+                                            kind = GestureLevelKind.Volume,
+                                            percent = gesturePercent
+                                        )
+                                    }
+                                    else -> {}
+                                }
+                            }
+                        }
+                    )
+                }
+                // 🖱️ 点击/双击/长按手势
+                .pointerInput(player, playbackFailure, longPressSpeed) {
+                    if (playbackFailure != null) return@pointerInput
+                    detectTapGestures(
+                        onTap = { showControls = !showControls },
+                        onLongPress = {
+                            // 长按倍速
+                            originalSpeed = player.playbackParameters.speed
+                            player.setPlaybackSpeed(longPressSpeed)
+                            isLongPressing = true
+                            longPressSpeedVisible = true
+                        },
+                        onDoubleTap = { offset ->
+                            val screenWidth = size.width
+                            when {
+                                // 右侧 1/3：快进
+                                offset.x > screenWidth * 2 / 3 -> {
+                                    val seekMs = seekForwardSeconds * 1000L
+                                    val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
+                                    seekToPosition(newPos)
+                                    seekFeedbackText = "+${seekForwardSeconds}s"
+                                    seekFeedbackVisible = true
+                                }
+                                // 左侧 1/3：后退
+                                offset.x < screenWidth / 3 -> {
+                                    val seekMs = seekBackwardSeconds * 1000L
+                                    val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
+                                    seekToPosition(newPos)
+                                    seekFeedbackText = "-${seekBackwardSeconds}s"
+                                    seekFeedbackVisible = true
+                                }
+                                // 中间：暂停/播放
+                                else -> {
+                                    player.playWhenReady = !player.playWhenReady
+                                }
+                            }
+                        },
+                        onPress = {
+                            tryAwaitRelease()
+                            // 松开时恢复原速度
+                            if (isLongPressing) {
+                                player.setPlaybackSpeed(originalSpeed)
+                                isLongPressing = false
+                                longPressSpeedVisible = false
+                            }
+                        }
+                    )
+                }
+        ) {
+            // 1. PlayerView
             AndroidView(
                 factory = { ctx ->
-                    DanmakuRenderView(ctx).apply {
-                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                        configureAsPassiveDanmakuOverlay()
-                        danmakuManager.attachView(this)
+                    PlayerView(ctx).apply {
+                        this.player = player
+                        useController = false
+                        keepScreenOn = true
+                        playerView = this
                     }
                 },
                 update = { view ->
-                    view.visibility = if (showDanmakuLayer) {
-                        android.view.View.VISIBLE
-                    } else {
-                        android.view.View.GONE
-                    }
-                    if (view.width > 0 && view.height > 0) {
-                        val sizeTag = "${view.width}x${view.height}"
-                        if (view.tag != sizeTag) {
-                            view.tag = sizeTag
-                            danmakuManager.attachView(view)
-                        }
-                    }
+                    view.player = player
+                    view.keepScreenOn = playbackFailure == null && isPlaying
                 },
-                onRelease = { view -> danmakuManager.detachView(view) },
+                onRelease = { view ->
+                    view.player = null
+                    if (playerView === view) playerView = null
+                },
                 modifier = Modifier.fillMaxSize()
             )
-        }
-        
-        // 2. 封面图（播放前显示，或是纯音频模式常驻显示）
-        val showCover = (!player.isPlaying && player.playbackState == Player.STATE_IDLE) || task.isAudioOnly
-        AnimatedVisibility(visible = showCover, enter = fadeIn(), exit = fadeOut()) {
-            val localCoverFile = task.localCoverPath?.let { File(it) }
-            AsyncImage(
-                model = if (localCoverFile?.exists() == true) localCoverFile else task.cover,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().background(Color.Black)
-            )
-        }
-        
-        // 3. 手势指示器（亮度/音量/进度）
-        if (isGestureVisible) {
-            if (gestureMode == GestureMode.Seek) {
+
+            if (danmakuAvailable) {
+                key(danmakuManager) {
+                    AndroidView(
+                        factory = { ctx ->
+                            DanmakuRenderView(ctx).apply {
+                                danmakuManager.useFullscreenTextSize = isFullscreen
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                configureAsPassiveDanmakuOverlay()
+                                danmakuManager.attachView(this)
+                            }
+                        },
+                        update = { view ->
+                            danmakuManager.useFullscreenTextSize = isFullscreen
+                            view.visibility = if (showDanmakuLayer) {
+                                android.view.View.VISIBLE
+                            } else {
+                                android.view.View.GONE
+                            }
+                            if (view.width > 0 && view.height > 0) {
+                                val sizeTag = "${view.width}x${view.height}"
+                                if (view.tag != sizeTag) {
+                                    view.tag = sizeTag
+                                    danmakuManager.attachView(view)
+                                }
+                            }
+                        },
+                        onRelease = { view -> danmakuManager.detachView(view) },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            // 2. 封面图（播放前显示，或是纯音频模式常驻显示）
+            val showCover = (!player.isPlaying && player.playbackState == Player.STATE_IDLE) || task.isAudioOnly
+            AnimatedVisibility(visible = showCover, enter = fadeIn(), exit = fadeOut()) {
+                val localCoverFile = task.localCoverPath?.let { File(it) }
+                AsyncImage(
+                    model = if (localCoverFile?.exists() == true) localCoverFile else task.cover,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().background(Color.Black)
+                )
+            }
+
+            // 3. 手势指示器（亮度/音量/进度）
+            if (isGestureVisible) {
+                if (gestureMode == GestureMode.Seek) {
+                    Box(
+                        modifier = Modifier.align(Alignment.Center),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val durationSeconds = (player.duration / 1000).coerceAtLeast(1)
+                            val targetSeconds = (seekTargetTime / 1000).toInt()
+                            AppText(
+                                text = "${FormatUtils.formatDuration(targetSeconds)} / ${FormatUtils.formatDuration(durationSeconds.toInt())}",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            val deltaSeconds = (seekTargetTime - startPosition) / 1000
+                            val sign = if (deltaSeconds > 0) "+" else ""
+                            if (deltaSeconds != 0L) {
+                                AppText(
+                                    text = "($sign${deltaSeconds}s)",
+                                    color = com.android.purebilibili.core.ui.MediaContrastPalette.Foreground,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                } else if (
+                    gestureMode == GestureMode.Brightness ||
+                    gestureMode == GestureMode.Volume
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        GestureLevelOverlayContent(
+                            mode = if (gestureMode == GestureMode.Brightness) {
+                                VideoGestureMode.Brightness
+                            } else {
+                                VideoGestureMode.Volume
+                            },
+                            percent = gesturePercent,
+                            style = gestureLevelOverlayStyle,
+                            modifier = Modifier
+                                .align(
+                                    if (playerChromeProfile.effects.usesTonalContainerTreatment) {
+                                        if (gestureMode == GestureMode.Volume) {
+                                            Alignment.CenterEnd
+                                        } else {
+                                            Alignment.CenterStart
+                                        }
+                                    } else {
+                                        Alignment.Center
+                                    }
+                                )
+                                .then(
+                                    if (playerChromeProfile.effects.usesTonalContainerTreatment) {
+                                        Modifier.padding(horizontal = 22.dp)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        )
+                    }
+                }
+            }
+
+            // 4. 双击跳转反馈
+            AnimatedVisibility(
+                visible = seekFeedbackVisible,
+                modifier = Modifier.align(Alignment.Center),
+                enter = scaleIn(initialScale = 0.5f) + fadeIn(),
+                exit = scaleOut(targetScale = 0.8f) + fadeOut()
+            ) {
                 Box(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .size(100.dp)
+                        .background(Color.Black.copy(0.75f), AppShapes.container(ContainerLevel.Floating)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        val durationSeconds = (player.duration / 1000).coerceAtLeast(1)
-                        val targetSeconds = (seekTargetTime / 1000).toInt()
-                        AppText(
-                            text = "${FormatUtils.formatDuration(targetSeconds)} / ${FormatUtils.formatDuration(durationSeconds.toInt())}",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        val deltaSeconds = (seekTargetTime - startPosition) / 1000
-                        val sign = if (deltaSeconds > 0) "+" else ""
-                        if (deltaSeconds != 0L) {
-                            AppText(
-                                text = "($sign${deltaSeconds}s)",
-                                color = if (deltaSeconds > 0) Color.Green else Color.Red,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-            } else if (
-                gestureMode == GestureMode.Brightness ||
-                gestureMode == GestureMode.Volume
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    GestureLevelOverlayContent(
-                        mode = if (gestureMode == GestureMode.Brightness) {
-                            VideoGestureMode.Brightness
-                        } else {
-                            VideoGestureMode.Volume
-                        },
-                        percent = gesturePercent,
-                        style = gestureLevelOverlayStyle,
-                        modifier = Modifier
-                            .align(
-                                if (playerChromeProfile.effects.usesTonalContainerTreatment) {
-                                    if (gestureMode == GestureMode.Volume) {
-                                        Alignment.CenterEnd
-                                    } else {
-                                        Alignment.CenterStart
-                                    }
-                                } else {
-                                    Alignment.Center
-                                }
-                            )
-                            .then(
-                                if (playerChromeProfile.effects.usesTonalContainerTreatment) {
-                                    Modifier.padding(horizontal = 22.dp)
-                                } else {
-                                    Modifier
-                                }
-                            )
-                    )
-                }
-            }
-        }
-        
-        // 4. 双击跳转反馈
-        AnimatedVisibility(
-            visible = seekFeedbackVisible,
-            modifier = Modifier.align(Alignment.Center),
-            enter = scaleIn(initialScale = 0.5f) + fadeIn(),
-            exit = scaleOut(targetScale = 0.8f) + fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .background(Color.Black.copy(0.75f), AppShapes.container(ContainerLevel.Floating)),
-                contentAlignment = Alignment.Center
-            ) {
-                AppText(
-                    text = seekFeedbackText ?: "",
-                    color = if (seekFeedbackText?.startsWith("+") == true) Color.Green else Color.Red,
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-        }
-        
-        // 5. 长按倍速提示
-        AnimatedVisibility(
-            visible = longPressSpeedVisible,
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 100.dp),
-            enter = scaleIn() + fadeIn(),
-            exit = scaleOut() + fadeOut()
-        ) {
-            AppSurface(
-                color = Color.Black.copy(alpha = 0.7f),
-                shape = AppShapes.container(ContainerLevel.Floating)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppIcon(
-                        Icons.Outlined.FastForward,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     AppText(
-                        text = "${longPressSpeed}x 倍速播放中",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        text = seekFeedbackText ?: "",
+                        color = com.android.purebilibili.core.ui.MediaContrastPalette.Foreground,
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
                 }
             }
-        }
-        
-        // 6. 顶部渐变遮罩
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)
-                        )
-                    )
-            )
-        }
-        
-        // 7. 底部渐变遮罩
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
-                        )
-                    )
-            )
-        }
-        
-        // 8. 顶部控制栏
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn() + slideInVertically { -it },
-            exit = fadeOut() + slideOutVertically { -it },
-            modifier = Modifier.align(Alignment.TopStart)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AppIconButton(onClick = { if (isFullscreen) toggleFullscreen() else onBack() }) {
-                    AppIcon(
-                        backIcon,
-                        contentDescription = "返回",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
-                
-                AppText(
-                    text = task.episodeLabel?.takeIf { it.isNotBlank() } ?: task.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        
-        // 9. 底部控制栏
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small)
-            ) {
-                // 进度条
-                OfflineProgressBar(
-                    currentPosition = progressState.current,
-                    duration = progressState.duration,
-                    bufferedPosition = progressState.buffered,
-                    onSeek = { seekToPosition(it) }
-                )
-                
-                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
 
-                if (episodeQueue.size > 1 && currentEpisodeIndex >= 0) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = AppSpacingTokens.ExtraSmall),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
-                    ) {
-                        AppSurface(
-                            onClick = {
-                                val previousTask = episodeQueue.getOrNull(currentEpisodeIndex - 1) ?: return@AppSurface
-                                switchEpisode(previousTask.id)
-                            },
-                            enabled = currentEpisodeIndex > 0,
-                            color = Color.White.copy(alpha = if (currentEpisodeIndex > 0) 0.15f else 0.08f),
-                            shape = AppShapes.container(ContainerLevel.Chip)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                AppIcon(
-                                    Icons.Outlined.SkipPrevious,
-                                    contentDescription = "上一集",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
-                                AppText("上一集", color = Color.White, style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                        AppText(
-                            text = "${currentEpisodeIndex + 1}/${episodeQueue.size}",
-                            color = Color.White.copy(alpha = 0.85f),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        AppSurface(
-                            onClick = {
-                                val nextTask = episodeQueue.getOrNull(currentEpisodeIndex + 1) ?: return@AppSurface
-                                switchEpisode(nextTask.id)
-                            },
-                            enabled = currentEpisodeIndex < episodeQueue.lastIndex,
-                            color = Color.White.copy(alpha = if (currentEpisodeIndex < episodeQueue.lastIndex) 0.15f else 0.08f),
-                            shape = AppShapes.container(ContainerLevel.Chip)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                AppText("下一集", color = Color.White, style = MaterialTheme.typography.labelMedium)
-                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
-                                AppIcon(
-                                    Icons.Outlined.SkipNext,
-                                    contentDescription = "下一集",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-                
-                // 控制按钮行
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+            // 5. 长按倍速提示
+            AnimatedVisibility(
+                visible = longPressSpeedVisible,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 100.dp),
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut()
+            ) {
+                AppSurface(
+                    color = Color.Black.copy(alpha = 0.7f),
+                    shape = AppShapes.container(ContainerLevel.Floating)
                 ) {
-                    val activeControlColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
-                    // 播放/暂停按钮
-                    AppIconButton(
-                        onClick = {
-                            if (player.playbackState == Player.STATE_ENDED) {
-                                player.seekTo(0)
-                                player.play()
-                            } else if (player.isPlaying) {
-                                player.pause()
-                            } else {
-                                player.play()
-                            }
-                        },
-                        modifier = Modifier.size(36.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppIcon(
-                            if (isPlaying) Icons.Outlined.Pause else playIcon,
-                            contentDescription = if (isPlaying) "暂停" else "播放",
+                            Icons.Outlined.FastForward,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        AppText(
+                            text = "${longPressSpeed}x 倍速播放中",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // 6. 顶部渐变遮罩
+            NextWatchOverlay(
+                player = player,
+                mediaKey = "offline:${task.id}",
+                eligible = !showControls && playbackFailure == null && !task.isAudioOnly &&
+                    gestureMode == GestureMode.None && player.repeatMode != Player.REPEAT_MODE_ONE,
+                resolve = {
+                    episodeQueue.getOrNull(currentEpisodeIndex + 1)?.let { next ->
+                        com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion(
+                            task.bvid, task.cid, next.bvid, next.cid, next.title, next.cover, "下一集",
+                            playlistIndex = currentEpisodeIndex + 1
+                        )
+                    }
+                },
+                play = { target ->
+                    val next = episodeQueue.getOrNull(target.playlistIndex ?: -1)
+                    if (target.sourceBvid == task.bvid && target.sourceCid == task.cid &&
+                        next != null && next.bvid == target.bvid && next.cid == target.cid) {
+                        switchEpisode(next.id)
+                        true
+                    } else false
+                },
+            )
+
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)
+                            )
+                        )
+                )
+            }
+
+            // 7. 底部渐变遮罩
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                            )
+                        )
+                )
+            }
+
+            // 8. 顶部控制栏
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn() + slideInVertically { -it },
+                exit = fadeOut() + slideOutVertically { -it },
+                modifier = Modifier.align(Alignment.TopStart)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIconButton(onClick = { if (isFullscreen) toggleFullscreen() else onBack() }) {
+                        AppIcon(
+                            backIcon,
+                            contentDescription = "返回",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
-                    
-                    // 时间显示
-                    AppText(
-                        text = "${FormatUtils.formatDuration((progressState.current / 1000).toInt())} / ${FormatUtils.formatDuration((progressState.duration / 1000).toInt())}",
-                        color = Color.White.copy(alpha = 0.9f),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    
-                    Spacer(modifier = Modifier.weight(1f))
 
-                    if (danmakuAvailable) {
+                    Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+
+                    AppText(
+                        text = task.episodeLabel?.takeIf { it.isNotBlank() } ?: task.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // 9. 底部控制栏
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn() + slideInVertically { it },
+                exit = fadeOut() + slideOutVertically { it },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small)
+                ) {
+                    // 进度条
+                    OfflineProgressBar(
+                        currentPosition = progressState.current,
+                        duration = progressState.duration,
+                        bufferedPosition = progressState.buffered,
+                        onSeek = { seekToPosition(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+
+                    if (episodeQueue.size > 1 && currentEpisodeIndex >= 0) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = AppSpacingTokens.ExtraSmall),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
+                        ) {
+                            AppSurface(
+                                onClick = {
+                                    val previousTask = episodeQueue.getOrNull(currentEpisodeIndex - 1) ?: return@AppSurface
+                                    switchEpisode(previousTask.id)
+                                },
+                                enabled = currentEpisodeIndex > 0,
+                                color = Color.White.copy(alpha = if (currentEpisodeIndex > 0) 0.15f else 0.08f),
+                                shape = AppShapes.container(ContainerLevel.Chip)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AppIcon(
+                                        Icons.Outlined.SkipPrevious,
+                                        contentDescription = "上一集",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                                    AppText("上一集", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                            AppText(
+                                text = "${currentEpisodeIndex + 1}/${episodeQueue.size}",
+                                color = Color.White.copy(alpha = 0.85f),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            AppSurface(
+                                onClick = {
+                                    val nextTask = episodeQueue.getOrNull(currentEpisodeIndex + 1) ?: return@AppSurface
+                                    switchEpisode(nextTask.id)
+                                },
+                                enabled = currentEpisodeIndex < episodeQueue.lastIndex,
+                                color = Color.White.copy(alpha = if (currentEpisodeIndex < episodeQueue.lastIndex) 0.15f else 0.08f),
+                                shape = AppShapes.container(ContainerLevel.Chip)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AppText("下一集", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                    Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                                    AppIcon(
+                                        Icons.Outlined.SkipNext,
+                                        contentDescription = "下一集",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 控制按钮行
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val activeControlColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
+                        // 播放/暂停按钮
+                        AppIconButton(
+                            onClick = {
+                                if (player.playbackState == Player.STATE_ENDED) {
+                                    player.seekTo(0)
+                                    player.play()
+                                } else if (player.isPlaying) {
+                                    player.pause()
+                                } else {
+                                    player.play()
+                                }
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            AppIcon(
+                                if (isPlaying) Icons.Outlined.Pause else playIcon,
+                                contentDescription = if (isPlaying) "暂停" else "播放",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // 时间显示
+                        AppText(
+                            text = "${FormatUtils.formatDuration((progressState.current / 1000).toInt())} / ${FormatUtils.formatDuration((progressState.duration / 1000).toInt())}",
+                            color = Color.White.copy(alpha = 0.9f),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        if (danmakuAvailable) {
+                            AppSurface(
+                                onClick = { danmakuEnabled = !danmakuEnabled },
+                                color = if (danmakuEnabled) {
+                                    activeControlColors.backgroundColor.copy(alpha = 0.9f)
+                                } else {
+                                    Color.White.copy(alpha = 0.15f)
+                                },
+                                shape = AppShapes.container(ContainerLevel.Chip),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    AppIcon(
+                                        commentIcon,
+                                        contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
+                                        tint = if (danmakuEnabled) activeControlColors.contentColor else Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+
+                        // 📺 全屏按钮
                         AppSurface(
-                            onClick = { danmakuEnabled = !danmakuEnabled },
-                            color = if (danmakuEnabled) {
+                            onClick = { toggleFullscreen() },
+                            color = if (!isFullscreen) {
                                 activeControlColors.backgroundColor.copy(alpha = 0.9f)
                             } else {
                                 Color.White.copy(alpha = 0.15f)
@@ -1042,64 +1240,85 @@ fun OfflineVideoPlayerScreen(
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 AppIcon(
-                                    commentIcon,
-                                    contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                                    tint = if (danmakuEnabled) activeControlColors.contentColor else Color.White,
+                                    if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                                    contentDescription = if (isFullscreen) "退出全屏" else "全屏",
+                                    tint = if (!isFullscreen) activeControlColors.contentColor else Color.White,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
+                    }
+                }
+            }
 
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    
-                    // 📺 全屏按钮
-                    AppSurface(
-                        onClick = { toggleFullscreen() },
-                        color = if (!isFullscreen) {
-                            activeControlColors.backgroundColor.copy(alpha = 0.9f)
-                        } else {
-                            Color.White.copy(alpha = 0.15f)
-                        },
-                        shape = AppShapes.container(ContainerLevel.Chip),
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            AppIcon(
-                                if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                                contentDescription = if (isFullscreen) "退出全屏" else "全屏",
-                                tint = if (!isFullscreen) activeControlColors.contentColor else Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        
-        // 10. 中央播放按钮（暂停时显示）
-        AnimatedVisibility(
-            visible = showControls && !isPlaying,
-            modifier = Modifier.align(Alignment.Center),
-            enter = scaleIn() + fadeIn(),
-            exit = scaleOut() + fadeOut()
-        ) {
-            AppSurface(
-                onClick = { player.play() },
-                color = Color.Black.copy(alpha = 0.5f),
-                shape = CircleShape,
-                modifier = Modifier.size(72.dp)
+            // 10. 中央播放按钮（暂停时显示）
+            AnimatedVisibility(
+                visible = showControls && !isPlaying && playbackFailure == null,
+                modifier = Modifier.align(Alignment.Center),
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut()
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    AppIcon(
-                        playIcon,
-                        contentDescription = "播放",
-                        tint = Color.White.copy(alpha = 0.95f),
-                        modifier = Modifier.size(42.dp)
-                    )
+                AppSurface(
+                    onClick = { player.play() },
+                    color = Color.Black.copy(alpha = 0.5f),
+                    shape = CircleShape,
+                    modifier = Modifier.size(72.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        AppIcon(
+                            playIcon,
+                            contentDescription = "播放",
+                            tint = Color.White.copy(alpha = 0.95f),
+                            modifier = Modifier.size(42.dp)
+                        )
+                    }
+                }
+            }
+            playbackFailure?.let { failure ->
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.9f))
+                        .pointerInput(failure) { detectTapGestures(onTap = {}) }
+                        .safeDrawingPadding()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        AppText("播放失败", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                        AppText(
+                            failure.message,
+                            color = Color.White.copy(alpha = 0.85f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        if (failure.canRetry) {
+                            AppButton(onClick = {
+                                playbackFailure = null
+                                showControls = true
+                                retryVersion++
+                            }) { AppText("重新播放") }
+                        }
+                        AppTextButton(onClick = onBack) { AppText("返回", color = Color.White) }
+                    }
                 }
             }
         }
+    }
+    // 无二级内容的播放器仅避让物理遮挡铰链；软折痕跨整窗，避免半开下半屏留黑。
+    val offlineOccludingHingePresent = appWindowAdaptiveInfo.foldingFeature
+        .layoutHinges()
+        .any { it.isOccluding }
+    if (offlineOccludingHingePresent) {
+        com.android.purebilibili.core.ui.adaptive.AppHingePaneLayout(
+            modifier = Modifier.fillMaxSize().background(Color.Black),
+            primaryContent = offlinePlayerSurface,
+        )
+    } else {
+        offlinePlayerSurface()
     }
 }
 
@@ -1126,16 +1345,16 @@ private fun OfflineProgressBar(
     val bufferedProgress = if (duration > 0) bufferedPosition.toFloat() / duration else 0f
     var tempProgress by remember { mutableFloatStateOf(progress) }
     var isDragging by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(progress) {
         if (!isDragging) {
             tempProgress = progress
         }
     }
-    
+
     val displayProgress = if (isDragging) tempProgress else progress
-    val primaryColor = MaterialTheme.colorScheme.primary
-    
+    val primaryColor = AppContentColors.accent()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1191,7 +1410,7 @@ private fun OfflineProgressBar(
                 .height(3.dp)
                 .background(Color.White.copy(alpha = 0.3f), AppShapes.container(ContainerLevel.Micro))
         )
-        
+
         // 缓冲进度
         Box(
             modifier = Modifier
@@ -1199,7 +1418,7 @@ private fun OfflineProgressBar(
                 .height(3.dp)
                 .background(Color.White.copy(alpha = 0.5f), AppShapes.container(ContainerLevel.Micro))
         )
-        
+
         // 当前进度
         Box(
             modifier = Modifier
@@ -1207,7 +1426,7 @@ private fun OfflineProgressBar(
                 .height(3.dp)
                 .background(primaryColor, AppShapes.container(ContainerLevel.Micro))
         )
-        
+
         // 滑块（圆点）
         Box(modifier = Modifier.fillMaxWidth(displayProgress.coerceIn(0f, 1f))) {
             Box(
@@ -1220,3 +1439,4 @@ private fun OfflineProgressBar(
         }
     }
 }
+

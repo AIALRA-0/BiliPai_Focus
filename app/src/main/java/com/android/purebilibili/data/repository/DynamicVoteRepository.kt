@@ -5,6 +5,7 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.DynamicDoVoteRequest
 import com.android.purebilibili.data.model.response.DynamicVoteInfo
 import com.android.purebilibili.data.model.response.toResolvedVoteInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -17,7 +18,7 @@ object DynamicVoteRepository {
             }
             response.data?.toResolvedVoteInfo()
                 ?: error("投票信息为空")
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
     suspend fun submitVote(
@@ -46,6 +47,6 @@ object DynamicVoteRepository {
             }
             response.data?.toResolvedVoteInfo()
                 ?: error("投票结果为空")
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 }

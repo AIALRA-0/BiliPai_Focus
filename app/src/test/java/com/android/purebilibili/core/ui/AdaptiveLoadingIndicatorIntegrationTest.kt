@@ -17,7 +17,8 @@ class AdaptiveLoadingIndicatorIntegrationTest {
             "app/src/main/java/com/android/purebilibili/core/ui/LottieComponents.kt"
         )
 
-        assertTrue(adaptive.contains("LoadingIndicator("))
+        assertTrue(adaptive.contains("CircularProgressIndicator("))
+        assertFalse(adaptive.contains("import androidx.compose.material3.LoadingIndicator"))
         assertTrue(adaptive.contains("MiuixInfiniteProgressIndicator("))
         assertTrue(adaptive.contains("MiuixCircularProgressIndicator("))
         assertTrue(lottie.contains("AdaptiveLoadingIndicator("))

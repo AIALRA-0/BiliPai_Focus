@@ -10,25 +10,27 @@ import com.android.purebilibili.navigation3.BiliPaiNavKey
 class FocusSettingsScreenPolicyTest {
 
     @Test
-    fun `search hot and discover switches live outside Focus while history remains Focus-only`() {
+    fun `search landing visibility is managed in upstream privacy settings`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt")
+            .replace(Regex("\\s+"), " ")
+        val upstreamSettings = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt")
             .replace(Regex("\\s+"), " ")
 
         assertFalse(source.contains("settings.showSearchHotSection"))
         assertFalse(source.contains("settings.showSearchDiscoverSection"))
+        assertFalse(source.contains("settings.showSearchHistorySection"))
         assertFalse(source.contains("setSearchHotSectionEnabled"))
         assertFalse(source.contains("setSearchDiscoverSectionEnabled"))
-
-        assertTrue(source.contains("title = \"显示搜索历史\""))
-        assertTrue(source.contains("checked = settings.showSearchHistorySection"))
-        assertTrue(source.contains("SettingsManager.setSearchHistorySectionEnabled(context, enabled)"))
+        assertFalse(source.contains("setSearchHistorySectionEnabled"))
+        assertFalse(source.contains("title = \"显示搜索历史\""))
 
         assertFalse(source.contains("title = \"隐藏大家都在搜\""))
         assertFalse(source.contains("title = \"隐藏搜索发现\""))
         assertFalse(source.contains("title = \"隐藏搜索历史\""))
-        assertFalse(source.contains("checked = !settings.showSearchHotSection"))
-        assertFalse(source.contains("checked = !settings.showSearchDiscoverSection"))
-        assertFalse(source.contains("checked = !settings.showSearchHistorySection"))
+        assertTrue(upstreamSettings.contains("privacy.search_hot_control"))
+        assertTrue(upstreamSettings.contains("privacy.search_history_control"))
+        assertTrue(upstreamSettings.contains("privacy.search_discover_control"))
+        assertTrue(upstreamSettings.contains("SettingsManager.setSearchLandingSectionVisible(context, index, enabled)"))
     }
 
     @Test
@@ -65,7 +67,9 @@ class FocusSettingsScreenPolicyTest {
         assertFalse(source.contains("IOSDivider"))
         assertFalse(source.contains("setFocusHome"))
         assertTrue(source.contains("关注分组过滤"))
-        assertTrue(source.contains("搜索历史"))
+        assertTrue(source.contains("显示相关推荐"))
+        assertTrue(source.contains("显示一键清空"))
+        assertTrue(source.contains("首页标签与搜索首页各区块都在现有设置中管理"))
         assertTrue(source.contains("SettingsManager.setFocusHistoryClearAllActionEnabled"))
     }
 

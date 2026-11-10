@@ -93,6 +93,46 @@ class FollowingGroupPolicyTest {
     }
 
     @Test
+    fun `following pagination continues only while a page adds unique users`() {
+        // 正常推进：上一页 50，本页新增 50，合并后 100，服务器总数 300 还有更多。
+        assertTrue(
+            shouldContinueFollowingPagination(
+                previousCount = 50,
+                mergedCount = 100,
+                incomingCount = 50,
+                total = 300
+            )
+        )
+        // 服务器在边界重复返回同一页：去重后没有新增，必须停下，避免无限翻页。
+        assertFalse(
+            shouldContinueFollowingPagination(
+                previousCount = 100,
+                mergedCount = 100,
+                incomingCount = 50,
+                total = 300
+            )
+        )
+        // 空页立即停下。
+        assertFalse(
+            shouldContinueFollowingPagination(
+                previousCount = 100,
+                mergedCount = 100,
+                incomingCount = 0,
+                total = 300
+            )
+        )
+        // 合并后已达到服务器总数：到底。
+        assertFalse(
+            shouldContinueFollowingPagination(
+                previousCount = 250,
+                mergedCount = 300,
+                incomingCount = 50,
+                total = 300
+            )
+        )
+    }
+
+    @Test
     fun `shouldPublishFollowingLoadBatch should batch intermediate page updates`() {
         assertFalse(
             shouldPublishFollowingLoadBatch(

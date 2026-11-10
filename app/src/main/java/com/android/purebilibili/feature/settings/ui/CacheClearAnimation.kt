@@ -1,74 +1,58 @@
 package com.android.purebilibili.feature.settings
 
+import android.os.StatFs
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppPopupSurface
-import com.android.purebilibili.core.ui.AppPopupSurfaceType
-import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.motion.AppMotionTokens
-import com.android.purebilibili.core.theme.iOSGreen
+import com.android.purebilibili.core.ui.*
 import com.android.purebilibili.core.ui.components.AppButton
-import com.android.purebilibili.core.ui.components.AppCheckbox
-import com.android.purebilibili.core.ui.components.AppCheckboxDefaults
-import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
-import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.util.CacheUtils
-import kotlin.math.min
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlin.math.ceil
 
+/** current/total 表示已完成类别数，释放容量仅在重新统计后提供。 */
 data class CacheClearProgress(
     val current: Long,
     val total: Long,
     val isComplete: Boolean = false,
-    val clearedSize: String = ""
+    val clearedSize: String = "",
+    val message: String = "正在准备清理"
 )
 
 @Composable
@@ -79,339 +63,105 @@ internal fun CacheClearConfirmDialog(
     selectedTargets: Set<CacheClearTarget>,
     onTargetToggle: (CacheClearTarget, Boolean) -> Unit,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    clearing: Boolean = false,
+    progress: CacheClearProgress? = null,
+    clearSucceeded: Boolean = false,
+    releasedSize: String = "",
+    onProgressDismiss: () -> Unit = {}
 ) {
     val segments = remember(breakdown, selectedTargets, options) {
-        resolveCacheClearDonutSegments(
-            breakdown = breakdown,
-            selectedTargets = selectedTargets,
-            options = options
-        )
+        resolveCacheClearDonutSegments(breakdown, selectedTargets, options)
     }
-    val colorScheme = MaterialTheme.colorScheme
-    val segmentColors = remember(colorScheme) {
-        listOf(
-            colorScheme.primary,
-            colorScheme.tertiary,
-            colorScheme.secondary,
-            colorScheme.error,
-            colorScheme.primaryContainer,
-            colorScheme.tertiaryContainer
-        )
+    var showProgress by remember { mutableStateOf(false) }
+    var highlightedTarget by remember { mutableStateOf<CacheClearTarget?>(null) }
+    LaunchedEffect(clearing) {
+        showProgress = false
+        if (clearing) { delay(150); showProgress = true }
     }
-    val centerSize = resolveCacheClearDonutCenterSize(breakdown, selectedTargets)
-    val buttonLabel = resolveCacheClearButtonLabel(breakdown, selectedTargets)
-
+    val emptyAfterClear = clearSucceeded && breakdown != null && breakdown.totalSize == 0L && !clearing
+    val context = LocalContext.current
+    var deviceStorage by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    LaunchedEffect(breakdown) {
+        deviceStorage = withContext(Dispatchers.IO) {
+            runCatching { StatFs(context.filesDir.path).let { it.totalBytes to it.availableBytes } }.getOrNull()
+        }
+    }
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = { if (!clearing) onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
+            dismissOnBackPress = !clearing, dismissOnClickOutside = !clearing)
     ) {
-        AppPopupSurface(
-            type = AppPopupSurfaceType.DIALOG,
-            modifier = Modifier
-                .padding(horizontal = 20.dp, vertical = 24.dp)
-                .widthIn(max = 480.dp)
-                .fillMaxWidth(),
-            shape = AppShapes.container(ContainerLevel.Dialog),
-            containerColor = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                CacheClearUsageDonut(
-                    segments = segments,
-                    colors = segmentColors,
-                    centerSize = centerSize,
-                    onSegmentClick = { target ->
-                        onTargetToggle(target, target !in selectedTargets)
-                    }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                AppText(
-                    text = "存储使用情况",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                AppText(
-                    text = selectedCacheSizeSummary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                AppText(
-                    text = resolveCacheClearConfirmationMessage(selectedTargets),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                segments.forEach { segment ->
-                    val color = segmentColors[segment.colorIndex % segmentColors.size]
-                    CacheClearCategoryRow(
-                        segment = segment,
-                        color = color,
-                        onToggle = { checked -> onTargetToggle(segment.target, checked) }
-                    )
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-                AppButton(
-                    onClick = onConfirm,
-                    enabled = selectedTargets.isNotEmpty(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                ) {
-                    AppText(buttonLabel)
-                }
-                AppTextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    AppText("取消")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CacheClearUsageDonut(
-    segments: List<CacheClearDonutSegment>,
-    colors: List<Color>,
-    centerSize: String,
-    onSegmentClick: (CacheClearTarget) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .size(220.dp)
-            .semantics {
-                contentDescription = "缓存占用圆环，点击扇区可选择要清理的类型"
-            }
-            .pointerInput(segments) {
-                detectTapGestures { offset ->
-                    val radius = min(size.width, size.height) / 2f
-                    val dx = offset.x - size.width / 2f
-                    val dy = offset.y - size.height / 2f
-                    val target = resolveCacheClearDonutHitTarget(
-                        segments = segments,
-                        dx = dx,
-                        dy = dy,
-                        innerRadius = radius * 0.58f,
-                        outerRadius = radius
-                    )
-                    if (target != null) onSegmentClick(target)
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        val donutSpec = AppMotionTokens.spatialSpec<Float>()
-        val sweepStates = segments.map { segment ->
-            animateFloatAsState(
-                targetValue = segment.sweepAngle,
-                animationSpec = donutSpec,
-                label = "cacheDonutSweep-${segment.target}"
-            )
-        }
-        val startStates = segments.map { segment ->
-            animateFloatAsState(
-                targetValue = segment.startAngle,
-                animationSpec = donutSpec,
-                label = "cacheDonutStart-${segment.target}"
-            )
-        }
-        val trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val stroke = size.minDimension * 0.18f
-            val inset = stroke / 2f
-            val arcSize = Size(size.width - stroke, size.height - stroke)
-            val topLeft = Offset(inset, inset)
-            drawArc(
-                color = trackColor,
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Butt)
-            )
-            segments.forEachIndexed { index, segment ->
-                val sweep = sweepStates[index].value
-                if (sweep <= 0.5f) return@forEachIndexed
-                val start = startStates[index].value
-                val color = colors[segment.colorIndex % colors.size]
-                val gap = if (sweep > 8f) 3f else 0f
-                drawArc(
-                    color = color,
-                    startAngle = start + gap / 2f,
-                    sweepAngle = (sweep - gap).coerceAtLeast(0.5f),
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Butt)
-                )
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            AppText(
-                text = "BiliPai",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            AppText(
-                text = centerSize,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-@Composable
-private fun CacheClearCategoryRow(
-    segment: CacheClearDonutSegment,
-    color: Color,
-    onToggle: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clip(AppShapes.container(ContainerLevel.Card))
-            .clickable { onToggle(!segment.selected) }
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AppCheckbox(
-            checked = segment.selected,
-            onCheckedChange = onToggle,
-            colors = AppCheckboxDefaults.colors(
-                checkedColor = color,
-                uncheckedColor = color.copy(alpha = 0.6f)
-            )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            AppText(
-                text = segment.title,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
-            )
-            AppText(
-                text = segment.percentLabel,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-        AppText(
-            text = formatCacheClearBytes(segment.bytes),
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-fun CacheClearAnimationDialog(
-    progress: CacheClearProgress,
-    onDismiss: () -> Unit
-) {
-    val progressValue = if (progress.total > 0) {
-        (progress.current.toFloat() / progress.total.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-    val animatedProgress by animateFloatAsState(
-        targetValue = if (progress.isComplete) 1f else progressValue,
-        label = "cacheClearProgress"
-    )
-
-    LaunchedEffect(progress.isComplete) {
-        if (progress.isComplete) {
-            kotlinx.coroutines.delay(2000L)
-            onDismiss()
-        }
-    }
-
-    Dialog(
-        onDismissRequest = { },
-        properties = DialogProperties(
-            dismissOnBackPress = progress.isComplete,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        ModalWindowBlurBehindEffect(enabled = true)
+        BackHandler(enabled = clearing) { /* 实际任务完成前禁止取消，避免把部分清理显示为成功。 */ }
+        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing), contentAlignment = Alignment.Center) {
+            // 两条材质路径共用内容布局；玻璃外观由 AppPopupSurface 渲染，保留原生材质默认值。
             AppPopupSurface(
                 type = AppPopupSurfaceType.DIALOG,
-                modifier = Modifier
-                    .padding(48.dp)
-                    .widthIn(max = 360.dp)
-                    .fillMaxWidth(),
+                modifier = Modifier.padding(16.dp).widthIn(max = 480.dp).fillMaxWidth()
+                    .heightIn(max = (maxHeight - 32.dp).coerceAtLeast(1.dp)),
                 shape = AppShapes.container(ContainerLevel.Dialog),
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp
+                tonalElevation = 2.dp
             ) {
-                Column(
-                    modifier = Modifier.padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.size(96.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    CacheClearUsageDonut(
+                        segments = segments,
+                        centerSize = resolveCacheClearDonutCenterSize(breakdown, selectedTargets),
+                        loading = breakdown == null,
+                        complete = emptyAfterClear,
+                        active = !clearing,
+                        onSegmentClick = { target -> onTargetToggle(target, target !in selectedTargets) },
+                        onSegmentPress = { highlightedTarget = it }
+                    )
+                    AppText(if (emptyAfterClear) "缓存已清空" else "存储使用情况",
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    AppText(
                         when {
-                            progress.isComplete -> {
-                                CacheClearSuccessAnimation()
-                            }
-
-                            progressValue <= 0f -> {
-                                AdaptiveLoadingIndicator(size = 64.dp)
-                            }
-
-                            else -> {
-                                AppCircularProgressIndicator(
-                                    progress = { animatedProgress },
-                                    modifier = Modifier.size(72.dp)
-                                )
+                            clearSucceeded && !clearing -> "已释放 $releasedSize 磁盘空间"
+                            breakdown == null -> "正在统计缓存…"
+                            else -> "磁盘 ${breakdown.format()} · 内存约 ${formatCacheClearBytes(breakdown.memoryCache)}"
+                        }, style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText()
+                    )
+                    if (!emptyAfterClear) {
+                        CacheDeviceStorageBar(breakdown, deviceStorage)
+                        Spacer(Modifier.height(12.dp))
+                        Column(Modifier.clip(AppShapes.container(ContainerLevel.Card))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .24f))) {
+                            segments.sortedByDescending { it.bytes }.forEach { segment ->
+                                key(segment.target) {
+                                    val option = options.first { it.target == segment.target }
+                                    CacheClearCategoryRow(segment, option.description, enabled = !clearing,
+                                        highlighted = highlightedTarget == segment.target,
+                                        onToggle = { onTargetToggle(segment.target, it) })
+                                }
                             }
                         }
+                        Spacer(Modifier.height(12.dp))
+                        AppText(selectedCacheSizeSummary, style = MaterialTheme.typography.bodyMedium,
+                            color = AppContentColors.secondaryText())
+                        Spacer(Modifier.height(12.dp))
+                        AppButton(onClick = onConfirm,
+                            enabled = !clearing && breakdown != null && selectedTargets.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            AppText(resolveCacheClearButtonLabel(breakdown, selectedTargets))
+                        }
                     }
-                    AppText(
-                        text = if (progress.isComplete) "清理完成" else "正在清理",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    AppText(
-                        text = if (progress.clearedSize.isNotEmpty()) {
-                            if (progress.isComplete) "共释放 ${progress.clearedSize}"
-                            else "已清理 ${progress.clearedSize}"
-                        } else {
-                            "准备中..."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (progress.isComplete) {
-                        AppText(
-                            text = "即将自动关闭...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Spacer(Modifier.height(8.dp))
+                    AppText("可重建的缓存会在需要时重新获取。不会删除离线缓存、下载内容和播放记录。",
+                        style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
+                    AppTextButton(onClick = { if (!clearing) onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                        AppText(if (clearSucceeded) "完成" else "取消")
                     }
+                }
+            }
+            if (clearing) {
+                // 延迟显示期间也拦截操作；底层图表显式停止循环，不依赖遮罩透明度。
+                Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures {} })
+                if (showProgress && progress != null) {
+                    CacheClearAnimationDialog(progress, onProgressDismiss)
                 }
             }
         }
@@ -419,59 +169,111 @@ fun CacheClearAnimationDialog(
 }
 
 @Composable
-private fun CacheClearSuccessAnimation() {
-    val transitionState = remember {
-        MutableTransitionState(false).apply { targetState = true }
+private fun CacheDeviceStorageBar(breakdown: CacheUtils.CacheBreakdown?, storage: Pair<Long, Long>?) {
+    val cacheFraction = if (breakdown != null && storage != null && storage.first > 0L)
+        (breakdown.reclaimableDiskSize.toDouble() / storage.first).toFloat().coerceIn(0f, 1f) else 0f
+    val usedFraction = storage?.let { if (it.first > 0L) (1.0 - it.second.toDouble() / it.first).toFloat().coerceIn(0f, 1f) else 0f } ?: 0f
+    val reduced = LocalSystemReduceMotion.current
+    val cache = animateFloatAsState(cacheFraction, if (reduced) snap() else AppMotionTokens.standardSpec(), label = "cacheDeviceFraction")
+    val used = animateFloatAsState(usedFraction, if (reduced) snap() else AppMotionTokens.standardSpec(), label = "cacheDeviceUsed")
+    val color = MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.onSurface
+    Spacer(Modifier.height(12.dp))
+    Canvas(Modifier.widthIn(max = 174.dp).fillMaxWidth(.8f).height(4.dp).semantics {
+        contentDescription = if (storage == null || breakdown == null) "设备存储统计中" else "设备存储占用；缓存 ${formatCacheClearBytes(breakdown.reclaimableDiskSize)}"
+    }) {
+        val corner = CornerRadius(size.height / 2)
+        drawRoundRect(track.copy(alpha = .1f), cornerRadius = corner)
+        val cacheWidth = if (cache.value > 0f) maxOf(4.dp.toPx(), size.width * cache.value).coerceAtMost(size.width) else 0f
+        val usedWidth = maxOf(cacheWidth, size.width * used.value)
+        drawRoundRect(track.copy(alpha = .25f), size = Size(usedWidth, size.height), cornerRadius = corner)
+        if (cacheWidth > 0) drawRoundRect(color, size = Size(cacheWidth, size.height), cornerRadius = corner)
     }
-    val transition = rememberTransition(transitionState = transitionState, label = "cacheClearSuccess")
-    val scale by transition.animateFloat(
-        transitionSpec = { tween(durationMillis = 420) },
-        label = "cacheClearSuccessScale"
-    ) { complete -> if (complete) 1f else 0.65f }
-    val sparkleAlpha by transition.animateFloat(
-        transitionSpec = { tween(durationMillis = 650, delayMillis = 180) },
-        label = "cacheClearSparkleAlpha"
-    ) { complete -> if (complete) 1f else 0f }
-    val successColor = iOSGreen
+}
 
-    Box(modifier = Modifier.size(96.dp), contentAlignment = Alignment.Center) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = sparkleAlpha }
-        ) {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            repeat(10) { index ->
-                val angle = Math.toRadians(index * 36.0)
-                val radius = size.minDimension * (0.39f + (index % 3) * 0.045f)
-                val point = Offset(
-                    x = center.x + kotlin.math.cos(angle).toFloat() * radius,
-                    y = center.y + kotlin.math.sin(angle).toFloat() * radius
-                )
-                drawCircle(
-                    color = successColor.copy(alpha = 0.35f + (index % 2) * 0.25f),
-                    radius = if (index % 2 == 0) 4.dp.toPx() else 2.5.dp.toPx(),
-                    center = point
-                )
+@Composable
+private fun CacheClearCategoryRow(segment: CacheClearDonutSegment, description: String, enabled: Boolean, highlighted: Boolean, onToggle: (Boolean) -> Unit) {
+    val color = CacheClearChartColors[segment.colorIndex % CacheClearChartColors.size]
+    val reduced = LocalSystemReduceMotion.current
+    val checked = animateFloatAsState(if (segment.selected) 1f else 0f,
+        if (reduced) snap() else AppMotionTokens.standardSpec(), label = "cacheChecked-${segment.target}")
+    val unknown = !segment.sizeKnown
+    Row(Modifier.fillMaxWidth().background(if (highlighted) color.copy(alpha = .12f) else Color.Transparent).toggleable(segment.selected, enabled = enabled, role = Role.Checkbox, onValueChange = onToggle)
+        .semantics { contentDescription = "${segment.title}，$description" }
+        .padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+        Canvas(Modifier.size(22.dp)) {
+            val t = checked.value
+            drawCircle(color.copy(alpha = .5f), style = Stroke(1.5.dp.toPx()))
+            if (t > 0f) {
+                drawCircle(color, radius = size.minDimension / 2 * minOf(t * 2, 1f))
+                val p = ((t - .5f) * 2).coerceIn(0f, 1f)
+                val path = Path().apply {
+                    moveTo(size.width * .25f, size.height * .5f)
+                    val elbow = Offset(size.width * .43f, size.height * .68f)
+                    if (p < .35f) lineTo(size.width * .25f + (elbow.x - size.width * .25f) * p / .35f,
+                        size.height * .5f + (elbow.y - size.height * .5f) * p / .35f)
+                    else { lineTo(elbow.x, elbow.y); lineTo(elbow.x + size.width * .34f * (p - .35f) / .65f,
+                        elbow.y - size.height * .4f * (p - .35f) / .65f) }
+                }
+                if (p > 0) drawPath(path, Color.White, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
             }
         }
-        Surface(
-            modifier = Modifier
-                .size(72.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                },
-            shape = CircleShape,
-            color = successColor.copy(alpha = 0.14f)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                AppIcon(
-                    imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_fill_24),
-                    contentDescription = "存储已清除",
-                    modifier = Modifier.size(40.dp),
-                    tint = successColor
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            AppText(cacheClearCategoryTitle(segment.target), fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.bodyLarge, maxLines = 2)
+            AppText(if (segment.target == CacheClearTarget.APP_METADATA) "按需重新获取" else segment.percentLabel,
+                style = MaterialTheme.typography.labelSmall, color = AppContentColors.secondaryText())
+        }
+        Spacer(Modifier.width(8.dp))
+        AppText(when { segment.target == CacheClearTarget.APP_METADATA -> "可重建"; unknown -> "统计中"; else -> formatCacheClearBytes(segment.bytes) },
+            color = AppContentColors.link(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** 与缓存选择内容共用一个窗口，避免任务切换时先关闭选择窗再弹出清理窗。 */
+@Composable
+fun CacheClearAnimationDialog(progress: CacheClearProgress, onDismiss: () -> Unit) {
+    val gate = rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+        respectSystemReduceMotion = false
+    )
+    val latestOnDismiss by rememberUpdatedState(onDismiss)
+    val value = cacheClearProgressFraction(progress.current, progress.total)?.let { if (progress.isComplete) 1f else it.coerceAtMost(.99f) }
+    val animated = animateFloatAsState(if (progress.isComplete) 1f else value ?: 0f,
+        if (LocalSystemReduceMotion.current) snap() else AppMotionTokens.standardSpec(), label = "cacheClearProgress")
+    val window = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.windowSizeClass
+    val characterSize = if (window.heightDp < 480.dp) 96.dp else 150.dp
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .22f)), contentAlignment = Alignment.BottomCenter) {
+        AppPopupSurface(type = AppPopupSurfaceType.SHEET,
+            modifier = Modifier.padding(12.dp).widthIn(max = 480.dp).fillMaxWidth()
+                .heightIn(max = (window.heightDp * .8f).coerceAtLeast(96.dp)),
+            shape = AppShapes.container(ContainerLevel.Sheet), containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                BlueSnowMaidAnimation(
+                    animation = if (progress.isComplete) MaidAnimation.CLEAN_COMPLETE else MaidAnimation.CLEANING,
+                    modifier = Modifier.size(characterSize).then(gate.modifier),
+                    isVisible = gate.active,
+                    reducedMotion = LocalSystemReduceMotion.current,
+                    staticDisplayDurationMs = 600L,
+                    completionHoldDurationMs = if (progress.isComplete) 600L else 0L,
+                    onFinished = { if (progress.isComplete) latestOnDismiss() }
                 )
+                // 完成时保留进度槽位，呈现 100% 并避免面板高度突然收缩；两条材质路径共用。
+                AppText(if (progress.isComplete) "100%" else if (value == null) "准备中…" else "${ceil(value * 100).toInt()}%",
+                    fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                if (value != null || progress.isComplete) {
+                    AppLinearProgressIndicator(progress = { animated.value }, modifier = Modifier.widthIn(max = 240.dp).fillMaxWidth().height(5.dp))
+                } else {
+                    Spacer(Modifier.height(5.dp))
+                }
+                AppText(if (progress.isComplete) "清理完成" else "正在清理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                AppText(if (progress.isComplete) "已释放 ${progress.clearedSize} 磁盘空间" else progress.message,
+                    style = MaterialTheme.typography.bodyMedium, color = AppContentColors.secondaryText())
+                AppText(if (progress.isComplete) "即将返回缓存详情" else "请稍候，清理完成后会更新缓存详情",
+                    style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
             }
         }
     }

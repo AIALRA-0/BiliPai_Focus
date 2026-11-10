@@ -16,6 +16,36 @@ class PlaylistManagerShufflePolicyTest {
     }
 
     @Test
+    fun `editing queue preserves current part and queued next through reorder and removal`() {
+        val parts = listOf(1L, 2L, 3L, 4L).map { cid -> playlistItem("BV1").copy(cid = cid) }
+        PlaylistManager.setPlaylist(parts, startIndex = 1)
+        PlaylistManager.setShuffleEnabled(true)
+        PlaylistManager.playQueueItemNext(0)
+        assertTrue(PlaylistManager.hasQueuedNext)
+        assertEquals(2L, PlaylistManager.getCurrentItem()?.cid)
+        assertEquals(listOf(2L, 1L, 3L, 4L), PlaylistManager.playlist.value.map { it.cid })
+        PlaylistManager.moveQueueItem(3, 0)
+        PlaylistManager.removeQueueItem(0)
+        assertEquals(2L, PlaylistManager.getCurrentItem()?.cid)
+        assertEquals(1L, PlaylistManager.playNext()?.cid)
+        assertFalse(PlaylistManager.hasQueuedNext)
+        assertEquals(2L, PlaylistManager.playPrevious()?.cid)
+        PlaylistManager.clearUpcomingQueue()
+        assertEquals(listOf(2L), PlaylistManager.playlist.value.map { it.cid })
+        assertEquals(0, PlaylistManager.currentIndex.value)
+    }
+
+    @Test
+    fun `queue edits invalidate stale asynchronous playlist additions`() {
+        val session = PlaylistManager.setExternalPlaylist(
+            listOf(playlistItem("BV1"), playlistItem("BV2")), source = ExternalPlaylistSource.WATCH_LATER,
+        )
+        PlaylistManager.removeQueueItem(1)
+        assertFalse(PlaylistManager.addAllToPlaylistIfCurrent(listOf(playlistItem("BV3")), session))
+        assertEquals(listOf("BV1"), PlaylistManager.playlist.value.map { it.bvid })
+    }
+
+    @Test
     fun `shuffle should not repeat tracks before exhausting the current cycle`() {
         var progress = ShuffleProgress(
             history = listOf(0),

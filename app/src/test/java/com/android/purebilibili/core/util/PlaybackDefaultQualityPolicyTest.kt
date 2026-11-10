@@ -65,9 +65,9 @@ class PlaybackDefaultQualityPolicyTest {
     }
 
     @Test
-    fun `disabled auto highest preference should keep existing normalization rules`() {
+    fun `disabled auto highest preserves preferred quality before stream discovery`() {
         assertEquals(
-            80,
+            116,
             resolvePlaybackDefaultQualityId(
                 storedQuality = 116,
                 autoHighestEnabled = false,
@@ -78,9 +78,9 @@ class PlaybackDefaultQualityPolicyTest {
     }
 
     @Test
-    fun `non vip login should normalize 1080p60 default to 1080p`() {
+    fun `stale non vip cache preserves 1080p60 preference`() {
         assertEquals(
-            80,
+            116,
             resolvePlayableDefaultQualityId(
                 storedQuality = 116,
                 isLoggedIn = true,
@@ -90,9 +90,9 @@ class PlaybackDefaultQualityPolicyTest {
     }
 
     @Test
-    fun `guest should normalize 1080p60 default to 720p`() {
+    fun `guest preserves preference for server based fallback`() {
         assertEquals(
-            64,
+            116,
             resolvePlayableDefaultQualityId(
                 storedQuality = 116,
                 isLoggedIn = false,
@@ -114,11 +114,11 @@ class PlaybackDefaultQualityPolicyTest {
     }
 
     @Test
-    fun `non vip login should normalize other vip-only tiers to 1080p`() {
+    fun `premium preferences are resolved against discovered streams`() {
         listOf(112, 120, 125, 126, 127).forEach { quality ->
             assertEquals(
                 "quality=$quality",
-                80,
+                quality,
                 resolvePlayableDefaultQualityId(
                     storedQuality = quality,
                     isLoggedIn = true,

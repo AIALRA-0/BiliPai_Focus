@@ -29,6 +29,17 @@ object FocusSettingsStore {
         showPartition = preferences[KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE] ?: false,
     )
 
+    internal fun hasLegacyHomeTabVisibilityPreferences(preferences: Preferences): Boolean =
+        preferences[KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_FOLLOW_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_LIVE_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_ANIME_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_GAME_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_KNOWLEDGE_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_TECH_TAB_VISIBLE] != null ||
+            preferences[KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE] != null
+
     fun observe(context: Context): Flow<FocusSettings> = context.settingsDataStore.data
         .map(::mapFromPreferences)
         .distinctUntilChanged()

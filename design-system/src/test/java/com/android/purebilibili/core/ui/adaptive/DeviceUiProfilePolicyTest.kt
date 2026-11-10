@@ -8,11 +8,18 @@ import kotlin.test.assertTrue
 class DeviceUiProfilePolicyTest {
 
     @Test
-    fun expandedTabletPrefersEnhancedMotionTier() {
+    fun expandedTabletKeepsNormalMotionTier() {
         val profile = resolveDeviceUiProfileSpec(
             widthClass = AdaptiveWidthClass.Expanded,
         )
 
+        assertEquals(MotionTier.Normal, profile.motionTier)
+        assertTrue(profile.isTablet)
+    }
+
+    @Test
+    fun largeTabletPrefersEnhancedMotionTier() {
+        val profile = resolveDeviceUiProfileSpec(widthClass = AdaptiveWidthClass.Large)
         assertEquals(MotionTier.Enhanced, profile.motionTier)
         assertTrue(profile.isTablet)
     }

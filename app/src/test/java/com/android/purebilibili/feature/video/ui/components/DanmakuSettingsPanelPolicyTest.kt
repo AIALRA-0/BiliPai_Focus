@@ -40,13 +40,13 @@ class DanmakuSettingsPanelPolicyTest {
             DanmakuSettingsPanelPresentation.BottomSheet,
             policy.presentation
         )
-        assertEquals(16, policy.horizontalPaddingDp)
-        assertEquals(20, policy.bottomPaddingDp)
-        assertTrue(policy.maxWidthDp >= 520)
+        assertEquals(12, policy.horizontalPaddingDp)
+        assertEquals(12, policy.bottomPaddingDp)
+        assertEquals(411, policy.maxWidthDp)
     }
 
     @Test
-    fun fullscreenPanelKeepsCenteredDialogPresentation() {
+    fun landscapeFullscreenPanelUsesRightSheet() {
         val policy = resolveDanmakuSettingsPanelLayoutPolicy(
             isFullscreen = true,
             screenWidthDp = 915,
@@ -57,8 +57,8 @@ class DanmakuSettingsPanelPolicyTest {
             DanmakuSettingsPanelPresentation.CenteredDialog,
             policy.presentation
         )
-        assertEquals(0, policy.bottomPaddingDp)
-        assertTrue(policy.maxHeightDp in 280..420)
+        assertEquals(12, policy.bottomPaddingDp)
+        assertEquals(387, policy.maxHeightDp)
         assertEquals(
             DanmakuSettingsPanelAnchor.End,
             policy.anchor
@@ -86,16 +86,15 @@ class DanmakuSettingsPanelPolicyTest {
             fullscreenWidthMode = DanmakuPanelWidthMode.THIRD
         )
 
-        // 分区 Tab 侧栏：放宽到约 45% 屏宽（380-440dp），避免控件拥挤
         assertEquals(fullWidth.maxWidthDp, halfWidth.maxWidthDp)
         assertEquals(fullWidth.maxWidthDp, thirdWidth.maxWidthDp)
-        assertTrue(fullWidth.maxWidthDp in 380..440)
-        assertEquals(fullWidth.minWidthDp, fullWidth.maxWidthDp)
+        assertEquals(457, fullWidth.maxWidthDp)
+        assertEquals(0, fullWidth.minWidthDp)
         assertEquals(DanmakuSettingsPanelAnchor.End, fullWidth.anchor)
     }
 
     @Test
-    fun wideTabletInlinePanel_usesCenteredDialogInsteadOfFullWidthSheet() {
+    fun landscapeInlinePanelUsesSameRightSheetAsFullscreen() {
         val policy = resolveDanmakuSettingsPanelLayoutPolicy(
             isFullscreen = false,
             screenWidthDp = 1280,
@@ -106,9 +105,9 @@ class DanmakuSettingsPanelPolicyTest {
             DanmakuSettingsPanelPresentation.CenteredDialog,
             policy.presentation
         )
-        assertEquals(640, policy.maxWidthDp)
-        assertEquals(0, policy.bottomPaddingDp)
-        assertEquals(DanmakuSettingsPanelAnchor.Center, policy.anchor)
+        assertEquals(512, policy.maxWidthDp)
+        assertEquals(12, policy.bottomPaddingDp)
+        assertEquals(DanmakuSettingsPanelAnchor.End, policy.anchor)
     }
 
     @Test
@@ -120,6 +119,27 @@ class DanmakuSettingsPanelPolicyTest {
         )
 
         assertEquals(DanmakuSettingsPanelAnchor.Bottom, policy.anchor)
+    }
+
+    @Test
+    fun orientationNotFullscreenDeterminesSheetAnchor() {
+        for (fullscreen in listOf(false, true)) {
+            val portrait = resolveDanmakuSettingsPanelLayoutPolicy(fullscreen, 411, 915)
+            val landscape = resolveDanmakuSettingsPanelLayoutPolicy(fullscreen, 915, 411)
+            assertEquals(DanmakuSettingsPanelAnchor.Bottom, portrait.anchor)
+            assertEquals(DanmakuSettingsPanelAnchor.End, landscape.anchor)
+            assertTrue(portrait.maxWidthDp <= 411)
+            assertTrue(landscape.maxWidthDp <= 915)
+            assertTrue(portrait.maxHeightDp < 915)
+            assertTrue(landscape.maxHeightDp < 411)
+        }
+    }
+
+    @Test
+    fun shortViewportNeverForcesContentBeyondWindow() {
+        val policy = resolveDanmakuSettingsPanelLayoutPolicy(true, 640, 240)
+        assertEquals(216, policy.maxHeightDp)
+        assertTrue(policy.maxWidthDp <= 640)
     }
 
     @Test

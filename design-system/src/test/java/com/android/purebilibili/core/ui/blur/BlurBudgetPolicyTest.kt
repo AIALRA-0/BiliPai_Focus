@@ -36,7 +36,7 @@ class BlurBudgetPolicyTest {
     }
 
     @Test
-    fun bottomBar_duringTransition_shouldKeepVisualBudgetStableAndDisableRealtime() {
+    fun bottomBar_duringTransition_shouldKeepSamplingAndVisualBudgetStable() {
         val budget = resolveBlurBudget(
             surfaceType = BlurSurfaceType.BOTTOM_BAR,
             motionTier = MotionTier.Normal,
@@ -46,7 +46,7 @@ class BlurBudgetPolicyTest {
 
         assertEquals(1, budget.maxBlurLevel)
         assertEquals(0.95f, budget.backgroundAlphaMultiplier)
-        assertFalse(budget.allowRealtime)
+        assertTrue(budget.allowRealtime)
     }
 
     @Test
@@ -116,5 +116,20 @@ class BlurBudgetPolicyTest {
         )
 
         assertEquals(0.88f, scale)
+    }
+
+    @Test
+    fun allSurfaces_keepSameSamplingAcrossDragAndSettle() {
+        for (surface in BlurSurfaceType.entries) {
+            val idle = resolveBlurBudget(surface, MotionTier.Normal, false, false)
+            for ((scrolling, transitioning) in listOf(true to false, false to true, true to true)) {
+                val moving = resolveBlurBudget(surface, MotionTier.Normal, scrolling, transitioning)
+                assertEquals(idle, moving)
+                assertEquals(resolveBlurInputScale(idle, surface), resolveBlurInputScale(moving, surface))
+            }
+            val low = resolveBlurBudget(surface, MotionTier.Normal, true, true, forceLowBudget = true)
+            assertFalse(low.allowRealtime)
+            assertTrue(resolveBlurInputScale(low, surface) < 1f)
+        }
     }
 }

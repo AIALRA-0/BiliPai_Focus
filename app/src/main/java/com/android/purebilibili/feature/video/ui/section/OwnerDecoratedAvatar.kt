@@ -43,7 +43,8 @@ fun OwnerDecoratedAvatar(
     faceModifier: Modifier = Modifier,
     contentDescription: String? = null,
 ) {
-    var card by remember(ownerMid) { mutableStateOf<CreatorCardStats?>(null) }
+    val displayFace = faceUrl
+    var card by remember(ownerMid) { mutableStateOf(VideoRepository.getCachedCreatorCardStats(ownerMid)) }
     LaunchedEffect(ownerMid) {
         if (ownerMid <= 0L) return@LaunchedEffect
         card = VideoRepository.getCreatorCardStats(ownerMid).getOrNull()
@@ -56,8 +57,8 @@ fun OwnerDecoratedAvatar(
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(faceUrl))
-                .crossfade(true)
+                .data(FormatUtils.fixImageUrl(displayFace))
+                .crossfade(false)
                 .build(),
             contentDescription = contentDescription,
             modifier = faceModifier
@@ -70,7 +71,7 @@ fun OwnerDecoratedAvatar(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(FormatUtils.fixImageUrl(pendantUrl))
-                    .crossfade(true)
+                    .crossfade(false)
                     .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),

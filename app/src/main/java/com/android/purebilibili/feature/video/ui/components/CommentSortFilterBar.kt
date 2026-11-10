@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -33,9 +35,13 @@ internal data class CommentSortSegmentedControlSpec(
     val indicatorHeightDp: Int
 )
 
-internal fun resolveCommentSortSegmentedControlSpec(itemCount: Int): CommentSortSegmentedControlSpec {
+internal fun resolveCommentSortSegmentedControlSpec(
+    itemCount: Int,
+    liquidGlassEnabled: Boolean = false,
+): CommentSortSegmentedControlSpec {
     return CommentSortSegmentedControlSpec(
-        itemWidthDp = if (itemCount >= 4) 56 else 66,
+        // The outer header and inner dock must shrink together. Native defaults stay intact.
+        itemWidthDp = if (liquidGlassEnabled || itemCount >= 4) 56 else 66,
         heightDp = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp,
         indicatorHeightDp = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp,
     )
@@ -73,7 +79,11 @@ fun CommentListHeader(
     count: Int,
     title: String = "评论",
     modifier: Modifier = Modifier,
+    liquidGlassEffectsEnabled: Boolean = true,
+    compactTypography: Boolean = false,
 ) {
+    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+        liquidGlassEffectsEnabled
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -82,25 +92,42 @@ fun CommentListHeader(
             .padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CommentListTitle(title = title, count = count)
+        CommentListTitle(
+            title = title,
+            count = count,
+            liquidGlassEnabled = liquidGlassEnabled,
+            compactTypography = compactTypography,
+        )
     }
 }
 
 @Composable
-private fun CommentListTitle(title: String, count: Int) {
+internal fun CommentListTitle(
+    title: String,
+    count: Int,
+    liquidGlassEnabled: Boolean,
+    compactTypography: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    // 紧凑字阶用于玻璃评论栏与详情页共享浮动评论栏；关闭玻璃的原生列表栏默认保持
+    // MD3/Miuix 原字阶，只有明确传入 compactTypography 的调用点才跟随紧凑字阶。
+    val compact = liquidGlassEnabled || compactTypography
+    val titleStyle = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge
+    val countStyle = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium
+    val titleWeight = if (compact) FontWeight.SemiBold else FontWeight.Bold
     val appearance = rememberVideoCommentAppearance()
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         AppText(
             text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            style = titleStyle,
+            fontWeight = titleWeight,
             color = appearance.primaryTextColor,
             modifier = Modifier.alignByBaseline(),
         )
         Spacer(modifier = Modifier.width(6.dp))
         AppText(
             text = FormatUtils.formatStat(count.toLong()),
-            style = MaterialTheme.typography.titleMedium,
+            style = countStyle,
             fontWeight = FontWeight.Normal,
             color = appearance.secondaryTextColor,
             modifier = Modifier.alignByBaseline(),
@@ -118,11 +145,13 @@ fun CommentSortHeader(
     onSortModeChange: (CommentSortMode) -> Unit,
     modifier: Modifier = Modifier,
     onSearchClick: (() -> Unit)? = null,
+    compactTypography: Boolean = false,
 ) {
     val uiStyle = LocalAppUiStyle.current
     val sortModes = remember { listOf(CommentSortMode.HOT, CommentSortMode.NEWEST) }
-    val spec = remember(sortModes.size) {
-        resolveCommentSortSegmentedControlSpec(itemCount = sortModes.size)
+    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+    val spec = remember(sortModes.size, liquidGlassEnabled) {
+        resolveCommentSortSegmentedControlSpec(sortModes.size, liquidGlassEnabled)
     }
     FlowRow(
         modifier = modifier
@@ -136,6 +165,8 @@ fun CommentSortHeader(
         CommentListTitle(
             title = if (uiStyle == AppUiStyle.MIUIX) "评论" else "${sortMode.label}评论",
             count = count,
+            liquidGlassEnabled = liquidGlassEnabled,
+            compactTypography = compactTypography,
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -150,7 +181,7 @@ fun CommentSortHeader(
                         imageVector = Icons.Outlined.Search,
                         contentDescription = "搜索评论",
                         modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = AppContentColors.secondaryText(),
                     )
                 }
             }
@@ -160,13 +191,16 @@ fun CommentSortHeader(
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     AppThemeAdaptiveTabRow(
+                        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                        role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
                         options = sortModes.map { AppSegmentOption(it, it.label) },
                         selectedValue = sortMode,
                         onSelectionChange = onSortModeChange,
                         modifier = Modifier.fillMaxWidth(),
                         height = spec.heightDp.dp,
                         indicatorHeight = spec.indicatorHeightDp.dp,
-                        labelFontSize = 13.sp,
+                        labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
                         compactMiuixWhenTwoOptions = true,
                         dragSelectionEnabled = true,
                         tapPressRefractionEnabled = false,
@@ -206,8 +240,10 @@ fun CommentSortFilterBar(
     onSearchClick: (() -> Unit)? = null,
 ) {
     val sortModes = remember { listOf(CommentSortMode.HOT, CommentSortMode.NEWEST) }
-    val spec = remember(sortModes.size) {
-        resolveCommentSortSegmentedControlSpec(itemCount = sortModes.size)
+    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+        liquidGlassEffectsEnabled
+    val spec = remember(sortModes.size, liquidGlassEnabled) {
+        resolveCommentSortSegmentedControlSpec(sortModes.size, liquidGlassEnabled)
     }
     Row(
         modifier = modifier,
@@ -223,7 +259,7 @@ fun CommentSortFilterBar(
                     imageVector = Icons.Outlined.Search,
                     contentDescription = "搜索评论",
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = AppContentColors.secondaryText(),
                 )
             }
         }
@@ -257,24 +293,28 @@ fun CommentSegmentedControl(
     miuixBackdrop: MiuixBackdrop? = null,
     liquidGlassEffectsEnabled: Boolean = true,
 ) {
-    val spec = remember(items.size) {
-        resolveCommentSortSegmentedControlSpec(itemCount = items.size)
+    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+        liquidGlassEffectsEnabled
+    val spec = remember(items.size, liquidGlassEnabled) {
+        resolveCommentSortSegmentedControlSpec(items.size, liquidGlassEnabled)
     }
     BottomBarLiquidSegmentedControl(
+        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
         items = items,
         selectedIndex = selectedIndex,
         onSelected = onScaleChange,
         itemWidth = spec.itemWidthDp.dp,
         height = spec.heightDp.dp,
         indicatorHeight = spec.indicatorHeightDp.dp,
-        labelFontSize = 13.sp,
+        labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
         modifier = modifier,
         miuixBackdrop = miuixBackdrop,
         liquidGlassEffectsEnabled = liquidGlassEffectsEnabled,
         dragSelectionEnabled = items.size > 1,
         tapPressRefractionEnabled = true,
-        // The detail header owns a fixed 66dp-per-item width. Keep native Miuix items
-        // evenly divided when its non-glass outer track is transparent.
+        // The header and child share this material-specific slot width. Keep native
+        // Miuix evenly divided in its original 66dp slots when the outer track is transparent.
         forceEqualWidth = true,
     )
 }

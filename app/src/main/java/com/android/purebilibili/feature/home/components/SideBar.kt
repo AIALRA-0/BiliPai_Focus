@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import android.os.SystemClock
@@ -124,6 +126,25 @@ fun FrostedSideBar(
                 onToggleSidebar = onToggleSidebar,
                 onAccountSwitchClick = onAccountSwitchClick,
             )
+        } else if (
+            com.android.purebilibili.core.theme.LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3 &&
+            !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+            uiSkinDecoration == null && itemColorIndices.isEmpty()
+        ) {
+            MaterialSideBar(
+                currentItem = currentItem,
+                onItemClick = onItemClick,
+                visibleItems = visibleItems,
+                itemLabels = itemLabels,
+                expanded = sidebarExpanded,
+                onExpandedChange = onSidebarExpandedChange,
+                onHomeDoubleTap = onHomeDoubleTap,
+                onDynamicDoubleTap = onDynamicDoubleTap,
+                onToggleSidebar = onToggleSidebar,
+                onAccountSwitchClick = onAccountSwitchClick,
+                firstItemModifier = firstItemModifier,
+                modifier = modifier,
+            )
         } else {
             FrostedSideBarContent(
                 currentItem = currentItem,
@@ -160,7 +181,7 @@ private fun MiuixSideBar(
     onToggleSidebar: (() -> Unit)?,
     onAccountSwitchClick: (() -> Unit)?,
 ) {
-    val haptic = rememberHapticFeedback()
+    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
     val expandable = shouldUseExpandableMiuixSideBar(
         shouldUseExpandedNavigationRailForLayout(
             windowSizeClass = LocalWindowSizeClass.current,
@@ -278,34 +299,22 @@ private fun MiuixSideBar(
             }
         }
 
+        Spacer(modifier = Modifier.weight(1f))
         if (onAccountSwitchClick != null) {
-            Spacer(modifier = Modifier.weight(1f))
-            SideBarAccountSwitchButton(
-                onClick = onAccountSwitchClick,
-                tint = AppSurfaceTokens.onSurfaceVariantSummary(),
+            AppPlatformNavigationRailItem(
+                selected = false,
+                onClick = { haptic(HapticType.LIGHT); onAccountSwitchClick() },
+                icon = Icons.Outlined.SwapHoriz,
+                label = "切换账号",
             )
         }
-
         if (onToggleSidebar != null) {
-            Spacer(modifier = Modifier.height(AppSpacingTokens.Large))
-            val sidebarLabel = stringResource(R.string.sidebar_toggle)
-            Box(
-                modifier = Modifier
-                    .size(AppChromeSizeTokens.MinimumTouchTarget)
-                    .clip(AppShapes.container(ContainerLevel.Card))
-                    .clickable {
-                        haptic(HapticType.LIGHT)
-                        onToggleSidebar()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                AppIcon(
-                    Icons.Outlined.ViewSidebar,
-                    contentDescription = sidebarLabel,
-                    tint = AppSurfaceTokens.onSurfaceVariantSummary(),
-                    modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
-                )
-            }
+            AppPlatformNavigationRailItem(
+                selected = false,
+                onClick = { haptic(HapticType.LIGHT); onToggleSidebar() },
+                icon = Icons.Outlined.ViewSidebar,
+                label = "切换到底栏",
+            )
         }
     }
 }
@@ -318,7 +327,7 @@ private fun ColumnScope.MiuixSideBarSkinItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val primaryColor = AppContentColors.accent()
     val unselectedColor = AppSurfaceTokens.onSurface().copy(alpha = 0.6f)
     val iconColor = if (selected) primaryColor else unselectedColor
     Column(
@@ -393,7 +402,7 @@ private fun FrostedSideBarContent(
     onToggleSidebar: (() -> Unit)?,
     onAccountSwitchClick: (() -> Unit)?,
 ) {
-    val haptic = rememberHapticFeedback()
+    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
     var lastHomeClickMs by remember { mutableLongStateOf(0L) }
     var lastDynamicClickMs by remember { mutableLongStateOf(0L) }
     val blurIntensity = com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity()
@@ -437,7 +446,7 @@ private fun FrostedSideBarContent(
                 brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                        AppContentColors.primaryText().copy(alpha = 0.1f)
                     )
                 )
             )
@@ -460,8 +469,8 @@ private fun FrostedSideBarContent(
                 val isSelected = item == currentItem
                 val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
 
-                val primaryColor = MaterialTheme.colorScheme.primary
-                val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                val primaryColor = AppContentColors.accent()
+                val unselectedColor = AppContentColors.primaryText().copy(alpha = 0.6f)
                 val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = isSelected)
                 val selectionTransform = rememberNavigationSelectionTransform(
                     selected = isSelected,
@@ -571,7 +580,7 @@ private fun FrostedSideBarContent(
             if (onAccountSwitchClick != null) {
                 SideBarAccountSwitchButton(
                     onClick = onAccountSwitchClick,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    tint = AppContentColors.secondaryText().copy(alpha = 0.7f),
                 )
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Large))
             }
@@ -591,7 +600,7 @@ private fun FrostedSideBarContent(
                     AppIcon(
                         Icons.Outlined.ViewSidebar,
                         contentDescription = sidebarLabel,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        tint = AppContentColors.secondaryText().copy(alpha = 0.7f),
                         modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
                     )
                 }
@@ -607,7 +616,7 @@ private fun SideBarAccountSwitchButton(
     tint: Color,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = rememberHapticFeedback()
+    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
     Box(
         modifier = modifier
             .size(AppChromeSizeTokens.MinimumTouchTarget)

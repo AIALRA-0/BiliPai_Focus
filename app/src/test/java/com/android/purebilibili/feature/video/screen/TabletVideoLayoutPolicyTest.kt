@@ -106,8 +106,8 @@ class TabletVideoLayoutPolicyTest {
             .substringAfter("internal fun TabletSecondaryLiquidTabRow(")
             .substringBefore("/**\n * 🖥️ 平板端视频详情页布局")
 
-        assertTrue(tabRow.contains("equalizeMiuixNonGlassItemWidths = false"))
-        assertTrue(tabRow.contains("allowNativeLabelOverflow = true"))
+        assertTrue(tabRow.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(tabRow.contains("scrollable = true"))
         assertFalse(tabRow.contains("108.dp"))
     }
 

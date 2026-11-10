@@ -30,7 +30,7 @@ class DynamicLayoutPolicyTest {
         assertEquals(1840.dp, resolveDynamicTimelineMaxWidth())
         assertEquals(360.dp, resolveDynamicTimelineMinColumnWidth())
         assertEquals(18.dp, resolveDynamicTimelineHorizontalSpacing())
-        assertEquals(10.dp, resolveDynamicTimelineVerticalSpacing())
+        assertEquals(6.dp, resolveDynamicTimelineVerticalSpacing())
     }
 
     @Test
@@ -63,29 +63,11 @@ class DynamicLayoutPolicyTest {
     }
 
     @Test
-    fun `dynamic top tab row uses tight top dock indicator insets`() {
-        val spec = resolveDynamicTopBarLiquidTabSpec()
-
-        assertEquals(0, spec.topPaddingDp)
-        assertEquals(0, spec.bottomPaddingDp)
-        assertEquals(50, spec.heightDp)
-        assertEquals(42, spec.indicatorHeightDp)
-        assertEquals(13, spec.labelFontSizeSp)
-        assertEquals(72, resolveDynamicTopBarTabItemWidthDp())
-    }
-
-    @Test
     fun `dynamic tab indicator follows pager position within tab bounds`() {
         assertEquals(1.4f, resolveDynamicTabIndicatorPosition(1, 1.4f, 3))
         assertEquals(2f, resolveDynamicTabIndicatorPosition(1, 5f, 3))
         assertEquals(1f, resolveDynamicTabIndicatorPosition(1, Float.NaN, 3))
         assertEquals(0f, resolveDynamicTabIndicatorPosition(1, 1f, 0))
-    }
-
-    @Test
-    fun `dynamic sidebar return header aligns with top tab row height`() {
-        assertEquals(50, resolveDynamicTopBarHeightDp())
-        assertEquals(resolveDynamicTopBarHeightDp(), resolveDynamicSidebarReturnHeaderHeightDp())
     }
 
     @Test

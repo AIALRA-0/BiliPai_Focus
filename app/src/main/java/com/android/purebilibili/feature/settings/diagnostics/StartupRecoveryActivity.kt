@@ -79,9 +79,26 @@ class StartupRecoveryActivity : Activity() {
             // Avoid loading the API 37 profiling path while diagnosing OS compatibility.
             LogCollector.exportAndShare(this, includeSystemDiagnostics = false)
         }
+        if (LogCollector.hasRawCrashTrace(this)) {
+            button("分享原始崩溃回溯") {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("分享原始崩溃回溯？")
+                    .setMessage("原始 .pb 文件可能包含设备路径等敏感信息。仅在需要深入排查时分享。")
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("分享") { _, _ ->
+                        LogCollector.exportAndShare(
+                            this,
+                            includeSystemDiagnostics = false,
+                            includeRawCrashTrace = true,
+                        )
+                    }
+                    .show()
+            }
+        }
         button("重试正常启动") {
             (application as PureApplication).retryStartupFromRecovery()
-            startActivity(Intent(this, MainActivity::class.java).apply {
+            startActivity(Intent(intent).apply {
+                setClass(this@StartupRecoveryActivity, MainActivity::class.java)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             })
             finish()

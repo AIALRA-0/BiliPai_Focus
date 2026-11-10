@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.cast
+
+import com.android.purebilibili.core.ui.AppContentColors
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -9,7 +11,7 @@ import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cast
@@ -20,9 +22,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.plugin.CastPluginApi
-import com.android.purebilibili.core.plugin.CastDiscoveryRequirement
-import com.android.purebilibili.core.plugin.CastPluginRoute
+import com.android.purebilibili.plugin.sdk.CastPluginApi
+import com.android.purebilibili.core.plugin.BuiltinPlugin
+import com.android.purebilibili.plugin.sdk.CastDiscoveryRequirement
+import com.android.purebilibili.plugin.sdk.CastPluginRoute
 import com.android.purebilibili.core.plugin.PluginManager
 import kotlinx.coroutines.flow.combine
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,6 +40,7 @@ import androidx.lifecycle.LifecycleEventObserver
 
 private data class PluginRouteEntry(
     val plugin: CastPluginApi,
+    val presentation: BuiltinPlugin,
     val route: CastPluginRoute
 )
 
@@ -101,7 +105,9 @@ fun DeviceListDialog(
         }
         combine(castPlugins.map { it.routes }) { arrays ->
             arrays.flatMapIndexed { index, routes ->
-                routes.map { PluginRouteEntry(castPlugins[index], it) }
+                val plugin = castPlugins[index]
+                val presentation = castPluginInfos.first { it.second === plugin }.first.plugin
+                routes.map { PluginRouteEntry(plugin, presentation, it) }
             }
         }.collect { value = it }
     }
@@ -162,7 +168,7 @@ fun DeviceListDialog(
                         AppText(
                             "请前往 设置 > 插件，启用 DLNA 或 Google Cast",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = AppContentColors.secondaryText(),
                         )
                     }
                 }
@@ -175,16 +181,16 @@ fun DeviceListDialog(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 ) {
-                    AppText("DLNA 需要本地网络权限", style = MaterialTheme.typography.bodyMedium)
+                    AppText("搜索投屏设备需要本地网络权限", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(6.dp))
                     AppText(
                         if (permissionRequested) {
-                            "权限未开启，DLNA 搜索已停止。Google Cast 仍可正常使用。"
+                            "权限未开启，需要本地网络权限的设备搜索已停止。"
                         } else {
-                            "仅在搜索局域网中的 DLNA 电视时使用，不会上传局域网信息。"
+                            "用于搜索和连接同一网络中的投屏设备，不会上传局域网信息。"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                     )
                     Spacer(Modifier.height(8.dp))
                     AppTextButton(
@@ -198,7 +204,7 @@ fun DeviceListDialog(
                             }
                         }
                     ) {
-                        AppText("允许并搜索 DLNA")
+                        AppText("允许并搜索设备")
                     }
                     if (permissionRequested) {
                         AppTextButton(
@@ -234,7 +240,7 @@ fun DeviceListDialog(
                                 "5. 小米自带投屏多为 Miracast，不一定支持 DLNA\n" +
                                 "6. Google Cast 需接收端支持 Chromecast 且手机有 GMS",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = AppContentColors.secondaryText(),
                         )
                     }
                 }
@@ -254,15 +260,15 @@ fun DeviceListDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppText(
-                                "Google Cast 已可用；授权后可继续搜索 DLNA",
+                                "授权本地网络后可搜索更多投屏设备",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = AppContentColors.secondaryText(),
                                 modifier = Modifier.weight(1f)
                             )
                             AppTextButton(
                                 onClick = { permissionLauncher.launch(localNetworkRuntimePermissions()) }
                             ) {
-                                AppText("启用 DLNA")
+                                AppText("允许本地网络")
                             }
                         }
                     }
@@ -273,7 +279,7 @@ fun DeviceListDialog(
                             AppListItem(
                                 headlineContent = { AppText(route.name) },
                                 supportingContent = { AppText(route.description ?: plugin.name) },
-                                leadingContent = { AppIcon(route.icon ?: plugin.icon ?: Icons.Rounded.Cast, null) },
+                                leadingContent = { AppIcon(entry.presentation.icon ?: Icons.Rounded.Cast, null) },
                                 modifier = Modifier
                                     .clickable { onPluginCastDeviceSelected(plugin, route) }
                                     .fillMaxWidth()

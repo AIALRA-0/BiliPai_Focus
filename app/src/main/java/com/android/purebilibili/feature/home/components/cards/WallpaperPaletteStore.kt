@@ -3,162 +3,133 @@ package com.android.purebilibili.feature.home.components.cards
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
 import android.util.LruCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.IntSize
 import androidx.palette.graphics.Palette
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
-import com.android.purebilibili.feature.home.HomeVisualPalette
-import kotlinx.coroutines.CoroutineScope
+import coil3.size.Scale
+import com.android.purebilibili.core.ui.wallpaper.WallpaperLuminanceBand
+import com.android.purebilibili.core.ui.wallpaper.WallpaperReadabilityProfile
+import com.android.purebilibili.core.ui.wallpaper.WallpaperTransform
+import com.android.purebilibili.core.ui.wallpaper.resolveWallpaperVisibleSourceRegion
+import com.android.purebilibili.core.ui.wallpaper.sanitizeWallpaperTransform
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.ceil
+import kotlin.math.floor
 
-/**
- * 全局壁纸调色板提取与缓存管理
- * 负责在壁纸变更时异步提取多段垂直区间的调色板基色，完全解耦 UI 渲染树，杜绝循环采样。
- */
+internal data class WallpaperPaletteRequest(
+    val uri: String,
+    val viewport: IntSize,
+    val transform: WallpaperTransform,
+    val baseColor: Color,
+)
+
+internal data class WallpaperPaletteResult(val request: WallpaperPaletteRequest, val palette: WallpaperPalette?)
+
+/** Cache-only suspending API. The calling UI owns cancellation and publication of results. */
 object WallpaperPaletteStore {
-    private const val MAX_CACHE_SIZE = 8
-    private val paletteCache = LruCache<String, WallpaperPalette>(MAX_CACHE_SIZE)
-    private val _currentPalette = MutableStateFlow<WallpaperPalette?>(null)
-    val currentPalette: StateFlow<WallpaperPalette?> = _currentPalette.asStateFlow()
+    private data class CacheKey(
+        val uri: String,
+        val revision: String,
+        val viewport: IntSize,
+        val transform: WallpaperTransform,
+        val baseColor: Int,
+    )
+    private val cache = LruCache<CacheKey, WallpaperPalette>(8)
 
-    fun getCachedPalette(uri: String): WallpaperPalette? {
-        if (uri.isBlank()) return null
-        return synchronized(paletteCache) { paletteCache.get(uri) }
-    }
-
-    fun loadWallpaperPalette(
-        context: Context,
-        uri: String,
-        scope: CoroutineScope
-    ) {
-        if (uri.isBlank()) {
-            val systemPalette = extractSystemWallpaperPalette(context) ?: createDefaultThemePalette()
-            _currentPalette.value = systemPalette
-            return
-        }
-
-        val cached = getCachedPalette(uri)
-        if (cached != null) {
-            _currentPalette.value = cached
-            return
-        }
-
-        scope.launch(Dispatchers.Default) {
-            val palette = extractWallpaperPaletteFromUri(context, uri)
-                ?: extractSystemWallpaperPalette(context)
-                ?: createDefaultThemePalette()
-            synchronized(paletteCache) {
-                paletteCache.put(uri, palette)
+    internal suspend fun loadWallpaperPalette(context: Context, request: WallpaperPaletteRequest): WallpaperPalette? {
+        if (request.uri.isBlank() || request.viewport.width <= 0 || request.viewport.height <= 0) return null
+        return try {
+            val file = when {
+                request.uri.startsWith("file:") -> Uri.parse(request.uri).path?.let(::File)
+                request.uri.startsWith("/") -> File(request.uri)
+                else -> null
             }
-            _currentPalette.value = palette
-        }
-    }
-
-    private fun extractSystemWallpaperPalette(context: Context): WallpaperPalette? {
-        return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                val wallpaperManager = android.app.WallpaperManager.getInstance(context)
-                val colors = wallpaperManager.getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)
-                if (colors != null) {
-                    val primary = Color(colors.primaryColor.toArgb())
-                    val secondary = colors.secondaryColor?.toArgb()?.let { Color(it) } ?: primary
-                    val tertiary = colors.tertiaryColor?.toArgb()?.let { Color(it) } ?: secondary
-                    return@runCatching WallpaperPalette(
-                        topColor = primary,
-                        bottomColor = tertiary,
-                        dominantColor = secondary,
-                        stops = listOf(primary, secondary, tertiary)
-                    )
-                }
+            val revision = withContext(Dispatchers.IO) {
+                file?.let { "${it.lastModified()}:${it.length()}" }.orEmpty()
             }
+            val key = CacheKey(request.uri, revision, request.viewport,
+                sanitizeWallpaperTransform(request.transform), request.baseColor.toArgb())
+            synchronized(cache) { cache.get(key) }?.let { return it }
+            val bitmap = withContext(Dispatchers.IO) {
+                val image = ImageRequest.Builder(context)
+                    .data(file ?: request.uri)
+                    .allowHardware(false)
+                    .size(512, 512)
+                    .scale(Scale.FIT)
+                    .memoryCacheKey("wallpaper_palette_${request.uri}_$revision")
+                    .build()
+                val result = context.imageLoader.execute(image) as? SuccessResult
+                (result?.image as? coil3.BitmapImage)?.bitmap
+            } ?: return null
+            if (bitmap.isRecycled) return null
+            val palette = withContext(Dispatchers.Default) { extractVisiblePalette(bitmap, request) }
+            currentCoroutineContext().ensureActive()
+            synchronized(cache) { cache.put(key, palette) }
+            palette
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // An unreadable/animated source must not introduce an unrelated system wallpaper.
             null
-        }.getOrNull()
+        }
     }
 
-    private suspend fun extractWallpaperPaletteFromUri(context: Context, uri: String): WallpaperPalette? {
-        return runCatching {
-            val model: Any = when {
-                uri.startsWith("content://") -> Uri.parse(uri)
-                uri.startsWith("file://") -> {
-                    val path = Uri.parse(uri).path
-                    if (path != null) File(path) else uri
+    private suspend fun extractVisiblePalette(bitmap: Bitmap, request: WallpaperPaletteRequest): WallpaperPalette {
+        val visible = resolveWallpaperVisibleSourceRegion(
+            request.viewport.width.toFloat(), request.viewport.height.toFloat(),
+            bitmap.width.toFloat(), bitmap.height.toFloat(), request.transform,
+        )
+        val left = floor(visible.left).toInt().coerceIn(0, bitmap.width - 1)
+        val right = ceil(visible.right).toInt().coerceIn(left + 1, bitmap.width)
+        val colors = mutableListOf<Color>()
+        val bands = mutableListOf<WallpaperLuminanceBand>()
+        repeat(5) { index ->
+            currentCoroutineContext().ensureActive()
+            val top = floor(visible.top + (visible.bottom - visible.top) * index / 5f)
+                .toInt().coerceIn(0, bitmap.height - 1)
+            val bottom = ceil(visible.top + (visible.bottom - visible.top) * (index + 1) / 5f)
+                .toInt().coerceIn(top + 1, bitmap.height)
+            val palette = Palette.from(bitmap).setRegion(left, top, right, bottom)
+                .maximumColorCount(8).clearFilters().generate()
+            val color = palette.vibrantSwatch?.rgb ?: palette.mutedSwatch?.rgb
+                ?: palette.dominantSwatch?.rgb ?: bitmap.getPixel((left + right - 1) / 2, (top + bottom - 1) / 2)
+            colors += Color(color).compositeOver(request.baseColor.copy(alpha = 1f))
+            val luminances = mutableListOf<Float>()
+            val stepX = ((right - left) / 20).coerceAtLeast(1)
+            val stepY = ((bottom - top) / 20).coerceAtLeast(1)
+            for (y in top until bottom step stepY) {
+                currentCoroutineContext().ensureActive()
+                for (x in left until right step stepX) {
+                    luminances += Color(bitmap.getPixel(x, y))
+                        .compositeOver(request.baseColor.copy(alpha = 1f)).luminance()
                 }
-                uri.startsWith("/") -> File(uri)
-                else -> uri
             }
-            val request = ImageRequest.Builder(context)
-                .data(model)
-                .allowHardware(false)
-                .size(256, 512)
-                .build()
-            val result = context.imageLoader.execute(request) as? SuccessResult ?: return@runCatching null
-            val rawBitmap = (result.image as? coil3.BitmapImage)?.bitmap ?: return@runCatching null
-            if (rawBitmap.isRecycled) return@runCatching null
-
-            val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                rawBitmap.config == Bitmap.Config.HARDWARE
-            ) {
-                rawBitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return@runCatching null
-            } else {
-                rawBitmap
-            }
-
-            val stops = mutableListOf<Color>()
-            val sliceCount = 5
-            val sliceHeight = (bitmap.height / sliceCount).coerceAtLeast(1)
-            for (i in 0 until sliceCount) {
-                val sliceTop = (i * sliceHeight).coerceIn(0, bitmap.height - 1)
-                val sliceBottom = ((i + 1) * sliceHeight).coerceIn(sliceTop + 1, bitmap.height)
-                val palette = Palette.from(bitmap)
-                    .setRegion(0, sliceTop, bitmap.width, sliceBottom)
-                    .maximumColorCount(8)
-                    .clearFilters()
-                    .generate()
-                val colorInt = palette.vibrantSwatch?.rgb
-                    ?: palette.lightVibrantSwatch?.rgb
-                    ?: palette.darkVibrantSwatch?.rgb
-                    ?: palette.mutedSwatch?.rgb
-                    ?: palette.dominantSwatch?.rgb
-                    ?: bitmap.getPixel(bitmap.width / 2, (sliceTop + sliceBottom) / 2)
-                stops.add(Color(colorInt))
-            }
-
-            WallpaperPalette(
-                topColor = stops.first(),
-                bottomColor = stops.last(),
-                dominantColor = stops[stops.size / 2],
-                stops = stops
+            luminances.sort()
+            bands += WallpaperLuminanceBand(
+                low = luminances[((luminances.lastIndex) * 0.1f).toInt()],
+                mean = luminances.average().toFloat(),
+                high = luminances[((luminances.lastIndex) * 0.9f).toInt()],
             )
-        }.getOrNull()
-    }
-
-    private fun createDefaultThemePalette(): WallpaperPalette {
-        val fallbackStops = HomeVisualPalette.WallpaperFallbackStops
+        }
         return WallpaperPalette(
-            topColor = fallbackStops.first(),
-            bottomColor = fallbackStops.last(),
-            dominantColor = fallbackStops.first(),
-            stops = fallbackStops,
+            topColor = colors.first(), bottomColor = colors.last(), dominantColor = colors[2],
+            stops = colors, readability = WallpaperReadabilityProfile(bands),
         )
     }
 
-    fun clearCache() {
-        synchronized(paletteCache) {
-            paletteCache.evictAll()
-        }
-    }
-
-    fun clear() {
-        clearCache()
-        _currentPalette.value = null
-    }
+    fun clearCache() { synchronized(cache) { cache.evictAll() } }
+    fun clear() = clearCache()
 }

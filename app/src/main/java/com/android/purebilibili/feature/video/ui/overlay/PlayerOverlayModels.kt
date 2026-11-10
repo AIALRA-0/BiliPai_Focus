@@ -17,6 +17,9 @@ data class PlaybackDebugInfo(
     val audioCodec: String = "",
     val frameRate: String = "",
     val videoDecoder: String = "",
+    val videoDecoderType: String = "",
+    val videoDecoderPreference: String = "",
+    val videoDecoderFallbackReason: String = "",
     val audioDecoder: String = "",
     val playbackState: String = "",
     val playWhenReady: String = "",
@@ -123,6 +126,9 @@ internal fun resolvePlaybackDebugRows(
         DebugStatRow("Audio codec", info.audioCodec),
         DebugStatRow("Frame rate", info.frameRate),
         DebugStatRow("Video decoder", info.videoDecoder),
+        DebugStatRow("Video decoder type", info.videoDecoderType),
+        DebugStatRow("Video decoder preference", info.videoDecoderPreference),
+        DebugStatRow("解码方式说明", info.videoDecoderFallbackReason),
         DebugStatRow("Audio decoder", info.audioDecoder),
         DebugStatRow("Playback state", info.playbackState),
         DebugStatRow("Play when ready", info.playWhenReady),
@@ -142,6 +148,17 @@ internal fun resolvePlaybackDebugRows(
     return candidates.filter { it.value.isNotBlank() }
 }
 
+/** Cheap visibility projection; does not build formatted diagnostic rows or sections. */
+internal fun resolvePlaybackInsightLevel(info: PlaybackDebugInfo): PlaybackInsightLevel {
+    val decoder = info.videoDecoder.lowercase(Locale.ROOT)
+    return when {
+        (info.droppedFrames.toIntOrNull() ?: 0) > 0 || info.videoDecoderType == "软件解码" || (info.videoDecoderType.isBlank() &&
+            (decoder.contains("software") || decoder.contains("omx.google") || decoder.contains("c2.android"))) -> PlaybackInsightLevel.ATTENTION
+        info == PlaybackDebugInfo() -> PlaybackInsightLevel.UNAVAILABLE
+        else -> PlaybackInsightLevel.LIVE
+    }
+}
+
 internal fun resolvePlaybackInsightPresentation(
     info: PlaybackDebugInfo
 ): PlaybackInsightPresentation {
@@ -149,11 +166,10 @@ internal fun resolvePlaybackInsightPresentation(
         .filter { it.isNotBlank() }
         .take(3)
     val droppedFrames = info.droppedFrames.toIntOrNull()?.coerceAtLeast(0) ?: 0
-    val usesSoftwareVideoDecoder = info.videoDecoder.lowercase(Locale.ROOT).let { decoder ->
-        decoder.contains("software") ||
-            decoder.contains("omx.google") ||
-            decoder.contains("c2.android")
-    }
+    val usesSoftwareVideoDecoder = info.videoDecoderType == "软件解码" ||
+        (info.videoDecoderType.isBlank() && info.videoDecoder.lowercase(Locale.ROOT).let { decoder ->
+            decoder.contains("software") || decoder.contains("omx.google") || decoder.contains("c2.android")
+        })
     val rows = resolvePlaybackDebugRows(info)
     val (level, statusText) = when {
         rows.isEmpty() -> PlaybackInsightLevel.UNAVAILABLE to "等待播放器数据"
@@ -176,6 +192,9 @@ internal fun resolvePlaybackInsightPresentation(
             DebugStatRow("视频编码", info.videoCodec),
             DebugStatRow("帧率", info.frameRate),
             DebugStatRow("视频解码器", info.videoDecoder),
+            DebugStatRow("实际解码类型", info.videoDecoderType),
+            DebugStatRow("创建时解码偏好", info.videoDecoderPreference),
+            DebugStatRow("解码方式说明", info.videoDecoderFallbackReason),
             DebugStatRow("掉帧", info.droppedFrames)
         ),
         PlaybackInsightSection.AUDIO to listOf(
@@ -386,8 +405,10 @@ internal fun resolveCenterLoadingUiState(
     isSeekTransitionPending: Boolean,
     playWhenReady: Boolean,
     isPlaying: Boolean,
-    bandwidthEstimate: String
+    bandwidthEstimate: String,
+    playbackState: Int = androidx.media3.common.Player.STATE_READY,
 ): CenterLoadingUiState? {
+    if (playbackState == androidx.media3.common.Player.STATE_ENDED) return null
     val bandwidthLabel = bandwidthEstimate.trim().ifBlank { null }
     return when {
         isBuffering && isQualitySwitching -> {

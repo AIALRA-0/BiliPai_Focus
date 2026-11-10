@@ -103,3 +103,62 @@ fun mapAppScreenshotSelectionRectToBitmap(
         height = height
     )
 }
+
+/** Interactive adjustment is used by image cropping; screenshot selection keeps its original gesture. */
+internal enum class RegionDragTarget { NEW, MOVE, LEFT, RIGHT, TOP, BOTTOM, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+
+internal fun resolveRegionDragTarget(
+    rect: AppScreenshotSelectionRect?, point: AppScreenshotPoint, hitRadius: Float,
+): RegionDragTarget {
+    if (rect == null) return RegionDragTarget.NEW
+    val x = point.x
+    val y = point.y
+    if (x < rect.left - hitRadius || x > rect.right + hitRadius || y < rect.top - hitRadius || y > rect.bottom + hitRadius) return RegionDragTarget.NEW
+    val nearLeft = kotlin.math.abs(x - rect.left) <= hitRadius
+    val nearRight = kotlin.math.abs(x - rect.right) <= hitRadius
+    val nearTop = kotlin.math.abs(y - rect.top) <= hitRadius
+    val nearBottom = kotlin.math.abs(y - rect.bottom) <= hitRadius
+    val left = nearLeft && (!nearRight || kotlin.math.abs(x - rect.left) <= kotlin.math.abs(x - rect.right))
+    val right = nearRight && !left
+    val top = nearTop && (!nearBottom || kotlin.math.abs(y - rect.top) <= kotlin.math.abs(y - rect.bottom))
+    val bottom = nearBottom && !top
+    return when {
+        left && top -> RegionDragTarget.TOP_LEFT
+        right && top -> RegionDragTarget.TOP_RIGHT
+        left && bottom -> RegionDragTarget.BOTTOM_LEFT
+        right && bottom -> RegionDragTarget.BOTTOM_RIGHT
+        left -> RegionDragTarget.LEFT
+        right -> RegionDragTarget.RIGHT
+        top -> RegionDragTarget.TOP
+        bottom -> RegionDragTarget.BOTTOM
+        x in rect.left..rect.right && y in rect.top..rect.bottom -> RegionDragTarget.MOVE
+        else -> RegionDragTarget.NEW
+    }
+}
+
+internal fun adjustRegionSelection(
+    rect: AppScreenshotSelectionRect,
+    target: RegionDragTarget,
+    delta: AppScreenshotPoint,
+    viewportWidth: Float,
+    viewportHeight: Float,
+    minimumSize: Float = 24f,
+): AppScreenshotSelectionRect {
+    if (viewportWidth <= 0f || viewportHeight <= 0f) return rect
+    val minWidth = minimumSize.coerceIn(0f, viewportWidth)
+    val minHeight = minimumSize.coerceIn(0f, viewportHeight)
+    if (target == RegionDragTarget.MOVE) {
+        val dx = delta.x.coerceIn(-rect.left, viewportWidth - rect.right)
+        val dy = delta.y.coerceIn(-rect.top, viewportHeight - rect.bottom)
+        return AppScreenshotSelectionRect(rect.left + dx, rect.top + dy, rect.right + dx, rect.bottom + dy)
+    }
+    val left = if ((target == RegionDragTarget.LEFT || target == RegionDragTarget.TOP_LEFT || target == RegionDragTarget.BOTTOM_LEFT))
+        (rect.left + delta.x).coerceIn(0f, (rect.right - minWidth).coerceAtLeast(0f)) else rect.left
+    val right = if ((target == RegionDragTarget.RIGHT || target == RegionDragTarget.TOP_RIGHT || target == RegionDragTarget.BOTTOM_RIGHT))
+        (rect.right + delta.x).coerceIn((rect.left + minWidth).coerceAtMost(viewportWidth), viewportWidth) else rect.right
+    val top = if ((target == RegionDragTarget.TOP || target == RegionDragTarget.TOP_LEFT || target == RegionDragTarget.TOP_RIGHT))
+        (rect.top + delta.y).coerceIn(0f, (rect.bottom - minHeight).coerceAtLeast(0f)) else rect.top
+    val bottom = if ((target == RegionDragTarget.BOTTOM || target == RegionDragTarget.BOTTOM_LEFT || target == RegionDragTarget.BOTTOM_RIGHT))
+        (rect.bottom + delta.y).coerceIn((rect.top + minHeight).coerceAtMost(viewportHeight), viewportHeight) else rect.bottom
+    return AppScreenshotSelectionRect(left, top, right, bottom)
+}

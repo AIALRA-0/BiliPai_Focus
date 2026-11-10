@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -31,19 +33,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.android.purebilibili.R
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.android.purebilibili.core.theme.iOSBlue
-import com.android.purebilibili.core.theme.iOSGreen
-import com.android.purebilibili.core.theme.iOSOrange
-import com.android.purebilibili.core.theme.iOSPink
-import com.android.purebilibili.core.theme.iOSPurple
-import com.android.purebilibili.core.theme.iOSRed
-import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.ui.components.AppChoiceOption
 import com.android.purebilibili.core.ui.components.AppPreference as SettingClickableItem
 import com.android.purebilibili.core.ui.components.AppPreferenceDivider
@@ -101,7 +97,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
     }
 
     fun openNotificationSettings() {
-        statusMessage = if (notificationsCanPost) null else "通知权限或通知渠道未开启，请在系统设置中允许通知"
+        statusMessage = if (notificationsCanPost) null else context.getString(R.string.notify_open_permission_message)
         val notificationIntent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
             putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         }
@@ -115,7 +111,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                     },
                 )
             }.onFailure {
-                Toast.makeText(context, "无法打开系统通知设置", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.notify_open_settings_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -126,10 +122,10 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
             statusMessage = null
             save()
             if (!MessageNotificationSync.sync(context)) {
-                statusMessage = "设置已保存，但常驻后台未能启动，将使用系统周期检查"
+                statusMessage = context.getString(R.string.notify_background_fallback_status)
                 Toast.makeText(
                     context,
-                    "常驻后台启动失败，已保留周期检查作为兜底",
+                    context.getString(R.string.notify_background_fallback_toast),
                     Toast.LENGTH_SHORT,
                 ).show()
             }
@@ -137,7 +133,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
             throw cancellation
         } catch (error: Exception) {
             val message = error.message?.takeIf { it.isNotBlank() }
-                ?: "设置保存失败，请稍后重试"
+                ?: context.getString(R.string.notify_save_failed)
             statusMessage = message
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -152,10 +148,10 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
         val usable = refreshNotificationStatus()
         if (request == NotificationPermissionRequest.MASTER_ENABLE) {
             if (!granted) {
-                statusMessage = "未授予通知权限，无法开启后台通知；可点下方通知权限前往系统设置"
+                statusMessage = context.getString(R.string.notify_permission_denied_status)
                 Toast.makeText(
                     context,
-                    "未授予通知权限，无法开启后台通知",
+                    context.getString(R.string.notify_permission_denied),
                     Toast.LENGTH_SHORT,
                 ).show()
             } else if (usable) {
@@ -163,8 +159,8 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                     persistAndSync { MessageNotificationSettingsStore.setEnabled(context, true) }
                 }
             } else {
-                statusMessage = "通知权限已授予，但系统通知或通知渠道仍处于关闭状态"
-                Toast.makeText(context, "请先在系统设置中开启通知", Toast.LENGTH_SHORT).show()
+                statusMessage = context.getString(R.string.notify_permission_channels_off)
+                Toast.makeText(context, context.getString(R.string.notify_enable_in_settings), Toast.LENGTH_SHORT).show()
             }
         } else if (request == NotificationPermissionRequest.PERMISSION_ROW) {
             if (granted && usable) {
@@ -173,9 +169,9 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                 }
             } else {
                 val message = if (!granted) {
-                    "通知权限未开启，可再次点击此项前往系统设置"
+                    context.getString(R.string.notify_permission_not_enabled)
                 } else {
-                    "通知权限已授予，但系统通知或通知渠道仍处于关闭状态"
+                    context.getString(R.string.notify_permission_channels_off)
                 }
                 statusMessage = message
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -207,21 +203,21 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
     }
 
     val notificationPermissionValue = when {
-        !notificationPermissionGranted && permissionRequestAttempted -> "未开启 · 前往系统设置"
-        !notificationPermissionGranted -> "未开启"
-        !notificationsCanPost -> "系统已关闭 · 前往系统设置"
-        else -> "已开启"
+        !notificationPermissionGranted && permissionRequestAttempted -> context.getString(R.string.notify_permission_off_open_settings)
+        !notificationPermissionGranted -> context.getString(R.string.notify_permission_off)
+        !notificationsCanPost -> context.getString(R.string.notify_system_off_open_settings)
+        else -> context.getString(R.string.notify_enabled)
     }
     val masterSubtitle = when {
-        !notificationPermissionGranted -> "应用关闭后定期检查新消息；未登录时不检查。请先开启通知权限"
-        !notificationsCanPost -> "应用关闭后定期检查新消息；系统通知或通知渠道已关闭"
-        else -> "应用关闭后定期检查新消息；未登录时不检查"
+        !notificationPermissionGranted -> context.getString(R.string.notify_master_subtitle_permission)
+        !notificationsCanPost -> context.getString(R.string.notify_master_subtitle_channels)
+        else -> context.getString(R.string.notify_master_subtitle)
     }
 
     SettingsPageScaffold(
-        title = "消息通知",
+        title = context.getString(R.string.notify_settings_title),
         onBack = onBack,
-        backContentDescription = "返回",
+        backContentDescription = context.getString(R.string.notify_back),
         bottomContentPadding = bottomContentPadding,
         scrollHost = SettingsPageScrollHost.External,
         externalContentHandlesTopPadding = true,
@@ -234,240 +230,260 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(LocalSettingsTopContentPadding.current))
             AppText(
-                text = "后台消息通知会在应用不活跃时检查私信、互动消息、关注更新和开播提醒。检查频率与常驻后台可能增加耗电，系统仍可能终止后台任务。",
+                text = context.getString(R.string.notify_intro),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AppContentColors.secondaryText(),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
             statusMessage?.let { message ->
                 AppText(
                     text = message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = iOSOrange,
+                    color = AppContentColors.warning(),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
 
-            AppPreferenceSectionTitle("后台通知")
+            AppPreferenceSectionTitle(context.getString(R.string.notify_section_background))
             SettingsCardGroup {
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.MESSAGE_NOTIFICATION),
-                    title = "后台消息通知",
-                    subtitle = masterSubtitle,
-                    checked = settings.enabled,
-                    onCheckedChange = { enabled ->
-                        if (!enabled) {
-                            scope.launch {
-                                persistAndSync {
-                                    MessageNotificationSettingsStore.setEnabled(context, false)
+                SettingsItemAnchor("notification.enabled") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.MESSAGE_NOTIFICATION),
+                        title = context.getString(R.string.notify_item_enabled),
+                        subtitle = masterSubtitle,
+                        checked = settings.enabled,
+                        onCheckedChange = { enabled ->
+                            if (!enabled) {
+                                scope.launch {
+                                    persistAndSync {
+                                        MessageNotificationSettingsStore.setEnabled(context, false)
+                                    }
                                 }
-                            }
-                        } else if (!notificationPermissionGranted) {
-                            if (permissionRequestAttempted) {
+                            } else if (!notificationPermissionGranted) {
+                                if (permissionRequestAttempted) {
+                                    openNotificationSettings()
+                                } else {
+                                    requestNotificationPermission(NotificationPermissionRequest.MASTER_ENABLE)
+                                }
+                            } else if (!notificationsCanPost) {
                                 openNotificationSettings()
                             } else {
-                                requestNotificationPermission(NotificationPermissionRequest.MASTER_ENABLE)
-                            }
-                        } else if (!notificationsCanPost) {
-                            openNotificationSettings()
-                        } else {
-                            scope.launch {
-                                persistAndSync {
-                                    MessageNotificationSettingsStore.setEnabled(context, true)
+                                scope.launch {
+                                    persistAndSync {
+                                        MessageNotificationSettingsStore.setEnabled(context, true)
+                                    }
                                 }
                             }
-                        }
-                    },
-                    iconTint = iOSBlue,
-                )
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
                 AppPreferenceDivider()
-                AppSingleChoicePreference(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.MESSAGE_NOTIFICATION),
-                    title = "检查频率",
-                    subtitle = "省电优先可减少耗电，更及时会增加检查频率",
-                    selectedValue = settings.mode,
-                    options = listOf(
-                        AppChoiceOption(
-                            value = MessageNotificationMode.POWER_SAVING,
-                            label = "省电优先",
-                            description = "系统空闲时批量检查，延迟较高、耗电低（默认）",
+                SettingsItemAnchor("notification.mode") {
+                    AppSingleChoicePreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_DELIVERY_MODE),
+                        title = context.getString(R.string.notify_item_mode),
+                        subtitle = context.getString(R.string.notify_mode_subtitle),
+                        selectedValue = settings.mode,
+                        options = listOf(
+                            AppChoiceOption(
+                                value = MessageNotificationMode.POWER_SAVING,
+                                label = context.getString(R.string.notify_mode_saving),
+                                description = context.getString(R.string.notify_mode_saving_desc),
+                            ),
+                            AppChoiceOption(
+                                value = MessageNotificationMode.MORE_TIMELY,
+                                label = context.getString(R.string.notify_mode_timely),
+                                description = context.getString(R.string.notify_mode_timely_desc),
+                            ),
                         ),
-                        AppChoiceOption(
-                            value = MessageNotificationMode.MORE_TIMELY,
-                            label = "更及时",
-                            description = "检查更频繁，耗电略增",
-                        ),
-                    ),
-                    onValueChange = { mode ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setMode(context, mode)
-                            }
-                        }
-                    },
-                    iconTint = iOSGreen,
-                )
-            }
-
-            AppPreferenceSectionTitle("通知范围")
-            SettingsCardGroup {
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_MESSAGE),
-                    title = "私信",
-                    subtitle = "新私信消息；仅在总开关开启时生效",
-                    checked = settings.notifyPrivateMessages,
-                    onCheckedChange = { enabled ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setPrivateMessagesEnabled(context, enabled)
-                            }
-                        }
-                    },
-                    iconTint = iOSPurple,
-                )
-                AppPreferenceDivider()
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_REPLY),
-                    title = "回复我的",
-                    subtitle = "视频与动态评论回复；仅在总开关开启时生效",
-                    checked = settings.notifyReplies,
-                    onCheckedChange = { enabled ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setRepliesEnabled(context, enabled)
-                            }
-                        }
-                    },
-                    iconTint = iOSBlue,
-                )
-                AppPreferenceDivider()
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_AT_ME),
-                    title = "@我",
-                    subtitle = "评论与动态中提到我；仅在总开关开启时生效",
-                    checked = settings.notifyAtMe,
-                    onCheckedChange = { enabled ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setAtMeEnabled(context, enabled)
-                            }
-                        }
-                    },
-                    iconTint = iOSTeal,
-                )
-                AppPreferenceDivider()
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_LIKE),
-                    title = "收到的赞",
-                    subtitle = "点赞与投币收藏等；仅在总开关开启时生效",
-                    checked = settings.notifyLikes,
-                    onCheckedChange = { enabled ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setLikesEnabled(context, enabled)
-                            }
-                        }
-                    },
-                    iconTint = iOSPink,
-                )
-                AppPreferenceDivider()
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_SYSTEM),
-                    title = "系统通知",
-                    subtitle = "官方系统公告与通知；仅在总开关开启时生效",
-                    checked = settings.notifySystemNotices,
-                    onCheckedChange = { enabled ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setSystemNoticesEnabled(context, enabled)
-                            }
-                        }
-                    },
-                    iconTint = iOSRed,
-                )
-                AppPreferenceDivider()
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_DYNAMIC_UP),
-                    title = "关注 UP 更新",
-                    subtitle = "关注 UP 主的视频和动态更新；仅在总开关开启时生效",
-                    checked = settings.notifyDynamicUpdates,
-                    onCheckedChange = { enabled ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setDynamicUpdatesEnabled(context, enabled)
-                            }
-                        }
-                    },
-                    iconTint = iOSBlue,
-                )
-                AppPreferenceDivider()
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_LIVE),
-                    title = "开播提醒",
-                    subtitle = "关注主播开播提醒；仅在总开关开启时生效",
-                    checked = settings.notifyLiveAlerts,
-                    onCheckedChange = { enabled ->
-                        scope.launch {
-                            persistAndSync {
-                                MessageNotificationSettingsStore.setLiveAlertsEnabled(context, enabled)
-                            }
-                        }
-                    },
-                    iconTint = iOSOrange,
-                )
-            }
-
-            AppPreferenceSectionTitle("后台运行")
-            SettingsCardGroup {
-                SettingSwitchItem(
-                    icon = rememberSettingsSemanticIcon(SettingsIconRole.BATTERY_STATUS),
-                    title = "常驻后台",
-                    subtitle = if (settings.enabled && notificationsCanPost) {
-                        "保持应用后台运行以更及时地收到通知；会增加耗电，系统仍可能终止"
-                    } else {
-                        "需要先开启后台消息通知和可用的通知权限；会增加耗电，系统仍可能终止"
-                    },
-                    checked = settings.residentEnabled,
-                    onCheckedChange = { enabled ->
-                        if (!enabled) {
+                        onValueChange = { mode ->
                             scope.launch {
                                 persistAndSync {
-                                    MessageNotificationSettingsStore.setResidentEnabled(context, false)
+                                    MessageNotificationSettingsStore.setMode(context, mode)
                                 }
                             }
-                        } else if (!settings.enabled) {
-                            statusMessage = "请先开启后台消息通知，再启用常驻后台"
-                            Toast.makeText(context, "请先开启后台消息通知，再启用常驻后台", Toast.LENGTH_SHORT).show()
-                        } else if (!notificationPermissionGranted || !notificationsCanPost) {
-                            statusMessage = "请先在通知权限中开启通知，并确保通知渠道未被系统关闭"
-                            Toast.makeText(
-                                context,
-                                "请先在通知权限中开启通知，并确保通知渠道未被系统关闭",
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            if (notificationPermissionGranted && !notificationsCanPost) {
-                                openNotificationSettings()
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+            }
+
+            AppPreferenceSectionTitle(context.getString(R.string.notify_section_scope))
+            SettingsCardGroup {
+                SettingsItemAnchor("notification.notify_private_messages") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_MESSAGE),
+                        title = context.getString(R.string.notify_item_private_messages),
+                        subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_private_messages),
+                        checked = settings.notifyPrivateMessages,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                persistAndSync {
+                                    MessageNotificationSettingsStore.setPrivateMessagesEnabled(context, enabled)
+                                }
                             }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("notification.notify_replies") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_REPLY),
+                        title = context.getString(R.string.notify_item_replies),
+                        subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_replies),
+                        checked = settings.notifyReplies,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                persistAndSync {
+                                    MessageNotificationSettingsStore.setRepliesEnabled(context, enabled)
+                                }
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("notification.notify_at_me") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_AT_ME),
+                        title = context.getString(R.string.notify_item_at_me),
+                        subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_at_me),
+                        checked = settings.notifyAtMe,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                persistAndSync {
+                                    MessageNotificationSettingsStore.setAtMeEnabled(context, enabled)
+                                }
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("notification.notify_likes") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_LIKE),
+                        title = context.getString(R.string.notify_item_likes),
+                        subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_likes),
+                        checked = settings.notifyLikes,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                persistAndSync {
+                                    MessageNotificationSettingsStore.setLikesEnabled(context, enabled)
+                                }
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("notification.notify_system_notices") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_SYSTEM),
+                        title = context.getString(R.string.notify_item_system),
+                        subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_system),
+                        checked = settings.notifySystemNotices,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                persistAndSync {
+                                    MessageNotificationSettingsStore.setSystemNoticesEnabled(context, enabled)
+                                }
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("notification.notify_dynamic_updates") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_DYNAMIC_UP),
+                        title = context.getString(R.string.notify_item_dynamic),
+                        subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_dynamic),
+                        checked = settings.notifyDynamicUpdates,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                persistAndSync {
+                                    MessageNotificationSettingsStore.setDynamicUpdatesEnabled(context, enabled)
+                                }
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("notification.notify_live_alerts") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_LIVE),
+                        title = context.getString(R.string.notify_item_live),
+                        subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_live),
+                        checked = settings.notifyLiveAlerts,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                persistAndSync {
+                                    MessageNotificationSettingsStore.setLiveAlertsEnabled(context, enabled)
+                                }
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+            }
+
+            AppPreferenceSectionTitle(context.getString(R.string.notify_section_resident))
+            SettingsCardGroup {
+                SettingsItemAnchor("notification.resident_enabled") {
+                    SettingSwitchItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.BATTERY_STATUS),
+                        title = context.getString(R.string.notify_item_resident),
+                        subtitle = if (settings.enabled && notificationsCanPost) {
+                            context.getString(R.string.notify_resident_enabled_desc)
                         } else {
-                            scope.launch {
-                                persistAndSync {
-                                    MessageNotificationSettingsStore.setResidentEnabled(context, true)
+                            context.getString(R.string.notify_resident_requires_desc)
+                        },
+                        checked = settings.residentEnabled,
+                        onCheckedChange = { enabled ->
+                            if (!enabled) {
+                                scope.launch {
+                                    persistAndSync {
+                                        MessageNotificationSettingsStore.setResidentEnabled(context, false)
+                                    }
+                                }
+                            } else if (!settings.enabled) {
+                                statusMessage = context.getString(R.string.notify_resident_first_status)
+                                Toast.makeText(context, context.getString(R.string.notify_resident_first_status), Toast.LENGTH_SHORT).show()
+                            } else if (!notificationPermissionGranted || !notificationsCanPost) {
+                                statusMessage = context.getString(R.string.notify_permission_setup_status)
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.notify_permission_setup_status),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                if (notificationPermissionGranted && !notificationsCanPost) {
+                                    openNotificationSettings()
+                                }
+                            } else {
+                                scope.launch {
+                                    persistAndSync {
+                                        MessageNotificationSettingsStore.setResidentEnabled(context, true)
+                                    }
                                 }
                             }
-                        }
-                    },
-                    iconTint = iOSOrange,
-                )
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
 
             }
 
-            AppPreferenceSectionTitle("通知权限")
+            AppPreferenceSectionTitle(context.getString(R.string.notify_section_send))
             SettingsCardGroup {
                 SettingClickableItem(
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.PERMISSION),
-                    title = "通知权限",
+                    title = context.getString(R.string.notify_section_send),
                     value = notificationPermissionValue,
-                    subtitle = "点击检查权限；永久拒绝、系统总开关或通知渠道关闭时前往系统设置",
+                    subtitle = context.getString(R.string.notify_permission_subtitle),
                     onClick = {
                         if (!notificationPermissionGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             if (permissionRequestAttempted) {
@@ -479,7 +495,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                             openNotificationSettings()
                         }
                     },
-                    iconTint = iOSGreen,
+                    iconTint = AppContentColors.secondaryText(),
                 )
             }
 

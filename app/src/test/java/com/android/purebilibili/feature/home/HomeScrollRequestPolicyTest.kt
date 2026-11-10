@@ -1,36 +1,42 @@
 package com.android.purebilibili.feature.home
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class HomeScrollRequestPolicyTest {
+    private val request = HomeScrollRequestIdentity(
+        HomeTopTabEntry.Category(HomeCategory.RECOMMEND), null, 7L,
+    )
 
     @Test
-    fun `double tap upgrades initial reselect to one scroll and refresh request`() {
-        assertEquals(
-            HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH,
-            mergeHomeScrollRequests(
-                HomeScrollRequest.SCROLL_TO_TOP,
-                HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH,
-            ),
-        )
+    fun visibleSettledPageAcceptsItsCurrentRequest() {
+        assertTrue(shouldApplyHomeScrollRequest(request, request, true, false))
     }
 
     @Test
-    fun `refresh request keeps priority regardless of event order`() {
-        assertEquals(
-            HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH,
-            mergeHomeScrollRequests(
-                HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH,
-                HomeScrollRequest.SCROLL_TO_TOP,
-            ),
+    fun switchingAwayAndReturningDoesNotReviveOldRequest() {
+        assertFalse(shouldApplyHomeScrollRequest(request, request.copy(navigationRevision = 9L), true, false))
+        val otherPage = request.copy(entry = HomeTopTabEntry.Category(HomeCategory.LIVE))
+        assertFalse(shouldApplyHomeScrollRequest(request, otherPage, true, false))
+    }
+
+    @Test
+    fun hiddenMovingAndRemovedPagesRejectRequests() {
+        assertFalse(shouldApplyHomeScrollRequest(request, request, false, false))
+        assertFalse(shouldApplyHomeScrollRequest(request, request, true, true))
+        val removed = request.copy(entry = null)
+        assertFalse(shouldApplyHomeScrollRequest(removed, removed, true, false))
+    }
+
+    @Test
+    fun popularSubcategoryChangeInvalidatesRequestBeforePagerChanges() {
+        val popular = request.copy(
+            entry = HomeTopTabEntry.Category(HomeCategory.POPULAR),
+            popularSubCategory = PopularSubCategory.COMPREHENSIVE,
         )
-        assertEquals(
-            HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH,
-            mergeHomeScrollRequests(
-                HomeScrollRequest.SCROLL_TO_TOP,
-                HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH,
-            ),
-        )
+        assertFalse(shouldApplyHomeScrollRequest(
+            popular, popular.copy(popularSubCategory = PopularSubCategory.RANKING), true, false,
+        ))
     }
 }

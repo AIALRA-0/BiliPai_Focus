@@ -3,6 +3,15 @@ package com.android.purebilibili.feature.video.player
 
 import android.content.Context
 import com.android.purebilibili.core.util.Logger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -31,7 +40,10 @@ data class PlaylistItem(
     // 番剧专用
     val isBangumi: Boolean = false,
     val seasonId: Long? = null,
-    val epId: Long? = null
+    val epId: Long? = null,
+    val playCount: Long? = null,
+    val commentCount: Long? = null,
+    val publishedAt: Long? = null,
 )
 
 /**
@@ -194,11 +206,11 @@ internal fun reconcileShuffleProgressForPlaylistUpdate(
         return ShuffleProgress()
     }
 
-    val newIndexByBvid = newPlaylist.mapIndexed { index, item -> item.bvid to index }.toMap()
+    val newIndexByIdentity = newPlaylist.mapIndexed { index, item -> (item.bvid to item.cid) to index }.toMap()
     val mappedHistory = progress.history
         .take((progress.historyIndex + 1).coerceAtLeast(0))
         .mapNotNull { oldIndex ->
-            previousPlaylist.getOrNull(oldIndex)?.bvid?.let(newIndexByBvid::get)
+            previousPlaylist.getOrNull(oldIndex)?.let { newIndexByIdentity[it.bvid to it.cid] }
         }
     val normalizedHistory = if (mappedHistory.lastOrNull() == currentIndex) {
         mappedHistory
@@ -207,7 +219,7 @@ internal fun reconcileShuffleProgressForPlaylistUpdate(
     }
     val mappedCyclePlayed = progress.cyclePlayed
         .mapNotNull { oldIndex ->
-            previousPlaylist.getOrNull(oldIndex)?.bvid?.let(newIndexByBvid::get)
+            previousPlaylist.getOrNull(oldIndex)?.let { newIndexByIdentity[it.bvid to it.cid] }
         }
         .toSet() + currentIndex
 
@@ -249,7 +261,9 @@ object PlaylistManager {
         val playMode: PlayMode = PlayMode.SEQUENTIAL,
         val isExternalPlaylist: Boolean = false,
         val externalPlaylistSource: ExternalPlaylistSource = ExternalPlaylistSource.NONE,
-        val shuffleEnabled: Boolean = false
+        val shuffleEnabled: Boolean = false,
+        val nextOverrideIndex: Int? = null,
+        val userEdited: Boolean = false,
     )
     
     // ========== 状态 ==========
@@ -273,7 +287,15 @@ object PlaylistManager {
 
     private val _externalPlaylistSource = MutableStateFlow(ExternalPlaylistSource.NONE)
     val externalPlaylistSource = _externalPlaylistSource.asStateFlow()
+    private var nextOverrideIndex: Int? = null
+    val hasQueuedNext: Boolean
+        get() = nextOverrideIndex?.let { it in _playlist.value.indices && it != _currentIndex.value } == true
+    var userEdited: Boolean = false
+        private set
 
+    private val transportPreferences = PlaylistTransportPreferences()
+    private val _savedTransport = MutableStateFlow(transportPreferences.saved)
+    internal val savedTransport = _savedTransport.asStateFlow()
     private var activePlaylistSession = PlaylistSession(0L)
 
     private val transportState = combine(playMode, shuffleEnabled) { playMode, shuffleEnabled ->
@@ -304,9 +326,29 @@ object PlaylistManager {
     private var appContext: Context? = null
     private val json = Json { ignoreUnknownKeys = true }
 
+    // 应用级单例负责串行落盘；合并尚未写入的中间队列，主线程只提交不可变快照。
+    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val persistenceRequests = Channel<PlaylistSnapshot>(Channel.CONFLATED)
+    private var persistenceJob: Job? = null
+
     fun init(context: Context) {
-        appContext = context.applicationContext
+        if (appContext != null) return
+        val applicationContext = context.applicationContext
+        appContext = applicationContext
         restoreState()
+        persistenceJob = persistenceScope.launch {
+            for (snapshot in persistenceRequests) {
+                try {
+                    val raw = json.encodeToString(snapshot)
+                    applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit().putString(KEY_SNAPSHOT, raw).apply()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Logger.e(TAG, "Failed to persist playlist state", error)
+                }
+            }
+        }
     }
     
     // ========== 公共 API ==========
@@ -318,7 +360,10 @@ object PlaylistManager {
      * 注意：此方法会重置外部播放列表标志
      */
     fun setPlaylist(items: List<PlaylistItem>, startIndex: Int = 0) {
+        resetTemporaryTransport()
         beginPlaylistSession()
+        nextOverrideIndex = null
+        userEdited = false
         val previousPlaylist = _playlist.value
         val previousShuffleProgress = snapshotShuffleProgress()
         Logger.d(TAG, "🎵 设置播放列表: ${items.size} 项, 从索引 $startIndex 开始")
@@ -347,7 +392,10 @@ object PlaylistManager {
         startIndex: Int = 0,
         source: ExternalPlaylistSource = ExternalPlaylistSource.UNKNOWN
     ): PlaylistSession {
+        resetTemporaryTransport()
         val session = beginPlaylistSession()
+        nextOverrideIndex = null
+        userEdited = false
         val previousPlaylist = _playlist.value
         val previousShuffleProgress = snapshotShuffleProgress()
         Logger.d(TAG, "🔒 设置外部播放列表: ${items.size} 项, 从索引 $startIndex 开始, source=$source")
@@ -419,12 +467,73 @@ object PlaylistManager {
             persistState()
         }
     }
+
+    /** 调整的是当前播放队列，不修改收藏夹或稍后再看。 */
+    fun moveQueueItem(from: Int, to: Int) {
+        val old = _playlist.value
+        if (from !in old.indices || to !in old.indices || from == to) return
+        beginPlaylistSession()
+        val oldCurrent = _currentIndex.value
+        val previousProgress = snapshotShuffleProgress()
+        fun movedIndex(index: Int): Int = when {
+            index == from -> to
+            from < to && index in (from + 1)..to -> index - 1
+            from > to && index in to until from -> index + 1
+            else -> index
+        }
+        val updated = old.toMutableList().apply { add(to, removeAt(from)) }
+        _currentIndex.value = movedIndex(oldCurrent)
+        nextOverrideIndex = nextOverrideIndex?.let(::movedIndex)
+        _playlist.value = updated
+        userEdited = true
+        restoreShuffleProgressForPlaylistUpdate(old, updated, _currentIndex.value, previousProgress)
+        persistState()
+    }
+
+    fun removeQueueItem(index: Int) {
+        val old = _playlist.value
+        if (index !in old.indices || index == _currentIndex.value) return
+        beginPlaylistSession()
+        val previousProgress = snapshotShuffleProgress()
+        val updated = old.toMutableList().apply { removeAt(index) }
+        if (index < _currentIndex.value) _currentIndex.value--
+        nextOverrideIndex = nextOverrideIndex?.let { next ->
+            when { next == index -> null; next > index -> next - 1; else -> next }
+        }
+        _playlist.value = updated
+        userEdited = true
+        restoreShuffleProgressForPlaylistUpdate(old, updated, _currentIndex.value, previousProgress)
+        persistState()
+    }
+
+    fun clearUpcomingQueue() {
+        val current = _playlist.value.getOrNull(_currentIndex.value) ?: return
+        beginPlaylistSession()
+        _playlist.value = listOf(current)
+        _currentIndex.value = 0
+        nextOverrideIndex = null
+        userEdited = true
+        resetShuffleHistoryForCurrentIndex()
+        persistState()
+    }
+
+    fun playQueueItemNext(index: Int) {
+        if (index !in _playlist.value.indices || index == _currentIndex.value) return
+        beginPlaylistSession()
+        moveQueueItem(index, if (index < _currentIndex.value) _currentIndex.value else _currentIndex.value + 1)
+        nextOverrideIndex = (_currentIndex.value + 1).takeIf { it in _playlist.value.indices }
+        userEdited = true
+        persistState()
+    }
     
     /**
      * 清空播放列表
      */
     fun clearPlaylist() {
+        resetTemporaryTransport()
         beginPlaylistSession()
+        nextOverrideIndex = null
+        userEdited = false
         _playlist.value = emptyList()
         _currentIndex.value = -1
         _isExternalPlaylist.value = false
@@ -446,7 +555,7 @@ object PlaylistManager {
         }
         _playMode.value = mode
         Logger.d(TAG, " 播放模式: $mode")
-        persistState()
+        recordTransportSelection()
     }
 
     fun setShuffleEnabled(enabled: Boolean) {
@@ -459,7 +568,7 @@ object PlaylistManager {
             _playMode.value = PlayMode.REPEAT_ALL
         }
         Logger.d(TAG, " 随机播放: $enabled")
-        persistState()
+        recordTransportSelection()
     }
     
     /**
@@ -477,7 +586,7 @@ object PlaylistManager {
             resetShuffleHistoryForCurrentIndex()
         }
         Logger.d(TAG, " 切换播放模式: $newMode")
-        persistState()
+        recordTransportSelection()
         return newMode
     }
     
@@ -492,7 +601,12 @@ object PlaylistManager {
             playAt(_playlist.value.lastIndex)
         } else {
             val existing = _playlist.value[index]
-            val updated = item.copy(ownerFace = item.ownerFace.ifBlank { existing.ownerFace })
+            val updated = item.copy(
+                ownerFace = item.ownerFace.ifBlank { existing.ownerFace },
+                playCount = item.playCount ?: existing.playCount,
+                commentCount = item.commentCount ?: existing.commentCount,
+                publishedAt = item.publishedAt ?: existing.publishedAt,
+            )
             if (existing != updated) {
                 _playlist.value = _playlist.value.toMutableList().also { it[index] = updated }
             }
@@ -513,6 +627,11 @@ object PlaylistManager {
     fun playNext(): PlaylistItem? {
         val list = _playlist.value
         if (list.isEmpty()) return null
+        val requested = nextOverrideIndex
+        if (requested != null) {
+            nextOverrideIndex = null
+            if (requested in list.indices && requested != _currentIndex.value) return playAt(requested)
+        }
         
         val currentIdx = _currentIndex.value
         
@@ -599,6 +718,7 @@ object PlaylistManager {
         if (index !in list.indices) return null
         
         _currentIndex.value = index
+        if (nextOverrideIndex == index) nextOverrideIndex = null
         
         // 添加到随机历史
         if (_shuffleEnabled.value || _playMode.value == PlayMode.SHUFFLE) {
@@ -755,25 +875,56 @@ object PlaylistManager {
         applyShuffleProgress(nextProgress)
     }
 
-    private fun persistState() {
-        val context = appContext ?: return
-        runCatching {
-            val snapshot = PlaylistSnapshot(
-                playlist = _playlist.value,
-                currentIndex = _currentIndex.value,
-                playMode = _playMode.value,
-                isExternalPlaylist = _isExternalPlaylist.value,
-                externalPlaylistSource = _externalPlaylistSource.value,
-                shuffleEnabled = _shuffleEnabled.value
-            )
-            val raw = json.encodeToString(snapshot)
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(KEY_SNAPSHOT, raw)
-                .apply()
-        }.onFailure { e ->
-            Logger.e(TAG, "⚠️ Failed to persist playlist state", e)
+    internal fun endPlaybackPreferenceSession() {
+        resetTemporaryTransport()
+        resetShuffleHistoryForCurrentIndex()
+        persistState()
+    }
+
+    private fun resetTemporaryTransport() {
+        _playMode.value = transportPreferences.saved.playMode
+        _shuffleEnabled.value = transportPreferences.saved.shuffleEnabled
+    }
+
+    private fun recordTransportSelection() {
+        val request = transportPreferences.request(RestoredPlayTransport(_playMode.value, _shuffleEnabled.value))
+        val context = appContext
+        val remember = com.android.purebilibili.core.store.ContentDisplayPreferences.rememberAdjustmentsSnapshot
+        if (remember != null || context == null) {
+            if (transportPreferences.commit(request, remember ?: true)) _savedTransport.value = transportPreferences.saved
+        } else {
+            // 冷启动偏好尚未读取时异步确认；未确认前仅按临时选择生效。
+            persistenceScope.launch {
+                try {
+                    val shouldRemember = com.android.purebilibili.core.store.ContentDisplayPreferences.rememberPlayerAdjustments(context).first()
+                    withContext(Dispatchers.Main.immediate) {
+                        if (transportPreferences.commit(request, shouldRemember)) {
+                            _savedTransport.value = transportPreferences.saved
+                            persistState()
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Logger.e(TAG, "Failed to resolve playback preference; selection remains temporary", error)
+                }
+            }
         }
+        persistState()
+    }
+
+    private fun persistState() {
+        if (appContext == null) return
+        persistenceRequests.trySend(PlaylistSnapshot(
+            playlist = _playlist.value,
+            currentIndex = _currentIndex.value,
+            playMode = transportPreferences.saved.playMode,
+            isExternalPlaylist = _isExternalPlaylist.value,
+            externalPlaylistSource = _externalPlaylistSource.value,
+            shuffleEnabled = transportPreferences.saved.shuffleEnabled,
+            nextOverrideIndex = nextOverrideIndex,
+            userEdited = userEdited,
+        ))
     }
 
     private fun restoreState() {
@@ -791,6 +942,8 @@ object PlaylistManager {
                 storedPlayMode = snapshot.playMode,
                 storedShuffleEnabled = snapshot.shuffleEnabled
             )
+            transportPreferences.restore(transport)
+            _savedTransport.value = transportPreferences.saved
             _playlist.value = snapshot.playlist
             _playMode.value = transport.playMode
             _shuffleEnabled.value = transport.shuffleEnabled
@@ -801,6 +954,10 @@ object PlaylistManager {
                 ExternalPlaylistSource.NONE
             }
             _currentIndex.value = resolveStartIndex(snapshot.playlist, snapshot.currentIndex)
+            nextOverrideIndex = snapshot.nextOverrideIndex?.takeIf {
+                it in snapshot.playlist.indices && it != _currentIndex.value
+            }
+            userEdited = snapshot.userEdited
             resetShuffleHistoryForCurrentIndex()
             Logger.d(
                 TAG,

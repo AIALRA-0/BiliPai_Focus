@@ -1,91 +1,54 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-data class TopControlBarLayoutPolicy(
-    val horizontalPaddingDp: Int,
-    val verticalPaddingDp: Int,
-    val timeFontSp: Int,
-    val timeBottomSpacingDp: Int,
-    val buttonSizeDp: Int,
-    val iconSizeDp: Int,
-    val backToTitleSpacingDp: Int,
-    val sectionGapDp: Int,
-    val actionSpacingDp: Int,
-    val titleFontSp: Int,
-    val onlineCountStartPaddingDp: Int,
-    val onlineCountFontSp: Int,
-    val onlineCountTopPaddingDp: Int
+/** 播放器顶栏按窗口方向与全屏状态选择操作。 */
+internal data class TopControlBarLayoutPolicy(
+    val showHome: Boolean,
+    val showTitle: Boolean,
+    val showStatus: Boolean,
+    val showAudio: Boolean,
+    val showCast: Boolean,
+    val showDanmakuActions: Boolean,
+    val showEngagement: Boolean,
+    val showDislike: Boolean,
+) {
+    val buttonWidthDp: Int get() = 42
+    val buttonHeightDp: Int get() = 34
+    val verticalPaddingDp: Int get() = 12
+    val titleFontSp: Int get() = 16
+    val statusFontSp: Int get() = 13
+    val onlineCountFontSp: Int get() = 11
+}
+
+internal fun resolveTopControlBarLayoutPolicy(
+    isPortrait: Boolean,
+    isFullscreen: Boolean,
+    horizontalScreen: Boolean = true,
+    isFileSource: Boolean = false,
+    isUgc: Boolean = true,
+    showFullscreenActionItems: Boolean = true,
+): TopControlBarLayoutPolicy = TopControlBarLayoutPolicy(
+    showHome = !isPortrait || !isFullscreen,
+    showTitle = isFullscreen || (!horizontalScreen && !isPortrait),
+    showStatus = !isPortrait && (isFullscreen || !horizontalScreen),
+    showAudio = !isFileSource && !isFullscreen && isUgc,
+    showCast = !isFileSource && !isFullscreen,
+    showDanmakuActions = !isPortrait || isFullscreen,
+    showEngagement = !isFileSource && isFullscreen && showFullscreenActionItems,
+    showDislike = isUgc,
 )
 
-fun resolveTopControlBarLayoutPolicy(
-    widthDp: Int
-): TopControlBarLayoutPolicy {
-    if (widthDp >= 1600) {
-        return TopControlBarLayoutPolicy(
-            horizontalPaddingDp = 32,
-            verticalPaddingDp = 12,
-            timeFontSp = 15,
-            timeBottomSpacingDp = 8,
-            buttonSizeDp = 44,
-            iconSizeDp = 30,
-            backToTitleSpacingDp = 20,
-            sectionGapDp = 28,
-            actionSpacingDp = 30,
-            titleFontSp = 17,
-            onlineCountStartPaddingDp = 60,
-            onlineCountFontSp = 13,
-            onlineCountTopPaddingDp = 3
-        )
-    }
+internal fun shouldApplyStatusBarPaddingToTopControlBar(
+    isFullscreen: Boolean = false,
+    statusBarVisible: Boolean = isFullscreen,
+): Boolean = com.android.purebilibili.feature.video.screen
+    .shouldApplyStatusBarPaddingToVideoPlayerChrome(statusBarVisible = statusBarVisible)
 
-    if (widthDp >= 1200) {
-        return TopControlBarLayoutPolicy(
-            horizontalPaddingDp = 28,
-            verticalPaddingDp = 11,
-            timeFontSp = 14,
-            timeBottomSpacingDp = 7,
-            buttonSizeDp = 40,
-            iconSizeDp = 28,
-            backToTitleSpacingDp = 18,
-            sectionGapDp = 26,
-            actionSpacingDp = 28,
-            titleFontSp = 17,
-            onlineCountStartPaddingDp = 56,
-            onlineCountFontSp = 12,
-            onlineCountTopPaddingDp = 2
-        )
-    }
+internal fun shouldPollTopControlBarClock(
+    showCurrentTime: Boolean,
+    hostLifecycleStarted: Boolean,
+): Boolean = showCurrentTime && hostLifecycleStarted
 
-    if (widthDp >= 600) {
-        return TopControlBarLayoutPolicy(
-            horizontalPaddingDp = 26,
-            verticalPaddingDp = 10,
-            timeFontSp = 13,
-            timeBottomSpacingDp = 6,
-            buttonSizeDp = 36,
-            iconSizeDp = 26,
-            backToTitleSpacingDp = 16,
-            sectionGapDp = 24,
-            actionSpacingDp = 26,
-            titleFontSp = 16,
-            onlineCountStartPaddingDp = 52,
-            onlineCountFontSp = 12,
-            onlineCountTopPaddingDp = 2
-        )
-    }
-
-    return TopControlBarLayoutPolicy(
-        horizontalPaddingDp = 24,
-        verticalPaddingDp = 10,
-        timeFontSp = 12,
-        timeBottomSpacingDp = 5,
-        buttonSizeDp = 32,
-        iconSizeDp = 24,
-        backToTitleSpacingDp = 14,
-        sectionGapDp = 20,
-        actionSpacingDp = 24,
-        titleFontSp = 16,
-        onlineCountStartPaddingDp = 48,
-        onlineCountFontSp = 11,
-        onlineCountTopPaddingDp = 2
-    )
-}
+internal fun shouldPollTopControlBarBattery(
+    showBatteryLevel: Boolean,
+    hostLifecycleStarted: Boolean,
+): Boolean = showBatteryLevel && hostLifecycleStarted

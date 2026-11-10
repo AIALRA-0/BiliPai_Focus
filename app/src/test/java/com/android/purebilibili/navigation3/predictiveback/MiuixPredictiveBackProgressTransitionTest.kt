@@ -129,7 +129,6 @@ class MiuixPredictiveBackProgressTransitionTest {
             "BangumiPlayer",
             "MusicDetail",
             "NativeMusic",
-            "Live",
             "Web",
         ).forEach { keyName ->
             val entryBlock = source
@@ -140,6 +139,10 @@ class MiuixPredictiveBackProgressTransitionTest {
                 "$keyName must not use the limited predictive-back transition",
             )
         }
+        val liveEntry = source.substringAfter("entry<BiliPaiNavKey.Live>(")
+            .substringBefore("content = content")
+        assertTrue(liveEntry.contains("?.let(liveContainerTransitions::get) ?: pageTransition"))
+        assertTrue(liveEntry.contains("swipeDismiss = NavSwipeDirection.None"))
         assertTrue(
             source.substringAfter("entry<BiliPaiNavKey.VideoDetail>(")
                 .substringBefore("content = content")

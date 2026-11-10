@@ -1,6 +1,10 @@
 package com.android.purebilibili.feature.plugin
 
 import kotlinx.serialization.Serializable
+import com.android.purebilibili.plugin.sdk.PlaybackCdnCandidate
+import com.android.purebilibili.plugin.sdk.PlaybackCdnCandidateSource
+import com.android.purebilibili.plugin.sdk.CdnHealthEvent
+import com.android.purebilibili.plugin.sdk.CdnLineDiagnostic
 import java.net.URI
 
 @Serializable
@@ -30,17 +34,6 @@ data class CdnCustomRule(
     val enabled: Boolean = true
 )
 
-enum class PlaybackCdnCandidateSource {
-    CUSTOM,
-    REGION,
-    ORIGINAL
-}
-
-data class PlaybackCdnCandidate(
-    val videoUrl: String,
-    val audioUrl: String?,
-    val source: PlaybackCdnCandidateSource
-)
 
 enum class PlaybackCdnPreference(
     val storageValue: String,
@@ -78,19 +71,76 @@ enum class PlaybackCdnPreference(
 internal fun applyPlaybackCdnPreference(
     candidates: List<PlaybackCdnCandidate>,
     preference: PlaybackCdnPreference,
+    pluginApplied: Boolean = false,
 ): List<PlaybackCdnCandidate> {
-    if (candidates.isEmpty() || preference == PlaybackCdnPreference.BASE_URL) return candidates
-    if (preference == PlaybackCdnPreference.BACKUP_URL) {
-        return candidates.drop(1) + candidates.take(1)
+    if (candidates.isEmpty()) return candidates
+
+    // ① 设置里选了具体线路：最高优先，无条件排到最前。
+    val host = preference.host
+    if (host != null) {
+        // 不管原候选是 PCDN 还是常规 CDN，改 host 后就是设置里的线路
+        // （upgcxcode 路径与签名在 host 之间通用）。
+        val base = candidates.first()
+        val preferred = base.copy(
+            videoUrl = rewriteBilivideoHost(base.videoUrl, host) ?: base.videoUrl,
+            audioUrl = base.audioUrl?.let { rewriteBilivideoHost(it, host) ?: it },
+        )
+        val rest = excludePcdnCandidates(candidates)
+        return (listOf(preferred) + rest).distinctBy { it.videoUrl to it.audioUrl }
     }
-    val host = preference.host ?: return candidates
-    val source = candidates.first()
-    val preferred = source.copy(
-        videoUrl = rewriteBilivideoHost(source.videoUrl, host) ?: return candidates,
-        audioUrl = source.audioUrl?.let { rewriteBilivideoHost(it, host) ?: it },
-    )
-    return (listOf(preferred) + candidates).distinctBy { it.videoUrl to it.audioUrl }
+
+    // ② 插件（CDN 智能选线）已开启：尊重插件给出的顺序，不再额外过滤。
+    //    插件内部已用 risky 标记把 PCDN 排到最后，再过滤等于推翻它的判断。
+    if (pluginApplied) {
+        return if (preference == PlaybackCdnPreference.BACKUP_URL) {
+            candidates.drop(1) + candidates.take(1)
+        } else {
+            candidates
+        }
+    }
+
+    // ③ 插件没开：排除 PCDN，整批都是 PCDN 时换 host 兜底。
+    val usable = excludePcdnCandidates(candidates)
+    if (preference == PlaybackCdnPreference.BACKUP_URL) {
+        return usable.drop(1) + usable.take(1)
+    }
+    return usable
 }
+
+/**
+ * 处理候选里的 PCDN 地址。
+ *
+ * 不丢弃，而是保留 upgcxcode 路径与签名、把 host 换成常规线路——直接丢弃会让
+ * 只下发 PCDN 的视频彻底打不开。顺序保持不变，换完 host 的地址照常参与选线。
+ */
+private fun excludePcdnCandidates(
+    candidates: List<PlaybackCdnCandidate>
+): List<PlaybackCdnCandidate> {
+    return candidates.map { candidate ->
+        // 视频和音频的 host 是独立下发的，B 站会只把其中一条分到 PCDN。
+        // 以前只看 videoUrl，视频走常规 CDN、音频走 PCDN 时整个候选被跳过，
+        // 音频就带着解析不了的 mcdn 域名进了播放器。
+        val videoRisky = isRiskyCdnHost(hostOf(candidate.videoUrl))
+        val audioRisky = candidate.audioUrl?.let { isRiskyCdnHost(hostOf(it)) } == true
+        if (!videoRisky && !audioRisky) return@map candidate
+        candidate.copy(
+            videoUrl = if (videoRisky) {
+                rewriteBilivideoHost(candidate.videoUrl, FALLBACK_CDN_HOST) ?: candidate.videoUrl
+            } else {
+                candidate.videoUrl
+            },
+            audioUrl = candidate.audioUrl?.let {
+                if (audioRisky) rewriteBilivideoHost(it, FALLBACK_CDN_HOST) ?: it else it
+            },
+        )
+    }
+}
+
+private fun hostOf(url: String): String =
+    runCatching { java.net.URI(url).host.orEmpty() }.getOrDefault("")
+
+/** 整批候选都是 PCDN 时改写的目标线路。 */
+private const val FALLBACK_CDN_HOST = "upos-sz-mirrorali.bilivideo.com"
 
 data class CdnCustomRuleValidation(
     val rule: CdnCustomRule,
@@ -107,16 +157,10 @@ data class CdnCandidateHealth(
     val manualProbeLatencyMs: Long? = null,
     val manualProbeSpeedKbps: Long? = null,
     val lastProbeAtMs: Long = 0L,
-    val lastUpdatedAtMs: Long = 0L
+    val lastUpdatedAtMs: Long = 0L,
+    val healthWindowStartedAtMs: Long = 0L
 )
 
-enum class CdnHealthEvent {
-    PLAYBACK_READY,
-    FIRST_FRAME_TIMEOUT,
-    AUDIO_TRACK_MISSING,
-    PLAYER_ERROR,
-    BUFFERING
-}
 
 data class CdnProbeLimit(
     val maxCandidates: Int = 5,
@@ -130,19 +174,6 @@ data class CdnProbeCandidate(
     val cooldownRemainingMs: Long
 )
 
-data class CdnLineDiagnostic(
-    val index: Int,
-    val host: String,
-    val displayName: String,
-    val statusLabel: String,
-    val latencyMs: Long?,
-    val speedKbps: Long?,
-    val errorCount: Int,
-    val bufferingCount: Int,
-    val lastProbeAtMs: Long,
-    val score: Int,
-    val sourceLabel: String? = null
-)
 
 data class CdnHostDiagnostic(
     val host: String,
@@ -715,16 +746,20 @@ private fun normalizeRegionName(value: String): String {
         .removeSuffix("市")
 }
 
-private fun rewriteBilivideoHost(url: String, newHost: String): String? {
+internal fun rewriteBilivideoHost(url: String, newHost: String): String? {
     val uri = runCatching { URI(url) }.getOrNull() ?: return null
     val originalHost = uri.host ?: return null
-    if (originalHost != "bilivideo.com" && !originalHost.endsWith(".bilivideo.com")) return null
+    if (originalHost.equals(newHost, ignoreCase = true)) return null
+    // 能否换 host 取决于路径：upgcxcode 的路径与签名在 host 之间通用。
+    // 不按域名白名单判断，否则 mountaintoys.cn / qrstuvwxyzab.com 这类 PCDN
+    // 和裸 IP 会被挡掉，设置里的线路就失效了。
+    val path = uri.rawPath.orEmpty()
+    if (!path.contains("/upgcxcode/") && !path.contains("/v1/resource")) return null
     if (newHost.isBlank()) return null
 
     val scheme = uri.scheme ?: return null
     val userInfo = uri.rawUserInfo?.let { "$it@" }.orEmpty()
     val port = if (uri.port >= 0) ":${uri.port}" else ""
-    val path = uri.rawPath.orEmpty()
     val query = uri.rawQuery?.let { "?$it" }.orEmpty()
     val fragment = uri.rawFragment?.let { "#$it" }.orEmpty()
     return "$scheme://$userInfo$newHost$port$path$query$fragment"

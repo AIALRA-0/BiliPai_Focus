@@ -43,13 +43,16 @@ fun resolveBangumiIndexItemLazyKey(
     return "bangumi_index_${resolveBangumiIndexItemBusinessKey(item)}_$index"
 }
 
-fun resolveBangumiIndexItemBusinessKey(item: BangumiItem): String = when {
+fun resolveBangumiIndexItemBusinessKey(item: BangumiItem): String {
+    val newEpisodeId = item.newEp?.id
+    return when {
         item.seasonId > 0L -> "season_${item.seasonId}"
         item.mediaId > 0L -> "media_${item.mediaId}"
-        item.newEp?.id?.takeIf { it > 0L } != null -> "ep_${item.newEp.id}"
+        newEpisodeId != null && newEpisodeId > 0L -> "ep_$newEpisodeId"
         item.title.isNotBlank() -> "title_${item.title.hashCode()}"
         item.cover.isNotBlank() -> "cover_${item.cover.hashCode()}"
         else -> "unknown"
+    }
 }
 
 fun resolveBangumiSearchItemLazyKey(
@@ -63,7 +66,7 @@ fun resolveBangumiSearchItemBusinessKey(item: BangumiSearchItem): String = when 
         item.seasonId > 0L -> "season_${item.seasonId}"
         item.pgcSeasonId > 0L -> "season_${item.pgcSeasonId}"
         item.mediaId > 0L -> "media_${item.mediaId}"
-        item.episodes?.firstOrNull { it.id > 0L } != null -> "ep_${item.episodes.first { it.id > 0L }.id}"
+        item.episodes?.firstOrNull { it.id > 0L } != null -> "ep_${item.episodes.orEmpty().first { it.id > 0L }.id}"
         item.gotoUrl.isNotBlank() -> "url_${item.gotoUrl.hashCode()}"
         item.orgTitle.isNotBlank() -> "org_title_${item.orgTitle.hashCode()}"
         item.title.isNotBlank() -> "title_${item.title.hashCode()}"

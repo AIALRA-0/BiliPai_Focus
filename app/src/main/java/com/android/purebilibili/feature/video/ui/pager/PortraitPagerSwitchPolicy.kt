@@ -66,8 +66,9 @@ internal fun shouldSkipPortraitReloadForCurrentMedia(
     val expectedMediaId = resolvePortraitMediaId(targetBvid, targetCid)
     if (normalizedMediaId == expectedMediaId) return true
     // Legacy media ids were plain bvid (cid-less). Only skip when cid is also unchanged.
-    if (normalizedMediaId == targetBvid && targetCid <= 0L && currentPlayingCid <= 0L) {
-        return true
+    if (normalizedMediaId == targetBvid) {
+        return (targetCid > 0L && targetCid == currentPlayingCid) ||
+            (targetCid <= 0L && currentPlayingCid <= 0L)
     }
     return false
 }
@@ -84,8 +85,9 @@ internal fun shouldShowPortraitCover(
     hasRenderedFirstFrame: Boolean
 ): Boolean {
     if (!isCurrentPage) return true
-    // 当前播放页一律不显示静态封面，保持黑屏底色平滑过渡起播，避免进入时闪烁封面
-    return false
+    // 首帧出现后不因缓冲重新盖回封面，避免播放中画面跳变。
+    if (isLoading && !hasRenderedFirstFrame) return true
+    return !isPlayerReadyForThisVideo || !hasRenderedFirstFrame
 }
 
 internal fun shouldUseViewportBoundPortraitCover(
@@ -99,7 +101,8 @@ internal fun shouldUseViewportBoundPortraitCover(
     return false
 }
 
-internal fun resolvePortraitCoverContentScale(): ContentScale = ContentScale.Fit
+internal fun resolvePortraitCoverContentScale(isVerticalVideo: Boolean = false): ContentScale =
+    if (isVerticalVideo) ContentScale.Crop else ContentScale.Fit
 
 internal fun resolvePortraitCoverViewportAspect(
     currentVideoAspect: Float,

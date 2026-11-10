@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.settings
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -19,7 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.*
 import com.android.purebilibili.core.ui.AppShapes
@@ -54,10 +56,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  */
 
 // 图标选项数据
-data class IconOption(val key: String, val name: String, val desc: String, val iconRes: Int)
+data class IconOption(@androidx.annotation.StringRes val nameResId: Int, val key: String, @androidx.annotation.StringRes val descResId: Int, val iconRes: Int)
 
 // 分组定义
-data class IconGroup(val title: String, val icons: List<IconOption>)
+data class IconGroup(@androidx.annotation.StringRes val titleResId: Int, val icons: List<IconOption>)
 
 internal fun resolveIconSettingsContainerColor(
     background: Color,
@@ -75,16 +77,16 @@ internal fun resolveIconSettingsContainerColor(
 fun getIconGroups(): List<IconGroup> {
     return listOf(
         IconGroup(
-            title = "精选",
+            titleResId = R.string.icon_group_featured,
             icons = listOf(
-                IconOption("icon_blue_snow_maid", "蓝雪女仆", "蓝白女仆主题", R.mipmap.ic_launcher_blue_snow_maid_round),
-                IconOption("icon_blue_snow_maid_announcement", "蓝雪女仆·喇叭", "居中扩音器主题", R.mipmap.ic_launcher_blue_snow_maid_announcement_round),
-                IconOption("icon_blue_snow_maid_front", "蓝雪女仆·正面", "正面微笑主题", R.mipmap.ic_launcher_blue_snow_maid_front_round),
-                IconOption("icon_3d", "3D立体", "全新3D设计", R.mipmap.ic_launcher_3d_foreground),
-                IconOption("icon_bilipai", "BiliPai", "全新品牌图标", R.mipmap.ic_launcher_bilipai_round),
-                IconOption("icon_bilipai_pink", "BiliPai 粉", "同款粉色", R.mipmap.ic_launcher_bilipai_pink_round),
-                IconOption("icon_bilipai_white", "BiliPai 白", "霜白配色", R.mipmap.ic_launcher_bilipai_white_round),
-                IconOption("icon_bilipai_monet", "BiliPai Monet", "随系统主题图标取色", R.mipmap.ic_launcher_bilipai_monet_round)
+                IconOption(R.string.icon_blue_snow_maid, "icon_blue_snow_maid", R.string.icon_blue_snow_maid_description, R.mipmap.ic_launcher_blue_snow_maid_round),
+                IconOption(R.string.icon_blue_snow_maid_announcement, "icon_blue_snow_maid_announcement", R.string.icon_blue_snow_maid_announcement_description, R.mipmap.ic_launcher_blue_snow_maid_announcement_round),
+                IconOption(R.string.icon_blue_snow_maid_front, "icon_blue_snow_maid_front", R.string.icon_blue_snow_maid_front_description, R.mipmap.ic_launcher_blue_snow_maid_front_round),
+                IconOption(R.string.icon_3d, "icon_3d", R.string.icon_3d_description, R.mipmap.ic_launcher_3d_foreground),
+                IconOption(R.string.icon_bilipai, "icon_bilipai", R.string.icon_bilipai_description, R.mipmap.ic_launcher_bilipai_round),
+                IconOption(R.string.icon_bilipai_pink, "icon_bilipai_pink", R.string.icon_bilipai_pink_description, R.mipmap.ic_launcher_bilipai_pink_round),
+                IconOption(R.string.icon_bilipai_white, "icon_bilipai_white", R.string.icon_bilipai_white_description, R.mipmap.ic_launcher_bilipai_white_round),
+                IconOption(R.string.icon_bilipai_monet, "icon_bilipai_monet", R.string.icon_bilipai_monet_description, R.mipmap.ic_launcher_bilipai_monet_round)
             )
         )
     )
@@ -126,7 +128,7 @@ fun IconSettingsScreen(
         .collectAsStateWithLifecycle(initialValue = AppIconAppearance.FOLLOW_SYSTEM)
     val screenTitle = stringResource(R.string.icon_settings_title)
     val backLabel = stringResource(R.string.common_back)
-    
+
     val iconGroups = getIconGroups()
     val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -170,7 +172,10 @@ fun IconSettingsContent(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
         extraBottomPadding = 24.dp
     )
-    
+    val appearanceFollowSystem = stringResource(R.string.icon_appearance_follow_system)
+    val appearanceLight = stringResource(R.string.icon_appearance_light)
+    val appearanceDark = stringResource(R.string.icon_appearance_dark)
+
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 100.dp),
         contentPadding = settingsScrollContentPadding(
@@ -201,9 +206,9 @@ fun IconSettingsContent(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     AppText(
-                        text = "图标切换可能需要几秒钟生效，系统可能会短暂卡顿。",
+                        text = stringResource(R.string.icon_settings_apply_notice),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AppContentColors.secondaryText()
                     )
                 }
             }
@@ -216,12 +221,12 @@ fun IconSettingsContent(
                         .background(AppSurfaceTokens.cardContainer())
                 ) {
                     SettingsSingleChoicePreference(
-                        title = "女仆图标外观",
-                        subtitle = "可跟随系统，或在任意系统主题下固定明亮、暗黑外壳",
+                        title = stringResource(R.string.icon_appearance_title),
+                        subtitle = stringResource(R.string.icon_appearance_summary),
                         options = listOf(
-                            AppSegmentOption(AppIconAppearance.FOLLOW_SYSTEM, "跟随系统"),
-                            AppSegmentOption(AppIconAppearance.LIGHT, "明亮"),
-                            AppSegmentOption(AppIconAppearance.DARK, "暗黑")
+                            AppSegmentOption(AppIconAppearance.FOLLOW_SYSTEM, appearanceFollowSystem),
+                            AppSegmentOption(AppIconAppearance.LIGHT, appearanceLight),
+                            AppSegmentOption(AppIconAppearance.DARK, appearanceDark)
                         ),
                         selectedValue = iconAppearance,
                         onSelectionChange = viewModel::setAppIconAppearance
@@ -233,23 +238,25 @@ fun IconSettingsContent(
                 // 分组标题
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     AppText(
-                        text = group.title,
+                        text = stringResource(group.titleResId),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = AppContentColors.primaryText(),
                         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp, start = 4.dp)
                     )
                 }
 
                 items(group.icons, key = { it.key }) { option ->
                     val isSelected = state.appIcon == option.key
-                    
+                    val optionAccessibilityLabel = stringResource(option.nameResId) + ", " +
+                        stringResource(option.descResId)
+
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .clip(AppShapes.container(ContainerLevel.Dialog))
                             .clickable {
                                 if (!isSelected) {
-                                    Toast.makeText(context, "正在切换图标...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.icon_settings_switching), Toast.LENGTH_SHORT).show()
                                     viewModel.setAppIcon(option.key)
                                 }
                             }
@@ -264,7 +271,7 @@ fun IconSettingsContent(
                             val iconShape = AppShapes.container(ContainerLevel.Dialog)
                             AsyncImage(
                                 model = resolveIconOptionPreviewRes(option.key, iconAppearance),
-                                contentDescription = option.name,
+                                contentDescription = optionAccessibilityLabel,
                                 modifier = Modifier
                                     .size(64.dp)
                                     .shadow(
@@ -276,12 +283,12 @@ fun IconSettingsContent(
                                     .then(
                                         if (isSelected) Modifier.border(
                                             width = 2.dp,
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = AppContentColors.accent(),
                                             shape = iconShape
                                         ) else Modifier
                                     )
                             )
-                            
+
                             // 选中标记 (右下角悬浮)
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = isSelected,
@@ -294,7 +301,7 @@ fun IconSettingsContent(
                                 AppIcon(
                                     com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_circle_fill_24),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = AppContentColors.accent(),
                                     modifier = Modifier
                                         .size(24.dp)
                                         .background(AppSurfaceTokens.cardContainer(), androidx.compose.foundation.shape.CircleShape)
@@ -302,15 +309,15 @@ fun IconSettingsContent(
                                 )
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.height(10.dp))
-                        
+
                         AppText(
-                            text = option.name,
+                            text = stringResource(option.nameResId),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary 
-                                    else MaterialTheme.colorScheme.onSurface,
+                            color = if (isSelected) AppContentColors.accent()
+                                    else AppContentColors.primaryText(),
                             textAlign = TextAlign.Center,
                             maxLines = 1
                         )

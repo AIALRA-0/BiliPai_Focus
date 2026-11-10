@@ -1,0 +1,762 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
+package com.android.purebilibili.feature.audio.player
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Bundle
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.LibraryResult
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import androidx.media3.session.SessionError
+import com.android.purebilibili.R
+import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.player.SharedPlaybackRepository
+import com.android.purebilibili.core.player.SharedPlaybackRequest
+import com.android.purebilibili.core.store.MultiProcessPreferences
+import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.util.MediaUtils
+import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.feature.video.playback.audio.resolveAudioStreamSelection
+import com.android.purebilibili.feature.video.player.PlayMode
+import com.android.purebilibili.feature.video.player.resolveActivePlaybackLaunchIntent
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Owns only an audio renderer, a bounded transport queue and the system media session. */
+class BackgroundAudioService : MediaLibraryService() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private lateinit var player: ExoPlayer
+    private lateinit var session: MediaLibrarySession
+    private val library by lazy { AudioMediaLibrary(this) }
+    private var snapshot: BackgroundAudioSnapshot? = null
+    private var preparing: SettableFuture<SessionResult>? = null
+    private var nextLoad: Job? = null
+    private var errorRecovery: Job? = null
+    private var retriedMediaId: String? = null
+    private var pauseRelease: Job? = null
+    private var generation = 0L
+    private var libraryRequestGeneration = 0L
+    private var playedMs = 0L
+    private var lastPlayTick = android.os.SystemClock.elapsedRealtime()
+    private var wasPlaying = false
+    private var historyStartedAt = System.currentTimeMillis() / 1000L
+    private var committed = false
+    private var libraryPlaybackOwned = false
+    private var nativeReleased = false
+    private var taskRemoved = false
+    private var restoring: Job? = null
+    private val stateStore by lazy { MultiProcessPreferences.get(this, "background_audio") }
+    private val snapshotKey = stringPreferencesKey("snapshot")
+    private val persistenceMutex = Mutex()
+
+    override fun onCreate() {
+        super.onCreate()
+        val http = OkHttpDataSource.Factory(NetworkModule.okHttpClient).setDefaultRequestProperties(
+            mapOf("Referer" to "https://www.bilibili.com/")
+        )
+        player = ExoPlayer.Builder(this,
+            com.android.purebilibili.core.player.HiResCompatibleRenderersFactory(this)
+                .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http)))
+            .setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(10_000, 30_000, 1000, 2000)
+                .setTargetBufferBytes(4 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(false).build())
+            .build().apply {
+                setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
+                setHandleAudioBecomingNoisy(true)
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true).build()
+                addListener(listener)
+            }
+        session = MediaLibrarySession.Builder(this, player, callback).build()
+        updateSessionActivity(null)
+        setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this)
+            .setNotificationId(NOTIFICATION_ID).setChannelId(CHANNEL_ID).build())
+        scope.launch {
+            var ticks = 0
+            while (isActive) {
+                delay(5000L)
+                if (nativeReleased) break
+                updateWatchTime()
+                if (committed) {
+                    try {
+                        persist()
+                        if (++ticks % 6 == 0) reportHistory()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // A temporary storage/network failure must not stop audio playback.
+                    }
+                }
+            }
+        }
+        scope.launch {
+            TokenManager.observeServiceSession(this@BackgroundAudioService) {
+                val current = snapshot
+                if (current != null && current.accountMid != TokenManager.midCache) {
+                    scope.launch { closeSession() }
+                }
+            }
+        }
+    }
+
+    private fun updateSessionActivity(bvid: String?) {
+        session.setSessionActivity(PendingIntent.getActivity(
+            this, 1, resolveActivePlaybackLaunchIntent(this, bvid),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        ))
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
+        session.takeUnless { taskRemoved || nativeReleased }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (taskRemoved || nativeReleased) return START_NOT_STICKY
+        if (intent?.action == ACTION_PROMOTE || intent == null) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "后台音频", NotificationManager.IMPORTANCE_LOW))
+            ServiceCompat.startForeground(this, NOTIFICATION_ID,
+                NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle("BiliPai").setContentText("正在准备后台音频")
+                    .setSilent(true).setOngoing(true).build(),
+                if (android.os.Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0)
+        }
+        if (intent == null && snapshot == null) restoring = scope.launch {
+            val saved = stateStore.data.first()[snapshotKey]?.let {
+                runCatching { backgroundAudioJson.decodeFromString(BackgroundAudioSnapshot.serializer(), it) }.getOrNull()
+            }
+            if (saved == null || !saved.playing) closeSession() else {
+                try {
+                    prepare(saved.copy(audioUrl = ""), resume = true)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    closeSession()
+                }
+            }
+        }
+        super.onStartCommand(intent, flags, startId)
+        return START_STICKY
+    }
+
+    private fun <T> mediaFuture(block: suspend () -> T): ListenableFuture<T> {
+        val result = SettableFuture.create<T>()
+        val job = scope.launch {
+            try { result.set(block()) }
+            catch (cancelled: CancellationException) { result.cancel(false); throw cancelled }
+            catch (error: Exception) { result.setException(error) }
+        }
+        result.addListener({ if (result.isCancelled) job.cancel() }, { it.run() })
+        return result
+    }
+
+    private suspend fun libraryChildren(parentId: String): List<MediaItem> {
+        if (parentId == AudioMediaLibrary.ROOT) return listOf(
+            library.folder(AudioMediaLibrary.QUEUE), library.folder(AudioMediaLibrary.LATER))
+        val page = library.entries(parentId, currentSnapshot())
+        return page.entries.map { library.item(parentId, it) } + listOfNotNull(page.nextParent?.let(library::folder))
+    }
+
+    private suspend fun resolveLibraryPlayback(id: String?, requestedPosition: Long): MediaSession.MediaItemsWithStartPosition {
+        val ticket = ++libraryRequestGeneration
+        restoring?.join()
+        check(!SystemMediaPreferences.libraryProtected(this)) { getString(R.string.audio_library_locked) }
+        val saved = currentSnapshot() ?: library.saved()
+        val request = if (id == null) {
+            checkNotNull(saved) { getString(R.string.audio_library_empty) }
+        } else {
+            val parent = id.substringBefore('/')
+            val queue = library.entries(parent, currentSnapshot()).entries
+            val index = queue.indexOfFirst { library.item(parent, it).mediaId == id }
+            require(index >= 0) { "Media item is no longer available" }
+            selectAudioLibraryRequest(saved, queue, index, TokenManager.midCache)
+        }
+        if (committed) persist()
+        check(ticket == libraryRequestGeneration && !nativeReleased) { "Playback request superseded" }
+        nextLoad?.cancel()
+        errorRecovery?.cancel()
+        pauseRelease?.cancel()
+        val resolved = resolve(request.index, request)
+        val selected = checkNotNull(request.current)
+        val cid = checkNotNull(resolved.mediaMetadata.extras).getLong("cid")
+        val checkpoint = com.android.purebilibili.core.store.AudioPlaybackProgressStore.read(
+            this, request.accountMid ?: 0L, selected.bvid, cid)
+        check(ticket == libraryRequestGeneration && !nativeReleased) { "Playback request superseded" }
+        generation++
+        val reportHistory = SystemMediaPreferences.reportHistory(this)
+        TokenManager.refreshServiceSession(this)
+        check(request.accountMid == TokenManager.midCache && ticket == libraryRequestGeneration && !nativeReleased)
+        val queue = request.queue.toMutableList().also { it[request.index] = selected.copy(cid = cid) }
+        snapshot = request.copy(queue = queue, audioUrl = "", reportHistory = reportHistory)
+        committed = true
+        libraryPlaybackOwned = true
+        player.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
+        player.volume = request.volume
+        player.setPlaybackSpeed(request.speed)
+        player.repeatMode = if (request.playMode == PlayMode.REPEAT_ONE ||
+            request.queue.size == 1 && request.playMode == PlayMode.REPEAT_ALL) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        updateSessionActivity(selected.bvid)
+        val sameSavedPart = saved?.current?.let { it.bvid == selected.bvid && it.cid == cid } == true
+        val resumePosition = if (sameSavedPart) request.positionMs else checkpoint?.positionMs ?: request.positionMs
+        val position = if (requestedPosition == C.TIME_UNSET) resumePosition else requestedPosition
+        return MediaSession.MediaItemsWithStartPosition(listOf(resolved), 0, position)
+    }
+
+    private val callback = object : MediaLibrarySession.Callback {
+        override fun onGetLibraryRoot(session: MediaLibrarySession, browser: MediaSession.ControllerInfo,
+            params: LibraryParams?): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(library.folder(AudioMediaLibrary.ROOT), params))
+
+        override fun onGetChildren(session: MediaLibrarySession, browser: MediaSession.ControllerInfo,
+            parentId: String, page: Int, pageSize: Int, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = mediaFuture {
+            try {
+                require(page >= 0 && pageSize > 0)
+                val children = libraryChildren(parentId)
+                val start = (page.toLong() * pageSize).coerceAtMost(children.size.toLong()).toInt()
+                LibraryResult.ofItemList(children.subList(start, (start.toLong() + pageSize).coerceAtMost(children.size.toLong()).toInt()), params)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                Logger.w("AudioLibrary", "Cannot load media directory", error)
+                LibraryResult.ofError<ImmutableList<MediaItem>>(SessionError(SessionResult.RESULT_ERROR_IO,
+                    error.message ?: getString(R.string.playback_widget_error), Bundle.EMPTY))
+            }
+        }
+
+        override fun onGetItem(session: MediaLibrarySession, browser: MediaSession.ControllerInfo,
+            mediaId: String): ListenableFuture<LibraryResult<MediaItem>> = mediaFuture {
+            if (!mediaId.contains('/')) LibraryResult.ofItem(library.folder(mediaId), null)
+            else libraryChildren(mediaId.substringBefore('/')).firstOrNull { it.mediaId == mediaId }
+                ?.let { LibraryResult.ofItem(it, null) }
+                ?: LibraryResult.ofError<MediaItem>(SessionResult.RESULT_ERROR_BAD_VALUE)
+        }
+
+        override fun onSetMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = mediaFuture {
+            require(mediaItems.size == 1)
+            resolveLibraryPlayback(mediaItems.single().mediaId, startPositionMs)
+        }
+
+        override fun onPlaybackResumption(session: MediaSession, controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = mediaFuture {
+            if (isForPlayback) resolveLibraryPlayback(null, C.TIME_UNSET)
+            else {
+                check(!SystemMediaPreferences.libraryProtected(this@BackgroundAudioService)) { getString(R.string.audio_library_locked) }
+                val saved = checkNotNull(currentSnapshot() ?: library.saved()) { getString(R.string.audio_library_empty) }
+                MediaSession.MediaItemsWithStartPosition(listOf(library.item(AudioMediaLibrary.QUEUE, checkNotNull(saved.current))), 0, saved.positionMs)
+            }
+        }
+
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            if (taskRemoved || nativeReleased) return MediaSession.ConnectionResult.reject()
+            val verifiedAuto = session.isAutoCompanionController(controller) &&
+                packageManager.checkSignatures(controller.packageName, "com.google.android.gms") ==
+                android.content.pm.PackageManager.SIGNATURE_MATCH
+            if (controller.uid != android.os.Process.myUid() && !controller.isTrusted && !verifiedAuto) {
+                return MediaSession.ConnectionResult.reject()
+            }
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+            if (controller.uid == android.os.Process.myUid()) {
+                listOf(AUDIO_PREPARE, AUDIO_COMMIT, AUDIO_RETURN, AUDIO_SNAPSHOT, AUDIO_CLOSE, AUDIO_TRANSPORT)
+                    .forEach { commands.add(SessionCommand(it, Bundle.EMPTY)) }
+            }
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands.build()).build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession, controller: MediaSession.ControllerInfo,
+            command: SessionCommand, args: Bundle
+        ): ListenableFuture<SessionResult> {
+            val result = SettableFuture.create<SessionResult>()
+            if (taskRemoved || nativeReleased) {
+                result.set(SessionResult(SessionResult.RESULT_ERROR_INVALID_STATE))
+                return result
+            }
+            scope.launch {
+                try {
+                    when (command.customAction) {
+                        AUDIO_PREPARE -> {
+                            val request = requireNotNull(args.audioSnapshot())
+                            require(request.queue.size in 1..128 && request.current != null)
+                            preparing?.set(SessionResult(SessionResult.RESULT_ERROR_INVALID_STATE))
+                            preparing = result
+                            prepare(request, resume = false)
+                            return@launch
+                        }
+                        AUDIO_COMMIT -> {
+                            check(snapshot != null && player.playbackState == Player.STATE_READY)
+                            committed = true
+                            player.seekTo(args.getLong("position_ms", player.currentPosition))
+                            player.play()
+                            persist()
+                            prefetchNext()
+                        }
+                        AUDIO_RETURN -> {
+                            restoring?.join()
+                            persist()
+                            val state = currentSnapshot()
+                            committed = false
+                            player.pause()
+                            result.set(SessionResult(SessionResult.RESULT_SUCCESS, state?.toAudioBundle() ?: Bundle.EMPTY))
+                            closeSession()
+                            return@launch
+                        }
+                        AUDIO_SNAPSHOT -> {
+                            restoring?.join()
+                            result.set(SessionResult(SessionResult.RESULT_SUCCESS, currentSnapshot()?.toAudioBundle() ?: Bundle.EMPTY))
+                            return@launch
+                        }
+                        AUDIO_TRANSPORT -> {
+                            val current = checkNotNull(snapshot)
+                            val mode = PlayMode.valueOf(checkNotNull(args.getString("mode")))
+                            val queue = args.getString("queue")?.let {
+                                backgroundAudioJson.decodeFromString(
+                                    kotlinx.serialization.builtins.ListSerializer(
+                                        com.android.purebilibili.feature.video.player.PlaylistItem.serializer()
+                                    ), it
+                                )
+                            }?.takeIf { entries -> entries.size in 1..128 && entries.none { it.isBangumi || it.bvid.isBlank() } &&
+                                entries.distinctBy { it.bvid }.size == entries.size }
+                            val newIndex = queue?.indexOfFirst { it.bvid == current.current?.bvid }
+                            val savedMode = args.getString("saved_mode")?.let { value ->
+                                com.android.purebilibili.feature.video.player.PlayMode.entries.firstOrNull { it.name == value }
+                            } ?: current.savedPlayMode
+                            val next = current.copy(playMode = mode, shuffle = args.getBoolean("shuffle"),
+                                savedPlayMode = savedMode,
+                                savedShuffle = if (args.containsKey("saved_shuffle")) args.getBoolean("saved_shuffle") else current.savedShuffle,
+                                reportHistory = args.getBoolean("report_history", current.reportHistory),
+                                queue = queue?.takeIf { newIndex != null && newIndex >= 0 } ?: current.queue,
+                                index = newIndex?.takeIf { it >= 0 } ?: current.index)
+                            snapshot = next
+                            if (next.queue != current.queue || next.playMode != current.playMode || next.shuffle != current.shuffle) {
+                                generation++
+                                nextLoad?.cancel()
+                                if (player.mediaItemCount > player.currentMediaItemIndex + 1) {
+                                    player.removeMediaItems(player.currentMediaItemIndex + 1, player.mediaItemCount)
+                                }
+                                if (player.currentMediaItemIndex > 0) player.removeMediaItems(0, player.currentMediaItemIndex)
+                                player.repeatMode = if (mode == PlayMode.REPEAT_ONE || next.queue.size == 1 &&
+                                    mode == PlayMode.REPEAT_ALL) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                                prefetchNext()
+                            }
+                            persist()
+                        }
+                        AUDIO_CLOSE -> closeSession()
+                        else -> error("Unsupported audio command")
+                    }
+                    result.set(SessionResult(SessionResult.RESULT_SUCCESS))
+                } catch (e: CancellationException) {
+                    result.cancel(false)
+                    throw e
+                } catch (e: Exception) {
+                    preparing = null
+                    result.set(SessionResult(SessionResult.RESULT_ERROR_UNKNOWN))
+                    closeSession()
+                }
+            }
+            return result
+        }
+    }
+
+    private suspend fun prepare(request: BackgroundAudioSnapshot, resume: Boolean) {
+        libraryPlaybackOwned = false
+        libraryRequestGeneration++
+        if (committed) persist()
+        TokenManager.refreshServiceSession(this)
+        check(request.accountMid == TokenManager.midCache)
+        generation++
+        nextLoad?.cancel()
+        errorRecovery?.cancel()
+        snapshot = request
+        committed = resume
+        val item = request.current ?: error("Missing audio entry")
+        updateSessionActivity(item.bvid)
+        val media = if (request.audioUrl.isNotBlank()) mediaItem(request.index, item, request.audioUrl) else resolve(request.index)
+        player.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), request.handleAudioFocus)
+        player.volume = request.volume.coerceIn(0f, 1f)
+        player.setMediaItem(media, request.positionMs.coerceAtLeast(0L))
+        player.setPlaybackSpeed(request.speed.coerceIn(0.25f, 4f))
+        player.repeatMode = if (request.playMode == PlayMode.REPEAT_ONE ||
+            request.queue.size == 1 && request.playMode == PlayMode.REPEAT_ALL) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        player.playWhenReady = resume
+        player.prepare()
+    }
+
+    private fun mediaItem(index: Int, entry: com.android.purebilibili.feature.video.player.PlaylistItem, url: String): MediaItem =
+        MediaItem.Builder().setMediaId("${entry.bvid}:${entry.cid}").setUri(url)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(entry.title).setArtist(entry.owner)
+                .setIsBrowsable(false).setIsPlayable(true).setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                .setArtworkUri(entry.cover.takeIf { it.isNotBlank() }?.let { android.net.Uri.parse(if (it.startsWith("//")) "https:$it" else it) })
+                .setExtras(Bundle().apply {
+                    putInt("queue_index", index); putString("bvid", entry.bvid); putLong("cid", entry.cid)
+                    putString("cover", entry.cover)
+                }).build()).build()
+
+    private suspend fun resolve(index: Int, request: BackgroundAudioSnapshot = checkNotNull(snapshot)): MediaItem {
+        TokenManager.refreshServiceSession(this)
+        check(request.accountMid == TokenManager.midCache)
+        val entry = request.queue[index]
+        val loaded = SharedPlaybackRepository.load(SharedPlaybackRequest(
+            bvid = entry.bvid, cid = entry.cid, quality = request.quality,
+            audioQuality = request.audioQuality, audioLanguage = request.audioLanguage
+        ), allowTokenRefresh = false, usePlaybackAccount = false).getOrThrow()
+        TokenManager.refreshServiceSession(this)
+        check(request.accountMid == TokenManager.midCache)
+        // Audio-only DASH is required; a video-only fallback is left to the foreground player.
+        val dolbyAudioCapabilities = MediaUtils.awaitDolbyAudioCapabilities()
+        val audio = loaded.streams.dash?.let { dash ->
+            resolveAudioStreamSelection(
+                dash = dash,
+                requestedAudioQuality = request.audioQuality,
+                playbackSpeed = request.speed,
+                isDolbyAudioSupported = dolbyAudioCapabilities.isDolbyAudioSupported,
+                isDolbyAudioSoftwareDecoded = dolbyAudioCapabilities.isDolbyAudioSoftwareDecoded
+            ).selected?.track?.getValidUrl()
+        }?.takeIf { it.startsWith("https://") } ?: error("Audio stream unavailable")
+        return mediaItem(index, entry.copy(cid = loaded.info.cid), audio)
+    }
+
+    private fun prefetchNext() {
+        val request = snapshot ?: return
+        if (!committed || nextLoad?.isActive == true) return
+        val next = nextBackgroundAudioIndex(request.queue.size, request.index, request.playMode, request.shuffle)
+        val previous = (request.index - 1).takeIf {
+            it >= 0 && player.currentMediaItemIndex == 0 && !request.shuffle && request.playMode != PlayMode.SHUFFLE
+        }
+        val needsNext = next != null && next != request.index && player.nextMediaItemIndex == C.INDEX_UNSET
+        if (!needsNext && previous == null) return
+        val ticket = generation
+        nextLoad = scope.launch {
+            try {
+                if (previous != null) {
+                    val media = try {
+                        resolve(previous)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (ticket != generation || !committed) return@launch
+                    if (media != null) player.addMediaItem(0, media)
+                }
+                if (next != null && next != request.index && player.nextMediaItemIndex == C.INDEX_UNSET) {
+                    val media = resolve(next)
+                    if (ticket == generation && committed) player.addMediaItem(media)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Keep the current audio intact; a failed prefetch must not stop it.
+            }
+        }
+    }
+
+    private val listener = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) {
+            if (snapshot != null && events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_IS_PLAYING_CHANGED,
+                    Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED)) {
+                com.android.purebilibili.feature.widget.PlaybackWidgetProvider.publish(this@BackgroundAudioService, player)
+            }
+        }
+
+        override fun onPlaybackStateChanged(state: Int) {
+            if (state == Player.STATE_ENDED && committed) {
+                prefetchNext()
+                onIsPlayingChanged(false)
+            }
+            if (state == Player.STATE_READY) {
+                preparing?.set(SessionResult(SessionResult.RESULT_SUCCESS))
+                preparing = null
+                if (committed) prefetchNext()
+            }
+        }
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            if (!committed) return
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                scope.launch {
+                    try {
+                        persist()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        Logger.w("BackgroundAudio", "Seek checkpoint save failed", error)
+                    }
+                }
+            } else if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                val extras = oldPosition.mediaItem?.mediaMetadata?.extras ?: return
+                val bvid = extras.getString("bvid") ?: return
+                val checkpoint = com.android.purebilibili.core.store.AudioPlaybackCheckpoint(
+                    accountMid = snapshot?.accountMid ?: 0L,
+                    bvid = bvid, cid = extras.getLong("cid"), positionMs = 0L,
+                )
+                scope.launch {
+                    try {
+                        com.android.purebilibili.core.store.AudioPlaybackProgressStore.save(this@BackgroundAudioService, checkpoint)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        Logger.w("BackgroundAudio", "Completed audio checkpoint save failed", error)
+                    }
+                }
+            }
+        }
+        override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+            updateWatchTime()
+            playedMs = 0L
+            historyStartedAt = System.currentTimeMillis() / 1000L
+            val media = item ?: return
+            val current = snapshot ?: return
+            val extras = media.mediaMetadata.extras ?: return
+            val bvid = extras.getString("bvid") ?: return
+            val index = extras.getInt("queue_index", -1)
+                .takeIf { current.queue.getOrNull(it)?.bvid == bvid } ?: return
+            if (index !in current.queue.indices) return
+            val cid = media.mediaMetadata.extras?.getLong("cid") ?: 0L
+            snapshot = current.copy(index = index, queue = current.queue.toMutableList().also {
+                it[index] = it[index].copy(cid = cid)
+            }, audioUrl = "")
+            updateSessionActivity(bvid)
+            generation++
+            nextLoad?.cancel()
+            if (player.currentMediaItemIndex > 1) player.removeMediaItems(0, player.currentMediaItemIndex - 1)
+            if (player.mediaItemCount > player.currentMediaItemIndex + 2) {
+                player.removeMediaItems(player.currentMediaItemIndex + 2, player.mediaItemCount)
+            }
+            if (committed) prefetchNext()
+        }
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (committed && playWhenReady && player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) {
+                player.prepare()
+            }
+            onIsPlayingChanged(player.isPlaying)
+        }
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            updateWatchTime()
+            pauseRelease?.cancel()
+            if (committed) scope.launch { persist() }
+            if (committed && (!player.playWhenReady || player.playbackState == Player.STATE_ENDED)) pauseRelease = scope.launch {
+                delay(30_000L)
+                if (!player.playWhenReady || player.playbackState == Player.STATE_ENDED) {
+                    persist()
+                    player.stop()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
+        }
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            preparing?.set(SessionResult(SessionResult.RESULT_ERROR_IO))
+            preparing = null
+            val current = currentSnapshot()
+            val key = player.currentMediaItem?.mediaId
+            if (!committed || current == null) {
+                scope.launch { closeSession() }
+                return
+            }
+            player.pause()
+            if (key == null || retriedMediaId == key || errorRecovery?.isActive == true) return
+            retriedMediaId = key
+            val ticket = generation
+            errorRecovery = scope.launch {
+                try {
+                    val media = resolve(current.index)
+                    if (ticket != generation || !committed) return@launch
+                    player.setMediaItem(media, current.positionMs)
+                    player.playWhenReady = current.playing
+                    player.prepare()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // The session remains paused and can be reclaimed by the video page.
+                    persist()
+                }
+            }
+        }
+    }
+
+    private fun updateWatchTime() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (wasPlaying) playedMs += (now - lastPlayTick).coerceAtLeast(0L)
+        lastPlayTick = now
+        wasPlaying = committed && player.isPlaying
+    }
+
+    private suspend fun reportHistory() {
+        val state = currentSnapshot() ?: return
+        val item = state.current ?: return
+        if (!SystemMediaPreferences.reportHistory(this)) return
+        if (!state.reportHistory || !state.playing || state.accountMid == null) return
+        TokenManager.refreshServiceSession(this)
+        if (TokenManager.midCache != state.accountMid) return
+        com.android.purebilibili.data.repository.HistoryRepository.reportPlayback(
+            item.bvid, item.cid, state.positionMs / 1000L, playedMs / 1000L, historyStartedAt
+        )
+    }
+
+    private fun currentSnapshot(): BackgroundAudioSnapshot? = snapshot?.copy(
+        positionMs = player.currentPosition.coerceAtLeast(0L), playing = player.playWhenReady && committed && player.playbackState != Player.STATE_ENDED,
+        speed = player.playbackParameters.speed, audioUrl = ""
+    )
+
+    private suspend fun persist(): Unit = persistenceMutex.withLock {
+        if (nativeReleased) return@withLock
+        val state = currentSnapshot() ?: return@withLock
+        if (committed && player.playbackState != Player.STATE_IDLE) {
+            state.current?.let { item ->
+                com.android.purebilibili.core.store.AudioPlaybackProgressStore.save(
+                    this,
+                    com.android.purebilibili.core.store.AudioPlaybackCheckpoint(
+                        accountMid = state.accountMid ?: 0L, bvid = item.bvid, cid = item.cid,
+                        positionMs = if (player.playbackState == Player.STATE_ENDED) 0L else state.positionMs,
+                    ),
+                )
+            }
+        }
+        stateStore.edit {
+            it[snapshotKey] = backgroundAudioJson.encodeToString(BackgroundAudioSnapshot.serializer(), state.forPersistence())
+            if (committed) it[stringPreferencesKey("library_snapshot")] = backgroundAudioJson.encodeToString(
+                BackgroundAudioSnapshot.serializer(), state.forPersistence().copy(playing = false, audioUrl = ""))
+        }
+        Unit
+    }
+
+    private suspend fun closeSession() {
+        if (!nativeReleased) {
+            if (committed) {
+                try {
+                    withContext(NonCancellable) { persist() }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Logger.w("BackgroundAudio", "Final audio checkpoint save failed", error)
+                }
+            }
+            committed = false
+            generation++
+            libraryRequestGeneration++
+            nextLoad?.cancel()
+            errorRecovery?.cancel()
+            pauseRelease?.cancel()
+            snapshot = null
+            player.pause()
+            player.stop()
+            releaseNativeResources()
+        }
+        try {
+            // 清理开始后即使服务销毁，也应完成删除，避免旧播放意图残留。
+            withContext(NonCancellable) {
+                stateStore.edit { it.remove(snapshotKey) }
+            }
+        } finally {
+            com.android.purebilibili.feature.widget.PlaybackWidgetProvider.requestUpdate(this)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
+    private fun releaseNativeResources() {
+        if (nativeReleased) return
+        nativeReleased = true
+        preparing?.set(SessionResult(SessionResult.RESULT_ERROR_INVALID_STATE))
+        preparing = null
+        session.release()
+        player.release()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (libraryPlaybackOwned && player.playWhenReady && committed) return
+        if (taskRemoved) return
+        taskRemoved = true
+        // 先取消恢复、预取及快照写入，再清理；服务存活至快照删除完成。
+        scope.coroutineContext.cancelChildren()
+        scope.launch {
+            try {
+                closeSession()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Logger.e("BackgroundAudioService", "Failed to clear removed task audio snapshot", error)
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        if (!nativeReleased && committed && player.playbackState != Player.STATE_IDLE) {
+            val state = currentSnapshot()
+            val item = state?.current
+            if (state != null && item != null) {
+                val checkpoint = com.android.purebilibili.core.store.AudioPlaybackCheckpoint(
+                    accountMid = state.accountMid ?: 0L, bvid = item.bvid, cid = item.cid,
+                    positionMs = if (player.playbackState == Player.STATE_ENDED) 0L else state.positionMs,
+                )
+                scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    withContext(NonCancellable) {
+                        try {
+                            com.android.purebilibili.core.store.AudioPlaybackProgressStore.save(this@BackgroundAudioService, checkpoint)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            Logger.w("BackgroundAudio", "Service shutdown checkpoint save failed", error)
+                        }
+                    }
+                }
+            }
+        }
+        scope.cancel()
+        releaseNativeResources()
+        super.onDestroy()
+    }
+
+    companion object {
+        const val ACTION_PROMOTE = "bilipai.audio.PROMOTE"
+        private const val NOTIFICATION_ID = 5101
+        private const val CHANNEL_ID = "background_audio"
+    }
+}

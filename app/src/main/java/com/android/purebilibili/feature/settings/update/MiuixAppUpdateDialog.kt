@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.settings
+import com.android.purebilibili.core.ui.components.appElasticPress
+
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,13 +21,13 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
-import com.android.purebilibili.core.ui.components.AppIconButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -44,6 +46,7 @@ internal fun MiuixAppUpdateDialog(
         onDismissRequest = actions.onDismissRequest,
         maxWidth = 420.dp,
     ) {
+        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             MiuixUpdateHeader(state = state, onDismissRequest = actions.onDismissRequest)
             MiuixUpdateContent(state = state, actions = actions)
@@ -84,8 +87,11 @@ private fun MiuixUpdateHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        AppIconButton(
+        IconButton(
             onClick = onDismissRequest,
+            minWidth = 48.dp,
+            minHeight = 48.dp,
+            modifier = Modifier.appElasticPress(),
         ) {
             Icon(
                 imageVector = MiuixIcons.Basic.Close,
@@ -221,14 +227,10 @@ private fun MiuixDownloadStatus(
             fontWeight = FontWeight.Medium,
         )
         if (state.isActiveDownload()) {
-            if (state.totalBytes > 0L) {
-                AppLinearProgressIndicator(
-                    progress = { state.progress },
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            } else {
-                AppLinearProgressIndicator(modifier = Modifier.padding(top = 12.dp))
-            }
+            LinearProgressIndicator(
+                progress = state.progress.takeIf { state.totalBytes > 0L },
+                modifier = Modifier.padding(top = 12.dp),
+            )
         }
         if (state.status == AppUpdateDownloadStatus.COMPLETED) {
             Text(
@@ -311,13 +313,13 @@ private fun MiuixDownloadChannels(
             TextButton(
                 text = "正式版下载",
                 onClick = actions.onOpenRelease,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).appElasticPress(),
                 minHeight = 48.dp,
             )
             TextButton(
                 text = "测试版下载",
                 onClick = actions.onOpenTestRelease,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).appElasticPress(),
                 minHeight = 48.dp,
             )
         }
@@ -342,14 +344,14 @@ private fun MiuixUpdateActions(
                 } else {
                     actions.onDismissRequest
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).appElasticPress(),
                 minHeight = 48.dp,
             )
         }
         TextButton(
             text = appUpdatePrimaryLabel(state.downloadState, state.hasAsset),
             onClick = actions.onPrimaryAction,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).appElasticPress(enabled = !state.downloadState.isActiveDownload()),
             enabled = !state.downloadState.isActiveDownload(),
             colors = ButtonDefaults.textButtonColorsPrimary(),
             minHeight = 48.dp,

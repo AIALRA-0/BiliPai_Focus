@@ -1,11 +1,84 @@
 package com.android.purebilibili.feature.search
 
+import com.android.purebilibili.data.model.response.SearchType
+import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.data.repository.shouldApplySearchResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SearchContentStatePolicyTest {
+
+    @Test
+    fun `draft editing cannot change cached result ownership or invalidate active response`() {
+        val page = SearchResultPageUiState(query = "QQ", currentPage = 3)
+        val submitted = SearchUiState(
+            query = "QQ", showResults = true, searchSessionId = 7L,
+            resultPages = mapOf(SearchType.UP to page),
+        )
+        for (draft in listOf("", " ", "新关键词")) {
+            val edited = submitted.withEditedSearchQuery(draft)
+            assertEquals("QQ", edited.toCurrentSearchResultPage().query)
+            assertEquals(page, resolveSearchResultPageState(edited, SearchType.UP))
+            assertTrue(shouldApplySearchResult(
+                7L, edited.searchSessionId, "QQ", edited.submittedQuery,
+                SearchType.ALL, edited.searchType,
+            ))
+            assertFalse(shouldApplySearchResult(
+                6L, edited.searchSessionId, "QQ", edited.submittedQuery,
+                SearchType.ALL, edited.searchType,
+            ))
+            val restored = edited.withCurrentSearchResultPageCached()
+                .withSearchResultPageMirrored(SearchType.UP, page)
+            assertEquals(draft, restored.query)
+            assertEquals("QQ", restored.submittedQuery)
+        }
+    }
+
+    @Test
+    fun `search recording never overrides global privacy`() {
+        assertTrue(shouldRecordSearchHistory(true, false))
+        assertFalse(shouldRecordSearchHistory(false, false))
+        assertFalse(shouldRecordSearchHistory(true, true))
+        assertFalse(shouldRecordSearchHistory(false, true))
+    }
+
+    @Test
+    fun `clearing results query preserves the page session rows cache and errors`() {
+        val rows = listOf(VideoItem(bvid = "BV1QQ", title = "QQ"))
+        val cachedPage = SearchResultPageUiState(query = "QQ", currentPage = 1, searchResults = rows)
+        val original = SearchUiState(
+            query = "QQ",
+            showResults = true,
+            searchSessionId = 12L,
+            currentPage = 3,
+            searchResults = rows,
+            error = "保留当前结果状态",
+            loadMoreError = "保留翻页重试入口",
+            resultPages = mapOf(SearchType.ALL to cachedPage),
+        )
+        for (query in listOf("", " ", "新搜索词")) {
+            val edited = original.withEditedSearchQuery(query)
+            assertEquals(original.copy(query = query), edited)
+        }
+    }
+
+    @Test
+    fun `clearing draft preserves the submitted request and stays on results`() {
+        val original = SearchUiState(
+            query = "QQ", showResults = true, isSearching = true, isLoadingMore = true,
+            suggestions = listOf(SearchSuggestionUiModel("QQ")),
+        )
+        val cleared = original.withEditedSearchQuery("")
+        assertTrue(cleared.showResults)
+        assertTrue(cleared.isSearching)
+        assertTrue(cleared.isLoadingMore)
+        assertEquals("QQ", cleared.submittedQuery)
+        assertEquals("", cleared.query)
+        assertTrue(cleared.suggestions.isEmpty())
+        assertFalse(SearchUiState(query = "QQ").withEditedSearchQuery("").showResults)
+    }
 
     @Test
     fun `video pagination can fill an empty filtered page or a one or two item grid`() {

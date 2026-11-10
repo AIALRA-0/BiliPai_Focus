@@ -1,5 +1,10 @@
 package com.android.purebilibili.feature.download
 
+import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.util.HapticType
+
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
 import com.android.purebilibili.core.ui.components.AppButton
@@ -52,9 +57,22 @@ internal fun BatchDownloadDialog(
     currentQuality: Int,
     downloadedIds: Set<String>,
     onConfirm: (Int, DownloadOptions, List<BatchDownloadCandidate>) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isLoadingCandidates: Boolean = false,
+    failedExpansionCount: Int = 0,
+    onRetryExpansion: () -> Unit = {},
 ) {
-    var workingCandidates by remember(candidates) { mutableStateOf(candidates) }
+    var selectionOverrides by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    val workingCandidates = candidates.map { candidate ->
+        candidate.copy(selected = selectionOverrides[candidate.id] ?: candidate.selected)
+    }
+    val selectionHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.REFRESH)
+    fun updateCandidates(next: List<BatchDownloadCandidate>) {
+        val previousIds = workingCandidates.filter { it.selected }.map { it.id }.toSet()
+        val nextIds = next.filter { it.selected }.map { it.id }.toSet()
+        selectionOverrides = selectionOverrides + next.associate { it.id to it.selected }
+        if (previousIds != nextIds) selectionHaptic(HapticType.LIGHT)
+    }
     var selectedQuality by remember(currentQuality) { mutableIntStateOf(currentQuality) }
     var includeDanmaku by remember { mutableStateOf(true) }
     val dialogLayout = remember { resolveAppExpandedContentDialogLayoutPolicy() }
@@ -65,6 +83,7 @@ internal fun BatchDownloadDialog(
             usePlatformDefaultWidth = dialogLayout.usePlatformDefaultWidth,
         ),
     ) {
+        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
         BoxWithConstraints(
             modifier = Modifier.appContentDialogWidth(policy = dialogLayout, wrapHeight = false),
         ) {
@@ -98,38 +117,52 @@ internal fun BatchDownloadDialog(
                     AppText(
                         text = title,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
+                    if (isLoadingCandidates) {
+                        AppText("正在加载合集分 P…", style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    } else if (failedExpansionCount > 0) {
+                        AppText(
+                            "有 $failedExpansionCount 个稿件未能展开分 P，当前仅列出已知条目。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        AppOutlinedButton(onClick = onRetryExpansion) { AppText("重试加载分 P") }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         AppFilterChip(
+                            enabled = !isLoadingCandidates,
                             selected = false,
                             onClick = {
-                                workingCandidates = selectAllBatchDownloadCandidates(workingCandidates)
+                                updateCandidates(selectAllBatchDownloadCandidates(workingCandidates))
                             },
                             label = { AppText("全选") }
                         )
                         AppFilterChip(
+                            enabled = !isLoadingCandidates,
                             selected = false,
                             onClick = {
-                                workingCandidates = invertBatchDownloadCandidateSelection(workingCandidates)
+                                updateCandidates(invertBatchDownloadCandidateSelection(workingCandidates))
                             },
                             label = { AppText("反选") }
                         )
                         AppFilterChip(
+                            enabled = !isLoadingCandidates,
                             selected = false,
                             onClick = {
-                                workingCandidates = selectOnlyUndownloadedBatchCandidates(
+                                updateCandidates(selectOnlyUndownloadedBatchCandidates(
                                     candidates = workingCandidates,
                                     downloadedIds = downloadedIds
-                                )
+                                ))
                             },
                             label = { AppText("仅未下载") }
                         )
@@ -153,20 +186,21 @@ internal fun BatchDownloadDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        workingCandidates = workingCandidates.map {
+                                    .clickable(enabled = !isLoadingCandidates) {
+                                        updateCandidates(workingCandidates.map {
                                             if (it.id == candidate.id) it.copy(selected = !it.selected) else it
-                                        }
+                                        })
                                     }
                                     .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 AppCheckbox(
+                                    enabled = !isLoadingCandidates,
                                     checked = candidate.selected,
                                     onCheckedChange = { checked ->
-                                        workingCandidates = workingCandidates.map {
+                                        updateCandidates(workingCandidates.map {
                                             if (it.id == candidate.id) it.copy(selected = checked) else it
-                                        }
+                                        })
                                     }
                                 )
                                 Column(
@@ -181,7 +215,7 @@ internal fun BatchDownloadDialog(
                                     AppText(
                                         text = candidate.title,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = AppContentColors.secondaryText(),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -198,7 +232,7 @@ internal fun BatchDownloadDialog(
                                         AppText(
                                             text = "已存在",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = AppContentColors.secondaryText()
                                         )
                                     }
                                 }
@@ -274,7 +308,7 @@ internal fun BatchDownloadDialog(
                                 )
                             },
                             modifier = Modifier.weight(1f),
-                            enabled = canConfirmBatchDownload(workingCandidates)
+                            enabled = !isLoadingCandidates && canConfirmBatchDownload(workingCandidates)
                         ) {
                             AppText("加入下载")
                         }

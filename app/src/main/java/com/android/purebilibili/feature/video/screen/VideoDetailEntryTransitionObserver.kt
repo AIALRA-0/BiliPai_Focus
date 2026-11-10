@@ -10,10 +10,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.withFrameNanos
 import com.android.purebilibili.core.ui.transition.MiuixVideoCardTransitionState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.nav.transition.NavRole
+import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -23,101 +26,79 @@ internal fun rememberVideoDetailEntryTransitionFinished(
     animatedVisibilityScope: AnimatedVisibilityScope?,
     fallbackDurationMillis: Int,
     heroDriver: MiuixVideoCardTransitionState? = null,
+    navigationTransitionScope: NavTransitionScope? = null,
 ): Boolean {
-    if (!deferLoad) return true
-
-    var finished by remember(deferLoad) { mutableStateOf(false) }
+    // 在分支外保存 entry 生命周期锁存，defer/返回标志变化不能删除已完成的状态。
+    var finished by remember { mutableStateOf(!deferLoad) }
+    if (!deferLoad || finished) return true
     val fallbackTimeoutMillis = remember(fallbackDurationMillis) {
         resolveVideoDetailEntryTransitionFallbackTimeoutMillis(fallbackDurationMillis)
     }
 
-    LaunchedEffect(deferLoad, sharedTransitionScope, animatedVisibilityScope, fallbackTimeoutMillis, heroDriver) {
-        if (!deferLoad) {
+    LaunchedEffect(
+        deferLoad,
+        sharedTransitionScope,
+        animatedVisibilityScope,
+        fallbackTimeoutMillis,
+        heroDriver,
+        navigationTransitionScope,
+    ) {
+        // 单向锁存：已加载父详情的返回预览/取消不能重新卸载正文或关闭准备门控。
+        if (finished) return@LaunchedEffect
+
+        if (navigationTransitionScope != null) {
+            // 给宿主的入场 effect 一个发布 settle 的机会；无动画入口不必等待固定超时。
+            withFrameNanos { }
+            snapshotFlow {
+                // 先读边界信号，仅在导航 idle 时求角色，避免订阅整段逐帧 depth。
+                if (navigationTransitionScope.isRunning) return@snapshotFlow false
+                if (navigationTransitionScope.role != NavRole.Top) return@snapshotFlow false
+                shouldFinishVideoDetailNavigationEntry(
+                    isNavigationRunning = false,
+                    isEntryTop = true,
+                    isSharedTransitionActive = sharedTransitionScope?.isTransitionActive ?: false,
+                    isLegacyNavRunning = animatedVisibilityScope?.transition?.isRunning ?: false,
+                    isHeroSettled = heroDriver == null ||
+                        (heroDriver.progressProvider() >= 0.999f &&
+                            !heroDriver.isGestureInProgressProvider()),
+                )
+            }.first { it }
             finished = true
             return@LaunchedEffect
         }
 
-        // 相关推荐返回会再次触发 shared/nav transition；若把 finished 打回 false，
-        // 父详情简介/相关列表会被 AnimatedVisibility 整块卸掉，表现为播放器下方黑屏重载。
-        if (finished) {
-            return@LaunchedEffect
-        }
         if (heroDriver != null) {
-            snapshotFlow { heroDriver.progressProvider() >= 0.999f &&
-                !heroDriver.isGestureInProgressProvider() }.first { it }
+            snapshotFlow {
+                heroDriver.progressProvider() >= 0.999f &&
+                    !heroDriver.isGestureInProgressProvider()
+            }.first { it }
             finished = true
             return@LaunchedEffect
         }
 
         var hasObservedActiveTransition = false
-
+        var fallbackElapsed by mutableStateOf(false)
         val timeoutJob = launch {
-            kotlinx.coroutines.delay(fallbackTimeoutMillis.toLong())
-            finished = true
+            delay(fallbackTimeoutMillis.toLong())
+            fallbackElapsed = true
         }
-
         try {
             snapshotFlow {
                 val sharedActive = sharedTransitionScope?.isTransitionActive ?: false
                 val navRunning = animatedVisibilityScope?.transition?.isRunning ?: false
-                sharedActive to navRunning
-            }
-                .distinctUntilChanged()
-                .collect { (sharedActive, navRunning) ->
-                    if (sharedActive || navRunning) {
-                        hasObservedActiveTransition = true
-                    }
-                    if (
-                        shouldMarkVideoDetailEntryTransitionFinished(
-                            hasObservedActiveTransition = hasObservedActiveTransition,
-                            isSharedTransitionActive = sharedActive,
-                            isNavEnterTransitionRunning = navRunning,
-                        )
-                    ) {
-                        finished = true
-                        timeoutJob.cancel()
-                    }
-                }
+                if (sharedActive || navRunning) hasObservedActiveTransition = true
+                shouldMarkVideoDetailEntryTransitionFinished(
+                    hasObservedActiveTransition = hasObservedActiveTransition || fallbackElapsed,
+                    isSharedTransitionActive = sharedActive,
+                    isNavEnterTransitionRunning = navRunning,
+                )
+            }.first { it }
+            // 超时只兜底缺失的启动信号，不在明确活跃的动画中强行启动重任务。
+            finished = true
         } finally {
             timeoutJob.cancel()
         }
     }
 
     return finished
-}
-
-/**
- * 冷启动不必等整个 shared morph 完成才请求媒体：在后段开始解码，实际画面仍由
- * [VideoPlayerSection] 的首帧揭开策略接管封面，所以慢网不会露黑帧。
- */
-@Composable
-internal fun rememberVideoDetailEntryPlaybackReady(
-    deferLoad: Boolean,
-    morphDurationMillis: Int,
-    heroDriver: MiuixVideoCardTransitionState? = null,
-): Boolean {
-    if (!deferLoad) return true
-
-    var ready by remember(deferLoad) { mutableStateOf(false) }
-    val preloadDelayMillis = remember(morphDurationMillis) {
-        resolveVideoDetailEntryPlaybackPreloadDelayMillis(morphDurationMillis)
-    }
-    LaunchedEffect(deferLoad, preloadDelayMillis, heroDriver) {
-        if (!deferLoad) {
-            ready = true
-            return@LaunchedEffect
-        }
-        if (heroDriver != null) {
-            val spec = heroDriver.motionSpec
-            val duration = spec?.enterDurationMillis ?: morphDurationMillis
-            val fraction = resolveVideoDetailEntryPlaybackPreloadDelayMillis(duration).toFloat() /
-                duration.coerceAtLeast(1)
-            val threshold = spec?.enterSpatialSpec?.transform(fraction.coerceIn(0f, 1f)) ?: fraction
-            snapshotFlow { heroDriver.progressProvider() >= threshold }.first { it }
-        } else {
-            kotlinx.coroutines.delay(preloadDelayMillis.toLong())
-        }
-        ready = true
-    }
-    return ready
 }

@@ -14,7 +14,7 @@ class MainActivityRuntimeVisualGuardStructureTest {
         val onDestroyBlock = source.substringAfter("override fun onDestroy()").substringBefore("\n    }")
 
         assertTrue(onStartBlock.contains("JankStats.createAndTrack(window)"))
-        assertTrue(onStartBlock.contains("activateSession(runtimeVisualGuardSession)"))
+        assertTrue(onStartBlock.contains("beginSession(runtimeVisualGuardSession)"))
         assertTrue(onStartBlock.contains("SystemClock.uptimeMillis()"))
         assertTrue(onStopBlock.contains("discardActiveWindow(runtimeVisualGuardSession)"))
         assertTrue(onStopBlock.contains("isTrackingEnabled = false"))
@@ -46,7 +46,7 @@ class MainActivityRuntimeVisualGuardStructureTest {
         val onDestroyBlock = source.substringAfter("override fun onDestroy()").substringBefore("override fun onConfigurationChanged")
 
         assertTrue(onStartBlock.contains("JankStats.createAndTrack(window)"))
-        assertTrue(onStartBlock.contains("activateSession(runtimeVisualGuardSession)"))
+        assertTrue(onStartBlock.contains("beginSession(runtimeVisualGuardSession)"))
         assertTrue(onStartBlock.contains("AppRuntimeVisualGuardTracker.onFrame("))
         assertTrue(onStartBlock.contains("SystemClock.uptimeMillis()"))
         assertTrue(onStopBlock.contains("discardActiveWindow(runtimeVisualGuardSession)"))

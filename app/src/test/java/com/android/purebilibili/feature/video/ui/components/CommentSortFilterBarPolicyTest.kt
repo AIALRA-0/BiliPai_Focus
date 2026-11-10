@@ -10,6 +10,17 @@ import kotlin.test.assertTrue
 class CommentSortFilterBarPolicyTest {
 
     @Test
+    fun `compact glass sort slots preserve disabled material defaults`() {
+        val native = resolveCommentSortSegmentedControlSpec(2, liquidGlassEnabled = false)
+        val glass = resolveCommentSortSegmentedControlSpec(2, liquidGlassEnabled = true)
+        assertEquals(66, native.itemWidthDp)
+        assertEquals(56, glass.itemWidthDp)
+        assertEquals(native.heightDp, glass.heightDp)
+        assertEquals(native.indicatorHeightDp, glass.indicatorHeightDp)
+        assertEquals(native, resolveCommentSortSegmentedControlSpec(2))
+    }
+
+    @Test
     fun `comment sort exposes only hot and newest without up filter`() {
         assertEquals(
             listOf(CommentSortMode.HOT, CommentSortMode.NEWEST),

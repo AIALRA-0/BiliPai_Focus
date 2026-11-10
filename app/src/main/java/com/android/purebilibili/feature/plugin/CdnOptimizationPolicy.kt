@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.plugin.sdk.PlaybackCdnCandidate
+
 import java.net.URI
 import java.security.MessageDigest
 
@@ -96,8 +98,18 @@ internal fun isRiskyCdnHost(host: String): Boolean {
     return normalized.contains("mcdn") ||
         normalized.contains("pcdn") ||
         normalized.contains("gotcha") ||
+        // 与 core-data 的 isPcdnUrl 保持一致，避免回退时把 PCDN 地址捡回来
+        riskyCdnHostSuffixes.any { normalized.contains(it) } ||
         normalized.matches(Regex("^\\d{1,3}(?:\\.\\d{1,3}){3}$"))
 }
+
+/** 已知的第三方 PCDN 域名后缀，与 core-data/VideoResponse.pcdnHostSuffixes 同口径。 */
+private val riskyCdnHostSuffixes = listOf(
+    "szbdyd.com",
+    "mountaintoys.cn",
+    "qrstuvwxyzab.com",
+    "zhenidc.cn",
+)
 
 internal fun resolveCdnPrefetchSegmentCount(bufferedDurationMs: Long): Int {
     return when {

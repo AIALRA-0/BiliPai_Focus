@@ -58,15 +58,20 @@ internal fun resolveDanmakuInputPlaceholder(isLoggedIn: Boolean): String {
 internal fun resolveDanmakuComposerLoginBlockedMessage(): String = "请先登录后再发送弹幕"
 
 internal fun danmakuSendColorOptions(): List<DanmakuSendOption<Int>> = listOf(
-    DanmakuSendOption(16777215, "白色"),
-    DanmakuSendOption(16646914, "红色"),
-    DanmakuSendOption(16740868, "橙色"),
-    DanmakuSendOption(16755202, "金色"),
-    DanmakuSendOption(52224, "绿色"),
-    DanmakuSendOption(41430, "蓝色"),
-    DanmakuSendOption(13369971, "紫色"),
-    DanmakuSendOption(2236962, "黑色"),
-    DanmakuSendOption(DANMAKU_SEND_VIP_GRADUAL_COLOR, "会员渐变")
+    DanmakuSendOption(0xFFFFFF, "白色"),
+    DanmakuSendOption(0xFE0302, "红色"),
+    DanmakuSendOption(0xFF7204, "橙色"),
+    DanmakuSendOption(0xFFAA02, "金色"),
+    DanmakuSendOption(0xFFD302, "黄色"),
+    DanmakuSendOption(0xFFFF00, "亮黄"),
+    DanmakuSendOption(0xA0EE00, "黄绿"),
+    DanmakuSendOption(0x00CD00, "绿色"),
+    DanmakuSendOption(0x019899, "青色"),
+    DanmakuSendOption(0x4266BE, "蓝色"),
+    DanmakuSendOption(0x89D5FF, "天蓝"),
+    DanmakuSendOption(0xCC0273, "紫色"),
+    DanmakuSendOption(0x222222, "黑色"),
+    DanmakuSendOption(0x9B9B9B, "灰色")
 )
 
 internal fun danmakuSendModeOptions(): List<DanmakuSendOption<Int>> = listOf(
@@ -77,6 +82,5 @@ internal fun danmakuSendModeOptions(): List<DanmakuSendOption<Int>> = listOf(
 
 internal fun danmakuSendFontSizeOptions(): List<DanmakuSendOption<Int>> = listOf(
     DanmakuSendOption(18, "小"),
-    DanmakuSendOption(25, "中"),
-    DanmakuSendOption(36, "大")
+    DanmakuSendOption(25, "标准")
 )

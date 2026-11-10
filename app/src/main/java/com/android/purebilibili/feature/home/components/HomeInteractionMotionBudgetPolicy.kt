@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.Easing
 import com.android.purebilibili.core.ui.AppTopTabPresentation
 
 import kotlin.math.roundToInt
@@ -308,23 +306,18 @@ internal fun shouldUseLightweightTopTabItemClickIndication(
     return presentation == AppTopTabPresentation.MATERIAL_UNDERLINE
 }
 
-internal const val MD3_TOP_TAB_INDICATOR_DURATION_MILLIS = 300
-
-internal val Md3TopTabIndicatorFlutterEase = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
-
-internal val Md3TopTabIndicatorDecelerate = Easing { fraction ->
-    kotlin.math.sin(Md3TopTabIndicatorFlutterEase.transform(fraction) * Math.PI.toFloat() / 2f)
-}
-
-internal val Md3TopTabIndicatorAccelerate = Easing { fraction ->
-    1f - kotlin.math.cos(Md3TopTabIndicatorFlutterEase.transform(fraction) * Math.PI.toFloat() / 2f)
-}
+internal const val MD3_TOP_TAB_INDICATOR_DURATION_MILLIS =
+    com.android.purebilibili.core.ui.motion.AppTabIndicatorMotion.DurationMillis
+internal val Md3TopTabIndicatorFlutterEase = com.android.purebilibili.core.ui.motion.AppTabIndicatorMotion.ease
+internal val Md3TopTabIndicatorDecelerate = com.android.purebilibili.core.ui.motion.AppTabIndicatorMotion.decelerate
+internal val Md3TopTabIndicatorAccelerate = com.android.purebilibili.core.ui.motion.AppTabIndicatorMotion.accelerate
 
 internal fun shouldAnimateMd3TopTabUnderline(
     pagerIsDragging: Boolean,
-    topTabIndicatorOwnsPosition: Boolean
+    topTabIndicatorOwnsPosition: Boolean,
+    pagerDrivesIndicator: Boolean = false,
 ): Boolean {
-    return !pagerIsDragging && !topTabIndicatorOwnsPosition
+    return !pagerDrivesIndicator && !pagerIsDragging && !topTabIndicatorOwnsPosition
 }
 
 internal data class Md3TopTabTargetBounds(

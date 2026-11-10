@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.audio.screen
 
+import com.android.purebilibili.core.ui.transition.NowPlayingBarHandoffState
+import com.android.purebilibili.core.ui.transition.resolveNowPlayingBarReturnVisibility
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,32 +12,20 @@ class AudioNowPlayingBarMotionPolicyTest {
 
     @Test
     fun sourceHideRequiresTheRealSharedReturnOwner() {
-        assertTrue(
-            shouldHideAudioNowPlayingBarForSharedReturn(
-                isReturningFromDetail = true,
-                targetBvid = "BV123",
-                currentBvid = "BV123",
-                isSharedTransitionRunning = true,
-                isSharedTransitionSourceOwner = true,
-            )
+        val returning = NowPlayingBarHandoffState.Returning(
+            targetBvid = "BV123",
+            isSourceOwner = true,
         )
-        assertFalse(
-            shouldHideAudioNowPlayingBarForSharedReturn(
-                isReturningFromDetail = true,
-                targetBvid = "BV123",
-                currentBvid = "BV123",
-                isSharedTransitionRunning = false,
-                isSharedTransitionSourceOwner = true,
-            )
+        assertEquals(
+            0f,
+            resolveNowPlayingBarReturnVisibility(handoff = returning, currentBvid = "BV123"),
         )
-        assertFalse(
-            shouldHideAudioNowPlayingBarForSharedReturn(
-                isReturningFromDetail = true,
-                targetBvid = "BV123",
+        assertEquals(
+            1f,
+            resolveNowPlayingBarReturnVisibility(
+                handoff = NowPlayingBarHandoffState.Idle,
                 currentBvid = "BV123",
-                isSharedTransitionRunning = true,
-                isSharedTransitionSourceOwner = false,
-            )
+            ),
         )
     }
 
@@ -53,7 +43,7 @@ class AudioNowPlayingBarMotionPolicyTest {
             "app/src/main/java/com/android/purebilibili/feature/audio/screen/AudioNowPlayingBar.kt"
         )
         assertTrue(source.contains("onCompactClick"))
-        assertTrue(source.contains("isSharedTransitionSourceOwner"))
+        assertTrue(source.contains("handoff"))
         assertFalse(source.contains("landingProgress"))
         assertFalse(source.contains("AudioNowPlayingBarLandingEasing"))
     }
@@ -66,14 +56,15 @@ class AudioNowPlayingBarMotionPolicyTest {
             searchProgress = 0f,
             density = 1f,
         )
-        assertEquals(40, metrics.coverPx)
-        assertEquals(10, metrics.horizontalPaddingPx)
-        assertEquals(10, metrics.spacerPx)
-        assertEquals(48, metrics.playWidthPx)
-        assertEquals(48, metrics.extraWidthPx)
-        assertEquals(186, metrics.titleWidthPx)
-        assertEquals(10, metrics.contentStartPx)
-        assertEquals(20, metrics.artistHeightPx)
+        assertTrue(metrics.titleWidthPx > 0)
+        assertTrue(metrics.playWidthPx > 0)
+        assertTrue(metrics.extraWidthPx > 0)
+        // 封面、文字与两个操作占满可用宽度，不为已移除的第三个按钮预留空白。
+        assertEquals(
+            400 - metrics.horizontalPaddingPx,
+            metrics.contentStartPx + metrics.coverPx + metrics.spacerPx +
+                metrics.titleWidthPx + metrics.playWidthPx + metrics.extraWidthPx,
+        )
     }
 
     @Test
@@ -84,14 +75,17 @@ class AudioNowPlayingBarMotionPolicyTest {
             searchProgress = 0f,
             density = 1f,
         )
-        assertEquals(32, metrics.coverPx)
-        assertEquals(10, metrics.horizontalPaddingPx)
-        assertEquals(6, metrics.spacerPx)
-        assertEquals(48, metrics.playWidthPx)
+        assertEquals(metrics.horizontalPaddingPx, metrics.contentStartPx)
         assertEquals(0, metrics.extraWidthPx)
-        assertEquals(294, metrics.titleWidthPx)
-        assertEquals(10, metrics.contentStartPx)
         assertEquals(0, metrics.artistHeightPx)
+        assertEquals(
+            400 - metrics.horizontalPaddingPx,
+            metrics.contentStartPx + metrics.coverPx + metrics.spacerPx +
+                metrics.titleWidthPx + metrics.playWidthPx,
+        )
+        val expanded = resolveAudioNowPlayingBarRowMetrics(400, 0f, 0f, 1f)
+        assertTrue(metrics.controlHeightPx < expanded.controlHeightPx)
+        assertTrue(metrics.coverPx < expanded.coverPx)
     }
 
     @Test

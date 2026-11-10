@@ -35,6 +35,19 @@ fun resolveSearchLandingSectionOrder(): List<SearchLandingSection> {
     )
 }
 
+internal fun resolveVisibleSearchLandingSectionOrder(
+    sectionOrder: List<SearchLandingSection>,
+    showHotSection: Boolean,
+    showHistorySection: Boolean,
+    showDiscoverSection: Boolean,
+): List<SearchLandingSection> = sectionOrder.filter { section ->
+    when (section) {
+        SearchLandingSection.TRENDING -> showHotSection
+        SearchLandingSection.HISTORY -> showHistorySection
+        SearchLandingSection.DISCOVER -> showDiscoverSection
+    }
+}
+
 enum class SearchLandingSection {
     TRENDING,
     HISTORY,

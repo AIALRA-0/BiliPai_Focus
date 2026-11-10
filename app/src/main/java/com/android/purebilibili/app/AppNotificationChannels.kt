@@ -8,6 +8,7 @@ internal const val SPONSOR_BLOCK_NOTIFICATION_CHANNEL_ID = "sponsor_block_channe
 internal const val JSON_PLUGIN_STATS_NOTIFICATION_CHANNEL_ID = "json_plugin_stats_channel"
 internal const val MESSAGE_NOTIFICATION_CHANNEL_ID = "message_notification_channel"
 internal const val MESSAGE_NOTIFICATION_SERVICE_CHANNEL_ID = "message_notification_service_channel"
+internal const val LIVE_RESERVE_NOTIFICATION_CHANNEL_ID = "live_reserve_notification_channel"
 
 internal data class AppNotificationChannelSpec(
     val id: String,
@@ -57,6 +58,14 @@ internal fun resolveAppNotificationChannels(): List<AppNotificationChannelSpec> 
             name = "后台消息监测",
             description = "常驻后台监测消息时显示的常驻通知",
             importance = NotificationManager.IMPORTANCE_LOW
+        ),
+        AppNotificationChannelSpec(
+            id = LIVE_RESERVE_NOTIFICATION_CHANNEL_ID,
+            name = "直播预约提醒",
+            description = "提醒已预约的直播即将开播",
+            importance = NotificationManager.IMPORTANCE_DEFAULT,
+            showBadge = true,
+            silent = false,
         )
     )
 }

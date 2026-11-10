@@ -30,20 +30,59 @@ fun Modifier.liquidGlassBackground(
         RenderEffect.createRuntimeShaderEffect(shader, "img").asComposeRenderEffect()
     }
 
+    val uniforms = remember(shader) { LiquidGlassUniformCache(shader) }
+    val backgroundArgb = remember(backgroundColor) { backgroundColor.toArgb() }
     this.graphicsLayer {
-        shader.setFloatUniform("resolution", size.width, size.height)
-        shader.setFloatUniform("refract_intensity", refractIntensity)
-        // Read the value inside the graphicsLayer block - this triggers redraw only, not recomposition
-        shader.setFloatUniform("scroll_offset", scrollOffsetProvider())
+        if (size.width <= 0f || size.height <= 0f) {
+            renderEffect = null
+        } else {
+            uniforms.updateStatic(size.width, size.height, refractIntensity, backgroundArgb)
+            // The zero-refraction shader path does not use scrolling. Avoid subscribing to it.
+            if (refractIntensity > 0.001f) {
+                uniforms.updateScroll(scrollOffsetProvider())
+            }
+            renderEffect = liquidGlassRenderEffect
+        }
+    }
+}
 
-        val bgColor = backgroundColor.toArgb()
-        val a = android.graphics.Color.alpha(bgColor) / 255f
-        val r = android.graphics.Color.red(bgColor) / 255f * a
-        val g = android.graphics.Color.green(bgColor) / 255f * a
-        val b = android.graphics.Color.blue(bgColor) / 255f * a
-        shader.setFloatUniform("background_color", r, g, b, a)
+/** UI-thread cache only; uniform updates must not write Compose Snapshot state. */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private class LiquidGlassUniformCache(private val shader: RuntimeShader) {
+    private var width = Float.NaN
+    private var height = Float.NaN
+    private var intensity = Float.NaN
+    private var backgroundArgb: Int? = null
+    private var scroll = Float.NaN
 
-        renderEffect = liquidGlassRenderEffect
+    fun updateStatic(nextWidth: Float, nextHeight: Float, nextIntensity: Float, nextBackground: Int) {
+        if (width != nextWidth || height != nextHeight) {
+            shader.setFloatUniform("resolution", nextWidth, nextHeight)
+            width = nextWidth
+            height = nextHeight
+        }
+        if (intensity != nextIntensity) {
+            shader.setFloatUniform("refract_intensity", nextIntensity)
+            intensity = nextIntensity
+        }
+        if (backgroundArgb != nextBackground) {
+            val alpha = android.graphics.Color.alpha(nextBackground) / 255f
+            shader.setFloatUniform(
+                "background_color",
+                android.graphics.Color.red(nextBackground) / 255f * alpha,
+                android.graphics.Color.green(nextBackground) / 255f * alpha,
+                android.graphics.Color.blue(nextBackground) / 255f * alpha,
+                alpha,
+            )
+            backgroundArgb = nextBackground
+        }
+    }
+
+    fun updateScroll(nextScroll: Float) {
+        if (scroll != nextScroll) {
+            shader.setFloatUniform("scroll_offset", nextScroll)
+            scroll = nextScroll
+        }
     }
 }
 

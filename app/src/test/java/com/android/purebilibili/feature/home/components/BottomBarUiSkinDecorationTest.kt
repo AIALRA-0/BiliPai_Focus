@@ -18,6 +18,34 @@ import kotlin.test.assertTrue
 class BottomBarUiSkinDecorationTest {
 
     @Test
+    fun illustratedSkinKeepsTheConfiguredFloatingDock() {
+        val source = File("src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+            .readText()
+        val host = source.substringAfter("fun FrostedBottomBar(")
+            .substringBefore("private fun MaterialBottomBar(")
+        val floatingChrome = source.substringAfter("private fun BiliPaiFloatingBottomBarChrome(")
+            .substringBefore("// BiliPai 对齐：材质/动效由 FloatingBottomBar 三层结构承担")
+
+        assertEquals(2, "isFloating = isFloating,".toRegex().findAll(host).count())
+        assertTrue(!floatingChrome.contains("IllustratedSkinBottomBar("))
+    }
+
+    @Test
+    fun illustratedNavigationRequiresArtworkAndKeepsTabletNavigation() {
+        assertTrue(shouldUseIllustratedSkinBottomBar(true, true, false))
+        assertTrue(!shouldUseIllustratedSkinBottomBar(false, true, false))
+        assertTrue(!shouldUseIllustratedSkinBottomBar(true, false, false))
+        assertTrue(!shouldUseIllustratedSkinBottomBar(true, true, true))
+    }
+
+    @Test
+    fun illustratedIconsFitNarrowSlotsWithoutCroppingCharacters() {
+        assertEquals(52.dp, resolveIllustratedSkinIconSize(80.dp))
+        assertEquals(40.dp, resolveIllustratedSkinIconSize(48.dp))
+        assertEquals(24.dp, resolveIllustratedSkinIconSize(24.dp))
+    }
+
+    @Test
     fun bottomSkinDecorativeTrimSupportsOptionalShapeClipForFloatingShell() {
         val source = File("src/main/java/com/android/purebilibili/feature/home/components/BottomBarUiSkin.kt")
             .readText()
@@ -30,8 +58,8 @@ class BottomBarUiSkinDecorationTest {
         assertTrue(trimSource.contains(".clearAndSetSemantics {}"))
         assertTrue(trimSource.contains(".drawBehind {"))
         assertTrue(trimSource.contains("drawRect(decoration.bottomTrimTint)"))
-        // Crop + 底部对齐可覆盖手势导航区，同时保持素材主体沉底。
-        assertTrue(trimSource.contains("ContentScale.Crop"))
+        // Fit 保留完整皮肤图，基础底色填补未覆盖区域。
+        assertTrue(trimSource.contains("ContentScale.Fit"))
         assertTrue(trimSource.contains("Alignment.BottomCenter"))
         assertTrue(!trimSource.contains(".alpha(0.82f)"))
     }
@@ -105,6 +133,44 @@ class BottomBarUiSkinDecorationTest {
 
         assertEquals("dev.example.cloud", decoration?.skinId)
         assertEquals("/tmp/bottom_trim.png", decoration?.bottomTrimImagePath)
+    }
+
+    @Test
+    fun illustratedBottomBarUsesProvidedSelectedCharacterArtwork() {
+        val installed = InstalledUiSkinPackage(
+            manifest = UiSkinManifest(
+                formatVersion = 1,
+                skinId = "dev.example.illustrated",
+                displayName = "插画底栏",
+                version = "1.0.0",
+                apiVersion = 1,
+                surfaces = setOf(UiSkinSurface.HOME_BOTTOM_BAR),
+                assets = UiSkinAssets(
+                    bottomBarTrim = "assets/tail_bg.png",
+                    bottomBarIcons = mapOf(
+                        "home" to "assets/tail_icon_main.png",
+                        "home_selected" to "assets/tail_icon_selected_main.png",
+                    ),
+                ),
+            ),
+            packageSha256 = "sha",
+            packagePath = "/tmp/illustrated.bpskin",
+            installedAtMillis = 42L,
+            assetFiles = mapOf(
+                "assets/tail_bg.png" to "/tmp/tail_bg.png",
+                "assets/tail_icon_main.png" to "/tmp/tail_icon_main.png",
+                "assets/tail_icon_selected_main.png" to "/tmp/tail_icon_selected_main.png",
+            ),
+        )
+        val decoration = resolveBottomBarUiSkinDecoration(
+            UiSkinState(enabled = true, activeSkin = installed)
+        )
+
+        assertEquals("/tmp/tail_icon_main.png", decoration?.illustratedIconPathFor(BottomNavItem.HOME, selected = false))
+        assertEquals(
+            "/tmp/tail_icon_selected_main.png",
+            decoration?.illustratedIconPathFor(BottomNavItem.HOME, selected = true),
+        )
     }
 
     @Test

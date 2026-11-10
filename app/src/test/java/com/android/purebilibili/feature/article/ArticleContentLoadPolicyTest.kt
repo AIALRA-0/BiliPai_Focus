@@ -69,7 +69,7 @@ class ArticleContentLoadPolicyTest {
                     width = 800,
                     height = 600
                 ),
-                ArticleContentBlock.Paragraph("相关专栏")
+                ArticleContentBlock.MediaCard(OpusLinkCard(title = "相关专栏", description = "desc"))
             ),
             blocks
         )

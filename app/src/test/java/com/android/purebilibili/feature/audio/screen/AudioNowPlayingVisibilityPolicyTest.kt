@@ -109,6 +109,33 @@ class AudioNowPlayingVisibilityPolicyTest {
     }
 
     @Test
+    fun landscapeTabletKeepsVideoEntryReachableOutsidePlaybackDestinations() {
+        assertTrue(
+            resolveAudioNowPlayingVisible(
+                sessionActive = true,
+                isOnAudioModeScreen = false,
+                isInPipMode = false,
+                hasCurrentItem = true,
+                barEnabled = true,
+                isLandscape = true,
+                isTabletLayout = true,
+            )
+        )
+        assertFalse(
+            resolveAudioNowPlayingVisible(
+                sessionActive = true,
+                isOnAudioModeScreen = false,
+                isInPipMode = false,
+                hasCurrentItem = true,
+                barEnabled = true,
+                isLandscape = true,
+                isTabletLayout = true,
+                isVideoDetailDestination = true,
+            )
+        )
+    }
+
+    @Test
     fun miniPlayerTakesPriorityOverAudioNowPlayingBar() {
         assertFalse(
             resolveAudioNowPlayingVisible(

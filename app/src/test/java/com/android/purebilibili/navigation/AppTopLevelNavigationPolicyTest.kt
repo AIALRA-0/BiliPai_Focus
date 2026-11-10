@@ -570,6 +570,36 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun bottomPagerPreloadedItemsSaver_survivesActivityRecreation() {
+        val items = setOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.PROFILE)
+        val saved = with(BottomPagerPreloadedItemsSaver) {
+            androidx.compose.runtime.saveable.SaverScope { true }.save(items)
+        }
+        assertEquals(items, saved?.let { BottomPagerPreloadedItemsSaver.restore(it) })
+    }
+
+    @Test
+    fun bottomPagerPreloadedItemsSaver_dropsUnknownTabNames() {
+        val saver = bottomPagerPreloadedItemsSaver("same-process")
+        assertEquals(
+            setOf(BottomNavItem.HOME),
+            saver.restore(listOf("same-process", "HOME", "NOT_A_TAB"))
+        )
+    }
+
+    @Test
+    fun bottomPagerPreloadedItemsSaver_dropsWarmthAfterProcessDeathAndLegacyRestore() {
+        val saver = bottomPagerPreloadedItemsSaver("old-process")
+        val saved = with(saver) {
+            androidx.compose.runtime.saveable.SaverScope { true }.save(
+                setOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.PROFILE)
+            )
+        }
+        assertEquals(emptySet(), saved?.let { bottomPagerPreloadedItemsSaver("new-process").restore(it) })
+        assertEquals(emptySet(), saver.restore(listOf("HOME", "DYNAMIC", "PROFILE")))
+    }
+
+    @Test
     fun bottomPagerPreload_followsVisibleBottomBarCountAfterReady() {
         assertEquals(0, resolveBottomPagerBeyondViewportPageCount(pageCount = 4, contentReady = false))
         assertEquals(0, resolveBottomPagerBeyondViewportPageCount(pageCount = 1, contentReady = true))
@@ -603,6 +633,26 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun bottomPagerVisibleItems_deduplicateBeforeApplyingPageLimit() {
+        val items = resolveVisibleBottomBarItems(
+            listOf("PROFILE", "HOME", "PROFILE", "DYNAMIC", "SETTINGS", "HISTORY")
+        )
+        assertEquals(
+            listOf(BottomNavItem.PROFILE, BottomNavItem.HOME, BottomNavItem.DYNAMIC,
+                BottomNavItem.SETTINGS, BottomNavItem.HISTORY),
+            items,
+        )
+        val keys = items.map(::resolveBottomPagerSaveableStateKey)
+        assertEquals(keys.size, keys.toSet().size)
+    }
+
+    @Test
+    fun bottomPagerVisibleItems_emptyOrInvalidSettingsKeepOneHomePage() {
+        assertEquals(listOf(BottomNavItem.HOME), resolveVisibleBottomBarItems(emptyList()))
+        assertEquals(listOf(BottomNavItem.HOME), resolveVisibleBottomBarItems(listOf("INVALID")))
+    }
+
+    @Test
     fun bottomPagerNavigation_keepsSaveableKeysUniqueForFarJump() {
         val visibleItems = listOf(
             BottomNavItem.HOME,
@@ -629,6 +679,27 @@ class AppTopLevelNavigationPolicyTest {
             }
 
         assertEquals(saveableKeys.distinct(), saveableKeys)
+    }
+
+    @Test
+    fun bottomPagerLayoutKeys_allowOldLayoutQueriesAfterSettingsRemoveTab() {
+        val before = listOf(
+            BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY,
+            BottomNavItem.PROFILE, BottomNavItem.SETTINGS
+        )
+        val after = before.dropLast(1)
+        // 旧布局仍查询五页，新配置已经只剩四页。
+        val keys = before.indices.map { resolveBottomPagerLayoutKey(it, after) }
+        assertEquals(keys.size, keys.toSet().size)
+        after.forEachIndexed { index, item ->
+            assertEquals(resolveBottomPagerSaveableStateKey(item), keys[index])
+        }
+        assertFalse(keys.last() in before.map(::resolveBottomPagerSaveableStateKey))
+        // 重新启用时恢复标签自身的键，保留原页面状态。
+        assertEquals(
+            resolveBottomPagerSaveableStateKey(BottomNavItem.SETTINGS),
+            resolveBottomPagerLayoutKey(4, before)
+        )
     }
 
     @Test

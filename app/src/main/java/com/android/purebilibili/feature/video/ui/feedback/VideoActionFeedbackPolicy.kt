@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.feedback
 
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.theme.AppUiStyle
 
 enum class VideoFeedbackAnchor {
     BottomCenter,
@@ -30,12 +31,12 @@ data class VideoDetailActionActiveColors(
 fun resolveVideoDetailActionActiveColors(
     primary: Color,
     secondary: Color,
-    tertiary: Color
+    uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
 ): VideoDetailActionActiveColors {
     return VideoDetailActionActiveColors(
         primaryAction = primary,
-        watchLater = tertiary,
-        downloadInProgress = secondary,
+        watchLater = primary,
+        downloadInProgress = if (uiStyle == AppUiStyle.MIUIX) primary else secondary,
         downloaded = primary
     )
 }
@@ -51,6 +52,20 @@ fun resolveVideoActionCountTint(
     activeColor: Color,
     inactiveColor: Color
 ): Color = if (isActive) activeColor else inactiveColor
+
+internal fun canSubmitVideoFollowAction(
+    statusKnown: Boolean,
+    isFollowing: Boolean,
+    isSubmitting: Boolean,
+): Boolean = statusKnown && !isFollowing && !isSubmitting
+
+internal fun canSubmitVideoTripleAction(
+    statusKnown: Boolean,
+    isLiked: Boolean,
+    isCoined: Boolean,
+    isFavorited: Boolean,
+    isSubmitting: Boolean,
+): Boolean = statusKnown && !isSubmitting && !(isLiked && isCoined && isFavorited)
 
 fun resolveVideoFeedbackPlacement(
     isFullscreen: Boolean,
@@ -72,11 +87,11 @@ fun resolveVideoFeedbackPlacement(
     }
 }
 
-/** The like burst is transient feedback and remains visible when centered over the player. */
-fun resolveLikeBurstPlacement(): VideoFeedbackPlacement = VideoFeedbackPlacement(
-    anchor = VideoFeedbackAnchor.CenterOverlay,
-    bottomInsetDp = 0,
-    sideInsetDp = 0,
+/** Reserve room for player controls / the reply composer rather than covering the picture center. */
+fun resolveLikeBurstPlacement(bottomInsetDp: Int = 0): VideoFeedbackPlacement = VideoFeedbackPlacement(
+    anchor = VideoFeedbackAnchor.BottomTrailing,
+    bottomInsetDp = bottomInsetDp + 64,
+    sideInsetDp = 16,
     emphasis = VideoFeedbackEmphasis.Emphasized,
 )
 

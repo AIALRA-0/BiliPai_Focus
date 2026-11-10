@@ -7,7 +7,6 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,9 +24,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -74,6 +75,7 @@ internal fun rememberVideoDetailTransitionState(
     val entryOwnsMiuixCardTransition = isVideoDetailEntryActiveMiuixTransitionSource(
         entrySourceRoute = sourceRoute,
         activeSourceRoute = transitionBackgroundState.sourceRouteProvider(),
+        miuixTransitionEnabled = miuixCardTransition.enabled,
     )
     val entryMiuixTransitionEnabled =
         miuixCardTransition.enabled && entryOwnsMiuixCardTransition
@@ -124,10 +126,16 @@ internal fun rememberVideoDetailTransitionState(
         requireNotNull(animatedVisibilityScope).transition.animateFloat(
             transitionSpec = {
                 if (targetState == EnterExitState.PostExit) {
-                    // 返回：Linear + 满 morph 时长，与 videoSharedElementReturnTweenSpec 一致
+                    // 返回：Linear + 满 morph 时长——spec 直读 bounds 侧的单一事实来源
+                    // （videoSharedElementReturnMorph*），与 sharedBounds 严格同源。
                     tween(
-                        durationMillis = motionSpec.durationMillis.coerceAtLeast(0),
-                        easing = androidx.compose.animation.core.LinearEasing,
+                        durationMillis =
+                            com.android.purebilibili.core.ui.transition
+                                .videoSharedElementReturnMorphDurationMillis(
+                                    motionSpec.durationMillis.coerceAtLeast(0),
+                                ),
+                        easing = com.android.purebilibili.core.ui.transition
+                            .videoSharedElementReturnMorphEasing(),
                     )
                 } else {
                     // 进场：Continuity + 满 morph 时长，与 bounds enter 一致
@@ -234,6 +242,9 @@ internal fun rememberVideoDetailRouteSheetFrameProvider(
     var settleDirection by remember {
         mutableStateOf(VideoDetailRouteSheetSettleDirection.None)
     }
+    // predictive back 预览被取消时（exit → 重新 enter），tween 若仍用全时长会显得拖沓；
+    // 按剩余进度比例缩短恢复段时长，保持原 easing 设计。
+    var previousExitInProgress by remember { mutableStateOf(false) }
 
     LaunchedEffect(
         effectiveMotion.enabled,
@@ -247,16 +258,26 @@ internal fun rememberVideoDetailRouteSheetFrameProvider(
             settleDirection = VideoDetailRouteSheetSettleDirection.None
             routeSheetSettleProgress.snapTo(0f)
             routeSheetProgress.snapTo(1f)
+            previousExitInProgress = false
             return@LaunchedEffect
         }
 
+        val isCancelRecovery = previousExitInProgress && !isExitTransitionInProgress
+        previousExitInProgress = isExitTransitionInProgress
         settleDirection = VideoDetailRouteSheetSettleDirection.None
         routeSheetSettleProgress.snapTo(0f)
         val targetProgress = if (isExitTransitionInProgress) 0f else 1f
         routeSheetProgress.animateTo(
             targetValue = targetProgress,
             animationSpec = tween(
-                durationMillis = effectiveMotion.mainDurationMillis,
+                durationMillis = if (isCancelRecovery) {
+                    val remaining = 1f - routeSheetProgress.value
+                    (effectiveMotion.mainDurationMillis * remaining)
+                        .roundToInt()
+                        .coerceIn(60, effectiveMotion.mainDurationMillis)
+                } else {
+                    effectiveMotion.mainDurationMillis
+                },
                 easing = if (isExitTransitionInProgress) {
                     effectiveMotion.returnEasing
                 } else {
@@ -303,6 +324,7 @@ internal fun VideoDetailRouteSheetHost(
     isFullscreenMode: Boolean,
     backgroundColor: Color,
     backgroundAlpha: Float = 1f,
+    backgroundAlphaProvider: () -> Float = { backgroundAlpha },
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
     overlayContent: @Composable BoxScope.() -> Unit
@@ -321,19 +343,19 @@ internal fun VideoDetailRouteSheetHost(
             }
             .graphicsLayer {
                 val frame = frameProvider()
-                scaleX = frame.scale
-                scaleY = frame.scale
-                translationY = with(density) {
+                scaleX = if (isFullscreenMode) 1f else frame.scale
+                scaleY = if (isFullscreenMode) 1f else frame.scale
+                translationY = if (isFullscreenMode) 0f else with(density) {
                     frame.translationYDp.dp.toPx()
                 }
                 transformOrigin = TransformOrigin(0.5f, 0f)
-                clip = motion.enabled && frame.cornerDp > 0.01f
+                clip = !isFullscreenMode && motion.enabled && frame.cornerDp > 0.01f
                 shape = RoundedCornerShape(frame.cornerDp.dp)
             }
-            .background(
-                if (isFullscreenMode) Color.Black.copy(alpha = backgroundAlpha)
-                else backgroundColor.copy(alpha = backgroundAlpha)
-            ),
+            .drawBehind {
+                val background = if (isFullscreenMode) Color.Black else backgroundColor
+                drawRect(background.copy(alpha = backgroundAlphaProvider().coerceIn(0f, 1f)))
+            },
     ) {
         content()
         overlayContent()

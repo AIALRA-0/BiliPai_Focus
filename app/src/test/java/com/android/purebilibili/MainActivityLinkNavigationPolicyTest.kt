@@ -2,11 +2,87 @@ package com.android.purebilibili
 
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.navigation.ScreenRoutes
+import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.legacyRouteToBiliPaiNavKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class MainActivityLinkNavigationPolicyTest {
+    @Test
+    fun dynamicPreviewIntentCarriesCommentEntryAndActualReplyIdsAcrossColdDispatch() {
+        listOf(
+            "bilibili://following/detail/123?tab=comment" to
+                BiliPaiNavKey.DynamicDetail("123", openComments = true),
+            "https://t.bilibili.com/123?tab=comment" to
+                BiliPaiNavKey.DynamicDetail("123", openComments = true),
+            "bilibili://following/detail/123?tab=comment&root=456&comment_id=789" to
+                BiliPaiNavKey.DynamicDetail("123", 456L, 789L, openComments = true),
+            "bilibili://following/detail/123" to BiliPaiNavKey.DynamicDetail("123"),
+        ).forEach { (link, expected) ->
+            val target = BilibiliNavigationTargetParser.parse(link)!!
+            val navigation = resolveMainActivityLinkNavigation(target)!!
+            assertNull(navigation.pendingVideoId, link)
+            assertEquals(expected, legacyRouteToBiliPaiNavKey(navigation.pendingNavigationRoute), link)
+        }
+    }
+
+    @Test
+    fun videoCommentIntentKeepsBothReplyIdsInsteadOfTakingIdOnlyPlaybackPath() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://www.bilibili.com/video/BV1xx411c7mD?root_id=456#reply789"
+        )!!
+        val navigation = resolveMainActivityLinkNavigation(target)!!
+        assertNull(navigation.pendingVideoId)
+        val key = assertIs<BiliPaiNavKey.VideoDetail>(
+            legacyRouteToBiliPaiNavKey(navigation.pendingNavigationRoute)
+        )
+        assertEquals("BV1xx411c7mD", key.bvid)
+        assertEquals(456L, key.commentRootRpid)
+        assertEquals(789L, key.commentTargetRpid)
+    }
+
+    @Test
+    fun targetOnlyDynamicIntentDoesNotCreateAnIndependentThreadWithAFakeRoot() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "bilibili://comment/detail/17/123/0?comment_id=789"
+        )!!
+        val navigation = resolveMainActivityLinkNavigation(target)!!
+        val key = assertIs<BiliPaiNavKey.DynamicDetail>(
+            legacyRouteToBiliPaiNavKey(navigation.pendingNavigationRoute)
+        )
+        assertEquals("123", key.dynamicId)
+        assertEquals(0L, key.commentRootRpid)
+        assertEquals(789L, key.commentTargetRpid)
+    }
+
+    @Test
+    fun musicCommentIntentKeepsBusinessAndEntryUriAcrossLegacyRouteEncoding() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "bilibili://comment/detail/47/999/456/789?enterUri=https%3A%2F%2Fmusic.bilibili.com%2Fh5%2Fmusic-detail%3Fmusic_id%3DMA123"
+        )!!
+        val navigation = resolveMainActivityLinkNavigation(target)!!
+        assertEquals(
+            BiliPaiNavKey.CommentDetail(
+                oid = 999L,
+                rootId = 456L,
+                targetId = 789L,
+                type = 47,
+                enterUri = "https://music.bilibili.com/h5/music-detail?music_id=MA123",
+            ),
+            legacyRouteToBiliPaiNavKey(navigation.pendingNavigationRoute),
+        )
+    }
+
+    @Test
+    fun weeklyColdStartPreservesHistoricalPeriod() {
+        val navigation = resolveMainActivityLinkNavigation(BilibiliNavigationTarget.PopularFeed("weekly", 133))
+        assertEquals("weekly_series?number=133", navigation?.pendingNavigationRoute)
+        assertNull(navigation?.pendingVideoId)
+    }
+
 
     @Test
     fun spaceTarget_mapsToSpaceRoute() {
@@ -56,12 +132,12 @@ class MainActivityLinkNavigationPolicyTest {
     }
 
     @Test
-    fun musicTarget_ignoresUnsupportedNonAuIds() {
+    fun musicTarget_routesCopyrightMusicToNativeDetail() {
         val navigation = resolveMainActivityLinkNavigation(
             BilibiliNavigationTarget.Music("ma123")
         )
 
-        assertNull(navigation)
+        assertEquals("bgm_detail?musicId=ma123&aid=0&cid=0&showVideos=false", navigation?.pendingNavigationRoute)
     }
 
     @Test

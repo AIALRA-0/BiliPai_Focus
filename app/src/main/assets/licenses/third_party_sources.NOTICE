@@ -1,0 +1,266 @@
+Third-party source notices
+
+Source and copyright notices consolidated from implementation comments.
+
+Image preview and original-file saving behavior reference:
+PiliPlus, revision 3d0aed958b3b7e59c39c121196f189f429719904 (GPL-3.0).
+https://github.com/bggRGjQaUbCoE/PiliPlus
+lib/common/widgets/image_viewer/gallery_viewer.dart
+lib/common/widgets/image_viewer/image.dart
+lib/utils/image_utils.dart
+lib/pages/common/reply_controller.dart (comment restriction codes and input behavior)
+The Android region decoder and Compose integration are implemented locally.
+The upstream license is retained in artwork/third-party/piliplus/LICENSE.
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileAvatarExpansion.kt
+/*
+ * Pull-down avatar expansion adapted from NextAlone/Nagram ProfileActivity.java,
+ * revision 87863c8a57854c739e1452e56591c07ea52415d3 (GPL-3.0).
+ * Telegram source copyright Nikolai Kudashov and Telegram/Nagram contributors.
+ * See scrollVerticallyBy, needLayout and setAvatarExpandProgress upstream.
+ */
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileExpandedAvatar.kt
+/* Avatar geometry/overlays adapted from Nagram ProfileActivity.java (87863c8a), GPL-3.0. */
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileIdentityHeader.kt
+/*
+ * Centered profile geometry ported from NextAlone/Nagram ProfileActivity.java
+ * (fb56ea9801e5de68c60f0152b444bbe2a0fda520), GPL-2.0-or-later / GPL-3.0.
+ * Telegram source copyright Nikolai Kudashov, 2013-2018, and Nagram contributors.
+ */
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileAvatarEffect.kt
+/*
+ * Avatar fusion hosted from NextAlone/Nagram ProfileGooeyView.java,
+ * revision fb56ea9801e5de68c60f0152b444bbe2a0fda520; GPL-3.0.
+ * Telegram and Nagram contributors.
+ */
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileHeaderMotion.kt
+/*
+ * Profile motion adapted from NextAlone/Nagram ProfileActivity.java.
+ * Upstream: fb56ea9801e5de68c60f0152b444bbe2a0fda520
+ * Telegram source copyright Nikolai Kudashov, 2013-2018; GPL-2.0-or-later.
+ * Nagram modifications by its contributors; this Compose port is GPL-3.0.
+ */
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileAvatarFusionView.java
+/* Avatar/cutout fusion ported from NextAlone/Nagram ProfileGooeyView.java
+ * revision fb56ea9801e5de68c60f0152b444bbe2a0fda520; GPL-3.0.
+ * Telegram and Nagram contributors. GPU/CPU compositing retained; host lifecycle adapted. */
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileCameraCutout.java
+/* Camera cutout parsing adapted from NextAlone/Nagram NotchInfoUtils.java
+ * revision fb56ea9801e5de68c60f0152b444bbe2a0fda520; GPL-3.0.
+ * Telegram and Nagram contributors. */
+
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/NagramChatAvatarPlacement.kt
+/*
+ * Derived from Telegram for Android / NextAlone Nagram, ChatActivity.drawChild().
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ * Distributed as part of BiliPai under GPLv3.
+ *
+ * Source revision: fb56ea9801e5de68c60f0152b444bbe2a0fda520
+ * https://github.com/NextAlone/Nagram/blob/fb56ea9801e5de68c60f0152b444bbe2a0fda520/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java#L6607
+ *
+ * Kotlin extraction of the ordinary, non-round-video avatar placement path.
+ * Keep the original clamp order: viewport bottom, group top, then cell bottom.
+ * Comment records are independent groups; Telegram albums, sender grouping,
+ * checkbox swipes and round-video playback are not BiliPai comment models.
+ */
+
+app/src/main/java/com/android/purebilibili/core/ui/animation/gl/ParticleRenderer.kt
+/*
+ * ThanosEffect rendering core ported from Telegram / NagramX (GPL).
+ * See docs/telegram-thanos-port.md for pinned upstream versions and integration changes.
+ */
+
+app/src/main/java/com/android/purebilibili/feature/profile/ProfileBackgroundMotion.kt
+/**
+ * Compose adapter for Nagram TopView: draw to toolbar + extraHeight and translate
+ * the background's origin with avatarY. Nagram uses a peer-color/pattern gradient;
+ * BiliPai applies that geometry to its existing wallpaper without changing its crop.
+ * Upstream: ProfileActivity.java, 87863c8a, TopView.onDraw / updateExtraViews (GPL-3.0).
+ */
+
+design-system/src/main/java/com/android/purebilibili/core/ui/animation/LiquidIndicatorWobble.kt
+/*
+ * Glass-indicator shape-spring parameters adapted
+ * from chen08209/FlClash, lib/ui/navigation_dock.dart, revision
+ * 8d4f9744948751f1273fe871e1d05276fac09b0e (_wobble, _lensRect, _jellySpring).
+ * https://github.com/chen08209/FlClash/blob/8d4f9744948751f1273fe871e1d05276fac09b0e/lib/ui/navigation_dock.dart
+ * FlClash contributors; GPL-3.0. Distributed as part of BiliPai under GPLv3.
+ * Compose samples movement to arm a stop-only recoil. The existing drag, velocity
+ * deformation and press transforms are retained; new interaction cancels recoil.
+ * Full license: flclash.LICENSE.
+ */
+
+core-data/src/main/java/com/android/purebilibili/core/network/AccountCookieSession.kt
+core-data/src/main/java/com/android/purebilibili/core/network/BuvidManager.kt
+core-data/src/main/java/com/android/purebilibili/data/repository/VideoLoadPolicy.kt
+Login session and Web playback behavior referenced against PiliPlus:
+https://github.com/bggRGjQaUbCoE/PiliPlus/tree/3d0aed958b3b7e59c39c121196f189f429719904
+Upstream files: lib/utils/accounts/account.dart, account_manager/account_mgr.dart,
+lib/http/video.dart, lib/http/init.dart, lib/utils/id_utils.dart and lib/pages/login/controller.dart.
+PiliPlus contributors; GPL-3.0. Distributed as part of BiliPai under GPLv3.
+License copy: artwork/third-party/piliplus/LICENSE in the source distribution.
+
+
+Live UI and interaction layout reference, and bundled fallback room background:
+https://github.com/bggRGjQaUbCoE/PiliPlus/tree/3d0aed958b3b7e59c39c121196f189f429719904
+Reference sources: lib/pages/live, lib/pages/live_follow, lib/pages/live_area,
+lib/pages/live_area_detail, lib/pages/live_search, lib/pages/live_room.
+Assets:
+assets/images/live/default_bg.webp -> app/src/main/res/drawable/live_room_background.webp.
+assets/images/live/live.gif -> app/src/main/assets/live/live.gif.
+PiliPlus contributors; GPL-3.0. Distributed as part of BiliPai under GPLv3.
+License copy: artwork/third-party/piliplus/LICENSE in the source distribution.
+
+Message center IM protocol mappings and interaction reference:
+https://github.com/bggRGjQaUbCoE/PiliPlus/tree/3d0aed958b3b7e59c39c121196f189f429719904
+Reference paths: lib/grpc/bilibili/app/im/v1.pb.dart, lib/grpc/im.dart,
+lib/http/msg.dart, lib/pages/whisper*, lib/pages/msg_feed_top/, lib/pages/contact/.
+PiliPlus contributors; GPL-3.0. BiliPai implementation uses its existing Android
+networking, account lifecycle and theme components; distributed under GPLv3.
+
+app/src/main/java/com/android/purebilibili/navigation3/SettingsContainerMotionPolicy.kt
+app/src/main/java/com/android/purebilibili/navigation3/SettingsContainerTransition.kt
+/*
+ * Settings container transition timing, geometry and content-fade staging reference:
+ * chen08209/FlClash, lib/ui/open_container.dart (main, inspected 2026-10-25).
+ * https://github.com/chen08209/FlClash/blob/main/lib/ui/open_container.dart
+ * FlClash contributors; GPL-3.0. Reimplemented for Compose and the shared Miuix
+ * navigation driver. Distributed as part of BiliPai under GPLv3.
+ * Full license: flclash.LICENSE.
+ */
+
+app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsGlassPopupMotion.kt
+/*
+ * Popup platter springs, capsule corner timing, content reveal, return dip and
+ * no-anchor shrink reference chen08209/FlClash, lib/ui/popup.dart (main,
+ * inspected 2026-10-25).
+ * https://github.com/chen08209/FlClash/blob/main/lib/ui/popup.dart
+ * FlClash contributors; GPL-3.0. Compose uses the shared Backdrop layer transform
+ * for optical sampling. The settings row owns the captured control graphics layer,
+ * hides its on-screen replay while the popup is active, and restores it on landing.
+ * Menu placement, 160..280dp sizing and neutral menu tints also reference
+ * lib/ui/popup.dart and LiquidGlassStyle.menu in lib/ui/liquid_glass.dart.
+ * Full license: flclash.LICENSE. Distributed as part of BiliPai under GPLv3.
+ */
+
+/*
+ * Popup drag tracking and release comparison: chen08209/FlClash,
+ * lib/ui/navigation_dock.dart (ElasticPress, _Spring), revision
+ * 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7, inspected 2026-10-25.
+ * https://github.com/chen08209/FlClash/blob/7fd417fb9a9a277c6a9339a8ac87f907df7c25f7/lib/ui/navigation_dock.dart
+ * FlClash contributors; GPL-3.0. The Compose implementation separates axis
+ * targets and tracking/release springs, preserves velocity on retargeting,
+ * and sizes the rubber-band limit to the menu. Full license: flclash.LICENSE.
+ */
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsOptionPreviewThumb.kt
+app/src/main/java/com/android/purebilibili/feature/settings/ThemeOptionPreviewThumb.kt
+/*
+ * Settings option pictograms reference the miniature-screen and choice-leading
+ * composition in chen08209/FlClash, lib/views/theme_preview.dart and lib/views/theme.dart,
+ * revision 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7, inspected 2026-10-25.
+ * https://github.com/chen08209/FlClash/blob/7fd417fb9a9a277c6a9339a8ac87f907df7c25f7/lib/views/theme_preview.dart
+ * FlClash contributors; GPL-3.0. Compose drawings use the active BiliPai theme
+ * roles and existing single-choice presentation slots. Full license: flclash.LICENSE.
+ */
+
+app/src/main/java/com/android/purebilibili/core/ui/popup/AppGlassPopupGestures.kt
+app/src/main/java/com/android/purebilibili/core/ui/popup/AppPopupDragFeedback.kt
+app/src/main/java/com/android/purebilibili/core/ui/popup/AppGlassSurfaceMaterial.kt
+Popup elastic transform, rubber-band resistance, press/track spring parameters and
+optional theme-frosted popup tint rules adapted from chen08209/FlClash,
+lib/ui/navigation_dock.dart, lib/ui/dialog.dart and lib/ui/liquid_glass.dart, revision
+7fd417fb9a9a277c6a9339a8ac87f907df7c25f7, inspected 2026-10-26.
+https://github.com/chen08209/FlClash/tree/7fd417fb9a9a277c6a9339a8ac87f907df7c25f7/lib/ui
+FlClash contributors; GPL-3.0. Distributed as part of BiliPai under GPLv3.
+
+/*
+ * Popup slide-to-pick row feedback comparison: chen08209/FlClash,
+ * lib/ui/popup.dart (_startPress, _slidePress, _endPress, _buildRow),
+ * main inspected 2026-10-26.
+ * https://github.com/chen08209/FlClash/blob/main/lib/ui/popup.dart
+ * FlClash contributors; GPL-3.0. BiliPai draws the active row in the existing
+ * Compose popup/menu scope and preserves long-list scrolling priority.
+ * Full license: flclash.LICENSE. Distributed as part of BiliPai under GPLv3.
+ */
+
+Content image export and share interaction reference:
+https://github.com/bggRGjQaUbCoE/PiliPlus/tree/3d0aed958b3b7e59c39c121196f189f429719904
+Reference paths: lib/pages/save_panel/view.dart, lib/pages/share/view.dart,
+lib/pages/video/introduction/ugc/controller.dart, lib/pages/video/introduction/pgc/controller.dart,
+lib/pages/live_room/superchat/superchat_card.dart, lib/utils/request_utils.dart,
+lib/utils/page_utils.dart and lib/grpc/bilibili/im/type.pbenum.dart.
+PiliPlus contributors; GPL-3.0. The Android implementation uses the existing
+rendering, account, networking and theme components. Distributed under GPLv3.
+License copy: artwork/third-party/piliplus/LICENSE in the source distribution.
+
+Coin selection interaction and content display/filter behavior referenced against
+PiliPlus (GPL-3.0): lib/pages/video/pay_coins/view.dart,
+lib/pages/setting/models/extra_settings.dart, lib/models/dynamics/result.dart,
+and lib/grpc/reply.dart. https://github.com/bggRGjQaUbCoE/PiliPlus
+When Blue Snow Maid animation is enabled, the Android implementation retains
+BiliPai's character artwork. The disabled path adapts the coin-selection layout,
+gestures and finite animation timeline from lib/pages/video/pay_coins/view.dart
+at revision 3d0aed958b3b7e59c39c121196f189f429719904, and includes its raster
+assets from assets/images/paycoins/ as drawable-nodpi/coin_toss_*.png:
+ic_22_mario.png, ic_22_gun_sister.png, ic_22_not_enough_pay.png,
+ic_pay_coins_box.png, ic_coins_one.png, ic_coins_two.png, ic_thunder_1.png,
+ic_thunder_2.png, ic_thunder_3.png, ic_left.png, ic_left_disable.png,
+ic_right.png, ic_right_disable.png and ic_panel_close.png.
+PiliPlus contributors; repository license GPL-3.0. Distributed as part of
+BiliPai under GPLv3.
+License copy: artwork/third-party/piliplus/LICENSE in the source distribution.
+
+UP small-shop behavior and API fields referenced against PiliPlus (GPL-3.0):
+lib/pages/member_shop/, lib/models_new/space/space_shop/, lib/http/member.dart.
+https://github.com/bggRGjQaUbCoE/PiliPlus
+License copy: artwork/third-party/piliplus/LICENSE in the source distribution.
+
+Followed-live pagination behavior referenced against PiliPlus (GPL-3.0):
+lib/http/live.dart, lib/models_new/live/live_follow/data.dart,
+lib/pages/live_follow/controller.dart. https://github.com/bggRGjQaUbCoE/PiliPlus
+License copy: artwork/third-party/piliplus/LICENSE in the source distribution.
+
+Subtitle synchronization design reference:
+PiliPlus, revision 3d0aed958b3b7e59c39c121196f189f429719904 (GPL-3.0).
+https://github.com/bggRGjQaUbCoE/PiliPlus
+Reviewed lib/pages/video/controller.dart (setSubtitle) and
+lib/utils/subtitle_utils.dart for player-clock subtitle timing and track caching.
+BiliPai retains its Android text renderers and implements event-driven position
+updates and cue-boundary scheduling with Media3 Player events and Kotlin coroutines.
+
+Glass menu spring parameter and phase reference:
+Glasmio, Copyright 2026 NEORUAA, Apache-2.0.
+https://github.com/NEORUAA/Glasmio
+https://github.com/NEORUAA/Glasmio/blob/main/glasmio-glass/src/main/java/io/github/neoruaa/glasmio/glass/LiquidMenuMorphMotion.kt
+Referenced damping/response pairs and staged release timings; the local finite
+menu renderer, frame adapter and presentation lifecycle are implemented for BiliPai.
+No Glasmio runtime dependency or bundled Apple assets are included.
+Apache-2.0 license text: design-system/src/main/assets/licenses/AndroidLiquidGlass.LICENSE.
+
+Adjacent navigation/search glass contact reference:
+Glasmio, Copyright 2026 NEORUAA, Apache-2.0.
+https://github.com/NEORUAA/Glasmio/blob/main/glasmio-glass/src/main/java/io/github/neoruaa/glasmio/glass/NavigationNativeUnion.kt
+Angle-weighted smooth union of capsule fields, adapted to local press geometry,
+shared material rendering and the existing Miuix backdrop infrastructure.
+Apache-2.0 license text: design-system/src/main/assets/licenses/AndroidLiquidGlass.LICENSE.
+
+Bangumi VIP icon and interaction reference:
+PiliPlus (GNU GPL v3), https://github.com/bggRGjQaUbCoE/PiliPlus
+assets/images/big-vip.svg converted to app/src/main/res/drawable/ic_bangumi_vip.xml.
+Details and episode badge behavior reference: lib/pages/video/introduction/pgc/widgets/
+intro_detail.dart, episode.dart, section.dart; lib/models_new/video/video_detail/episode.dart.
+The upstream license is retained in artwork/third-party/piliplus/LICENSE.
+
+Bangumi review UI behavior reference (PiliPlus, GNU GPL v3):
+lib/pages/pgc_review/view.dart, child/view.dart, child/controller.dart, post/view.dart;
+lib/models_new/pgc/pgc_review/; lib/common/widgets/sliver/sliver_floating_header.dart.
+Compose layout and gesture integration are implemented locally.
+Source: https://github.com/bggRGjQaUbCoE/PiliPlus
+License retained in artwork/third-party/piliplus/LICENSE.

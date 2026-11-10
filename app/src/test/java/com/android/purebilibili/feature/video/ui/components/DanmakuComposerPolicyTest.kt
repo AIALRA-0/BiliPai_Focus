@@ -14,52 +14,21 @@ class DanmakuComposerPolicyTest {
     }
 
     @Test
-    fun danmakuInput_shownFrom720dpInFullscreen() {
-        assertFalse(shouldShowDanmakuInputInControlBar(isFullscreen = true, widthDp = 479))
-        assertFalse(shouldShowDanmakuInputInControlBar(isFullscreen = true, widthDp = 480))
-        assertFalse(shouldShowDanmakuInputInControlBar(isFullscreen = true, widthDp = 616))
+    fun fullscreenCapsule_requiresBothRoomyViewportAndMeasuredSlot() {
         assertFalse(shouldShowDanmakuInputInControlBar(isFullscreen = true, widthDp = 719))
         assertTrue(shouldShowDanmakuInputInControlBar(isFullscreen = true, widthDp = 720))
-        assertFalse(shouldShowDanmakuInputInControlBar(isFullscreen = false, widthDp = 800))
-    }
-
-    @Test
-    fun compactDanmakuSend_shownBelow480dpInFullscreen() {
-        assertTrue(shouldShowCompactDanmakuSendAction(isFullscreen = true, widthDp = 479))
-        assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = true, widthDp = 480))
-        assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = true, widthDp = 616))
-    }
-
-    @Test
-    fun danmakuInputCapsule_hiddenWhenSlotIsNarrowerThanAHorizontalPill() {
-        assertFalse(shouldDrawDanmakuInputCapsule(availableWidthDp = 40))
+        assertFalse(shouldShowDanmakuInputInControlBar(isFullscreen = false, widthDp = 720))
         assertFalse(shouldDrawDanmakuInputCapsule(availableWidthDp = 95))
         assertTrue(shouldDrawDanmakuInputCapsule(availableWidthDp = 96))
     }
 
     @Test
-    fun compactDanmakuSend_shownOnTabletInlinePlayer() {
-        assertTrue(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 800))
-        // Split-screen tablet widths keep the control bar clear; a dedicated send
-        // action remains in the UP information section below the player.
-        assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 600))
+    fun compactDanmakuSend_requiresRoomyTabletInlinePlayer() {
         assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 411))
-    }
-
-    @Test
-    fun moreActionsFallback_whenInlineInputHidden() {
-        assertTrue(
-            shouldShowDanmakuSendInMoreActions(
-                isFullscreen = true,
-                showInlineDanmakuInput = false
-            )
-        )
-        assertFalse(
-            shouldShowDanmakuSendInMoreActions(
-                isFullscreen = true,
-                showInlineDanmakuInput = true
-            )
-        )
+        assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 600))
+        assertFalse(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 719))
+        assertTrue(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 720))
+        assertTrue(shouldShowCompactDanmakuSendAction(isFullscreen = false, widthDp = 800))
     }
 
     @Test
@@ -70,8 +39,8 @@ class DanmakuComposerPolicyTest {
 
     @Test
     fun sendOptions_includeExpectedDefaults() {
-        assertEquals(9, danmakuSendColorOptions().size)
-        assertEquals(3, danmakuSendModeOptions().size)
-        assertEquals(3, danmakuSendFontSizeOptions().size)
+        assertEquals(14, danmakuSendColorOptions().size)
+        assertEquals(listOf(1, 5, 4), danmakuSendModeOptions().map { it.value })
+        assertEquals(listOf(18, 25), danmakuSendFontSizeOptions().map { it.value })
     }
 }

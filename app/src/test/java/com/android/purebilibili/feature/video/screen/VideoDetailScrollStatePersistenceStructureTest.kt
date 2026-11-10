@@ -36,7 +36,7 @@ class VideoDetailScrollStatePersistenceStructureTest {
         assertTrue(collapseStateSource.contains("InlinePortraitPlayerCollapseState.Saver"))
         assertTrue(collapseStateSource.contains("rememberSaveable(videoBvid, saver = InlinePortraitPlayerCollapseState.Saver)"))
         assertTrue(source.contains("rememberInlinePortraitPlayerCollapseState(currentBvid)"))
-        assertTrue(source.contains("var introScrollPastCollapseThreshold by rememberSaveable(currentBvid)"))
+        assertFalse(source.contains("inlinePlayerCollapseState.updateOffset(-collapseRangePx)"))
         assertFalse(collapseStateSource.contains("remember { InlinePortraitPlayerCollapseState() }"))
     }
 

@@ -38,15 +38,9 @@ internal fun resolveArticleNavigationTargetFromRedirect(
     redirectUrl: String?
 ): ArticleNavigationTarget? {
     buildArticleWebUrl(articleId) ?: return null
-    val opusId = redirectUrl
-        ?.trim()
-        ?.let { opusRedirectPattern.find(it)?.groupValues?.getOrNull(1) }
-        ?.takeIf { it.isNotBlank() }
-    return if (opusId != null) {
-        ArticleNavigationTarget.NativeDynamic(dynamicId = opusId)
-    } else {
-        ArticleNavigationTarget.NativeArticle(articleId = articleId)
-    }
+    // /cv/ 链接无论 302 到 /cv/ 还是 /opus/，都是专栏；
+    // 统一走专栏渲染器，避免 opus 重定向被误当成图文动态打开。
+    return ArticleNavigationTarget.NativeArticle(articleId = articleId)
 }
 
 internal suspend fun resolveArticleWebUrl(articleId: Long): String? {
@@ -67,28 +61,18 @@ internal suspend fun resolveArticleWebUrl(articleId: Long): String? {
                     redirectUrl = response.header("Location")
                 )
             }
-        }.getOrDefault(fallbackUrl)
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }.getOrDefault(fallbackUrl)
     }
 }
 
-internal suspend fun resolveArticleNavigationTarget(articleId: Long): ArticleNavigationTarget? {
-    val fallbackUrl = buildArticleWebUrl(articleId) ?: return null
-    return withContext(Dispatchers.IO) {
-        runCatching {
-            val client = NetworkModule.okHttpClient.newBuilder()
-                .followRedirects(false)
-                .followSslRedirects(false)
-                .build()
-            val request = Request.Builder()
-                .url(fallbackUrl)
-                .method("HEAD", null)
-                .build()
-            client.newCall(request).execute().use { response ->
-                resolveArticleNavigationTargetFromRedirect(
-                    articleId = articleId,
-                    redirectUrl = response.header("Location")
-                ) ?: ArticleNavigationTarget.NativeArticle(articleId = articleId)
-            }
-        }.getOrDefault(ArticleNavigationTarget.NativeArticle(articleId = articleId))
+/** 原生入口只依赖已知内容 ID，不等待网页重定向。 */
+internal fun resolveArticleNavigationTarget(articleId: Long): ArticleNavigationTarget? {
+    if (articleId <= 0L) return null
+    return if (articleId >= ARTICLE_OPUS_ID_MIN_VALUE) {
+        ArticleNavigationTarget.NativeDynamic(articleId.toString())
+    } else {
+        ArticleNavigationTarget.NativeArticle(articleId)
     }
 }
+
+internal const val ARTICLE_OPUS_ID_MIN_VALUE = 1_000_000_000_000_000L

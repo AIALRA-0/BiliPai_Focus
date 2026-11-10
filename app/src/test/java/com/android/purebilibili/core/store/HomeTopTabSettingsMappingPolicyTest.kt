@@ -23,6 +23,32 @@ class HomeTopTabSettingsMappingPolicyTest {
     }
 
     @Test
+    fun firstInstallWithoutStoredTabsUsesTheFocusDefaultLayout() {
+        val result = resolveFocusHomeTopTabMigrationBoundary(
+            orderIds = null,
+            visibleIds = null,
+            focusSettings = LegacyFocusHomeTabVisibility(),
+            hasLegacyFocusVisibilitySettings = false,
+        )
+
+        assertEquals(listOf("FOLLOW", "SUBSCRIPTIONS"), result.orderIds)
+        assertEquals(setOf("FOLLOW", "SUBSCRIPTIONS"), result.visibleIds)
+    }
+
+    @Test
+    fun legacyFocusVisibilitySettingsKeepTheOldMigrationOrder() {
+        val result = resolveFocusHomeTopTabMigrationBoundary(
+            orderIds = null,
+            visibleIds = null,
+            focusSettings = LegacyFocusHomeTabVisibility(),
+            hasLegacyFocusVisibilitySettings = true,
+        )
+
+        assertEquals(listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"), result.orderIds.take(5))
+        assertEquals(setOf("FOLLOW", "SUBSCRIPTIONS"), result.visibleIds)
+    }
+
+    @Test
     fun legacyMigrationPreservesVisibleIntersectionOrderAndNewUpstreamEntries() {
         val result = resolveFocusHomeTopTabMigration(
             orderIds = listOf("TECH", "ANIME", "RECOMMEND", "FOLLOW", "SUBSCRIPTIONS"),

@@ -87,18 +87,11 @@ class DynamicIncrementalRefreshPolicyTest {
     }
 
     @Test
-    fun refreshTarget_usesSelectedUserOnlyOnUserTab() {
-        assertEquals(
-            1001L,
-            resolveDynamicRefreshUserId(selectedTab = 4, selectedUserId = 1001L)
-        )
-        assertEquals(
-            null,
-            resolveDynamicRefreshUserId(selectedTab = 0, selectedUserId = 1001L)
-        )
-        assertEquals(
-            null,
-            resolveDynamicRefreshUserId(selectedTab = 4, selectedUserId = null)
-        )
+    fun refreshTarget_usesSelectedAuthorForFilterableCategoriesOnly() {
+        for (tab in listOf(0, 1, 3)) {
+            assertEquals(1001L, resolveDynamicRefreshUserId(selectedTab = tab, selectedUserId = 1001L))
+            assertEquals(null, resolveDynamicRefreshUserId(selectedTab = tab, selectedUserId = null))
+        }
+        assertEquals(null, resolveDynamicRefreshUserId(selectedTab = 2, selectedUserId = 1001L))
     }
 }

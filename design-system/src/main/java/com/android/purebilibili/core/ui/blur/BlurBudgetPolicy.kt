@@ -16,6 +16,7 @@ data class BlurBudget(
     val allowRealtime: Boolean
 )
 
+@Suppress("UNUSED_PARAMETER")
 fun resolveBlurBudget(
     surfaceType: BlurSurfaceType,
     motionTier: MotionTier,
@@ -50,11 +51,8 @@ fun resolveBlurBudget(
         MotionTier.Enhanced -> Unit
     }
 
-    if (isScrolling || isTransitionRunning) {
-        // 保持视觉稳定：各表面在滑动与转场期间保持模糊材质等级与透明度恒定，
-        // 杜绝以往强切 0 级模糊导致的明暗跳跃与视觉割裂（Pulsing / Popping）。
-        allowRealtime = false
-    }
+    // 滚动与转场不能切换输入采样网格，否则慢拖及落定时会出现清晰度跳变。
+    // 只有明确的低预算或减少动效档位允许降低采样质量。
 
     if (forceLowBudget) {
         maxBlurLevel = 0

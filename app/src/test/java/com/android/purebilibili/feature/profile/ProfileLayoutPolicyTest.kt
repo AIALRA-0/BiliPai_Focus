@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.profile
 
-import com.android.purebilibili.core.util.WindowWidthSizeClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -24,17 +23,6 @@ class ProfileLayoutPolicyTest {
     @Test
     fun heroHeight_clampsOnVeryTallScreens() {
         assertEquals(360f, resolveProfileHeroHeightDp(screenHeightDp = 1200))
-    }
-
-    @Test
-    fun topBannerHeight_delegatesToHeroHeightPolicy() {
-        assertEquals(
-            resolveProfileHeroHeightDp(
-                screenHeightDp = referenceProfileScreenHeightDp(WindowWidthSizeClass.Compact),
-                widthSizeClass = WindowWidthSizeClass.Compact
-            ),
-            resolveProfileTopBannerHeightDp(WindowWidthSizeClass.Compact)
-        )
     }
 
     @Test
@@ -63,11 +51,44 @@ class ProfileLayoutPolicyTest {
     }
 
     @Test
-    fun cardTokens_useUnifiedPosterDimensions() {
-        val tokens = resolveProfileCardTokens()
+    fun identityReserve_keepsMeasuredLargeTextBelowAvatarAndAboveStats() {
+        for (density in listOf(0.85f, 1f, 2.625f, 3.5f)) {
+            for (fontScale in listOf(0.85f, 1f, 1.3f, 2f)) {
+                val top = 28f * density
+                val nameHeight = kotlin.math.ceil(24f * density * fontScale).toInt()
+                val uidHeight = kotlin.math.ceil(16f * density * fontScale).toInt()
+                val nameTop = top + PROFILE_EXPANDED_NAME_TOP_DP * density
+                val avatarBottom = top + PROFILE_EXPANDED_AVATAR_TOP_DP * density +
+                    resolveProfileAvatarSizePx(density, 1f, 0f)
+                val uidBottom = nameTop + nameHeight * PROFILE_EXPANDED_NAME_SCALE +
+                    6f * density + uidHeight
+                val statsTop = resolveProfileIdentityStatsTopPx(top, density, nameHeight, uidHeight)
 
-        assertEquals(148, tokens.widthDp)
-        assertEquals(56, tokens.metadataHeightDp)
-        assertTrue(resolveProfileCardHeightDp(tokens) > resolveProfileCardCoverHeightDp(tokens))
+                assertTrue(nameTop - avatarBottom >= 16f * density)
+                // 24dp clearance also keeps the fully expanded UID's fade alpha at one.
+                assertTrue(statsTop - uidBottom >= 24f * density - 0.001f)
+                assertTrue(statsTop >= top + 215f * density)
+            }
+        }
+    }
+
+    @Test
+    fun avatarSize_usesComposeDensityButPreservesPhysicalCutoutEndpoint() {
+        for (density in listOf(0.85f, 1f, 2.625f, 3.5f)) {
+            assertEquals(96f * density, resolveProfileAvatarSizePx(density, 1f, 48f), 0.001f)
+            assertEquals(24f, resolveProfileAvatarSizePx(density, 0f, 48f), 0.001f)
+            assertEquals(24f * density, resolveProfileAvatarSizePx(density, 0f, 0f), 0.001f)
+            val midpoint = resolveProfileAvatarSizePx(density, 0.5f, 48f)
+            assertEquals((24f + 96f * density) / 2f, midpoint, 0.001f)
+        }
+    }
+
+    @Test
+    fun identityReserve_retainsMinimumAndGrowsDownwardWithText() {
+        assertEquals(239f, resolveProfileIdentityStatsTopPx(24f, 1f, 0, 0))
+        val normal = resolveProfileIdentityStatsTopPx(24f, 1f, 24, 16)
+        val large = resolveProfileIdentityStatsTopPx(24f, 1f, 48, 32)
+        assertTrue(large > normal)
+        assertEquals(24f * PROFILE_EXPANDED_NAME_SCALE + 16f, large - normal, 0.001f)
     }
 }

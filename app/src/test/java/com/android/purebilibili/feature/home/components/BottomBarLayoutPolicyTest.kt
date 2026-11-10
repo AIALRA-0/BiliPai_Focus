@@ -54,7 +54,7 @@ class BottomBarLayoutPolicyTest {
             labelMode = 0
         )
 
-        assertEquals(312.dp, width)
+        assertEquals(328.dp, width)
     }
 
     @Test
@@ -90,9 +90,9 @@ class BottomBarLayoutPolicyTest {
             labelMode = 2
         )
 
-        assertEquals(328.dp, iconOnlyWidth)
+        assertEquals(344.dp, iconOnlyWidth)
         assertEquals(353.dp, iconAndTextWidth)
-        assertEquals(348.dp, textOnlyWidth)
+        assertEquals(353.dp, textOnlyWidth)
     }
 
     @Test
@@ -112,8 +112,8 @@ class BottomBarLayoutPolicyTest {
             cornerRadius = 36.dp
         )
 
-        assertEquals(232.dp, compactCorners)
-        assertEquals(296.dp, rounderCorners)
+        assertEquals(248.dp, compactCorners)
+        assertEquals(312.dp, rounderCorners)
     }
 
     @Test
@@ -145,7 +145,7 @@ class BottomBarLayoutPolicyTest {
             searchExpanded = false
         )
 
-        assertEquals(312.dp, layout.dockWidth)
+        assertEquals(328.dp, layout.dockWidth)
         assertEquals(56.dp, layout.searchWidth)
         assertEquals(8.dp, layout.gap)
         assertEquals(0.dp, layout.minimumIndicatorWidth)
@@ -164,11 +164,11 @@ class BottomBarLayoutPolicyTest {
 
         assertEquals(329.dp, layout.dockWidth)
         assertEquals(0.dp, layout.minimumIndicatorWidth)
-        assertEquals(69.dp, layout.indicatorReferenceWidth)
+        assertEquals(65.8.dp, layout.indicatorReferenceWidth)
         assertTrue(
             resolveBiliPaiBottomBarItemSlotWidth(
                 dockWidth = layout.dockWidth,
-                horizontalPadding = 4.dp,
+                horizontalPadding = 12.dp,
                 itemCount = 5,
             ) >= 48.dp
         )
@@ -187,7 +187,7 @@ class BottomBarLayoutPolicyTest {
         assertTrue(
             resolveBiliPaiBottomBarItemSlotWidth(
                 dockWidth = layout.dockWidth,
-                horizontalPadding = 4.dp,
+                horizontalPadding = 12.dp,
                 itemCount = 5,
             ) >= 48.dp
         )
@@ -217,7 +217,7 @@ class BottomBarLayoutPolicyTest {
             searchLayoutMode = BottomBarSearchLayoutMode.FULL_DOCK
         )
 
-        assertEquals(312.dp, layout.dockWidth)
+        assertEquals(328.dp, layout.dockWidth)
         assertEquals(56.dp, layout.searchWidth)
         assertEquals(8.dp, layout.gap)
     }
@@ -239,7 +239,7 @@ class BottomBarLayoutPolicyTest {
         )
 
         assertEquals(withoutSearch, withSearch.dockWidth)
-        assertEquals(312.dp, withSearch.dockWidth)
+        assertEquals(328.dp, withSearch.dockWidth)
     }
 
     @Test
@@ -283,8 +283,14 @@ class BottomBarLayoutPolicyTest {
     @Test
     fun `bilipai expanded home dock copies search circle size`() {
         assertEquals(56.dp, resolveBiliPaiBottomBarSearchCircleSize())
-        // 照搬 HyperIsland 的壳高 64dp（搜索展开态仍是 56dp 圆形）。
-        assertEquals(64.dp, resolveBiliPaiBottomBarDockHeight(searchExpanded = false))
+        // The ordinary dock and adjacent search circle share a compact resting height.
+        for (searchExpanded in listOf(false, true)) {
+            assertEquals(
+                64.dp,
+                resolveBiliPaiBottomBarDockHeight(searchExpanded, nativeMiuixNavigation = true),
+            )
+        }
+        assertEquals(56.dp, resolveBiliPaiBottomBarDockHeight(searchExpanded = false))
         assertEquals(
             64.dp,
             resolveBiliPaiBottomBarDockHeight(
@@ -293,6 +299,10 @@ class BottomBarLayoutPolicyTest {
             )
         )
         assertEquals(resolveBiliPaiBottomBarSearchCircleSize(), resolveBiliPaiBottomBarDockHeight(searchExpanded = true))
+        assertEquals(
+            resolveBottomBarSkinDockHeight(),
+            resolveBiliPaiBottomBarDockHeight(searchExpanded = true, hasUiSkinDecoration = true),
+        )
         // 照搬 HyperIsland 的 64/56 静止几何：指示器 = 壳高 × 56/64。
         // 64dp 壳 → 56dp 指示器（上下各 4dp）；56dp 短壳按同一比例得 49dp。
         assertEquals(49.dp, resolveBiliPaiBottomBarIndicatorHeight(56.dp))
@@ -801,6 +811,40 @@ class BottomBarLayoutPolicyTest {
                 effectiveSearchExpanded = true,
                 searchLayoutMode = BottomBarSearchLayoutMode.HOME_AND_SEARCH
             )
+        )
+    }
+
+    @Test
+    fun `bottom search collapses after keyword submit and keeps blank submit open`() {
+        assertEquals(
+            BottomBarSearchExpansionOverride.COLLAPSED,
+            resolveBottomBarSearchExpansionOverrideAfterSubmit(hasKeyword = true)
+        )
+        assertEquals(
+            null,
+            resolveBottomBarSearchExpansionOverrideAfterSubmit(hasKeyword = false)
+        )
+    }
+
+    @Test
+    fun `bottom search ime is user tap only`() {
+        assertEquals(true, shouldRequestBottomBarSearchIme(pendingUserImeRequest = true))
+        assertEquals(false, shouldRequestBottomBarSearchIme(pendingUserImeRequest = false))
+    }
+
+    @Test
+    fun `bottom search ime is dismissed while scrolling expanded capsule`() {
+        assertEquals(
+            true,
+            shouldDismissBottomBarSearchImeOnScroll(isScrolling = true, isSearchExpanded = true)
+        )
+        assertEquals(
+            false,
+            shouldDismissBottomBarSearchImeOnScroll(isScrolling = true, isSearchExpanded = false)
+        )
+        assertEquals(
+            false,
+            shouldDismissBottomBarSearchImeOnScroll(isScrolling = false, isSearchExpanded = true)
         )
     }
 

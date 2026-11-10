@@ -9,7 +9,8 @@ data class TripleActionMotionSpec(
 )
 
 enum class TripleCelebrationPlacement {
-    CenterOverlay
+    CenterOverlay,
+    BottomTrailing
 }
 
 fun resolveTripleActionMotionSpec(reducedMotion: Boolean): TripleActionMotionSpec {
@@ -36,5 +37,5 @@ fun resolveTripleCelebrationPlacement(
     isFullscreen: Boolean,
     isLandscape: Boolean
 ): TripleCelebrationPlacement {
-    return TripleCelebrationPlacement.CenterOverlay
+    return TripleCelebrationPlacement.BottomTrailing
 }

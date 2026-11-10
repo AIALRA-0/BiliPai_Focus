@@ -2,7 +2,21 @@ package com.android.purebilibili.feature.message
 
 import com.android.purebilibili.data.model.response.SessionItem
 
+data class UserBasicInfo(val mid: Long, val name: String, val face: String)
+
 internal object InboxUserInfoResolver {
+
+    fun sessionUserInfo(session: SessionItem): UserBasicInfo? {
+        if (session.session_type != 1 || session.talker_id <= 0L) return null
+        return mergeFetchedUserInfo(
+            existing = null,
+            fetched = UserBasicInfo(
+                session.talker_id,
+                session.account_info?.name.orEmpty(),
+                session.account_info?.avatarUrl.orEmpty(),
+            ),
+        )
+    }
 
     fun resolveDisplayName(cached: UserBasicInfo?, session: SessionItem): String {
         val cachedName = cached?.name.cleanValue()

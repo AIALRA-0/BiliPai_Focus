@@ -11,7 +11,6 @@ internal data class SettingsVisualSpec(
     val categoryIconBubbleSize: Dp = 36.dp,
     val categoryIconSize: Dp = 20.dp,
     val categoryRowVerticalPadding: Dp = 12.dp,
-    val searchBarVerticalPadding: Dp = 10.dp,
 )
 
 internal fun resolveSettingsVisualSpec(): SettingsVisualSpec = SettingsVisualSpec()

@@ -4,6 +4,11 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import com.android.purebilibili.core.store.MessageCenterPreferences
+import com.android.purebilibili.app.PureApplication
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,12 +28,20 @@ data class MessageSessionControlInfo(
     val pushMuted: Boolean? = null,
     val showPushSetting: Boolean = false,
     val followStatus: Int? = null,
-    val isIntercept: Boolean? = null
+    val isIntercept: Boolean? = null,
+    val isPinned: Boolean? = null,
 )
 
 object MessageRepository {
     private val api = NetworkModule.messageApi
     private val bilibiliApi = NetworkModule.api
+    private val _readEvents = MutableSharedFlow<MessageReadEvent>()
+    internal val readEvents = _readEvents.asSharedFlow()
+
+    internal suspend fun notifyReadStateChanged(event: MessageReadEvent = MessageReadEvent.Changed) {
+        _readEvents.emit(event)
+    }
+
     
     // 设备ID缓存 (用于发送私信)
     private var deviceIdCache: String? = null
@@ -81,7 +94,8 @@ object MessageRepository {
             )
 
             if (response.code == 0 && response.data != null) {
-                Result.success(response.data)
+                val checkedResponseData = requireNotNull(response.data)
+                Result.success(checkedResponseData)
             } else {
                 val errorMsg = when (response.code) {
                     -101 -> "请先登录"
@@ -113,7 +127,8 @@ object MessageRepository {
             val response = api.getUnreadCount()
             
             if (response.code == 0 && response.data != null) {
-                Result.success(response.data)
+                val checkedResponseData = requireNotNull(response.data)
+                Result.success(checkedResponseData)
             } else {
                 val errorMsg = when (response.code) {
                     -101 -> "请先登录"
@@ -122,6 +137,7 @@ object MessageRepository {
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "getUnreadCount exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -131,11 +147,14 @@ object MessageRepository {
         try {
             val response = api.getFeedUnread()
             if (response.code == 0 && response.data != null) {
-                Result.success(response.data)
+                val checkedResponseData = requireNotNull(response.data)
+                val disableLikes = MessageCenterPreferences.disabledLikes(PureApplication.instance).first()
+                Result.success(if (disableLikes) checkedResponseData.copy(like = 0) else checkedResponseData)
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "获取消息中心未读数失败 (${response.code})" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "getFeedUnread exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -146,11 +165,14 @@ object MessageRepository {
             try {
                 val response = api.getReplyFeed(cursor = cursor, cursorTime = cursorTime)
                 if (response.code == 0 && response.data != null) {
-                    Result.success(response.data)
+                    val checkedResponseData = requireNotNull(response.data)
+                    if (cursor == null) notifyReadStateChanged()
+                    Result.success(checkedResponseData)
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "获取回复消息失败 (${response.code})" }))
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 android.util.Log.e("MessageRepo", "getReplyFeed exception: ${e.message}", e)
                 Result.failure(e)
             }
@@ -161,11 +183,14 @@ object MessageRepository {
             try {
                 val response = api.getAtFeed(cursor = cursor, cursorTime = cursorTime)
                 if (response.code == 0 && response.data != null) {
-                    Result.success(response.data)
+                    val checkedResponseData = requireNotNull(response.data)
+                    if (cursor == null) notifyReadStateChanged()
+                    Result.success(checkedResponseData)
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "获取@我消息失败 (${response.code})" }))
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 android.util.Log.e("MessageRepo", "getAtFeed exception: ${e.message}", e)
                 Result.failure(e)
             }
@@ -176,11 +201,14 @@ object MessageRepository {
             try {
                 val response = api.getLikeFeed(cursor = cursor, cursorTime = cursorTime)
                 if (response.code == 0 && response.data != null) {
-                    Result.success(response.data)
+                    val checkedResponseData = requireNotNull(response.data)
+                    if (cursor == null) notifyReadStateChanged()
+                    Result.success(checkedResponseData)
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "获取点赞消息失败 (${response.code})" }))
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 android.util.Log.e("MessageRepo", "getLikeFeed exception: ${e.message}", e)
                 Result.failure(e)
             }
@@ -196,6 +224,7 @@ object MessageRepository {
                     Result.failure(Exception(response.message.ifEmpty { "获取系统通知失败 (${response.code})" }))
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 android.util.Log.e("MessageRepo", "getSystemNotices exception: ${e.message}", e)
                 Result.failure(e)
             }
@@ -210,11 +239,13 @@ object MessageRepository {
 
             val response = api.updateSystemNoticeCursor(csrf = csrf, cursor = cursor)
             if (response.code == 0) {
+                notifyReadStateChanged()
                 Result.success(Unit)
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "更新系统通知已读失败" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "updateSystemNoticeCursor exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -234,6 +265,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "删除消息失败" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "deleteFeedItem exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -258,6 +290,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "更新点赞通知设置失败" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "setLikeFeedNotice exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -298,7 +331,8 @@ object MessageRepository {
             }
             
             if (response.code == 0 && response.data != null) {
-                Result.success(response.data)
+                val checkedResponseData = requireNotNull(response.data)
+                Result.success(checkedResponseData)
             } else {
                 val errorMsg = when (response.code) {
                     -101 -> "请先登录"
@@ -340,7 +374,8 @@ object MessageRepository {
             com.android.purebilibili.core.util.Logger.d("MessageRepo", "getMessages response: code=${response.code}, messages=${response.data?.messages?.size ?: 0}")
             
             if (response.code == 0 && response.data != null) {
-                Result.success(response.data)
+                val checkedResponseData = requireNotNull(response.data)
+                Result.success(checkedResponseData)
             } else {
                 val errorMsg = when (response.code) {
                     -101 -> "请先登录"
@@ -349,9 +384,17 @@ object MessageRepository {
                 }
                 Result.failure(Exception(errorMsg))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "getMessages exception: ${e.message}", e)
-            Result.failure(e)
+            val message = when (e) {
+                is kotlinx.serialization.SerializationException -> "消息数据暂时无法读取，请稍后重试"
+                is java.io.IOException -> "网络连接失败，请检查网络后重试"
+                else -> "消息加载失败，请稍后重试"
+            }
+            Result.failure(Exception(message, e))
         }
     }
 
@@ -410,10 +453,12 @@ object MessageRepository {
                     pushMuted = push?.let { it.push_setting == 1 },
                     showPushSetting = push?.show_push_setting == 1,
                     followStatus = push?.follow_status,
-                    isIntercept = detail?.is_intercept?.let { it == 1 }
+                    isIntercept = detail?.is_intercept?.let { it == 1 },
+                    isPinned = detail?.top_ts?.let { it > 0 },
                 )
             )
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "getSessionControlInfo exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -440,6 +485,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "更新免打扰失败 (${response.code})" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "setSessionDnd exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -463,6 +509,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "更新推送设置失败 (${response.code})" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "setSessionPushMuted exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -486,6 +533,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "更新拦截状态失败 (${response.code})" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "setSessionIntercept exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -496,11 +544,13 @@ object MessageRepository {
             val csrf = requireCsrf().getOrElse { return@withContext Result.failure(it) }
             val response = api.batchUpdateDustbinAck(csrf = csrf, csrfToken = csrf)
             if (response.code == 0) {
+                notifyReadStateChanged()
                 Result.success(Unit)
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "拦截会话已读失败 (${response.code})" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "markDustbinRead exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -516,6 +566,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "清空拦截会话失败 (${response.code})" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "clearDustbinSessions exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -546,6 +597,7 @@ object MessageRepository {
                 }
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "sendTextMessage exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -577,6 +629,7 @@ object MessageRepository {
                 content = MessageSendPayloadFactory.buildWithdrawContent(msgKey)
             )
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "withdrawMessage exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -611,11 +664,13 @@ object MessageRepository {
             )
 
             if (response.code == 0 && response.data != null) {
-                Result.success(response.data)
+                val checkedResponseData = requireNotNull(response.data)
+                Result.success(checkedResponseData)
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "图片上传失败 (${response.code})" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "uploadPrivateImage exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -644,6 +699,7 @@ object MessageRepository {
                 )
             )
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "sendImageMessage exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -675,11 +731,13 @@ object MessageRepository {
             )
             
             if (response.code == 0) {
+                notifyReadStateChanged(MessageReadEvent.PrivateSession(talkerId, sessionType, ackSeqno))
                 Result.success(Unit)
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "标记已读失败" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "markAsRead exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -716,6 +774,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "操作失败" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "setSessionTop exception: ${e.message}", e)
             Result.failure(e)
         }
@@ -749,6 +808,7 @@ object MessageRepository {
                 Result.failure(Exception(response.message.ifEmpty { "移除会话失败" }))
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "removeSession exception: ${e.message}", e)
             Result.failure(e)
         }

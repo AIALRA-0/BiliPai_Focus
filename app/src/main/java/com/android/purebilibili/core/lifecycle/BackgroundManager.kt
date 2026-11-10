@@ -58,6 +58,7 @@ object BackgroundManager : DefaultLifecycleObserver {
     override fun onStart(owner: LifecycleOwner) {
         // 应用返回前台
         isInBackground = false
+        ForegroundSettleBudget.onEnterForeground(android.os.SystemClock.uptimeMillis())
         Logger.d(TAG, "🌅 App entered FOREGROUND")
         notifyListeners(false)
     }
@@ -65,6 +66,7 @@ object BackgroundManager : DefaultLifecycleObserver {
     override fun onStop(owner: LifecycleOwner) {
         // 应用进入后台
         isInBackground = true
+        ForegroundSettleBudget.onEnterBackground(android.os.SystemClock.uptimeMillis())
         Logger.d(TAG, "🌙 App entered BACKGROUND")
         notifyListeners(true)
     }

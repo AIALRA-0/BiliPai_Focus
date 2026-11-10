@@ -3,35 +3,13 @@ package com.android.purebilibili.feature.dynamic
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
 
-internal enum class DynamicUserContentFilter(val label: String) {
-    ALL("全部"),
-    VIDEO("视频"),
-    ARTICLE("图文专栏"),
-}
-
 internal fun filterSelectedUserDynamicItems(
     items: List<DynamicItem>,
-    filter: DynamicUserContentFilter,
-): List<DynamicItem> = when (filter) {
-    DynamicUserContentFilter.ALL -> items
-    DynamicUserContentFilter.VIDEO -> items.filter(::shouldIncludeDynamicItemInVideoTab)
-    DynamicUserContentFilter.ARTICLE -> items.filter(::shouldIncludeDynamicItemInArticleTab)
-}
-
-internal fun shouldAutoLoadMoreForUserContentFilter(
-    isSelectedUserFeed: Boolean,
-    filter: DynamicUserContentFilter,
-    visibleItemCount: Int,
-): Boolean {
-    if (!isSelectedUserFeed || filter == DynamicUserContentFilter.ALL) return true
-    return visibleItemCount > 0
-}
-
-internal fun DynamicPagePresentation.withUserContentFilter(
-    filter: DynamicUserContentFilter,
-): DynamicPagePresentation {
-    if (!isSelectedUserFeed || filter == DynamicUserContentFilter.ALL) return this
-    return copy(items = filterSelectedUserDynamicItems(items, filter))
+    logicalTab: Int,
+): List<DynamicItem> = when (logicalTab) {
+    1 -> items.filter(::shouldIncludeDynamicItemInVideoTab)
+    3 -> items.filter(::shouldIncludeDynamicItemInArticleTab)
+    else -> items
 }
 
 internal fun shouldApplyUserDynamicsResult(

@@ -16,17 +16,25 @@ fun AppBadge(
     contentColor: Color = Color.Unspecified,
     content: @Composable (RowScope.() -> Unit)? = null,
 ) {
+    val scheme = androidx.compose.material3.MaterialTheme.colorScheme
+    val resolvedContainer = if (containerColor == Color.Unspecified) scheme.error else containerColor
+    val preferredContent = if (contentColor == Color.Unspecified) {
+        androidx.compose.material3.contentColorFor(resolvedContainer)
+    } else contentColor
+    val resolvedContent = com.android.purebilibili.core.ui.resolveButtonContentColor(
+        resolvedContainer, preferredContent, scheme,
+    )
     when (LocalAppUiStyle.current) {
         AppUiStyle.MATERIAL3 -> AppMaterial3Badge(
             modifier = modifier,
-            containerColor = containerColor,
-            contentColor = contentColor,
+            containerColor = resolvedContainer,
+            contentColor = resolvedContent,
             content = content,
         )
         AppUiStyle.MIUIX -> AppMiuixBadge(
             modifier = modifier,
-            containerColor = containerColor,
-            contentColor = contentColor,
+            containerColor = resolvedContainer,
+            contentColor = resolvedContent,
             content = content,
         )
     }

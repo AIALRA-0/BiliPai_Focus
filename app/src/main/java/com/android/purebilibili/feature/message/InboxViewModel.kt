@@ -1,420 +1,231 @@
-// 私信收件箱 ViewModel
 package com.android.purebilibili.feature.message
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.coroutines.AccountScopedRequests
+import com.android.purebilibili.core.store.AccountSessionIdentity
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.MessageFeedUnreadData
-import com.android.purebilibili.data.model.response.MessageUnreadData
 import com.android.purebilibili.data.model.response.SessionItem
+import com.android.purebilibili.data.repository.ImMenuItem
+import com.android.purebilibili.data.repository.ImSession
+import com.android.purebilibili.data.repository.MessageImRepository
 import com.android.purebilibili.data.repository.MessageRepository
+import com.android.purebilibili.data.repository.MessageReadEvent
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * 用户简要信息 (用于缓存)
- */
-data class UserBasicInfo(
-    val mid: Long,
-    val name: String,
-    val face: String
-)
-
 data class InboxUiState(
+    val accountIdentity: AccountSessionIdentity = TokenManager.accountIdentity.value,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
-    val selectedCategory: MessageSessionCategory = MessageSessionCategory.All,
     val sessions: List<SessionItem> = emptyList(),
-    val unreadData: MessageUnreadData? = null,
+    val entries: Map<String, ImSession> = emptyMap(),
     val feedUnreadData: MessageFeedUnreadData? = null,
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
     val isBatchOperating: Boolean = false,
     val error: String? = null,
+    val loadMoreError: String? = null,
     val operationError: String? = null,
     val page: Int = 1,
-    val endTs: Long = 0, //  游标 (此会话列表中最后一条的 session_ts，微秒级)
-    val userInfoMap: Map<Long, UserBasicInfo> = emptyMap()  //  用户信息缓存
+    val endTs: Long = 0,
+    val userInfoMap: Map<Long, UserBasicInfo> = emptyMap(),
+    val pageType: Int = 1,
+    val title: String = "消息",
+    val menu: List<ImMenuItem> = emptyList(),
+    val outside: List<ImMenuItem> = emptyList(),
 )
 
-private const val USER_INFO_FETCH_BATCH_SIZE = 12
-private const val LOAD_MORE_DUPLICATE_RETRY_LIMIT = 2
-
 class InboxViewModel : ViewModel() {
-    
     private val _uiState = MutableStateFlow(InboxUiState())
-    val uiState: StateFlow<InboxUiState> = _uiState.asStateFlow()
-    
-    // 用户信息缓存 (跨刷新保持)
-    private val userCache = mutableMapOf<Long, UserBasicInfo>()
-    
+    val uiState = _uiState.asStateFlow()
+    private val requests = AccountScopedRequests(viewModelScope)
+    private var generation = 0L
+    private var listJob: Job? = null
+    private var moreJob: Job? = null
+    private var readStateJob: Job? = null
+    private var pagination = byteArrayOf()
+    private val parents = mutableListOf<Pair<Int, String>>()
+
     init {
+        requests.observe {
+            generation++
+            parents.clear()
+            pagination = byteArrayOf()
+            _uiState.value = InboxUiState(accountIdentity = requests.identity)
+            loadSessions()
+        }
         loadSessions()
-    }
-    
-    /**
-     * 加载会话列表
-     */
-    fun loadSessions() {
         viewModelScope.launch {
-            val category = _uiState.value.selectedCategory
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            
-            // 并行加载未读数和会话列表
-            val unreadResult = MessageRepository.getUnreadCount()
-            val feedUnreadResult = MessageRepository.getFeedUnread()
-            // 初始加载，endTs = 0
-            val sessionsResult = MessageRepository.getSessions(
-                sessionType = category.apiSessionType,
-                size = 100,
-                endTs = 0
-            )
-            
-            unreadResult.onSuccess { data ->
-                _uiState.value = _uiState.value.copy(unreadData = data)
-            }
-
-            feedUnreadResult.onSuccess { data ->
-                _uiState.value = _uiState.value.copy(feedUnreadData = data)
-            }
-            
-            sessionsResult.fold(
-                onSuccess = { data ->
-                    val sessions = InboxSessionPaginationPolicy.normalizeSessions(
-                        data.session_list ?: emptyList()
-                    )
-                    
-                    //  计算下一次加载的游标
-                    val nextEndTs = InboxSessionPaginationPolicy.resolveNextEndTs(sessions)
-                    
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        sessions = sessions,
-                        hasMore = data.has_more == 1 && nextEndTs > 0L,
-                        userInfoMap = primeSessionUserCache(sessions).toMap(),
-                        endTs = nextEndTs,
-                        page = 1
-                    )
-                    
-                    // 异步加载用户信息
-                    loadUserInfosForSessions(sessions)
-                },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = e.message ?: "加载失败"
-                    )
-                }
-            )
-        }
-    }
-
-    fun selectCategory(category: MessageSessionCategory) {
-        if (_uiState.value.selectedCategory == category) return
-        _uiState.value = _uiState.value.copy(
-            selectedCategory = category,
-            sessions = emptyList(),
-            hasMore = false,
-            page = 1,
-            endTs = 0,
-            error = null,
-            operationError = null
-        )
-        loadSessions()
-    }
-    
-    private fun loadUserInfosForSessions(sessions: List<SessionItem>) {
-        val mids = sessions
-            .filter { InboxUserInfoResolver.shouldFetchSessionUserInfo(it, userCache) }
-            .map { it.talker_id }
-        loadUserInfos(mids)
-    }
-
-    /**
-     * 异步批量加载用户信息
-     */
-    private fun loadUserInfos(mids: List<Long>) {
-        viewModelScope.launch {
-            // 仅拉取缺失或缓存不完整的用户，避免空值缓存导致后续页面显示缺失
-            val toFetch = InboxUserInfoResolver.selectMissingUserInfoMids(mids, userCache)
-
-            toFetch.chunked(USER_INFO_FETCH_BATCH_SIZE).forEach { batch ->
-                batch.map { mid ->
-                    launch { fetchAndPublishUserInfo(mid) }
-                }.joinAll()
-            }
-        }
-    }
-
-    private suspend fun fetchAndPublishUserInfo(mid: Long) {
-        val merged = InboxUserInfoResolver.mergeFetchedUserInfo(
-            existing = userCache[mid],
-            fetched = MessageUserInfoLoader.fetch(mid)
-        ) ?: return
-
-        userCache[mid] = merged
-        // 更新UI状态
-        _uiState.value = _uiState.value.copy(
-            userInfoMap = userCache.toMap()
-        )
-    }
-    
-    /**
-     * 加载更多会话
-     */
-    fun loadMoreSessions() {
-        if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
-
-        viewModelScope.launch {
-            val currentState = _uiState.value
-            _uiState.value = _uiState.value.copy(isLoadingMore = true)
-            loadMoreSessionsFromCursor(
-                baseState = currentState,
-                requestedEndTs = currentState.endTs,
-                remainingDuplicateRetries = LOAD_MORE_DUPLICATE_RETRY_LIMIT
-            )
-        }
-    }
-
-    private suspend fun loadMoreSessionsFromCursor(
-        baseState: InboxUiState,
-        requestedEndTs: Long,
-        remainingDuplicateRetries: Int
-    ) {
-        MessageRepository.getSessions(
-            sessionType = baseState.selectedCategory.apiSessionType,
-            size = 100,
-            page = 1,
-            endTs = requestedEndTs
-        ).fold(
-            onSuccess = { data ->
-                val newSessions = data.session_list.orEmpty()
-                val mergeResult = InboxSessionPaginationPolicy.mergePage(
-                    existing = _uiState.value.sessions,
-                    incoming = newSessions,
-                    responseHasMore = data.has_more == 1,
-                    requestedEndTs = requestedEndTs,
-                    canRetryDuplicatePage = remainingDuplicateRetries > 0
-                )
-
-                if (mergeResult.shouldRetryWithOlderCursor) {
-                    loadMoreSessionsFromCursor(
-                        baseState = baseState.copy(endTs = mergeResult.nextEndTs),
-                        requestedEndTs = mergeResult.nextEndTs,
-                        remainingDuplicateRetries = remainingDuplicateRetries - 1
-                    )
-                    return@fold
-                }
-
-                _uiState.value = _uiState.value.copy(
-                    isLoadingMore = false,
-                    sessions = mergeResult.sessions,
-                    hasMore = mergeResult.hasMore,
-                    page = baseState.page + 1,
-                    userInfoMap = primeSessionUserCache(mergeResult.newSessions).toMap(),
-                    endTs = mergeResult.nextEndTs
-                )
-
-                loadUserInfosForSessions(mergeResult.newSessions)
-            },
-            onFailure = {
-                _uiState.value = _uiState.value.copy(isLoadingMore = false)
-            }
-        )
-    }
-
-    /**
-     * 下拉刷新
-     */
-    fun refresh() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isRefreshing = true, error = null)
-            
-            val unreadResult = MessageRepository.getUnreadCount()
-            val feedUnreadResult = MessageRepository.getFeedUnread()
-            // 刷新时重置游标
-            val sessionsResult = MessageRepository.getSessions(
-                sessionType = _uiState.value.selectedCategory.apiSessionType,
-                size = 100,
-                endTs = 0
-            )
-            
-            unreadResult.onSuccess { data ->
-                _uiState.value = _uiState.value.copy(unreadData = data)
-            }
-
-            feedUnreadResult.onSuccess { data ->
-                _uiState.value = _uiState.value.copy(feedUnreadData = data)
-            }
-            
-            sessionsResult.fold(
-                onSuccess = { data ->
-                    val sessions = InboxSessionPaginationPolicy.normalizeSessions(
-                        data.session_list ?: emptyList()
-                    )
-                    
-                    // 计算 cursor
-                    val nextEndTs = InboxSessionPaginationPolicy.resolveNextEndTs(sessions)
-                    
-                    _uiState.value = _uiState.value.copy(
-                        isRefreshing = false,
-                        isBatchOperating = false,
-                        sessions = sessions,
-                        hasMore = data.has_more == 1 && nextEndTs > 0L,
-                        userInfoMap = primeSessionUserCache(sessions).toMap(),
-                        endTs = nextEndTs
-                    )
-                    
-                    // 异步加载用户信息
-                    loadUserInfosForSessions(sessions)
-                },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isRefreshing = false,
-                        isBatchOperating = false,
-                        error = e.message ?: "刷新失败"
-                    )
-                }
-            )
-        }
-    }
-    
-    /**
-     * 移除会话
-     */
-    fun removeSession(session: SessionItem) {
-        viewModelScope.launch {
-            MessageRepository.removeSession(session.talker_id, session.session_type)
-                .onSuccess {
-                    // 从列表中移除
-                    val newList = _uiState.value.sessions.filter { 
-                        it.talker_id != session.talker_id || it.session_type != session.session_type
+            MessageRepository.readEvents.collect { event ->
+                if (event is MessageReadEvent.PrivateSession) applyReadAck(event)
+                readStateJob?.cancel()
+                readStateJob = requests.launch {
+                    val result = MessageRepository.getFeedUnread()
+                    if (requests.isCurrent()) {
+                        result.onSuccess { unread ->
+                            _uiState.update { it.copy(feedUnreadData = unread) }
+                        }
                     }
-                    _uiState.value = _uiState.value.copy(sessions = newList)
                 }
-                .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        operationError = error.message ?: "删除会话失败"
-                    )
-                }
-        }
-    }
-    
-    /**
-     * 置顶/取消置顶会话
-     */
-    fun toggleTop(session: SessionItem) {
-        viewModelScope.launch {
-            val isCurrentlyTop = session.top_ts > 0
-            
-            // 乐观更新：立即在本地修改 top_ts 并重排
-            val now = System.currentTimeMillis() / 1000
-            val updatedSessions = _uiState.value.sessions.map {
-                if (it.talker_id == session.talker_id && it.session_type == session.session_type) {
-                    it.copy(top_ts = if (isCurrentlyTop) 0 else now)
-                } else it
-            }.let(InboxSessionPaginationPolicy::normalizeSessions)
-            _uiState.value = _uiState.value.copy(sessions = updatedSessions)
-            
-            MessageRepository.setSessionTop(session.talker_id, session.session_type, !isCurrentlyTop)
-                .onSuccess {
-                    // 后台同步服务器最新状态
-                    refresh()
-                }
-                .onFailure {
-                    // 失败时也刷新，恢复真实状态
-                    refresh()
-                }
-        }
-    }
-
-    fun toggleDnd(session: SessionItem) {
-        viewModelScope.launch {
-            MessageRepository.setSessionDnd(
-                talkerId = session.talker_id,
-                sessionType = session.session_type,
-                enabled = session.is_dnd != 1
-            ).onSuccess {
-                refresh()
-            }.onFailure { error ->
-                _uiState.value = _uiState.value.copy(
-                    operationError = error.message ?: "更新免打扰失败"
-                )
             }
         }
     }
 
-    fun toggleIntercept(session: SessionItem) {
-        if (session.session_type != 1) return
-        viewModelScope.launch {
-            MessageRepository.setSessionIntercept(
-                talkerId = session.talker_id,
-                intercepted = session.is_intercept != 1
-            ).onSuccess {
-                refresh()
-            }.onFailure { error ->
-                _uiState.value = _uiState.value.copy(
-                    operationError = error.message ?: "更新拦截状态失败"
-                )
+    fun entry(session: SessionItem): ImSession? = _uiState.value.entries[InboxSessionPaginationPolicy.resolveSessionKey(session)]
+
+    private fun applyReadAck(event: MessageReadEvent.PrivateSession) {
+        _uiState.update { state ->
+            val entries = state.entries.mapValues { (_, entry) ->
+                if (entry.item.talker_id == event.talkerId && entry.item.session_type == event.sessionType) {
+                    mergeReadAck(entry, event.ackSeqno)
+                } else entry
+            }
+            state.copy(
+                entries = entries,
+                sessions = state.sessions.map { session ->
+                    entries[InboxSessionPaginationPolicy.resolveSessionKey(session)]?.item ?: session
+                },
+            )
+        }
+    }
+
+    private fun mergeReadAck(entry: ImSession, ackSeqno: Long): ImSession {
+        val item = InboxSessionPaginationPolicy.applyReadAck(
+            entry.item, entry.item.talker_id, entry.item.session_type, ackSeqno,
+        )
+        return if (item === entry.item) entry else entry.copy(
+            item = item,
+            unreadLabel = if (ackSeqno >= item.max_seqno) "" else entry.unreadLabel,
+            unreadDot = entry.unreadDot && ackSeqno < item.max_seqno,
+        )
+    }
+
+    private fun retainReadAck(entry: ImSession): ImSession {
+        val key = InboxSessionPaginationPolicy.resolveSessionKey(entry.item)
+        return mergeReadAck(entry, _uiState.value.entries[key]?.item?.ack_seqno ?: 0L)
+    }
+
+    private fun rememberSessionUsers(items: List<SessionItem>): Map<Long, UserBasicInfo> =
+        items.mapNotNull { item ->
+            val user = InboxUserInfoResolver.sessionUserInfo(item) ?: return@mapNotNull null
+            MessageUserInfoLoader.remember(user)?.let { item.talker_id to it }
+        }.toMap()
+
+    fun openFolder(session: SessionItem): Boolean {
+        val folder = entry(session)?.folderPage ?: return false
+        parents += _uiState.value.pageType to _uiState.value.title
+        navigatePage(folder, session.account_info?.name.orEmpty().ifBlank { "消息" })
+        return true
+    }
+
+    fun back(): Boolean {
+        val parent = parents.removeLastOrNull() ?: return false
+        navigatePage(parent.first, parent.second)
+        return true
+    }
+
+    private fun navigatePage(pageType: Int, title: String) {
+        listJob?.cancel()
+        moreJob?.cancel()
+        generation++
+        pagination = byteArrayOf()
+        _uiState.update { InboxUiState(accountIdentity = it.accountIdentity, pageType = pageType, title = title, feedUnreadData = it.feedUnreadData) }
+        loadSessions()
+    }
+
+    fun loadSessions() = load(refresh = false)
+    fun refresh() = load(refresh = true)
+    private fun load(refresh: Boolean) {
+        listJob?.cancel()
+        moreJob?.cancel()
+        val version = ++generation
+        val pageType = _uiState.value.pageType
+        _uiState.update { it.copy(isLoading = it.sessions.isEmpty(), isRefreshing = refresh, isLoadingMore = false, error = null, loadMoreError = null) }
+        listJob = requests.launch {
+            coroutineScope {
+                val feed = async { MessageRepository.getFeedUnread() }
+                val sessions = async { MessageImRepository.sessions(pageType) }
+                val result = sessions.await()
+                val feedResult = feed.await()
+                if (version != generation || !requests.isCurrent()) return@coroutineScope
+                _uiState.update { it.copy(feedUnreadData = feedResult.getOrNull() ?: it.feedUnreadData) }
+                result.fold(onSuccess = { data ->
+                    pagination = data.pagination
+                    val entries = data.sessions.distinctBy { it.key }.map(::retainReadAck)
+                    val items = entries.map { it.item }
+                    _uiState.update { it.copy(
+                        isLoading = false, isRefreshing = false, isBatchOperating = false,
+                        sessions = items, entries = entries.associateBy { InboxSessionPaginationPolicy.resolveSessionKey(it.item) },
+                        userInfoMap = rememberSessionUsers(items),
+                        menu = data.menu, outside = data.outside, hasMore = data.hasMore,
+                        page = 1, endTs = it.endTs + 1,
+                    ) }
+                }, onFailure = { error ->
+                    _uiState.update { it.copy(isLoading = false, isRefreshing = false, isBatchOperating = false, error = error.message ?: "加载失败") }
+                })
             }
         }
     }
 
-    fun markDustbinRead() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isBatchOperating = true, operationError = null)
-            MessageRepository.markDustbinRead()
-                .onSuccess { refresh() }
-                .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isBatchOperating = false,
-                        operationError = error.message ?: "拦截会话已读失败"
+    fun loadMoreSessions() {
+        val current = _uiState.value
+        if (current.isLoading || current.isRefreshing || current.isLoadingMore || !current.hasMore) return
+        val version = generation
+        val cursor = pagination
+        _uiState.update { it.copy(isLoadingMore = true, loadMoreError = null) }
+        moreJob = requests.launch {
+            MessageImRepository.sessions(current.pageType, cursor).fold(onSuccess = { data ->
+                if (version != generation || !requests.isCurrent()) return@fold
+                val advanced = !cursor.contentEquals(data.pagination)
+                pagination = data.pagination
+                val incoming = data.sessions.associate { entry ->
+                    val retained = retainReadAck(entry)
+                    InboxSessionPaginationPolicy.resolveSessionKey(retained.item) to retained
+                }
+                _uiState.update { state ->
+                    val entries = state.entries + incoming
+                    val orderedKeys = (state.sessions.map(InboxSessionPaginationPolicy::resolveSessionKey) + incoming.keys).distinct()
+                    val items = orderedKeys.mapNotNull { entries[it]?.item }
+                    state.copy(
+                        isLoadingMore = false, sessions = items, entries = entries,
+                        userInfoMap = rememberSessionUsers(items),
+                        hasMore = data.hasMore && advanced, page = state.page + 1, endTs = state.endTs + 1,
                     )
                 }
+            }, onFailure = { error ->
+                if (version == generation) _uiState.update { it.copy(isLoadingMore = false, loadMoreError = error.message ?: "加载更多失败") }
+            })
         }
     }
 
-    fun clearDustbinSessions() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isBatchOperating = true, operationError = null)
-            MessageRepository.clearDustbinSessions()
-                .onSuccess { refresh() }
-                .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isBatchOperating = false,
-                        operationError = error.message ?: "清空拦截会话失败"
-                    )
-                }
+    private fun operate(action: suspend () -> Result<Unit>) {
+        if (_uiState.value.isBatchOperating) return
+        val version = generation
+        _uiState.update { it.copy(isBatchOperating = true, operationError = null) }
+        requests.launch {
+            action().fold(onSuccess = { if (version == generation) refresh() }, onFailure = { error ->
+                if (version == generation) _uiState.update { it.copy(isBatchOperating = false, operationError = error.message ?: "操作失败") }
+            })
         }
     }
-    
-    /**
-     * 清除错误信息
-     */
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+    fun markRead(session: SessionItem) {
+        val entry = entry(session) ?: return
+        val page = _uiState.value.pageType
+        operate { MessageImRepository.clearUnread(page, entry) }
     }
-
-    fun clearOperationError() {
-        _uiState.value = _uiState.value.copy(operationError = null)
-    }
-
-    private fun primeSessionUserCache(sessions: List<SessionItem>): Map<Long, UserBasicInfo> {
-        sessions.forEach { session ->
-            val accountInfo = session.account_info ?: return@forEach
-            val merged = InboxUserInfoResolver.mergeFetchedUserInfo(
-                existing = userCache[session.talker_id],
-                fetched = UserBasicInfo(
-                    mid = session.talker_id,
-                    name = accountInfo.name,
-                    face = accountInfo.avatarUrl
-                )
-            ) ?: return@forEach
-            userCache[session.talker_id] = merged
-        }
-        return userCache
-    }
-
+    fun markAllRead() { val page = _uiState.value.pageType; operate { MessageImRepository.clearUnread(page) } }
+    fun clearSessions() { val page = _uiState.value.pageType; operate { MessageImRepository.clearList(page) } }
+    fun removeSession(session: SessionItem) = operate { MessageRepository.removeSession(session.talker_id, session.session_type) }
+    fun toggleTop(session: SessionItem) { val entry = entry(session) ?: return; operate { MessageImRepository.pin(entry) } }
+    fun toggleDnd(session: SessionItem) = operate { MessageRepository.setSessionDnd(session.talker_id, session.session_type, session.is_dnd != 1) }
+    fun toggleIntercept(session: SessionItem) = operate { MessageRepository.setSessionIntercept(session.talker_id, session.is_intercept != 1) }
+    fun clearError() { _uiState.update { it.copy(error = null) } }
+    fun clearOperationError() { _uiState.update { it.copy(operationError = null) } }
 }

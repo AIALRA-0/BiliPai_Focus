@@ -7,7 +7,20 @@ interface DanmakuEngine : AutoCloseable {
     val playbackState: DanmakuPlaybackState
     val diagnostics: DanmakuEngineDiagnostics
 
+    /**
+     * UP 主身份标识（owner.mid 的 crc32 hex）。命中该标识的弹幕渲染时附带 UP 徽章。
+     * 置空（null）清除标识。
+     */
+    var upOwnerUserHash: String?
+
     fun updateConfig(config: DanmakuRenderConfig)
+
+    /**
+     * Hides ordinary danmaku matching a selected ID or exact original text.
+     * Active items keep moving; clearing both sets restores their visibility.
+     * This update may be called from any thread and does not replace the timeline.
+     */
+    fun setHiddenDanmaku(ids: Set<Long>, texts: Set<String>)
 
     fun replaceWindow(window: DanmakuWindow, currentPositionMs: Long = 0L)
 
@@ -41,7 +54,33 @@ interface DanmakuEngine : AutoCloseable {
 
     fun invalidate()
 
+    /** Capture a tap in renderer-local pixels; invoke only after single-tap confirmation. */
+    fun captureClick(x: Float, y: Float): DanmakuClickCapture?
+
+    fun clearClickSelection()
+
     fun setOnItemClickListener(listener: ((DanmakuItem, RectF, PointF) -> Unit)?)
 
     override fun close()
+}
+
+/** A press owns the frozen item until cancellation or the action menu closes. */
+class DanmakuClickCapture(
+    private val confirm: () -> Unit,
+    private val release: () -> Unit,
+) {
+    private var cancelled = false
+    private var confirmed = false
+    operator fun invoke() {
+        if (!cancelled && !confirmed) {
+            confirmed = true
+            confirm()
+        }
+    }
+    fun cancel() {
+        if (!cancelled) {
+            cancelled = true
+            release()
+        }
+    }
 }

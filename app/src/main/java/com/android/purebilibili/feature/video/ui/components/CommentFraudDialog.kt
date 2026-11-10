@@ -1,5 +1,7 @@
 // 文件路径: feature/video/ui/components/CommentFraudDialog.kt
 package com.android.purebilibili.feature.video.ui.components
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -78,10 +80,10 @@ fun CommentFraudResultDialog(
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
                 tint = when (color) {
-                    FraudStatusColor.GREEN -> MaterialTheme.colorScheme.primary
-                    FraudStatusColor.RED -> MaterialTheme.colorScheme.error
+                    FraudStatusColor.GREEN -> AppContentColors.accent()
+                    FraudStatusColor.RED -> AppContentColors.error()
                     FraudStatusColor.ORANGE -> MaterialTheme.colorScheme.tertiary
-                    FraudStatusColor.GRAY -> MaterialTheme.colorScheme.onSurfaceVariant
+                    FraudStatusColor.GRAY -> AppContentColors.secondaryText()
                 }
             )
         },
@@ -97,7 +99,7 @@ fun CommentFraudResultDialog(
             AppText(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
         },
         confirmButton = {
@@ -114,7 +116,7 @@ fun CommentFraudResultDialog(
                         onDismiss()
                     },
                     colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+                        contentColor = AppContentColors.error()
                     )
                 ) {
                     AppText("删除评论")
@@ -154,7 +156,7 @@ fun CommentFraudDetectingBanner(
             AppText(
                 text = "正在检测评论可见性…",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppContentColors.secondaryText()
             )
         }
     }

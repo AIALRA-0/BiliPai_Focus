@@ -85,21 +85,6 @@ class VideoAspectRatioLayoutPolicyTest {
         assertFalse(shouldUseFillMaxPlayerViewport(VideoAspectRatio.RATIO_4_3))
     }
 
-    @Test
-    fun `forced resize mode pivot differs from target so same-mode layout can remeasure`() {
-        assertEquals(
-            AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-            resolveForcedPlayerResizeModePivot(AspectRatioFrameLayout.RESIZE_MODE_FIT),
-        )
-        assertEquals(
-            AspectRatioFrameLayout.RESIZE_MODE_FIT,
-            resolveForcedPlayerResizeModePivot(AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-        )
-        assertEquals(
-            AspectRatioFrameLayout.RESIZE_MODE_FIT,
-            resolveForcedPlayerResizeModePivot(AspectRatioFrameLayout.RESIZE_MODE_FILL),
-        )
-    }
 
     @Test
     fun `measured viewport refreshes until Android view matches Compose size`() {
@@ -150,28 +135,39 @@ class VideoAspectRatioLayoutPolicyTest {
     }
 
     @Test
-    fun `safe aspect ratio forces stretch to fit for vertical content`() {
-        assertEquals(
-            VideoAspectRatio.FIT,
-            resolveSafeVideoAspectRatio(
-                preferred = VideoAspectRatio.STRETCH,
-                isVerticalVideo = true
-            )
-        )
-        assertEquals(
-            VideoAspectRatio.FILL,
-            resolveSafeVideoAspectRatio(
-                preferred = VideoAspectRatio.FILL,
-                isVerticalVideo = true
-            )
-        )
-        assertEquals(
-            VideoAspectRatio.STRETCH,
-            resolveSafeVideoAspectRatio(
-                preferred = VideoAspectRatio.STRETCH,
-                isVerticalVideo = false
-            )
-        )
+    fun `every explicit fit choice is preserved for both source orientations`() {
+        VideoAspectRatio.entries.forEach { ratio ->
+            assertEquals(ratio, resolveSafeVideoAspectRatio(ratio, isVerticalVideo = true))
+            assertEquals(ratio, resolveSafeVideoAspectRatio(ratio, isVerticalVideo = false))
+        }
+    }
+
+    @Test
+    fun `equal width and equal height use source ratio even when viewport overflows`() {
+        assertEquals(VideoViewportLayout(1000, 2000),
+            resolveVideoViewportLayout(1000, 600, VideoAspectRatio.FIT_WIDTH, 500, 1000))
+        assertEquals(VideoViewportLayout(1200, 600),
+            resolveVideoViewportLayout(1000, 600, VideoAspectRatio.FIT_HEIGHT, 2000, 1000))
+    }
+
+    @Test
+    fun `original preserves decoded pixels and limit never upscales`() {
+        assertEquals(VideoViewportLayout(1920, 1080),
+            resolveVideoViewportLayout(1000, 600, VideoAspectRatio.ORIGINAL, 1920, 1080))
+        assertEquals(VideoViewportLayout(500, 250),
+            resolveVideoViewportLayout(1000, 600, VideoAspectRatio.SCALE_DOWN, 500, 250))
+        assertEquals(VideoViewportLayout(1000, 563),
+            resolveVideoViewportLayout(1000, 600, VideoAspectRatio.SCALE_DOWN, 1920, 1080))
+    }
+
+    @Test
+    fun `all source sized modes use explicit viewport with fit content`() {
+        listOf(VideoAspectRatio.FIT_WIDTH, VideoAspectRatio.FIT_HEIGHT,
+            VideoAspectRatio.ORIGINAL, VideoAspectRatio.SCALE_DOWN).forEach { ratio ->
+            assertFalse(shouldUseFillMaxPlayerViewport(ratio))
+            assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, ratio.playerResizeMode)
+            assertEquals(Anime4KDisplayScaleMode.FIT, ratio.toAnime4KDisplayScaleMode())
+        }
     }
 
     @Test

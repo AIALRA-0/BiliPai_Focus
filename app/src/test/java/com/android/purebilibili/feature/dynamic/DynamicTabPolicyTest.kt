@@ -10,11 +10,11 @@ class DynamicTabPolicyTest {
     @Test
     fun `visible dynamic tabs follow fixed app order and ignore unknown ids`() {
         val result = resolveDynamicVisibleTabs(
-            setOf("article", "all", "unknown", "up")
+            setOf("article", "all", "unknown")
         )
 
         assertEquals(
-            listOf("all", "article", "up"),
+            listOf("all", "article"),
             result.map { it.id }
         )
     }
@@ -33,14 +33,14 @@ class DynamicTabPolicyTest {
         assertEquals(
             0,
             resolveDynamicSelectedTabWithinVisibleTabs(
-                selectedTab = 4,
+                selectedTab = 2,
                 visibleTabs = visibleTabs
             )
         )
         assertEquals(
             0,
             resolveDynamicSelectedVisibleTabIndex(
-                selectedTab = 4,
+                selectedTab = 2,
                 visibleTabs = visibleTabs
             )
         )
@@ -78,21 +78,6 @@ class DynamicTabPolicyTest {
 
         assertFalse("article" in hiddenArticle)
         assertTrue("article" in restoredArticle)
-    }
-
-    @Test
-    fun `up tab visibility follows the current visible tab list`() {
-        assertTrue(isDynamicUserTabVisible(resolveDynamicVisibleTabs(defaultDynamicTabVisibleIds)))
-        assertFalse(isDynamicUserTabVisible(resolveDynamicVisibleTabs(setOf("all", "video", "pgc", "article"))))
-    }
-
-    @Test
-    fun `dynamic top tabs expose the expected count and labels`() {
-        assertEquals(5, allDynamicTabSpecs.size)
-        assertEquals(
-            listOf("全部", "投稿", "番剧", "专栏", "UP"),
-            allDynamicTabSpecs.map { it.title }
-        )
     }
 
     @Test

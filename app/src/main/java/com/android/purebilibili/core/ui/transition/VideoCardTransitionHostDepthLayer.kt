@@ -41,15 +41,18 @@ internal fun VideoCardTransitionHostDepthLayer(
     sourceBoundsProvider: () -> Rect? = { null },
     modifier: Modifier = Modifier,
 ) {
-    if (!enabled) return
+    val contentLayer = snapshotHandle.contentLayer
+    val snapshotState = snapshotHandle.state
+    if (!enabled) {
+        SideEffect { snapshotHandle.clearRenderEffect() }
+        return
+    }
     val view = LocalView.current
     var deviceCornerRadiusPx by remember { mutableFloatStateOf(0f) }
     SideEffect {
         deviceCornerRadiusPx = resolveDeviceDisplayCornerRadiusPx(view.rootWindowInsets)
+        if (!realtimeBlurEnabledProvider()) snapshotHandle.clearRenderEffect()
     }
-    val contentLayer = snapshotHandle.contentLayer
-    val snapshotState = snapshotHandle.state
-
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -65,6 +68,7 @@ internal fun VideoCardTransitionHostDepthLayer(
                         displayListStale = snapshotState.displayListStale,
                         motionTier = motionTier,
                         realtimeBlurEnabled = realtimeBlur,
+                        sourceRendererReady = snapshotState.hasReadySourceRenderer,
                     )
                 ) {
                     return@drawWithContent
@@ -75,6 +79,26 @@ internal fun VideoCardTransitionHostDepthLayer(
                     exposure = exposure,
                     liveProgress = progressProvider(),
                 )
+                val frozenLayerAlpha = resolveVideoCardTransitionFrozenLayerAlpha(
+                    exposure = exposure,
+                    depthProgress = progress,
+                )
+                if (!shouldDrawVideoCardTransitionFrozenLayer(frozenLayerAlpha)) {
+                    // Source and host use the same handoff boundary. No invisible blur
+                    // updates during preparation; retain the layer for gesture reversal.
+                    val isLight = isLightBackgroundProvider()
+                    val scrimAlpha = resolveVideoCardTransitionBackgroundScrimAlpha(
+                        depthProgress = resolveVideoCardTransitionDepthProgress(progress, phase),
+                        phase = phase,
+                        motionTier = motionTier,
+                        isLightBackground = isLight,
+                    )
+                    if (scrimAlpha > 0.001f) {
+                        drawRect((if (isLight) VIDEO_CARD_TRANSITION_LIGHT_SCRIM_TINT else Color.Black)
+                            .copy(alpha = scrimAlpha))
+                    }
+                    return@drawWithContent
+                }
                 val frame = snapshotState.frameCache.resolve(
                     progress = progress,
                     phase = phase,
@@ -91,6 +115,8 @@ internal fun VideoCardTransitionHostDepthLayer(
                     frame = frame,
                     canvasSize = size,
                     sourceBounds = sourceBoundsProvider(),
+                    layerAlpha = frozenLayerAlpha,
+                    rasterScale = snapshotHandle.prepareEffectLayer(this, frame.blurRadiusPx),
                 )
                 if (shouldDrawVideoCardTransitionScaleGapFill(frame.contentScale)) {
                     drawRect(
@@ -100,15 +126,8 @@ internal fun VideoCardTransitionHostDepthLayer(
                         )
                     )
                 }
-                val frozenLayerAlpha = resolveVideoCardTransitionFrozenLayerAlpha(
-                    exposure = exposure,
-                    depthProgress = progress,
-                )
-                contentLayer.alpha = frozenLayerAlpha
-                if (frozenLayerAlpha > 0.001f) {
-                    drawLayer(contentLayer)
-                    VideoCardTransitionDiagnostics.onSourceLayerDrawn()
-                }
+                drawLayer(contentLayer)
+                VideoCardTransitionDiagnostics.onSourceLayerDrawn()
                 if (frame.scrimAlpha > 0.001f) {
                     val scrimColor = if (frame.useLightScrimTint) {
                         VIDEO_CARD_TRANSITION_LIGHT_SCRIM_TINT
@@ -122,12 +141,11 @@ internal fun VideoCardTransitionHostDepthLayer(
 }
 
 /**
- * Host 层何时绘制：有**可用**冻结内容时。
+ * Host 层何时绘制：源渲染器尚未就绪，且有可用冻结内容时。
  *
  * - stale / 无内容：永不 paint（防黑屏）。
- * - [SettledHidden]：详情下预热满糊。
- * - [BackPreview]/[Returning]/[Restoring]：drawable 时垫跟手/消糊景深；
- *   源 dispose 后 DL 失效时 stale=true，Host 不画，等源重录。
+ * - SettledHidden：源已卸载时维持详情下的满糊快照。
+ * - BackPreview / Returning / Restoring：准备期间垫景深；源就绪后停止绘制。
  */
 internal fun shouldPaintHostOwnedDepthLayer(
     exposure: VideoCardTransitionExposure,
@@ -136,7 +154,9 @@ internal fun shouldPaintHostOwnedDepthLayer(
     motionTier: MotionTier,
     realtimeBlurEnabled: Boolean,
     sdkInt: Int = Build.VERSION.SDK_INT,
+    sourceRendererReady: Boolean = false,
 ): Boolean {
+    if (sourceRendererReady) return false
     if (
         !isVideoCardTransitionSnapshotDrawable(
             hasRecordedContent = hasRecordedContent,
@@ -151,7 +171,7 @@ internal fun shouldPaintHostOwnedDepthLayer(
     return when (exposure) {
         // SettledHidden：详情下预热（须 drawable）。
         // BackPreview/Returning：drawable 时 Host 在 NavDisplay 下垫一层跟手糊；
-        // 源页重录后会在其上画同 layer。stale 时 Host 不画（防黑），源 live/重录接手。
+        // Prepared source renderers own the layer; Host only fills the preparation gap.
         VideoCardTransitionExposure.SettledHidden,
         VideoCardTransitionExposure.BackPreview,
         VideoCardTransitionExposure.Restoring,

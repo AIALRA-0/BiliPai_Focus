@@ -17,6 +17,7 @@ internal class VideoOutputRouter(
     private var shouldBindDirectPlayerView = false
     private var shouldUseAnime4K = false
     private var usingAnime4K = false
+    private var released = false
 
     fun update(
         playerView: PlayerView?,
@@ -24,6 +25,7 @@ internal class VideoOutputRouter(
         shouldBindDirectPlayerView: Boolean,
         shouldUseAnime4K: Boolean
     ) {
+        if (released) return
         directPlayerView = playerView
         anime4kInputSurface = inputSurface
         this.shouldBindDirectPlayerView = shouldBindDirectPlayerView
@@ -32,13 +34,16 @@ internal class VideoOutputRouter(
     }
 
     fun rebindDirectSurfaceIfNeeded() {
+        if (released) return
         if (!usingAnime4K && shouldBindDirectPlayerView) {
             directPlayerView?.let { rebindPlayerSurfaceIfNeeded(it, player) }
         }
     }
 
     fun release() {
-        if (usingAnime4K) player.clearVideoSurface()
+        if (released) return
+        released = true
+        boundAnime4kSurface?.let(player::clearVideoSurface)
         usingAnime4K = false
         anime4kInputSurface = null
         boundAnime4kSurface = null
@@ -50,7 +55,7 @@ internal class VideoOutputRouter(
         if (shouldUseAnime4K && inputSurface != null) {
             if (usingAnime4K && boundAnime4kSurface === inputSurface) return
             directPlayerView?.takeIf { it.player === player }?.player = null
-            if (usingAnime4K) player.clearVideoSurface()
+            boundAnime4kSurface?.let(player::clearVideoSurface)
             player.setVideoSurface(inputSurface)
             usingAnime4K = true
             boundAnime4kSurface = inputSurface
@@ -59,7 +64,7 @@ internal class VideoOutputRouter(
 
         val wasUsingAnime4K = usingAnime4K
         if (usingAnime4K) {
-            player.clearVideoSurface()
+            boundAnime4kSurface?.let(player::clearVideoSurface)
             usingAnime4K = false
             boundAnime4kSurface = null
         }

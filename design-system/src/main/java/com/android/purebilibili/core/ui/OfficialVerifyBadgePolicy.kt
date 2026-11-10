@@ -23,6 +23,11 @@ enum class OfficialVerifyBadgeTone {
     ORGANIZATION
 }
 
+fun officialVerifyColor(tone: OfficialVerifyBadgeTone): Color = when (tone) {
+    OfficialVerifyBadgeTone.PERSONAL -> Color(0xFFFFCC00)
+    OfficialVerifyBadgeTone.ORGANIZATION -> Color(0xFF40C4FF)
+}
+
 data class OfficialVerifyBadgeSpec(
     val text: String,
     val contentDescription: String,
@@ -121,8 +126,7 @@ fun OfficialVerifyBadge(
     ) {
         Text(
             text = badge.text,
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -147,10 +151,7 @@ fun OfficialVerifyAvatarBadge(
         Icon(
             imageVector = Icons.Outlined.Bolt,
             contentDescription = badge.contentDescription,
-            tint = when (badge.tone) {
-                OfficialVerifyBadgeTone.PERSONAL -> Color(0xFFFFCC00)
-                OfficialVerifyBadgeTone.ORGANIZATION -> Color(0xFF40C4FF)
-            },
+            tint = officialVerifyColor(badge.tone),
             modifier = Modifier.size(14.dp),
         )
     }

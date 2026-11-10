@@ -38,10 +38,3 @@ fun shouldRouteClickableItemToMiuixArrowPreference(
     centered = centered
 ) == AppClickableItemRenderer.MIUIX_ARROW
 
-fun shouldRouteSwitchItemToMiuixSwitchPreference(
-    uiStyle: AppUiStyle,
-): Boolean = uiStyle == AppUiStyle.MIUIX
-
-fun shouldRouteSliderPreferenceToMiuixSliderPreference(
-    uiStyle: AppUiStyle,
-): Boolean = uiStyle == AppUiStyle.MIUIX

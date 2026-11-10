@@ -1,12 +1,59 @@
 package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.store.SettingsManager.BottomBarVisibilityMode
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AppNavigationAppearancePolicyTest {
+
+    @Test
+    fun scrollHideTakesPriorityOverCompactAndAudioMergeWithoutChangingSavedSettings() {
+        for (glassEnabled in listOf(false, true)) {
+            for (floating in listOf(false, true)) {
+                val saved = HomeSettings(
+                    androidNativeLiquidGlassEnabled = glassEnabled,
+                    isBottomBarFloating = floating,
+                    bottomBarScrollCompactEnabled = true,
+                    linkedDockMergeOnScrollEnabled = true,
+                )
+                val effective = resolveBottomBarScrollSettings(saved, BottomBarVisibilityMode.SCROLL_HIDE)
+                assertFalse(effective.bottomBarScrollCompactEnabled)
+                assertFalse(effective.linkedDockMergeOnScrollEnabled)
+                kotlin.test.assertEquals(
+                    saved.copy(bottomBarScrollCompactEnabled = false, linkedDockMergeOnScrollEnabled = false),
+                    effective,
+                )
+                assertTrue(saved.bottomBarScrollCompactEnabled)
+                assertTrue(saved.linkedDockMergeOnScrollEnabled)
+                kotlin.test.assertSame(saved, resolveBottomBarScrollSettings(saved, BottomBarVisibilityMode.ALWAYS_VISIBLE))
+            }
+        }
+    }
+
+    @Test
+    fun scrollHideFollowsBothScrollDirectionsWhileFixedModesKeepTheirPriority() {
+        assertFalse(resolveBottomBarVisibleForMode(BottomBarVisibilityMode.SCROLL_HIDE, scrollVisible = false))
+        assertTrue(resolveBottomBarVisibleForMode(BottomBarVisibilityMode.SCROLL_HIDE, scrollVisible = true))
+        for (scrollVisible in listOf(false, true)) {
+            assertTrue(resolveBottomBarVisibleForMode(BottomBarVisibilityMode.ALWAYS_VISIBLE, scrollVisible))
+            assertFalse(resolveBottomBarVisibleForMode(BottomBarVisibilityMode.ALWAYS_HIDDEN, scrollVisible))
+        }
+    }
+
+    @Test
+    fun fixedVisibilityModesPreserveExistingDockPreferences() {
+        for (compact in listOf(false, true)) {
+            for (merge in listOf(false, true)) {
+                val saved = HomeSettings(bottomBarScrollCompactEnabled = compact, linkedDockMergeOnScrollEnabled = merge)
+                kotlin.test.assertSame(saved, resolveBottomBarScrollSettings(saved, BottomBarVisibilityMode.ALWAYS_VISIBLE))
+                kotlin.test.assertSame(saved, resolveBottomBarScrollSettings(saved, BottomBarVisibilityMode.ALWAYS_HIDDEN))
+            }
+        }
+    }
+
 
     @Test
     fun mapsBottomBarAndTransitionFlagsFromHomeSettings() {

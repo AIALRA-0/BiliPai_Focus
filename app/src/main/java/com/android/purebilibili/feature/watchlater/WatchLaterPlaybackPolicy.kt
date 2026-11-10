@@ -98,7 +98,7 @@ internal fun resolveWatchLaterPlaybackTarget(
 }
 
 internal fun isWatchLaterViewed(item: VideoItem): Boolean {
-    return item.duration > 0 && item.progress >= item.duration
+    return com.android.purebilibili.data.model.isWatchLaterViewed(item)
 }
 
 internal fun resolveWatchLaterItemsAfterManagementAction(

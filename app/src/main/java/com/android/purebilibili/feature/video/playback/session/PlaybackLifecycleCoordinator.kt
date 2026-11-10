@@ -16,6 +16,43 @@ internal data class PlaybackResumeDecision(
     val shouldRestoreVolume: Boolean
 )
 
+internal enum class PlaybackPauseOwner(val mask: Int) {
+    LIFECYCLE(1),
+    NAVIGATION(2),
+}
+
+/** Page-owned intent survives player recreation; automatic pauses must not overwrite it. */
+internal class PlaybackReturnState {
+    private var bvid = ""
+    private var cid = 0L
+    private var playWhenReady: Boolean? = null
+    private var pauseOwners = 0
+
+    private fun matchesMedia(bvid: String, cid: Long): Boolean =
+        this.bvid == bvid && (this.cid <= 0L || cid <= 0L || this.cid == cid)
+
+    fun recordPlaybackIntent(bvid: String, cid: Long, playing: Boolean) {
+        if (pauseOwners == 0 && matchesMedia(bvid, cid)) playWhenReady = playing
+    }
+
+    fun suspend(bvid: String, cid: Long, playing: Boolean, owner: PlaybackPauseOwner): Boolean {
+        if (pauseOwners == 0 || !matchesMedia(bvid, cid)) {
+            this.bvid = bvid
+            this.cid = cid
+            playWhenReady = playing
+        }
+        pauseOwners = pauseOwners or owner.mask
+        return playWhenReady == true
+    }
+
+    fun resume(owner: PlaybackPauseOwner) {
+        pauseOwners = pauseOwners and owner.mask.inv()
+    }
+
+    fun resolveAutoPlay(bvid: String, cid: Long, initialPreference: Boolean): Boolean =
+        if (matchesMedia(bvid, cid)) playWhenReady ?: initialPreference else initialPreference
+}
+
 internal fun resolveShouldContinuePlaybackDuringPause(
     isMiniMode: Boolean,
     isPip: Boolean,

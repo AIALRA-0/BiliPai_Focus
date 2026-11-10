@@ -63,9 +63,10 @@ class FlexibleBooleanFeedParsingTest {
         """.trimIndent()
 
         val response = json.decodeFromString<DynamicFeedResponse>(payload)
-        val item = assertNotNull(response.data).items.single()
+        val data = assertNotNull(response.data)
+        val item = data.items.single()
 
-        assertTrue(response.data.has_more)
+        assertTrue(data.has_more)
         assertTrue(item.visible)
         assertEquals(true, item.modules.module_author?.following)
         assertTrue(assertNotNull(item.modules.module_dynamic?.major?.archive).isChargingArc)
@@ -117,9 +118,10 @@ class FlexibleBooleanFeedParsingTest {
         """.trimIndent()
 
         val response = json.decodeFromString<SpaceDynamicResponse>(payload)
-        val item = assertNotNull(response.data).items.single()
+        val data = assertNotNull(response.data)
+        val item = data.items.single()
 
-        assertTrue(response.data.has_more)
+        assertTrue(data.has_more)
         assertTrue(item.visible)
         assertTrue(assertNotNull(item.modules.module_dynamic?.major?.archive).isChargingArc)
         assertFalse(assertNotNull(item.modules.module_dynamic?.major?.archive).isUgcpay)

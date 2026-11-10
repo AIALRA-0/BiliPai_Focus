@@ -101,5 +101,14 @@ class MiniPlayerOverlayLayoutPolicyTest {
         assertEquals(16f / 9f, dimensions.aspectRatio, 0.001f)
         assertEquals(220f, dimensions.widthDp)
     }
+
+    @Test
+    fun adaptiveDimensions_constrainsPortraitVideoToShortViewport() {
+        val dimensions = resolveAdaptiveMiniPlayerDimensions(9f / 16f, 320f, 130f,
+            maxWidthDp = 180f, maxHeightDp = 140f)
+        assertEquals(140f, dimensions.heightDp, 0.001f)
+        assertEquals(140f * 9f / 16f, dimensions.widthDp, 0.001f)
+    }
+
 }
 

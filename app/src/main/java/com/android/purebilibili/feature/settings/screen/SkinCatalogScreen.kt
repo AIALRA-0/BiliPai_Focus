@@ -1,4 +1,9 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.android.purebilibili.feature.settings.screen
+
+import com.android.purebilibili.feature.settings.SettingsFunctionIcon
+import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.request.crossfade
 
@@ -33,7 +38,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -192,7 +197,7 @@ fun SkinCatalogScreen(
     }
 
     SettingsPageScaffold(
-        title = "在线装扮目录",
+        title = "在线装扮",
         onBack = onBack,
         backContentDescription = "返回插件中心",
         bottomContentPadding = 0.dp,
@@ -215,7 +220,7 @@ fun SkinCatalogScreen(
             ) {
                 AppText(
                     text = "装扮目录为空或加载失败",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppContentColors.secondaryText()
                 )
             }
             return@SettingsPageScaffold
@@ -242,7 +247,25 @@ fun SkinCatalogScreen(
                 ) {
                     AppText(
                         text = "没有找到相关装扮",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AppContentColors.secondaryText()
+                    )
+                }
+            } else if (com.android.purebilibili.core.theme.LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3) {
+                val carouselState = androidx.compose.material3.carousel.rememberCarouselState { state.filteredThemes.size }
+                androidx.compose.material3.carousel.HorizontalUncontainedCarousel(
+                    state = carouselState,
+                    itemWidth = 240.dp,
+                    itemSpacing = 12.dp,
+                    contentPadding = PaddingValues(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { index ->
+                    val entry = state.filteredThemes.getOrNull(index) ?: return@HorizontalUncontainedCarousel
+                    SkinCatalogCard(
+                        entry = entry,
+                        onClick = {
+                            stateHolder.openPreview(entry)
+                            preparePreview(entry)
+                        },
                     )
                 }
             } else {
@@ -343,6 +366,20 @@ private fun SkinCatalogCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+                if (entry.officialExample) {
+                    AppSurface(
+                        shape = AppShapes.container(ContainerLevel.Chip),
+                        color = AppContentColors.accent(),
+                        modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
+                    ) {
+                        AppText(
+                            text = "官方示例",
+                            color = AppContentColors.onAccent(),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
                 // 颜色色块预览（右上角）
                 Row(
                     modifier = Modifier
@@ -377,7 +414,7 @@ private fun SkinCatalogCard(
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
+                color = AppContentColors.primaryText()
             )
         }
     }
@@ -408,32 +445,36 @@ private fun SkinCatalogPreviewDialog(
 ) {
     com.android.purebilibili.core.ui.AppAlertDialog(
         onDismissRequest = { if (!installing) onDismiss() },
-        icon = { AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_brush_fill_24), contentDescription = null) },
+        icon = { SettingsFunctionIcon(
+            com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_brush_fill_24),
+            title = entry.displayName,
+        ) },
         title = { AppText(entry.displayName) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (loading) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AppCircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        AppText("正在下载并生成真实预览...", style = MaterialTheme.typography.bodySmall)
+                        AppText("正在下载并准备预览…", style = MaterialTheme.typography.bodySmall)
                     }
                 } else if (error != null) {
-                    AppText(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    AppText(error, color = AppContentColors.error(), style = MaterialTheme.typography.bodySmall)
                 } else if (previewData != null) {
                     UiSkinCompositionPreview(data = previewData)
                     AppText(
-                        text = "预览按真实底栏尺寸渲染（dock 高 64dp、图标 32dp），含液态玻璃叠加。",
+                        text = "完整装扮使用通栏插画和大图标；实际显示会随导航布局调整。",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AppContentColors.secondaryText()
                     )
                     AppText(
-                        text = "素材来自 B 站官方付费/限定主题存档，仅供本地私用，不得作为社区包分发。",
+                        text = entry.licenseNote
+                            ?: "素材来自 B 站官方付费/限定主题存档，仅供本地私用，不得作为社区包分发。",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AppContentColors.secondaryText()
                     )
                 }
                 if (installError != null) {
-                    AppText(installError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    AppText(installError, color = AppContentColors.error(), style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
@@ -445,7 +486,7 @@ private fun SkinCatalogPreviewDialog(
                     onClick = onInstall,
                     enabled = !loading && !installing && previewData != null && error == null
                 ) {
-                    AppText(if (installing) "导入中..." else "下载并导入")
+                    AppText(if (installing) "导入中…" else "下载并导入")
                 }
             }
         },

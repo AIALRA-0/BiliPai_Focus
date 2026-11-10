@@ -26,6 +26,19 @@ class SearchUiModelsTest {
     }
 
     @Test
+    fun officialSearchRecommendation_usesDisplayNameAndReadableReasonButSubmitsKeyword() {
+        val model = HotItem(
+            keyword = "猫",
+            show_name = "猫咪视频",
+            recommend_reason = "猜你喜欢·已关注"
+        ).toSearchKeywordUiModel()
+
+        assertEquals("猫", model.keyword)
+        assertEquals("猫咪视频", model.title)
+        assertEquals("猜你喜欢 已关注", model.subtitle)
+    }
+
+    @Test
     fun searchSuggestMapping_prefersTermAndStripsFallbackMarkup() {
         val model = SearchSuggestTag(
             term = "黑神话",

@@ -52,7 +52,7 @@ class SettingsShareViewModel(
     }
 
     fun saveCurrentProfile(name: String) {
-        runAction("正在保存配置...", "保存配置失败，请稍后重试") {
+        runAction("正在保存配置…", "保存配置失败，请稍后重试") {
             service.saveCurrentProfile(name).fold(
                 onSuccess = { profile ->
                     _uiState.value = _uiState.value.copy(
@@ -71,7 +71,7 @@ class SettingsShareViewModel(
     }
 
     fun restoreSavedProfile(profile: SavedSettingsProfile) {
-        runAction("正在恢复配置...", "恢复配置失败，请稍后重试") {
+        runAction("正在恢复配置…", "恢复配置失败，请稍后重试") {
             service.restoreSavedProfile(profile).fold(
                 onSuccess = { result ->
                     _uiState.value = _uiState.value.copy(
@@ -90,7 +90,7 @@ class SettingsShareViewModel(
     fun exportToUri(uri: Uri) {
         val includeDeviceDebug = _uiState.value.includeDeviceDebug
         runAction(
-            loadingMessage = "正在导出设置...",
+            loadingMessage = "正在导出设置…",
             fallbackError = "导出失败，请稍后重试"
         ) {
             service.exportToUri(uri = uri, includeDeviceDebug = includeDeviceDebug)
@@ -117,7 +117,7 @@ class SettingsShareViewModel(
     fun prepareShare() {
         val includeDeviceDebug = _uiState.value.includeDeviceDebug
         runAction(
-            loadingMessage = "正在生成分享文件...",
+            loadingMessage = "正在生成分享文件…",
             fallbackError = "分享文件生成失败，请稍后重试"
         ) {
             service.createShareUri(includeDeviceDebug = includeDeviceDebug)
@@ -147,7 +147,7 @@ class SettingsShareViewModel(
 
     fun loadImportPreview(uri: Uri) {
         runAction(
-            loadingMessage = "正在读取设置文件...",
+            loadingMessage = "正在读取设置文件…",
             fallbackError = "导入文件读取失败，请检查文件内容"
         ) {
             service.readImportSession(uri)
@@ -175,7 +175,7 @@ class SettingsShareViewModel(
     fun confirmImport() {
         val session = _uiState.value.pendingImportSession ?: return
         runAction(
-            loadingMessage = "正在应用设置...",
+            loadingMessage = "正在应用设置…",
             fallbackError = "导入失败，请稍后重试"
         ) {
             service.applyImport(session)

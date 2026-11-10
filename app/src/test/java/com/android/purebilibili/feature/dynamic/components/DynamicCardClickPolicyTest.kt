@@ -150,30 +150,6 @@ class DynamicCardClickPolicyTest {
         assertEquals("987654321", (action as DynamicCardPrimaryAction.OpenDynamicDetail).dynamicId)
     }
 
-    @Test
-    fun resolveDynamicCardPrimaryAction_opensDynamicDetailForArticleOpusJumpUrl() {
-        val item = DynamicItem(
-            id_str = "1200069469486972932",
-            type = "DYNAMIC_TYPE_ARTICLE",
-            modules = DynamicModules(
-                module_dynamic = DynamicContentModule(
-                    major = DynamicMajor(
-                        type = "MAJOR_TYPE_ARTICLE",
-                        article = ArticleMajor(
-                            id = 1200069469486972932L,
-                            title = "长图文标题",
-                            jump_url = "https://www.bilibili.com/opus/1200069469486972932"
-                        )
-                    )
-                )
-            )
-        )
-
-        val action = resolveDynamicCardPrimaryAction(item)
-
-        assertTrue(action is DynamicCardPrimaryAction.OpenDynamicDetail)
-        assertEquals("1200069469486972932", (action as DynamicCardPrimaryAction.OpenDynamicDetail).dynamicId)
-    }
 
     @Test
     fun resolveDynamicCardPrimaryAction_usesLegacyArticleJumpUrlWhenPayloadIdIsMissing() {
@@ -493,6 +469,26 @@ class DynamicCardClickPolicyTest {
     }
 
     @Test
+    fun resolveDynamicOpusPresentationBlocks_dropsBlankTextAndTrimsEdges() {
+        val blocks = listOf(
+            OpusContentBlock.Text("  "),
+            OpusContentBlock.Text("\n正文\n\n"),
+            OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/a.jpg")),
+        )
+
+        assertEquals(
+            listOf(
+                OpusContentBlock.Text("正文"),
+                OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/a.jpg")),
+            ),
+            resolveDynamicOpusPresentationBlocks(
+                opus = OpusMajor(contentBlocks = blocks),
+                isDetail = true,
+            ),
+        )
+    }
+
+    @Test
     fun detailPreviewUsesTheSameValidImagesAsRenderedBodyBlocks() {
         val opus = OpusMajor(
             pics = listOf(
@@ -607,6 +603,22 @@ class DynamicCardClickPolicyTest {
     }
 
     @Test
+    fun commentLinkCardsKeepOriginalUrlForLocationAwareHostDispatch() {
+        listOf(
+            "https://www.bilibili.com/video/BV1xx411c7mD?root=456#reply789",
+            "https://t.bilibili.com/123?root=456&comment_id=789",
+            "https://www.bilibili.com/read/cv123?comment_id=789",
+            "bilibili://comment/detail/47/999/456/789",
+        ).forEach { link ->
+            assertEquals(
+                DynamicOpusLinkCardAction.OpenExternalUrl(link),
+                resolveDynamicOpusLinkCardAction(OpusLinkCard(title = "评论", jumpUrl = link)),
+                link,
+            )
+        }
+    }
+
+    @Test
     fun resolveDynamicOpusLinkCardAction_routesExternalUrlAndIgnoresMissingUrl() {
         assertEquals(
             DynamicOpusLinkCardAction.OpenExternalUrl("https://uland.taobao.com/item"),
@@ -706,6 +718,28 @@ class DynamicCardClickPolicyTest {
     fun shouldExpandDynamicOpusDetailImages_onlyForExpandedLayout() {
         assertTrue(shouldExpandDynamicOpusDetailImages(DynamicDetailImageLayout.EXPANDED))
         assertFalse(shouldExpandDynamicOpusDetailImages(DynamicDetailImageLayout.THUMBNAIL))
+    }
+
+    @Test
+    fun shouldExpandDynamicOpusFallbackImages_onlyOnDetailExpandedLayout() {
+        assertTrue(
+            shouldExpandDynamicOpusFallbackImages(
+                isDetail = true,
+                imageLayout = DynamicDetailImageLayout.EXPANDED,
+            )
+        )
+        assertFalse(
+            shouldExpandDynamicOpusFallbackImages(
+                isDetail = true,
+                imageLayout = DynamicDetailImageLayout.THUMBNAIL,
+            )
+        )
+        assertFalse(
+            shouldExpandDynamicOpusFallbackImages(
+                isDetail = false,
+                imageLayout = DynamicDetailImageLayout.EXPANDED,
+            )
+        )
     }
 
     @Test
@@ -850,5 +884,36 @@ class DynamicCardClickPolicyTest {
         )
 
         assertEquals(260882L, resolveDynamicAuthorClickMid(item))
+    }
+    @Test
+    fun forwardedHeaderKeepsForwarderWhileNestedHeaderKeepsOriginalAuthor() {
+        val original = DynamicItem(
+            type = "DYNAMIC_TYPE_AV",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 11L, name = "原作者")),
+        )
+        val forward = DynamicItem(
+            type = "DYNAMIC_TYPE_FORWARD",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 22L, name = "转发者")),
+            orig = original,
+        )
+
+        assertEquals(22L, resolveDynamicAuthorClickMid(forward))
+        assertEquals(11L, resolveDynamicAuthorClickMid(original))
+    }
+
+    @Test
+    fun forwardingPgcDoesNotDisableTheRealForwardersHeader() {
+        val original = DynamicItem(
+            type = "DYNAMIC_TYPE_PGC",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 33L, name = "番剧")),
+        )
+        val forward = DynamicItem(
+            type = "DYNAMIC_TYPE_FORWARD",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 22L, name = "转发者")),
+            orig = original,
+        )
+
+        assertEquals(22L, resolveDynamicAuthorClickMid(forward))
+        assertNull(resolveDynamicAuthorClickMid(original))
     }
 }

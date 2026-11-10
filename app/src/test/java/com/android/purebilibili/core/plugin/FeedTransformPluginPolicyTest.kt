@@ -1,6 +1,8 @@
 package com.android.purebilibili.core.plugin
 
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.plugin.sdk.FeedKind
+import com.android.purebilibili.plugin.sdk.FeedTransformPlugin
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -24,19 +26,23 @@ class FeedTransformPluginPolicyTest {
         val failures = mutableListOf<String>()
         val result = applyFeedTransformPlugins(
             items = listOf(VideoItem(bvid = "BV")),
-            plugins = listOf(SuffixTransformPlugin("first", "-1"), ThrowingTransformPlugin),
+            plugins = listOf(
+                SuffixTransformPlugin("first", "-1"),
+                ThrowingTransformPlugin,
+                SuffixTransformPlugin("last", "-3")
+            ),
             feedKind = FeedKind.HOME_RECOMMEND,
             onFailure = { plugin, _ -> failures += plugin.id },
         )
 
-        assertEquals("BV-1", result.single().bvid)
+        assertEquals("BV-1-3", result.single().bvid)
         assertEquals(listOf("throwing"), failures)
     }
 
     private class SuffixTransformPlugin(
         override val id: String,
         private val suffix: String,
-    ) : FeedTransformPlugin {
+    ) : BuiltinPlugin, FeedTransformPlugin<VideoItem> {
         override val name = id
         override val description = id
         override val version = "1"
@@ -45,7 +51,7 @@ class FeedTransformPluginPolicyTest {
             items.map { it.copy(bvid = it.bvid + suffix) }
     }
 
-    private object ThrowingTransformPlugin : FeedTransformPlugin {
+    private object ThrowingTransformPlugin : BuiltinPlugin, FeedTransformPlugin<VideoItem> {
         override val id = "throwing"
         override val name = id
         override val description = id

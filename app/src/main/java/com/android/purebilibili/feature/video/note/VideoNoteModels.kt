@@ -10,7 +10,10 @@ sealed interface VideoNoteBlock {
         val text: String,
         val bold: Boolean = false,
         val highlight: Boolean = false,
-        val unorderedList: Boolean = false
+        val unorderedList: Boolean = false,
+        val italic: Boolean = false,
+        val underline: Boolean = false,
+        val strikethrough: Boolean = false
     ) : VideoNoteBlock
 
     data class Timestamp(
@@ -19,6 +22,11 @@ sealed interface VideoNoteBlock {
         val index: Int,
         val cidCount: Int,
         val label: String = formatVideoNoteTimestamp(seconds)
+    ) : VideoNoteBlock
+
+    /** 引用块：视频笔记可作摘录，文章笔记（RSS）用于原文摘录。Quill delta 的 blockquote 属性。 */
+    data class Quote(
+        val text: String
     ) : VideoNoteBlock
 }
 
@@ -45,6 +53,8 @@ data class VideoNoteUiState(
     val privateNoteDocument: VideoNoteEditorDocument? = null,
     val publicNoteCount: Int = 0,
     val publicNotes: List<VideoNotePublicPreview> = emptyList(),
+    val publicNotesLoadingMore: Boolean = false,
+    val publicNotesEnd: Boolean = false,
     val editorVisible: Boolean = false,
     val editorDocument: VideoNoteEditorDocument = VideoNoteEditorDocument(),
     val editorFromAiSummary: Boolean = false,
@@ -59,6 +69,11 @@ data class VideoNotePublicPreview(
     val title: String,
     val summary: String,
     val authorName: String,
+    val authorMid: Long = 0L,
+    val authorFace: String = "",
+    val authorLevel: Int = 0,
+    val authorSenior: Boolean = false,
+    val pubtime: String = "",
     val webUrl: String,
     val likes: Int
 )

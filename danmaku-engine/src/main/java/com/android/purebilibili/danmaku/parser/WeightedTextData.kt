@@ -1,0 +1,21 @@
+package com.android.purebilibili.danmaku.parser
+
+import com.android.purebilibili.danmaku.engine.DanmakuItem
+
+/**
+ * 带有权重的文本弹幕数据
+ * 
+ * 扩展标准 TextData，携带 Bilibili API 返回的高级属性：
+ * - weight: AI 智能评分 (0-10)，越高越重要
+ * - pool: 弹幕池类型 (0:普通, 1:字幕, 2:特殊)
+ * - isVipGradualColor: 大会员专属渐变彩色弹幕
+ * - duplicateCount: 服务端合并计数
+ * - isSelf: 当前账号发送的弹幕
+ */
+class WeightedTextData : DanmakuItem() {
+    
+    // 调试用
+    override fun toString(): String {
+        return "WeightedTextData(id=$danmakuId, userHash='$userHash', text='$text', time=$showAtTime, weight=$weight, vipColor=$isVipGradualColor, count=$duplicateCount, isSelf=$isSelf)"
+    }
+}

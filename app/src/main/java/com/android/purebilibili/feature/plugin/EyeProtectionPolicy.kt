@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.plugin
 import com.android.purebilibili.core.plugin.formatClockHour
 import kotlin.math.min
 
-internal const val EYE_PROTECTION_PLUGIN_ID = "eye_protection"
 internal const val EYE_WARM_FILTER_COLOR = 0xFFFFC07A
 private const val MINUTES_PER_DAY = 24 * 60
 private const val PLAYBACK_WEAKEN_FACTOR = 0.42f
@@ -119,24 +118,22 @@ internal fun shouldTriggerCareReminder(
     lastReminderMinute: Int?
 ): Boolean {
     if (intervalMinutes <= 0 || usageMinutes <= 0) return false
-    if (usageMinutes % intervalMinutes != 0) return false
-    if (snoozeUntilMinute != null && usageMinutes < snoozeUntilMinute) return false
-    if (lastReminderMinute != null && usageMinutes - lastReminderMinute < intervalMinutes) return false
-    return true
+    if (snoozeUntilMinute != null) return usageMinutes >= snoozeUntilMinute
+    return usageMinutes - (lastReminderMinute ?: 0) >= intervalMinutes
 }
 
 internal fun resolveMinutesUntilReminder(
     usageMinutes: Int,
     intervalMinutes: Int,
     snoozeUntilMinute: Int?,
-    reminderEnabled: Boolean
+    reminderEnabled: Boolean,
+    lastReminderMinute: Int? = null,
 ): Int? {
     if (!reminderEnabled || intervalMinutes <= 0) return null
     if (snoozeUntilMinute != null && snoozeUntilMinute > usageMinutes) {
         return snoozeUntilMinute - usageMinutes
     }
-    val elapsedInCycle = usageMinutes % intervalMinutes
-    return if (elapsedInCycle == 0 && usageMinutes > 0) intervalMinutes else intervalMinutes - elapsedInCycle
+    return (intervalMinutes - (usageMinutes - (lastReminderMinute ?: 0))).coerceAtLeast(0)
 }
 
 internal fun isVisualEffectActive(
@@ -341,7 +338,7 @@ internal fun presetDescription(preset: EyeCarePreset): String {
 
 internal fun buildCareReminderMessage(usageMinutes: Int): String {
     val messages = listOf(
-        "你已经连续观看 ${usageMinutes} 分钟了，试着看向 6 米外 20 秒。",
+        "试着看向 6 米外 20 秒，让眼睛休息一下。",
         "眼睛已经很努力了，建议起身活动下肩颈，放松 1 分钟。",
         "喝一口温水，眨眨眼，再继续看会更舒服。"
     )

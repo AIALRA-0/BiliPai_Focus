@@ -67,7 +67,7 @@ class AppSelectionPreferencePolicyTest {
     }
 
     @Test
-    fun singleChoicePreference_routesWindowPopupToMiuixAndRetainsCenteredDialogFallback() {
+    fun singleChoicePreference_keepsMiuixSpinnerOnlyForMiuixStyleAndSharedRowOtherwise() {
         val source = listOf(
             java.io.File(
                 "design-system/src/main/java/com/android/purebilibili/core/ui/components/AppSelectionPreferenceComponents.kt"
@@ -84,10 +84,11 @@ class AppSelectionPreferencePolicyTest {
         assertTrue(start >= 0 && end > start, "AppSingleChoicePreference section markers missing")
         val section = source.substring(start, end)
 
-        assertTrue(section.contains("if (presentation == AppSingleChoicePresentation.WINDOW_POPUP)"))
+        // WindowSpinner 仅限 MIUIX 预设的跟随弹出分支
+        assertTrue(section.contains("presentation == AppSingleChoicePresentation.WINDOW_POPUP &&"))
+        assertTrue(section.contains("LocalAppUiStyle.current == AppUiStyle.MIUIX"))
         assertTrue(section.contains("WindowSpinnerPreference("))
-        assertTrue(section.contains("AppSingleChoiceDialog("))
-        assertTrue(section.contains("shouldDispatchAppChoiceSelection("))
-        assertFalse(section.contains("DropdownMenu("))
+        assertTrue(section.contains("AppPreference("))
+        assertTrue(section.contains("DropdownMenu("))
     }
 }

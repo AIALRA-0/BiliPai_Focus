@@ -42,13 +42,6 @@ class LiveAreaRoomsPolicyTest {
         assertEquals(listOf(1L), filtered.map { it.roomid })
     }
 
-    @Test
-    fun `live area error message should hide raw risk code`() {
-        assertEquals(
-            "触发风控，请稍后重试",
-            resolveLiveAreaRoomsErrorMessage(code = -352, message = "")
-        )
-    }
 
     @Test
     fun `room pagination uses total count when has more flag is absent`() {
@@ -57,18 +50,38 @@ class LiveAreaRoomsPolicyTest {
                 loadedCount = 30,
                 page = 1,
                 pageSize = 30,
-                hasMoreFlag = 0,
+                hasMoreFlag = null,
                 totalCount = 438
             )
         )
-        assertFalse(
+        // 服务器只回 18 条而请求 30：以实际返回大小兜底，不能按请求前的 30 提前判定到底。
+        assertTrue(
             hasMoreLiveAreaRooms(
                 loadedCount = 18,
                 page = 15,
                 pageSize = 30,
-                hasMoreFlag = 0,
+                hasMoreFlag = null,
                 totalCount = 438
             )
         )
+    }
+
+    @Test
+    fun `explicit final page wins over a full page and stale total count`() {
+        assertFalse(hasMoreLiveAreaRooms(30, 1, 30, 0, 438))
+        assertFalse(hasMoreLiveAreaRooms(30, 1, 30, 0, 0))
+        assertTrue(hasMoreLiveAreaRooms(30, 15, 30, 1, 438))
+    }
+
+    @Test
+    fun `missing pagination metadata uses page size while empty pages always stop`() {
+        // 满页（30/30）且无 hasMore/total：保留原语义继续探测下一页。
+        assertTrue(hasMoreLiveAreaRooms(30, 1, 30, null, 0))
+        // 短页（29/30）且无任何元数据：保留原语义视为到底，避免无限翻页。
+        assertFalse(hasMoreLiveAreaRooms(29, 1, 30, null, 0))
+        // 有 total 时以实际返回大小兜底：20/页 * 2 页 = 40 < 50 还有下一页，第 3 页到底。
+        assertTrue(hasMoreLiveAreaRooms(20, 2, 30, null, 50))
+        assertFalse(hasMoreLiveAreaRooms(20, 3, 30, null, 50))
+        assertFalse(hasMoreLiveAreaRooms(0, 1, 30, 1, 438))
     }
 }

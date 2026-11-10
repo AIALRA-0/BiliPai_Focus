@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.audio.library
 
+import androidx.lifecycle.ViewModelStore
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.FavoriteData
 import com.android.purebilibili.data.model.response.FavoriteResourceData
@@ -28,6 +29,12 @@ import kotlin.test.assertTrue
 class ListenVideoLibraryLoaderTest {
 
     private val dispatcher = StandardTestDispatcher()
+    private val viewModelStore = ViewModelStore()
+
+    private fun createViewModel(source: ListenVideoLibraryDataSource, mid: Long) =
+        ListenVideoViewModel(source, currentMid = { mid }).also {
+            viewModelStore.put("library", it)
+        }
 
     @BeforeEach
     fun setUp() {
@@ -36,6 +43,8 @@ class ListenVideoLibraryLoaderTest {
 
     @AfterEach
     fun tearDown() {
+        viewModelStore.clear()
+        dispatcher.scheduler.runCurrent()
         Dispatchers.resetMain()
     }
 
@@ -189,7 +198,7 @@ class ListenVideoLibraryLoaderTest {
     @Test
     fun `new refresh cancels old generation and only latest result is published`() = runTest {
         val source = RestartingListenVideoDataSource()
-        val viewModel = ListenVideoViewModel(source, currentMid = { 42L })
+        val viewModel = createViewModel(source, mid = 42L)
 
         viewModel.refresh()
         runCurrent()
@@ -205,7 +214,7 @@ class ListenVideoLibraryLoaderTest {
     @Test
     fun `logged out refresh skips remote requests`() = runTest {
         val source = FakeListenVideoDataSource()
-        val viewModel = ListenVideoViewModel(source, currentMid = { 0L })
+        val viewModel = createViewModel(source, mid = 0L)
 
         viewModel.refresh()
         advanceUntilIdle()
@@ -217,7 +226,7 @@ class ListenVideoLibraryLoaderTest {
     @Test
     fun `detail retry repeats the last playlist request`() = runTest {
         val source = RetryDetailListenVideoDataSource()
-        val viewModel = ListenVideoViewModel(source, currentMid = { 42L })
+        val viewModel = createViewModel(source, mid = 42L)
         viewModel.refresh()
         advanceUntilIdle()
         val playlist = viewModel.uiState.value.playlists.single()
@@ -231,6 +240,101 @@ class ListenVideoLibraryLoaderTest {
 
         assertEquals(listOf("BV-RETRY"), viewModel.uiState.value.selectedTracks.map { it.bvid })
         assertEquals(3, source.detailRequests)
+    }
+
+    @Test
+    fun `first page is published while next page is still waiting`() = runTest {
+        val nextPageStarted = CompletableDeferred<Unit>()
+        val releaseNextPage = CompletableDeferred<Unit>()
+        val source = object : FakeListenVideoDataSource() {
+            override suspend fun folderPage(mediaId: Long, page: Int): Result<FavoriteResourceData> {
+                if (page == 2) {
+                    nextPageStarted.complete(Unit)
+                    releaseNextPage.await()
+                }
+                return Result.success(this@ListenVideoLibraryLoaderTest.page(if (page == 1) "BV1" else "BV2", hasMore = page == 1))
+            }
+        }
+        val published = mutableListOf<List<String>>()
+        val loading = async {
+            ListenVideoLibraryLoader(source, minimumRequestIntervalMillis = 0L).loadFolder(1L) {
+                published += it.map(FavoriteData::bvid)
+            }
+        }
+        nextPageStarted.await()
+        assertEquals(listOf(listOf("BV1")), published)
+        assertFalse(loading.isCompleted)
+        releaseNextPage.complete(Unit)
+        loading.await().getOrThrow()
+        assertEquals(listOf("BV1", "BV2"), published.last())
+    }
+
+    @Test
+    fun `retry retains successful pages and only repeats failed page network request`() = runTest {
+        val requested = mutableListOf<Int>()
+        var secondPageAttempts = 0
+        val source = object : FakeListenVideoDataSource() {
+            override suspend fun folderPage(mediaId: Long, page: Int): Result<FavoriteResourceData> {
+                requested += page
+                if (page == 2 && ++secondPageAttempts == 1) return Result.failure(IOException("offline"))
+                return Result.success(this@ListenVideoLibraryLoaderTest.page(if (page == 1) "BV1" else "BV2", hasMore = page == 1))
+            }
+        }
+        val loader = ListenVideoLibraryLoader(source, minimumRequestIntervalMillis = 0L)
+        val published = mutableListOf<List<String>>()
+        assertTrue(loader.loadFolder(1L) { published += it.map(FavoriteData::bvid) }.isFailure)
+        assertEquals(listOf("BV1"), published.last())
+        assertEquals(listOf("BV1", "BV2"), loader.loadFolder(1L).getOrThrow().map { it.bvid })
+        assertEquals(listOf(1, 2, 2), requested)
+    }
+
+    @Test
+    fun `index keeps first page when a later page of same folder fails`() = runTest {
+        val source = FakeListenVideoDataSource(folderPages = mapOf(1L to mapOf(
+            1 to Result.success(page("BV1", hasMore = true)),
+            2 to Result.failure(IOException("offline")),
+        )))
+        val result = ListenVideoLibraryLoader(source, minimumRequestIntervalMillis = 0L)
+            .indexFolders(listOf(FavFolder(id = 1L)))
+        assertEquals(listOf("BV1"), result.resources.map { it.bvid })
+        assertEquals(setOf(1L), result.failedFolderIds)
+    }
+
+    @Test
+    fun `repeated pagination stops instead of loading indefinitely`() = runTest {
+        val source = FakeListenVideoDataSource(folderPages = mapOf(1L to mapOf(
+            1 to Result.success(page("BV1", hasMore = true)),
+            2 to Result.success(page("BV1", hasMore = true)),
+        )))
+        val result = ListenVideoLibraryLoader(source, minimumRequestIntervalMillis = 0L).loadFolder(1L)
+        assertTrue(result.isFailure)
+        assertEquals(listOf(1, 2), source.requestedFolderPages)
+    }
+
+    @Test
+    fun `switching between albums and artists does not restart active index`() = runTest {
+        var folderRequests = 0
+        val source = object : FakeListenVideoDataSource() {
+            override suspend fun ownedFolders(mid: Long) = Result.success(
+                listOf(FavFolder(id = 1L, title = "Large folder", cover = "cover")),
+            )
+            override suspend fun folderPage(mediaId: Long, page: Int): Result<FavoriteResourceData> {
+                folderRequests++
+                awaitCancellation()
+            }
+        }
+        val viewModel = createViewModel(source, mid = 42L)
+        viewModel.refresh()
+        advanceUntilIdle()
+        viewModel.selectSection(ListenVideoSection.ALBUMS)
+        runCurrent()
+        viewModel.selectSection(ListenVideoSection.ARTISTS)
+        runCurrent()
+        assertEquals(1, folderRequests)
+        assertTrue(viewModel.uiState.value.isIndexing)
+        viewModel.pauseBackgroundLoading()
+        runCurrent()
+        assertFalse(viewModel.uiState.value.isIndexing)
     }
 
     private fun page(bvid: String, hasMore: Boolean): FavoriteResourceData {

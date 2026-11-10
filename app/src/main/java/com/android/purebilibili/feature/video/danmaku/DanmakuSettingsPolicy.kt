@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.video.danmaku
 
-const val DANMAKU_MIN_OPACITY = 0.1f
+const val DANMAKU_MIN_OPACITY = 0f
 const val DANMAKU_MAX_OPACITY = 1.0f
 const val DANMAKU_DEFAULT_OPACITY = 0.85f
 

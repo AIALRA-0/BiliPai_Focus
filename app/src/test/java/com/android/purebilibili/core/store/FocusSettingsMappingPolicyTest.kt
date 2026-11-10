@@ -10,7 +10,7 @@ class FocusSettingsMappingPolicyTest {
 
     @Test
     fun emptyPreferences_useExpectedFocusDefaults() {
-        val result = SettingsManager.mapFocusSettingsFromPreferences(mutablePreferencesOf())
+        val result = FocusSettingsStore.mapFromPreferences(mutablePreferencesOf())
 
         assertTrue(result.enableFollowGroupFiltering)
         assertFalse(result.showVideoRelatedVideosSection)
@@ -27,7 +27,7 @@ class FocusSettingsMappingPolicyTest {
             booleanPreferencesKey("search_history_section_enabled") to true
         )
 
-        val result = SettingsManager.mapFocusSettingsFromPreferences(prefs)
+        val result = FocusSettingsStore.mapFromPreferences(prefs)
 
         assertFalse(result.enableFollowGroupFiltering)
         assertTrue(result.showVideoRelatedVideosSection)

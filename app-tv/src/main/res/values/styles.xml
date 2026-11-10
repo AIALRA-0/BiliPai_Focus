@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.BiliPaiTV" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#10141F</item>
+        <item name="android:colorAccent">#FB7299</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

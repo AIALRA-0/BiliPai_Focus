@@ -3,7 +3,7 @@ package com.android.purebilibili.feature.bangumi
 import com.android.purebilibili.data.model.response.Dash
 import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.data.model.response.DashVideo
-import com.android.purebilibili.feature.video.playback.dash.buildLocalDashManifest
+import com.android.purebilibili.core.player.dash.buildLocalDashManifest
 
 /**
  * Builds the small on-device MPD used for web/PUGV DASH URLs.

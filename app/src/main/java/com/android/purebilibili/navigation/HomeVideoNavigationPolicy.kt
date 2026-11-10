@@ -17,13 +17,15 @@ internal data class HomeVideoNavigationIntent(
 internal sealed interface HomeNavigationTarget {
     data class Video(val route: String) : HomeNavigationTarget
     data class DynamicDetail(val dynamicId: String) : HomeNavigationTarget
+    data class BangumiDetail(val episodeId: Long) : HomeNavigationTarget
 }
 
 internal fun resolveHomeVideoNavigationIntent(
     request: HomeVideoClickRequest
 ): HomeVideoNavigationIntent? {
     val normalizedBvid = request.bvid.trim()
-    if (normalizedBvid.isEmpty()) return null
+    if (normalizedBvid.isEmpty() || request.episodeId > 0L ||
+        normalizedBvid.startsWith("bangumi:") || normalizedBvid.startsWith("dynamic:")) return null
 
     return HomeVideoNavigationIntent(
         bvid = normalizedBvid,
@@ -59,6 +61,7 @@ internal fun resolveHomeVideoRoute(request: HomeVideoClickRequest): String? {
 internal fun resolveHomeNavigationTarget(
     request: HomeVideoClickRequest
 ): HomeNavigationTarget? {
+    if (request.episodeId > 0L) return HomeNavigationTarget.BangumiDetail(request.episodeId)
     val normalizedDynamicId = request.dynamicId.trim()
     val normalizedBvid = request.bvid.trim()
 

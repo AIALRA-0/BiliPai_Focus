@@ -1,0 +1,67 @@
+package com.android.purebilibili.feature.message
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.components.*
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
+import com.android.purebilibili.data.model.response.EmotePackage
+
+/** 固定面板高度，网格按可用宽度调整；选择后保留面板以便连续输入。 */
+@Composable
+internal fun ChatEmotePanel(
+    packages: List<EmotePackage>,
+    panelHeight: androidx.compose.ui.unit.Dp = 260.dp,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    onChoose: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var selectedId by remember { mutableStateOf<Long?>(null) }
+    val selected = packages.firstOrNull { it.id == selectedId } ?: packages.firstOrNull()
+    AppSurface(modifier.height(panelHeight)) {
+        Column(Modifier.fillMaxSize()) {
+            when {
+                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { AppText("加载表情中…") }
+                error != null -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    AppText(error)
+                    AppTextButton(onClick = onRetry) { AppText("重试") }
+                }
+                packages.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { AppText("暂无可用表情") }
+                else -> {
+                    AppThemeAdaptiveTabRow(
+                        role = AppTabRowRole.SECONDARY,
+                        options = packages.map { AppSegmentOption(it.id, it.text) },
+                        selectedValue = selected?.id ?: 0L,
+                        onSelectionChange = { selectedId = it },
+                        scrollable = true,
+                        // 玻璃使用完整槽位，原生标签栏保留默认指示器策略。
+                        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LazyVerticalGrid(columns = GridCells.Adaptive(44.dp), modifier = Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(8.dp)) {
+                        items(selected?.emote.orEmpty(), key = { it.id }) { emote ->
+                            AsyncImage(emote.url, emote.text, Modifier.aspectRatio(1f).clickable { onChoose(emote.text) }.padding(8.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun insertChatEmote(value: androidx.compose.ui.text.input.TextFieldValue, emote: String): androidx.compose.ui.text.input.TextFieldValue {
+    val start = value.selection.min.coerceIn(0, value.text.length)
+    val end = value.selection.max.coerceIn(start, value.text.length)
+    return androidx.compose.ui.text.input.TextFieldValue(
+        text = value.text.replaceRange(start, end, emote),
+        selection = androidx.compose.ui.text.TextRange(start + emote.length),
+    )
+}

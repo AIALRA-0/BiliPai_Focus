@@ -5,7 +5,7 @@ import android.graphics.PixelFormat
 import android.opengl.GLSurfaceView
 import android.util.AttributeSet
 import android.view.Surface
-import com.android.purebilibili.feature.anime4k.Anime4KConfig
+import com.android.purebilibili.plugin.sdk.Anime4KConfig
 
 /** Anime4K 的可见输出 SurfaceView，解码器输入 Surface 由 renderer 异步提供。 */
 class Anime4KGLSurfaceView @JvmOverloads constructor(
@@ -72,5 +72,8 @@ class Anime4KGLSurfaceView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         queueEvent { pipelineRenderer.release() }
         super.onDetachedFromWindow()
+        // GLSurfaceView 会先处理退出标记，队列里的 release 未必执行。
+        // super 已等待 GL 线程退出，EGL 资源由其销毁；独立输入资源在这里兜底归还。
+        pipelineRenderer.releaseInputAfterThreadExit()
     }
 }

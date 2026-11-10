@@ -5,6 +5,10 @@ import com.android.purebilibili.data.model.response.DynamicCreatePic
 import com.android.purebilibili.data.model.response.DynamicPublishDraft
 import com.android.purebilibili.data.model.response.DynamicPublishMention
 import com.android.purebilibili.data.model.response.DynamicPublishTopic
+import com.android.purebilibili.data.model.response.DynamicPublishToken
+import com.android.purebilibili.data.model.response.RichTextNode
+import com.android.purebilibili.data.model.response.DynamicRichTextIssue
+import com.android.purebilibili.data.model.response.DynamicUnlocatedRichText
 
 /**
  * 更多菜单的管理动作与参数解析（对齐 BiliPai 作者区 morePanel 的
@@ -21,7 +25,7 @@ sealed interface DynamicManageAction {
         val authorFace: String,
     ) : DynamicManageAction
     data class Report(val dynamicId: String, val authorMid: Long) : DynamicManageAction
-    data class Edit(val dynamicId: String, val initialDraft: DynamicPublishDraft) : DynamicManageAction
+    data class Edit(val dynamicId: String, val initialDraft: DynamicPublishDraft, val replyOid: Long? = null, val replyType: Int = 0) : DynamicManageAction
 }
 
 internal fun dispatchDynamicManageAction(
@@ -137,8 +141,11 @@ internal fun resolveDynamicEditDraft(item: DynamicItem): DynamicPublishDraft {
         .firstOrNull { it.type == "THREE_POINT_PRIVATE" }
         ?.params
         ?.status == 1
+    val editText = dynamic?.desc?.text.orEmpty().ifBlank { opus?.summary?.text.orEmpty() }
+    val restored = restoreDynamicEditTokens(editText, richNodes)
+    val tokens = restored.tokens
     return DynamicPublishDraft(
-        text = dynamic?.desc?.text.orEmpty().ifBlank { opus?.summary?.text.orEmpty() },
+        text = editText,
         title = opus?.title.orEmpty(),
         imageUris = images.map(DynamicCreatePic::img_src),
         voteId = additional?.vote?.vote_id ?: 0L,
@@ -161,7 +168,110 @@ internal fun resolveDynamicEditDraft(item: DynamicItem): DynamicPublishDraft {
             DynamicPublishTopic(id = it.id, name = it.name)
         },
         existingImages = images,
+        replyOption = null,
+        richTokens = tokens,
+        hasUnresolvedRichText = restored.unresolved,
+        unresolvedRichTextRanges = restored.issues,
+        hasUnlocatedRichText = restored.unlocated,
+        unlocatedRichTextItems = restored.unlocatedItems,
     )
+}
+
+internal data class DynamicRestoredRichText(
+    val tokens: List<DynamicPublishToken>,
+    val unresolved: Boolean,
+    val issues: List<DynamicRichTextIssue> = emptyList(),
+    val unlocated: Boolean = false,
+    val unlocatedItems: List<DynamicUnlocatedRichText> = emptyList(),
+)
+
+/** Map server nodes to the displayed text without guessing between repeated matches. */
+internal fun restoreDynamicEditTokens(text: String, nodes: List<RichTextNode>): DynamicRestoredRichText {
+    if (nodes.isEmpty()) {
+        // These patterns only signal that metadata may be missing; they do not create rich nodes.
+        val possibleMention = Regex("(?<![\\w@])@[^\\s@，。！？、：；,.!?;:]{1,30}")
+        val possibleEmote = Regex("\\[[^\\[\\]\\r\\n]{1,30}]")
+        val issues = (possibleMention.findAll(text) + possibleEmote.findAll(text))
+            .map { DynamicRichTextIssue(it.range.first, it.range.last + 1) }.toList().distinct()
+        return DynamicRestoredRichText(emptyList(), issues.isNotEmpty(), issues)
+    }
+    fun variants(node: RichTextNode): List<String> = listOf(node.text, node.orig_text, node.emoji?.text.orEmpty())
+        .filter { it.isNotEmpty() }.distinct().sortedByDescending { it.length }
+    fun tokenFor(node: RichTextNode, start: Int, matched: String): DynamicPublishToken? {
+        val type = when {
+            node.type.contains("AT", ignoreCase = true) && node.rid?.toLongOrNull()?.let { it > 0L } == true -> 2
+            node.type.contains("EMOJI", ignoreCase = true) -> 9
+            else -> return null
+        }
+        val tokenText = if (type == 2) matched.trimEnd() else matched
+        if (tokenText.isEmpty()) return null
+        return DynamicPublishToken(start, start + tokenText.length, type, if (type == 2) node.rid.orEmpty() else "", tokenText)
+    }
+    fun isSpecial(node: RichTextNode) = node.type.contains("AT", ignoreCase = true) || node.type.contains("EMOJI", ignoreCase = true)
+
+    // A complete sequential match disambiguates repeated text without relying on search order.
+    var offset = 0
+    val exact = mutableListOf<DynamicPublishToken>()
+    var complete = nodes.isNotEmpty()
+    for (node in nodes) {
+        val match = variants(node).firstOrNull { text.startsWith(it, offset) }
+        if (match == null) { complete = false; break }
+        if (isSpecial(node)) {
+            val token = tokenFor(node, offset, match)
+            if (token == null) { complete = false; break }
+            exact += token
+        }
+        offset += match.length
+    }
+    if (complete && offset == text.length) return DynamicRestoredRichText(exact, false)
+
+    var cursor = 0
+    var unresolved = false
+    val unlocatedItems = mutableListOf<DynamicUnlocatedRichText>()
+    val issues = mutableListOf<DynamicRichTextIssue>()
+    val result = mutableListOf<DynamicPublishToken>()
+    for (node in nodes) {
+        val matches = variants(node).flatMap { variant ->
+            buildList {
+                var index = text.indexOf(variant, cursor)
+                while (index >= 0) {
+                    add(index to variant)
+                    index = text.indexOf(variant, index + 1)
+                }
+            }
+        }.distinctBy { it.first to it.second }
+        val positions = matches.map { it.first }.distinct()
+        if (positions.size != 1) {
+            if (isSpecial(node)) {
+                unresolved = true
+                if (matches.isEmpty()) {
+                    val hint = variants(node).firstOrNull()?.take(60)
+                    val kind = if (node.type.contains("EMOJI", ignoreCase = true)) "表情" else "@ 用户"
+                    unlocatedItems += DynamicUnlocatedRichText(if (hint == null) "未定位的$kind" else "$kind：$hint")
+                } else matches.groupBy { it.first }.forEach { (start, variantsAtStart) ->
+                    issues += DynamicRichTextIssue(start, start + variantsAtStart.maxOf { it.second.length })
+                }
+            }
+            continue
+        }
+        val start = positions.single()
+        val match = matches.filter { it.first == start }.maxBy { it.second.length }.second
+        cursor = start + match.length
+        if (isSpecial(node)) {
+            val token = tokenFor(node, start, match)
+            if (token == null) {
+                unresolved = true
+                issues += DynamicRichTextIssue(start, start + match.length)
+            } else result += token
+        }
+    }
+    val unresolvedRanges = issues.distinct().filterNot { issue ->
+        result.any { token -> token.start <= issue.start && token.end >= issue.end }
+    }
+    if (unresolved && unresolvedRanges.isEmpty() && unlocatedItems.isEmpty()) {
+        unlocatedItems += DynamicUnlocatedRichText("未定位的 @ 或表情")
+    }
+    return DynamicRestoredRichText(result, unresolved, unresolvedRanges, unlocatedItems.isNotEmpty(), unlocatedItems)
 }
 
 // x/v2/reply/subject/modify 的 action 取值

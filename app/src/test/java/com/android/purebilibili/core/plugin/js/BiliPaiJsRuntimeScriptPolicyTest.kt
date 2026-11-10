@@ -29,6 +29,19 @@ class BiliPaiJsRuntimeScriptPolicyTest {
     }
 
     @Test
+    fun executionScriptExposesDomParsingThroughBiliPaiDom() {
+        val script = buildBiliPaiJsExecutionScript(
+            callId = "call",
+            pluginScript = "globalThis.BiliPaiPlugin = {};",
+            expression = "return globalThis.BiliPaiPlugin;"
+        )
+
+        assertContains(script, "dom: {")
+        assertContains(script, "DOMParser")
+        assertContains(script, "selectOne")
+    }
+
+    @Test
     fun moduleExpressionCanCallNativePluginFunction() {
         val expression = buildBiliPaiJsModuleExpression(
             functionName = "loadChannels",

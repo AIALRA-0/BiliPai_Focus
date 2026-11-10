@@ -13,13 +13,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.layout.sizeIn
+import com.android.purebilibili.core.ui.components.LocalAppIconButtonGlassSurfaceProvided
 import com.android.purebilibili.core.ui.components.AppIconButtonColors
 import com.android.purebilibili.core.ui.components.AppIconButtonVariant
+import com.android.purebilibili.core.ui.components.LocalAppActionContentColor
 import com.android.purebilibili.core.ui.components.appDesktopFocusableItemVisuals
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
+import top.yukonga.miuix.kmp.basic.IconButtonDefaults
+import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
 import top.yukonga.miuix.kmp.theme.LocalContentColor as MiuixLocalContentColor
 
@@ -33,12 +36,13 @@ internal fun AppMiuixIconButton(
     variant: AppIconButtonVariant,
     content: @Composable () -> Unit,
 ) {
+    val neutralContentColor = LocalAppActionContentColor.current.takeOrElse { MiuixLocalContentColor.current }
     val defaultColors = when (variant) {
         AppIconButtonVariant.Standard -> AppIconButtonColors(
             containerColor = Color.Unspecified,
-            contentColor = MiuixLocalContentColor.current,
+            contentColor = neutralContentColor,
             disabledContainerColor = Color.Unspecified,
-            disabledContentColor = MiuixLocalContentColor.current,
+            disabledContentColor = neutralContentColor.copy(alpha = 0.38f),
         )
         AppIconButtonVariant.Filled -> MiuixButtonDefaults.buttonColorsPrimary().let {
             AppIconButtonColors(
@@ -68,30 +72,32 @@ internal fun AppMiuixIconButton(
     } else {
         Modifier
     }
-    // Put the minimum before the caller modifier so an exact 32/36/40dp size is coerced to the
-    // accessibility bound instead of overriding Miuix's defaultMinSize. The icon content keeps
-    // its own visual size; only the selectable container grows.
-    val nativeModifier = Modifier
-        .sizeIn(
-            minWidth = AppChromeSizeTokens.MinimumTouchTarget,
-            minHeight = AppChromeSizeTokens.MinimumTouchTarget,
-        )
-        .then(modifier)
+    val cornerRadius = if (isMiuixNonGlassEnabled()) IconButtonDefaults.CornerRadius
+        else AppChromeSizeTokens.MiuixNativeCompactCornerRadiusDp.dp
+    // Leave explicit sizes to the caller and default sizing to the native control.
+    val nativeModifier = modifier
         .appDesktopFocusableItemVisuals(
             enabled = enabled,
-            shape = RoundedCornerShape(AppChromeSizeTokens.MiuixNativeCompactCornerRadiusDp.dp),
+            shape = RoundedCornerShape(cornerRadius),
         )
         .then(pointerMirror)
 
-    CompositionLocalProvider(MiuixLocalContentColor provides contentColor) {
+    CompositionLocalProvider(
+        MiuixLocalContentColor provides contentColor,
+        androidx.compose.material3.LocalContentColor provides contentColor,
+        com.android.purebilibili.core.ui.LocalAppButtonSlotPalette provides
+            if (LocalAppIconButtonGlassSurfaceProvided.current) null else com.android.purebilibili.core.ui.AppButtonSlotPalette(
+                containerColor = backgroundColor.takeOrElse { Color.Transparent },
+                contentColor = contentColor,
+                enabled = enabled,
+            ),
+    ) {
         MiuixIconButton(
             onClick = onClick,
             modifier = nativeModifier,
             enabled = enabled,
-            backgroundColor = backgroundColor,
-            minHeight = AppChromeSizeTokens.MinimumTouchTarget,
-            minWidth = AppChromeSizeTokens.MinimumTouchTarget,
-            cornerRadius = AppChromeSizeTokens.MiuixNativeCompactCornerRadiusDp.dp,
+            backgroundColor = if (LocalAppIconButtonGlassSurfaceProvided.current) Color.Transparent else backgroundColor,
+            cornerRadius = cornerRadius,
             content = content,
         )
     }

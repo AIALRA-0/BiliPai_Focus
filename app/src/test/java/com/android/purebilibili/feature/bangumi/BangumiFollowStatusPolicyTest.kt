@@ -3,7 +3,11 @@ package com.android.purebilibili.feature.bangumi
 import com.android.purebilibili.data.model.response.FollowBangumiItem
 import com.android.purebilibili.data.model.response.MyFollowBangumiData
 import com.android.purebilibili.data.model.response.UserStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.fail
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -125,6 +129,128 @@ class BangumiFollowStatusPolicyTest {
     }
 
     @Test
+    fun `target verification stops after finding season`() = runBlocking {
+        val ids = mutableSetOf<Long>()
+        val pages = mutableListOf<Int>()
+        val result = preloadFollowedSeasonsForType(
+            type = MY_FOLLOW_TYPE_BANGUMI,
+            followedSeasonIds = ids,
+            targetSeasonId = 31L,
+            fetchPage = { _, page, _ ->
+                pages.add(page)
+                val start = (page - 1) * 30L + 1
+                Result.success(MyFollowBangumiData(
+                    total = 900, pn = page, ps = 30,
+                    list = (start until start + 30).map {
+                        FollowBangumiItem(seasonId = it, followStatus = BANGUMI_FOLLOW_STATUS_WATCHED)
+                    }
+                ))
+            }
+        )
+        assertEquals(listOf(1, 2), pages)
+        assertTrue(31L in ids)
+        assertEquals(BANGUMI_FOLLOW_STATUS_WATCHED, result.targetFollowStatus)
+        val merged = resolveBangumiMergedFollowStatus(
+            31L, UserStatus(follow = 1, followStatus = requireNotNull(result.targetFollowStatus)),
+            emptyMap(), emptyMap(), ids
+        )
+        assertEquals(BANGUMI_FOLLOW_STATUS_WATCHED, merged.followStatus)
+    }
+
+    @Test
+    fun `session switch rejects earlier pages without polluting caller ids`() = runBlocking {
+        val ids = mutableSetOf(99L)
+        var session = BangumiFollowSession(1L, "账号一")
+        val pages = mutableListOf<Int>()
+        val result = preloadFollowedSeasonsForType(
+            type = MY_FOLLOW_TYPE_BANGUMI,
+            followedSeasonIds = ids,
+            pageSize = 1,
+            targetSeasonId = 2L,
+            sessionProvider = { session },
+            fetchPage = { _, page, _ ->
+                pages.add(page)
+                assertEquals(setOf(99L), ids)
+                if (page == 2) session = BangumiFollowSession(2L, "账号二")
+                Result.success(MyFollowBangumiData(
+                    total = 3, pn = page, ps = 1,
+                    list = listOf(FollowBangumiItem(
+                        seasonId = page.toLong(), followStatus = BANGUMI_FOLLOW_STATUS_WATCHED
+                    ))
+                ))
+            }
+        )
+        assertEquals(listOf(1, 2), pages)
+        assertFalse(result.requestSucceeded)
+        assertEquals(0, result.total)
+        assertNull(result.targetFollowStatus)
+        assertEquals(setOf(99L), ids)
+    }
+
+    @Test
+    fun `result cancellation propagates and does not commit earlier pages`() = runBlocking {
+        val ids = mutableSetOf(99L)
+        val cancellation = CancellationException("取消后台查找")
+        try {
+            preloadFollowedSeasonsForType(
+                type = MY_FOLLOW_TYPE_BANGUMI,
+                followedSeasonIds = ids,
+                pageSize = 1,
+                targetSeasonId = 2L,
+                sessionProvider = { BangumiFollowSession(1L, "固定账号") },
+                fetchPage = { _, page, _ ->
+                    if (page == 1) Result.success(MyFollowBangumiData(
+                        total = 3, pn = page, ps = 1,
+                        list = listOf(FollowBangumiItem(seasonId = 1L))
+                    )) else Result.failure(cancellation)
+                }
+            )
+            fail("取消异常必须传播")
+        } catch (error: CancellationException) {
+            assertSame(cancellation, error)
+        }
+        assertEquals(setOf(99L), ids)
+    }
+
+    @Test
+    fun `partial page failure retains ids and does not negate api watched status`() = runBlocking {
+        val ids = mutableSetOf<Long>()
+        val result = preloadFollowedSeasonsForType(
+            type = MY_FOLLOW_TYPE_BANGUMI,
+            followedSeasonIds = ids,
+            pageSize = 1,
+            targetSeasonId = 2L,
+            sessionProvider = { BangumiFollowSession(1L, "固定账号") },
+            fetchPage = { _, page, _ ->
+                if (page == 1) Result.success(MyFollowBangumiData(
+                    total = 3, pn = page, ps = 1,
+                    list = listOf(FollowBangumiItem(seasonId = 1L))
+                )) else Result.failure(Exception("部分页失败"))
+            }
+        )
+        assertTrue(result.requestSucceeded)
+        assertNull(result.targetFollowStatus)
+        assertEquals(setOf(1L), ids)
+        val merged = resolveBangumiMergedFollowStatus(
+            2L, UserStatus(follow = 1, followStatus = BANGUMI_FOLLOW_STATUS_WATCHED),
+            emptyMap(), emptyMap(), ids
+        )
+        assertTrue(merged.isFollowing)
+        assertEquals(BANGUMI_FOLLOW_STATUS_WATCHED, merged.followStatus)
+    }
+
+    @Test
+    fun `partial list miss retains positive api status`() {
+        val result = resolveBangumiMergedFollowStatus(
+            seasonId = 99L,
+            apiUserStatus = UserStatus(follow = 1, followStatus = BANGUMI_FOLLOW_STATUS_WATCHED),
+            cachedFollow = emptyMap(), cachedStatus = emptyMap(), followedSeasonIds = setOf(1L)
+        )
+        assertTrue(result.isFollowing)
+        assertEquals(BANGUMI_FOLLOW_STATUS_WATCHED, result.followStatus)
+    }
+
+    @Test
     fun `cached status should override followed list and api status`() {
         val result = resolveBangumiMergedFollowStatus(
             seasonId = 1L,
@@ -145,7 +271,7 @@ class BangumiFollowStatusPolicyTest {
             apiUserStatus = UserStatus(follow = 1, followStatus = BANGUMI_FOLLOW_STATUS_WATCHING),
             cachedFollow = mapOf(1L to false),
             cachedStatus = emptyMap(),
-            followedSeasonIds = emptySet()
+            followedSeasonIds = setOf(1L)
         )
 
         assertEquals(false, result.isFollowing)

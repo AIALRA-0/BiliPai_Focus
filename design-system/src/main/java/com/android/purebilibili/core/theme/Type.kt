@@ -112,6 +112,7 @@ val BiliTypography = Typography(
     )
 )
 
+/** Material 3's unmodified typography scale. */
 val Md3Typography = Typography()
 
 /**

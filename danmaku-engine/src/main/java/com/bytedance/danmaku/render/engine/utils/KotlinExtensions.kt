@@ -17,15 +17,28 @@ package com.bytedance.danmaku.render.engine.utils
 
 import android.os.Build
 import android.view.View
+import com.bytedance.danmaku.render.engine.DanmakuView
 
 /**
  * Created by dss886 on 2019/4/14.
  */
 
 fun View.postInvalidateCompat() {
-    if (Build.VERSION.SDK_INT >= 16) {
+    if (this is DanmakuView) {
+        requestRenderFrame()
+    } else if (Build.VERSION.SDK_INT >= 16) {
         postInvalidateOnAnimation()
     } else {
         postInvalidate()
     }
+}
+
+/** A single cancellable wake-up for the next timeline item. */
+fun View.postDanmakuFrameAfter(delayMs: Long) {
+    if (this is DanmakuView) requestRenderFrame(delayMs)
+    else postDelayed({ postInvalidateCompat() }, delayMs)
+}
+
+fun View.cancelDanmakuFrames() {
+    (this as? DanmakuView)?.cancelRenderFrames()
 }

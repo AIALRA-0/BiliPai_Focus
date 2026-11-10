@@ -1,18 +1,21 @@
 package com.android.purebilibili.feature.dynamic.components
 
-import androidx.compose.ui.graphics.Color
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import java.io.File
 
 class DynamicTopBarThemePolicyTest {
 
     @Test
-    fun `selected dynamic tab uses current theme color`() {
-        val themeColor = Color(0xFFFF6F6F)
+    fun `selected dynamic tab uses the shared theme adaptive row`() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt"
+        ).readText()
 
-        assertEquals(themeColor, resolveDynamicTabSelectedColor(themeColor))
+        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(source.contains("role = com.android.purebilibili.core.ui.components.AppTabRowRole.PRIMARY"))
+        assertTrue(source.contains("selectedValue = selectedTab"))
+        assertTrue(source.contains("onSelectionChange = onTabSelected"))
     }
 
     @Test

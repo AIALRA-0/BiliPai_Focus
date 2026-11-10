@@ -112,36 +112,6 @@ class SpaceDynamicNavigationPolicyTest {
     }
 
     @Test
-    fun resolveSpaceDynamicClickAction_opensDynamicDetailWhenArticleJumpUrlIsOpus() {
-        val dynamic = SpaceDynamicItem(
-            id_str = "1200069469486972932",
-            type = "DYNAMIC_TYPE_ARTICLE",
-            modules = SpaceDynamicModules(
-                module_dynamic = SpaceDynamicContent(
-                    major = SpaceDynamicMajor(
-                        type = "MAJOR_TYPE_ARTICLE",
-                        article = SpaceDynamicArticle(
-                            id = 1200069469486972932L,
-                            title = "长图文标题",
-                            jump_url = "https://www.bilibili.com/opus/1200069469486972932"
-                        )
-                    )
-                )
-            )
-        )
-
-        val sharedAction = assertIs<DynamicCardPrimaryAction.OpenDynamicDetail>(
-            resolveDynamicCardPrimaryAction(resolveSpaceDynamicCardItem(dynamic))
-        )
-        val spaceAction = assertIs<SpaceDynamicClickAction.OpenDynamicDetail>(
-            resolveSpaceDynamicClickAction(dynamic)
-        )
-
-        assertEquals(sharedAction.dynamicId, spaceAction.dynamicId)
-        assertEquals("1200069469486972932", spaceAction.dynamicId)
-    }
-
-    @Test
     fun resolveSpaceArticleClickAction_opensDynamicDetailForOpusJumpUrl() {
         val action = resolveSpaceArticleClickAction(
             SpaceArticleItem(
@@ -181,4 +151,15 @@ class SpaceDynamicNavigationPolicyTest {
         assertEquals(123456L, action.articleId)
         assertEquals("旧专栏", action.title)
     }
+    @Test
+    fun knownCvIdIsNotOverwrittenByMigratedOpusLink() {
+        assertEquals(
+            SpaceDynamicClickAction.OpenArticle(123456, "专栏标题"),
+            resolveSpaceArticleClickAction(SpaceArticleItem(
+                id = 123456, title = "专栏标题",
+                jump_url = "https://www.bilibili.com/opus/1201902028962398230",
+            )),
+        )
+    }
+
 }

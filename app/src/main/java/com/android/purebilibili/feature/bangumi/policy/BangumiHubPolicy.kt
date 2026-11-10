@@ -6,6 +6,23 @@ import com.android.purebilibili.data.model.response.BangumiSearchItem
 import com.android.purebilibili.data.model.response.TimelineDay
 import com.android.purebilibili.data.model.response.TimelineEpisode
 
+private val bangumiYearRangeLabel = Regex("""^(\d{4})\s*[-–~至]\s*(\d{4})(年?)$""")
+
+internal fun resolveBangumiIndexChoiceDisplayLabel(
+    group: BangumiIndexFilterGroupUi,
+    choice: BangumiIndexChoice,
+    liquidGlassEnabled: Boolean,
+): String {
+    if (!liquidGlassEnabled || (group.field != "year" && !group.label.contains("年"))) return choice.label
+    val match = bangumiYearRangeLabel.matchEntire(choice.label) ?: return choice.label
+    val firstYear = match.groupValues[1].toInt()
+    val secondYear = match.groupValues[2].toInt()
+    if (firstYear / 100 != secondYear / 100) return choice.label
+    val startYear = minOf(firstYear, secondYear)
+    val endYear = maxOf(firstYear, secondYear)
+    return "$startYear–${(endYear % 100).toString().padStart(2, '0')}${match.groupValues[3]}"
+}
+
 enum class BangumiChannel(val followType: Int, val label: String) {
     BANGUMI(MY_FOLLOW_TYPE_BANGUMI, "番剧"),
     CINEMA(MY_FOLLOW_TYPE_CINEMA, "影视"),

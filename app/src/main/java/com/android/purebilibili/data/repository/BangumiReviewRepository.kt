@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 data class BangumiReviewPage(
     val items: List<BangumiReviewItem>,
     val next: String,
-    val count: Int,
+    val count: Int?,
     val hasMore: Boolean
 )
 
@@ -39,12 +39,12 @@ object BangumiReviewRepository {
                 error(response.message.ifBlank { "点评加载失败" })
             }
             val data = response.data ?: error("点评为空")
-            val count = if (data.count > 0) data.count else data.total
+            val count = data.count ?: data.total
             BangumiReviewPage(
                 items = data.list,
                 next = data.next,
                 count = count,
-                hasMore = data.next.isNotBlank()
+                hasMore = data.list.isNotEmpty() && data.next.isNotBlank() && data.next != cursor
             )
         }
     }
@@ -67,7 +67,8 @@ object BangumiReviewRepository {
     suspend fun postShortReview(
         mediaId: Long,
         score: Int,
-        content: String
+        content: String,
+        shareFeed: Boolean = false,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val csrf = TokenManager.csrfCache.orEmpty()
@@ -76,11 +77,36 @@ object BangumiReviewRepository {
                 mediaId = mediaId,
                 score = score.coerceIn(2, 10),
                 content = content.trim(),
+                shareFeed = if (shareFeed) 1 else 0,
                 csrf = csrf
             )
             if (response.code != 0) {
                 error(response.message.ifBlank { "发布失败" })
             }
+        }
+    }
+
+    suspend fun dislikeReview(mediaId: Long, reviewId: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val csrf = TokenManager.csrfCache.orEmpty().ifBlank { error("请先登录") }
+            val response = NetworkModule.bangumiApi.dislikeBangumiReview(mediaId, reviewId = reviewId, csrf = csrf)
+            if (response.code != 0) error(response.message.ifBlank { "操作失败" })
+        }
+    }
+
+    suspend fun modifyShortReview(mediaId: Long, reviewId: Long, score: Int, content: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val csrf = TokenManager.csrfCache.orEmpty().ifBlank { error("请先登录") }
+            val response = NetworkModule.bangumiApi.modifyBangumiShortReview(mediaId, reviewId, score.coerceIn(2, 10), content.trim(), csrf)
+            if (response.code != 0) error(response.message.ifBlank { "编辑失败" })
+        }
+    }
+
+    suspend fun deleteShortReview(mediaId: Long, reviewId: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val csrf = TokenManager.csrfCache.orEmpty().ifBlank { error("请先登录") }
+            val response = NetworkModule.bangumiApi.deleteBangumiShortReview(mediaId, reviewId, csrf)
+            if (response.code != 0) error(response.message.ifBlank { "删除失败" })
         }
     }
 }

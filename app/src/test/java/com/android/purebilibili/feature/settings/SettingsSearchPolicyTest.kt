@@ -7,6 +7,33 @@ import kotlin.test.assertTrue
 class SettingsSearchPolicyTest {
 
     @Test
+    fun focusSettings_remainsSearchableAndOpensItsOwnPage() {
+        val result = resolveSettingsSearchResults("关注分组")
+            .first { it.target == SettingsSearchTarget.FOCUS_SETTINGS }
+
+        assertEquals(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.FocusSettings,
+            resolveSettingsSearchNavigation(result),
+        )
+    }
+
+    @Test
+    fun dynamicCommentPreviewTitleAndAliasesOpenHomeCategory() {
+        listOf("显示动态评论提示", "动态评论摘要", "动态评论预览", "相关评论").forEach { query ->
+            val result = resolveSettingsSearchResults(query)
+                .first { it.settingId == "home.dynamic_comment_preview_visible" }
+
+            assertEquals(SettingsSearchTarget.HOME_FEED, result.target)
+            assertEquals(SettingsRootCategory.HOME_RECOMMENDATION, result.page)
+            assertEquals("home_options", result.focusId)
+            assertEquals(
+                com.android.purebilibili.navigation3.BiliPaiNavKey.SettingsCategory(SettingsRootCategory.HOME_RECOMMENDATION),
+                resolveSettingsSearchNavigation(result),
+            )
+        }
+    }
+
+    @Test
     fun blankQuery_returnsEmptyList() {
         val results = resolveSettingsSearchResults("   ")
 
@@ -18,6 +45,14 @@ class SettingsSearchPolicyTest {
         val results = resolveSettingsSearchResults("缓存")
 
         assertTrue(results.any { it.target == SettingsSearchTarget.CLEAR_CACHE })
+    }
+
+    @Test
+    fun personalizationSwitchRemainsSearchable() {
+        assertEquals(
+            SettingsSearchTarget.PRIVACY_PERMISSION,
+            resolveSettingsSearchResults("个性化搜索推荐").firstOrNull()?.target
+        )
     }
 
     @Test
@@ -78,6 +113,15 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun separateCardEffectsSearchIntoHomeSettings() {
+        val glass = resolveSettingsSearchResults("卡片毛玻璃")
+        val tint = resolveSettingsSearchResults("卡片动态取色")
+
+        assertEquals(SettingsSearchTarget.HOME_FEED, glass.firstOrNull()?.target)
+        assertEquals(SettingsSearchTarget.HOME_FEED, tint.firstOrNull()?.target)
+    }
+
+    @Test
     fun queryByUpBadgeKeyword_hitsHomeEntry() {
         val results = resolveSettingsSearchResults("UP主标识")
 
@@ -130,18 +174,18 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryByAndroidNativeLiquidGlass_focusesAppearanceThemeSection() {
+    fun queryByAndroidNativeLiquidGlass_focusesAnimationGlassSection() {
         val result = resolveSettingsSearchResults("安卓原生液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test
     fun queryByRefreshRate_focusesAppearanceDisplayMode() {
         val result = resolveSettingsSearchResults("刷新率").firstOrNull()
 
-        assertEquals("屏幕帧率", result?.title)
+        assertEquals("屏幕刷新率", result?.title)
         assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
         assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
     }
@@ -162,24 +206,24 @@ class SettingsSearchPolicyTest {
     fun queryByBottomBarLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("底栏液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test
     fun queryByTopDockLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("顶部dock栏液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test
     fun queryByHomeSearchLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("首页搜索框液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test
@@ -232,7 +276,7 @@ class SettingsSearchPolicyTest {
         assertTrue(
             results.any {
                 it.target == SettingsSearchTarget.PLAYBACK &&
-                    it.focusId == SettingsSearchFocusIds.PLAYBACK_INTERACTION
+                    it.focusId == SettingsSearchFocusIds.PLAYBACK_COMMENTS
             }
         )
     }
@@ -256,7 +300,7 @@ class SettingsSearchPolicyTest {
         assertTrue(
             results.any {
                 it.target == SettingsSearchTarget.PLAYBACK &&
-                    it.focusId == SettingsSearchFocusIds.PLAYBACK_INTERACTION
+                    it.focusId == SettingsSearchFocusIds.PLAYBACK_COMMENTS
             }
         )
     }
@@ -268,7 +312,7 @@ class SettingsSearchPolicyTest {
         assertTrue(
             results.any {
                 it.target == SettingsSearchTarget.PLAYBACK &&
-                    it.focusId == SettingsSearchFocusIds.PLAYBACK_INTERACTION
+                    it.focusId == SettingsSearchFocusIds.PLAYBACK_COMMENTS
             }
         )
     }
@@ -404,6 +448,7 @@ class SettingsSearchPolicyTest {
         assertTrue(resolveSettingsSearchResults("顶部标签").any { it.target == SettingsSearchTarget.NAVIGATION })
         assertTrue(resolveSettingsSearchResults("首页壁纸").any { it.target == SettingsSearchTarget.HOME_FEED })
         assertTrue(resolveSettingsSearchResults("评论装扮").any { it.target == SettingsSearchTarget.INTERACTION_COMMENT })
+        assertTrue(resolveSettingsSearchResults("IP属地").any { it.title == "评论 IP 属地" })
         assertTrue(resolveSettingsSearchResults("WebDAV").any { it.target == SettingsSearchTarget.DATA_BACKUP })
     }
 
@@ -437,4 +482,21 @@ class SettingsSearchPolicyTest {
         assertEquals("平板侧边导航栏", result?.title)
         assertEquals("导航设置", result?.section)
     }
+    @Test
+    fun allRestoredCommentSettingsHaveConcreteSearchDestinations() {
+        val restored = settingsItemDirectory.filter { it.page == SettingsRootCategory.COMMENTS_CONTENT }
+        assertEquals(18, restored.size)
+        restored.forEach { item ->
+            val result = resolveSettingsSearchResults(item.title)
+                .first { it.settingId == item.settingId }
+            assertEquals(SettingsSearchFocusIds.PLAYBACK_COMMENTS, result.focusId)
+            assertEquals(com.android.purebilibili.navigation3.BiliPaiNavKey.PlaybackSettings,
+                resolveSettingsSearchNavigation(result))
+            assertTrue(result.path.contains("播放设置 / 互动与评论"))
+        }
+        assertTrue(resolveSettingsSearchResults("隐藏三连").any {
+            it.settingId == "playback.hide_interactive_command_danmaku"
+        })
+    }
+
 }

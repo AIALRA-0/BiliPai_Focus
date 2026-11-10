@@ -110,4 +110,10 @@ class LyricsParserTest {
         assertEquals(-10_000L, document.withOffset(-15_000L).offsetMs)
         assertTrue(document.withOffset(500L).lines === document.lines)
     }
+    @Test fun `whole second timestamps are retained alongside fractional timestamps`() {
+        val document = parseSplLyrics("[00:01]第一句\n[00:02.50]第二句\n[00:03]第三句")
+        assertEquals(listOf(1000L, 2500L, 3000L), document.lines.map { it.startTimeMs })
+        assertEquals(listOf("第一句", "第二句", "第三句"), document.lines.map { it.text })
+    }
+
 }

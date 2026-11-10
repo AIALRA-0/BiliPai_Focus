@@ -16,6 +16,40 @@ import kotlin.test.assertTrue
 class BottomBarGlassMaterialPolicyTest {
 
     @Test
+    fun `tuned glass scroll animation can be omitted without changing material`() {
+        for (dark in listOf(false, true)) {
+            for (tuningProgress in listOf(0f, 0.5f, 1f)) {
+                val tuning = resolveLiquidGlassTuning(progress = tuningProgress)
+                val resting = resolveBottomBarGlassMaterialSpec(
+                    preset = BottomBarLiquidGlassPreset.BILIPAI_TUNED,
+                    isDarkTheme = dark,
+                    isScrolling = false,
+                    scrollProgress = 0f,
+                    glassEnabled = true,
+                    motionProgress = 0f,
+                    pressProgress = 0f,
+                    liquidGlassTuning = tuning,
+                )
+                for (scrollProgress in listOf(0.1f, 0.5f, 1f)) {
+                    assertEquals(
+                        resting,
+                        resolveBottomBarGlassMaterialSpec(
+                            preset = BottomBarLiquidGlassPreset.BILIPAI_TUNED,
+                            isDarkTheme = dark,
+                            isScrolling = true,
+                            scrollProgress = scrollProgress,
+                            glassEnabled = true,
+                            motionProgress = 0f,
+                            pressProgress = 0f,
+                            liquidGlassTuning = tuning,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `enum value 1 round trips to ios26 refined`() {
         assertSame(BottomBarLiquidGlassPreset.IOS26_REFINED, BottomBarLiquidGlassPreset.fromValue(1))
         assertSame(BottomBarLiquidGlassPreset.BILIPAI_TUNED, BottomBarLiquidGlassPreset.fromValue(0))
@@ -242,7 +276,7 @@ class BottomBarGlassMaterialPolicyTest {
             glassEnabled = true, fallbackAlpha = 1f
         )
 
-        assertEquals(0.38f, tuned.alpha, 0.005f)
+        assertEquals(0.40f, tuned.alpha, 0.005f)
         assertEquals(0.40f, ios26Light.alpha, 0.005f)
         assertEquals(0.40f, ios26Dark.alpha, 0.005f)
     }

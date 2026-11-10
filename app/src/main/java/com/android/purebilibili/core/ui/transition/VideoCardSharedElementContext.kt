@@ -8,4 +8,5 @@ internal val LocalVideoSharedTransitionSpeedSettings = compositionLocalOf {
 }
 internal val LocalClickToPlayEnabled = compositionLocalOf { false }
 internal val LocalDynamicImagePreviewTextVisible = compositionLocalOf { true }
+internal val LocalDynamicCommentPreviewVisible = compositionLocalOf { false }
 

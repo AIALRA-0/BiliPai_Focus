@@ -14,12 +14,11 @@ import com.android.purebilibili.core.ui.adaptive.minMotionTier
 import com.android.purebilibili.core.ui.performance.LocalRuntimeVisualGuard
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeInputScale
-import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 
 private val LocalUnifiedBlurIntensity = staticCompositionLocalOf<BlurIntensity?> { null }
 
@@ -77,6 +76,7 @@ fun currentUnifiedBlurIntensity(): BlurIntensity {
  * @param hazeState Haze状态
  * @param enabled 是否启用模糊
  * @param blurStyleOverride 不使用主题材质时的定制 Haze 样式
+ * @param preferWindowBackdrop 仅限背景已在同一窗口先绘制的入口；指定内容源和跨窗口入口保持 false
  * @return 应用了用户偏好模糊的Modifier
  */
 @Composable
@@ -90,6 +90,7 @@ fun Modifier.unifiedBlur(
     isTransitionRunning: Boolean = false,
     forceLowBudget: Boolean = false,
     blurStyleOverride: HazeBlurStyle? = null,
+    preferWindowBackdrop: Boolean = false,
 ): Modifier {
     val appThemeConfig = LocalAppThemeConfig.current
     if (
@@ -126,31 +127,49 @@ fun Modifier.unifiedBlur(
 
     // 默认仍遵循用户的统一模糊偏好；播放画面等需要保真的场景可显式提供
     // 无主题染色样式，避免 Material surface tint 改变原始画面颜色。
-    val blurStyle = blurStyleOverride
-        ?: BlurStyles.getBlurStyle(currentUnifiedBlurIntensity(), budget)
+    // 注意：getBlurStyle 是 @Composable，只能在组合上下文调用；可缓存的
+    // 预算解析是普通函数，留在 remember 内。
+    val blurStyle = if (blurStyleOverride != null) {
+        blurStyleOverride
+    } else {
+        val intensity = currentUnifiedBlurIntensity()
+        val effectiveIntensity = remember(intensity, budget) {
+            resolveBudgetedBlurIntensity(intensity, budget)
+        }
+        BlurStyles.getBlurStyle(effectiveIntensity)
+    }
     val edgeTreatment = remember(shape) { resolveUnifiedBlurredEdgeTreatment(shape) }
     val inputScaleFactor = remember(budget, surfaceType) {
         resolveBlurInputScale(budget = budget, surfaceType = surfaceType)
     }
 
-    // Haze 2: style/blurEnabled/blurredEdgeTreatment live on BlurVisualEffect via blurEffect {}.
-    // Shape still applied with clip; recoverable background gate is per-effect blurEnabled.
+    // Haze 2: Style 是不可变的可重放程序，recoverable 门控与边缘处理作为额外写入排在
+    // 主题材质样式之前；预算降级映射为性能档位（旧 inputScale 语义 ≈ Fixed 采样质量）。
     val recoverableEnabled = recoverableBlurEnabled(hazeState)
-    return (if (shape != null) this.clip(shape) else this).hazeEffect(
-        state = hazeState,
-    ) {
-        blurEffect {
-            style = blurStyle
-            blurEnabled = recoverableEnabled
-            blurredEdgeTreatment = edgeTreatment
-        }
-        @OptIn(ExperimentalHazeApi::class)
-        run {
-            inputScale = if (inputScaleFactor >= 1f) {
-                HazeInputScale.None
-            } else {
-                HazeInputScale.Fixed(inputScaleFactor)
-            }
+    val performanceMode = remember(inputScaleFactor) {
+        if (inputScaleFactor >= 1f) {
+            HazePerformanceMode.Quality
+        } else {
+            HazePerformanceMode.Fixed(inputScaleFactor)
         }
     }
+    // 官方背景效果消费窗口内已经绘制的像素，不等价于指定源采样。
+    // 仅支持同窗口背景语义的入口显式启用，不依赖玻璃材质开关。
+    // 版本、硬件画布和效果兼容性由渲染器检查，失败时继续使用原有源。
+    val useWindowBackdrop = preferWindowBackdrop && !effectiveForceLowBudget && recoverableEnabled
+    val input = remember(hazeState, useWindowBackdrop) {
+        val source = HazeInput.Sources(hazeState)
+        if (useWindowBackdrop) HazeInput.Backdrop(fallback = source) else source
+    }
+    val effectiveStyle = remember(recoverableEnabled, edgeTreatment, blurStyle) {
+        HazeBlurStyle {
+            blurEnabled(recoverableEnabled)
+            blurredEdgeTreatment(edgeTreatment)
+        }.then(blurStyle)
+    }
+    return (if (shape != null) this.clip(shape) else this).hazeBlur(
+        input = input,
+        style = effectiveStyle,
+        performanceMode = performanceMode,
+    )
 }

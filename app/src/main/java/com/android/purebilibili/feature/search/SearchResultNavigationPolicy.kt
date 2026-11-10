@@ -40,11 +40,24 @@ internal fun resolveVideoSearchNavigationTarget(
     bvid: String,
     contentType: String,
     navigationUrl: String,
-    title: String
+    title: String,
+    videoId: Long = 0L,
+    ownerName: String = ""
 ): SearchResultNavigationTarget {
     val normalizedBvid = bvid.trim()
     if (normalizedBvid.isNotEmpty()) {
         return SearchResultNavigationTarget.Video(normalizedBvid)
+    }
+
+    // 综合搜索会把直播间混进 video 分类：contentType = "live_room"、bvid 为空、
+    // id 即房间号。不识别的话会落到 None，表现为卡片点了完全没反应
+    // （UP 主名是独立热区，所以进空间是通的）。
+    if (contentType.equals("live_room", ignoreCase = true) && videoId > 0L) {
+        return SearchResultNavigationTarget.LiveRoom(
+            roomId = videoId,
+            title = title.ifBlank { ownerName },
+            uname = ownerName
+        )
     }
 
     val normalizedUrl = navigationUrl.trim()

@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.settings.ui
 
+import com.android.purebilibili.core.ui.AppContentColors
+
+import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +16,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,8 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
 import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
@@ -47,6 +49,7 @@ import com.android.purebilibili.core.ui.AppScaffold
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.AppTopBarStyle
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.AdaptivePlainTooltipBox
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
@@ -150,6 +153,12 @@ internal fun SettingsPageScaffold(
         LocalBottomBarContentPadding.current,
     )
     val appThemeConfig = LocalAppThemeConfig.current
+    // 设置页导航槽补足窗口边距；大标题沿用顶栏自身的原生边距。
+    val navigationStartInset = when {
+        topBarStyle == AppTopBarStyle.LARGE -> 0.dp
+        LocalAppUiStyle.current == AppUiStyle.MIUIX -> 12.dp
+        else -> 8.dp
+    }
     val headerBlurEnabled = topBarBlurEnabled ?: appThemeConfig.headerBlurEnabled
     val lowBlurBudget = isLowBlurBudgetForced()
     val nonGlassMiuix = isMiuixNonGlassEnabled()
@@ -167,7 +176,10 @@ internal fun SettingsPageScaffold(
         hasBackdrop = true,
     ) && !lowBlurBudget
     val fadeActive = appThemeConfig.progressiveTopFadeEnabled && !headerBlurEnabled
-    val backdrop = if (progressiveBlurEnabled) rememberLayerBackdrop() else null
+    // Keep this backdrop in the scaffold chrome. The scroll content is its source,
+    // so passing it into a search dock inside that content would create a render-layer cycle.
+    val chromeSource = if (progressiveBlurEnabled) rememberChromeBackdropSource() else null
+    val backdrop = chromeSource?.takeIf { it.isReady }?.backdrop
     val hazeState = if (
         headerBlurEnabled && !lowBlurBudget &&
         shouldAllowRenderEffectBackedHazeEffect(android.os.Build.VERSION.SDK_INT)
@@ -183,7 +195,10 @@ internal fun SettingsPageScaffold(
 
     CompositionLocalProvider(
         LocalAppPreferenceIconTreatment provides AppPreferenceIconTreatment.FILLED,
-        LocalAppPreferenceGroupPresentation provides if (nonGlassMiuix) {
+        // Settings-only Miuix icons; shared defaults and MD3 remain unchanged in both glass states.
+        com.android.purebilibili.core.ui.components.LocalAppPreferenceIconColors provides
+            com.android.purebilibili.feature.settings.settingsIconColors(),
+        LocalAppPreferenceGroupPresentation provides if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
             AppPreferenceGroupPresentation.CARD
         } else {
             AppPreferenceGroupPresentation.FLAT
@@ -191,6 +206,7 @@ internal fun SettingsPageScaffold(
     ) {
         AppScaffold(
             modifier = modifier.appTopBarNestedScroll(collapseBehavior),
+            topBarIconBackdropSource = chromeSource,
             topBar = {
                 BiliPaiImmersiveTopBar(
                     backdrop = backdrop,
@@ -213,11 +229,19 @@ internal fun SettingsPageScaffold(
                                 )
                         } else Modifier,
                         navigationIcon = {
-                            AppIconButton(onClick = onBack) {
-                                AppIcon(
-                                    imageVector = rememberAppBackIcon(),
-                                    contentDescription = backContentDescription,
-                                )
+                            // 设置页自行提供导航边距；不修改共用顶栏默认值，玻璃与原生路径共用。
+                            Box(modifier = Modifier.padding(start = navigationStartInset)) {
+                                AdaptivePlainTooltipBox(
+                                    text = backContentDescription,
+                                    enabled = true,
+                                ) {
+                                    AppIconButton(onClick = onBack) {
+                                        AppIcon(
+                                            imageVector = rememberAppBackIcon(),
+                                            contentDescription = backContentDescription,
+                                        )
+                                    }
+                                }
                             }
                         },
                         actions = actions,
@@ -227,9 +251,9 @@ internal fun SettingsPageScaffold(
                             } else {
                                 Color.Transparent
                             },
-                            titleContentColor = MaterialTheme.colorScheme.onSurface,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                            actionIconContentColor = MaterialTheme.colorScheme.onSurface,
+                            titleContentColor = AppContentColors.primaryText(),
+                            navigationIconContentColor = AppContentColors.primaryText(),
+                            actionIconContentColor = AppContentColors.primaryText(),
                         ),
                         style = topBarStyle,
                         collapseBehavior = collapseBehavior,
@@ -241,65 +265,36 @@ internal fun SettingsPageScaffold(
         ) { padding ->
             val scrollModifier = Modifier
                 .fillMaxSize()
-                .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
-                .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
-                .background(pageContainerColor)
+                .then(chromeSource?.modifier ?: Modifier)
+                .then(
+                    if (hazeState != null &&
+                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                    ) Modifier.hazeSourceCompat(hazeState) else Modifier
+                )
+                .globalWallpaperAwareBackground(pageContainerColor)
 
             val windowSizeClass = LocalWindowSizeClass.current
             val isExpandedScreen = windowSizeClass.isExpandedScreen
 
-            when (scrollHost) {
-                SettingsPageScrollHost.LazyColumn -> {
-                    Box(
-                        modifier = scrollModifier,
-                        contentAlignment = Alignment.TopCenter
-                    ) {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .then(
-                                    if (isExpandedScreen) {
-                                        Modifier.widthIn(max = 760.dp).fillMaxWidth()
-                                    } else {
-                                        Modifier.fillMaxWidth()
-                                    }
-                                ),
-                            contentPadding = PaddingValues(
-                                top = padding.calculateTopPadding(),
-                                bottom = maxOf(resolvedBottomContentPadding, padding.calculateBottomPadding()),
-                            ),
-                        ) {
-                            if (header != null) {
-                                item {
-                                    header()
-                                }
-                            }
-                            if (lazyListContent != null) {
-                                lazyListContent()
-                            } else {
-                                item {
-                                    content()
-                                }
-                            }
-                        }
-                    }
-                }
+            // 液态玻璃开启后的单选弹窗宿主：玻璃卡片与页面内容同窗渲染（Backdrop
+            // 采样不跨平台窗口），关闭玻璃或设备不支持时不装配，条目回落原生弹窗。
+            val glassPopupAvailable = appThemeConfig.liquidGlassEnabled &&
+                com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(
+                    android.os.Build.VERSION.SDK_INT,
+                )
 
-                SettingsPageScrollHost.External -> {
-                    val chromeTop = padding.calculateTopPadding()
-                    CompositionLocalProvider(
-                        LocalSettingsTopContentPadding provides if (header != null) {
-                            0.dp
-                        } else {
-                            chromeTop
-                        },
-                    ) {
+            SettingsGlassChoicePopupHost(
+                glassAvailable = glassPopupAvailable,
+                bottomInset = resolvedBottomContentPadding,
+            ) {
+                when (scrollHost) {
+                    SettingsPageScrollHost.LazyColumn -> {
                         Box(
                             modifier = scrollModifier,
                             contentAlignment = Alignment.TopCenter
                         ) {
-                            Column(
+                            LazyColumn(
+                                state = listState,
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .then(
@@ -308,19 +303,64 @@ internal fun SettingsPageScaffold(
                                         } else {
                                             Modifier.fillMaxWidth()
                                         }
-                                    )
+                                    ),
+                                contentPadding = PaddingValues(
+                                    top = padding.calculateTopPadding(),
+                                    bottom = maxOf(resolvedBottomContentPadding, padding.calculateBottomPadding()),
+                                ),
                             ) {
                                 if (header != null) {
-                                    Box(modifier = Modifier.padding(top = chromeTop)) {
+                                    item {
                                         header()
                                     }
                                 }
-                                Box(
+                                if (lazyListContent != null) {
+                                    lazyListContent()
+                                } else {
+                                    item {
+                                        content()
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    SettingsPageScrollHost.External -> {
+                        val chromeTop = padding.calculateTopPadding()
+                        CompositionLocalProvider(
+                            LocalSettingsTopContentPadding provides if (header != null) {
+                                0.dp
+                            } else {
+                                chromeTop
+                            },
+                        ) {
+                            Box(
+                                modifier = scrollModifier,
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                Column(
                                     modifier = Modifier
-                                        .weight(1f, fill = true)
-                                        .fillMaxSize(),
+                                        .fillMaxHeight()
+                                        .then(
+                                            if (isExpandedScreen) {
+                                                Modifier.widthIn(max = 760.dp).fillMaxWidth()
+                                            } else {
+                                                Modifier.fillMaxWidth()
+                                            }
+                                        )
                                 ) {
-                                    content()
+                                    if (header != null) {
+                                        Box(modifier = Modifier.padding(top = chromeTop)) {
+                                            header()
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f, fill = true)
+                                            .fillMaxSize(),
+                                    ) {
+                                        content()
+                                    }
                                 }
                             }
                         }

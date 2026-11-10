@@ -40,7 +40,12 @@ class DampedDragAnimationTargetTest {
         }
     }
 
-    private fun createAnimation(scope: CoroutineScope, range: ClosedFloatingPointRange<Float> = 0f..2f) =
+    private fun createAnimation(
+        scope: CoroutineScope,
+        range: ClosedFloatingPointRange<Float> = 0f..2f,
+        useMiuixIndicatorMotion: Boolean = false,
+        trackingMode: DampedDragTrackingMode = DampedDragTrackingMode.SPRING,
+    ) =
         DampedDragAnimation(
             animationScope = scope,
             initialValue = 0f,
@@ -48,10 +53,60 @@ class DampedDragAnimationTargetTest {
             visibilityThreshold = 0.001f,
             initialScale = 1f,
             pressedScale = 1.2f,
+            useMiuixIndicatorMotion = useMiuixIndicatorMotion,
+            trackingMode = trackingMode,
             onDragStarted = {},
             onDragStopped = {},
             onDrag = { _, _ -> },
         )
+
+    @Test
+    fun `glass indicator follows spring even when native control requests direct tracking`() = runTest {
+        val clock = BroadcastFrameClock()
+        withContext(clock) {
+            val animation = createAnimation(
+                this,
+                useMiuixIndicatorMotion = true,
+                trackingMode = DampedDragTrackingMode.DIRECT,
+            )
+            animation.updateValue(2f)
+            assertEquals(2f, animation.targetValue)
+            assertEquals(0f, animation.value)
+            repeat(4) { frame ->
+                testScheduler.runCurrent()
+                clock.sendFrame(frame * 16_000_000L)
+                testScheduler.runCurrent()
+            }
+            assertTrue(animation.value > 0f && animation.value < 2f)
+            repeat(120) { frame ->
+                testScheduler.runCurrent()
+                clock.sendFrame((frame + 4) * 16_000_000L)
+                testScheduler.runCurrent()
+            }
+            assertEquals(2f, animation.value, 0.001f)
+        }
+    }
+
+    @Test
+    fun `glass release at rest does not wait for full bloom even for a single item`() = runTest {
+        val clock = BroadcastFrameClock()
+        withContext(clock) {
+            val animation = createAnimation(this, 0f..0f, useMiuixIndicatorMotion = true)
+            animation.press()
+            animation.release()
+            var peak = 1f
+            repeat(120) { frame ->
+                testScheduler.runCurrent()
+                clock.sendFrame(frame * 16_000_000L)
+                testScheduler.runCurrent()
+                peak = maxOf(peak, animation.scaleX)
+            }
+            assertTrue(peak < 1.2f)
+            assertEquals(1f, animation.scaleX, 0.001f)
+            assertEquals(1f, animation.scaleY, 0.001f)
+            assertEquals(0f, animation.pressProgress, 0.001f)
+        }
+    }
 
     @Test
     fun `tap visibly enlarges before settling back`() = runTest {
@@ -140,6 +195,27 @@ class DampedDragAnimationTargetTest {
         // Do not advance the dispatcher: the next pointer event must already accumulate from the
         // newest requested target even though the spring has not advanced a frame yet.
         assertEquals(0f, animation.targetValue)
+    }
+
+    @Test
+    fun `repeated glass target does not restart position or deformation`() = runTest {
+        val clock = BroadcastFrameClock()
+        withContext(clock) {
+            val reference = createAnimation(this, useMiuixIndicatorMotion = true)
+            val repeated = createAnimation(this, useMiuixIndicatorMotion = true)
+            reference.updateValue(2f)
+            repeated.updateValue(2f)
+            repeat(120) { frame ->
+                repeated.updateValue(2f)
+                testScheduler.runCurrent()
+                clock.sendFrame(frame * 16_000_000L)
+                testScheduler.runCurrent()
+                assertEquals(reference.value, repeated.value, 0.0001f)
+                assertEquals(reference.velocity, repeated.velocity, 0.0001f)
+            }
+            assertEquals(2f, repeated.value, 0.001f)
+            assertEquals(0f, repeated.velocity, 0.001f)
+        }
     }
 
     @Test

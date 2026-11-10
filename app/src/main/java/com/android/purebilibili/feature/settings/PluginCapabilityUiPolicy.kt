@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.plugin.ExternalPluginInstallDecision
-import com.android.purebilibili.core.plugin.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapability
 import com.android.purebilibili.core.plugin.kotlinpkg.ExternalKotlinPluginPayloadEntry
 import com.android.purebilibili.core.plugin.kotlinpkg.ExternalKotlinPluginPayloadType
 import com.android.purebilibili.core.plugin.kotlinpkg.InstalledExternalPluginPackage

@@ -7,6 +7,8 @@ import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import kotlin.math.max
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 data class RoundedControlVisualGeometry(
     val height: Dp,
@@ -42,7 +44,7 @@ fun resolveRoundedControlVisualGeometry(
     val safeCorner = preferredCornerRadius.coerceAtLeast(0.dp)
     val safeMinimumHeight = nativeMinimumHeight.coerceAtLeast(0.dp)
     val safeRatio = maxCornerRatio.coerceIn(0.15f, 0.45f)
-    val radiusDrivenHeight = (safeCorner.value / safeRatio).dp
+    val radiusDrivenHeight = (ceil(safeCorner.value / safeRatio * 10.0) / 10.0).toFloat().dp
     return RoundedControlVisualGeometry(
         height = max(safeMinimumHeight.value, radiusDrivenHeight.value).dp,
         cornerRadius = safeCorner,
@@ -63,10 +65,11 @@ internal fun resolveAppSegmentedControlPolicy(
 ): AppSegmentedControlPolicy {
     // Prefer Card-level corners, never the full Pill token. Native renderers keep this corner and
     // derive any required visual height from it instead of forcing a shared 48dp container.
-    val preferred = AppShapes.resolveContainerCornerDp(
+    val rawPreferred = AppShapes.resolveContainerCornerDp(
         level = ContainerLevel.Card,
         uiStyle = uiStyle,
     )
+    val preferred = ((rawPreferred.value * 10f).roundToInt() / 10f).dp
     return when (uiStyle) {
         AppUiStyle.MIUIX -> AppSegmentedControlPolicy(
             usesEmphasizedTitle = true,

@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "skinId": "official.blue_snow_maid",
+  "displayName": "蓝雪女仆",
+  "version": "1.1.0",
+  "apiVersion": 1,
+  "author": "BiliPai",
+  "surfaces": [
+    "HOME_TOP_CHROME",
+    "HOME_BOTTOM_BAR"
+  ],
+  "assets": {
+    "topAtmosphere": "assets/top_atmosphere.png",
+    "bottomBarTrim": "assets/bottom_trim.png",
+    "bottomBarIcons": {
+      "home": "assets/icon_home.png",
+      "home_selected": "assets/icon_home_selected.png",
+      "following": "assets/icon_following.png",
+      "following_selected": "assets/icon_following_selected.png",
+      "member": "assets/icon_member.png",
+      "member_selected": "assets/icon_member_selected.png",
+      "channel": "assets/icon_channel.png",
+      "channel_selected": "assets/icon_channel_selected.png",
+      "profile": "assets/icon_profile.png",
+      "profile_selected": "assets/icon_profile_selected.png"
+    }
+  },
+  "colors": {
+    "bottomBarTrimTint": "#EDF6FF",
+    "topAtmosphereTint": "#F6DCEB",
+    "searchCapsuleTint": "#FFFFFF",
+    "bottomBarSelectedTint": "#B33F79",
+    "bottomBarIconTint": "#365C8A",
+    "bottomBarIconDarkTint": "#365C8A",
+    "bottomBarSelectedDarkTint": "#B33F79",
+    "colorMode": "light"
+  },
+  "licenseNote": "BiliPai 官方主题示例，含官方角色主题素材；仅供应用内个人使用，不可作为社区皮肤包分发。",
+  "communityShareable": false,
+  "containsOfficialAssets": true
+}

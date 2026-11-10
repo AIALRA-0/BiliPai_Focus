@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.components.userVipPink
 import androidx.compose.ui.unit.sp
 
 /**
@@ -52,7 +53,6 @@ fun resolveUserAvatarCornerMark(
     }
 }
 
-private val VipAvatarPink = Color(0xFFFB7299)
 
 @Composable
 fun UserAvatarCornerMarkBadge(
@@ -82,7 +82,7 @@ fun UserAvatarCornerMarkBadge(
                         .fillMaxSize()
                         .padding(1.dp)
                         .clip(CircleShape)
-                        .background(VipAvatarPink),
+                        .background(userVipPink()),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -101,9 +101,9 @@ fun UserAvatarCornerMarkBadge(
                     imageVector = Icons.Outlined.Bolt,
                     contentDescription = null,
                     tint = if (mark == UserAvatarCornerMark.Personal) {
-                        Color(0xFFFFCC00)
+                        officialVerifyColor(OfficialVerifyBadgeTone.PERSONAL)
                     } else {
-                        Color(0xFF40C4FF)
+                        officialVerifyColor(OfficialVerifyBadgeTone.ORGANIZATION)
                     },
                     modifier = Modifier.fillMaxSize(),
                 )

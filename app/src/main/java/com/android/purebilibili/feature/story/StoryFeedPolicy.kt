@@ -49,18 +49,27 @@ internal fun resolveNextStoryFeedAid(
         ?: previousAid
 }
 
+internal fun storyItemIdentityKeys(item: StoryItem): List<String> = buildList {
+    resolveStoryItemAid(item)?.let { add("aid:$it") }
+    item.bvid.ifBlank { item.playerArgs?.bvid.orEmpty() }.trim()
+        .takeIf { it.isNotEmpty() }?.let { add("bvid:$it") }
+    if (item.id > 0L) add("id:${item.id}")
+}
+
 internal fun mergeStoryFeedItems(
     existingItems: List<StoryItem>,
     newItems: List<StoryItem>
 ): List<StoryItem> {
-    val seenAids = existingItems.mapNotNull { it.playerArgs?.aid?.takeIf { aid -> aid > 0L } }.toMutableSet()
-    val seenBvids = existingItems.mapNotNull { it.playerArgs?.bvid?.trim()?.takeIf { bvid -> bvid.isNotEmpty() } }.toMutableSet()
+    val seenAids = existingItems.mapNotNull(::resolveStoryItemAid).toMutableSet()
+    val seenBvids = existingItems.mapNotNull {
+        it.bvid.ifBlank { it.playerArgs?.bvid.orEmpty() }.trim().takeIf { bvid -> bvid.isNotEmpty() }
+    }.toMutableSet()
     val seenIds = existingItems.mapNotNull { it.id.takeIf { id -> id > 0L } }.toMutableSet()
     val merged = existingItems.toMutableList()
 
     newItems.forEach { item ->
-        val aid = item.playerArgs?.aid ?: 0L
-        val bvid = item.playerArgs?.bvid?.trim().orEmpty()
+        val aid = resolveStoryItemAid(item) ?: 0L
+        val bvid = item.bvid.ifBlank { item.playerArgs?.bvid.orEmpty() }.trim()
         val id = item.id
         val alreadySeen = (aid > 0L && aid in seenAids) ||
             (bvid.isNotEmpty() && bvid in seenBvids) ||
@@ -132,6 +141,7 @@ private data class PlayableStoryItem(
             pic = source.cover,
             owner = source.toOwner(),
             stat = source.toStat(),
+            dimension = source.dimension,
             pages = listOf(
                 Page(
                     cid = cid,
@@ -152,14 +162,15 @@ private data class PlayableStoryItem(
             pic = source.cover,
             owner = source.toOwner(),
             stat = source.toStat(),
-            duration = source.duration.coerceAtLeast(0)
+            duration = source.duration.coerceAtLeast(0),
+            isVertical = source.dimension?.takeIf { it.width > 0 && it.height > 0 }?.isVertical
         )
     }
 }
 
 /**
  * Story 流条目转竖屏流推荐项(供详情页竖屏全屏等场景混合多样内容)。
- * 无法播放(缺 aid/cid)的条目返回 null。
+ * 缺少稿件身份或不是普通视频的条目返回 null；缺 cid 时由播放器解析。
  */
 internal fun storyItemToRelatedVideo(item: StoryItem): RelatedVideo? =
     toPlayableStoryItem(item)?.toRelatedVideo()
@@ -176,6 +187,7 @@ internal fun videoItemToStoryItem(item: VideoItem): StoryItem? {
     if (bvid.isEmpty() && aid <= 0L) return null
     return StoryItem(
         id = aid.takeIf { it > 0L } ?: item.id,
+        bvid = bvid,
         goto = "av",
         title = item.title,
         cover = item.pic,
@@ -206,9 +218,10 @@ internal fun videoItemsToStoryItems(items: List<VideoItem>): List<StoryItem> =
     items.mapNotNull(::videoItemToStoryItem)
 
 private fun toPlayableStoryItem(item: StoryItem): PlayableStoryItem? {
-    val args = item.playerArgs ?: return null
-    val aid = args.aid.takeIf { it > 0L } ?: 0L
-    val bvid = args.bvid.trim()
+    if (item.goto.isNotBlank() && item.goto !in setOf("av", "vertical_av")) return null
+    val args = item.playerArgs
+    val aid = resolveStoryItemAid(item) ?: 0L
+    val bvid = item.bvid.ifBlank { args?.bvid.orEmpty() }.trim()
     // Home feed often has bvid without cid; still allow entry — player resolves cid later.
     if (aid <= 0L && bvid.isEmpty()) return null
     val playbackId = bvid.ifBlank {
@@ -217,10 +230,14 @@ private fun toPlayableStoryItem(item: StoryItem): PlayableStoryItem? {
     return PlayableStoryItem(
         source = item,
         aid = aid,
-        cid = args.cid.coerceAtLeast(0L),
+        cid = (args?.cid ?: 0L).coerceAtLeast(0L),
         playbackId = playbackId
     )
 }
+
+private fun resolveStoryItemAid(item: StoryItem): Long? =
+    item.playerArgs?.aid?.takeIf { it > 0L }
+        ?: item.param.toLongOrNull()?.takeIf { it > 0L }
 
 private fun StoryItem.toOwner(): Owner {
     return Owner(

@@ -55,7 +55,7 @@ internal fun areSameReusableBiliPaiDestination(
 /**
  * 平板/侧栏切换 Category：同层 replace，避免 Category 叠 Category，或详情页上再叠一层 Category。
  *
- * - 栈顶已是目标 Category → 不变
+ * - 栈内已有目标 Category → 返回已有条目，移除其上的搜索页或详情页，避免重复 contentKey
  * - 栈顶是 SettingsCategory 或其他设置子树详情 → 裁掉设置子树尾段后 push
  * - 栈顶是 Settings 根 / Search / 非设置页 → 普通 push
  */
@@ -64,7 +64,11 @@ internal fun pushOrReplaceSettingsCategoryNavKey(
     key: BiliPaiNavKey.SettingsCategory,
 ): List<BiliPaiNavKey> {
     val base = currentStack.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
-    if (base.lastOrNull() == key) return base
+    // Category navigation bypasses pushBiliPaiNavKey, so it must enforce the same
+    // uniqueness rule before any replacement/append branch. In particular,
+    // Category -> SettingsSearch -> the same Category must pop back to the existing page.
+    val existingIndex = base.indexOf(key)
+    if (existingIndex >= 0) return base.take(existingIndex + 1)
 
     val top = base.lastOrNull()
     if (top is BiliPaiNavKey.SettingsCategory) {

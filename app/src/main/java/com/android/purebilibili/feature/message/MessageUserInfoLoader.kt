@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.message
 
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.AccountSessionIdentity
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.network.WbiUtils
 import kotlinx.coroutines.CancellationException
@@ -9,13 +11,41 @@ import kotlinx.coroutines.withContext
 
 /** Shared user-profile completion for inbox and message-share session pickers. */
 internal object MessageUserInfoLoader {
+    private var accountIdentity = TokenManager.accountIdentity.value
+    private val users = mutableMapOf<Long, UserBasicInfo>()
+
+    @Synchronized
+    fun cached(mid: Long): UserBasicInfo? {
+        if (accountIdentity != TokenManager.accountIdentity.value) {
+            users.clear()
+            accountIdentity = TokenManager.accountIdentity.value
+        }
+        return users[mid]
+    }
+
+    @Synchronized
+    fun remember(
+        info: UserBasicInfo,
+        identity: AccountSessionIdentity = TokenManager.accountIdentity.value,
+    ): UserBasicInfo? {
+        if (identity != TokenManager.accountIdentity.value) return null
+        val merged = InboxUserInfoResolver.mergeFetchedUserInfo(cached(info.mid), info)
+        if (merged != null) users[info.mid] = merged
+        return merged
+    }
+
     suspend fun fetch(mid: Long): UserBasicInfo? = withContext(Dispatchers.IO) {
         if (mid <= 0L) return@withContext null
-        val cardInfo = fetchUserCardInfo(mid)
-        if (InboxUserInfoResolver.hasCompleteUserInfo(cardInfo)) return@withContext cardInfo
-
-        val spaceInfo = fetchSpaceUserInfo(mid)
-        InboxUserInfoResolver.mergeFetchedUserInfo(cardInfo, spaceInfo)
+        val identity = TokenManager.accountIdentity.value
+        val existing = cached(mid)
+        if (InboxUserInfoResolver.hasCompleteUserInfo(existing)) return@withContext existing
+        val cardInfo = InboxUserInfoResolver.mergeFetchedUserInfo(existing, fetchUserCardInfo(mid))
+        val user = if (InboxUserInfoResolver.hasCompleteUserInfo(cardInfo)) {
+            cardInfo
+        } else {
+            InboxUserInfoResolver.mergeFetchedUserInfo(cardInfo, fetchSpaceUserInfo(mid))
+        }
+        user?.let { remember(it, identity) }
     }
 
     private suspend fun fetchUserCardInfo(mid: Long): UserBasicInfo? {

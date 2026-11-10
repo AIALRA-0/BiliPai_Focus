@@ -88,9 +88,7 @@ class VideoCardScrollLiteVisualPolicyTest {
     fun `home video card variants do not attach shadow modifiers`() {
         listOf(
             "VideoCard.kt",
-            "StoryVideoCard.kt",
-            "GlassVideoCard.kt",
-            "CinematicVideoCard.kt"
+            "StoryVideoCard.kt"
         ).forEach { fileName ->
             val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/$fileName")
                 .readText()

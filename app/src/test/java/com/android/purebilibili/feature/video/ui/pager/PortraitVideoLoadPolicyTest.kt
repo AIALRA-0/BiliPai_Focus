@@ -98,6 +98,25 @@ class PortraitVideoLoadPolicyTest {
     }
 
     @Test
+    fun displayedQualityId_tracksDiscoveredStreamsInsteadOfResponseMetadata() {
+        assertEquals(80, resolvePortraitDisplayedQualityId(
+            requestedQuality = 80,
+            returnedQuality = 129,
+            dashVideoIds = listOf(129, 120, 80, 64)
+        ))
+        assertEquals(129, resolvePortraitDisplayedQualityId(
+            requestedQuality = 127,
+            returnedQuality = 127,
+            dashVideoIds = listOf(129, 127, 80)
+        ))
+        assertEquals(64, resolvePortraitDisplayedQualityId(
+            requestedQuality = 80,
+            returnedQuality = 129,
+            dashVideoIds = listOf(129, 64, 32)
+        ))
+    }
+
+    @Test
     fun parallelBootstrap_enablesWhenFeedProvidesCid() {
         assertTrue(
             shouldUsePortraitParallelPlaybackBootstrap(

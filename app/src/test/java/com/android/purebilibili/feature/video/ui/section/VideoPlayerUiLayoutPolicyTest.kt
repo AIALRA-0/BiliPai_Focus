@@ -7,6 +7,30 @@ import kotlin.test.assertTrue
 class VideoPlayerUiLayoutPolicyTest {
 
     @Test
+    fun shortWindowCompactsFeedbackWithoutShrinkingRestoreButtonTouchContent() {
+        val regular = resolveVideoPlayerUiLayoutPolicy(1280, 800)
+        val short = resolveVideoPlayerUiLayoutPolicy(1280, 360)
+        val veryShort = resolveVideoPlayerUiLayoutPolicy(1280, 240)
+        assertTrue(short.compactWindowHeight)
+        assertTrue(veryShort.seekFeedbackSizeDp < short.seekFeedbackSizeDp)
+        assertTrue(short.seekFeedbackSizeDp < regular.seekFeedbackSizeDp)
+        assertTrue(veryShort.seekCancelHintOffsetDp < short.seekCancelHintOffsetDp)
+        assertTrue(short.restoreButtonBottomOffsetDp < regular.restoreButtonBottomOffsetDp)
+        assertEquals(regular.restoreButtonHorizontalPaddingDp, veryShort.restoreButtonHorizontalPaddingDp)
+        assertEquals(regular.restoreButtonVerticalPaddingDp, veryShort.restoreButtonVerticalPaddingDp)
+        assertEquals(regular.restoreButtonIconSizeDp, veryShort.restoreButtonIconSizeDp)
+        assertEquals(regular, resolveVideoPlayerUiLayoutPolicy(1280, 800))
+    }
+
+    @Test
+    fun compactHeightBoundaryAndUnknownSizePreserveRegularProfile() {
+        val regular = resolveVideoPlayerUiLayoutPolicy(393)
+        assertEquals(regular, resolveVideoPlayerUiLayoutPolicy(393, 480))
+        assertEquals(regular, resolveVideoPlayerUiLayoutPolicy(393, 0))
+        assertTrue(resolveVideoPlayerUiLayoutPolicy(393, 479).compactWindowHeight)
+    }
+
+    @Test
     fun phoneProfile_usesCompactControlTargets() {
         val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 393)
 

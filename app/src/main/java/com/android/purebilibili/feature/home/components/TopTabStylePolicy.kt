@@ -139,7 +139,7 @@ internal fun resolveHomeTopPresetStyle(
                 presentation = chromePolicy.tabPresentation,
                 indicatorStyle = TopTabIndicatorStyle.CAPSULE,
                 search = HomeTopSearchStyle(
-                    barHeight = 48.dp,
+                    barHeight = compactChrome.primaryHeightDp.dp,
                     revealDeadZone = 8.dp,
                     rowHorizontalPadding = 14.dp,
                     pillHeight = compactChrome.primaryHeightDp.dp,
@@ -168,8 +168,8 @@ internal fun resolveHomeTopPresetStyle(
                 tabs = HomeTopTabsStyle(
                     horizontalPadding = HomeTopDpPair(docked = 0.dp, floating = 2.dp),
                     rowHeight = HomeTopDpPair(
-                        docked = resolveBiliPaiBottomBarDockHeight(searchExpanded = false),
-                        floating = resolveBiliPaiBottomBarDockHeight(searchExpanded = false)
+                        docked = resolveHomeTopDockShellHeight(isFloatingStyle = false),
+                        floating = resolveHomeTopDockShellHeight(isFloatingStyle = true)
                     ),
                     md3VisualSpec = resolveMd3TopTabVisualSpec(
                         false,
@@ -200,7 +200,7 @@ internal fun resolveHomeTopPresetStyle(
                 presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 indicatorStyle = TopTabIndicatorStyle.MATERIAL,
                 search = HomeTopSearchStyle(
-                    barHeight = 48.dp,
+                    barHeight = compactChrome.primaryHeightDp.dp,
                     revealDeadZone = 0.dp,
                     rowHorizontalPadding = 14.dp,
                     pillHeight = compactChrome.primaryHeightDp.dp,
@@ -229,8 +229,8 @@ internal fun resolveHomeTopPresetStyle(
                 tabs = HomeTopTabsStyle(
                     horizontalPadding = HomeTopDpPair(docked = 0.dp, floating = 2.dp),
                     rowHeight = HomeTopDpPair(
-                        docked = resolveBiliPaiBottomBarDockHeight(searchExpanded = false),
-                        floating = resolveBiliPaiBottomBarDockHeight(searchExpanded = false)
+                        docked = resolveHomeTopDockShellHeight(isFloatingStyle = false),
+                        floating = resolveHomeTopDockShellHeight(isFloatingStyle = true)
                     ),
                     md3VisualSpec = resolveMd3TopTabVisualSpec(
                         false,
@@ -259,7 +259,7 @@ internal fun resolveHomeTopPresetStyle(
                 presentation = chromePolicy.tabPresentation,
                 indicatorStyle = TopTabIndicatorStyle.MATERIAL,
                 search = HomeTopSearchStyle(
-                    barHeight = 48.dp,
+                    barHeight = compactChrome.primaryHeightDp.dp,
                     revealDeadZone = 0.dp,
                     rowHorizontalPadding = 16.dp,
                     pillHeight = compactChrome.primaryHeightDp.dp,
@@ -289,8 +289,8 @@ internal fun resolveHomeTopPresetStyle(
                     horizontalPadding = HomeTopDpPair(docked = 0.dp, floating = 2.dp),
                     // Align with resolveMd3TopTabVisualSpec used by the tab row.
                     rowHeight = HomeTopDpPair(
-                        docked = resolveBiliPaiBottomBarDockHeight(searchExpanded = false),
-                        floating = resolveBiliPaiBottomBarDockHeight(searchExpanded = false)
+                        docked = resolveHomeTopDockShellHeight(isFloatingStyle = false),
+                        floating = resolveHomeTopDockShellHeight(isFloatingStyle = true)
                     ),
                     md3VisualSpec = resolveMd3TopTabVisualSpec(
                         false,
@@ -443,7 +443,7 @@ internal fun resolveMd3TopTabVisualSpec(
     if (presentation == AppTopTabPresentation.TONAL_CAPSULE) {
         return if (isFloatingStyle) {
             Md3TopTabVisualSpec(
-                rowHeight = if (showIconAndText) 60.dp else 40.dp,
+                rowHeight = if (showIconAndText) 52.dp else 36.dp,
                 selectedCapsuleHeight = 30.dp,
                 selectedCapsuleCornerRadius = 9.dp,
                 selectedCapsuleTonalElevation = 0.dp,
@@ -456,7 +456,7 @@ internal fun resolveMd3TopTabVisualSpec(
             )
         } else {
             Md3TopTabVisualSpec(
-                rowHeight = if (showIconAndText) 56.dp else 36.dp,
+                rowHeight = if (showIconAndText) 48.dp else 32.dp,
                 selectedCapsuleHeight = 30.dp,
                 selectedCapsuleCornerRadius = 9.dp,
                 selectedCapsuleTonalElevation = 0.dp,
@@ -471,10 +471,10 @@ internal fun resolveMd3TopTabVisualSpec(
     }
 
     // MATERIAL_UNDERLINE on the home dock shares the compact liquid track with TONAL/Miuix.
-    // Older 54–64dp Material TabRow heights clip inside the 36/40 chrome and collapse labels.
+    // Row heights track the shrunken top dock shell (52/48) so labels never clip.
     return if (isFloatingStyle) {
         Md3TopTabVisualSpec(
-            rowHeight = if (showIconAndText) 60.dp else 40.dp,
+            rowHeight = if (showIconAndText) 52.dp else 36.dp,
             selectedCapsuleHeight = CompactTopTabIndicatorHeightDp.dp,
             selectedCapsuleCornerRadius = CompactTopTabIndicatorCornerDp.dp,
             selectedCapsuleTonalElevation = 0.dp,
@@ -487,7 +487,7 @@ internal fun resolveMd3TopTabVisualSpec(
         )
     } else {
         Md3TopTabVisualSpec(
-            rowHeight = if (showIconAndText) 56.dp else 36.dp,
+            rowHeight = if (showIconAndText) 48.dp else 32.dp,
             selectedCapsuleHeight = CompactTopTabIndicatorHeightDp.dp,
             selectedCapsuleCornerRadius = CompactTopTabIndicatorCornerDp.dp,
             selectedCapsuleTonalElevation = 0.dp,
@@ -506,7 +506,7 @@ internal fun resolveMd3TopTabSelectedContainerColor(
     presentation: AppTopTabPresentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
     uiStyle: AppUiStyle = AppUiStyle.MATERIAL3
 ): androidx.compose.ui.graphics.Color = when {
-    uiStyle == AppUiStyle.MIUIX -> colorScheme.onSurface
+    uiStyle == AppUiStyle.MIUIX -> colorScheme.primary
     presentation == AppTopTabPresentation.TONAL_CAPSULE -> colorScheme.secondaryContainer
     else -> colorScheme.primary
 }
@@ -516,7 +516,7 @@ internal fun resolveMd3TopTabSelectedIconColor(
     presentation: AppTopTabPresentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
     uiStyle: AppUiStyle = AppUiStyle.MATERIAL3
 ): androidx.compose.ui.graphics.Color = when {
-    uiStyle == AppUiStyle.MIUIX -> colorScheme.onSurface
+    uiStyle == AppUiStyle.MIUIX -> colorScheme.primary
     presentation == AppTopTabPresentation.TONAL_CAPSULE -> colorScheme.onSecondaryContainer
     else -> colorScheme.primary
 }
@@ -526,7 +526,7 @@ internal fun resolveMd3TopTabSelectedLabelColor(
     presentation: AppTopTabPresentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
     uiStyle: AppUiStyle = AppUiStyle.MATERIAL3
 ): androidx.compose.ui.graphics.Color = when {
-    uiStyle == AppUiStyle.MIUIX -> colorScheme.onSurface
+    uiStyle == AppUiStyle.MIUIX -> colorScheme.primary
     presentation == AppTopTabPresentation.TONAL_CAPSULE -> colorScheme.onSecondaryContainer
     else -> colorScheme.primary
 }
@@ -616,6 +616,16 @@ fun resolveTopTabIconSizeDp(labelMode: Int): Float {
         0 -> tuning.tabIconWithTextSizeDp
         1 -> tuning.tabIconOnlySizeDp
         else -> 0f
+    }
+}
+
+/** Native top-dock standalone icons use a standard 24dp glyph; glass keeps its existing dimensions. */
+internal fun resolveHomeTopDockIconSizeDp(labelMode: Int, liquidGlassEnabled: Boolean): Float {
+    val baseSize = resolveTopTabIconSizeDp(labelMode)
+    return if (!liquidGlassEnabled && normalizeTopTabLabelMode(labelMode) == 1) {
+        maxOf(baseSize, 24f)
+    } else {
+        baseSize
     }
 }
 

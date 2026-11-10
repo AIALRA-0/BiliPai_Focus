@@ -108,6 +108,12 @@ internal fun normalizeApiErrorEndpoint(endpoint: String): String {
     return if (method.isBlank()) groupedPath else "$method $groupedPath"
 }
 
+// Routine connectivity failures and server throttling need a lower reporting frequency.
+internal fun apiFailureReportIntervalMs(httpCode: Int): Long = when (httpCode) {
+    -1, 412, 429 -> 300_000L
+    else -> 60_000L
+}
+
 /**
  * 崩溃报告工具类
  *
@@ -124,7 +130,7 @@ object CrashReporter {
     private const val CUSTOM_KEY_CACHE_MAX_KEYS = 256
 
     @Volatile
-    private var isEnabled: Boolean = true
+    private var isEnabled: Boolean = false
 
     @Volatile
     private var firebaseConfigured: Boolean = false
@@ -133,7 +139,12 @@ object CrashReporter {
     private var globalHandlerInstalled = false
 
     private var previousUncaughtHandler: Thread.UncaughtExceptionHandler? = null
-    private val nonFatalRateLimiter = ConcurrentHashMap<String, Long>()
+    // A rolling budget prevents distinct failures from flooding the SDK during an outage.
+    private val nonFatalRateLimiter = TelemetryRateLimiter(
+        maxKeys = RATE_LIMIT_MAX_KEYS,
+        maxEventsPerWindow = 8,
+        windowMs = RATE_LIMIT_WINDOW_MS
+    )
     private val lastCustomKeyValues = ConcurrentHashMap<String, Any>()
     private val crashlytics: FirebaseCrashlytics
         get() = FirebaseCrashlytics.getInstance()
@@ -152,6 +163,11 @@ object CrashReporter {
 
     @Volatile
     private var liveLastStage: String = ""
+
+    /** Load consent before early business calls, leaving SDK setup in the deferred task. */
+    fun prepare(enabled: Boolean) {
+        isEnabled = enabled
+    }
 
     /**
      * 基础初始化：写入稳定环境信息
@@ -189,6 +205,7 @@ object CrashReporter {
      */
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
+        if (!enabled) nonFatalRateLimiter.clear()
         if (!firebaseConfigured) return
         try {
             crashlytics.setCrashlyticsCollectionEnabled(enabled)
@@ -249,6 +266,7 @@ object CrashReporter {
      * 记录前后台状态，便于排查崩溃发生场景
      */
     fun setAppForegroundState(inForeground: Boolean) {
+        com.android.purebilibili.core.performance.ProcessExitContextRecorder.foreground(inForeground)
         if (!canUseRemoteCrashlytics()) return
         if (lastAppForegroundState == inForeground) return
         lastAppForegroundState = inForeground
@@ -264,6 +282,7 @@ object CrashReporter {
      * 标记当前页面
      */
     fun setLastScreen(screenName: String) {
+        com.android.purebilibili.core.performance.ProcessExitContextRecorder.screen(screenName)
         if (!canUseRemoteCrashlytics()) return
         try {
             setCustomKey("last_screen", screenName.take(100))
@@ -276,6 +295,7 @@ object CrashReporter {
      * 标记最近一次业务事件
      */
     fun setLastEvent(eventName: String) {
+        com.android.purebilibili.core.performance.ProcessExitContextRecorder.event(eventName)
         if (!canUseRemoteCrashlytics()) return
         try {
             setCustomKey("last_event", eventName.take(100))
@@ -305,7 +325,9 @@ object CrashReporter {
      */
     fun logException(e: Throwable, message: String? = null) {
         if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
-        val key = "exception:${e.javaClass.name}:${message ?: e.message.orEmpty().take(120)}"
+        if (!shouldReportApiFailure(callCanceled = false, throwable = e)) return
+        val origin = e.stackTrace.firstOrNull()?.let { "${it.className}.${it.methodName}" }.orEmpty()
+        val key = "exception:${e.javaClass.name}:$origin"
         if (shouldDropByRateLimit(key)) return
 
         try {
@@ -416,7 +438,7 @@ object CrashReporter {
         exception: Throwable? = null
     ) {
         if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
-        val key = "video:$errorType:${errorMessage.take(80)}"
+        val key = "video:${errorType.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
         try {
@@ -450,8 +472,8 @@ object CrashReporter {
     ) {
         if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
         val safeEndpoint = normalizeApiErrorEndpoint(endpoint)
-        val key = "api:$httpCode:$safeEndpoint:${errorMessage.take(80)}"
-        if (shouldDropByRateLimit(key)) return
+        val key = "api:$httpCode:$safeEndpoint"
+        if (shouldDropByRateLimit(key, apiFailureReportIntervalMs(httpCode))) return
 
         try {
             crashlytics.setCustomKey("api_endpoint", safeEndpoint)
@@ -469,7 +491,7 @@ object CrashReporter {
      */
     fun reportDanmakuError(cid: Long, errorMessage: String, exception: Throwable? = null) {
         if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
-        val key = "danmaku:${errorMessage.take(80)}"
+        val key = "danmaku:${exception?.javaClass?.name ?: "load_failure"}"
         if (shouldDropByRateLimit(key)) return
 
         try {
@@ -498,7 +520,7 @@ object CrashReporter {
         exception: Throwable? = null
     ) {
         if (!canUseRemoteCrashlytics() || !hasNonFatalReportingHeadroom()) return
-        val key = "live:$errorType:${errorMessage.take(80)}"
+        val key = "live:${errorType.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
         try {
@@ -600,20 +622,10 @@ object CrashReporter {
         throw RuntimeException("CrashReporter Test Crash")
     }
 
-    private fun shouldDropByRateLimit(key: String): Boolean {
-        val now = System.currentTimeMillis()
-        val lastTs = nonFatalRateLimiter[key]
-        if (lastTs != null && now - lastTs < RATE_LIMIT_WINDOW_MS) {
-            return true
-        }
-        nonFatalRateLimiter[key] = now
-
-        if (nonFatalRateLimiter.size > RATE_LIMIT_MAX_KEYS) {
-            val expireBefore = now - RATE_LIMIT_WINDOW_MS * 2
-            nonFatalRateLimiter.entries.removeIf { it.value < expireBefore }
-        }
-        return false
-    }
+    private fun shouldDropByRateLimit(
+        key: String,
+        minIntervalMs: Long = RATE_LIMIT_WINDOW_MS
+    ): Boolean = nonFatalRateLimiter.shouldDrop(key, SystemClock.elapsedRealtime(), minIntervalMs)
 
     private fun canUseRemoteCrashlytics(): Boolean {
         return shouldUseRemoteCrashlytics(

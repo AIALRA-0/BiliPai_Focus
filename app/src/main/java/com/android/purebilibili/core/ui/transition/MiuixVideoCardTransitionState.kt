@@ -31,6 +31,13 @@ internal data class MiuixVideoCardTransitionState(
     val sourceBoundsProvider: () -> Rect? = { null },
     /** 点击时冻结的真实封面落点；不可由卡宽或固定宽高比推算。 */
     val sourceCoverBoundsProvider: () -> Rect? = { null },
+    /**
+     * 点击时冻结的**信息面**落点（与 [sourceBoundsProvider] 同坐标系）。
+     *
+     * 重建来源卡壳的信息板按它落位，避免用「卡底 − 封面底」推导时因卡片测量高度与列表
+     * 实际信息面不等价而在卡槽上段露出一块盖不住的近白带。
+     */
+    val sourceInfoBoundsProvider: () -> Rect? = { null },
     val sourceLayout: VideoCardSourceLayout = VideoCardSourceLayout.COVER_ONLY,
     val sourceChromeSnapshot: VideoCardSourceChromeSnapshot? = null,
 )

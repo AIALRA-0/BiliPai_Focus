@@ -20,17 +20,12 @@ import com.bytedance.danmaku.render.engine.data.DanmakuData
 import com.bytedance.danmaku.render.engine.render.IRenderLayer
 import com.bytedance.danmaku.render.engine.render.draw.DrawItem
 import com.bytedance.danmaku.render.engine.render.layer.line.BaseRenderLine
-import com.bytedance.danmaku.render.engine.utils.HIGH_REFRESH_MAX_TIME
-import com.bytedance.danmaku.render.engine.utils.STEPPER_TIME
 
 /**
  * Created by dss886 on 2018/11/8.
  */
 class ScrollLine(controller: DanmakuController,
                  private val mLayer: IRenderLayer) : BaseRenderLine(controller, mLayer) {
-
-    private var mLastTypeSettingTime = -1L
-    private var mStepperTime = STEPPER_TIME
 
     override fun onLayoutChanged(width: Float, height: Float, x: Float, y: Float) {
         super.onLayoutChanged(width, height, x, y)
@@ -46,6 +41,7 @@ class ScrollLine(controller: DanmakuController,
         item.x = this.width
         item.y = this.y
         item.showTime = playTime
+        beginItemTiming(item)
         mDrawingItems.add(item)
         return true
     }
@@ -56,25 +52,12 @@ class ScrollLine(controller: DanmakuController,
      * @param configChanged need to re-measure and re-layout items if config changed
      */
     override fun typesetting(playTime: Long, isPlaying: Boolean, configChanged: Boolean): Int {
-        if (mLastTypeSettingTime < 0) {
-            mLastTypeSettingTime = System.currentTimeMillis()
-        } else {
-            val newTypeSettingTime = System.currentTimeMillis()
-            mStepperTime = if (newTypeSettingTime - mLastTypeSettingTime < HIGH_REFRESH_MAX_TIME) {
-                newTypeSettingTime - mLastTypeSettingTime
-            } else {
-                STEPPER_TIME
-            }
-            mLastTypeSettingTime = newTypeSettingTime
-        }
-
         if (isPlaying) {
             // move drawing items if is playing
             mDrawingItems.forEach { item ->
-                if (!item.isPaused) {
-                    item.x -= getItemSpeed(item) * mStepperTime
-                    item.showDuration += mStepperTime
-                }
+                val elapsedMs = itemElapsedTimeMs(item)
+                item.x -= getItemSpeed(item) * elapsedMs
+                item.showDuration += elapsedMs
             }
             // remove items that already out of screen
             val iterator = mDrawingItems.iterator()

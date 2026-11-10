@@ -1,10 +1,38 @@
 package com.android.purebilibili.data.model.response
 
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DynamicCreateModelsTest {
+    @Test
+    fun savedDraftRetainsRichTokensAndPublicationOptions() {
+        val draft = DynamicPublishDraft(
+            text = "@甲",
+            imageUris = listOf("file:///private/draft.png"),
+            publishAtSeconds = 123456L,
+            replyOption = DynamicReplyOption.SELECTED,
+            richTokens = listOf(DynamicPublishToken(0, 2, 2, "42", "@甲")),
+            hasUnresolvedRichText = true,
+            unresolvedRichTextRanges = listOf(DynamicRichTextIssue(0, 2)),
+            hasUnlocatedRichText = true,
+            unlocatedRichTextItems = listOf(DynamicUnlocatedRichText("@ 用户：@甲")),
+        )
+        assertEquals(draft, Json.decodeFromString<DynamicPublishDraft>(Json.encodeToString(draft)))
+    }
+
+    @Test
+    fun explicitTokensDoNotConvertMatchingPlainText() {
+        val text = "@甲 @甲"
+        val nodes = buildDynamicCreateContents(text, 0, "", richTokens = listOf(DynamicPublishToken(3, 5, 2, "42", "@甲")))
+        assertEquals(listOf(1, 2), nodes.map { it.type })
+        assertEquals("@甲 ", nodes.first().raw_text)
+        assertEquals("42", nodes.last().biz_id)
+    }
+
 
     @Test
     fun imageDraftUsesDrawScene() {

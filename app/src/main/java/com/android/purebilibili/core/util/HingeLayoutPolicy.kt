@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.util
 
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 
 data class AppHingeFeature(
@@ -40,10 +41,43 @@ internal fun resolveHingeSafeContentRegions(
     containerWidthPx: Int,
     containerHeightPx: Int,
     hinges: List<AppHingeFeature>,
+    containerOrigin: IntOffset = IntOffset.Zero,
+    clearancePx: Int = 0,
 ): List<IntRect> {
     if (containerWidthPx <= 0 || containerHeightPx <= 0) return emptyList()
     val fullWindow = IntRect(0, 0, containerWidthPx, containerHeightPx)
-    val obstructing = hinges.filter { hinge -> hinge.isSeparating || hinge.isOccluding }
+    val obstructing = hinges.mapNotNull { hinge ->
+        if (!hinge.isSeparating && !hinge.isOccluding && hinge.isFlat) return@mapNotNull null
+        val local = IntRect(
+            hinge.bounds.left - containerOrigin.x,
+            hinge.bounds.top - containerOrigin.y,
+            hinge.bounds.right - containerOrigin.x,
+            hinge.bounds.bottom - containerOrigin.y,
+        )
+        val clearance = clearancePx.coerceAtLeast(0)
+        val bounds = when (hinge.orientation) {
+            AppHingeOrientation.Vertical -> {
+                if (local.bottom <= 0 || local.top >= containerHeightPx ||
+                    local.right < 0 || local.left > containerWidthPx
+                ) return@mapNotNull null
+                IntRect(
+                    (local.left - clearance).coerceIn(0, containerWidthPx), 0,
+                    (local.right + clearance).coerceIn(0, containerWidthPx), containerHeightPx,
+                )
+            }
+            AppHingeOrientation.Horizontal -> {
+                if (local.right <= 0 || local.left >= containerWidthPx ||
+                    local.bottom < 0 || local.top > containerHeightPx
+                ) return@mapNotNull null
+                IntRect(
+                    0, (local.top - clearance).coerceIn(0, containerHeightPx),
+                    containerWidthPx, (local.bottom + clearance).coerceIn(0, containerHeightPx),
+                )
+            }
+            AppHingeOrientation.None -> return@mapNotNull null
+        }
+        hinge.copy(bounds = bounds)
+    }
     if (obstructing.isEmpty()) return listOf(fullWindow)
 
     val xEdges = sortedUniqueEdges(
@@ -85,8 +119,23 @@ internal fun resolveHingeSafeContentRegions(
             regions += IntRect(left, top, right, bottom)
         }
     }
-    return regions.ifEmpty { listOf(fullWindow) }
+    // An entirely occluded container must not fall back to placing content under the hinge.
+    return regions
 }
+
+internal fun AppFoldingFeatureInfo.layoutHinges(): List<AppHingeFeature> =
+    hinges.ifEmpty {
+        val bounds = hingeBounds ?: return@ifEmpty emptyList()
+        listOf(
+            AppHingeFeature(
+                orientation = hingeOrientation,
+                bounds = bounds,
+                isSeparating = isSeparating,
+                isOccluding = isOccluding,
+                isFlat = posture == AppFoldPosture.Flat || posture == AppFoldPosture.None,
+            )
+        )
+    }
 
 internal fun resolvePreferredHingeSafePane(
     posture: AppFoldPosture,

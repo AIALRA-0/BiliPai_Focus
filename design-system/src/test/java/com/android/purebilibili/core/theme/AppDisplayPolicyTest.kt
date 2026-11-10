@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.theme
 
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.isUnspecified
 import kotlin.test.Test
@@ -13,9 +14,28 @@ class AppDisplayPolicyTest {
 
     @Test
     fun `font preset resolves expected multiplier`() {
+        assertEquals(0.85f, AppFontSizePreset.SMALLEST.multiplier)
         assertEquals(0.92f, AppFontSizePreset.SMALLER.multiplier)
         assertEquals(1.00f, AppFontSizePreset.DEFAULT.multiplier)
         assertEquals(1.08f, AppFontSizePreset.LARGER.multiplier)
+        assertEquals(1.15f, AppFontSizePreset.EXTRA_LARGE.multiplier)
+        assertEquals(1.25f, AppFontSizePreset.EXTRA_EXTRA_LARGE.multiplier)
+    }
+
+    @Test
+    fun `font preset values stay stable for persisted preferences`() {
+        // 旧档 value 0-4 不能漂移,存量偏好按 value 匹配。
+        assertEquals(0, AppFontSizePreset.SMALLER.value)
+        assertEquals(1, AppFontSizePreset.SMALL.value)
+        assertEquals(2, AppFontSizePreset.DEFAULT.value)
+        assertEquals(3, AppFontSizePreset.LARGE.value)
+        assertEquals(4, AppFontSizePreset.LARGER.value)
+        assertEquals(5, AppFontSizePreset.SMALLEST.value)
+        assertEquals(6, AppFontSizePreset.EXTRA_LARGE.value)
+        assertEquals(7, AppFontSizePreset.EXTRA_EXTRA_LARGE.value)
+        // 枚举声明顺序决定设置页段控件顺序,必须按倍率单调排列。
+        val multipliers = AppFontSizePreset.entries.map { it.multiplier }
+        assertEquals(multipliers, multipliers.sorted())
     }
 
     @Test
@@ -97,7 +117,7 @@ class AppDisplayPolicyTest {
     }
 
     @Test
-    fun `miuix native roles inherit md3 typography density`() {
+    fun `miuix native titles stay compact with md3 baseline`() {
         val textStyles = Md3Typography.toMiuixTextStyles()
 
         assertEquals(Md3Typography.bodyLarge, textStyles.main)
@@ -105,5 +125,11 @@ class AppDisplayPolicyTest {
         assertEquals(Md3Typography.bodySmall, textStyles.body2)
         assertEquals(Md3Typography.labelLarge, textStyles.button)
         assertEquals(Md3Typography.titleMedium, textStyles.headline1)
+        assertEquals(32.sp, textStyles.title1.fontSize)
+        assertEquals(24.sp, textStyles.title2.fontSize)
+        assertEquals(20.sp, textStyles.title3.fontSize)
+        assertEquals(18.sp, textStyles.title4.fontSize)
+        assertEquals(38.sp, textStyles.title1.lineHeight)
+        assertEquals(40.sp, textStyles.scaled(1.25f).title1.fontSize)
     }
 }

@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.plugin.js
 
-import com.android.purebilibili.core.plugin.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapability
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import kotlin.test.Test

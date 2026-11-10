@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.theme
 
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import kotlin.test.Test
@@ -46,7 +47,7 @@ class ThemeContrastPolicyTest {
             onSurfaceVariant = Color(0xFF5F6368)
         )
 
-        val result = enforceDynamicLightTextContrast(scheme)
+        val result = enforceDynamicTextContrast(scheme)
 
         assertEquals(scheme.onBackground, result.onBackground)
         assertEquals(scheme.onSurface, result.onSurface)
@@ -68,7 +69,7 @@ class ThemeContrastPolicyTest {
             onPrimaryContainer = Color(0xFFFFFFFF)
         )
 
-        val result = enforceDynamicLightTextContrast(scheme)
+        val result = enforceDynamicTextContrast(scheme)
 
         assertTrue(calculateContrastRatio(result.onBackground, result.background) >= 4.5f)
         assertTrue(calculateContrastRatio(result.onSurface, result.surface) >= 4.5f)
@@ -89,9 +90,51 @@ class ThemeContrastPolicyTest {
             onSecondaryContainer = Color(0xFFFF7285)
         )
 
-        val result = enforceDynamicLightTextContrast(scheme)
+        val result = enforceDynamicTextContrast(scheme)
 
         assertTrue(calculateContrastRatio(result.onSecondaryContainer, result.secondaryContainer) >= 4.5f)
+    }
+
+    @Test
+    fun `dynamic dark scheme keeps readable text colors unchanged`() {
+        val scheme = darkColorScheme(
+            background = Color(0xFF101215),
+            onBackground = Color(0xFFE2E4E9),
+            surface = Color(0xFF16181D),
+            onSurface = Color(0xFFE8EAEE),
+            surfaceVariant = Color(0xFF252930),
+            onSurfaceVariant = Color(0xFFB8BDC7)
+        )
+
+        val result = enforceDynamicTextContrast(scheme)
+
+        assertEquals(scheme.onBackground, result.onBackground)
+        assertEquals(scheme.onSurface, result.onSurface)
+        assertEquals(scheme.onSurfaceVariant, result.onSurfaceVariant)
+    }
+
+    @Test
+    fun `dynamic dark scheme falls back when text contrast is too low`() {
+        val scheme = darkColorScheme(
+            background = Color(0xFF101215),
+            onBackground = Color(0xFF1A1C20),
+            surface = Color(0xFF16181D),
+            onSurface = Color(0xFFE3E5E9),
+            surfaceVariant = Color(0xFF23262B),
+            onSurfaceVariant = Color(0xFF2A2D33),
+            primary = Color(0xFF14161A),
+            onPrimary = Color(0xFF17191D),
+            primaryContainer = Color(0xFF14161A),
+            onPrimaryContainer = Color(0xFF191B1F)
+        )
+
+        val result = enforceDynamicTextContrast(scheme)
+
+        assertTrue(calculateContrastRatio(result.onBackground, result.background) >= 4.5f)
+        assertTrue(calculateContrastRatio(result.onSurfaceVariant, result.surfaceVariant) >= 4.5f)
+        assertTrue(calculateContrastRatio(result.onPrimary, result.primary) >= 4.5f)
+        assertEquals(scheme.onSurface, result.onBackground)
+        assertEquals(scheme.onSurface, result.onSurfaceVariant)
     }
 
     @Test
@@ -113,4 +156,17 @@ class ThemeContrastPolicyTest {
         assertEquals(TextPrimary, replaced)
         assertTrue(calculateContrastRatio(TextPrimary, Color.White) >= 4.5f)
     }
+    @Test
+    fun controlGlyphFollowsItsActualFillAndPreservesReadableNativeColors() {
+        val whiteOnWhite = resolveControlGlyphColor(Color.White, Color.White, Color.White)
+        assertTrue(calculateContrastRatio(whiteOnWhite, Color.White) >= ACCESSIBLE_UI_MIN_CONTRAST)
+        val blackOnBlack = resolveControlGlyphColor(Color.Black, Color.Black, Color.White)
+        assertTrue(calculateContrastRatio(blackOnBlack, Color.Black) >= ACCESSIBLE_UI_MIN_CONTRAST)
+        assertEquals(Color.White, resolveControlGlyphColor(Color.White, Color.Black, Color.White))
+        val translucent = Color.Black.copy(alpha = 0.1f)
+        val repaired = resolveControlGlyphColor(Color.White, translucent, Color.White)
+        val background = opaqueCompositeOver(translucent, Color.White)
+        assertTrue(calculateContrastRatio(opaqueCompositeOver(repaired, background), background) >= ACCESSIBLE_UI_MIN_CONTRAST)
+    }
+
 }

@@ -11,21 +11,24 @@ import kotlin.test.assertTrue
 class SearchLandingUiPolicyTest {
 
     @Test
-    fun `hot ranking header keeps a persistable visibility toggle`() {
+    fun `visibility toggle requires a handler`() {
         assertTrue(shouldShowSearchKeywordSectionVisibilityToggle(hasToggleHandler = true))
         assertFalse(shouldShowSearchKeywordSectionVisibilityToggle(hasToggleHandler = false))
-        assertEquals("隐藏大家都在搜", resolveSearchKeywordSectionToggleContentDescription(true, "大家都在搜"))
-        assertEquals("显示大家都在搜", resolveSearchKeywordSectionToggleContentDescription(false, "大家都在搜"))
-        val source = java.io.File(
-            "app/src/main/java/com/android/purebilibili/feature/search/SearchLandingUi.kt"
-        ).takeIf { it.exists() } ?: java.io.File(
-            "src/main/java/com/android/purebilibili/feature/search/SearchLandingUi.kt"
-        )
-        val header = source.readText()
-            .substringAfter("private fun SearchKeywordSectionHeader(")
-            .substringBefore("private fun SearchDiscoverOriginalCell(")
-        assertTrue(header.contains("shouldShowSearchKeywordSectionVisibilityToggle("))
-        assertFalse(header.contains("onToggleEnabled != null && useOriginalDiscoverStyle"))
+    }
+
+    @Test
+    fun `normal phone keeps labeled section actions`() {
+        assertFalse(shouldUseCompactSearchSectionActions(widthDp = 412, fontScale = 1f))
+    }
+
+    @Test
+    fun `narrow phone keeps section actions reachable as icons`() {
+        assertTrue(shouldUseCompactSearchSectionActions(widthDp = 320, fontScale = 1f))
+    }
+
+    @Test
+    fun `large font avoids wrapping section action labels`() {
+        assertTrue(shouldUseCompactSearchSectionActions(widthDp = 412, fontScale = 2f))
     }
 
     @Test
@@ -55,39 +58,33 @@ class SearchLandingUiPolicyTest {
 
     @Test
     fun `focus visibility preferences omit complete landing sections`() {
-        val disabledSections = SearchLandingSection.entries.filterNot { section ->
-            shouldShowSearchLandingSection(
-                section = section,
-                hotSearchEnabled = false,
-                historySectionEnabled = false,
-                discoverSectionEnabled = false,
-            )
-        }
-        assertEquals(SearchLandingSection.entries.toSet(), disabledSections.toSet())
-
-        assertTrue(
-            shouldShowSearchLandingSection(
-                section = SearchLandingSection.TRENDING,
-                hotSearchEnabled = true,
-                historySectionEnabled = false,
-                discoverSectionEnabled = false,
-            )
+        val order = resolveSearchLandingSectionOrder()
+        assertEquals(
+            emptyList(),
+            resolveVisibleSearchLandingSectionOrder(
+                sectionOrder = order,
+                showHotSection = false,
+                showHistorySection = false,
+                showDiscoverSection = false,
+            ),
         )
-        assertFalse(
-            shouldShowSearchLandingSection(
-                section = SearchLandingSection.HISTORY,
-                hotSearchEnabled = true,
-                historySectionEnabled = false,
-                discoverSectionEnabled = false,
-            )
+        assertEquals(
+            listOf(SearchLandingSection.TRENDING),
+            resolveVisibleSearchLandingSectionOrder(
+                sectionOrder = order,
+                showHotSection = true,
+                showHistorySection = false,
+                showDiscoverSection = false,
+            ),
         )
-        assertTrue(
-            shouldShowSearchLandingSection(
-                section = SearchLandingSection.DISCOVER,
-                hotSearchEnabled = false,
-                historySectionEnabled = false,
-                discoverSectionEnabled = true,
-            )
+        assertEquals(
+            listOf(SearchLandingSection.TRENDING, SearchLandingSection.DISCOVER),
+            resolveVisibleSearchLandingSectionOrder(
+                sectionOrder = order,
+                showHotSection = true,
+                showHistorySection = false,
+                showDiscoverSection = true,
+            ),
         )
     }
 
@@ -119,12 +116,15 @@ class SearchLandingUiPolicyTest {
     fun `landing sections are fully guarded by focus visibility switches`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchLandingUi.kt")
             .replace(Regex("\\s+"), " ")
+        val policySource = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchVideoFilterPolicy.kt")
+            .replace(Regex("\\s+"), " ")
 
-        assertTrue(source.contains("if (hotSearchEnabled) item { TrendingSection() }"))
-        assertTrue(source.contains("if (discoverSectionEnabled) item { DiscoverSection() }"))
-        assertTrue(source.contains("if (historySectionEnabled) item { HistorySection() }"))
-        assertTrue(source.contains("sectionOrder.filter { section ->"))
-        assertTrue(source.contains("shouldShowSearchLandingSection("))
+        assertTrue(source.contains("resolveVisibleSearchLandingSectionOrder("))
+        assertTrue(source.contains("visibleSectionOrder.forEach { section ->"))
+        assertTrue(policySource.contains("internal fun resolveVisibleSearchLandingSectionOrder("))
+        assertTrue(policySource.contains("SearchLandingSection.TRENDING -> showHotSection"))
+        assertTrue(policySource.contains("SearchLandingSection.HISTORY -> showHistorySection"))
+        assertTrue(policySource.contains("SearchLandingSection.DISCOVER -> showDiscoverSection"))
     }
 
     private fun loadSource(path: String): String {

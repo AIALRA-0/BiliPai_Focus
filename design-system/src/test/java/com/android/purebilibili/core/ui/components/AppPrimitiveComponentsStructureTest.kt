@@ -7,6 +7,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AppPrimitiveComponentsStructureTest {
+    @Test
+    fun menuItemsUseNativeMiuixSurfacesBeforeMaterialFallback() {
+        val source = loadSource().substringAfter("fun AppDropdownMenuItem(")
+            .substringBefore("fun AppModalNavigationDrawer(")
+        assertTrue(source.contains("LocalAppUiStyle.current == AppUiStyle.MIUIX"))
+        assertTrue(source.contains("AppSurface("))
+        assertTrue(source.contains("enabled = enabled"))
+        assertTrue(source.contains("leadingIcon?.invoke()"))
+        assertTrue(source.contains("trailingIcon?.invoke()"))
+        assertTrue(source.indexOf("AppSurface(") < source.indexOf("DropdownMenuItem("))
+    }
+
 
     @Test
     fun singleChoiceRowsDelegateSelectionAndColorsToTheSharedThemeLayer() {
@@ -25,6 +37,7 @@ class AppPrimitiveComponentsStructureTest {
         val source = loadSource()
 
         assertTrue(source.contains("fun AppButton("))
+        assertTrue(source.contains("resolveAppButtonContentPadding("))
         assertTrue(source.contains("colors: ButtonColors"))
         assertTrue(source.contains("fun AppTextButton("))
         assertTrue(source.contains("AppUiStyle.MIUIX -> AppMiuixButton("))
@@ -108,8 +121,8 @@ class AppPrimitiveComponentsStructureTest {
         assertTrue(material.contains("import androidx.compose.material3.HorizontalDivider"))
         assertTrue(miuix.contains("import top.yukonga.miuix.kmp.basic.Surface"))
         assertTrue(miuix.contains("import top.yukonga.miuix.kmp.basic.HorizontalDivider"))
-        assertTrue(miuix.contains("isMiuixNonGlassEnabled()"))
-        assertTrue(miuix.contains("adaptiveMiuixPressFeedback("))
+        assertTrue(miuix.contains("interactionSource = resolvedInteractionSource"))
+        assertFalse(miuix.contains("adaptiveMiuixPressFeedback("))
         assertFalse(miuix.contains("import androidx.compose.material3"))
     }
 
@@ -148,75 +161,6 @@ class AppPrimitiveComponentsStructureTest {
     }
 
     @Test
-    fun iconButtonFacadeRoutesToNativeGeometryAndInteractionBoundaries() {
-        val primitiveSource = loadSource()
-        val facade = loadSource("components/AppIconButton.kt")
-        val desktopInteraction = loadSource("components/AppDesktopInteraction.kt")
-        val material = loadSource("renderer/material3/AppMaterial3IconButton.kt")
-        val miuix = loadSource("renderer/miuix/AppMiuixIconButton.kt")
-
-        assertFalse(primitiveSource.contains("fun AppIconButton("))
-        assertFalse(primitiveSource.contains("fun AppFilledIconButton("))
-        assertTrue(facade.contains("data class AppIconButtonColors("))
-        assertTrue(facade.contains("object AppIconButtonDefaults"))
-        assertTrue(facade.contains("internal enum class AppIconButtonVariant"))
-        assertTrue(facade.contains("fun AppIconButton("))
-        assertTrue(facade.contains("fun AppFilledIconButton("))
-        assertTrue(facade.contains("content: @Composable () -> Unit"))
-        assertTrue(facade.contains("AppUiStyle.MATERIAL3 -> AppMaterial3IconButton("))
-        assertTrue(facade.contains("AppUiStyle.MIUIX -> AppMiuixIconButton("))
-        assertEquals(8, facade.lineSequence().count { it.contains("Color = Color.Unspecified") })
-        assertFalse(facade.contains("import androidx.compose.material3"))
-        assertFalse(facade.contains("import top.yukonga.miuix"))
-        assertFalse(facade.contains("import androidx.compose.ui.graphics.Shape"))
-        assertFalse(facade.contains("cornerRadius"))
-
-        assertTrue(material.contains("import androidx.compose.material3.IconButton"))
-        assertTrue(material.contains("import androidx.compose.material3.FilledIconButton"))
-        assertTrue(material.contains("IconButtonDefaults.standardShape"))
-        assertTrue(material.contains("IconButtonDefaults.filledShape"))
-        assertTrue(material.contains("defaultColors.copy("))
-        assertTrue(material.contains("shape = nativeShape"))
-        assertTrue(material.contains("modifier.appDesktopInteractionVisuals("))
-        assertFalse(material.contains("minimumInteractiveComponentSize"))
-        assertFalse(material.contains("import top.yukonga.miuix"))
-
-        assertTrue(miuix.contains("import top.yukonga.miuix.kmp.basic.IconButton"))
-        assertTrue(miuix.contains("MiuixIconButton("))
-        assertTrue(miuix.contains("MiuixButtonDefaults.buttonColorsPrimary()"))
-        assertTrue(miuix.contains("MiuixLocalContentColor provides contentColor"))
-        assertTrue(miuix.contains("minWidth = AppChromeSizeTokens.MinimumTouchTarget"))
-        assertTrue(miuix.contains("minHeight = AppChromeSizeTokens.MinimumTouchTarget"))
-        assertTrue(miuix.contains("MiuixNativeCompactCornerRadiusDp.dp"))
-        assertTrue(miuix.contains("if (interactionSource != null)"))
-        assertTrue(miuix.contains(".then(pointerMirror)"))
-        assertTrue(miuix.contains("awaitEachGesture"))
-        assertTrue(miuix.contains("requireUnconsumed = false"))
-        assertTrue(miuix.contains("pass = PointerEventPass.Initial"))
-        assertTrue(miuix.contains("waitForUpOrCancellation(PointerEventPass.Initial)"))
-        assertTrue(miuix.contains("PressInteraction.Press"))
-        assertTrue(miuix.contains("PressInteraction.Release"))
-        assertTrue(miuix.contains("PressInteraction.Cancel"))
-        assertTrue(miuix.contains("finally"))
-        assertTrue(miuix.contains("interactionSource.tryEmit(press)"))
-        assertTrue(miuix.contains("interactionSource.tryEmit("))
-        assertFalse(miuix.contains("interactionSource.emit("))
-        assertFalse(miuix.contains(".clickable("))
-        assertFalse(miuix.contains(".consume("))
-        assertTrue(miuix.contains("cornerRadius = AppChromeSizeTokens.MiuixNativeCompactCornerRadiusDp.dp"))
-        assertFalse(miuix.contains("import androidx.compose.material3"))
-
-        assertEquals(2, desktopInteraction.lineSequence().count { it == "    shape: Shape? = null," })
-        assertTrue(desktopInteraction.contains("import androidx.compose.ui.graphics.drawOutline"))
-        assertFalse(desktopInteraction.contains("import androidx.compose.ui.graphics.drawscope.drawOutline"))
-        assertTrue(desktopInteraction.contains("shape?.createOutline(size, layoutDirection, this)"))
-        assertFalse(facade.contains("48.dp"))
-        assertFalse(material.contains("48.dp"))
-        assertFalse(miuix.contains("48.dp"))
-        assertFalse(desktopInteraction.contains("48.dp"))
-    }
-
-    @Test
     fun listItemFacadeRoutesEachThemeToItsNativeRenderer() {
         val primitiveSource = loadSource()
         val facade = loadSource("components/AppListItem.kt")
@@ -230,10 +174,19 @@ class AppPrimitiveComponentsStructureTest {
         assertFalse(facade.contains("import top.yukonga.miuix"))
 
         assertTrue(material.contains("import androidx.compose.material3.ListItem"))
-        assertFalse(miuix.contains("BasicComponent("))
-        assertTrue(miuix.contains(".heightIn(min = 48.dp)"))
-        assertTrue(miuix.contains("leadingContent()"))
-        assertTrue(miuix.contains("trailingContent()"))
+        val nativePathStart = miuix.indexOf("if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled())")
+        val glassRowStart = miuix.indexOf("    Row(", nativePathStart)
+        assertTrue(nativePathStart >= 0)
+        assertTrue(glassRowStart > nativePathStart)
+        val nativePath = miuix.substring(nativePathStart, glassRowStart)
+        val glassPath = miuix.substring(glassRowStart)
+        assertTrue(nativePath.contains("BasicComponent("))
+        assertTrue(nativePath.contains("startAction = leadingContent"))
+        assertTrue(nativePath.contains("endActions = trailingContent?.let { slot -> { slot() } }"))
+        assertTrue(nativePath.contains("return"))
+        assertTrue(glassPath.contains(".heightIn(min = AppChromeSizeTokens.CompactRowMinHeightDp.dp)"))
+        assertTrue(glassPath.contains("leadingContent()"))
+        assertTrue(glassPath.contains("ProvideAppActionContentColor(AppContentColors.secondaryText(), trailingContent)"))
         assertFalse(miuix.contains("import androidx.compose.material3"))
     }
 
@@ -260,28 +213,6 @@ class AppPrimitiveComponentsStructureTest {
         assertFalse(miuix.contains("import androidx.compose.material3"))
     }
 
-    @Test
-    fun sliderFacadeMapsNeutralColorsToEachNativeRenderer() {
-        val primitiveSource = loadSource()
-        val facade = loadSource("components/AppSlider.kt")
-        val material = loadSource("renderer/material3/AppMaterial3Slider.kt")
-        val miuix = loadSource("renderer/miuix/AppMiuixSlider.kt")
-
-        assertFalse(primitiveSource.contains("fun AppSlider("))
-        assertTrue(facade.contains("data class AppSliderColors("))
-        assertTrue(facade.contains("AppUiStyle.MATERIAL3 -> AppMaterial3Slider("))
-        assertTrue(facade.contains("AppUiStyle.MIUIX -> AppMiuixSlider("))
-        assertFalse(facade.contains("import androidx.compose.material3"))
-        assertFalse(facade.contains("import top.yukonga.miuix"))
-
-        assertTrue(material.contains("import androidx.compose.material3.Slider"))
-        assertTrue(material.contains("SliderDefaults.colors("))
-        assertTrue(material.contains("modifier.appDesktopInteractionVisuals("))
-        assertTrue(miuix.contains("import top.yukonga.miuix.kmp.basic.Slider"))
-        assertTrue(miuix.contains("SliderDefaults.sliderColors("))
-        assertTrue(miuix.contains("modifier.appDesktopFocusableItemVisuals(enabled)"))
-        assertFalse(miuix.contains("import androidx.compose.material3"))
-    }
 
     @Test
     fun progressFacadePreservesProvidersAndRoutesToNativeRenderers() {
@@ -326,30 +257,6 @@ class AppPrimitiveComponentsStructureTest {
         assertFalse(Regex("(?<!App)CircularProgressIndicator\\(").containsMatchIn(source))
     }
 
-    @Test
-    fun switchFacadeRoutesEachThemeToNativeDefaults() {
-        val primitiveSource = loadSource()
-        val facade = loadSource("components/AppSwitch.kt")
-        val material = loadSource("renderer/material3/AppMaterial3Switch.kt")
-        val miuix = loadSource("renderer/miuix/AppMiuixSwitch.kt")
-
-        assertFalse(primitiveSource.contains("fun AppSwitch("))
-        assertTrue(facade.contains("AppUiStyle.MATERIAL3 -> AppMaterial3Switch("))
-        assertTrue(facade.contains("AppUiStyle.MIUIX -> AppMiuixSwitch("))
-        assertTrue(facade.contains("showThumbIcon: Boolean = true"))
-        assertFalse(facade.contains("SwitchColors"))
-        assertFalse(facade.contains("import androidx.compose.material3"))
-        assertFalse(facade.contains("import top.yukonga.miuix"))
-
-        assertTrue(material.contains("import androidx.compose.material3.Switch"))
-        assertTrue(material.contains("SwitchDefaults.colors()"))
-        assertTrue(material.contains("Icons.Filled.Check"))
-        assertTrue(material.contains("Icons.Filled.Close"))
-        assertTrue(miuix.contains("import top.yukonga.miuix.kmp.basic.Switch"))
-        assertTrue(miuix.contains("ProvideAppMiuixHapticFeedback"))
-        assertTrue(miuix.contains("modifier.appDesktopFocusableItemVisuals("))
-        assertFalse(miuix.contains("import androidx.compose.material3"))
-    }
 
     @Test
     fun selectionFacadesRouteEachThemeToNativeRenderers() {

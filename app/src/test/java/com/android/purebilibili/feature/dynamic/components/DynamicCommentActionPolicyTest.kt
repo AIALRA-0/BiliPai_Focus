@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class DynamicCommentActionPolicyTest {
 
     @Test
-    fun dynamicAuthorCanDeleteAndTopRootComment() {
+    fun dynamicAuthorCanTopButCannotDeleteOthersRootComment() {
         val reply = ReplyItem(
             rpid = 1L,
             root = 0L,
@@ -24,7 +24,7 @@ class DynamicCommentActionPolicyTest {
             currentUserMid = 11L,
         )
 
-        assertTrue(actions.canDelete)
+        assertFalse(actions.canDelete)
         assertTrue(actions.canToggleTop)
         assertTrue(actions.isCurrentlyTop)
         assertTrue(actions.canReport)
@@ -43,5 +43,23 @@ class DynamicCommentActionPolicyTest {
         assertTrue(actions.canDelete)
         assertFalse(actions.canToggleTop)
         assertFalse(actions.canReport)
+    }
+
+    @Test
+    fun unrelatedAndLoggedOutUsersCannotDelete() {
+        val reply = ReplyItem(rpid = 1L, mid = 22L, member = ReplyMember(mid = "22"))
+        for (currentMid in listOf(33L, 0L, -1L, null)) {
+            assertFalse(
+                resolveDynamicCommentActionCapabilities(reply, 11L, currentMid).canDelete,
+                "Unexpected deletion for account $currentMid",
+            )
+        }
+    }
+
+    @Test
+    fun missingMemberMidUsesPositiveReplyAuthorMid() {
+        val reply = ReplyItem(rpid = 1L, mid = 22L, member = ReplyMember(mid = ""))
+        assertTrue(resolveDynamicCommentActionCapabilities(reply, 11L, 22L).canDelete)
+        assertFalse(resolveDynamicCommentActionCapabilities(reply.copy(mid = 0L), 11L, 0L).canDelete)
     }
 }

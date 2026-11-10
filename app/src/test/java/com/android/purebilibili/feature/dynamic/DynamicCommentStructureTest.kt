@@ -2,28 +2,34 @@ package com.android.purebilibili.feature.dynamic
 
 import java.io.File
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DynamicCommentStructureTest {
 
     @Test
-    fun `comment input uses Miuix text field only in non glass mode`() {
-        val source = File(
+    fun `dynamic comments use the shared dialog host and keep the entry bar read only`() {
+        val sheetSource = File(
             "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentSheet.kt"
         ).readText()
-        val composer = source
-            .substringAfter("private fun DynamicCommentComposer(")
-            .substringBefore("/**\n *  单条评论项")
+        val hostSource = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentInputHost.kt"
+        ).readText()
+        val entryBarSource = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentEntryBar.kt"
+        ).readText()
 
-        assertTrue(composer.contains("val useMiuixNonGlassInput = isMiuixNonGlassEnabled()"))
-        assertTrue(composer.contains("if (useMiuixNonGlassInput)"))
-        assertTrue(composer.contains("AppOutlinedTextField("))
-        assertTrue(composer.contains("placeholderText = hint"))
-        assertTrue(composer.contains("OutlinedTextField("))
-        assertTrue(composer.contains("focusedContainerColor = fieldColor"))
-        assertTrue(composer.contains("KeyboardOptions(imeAction = ImeAction.Send)"))
-        assertTrue(composer.contains("resolveDynamicCommentImeSubmission(value)?.let(onSubmit)"))
+        assertTrue(sheetSource.contains("DynamicCommentInputHost("))
+        assertTrue(sheetSource.contains("DynamicCommentEntryBar("))
+        assertTrue(hostSource.contains("CommentInputDialog("))
+        assertTrue(hostSource.contains("draftKey = draftKey"))
+        assertTrue(hostSource.contains("initialText = draft.text"))
+        assertTrue(hostSource.contains("onDraftChange = { text, images, sync ->"))
+        assertTrue(hostSource.contains("currentDrafts.sessionId == draftSessionId"))
+        assertTrue(hostSource.contains("commentReplyTarget.value?.parentRpid == draftReplyRpid"))
+        assertTrue(hostSource.contains("allowImageAttachment = replyTarget == null"))
+        assertTrue(entryBarSource.contains("CommentEntryBarContent("))
+        assertTrue(entryBarSource.contains("appActionClickable(role = Role.Button, onClick = onClick)"))
+        assertTrue(!entryBarSource.contains("OutlinedTextField("))
     }
 
     @Test
@@ -33,7 +39,7 @@ class DynamicCommentStructureTest {
 
         assertTrue(source.contains("val dynamicCommentSortMode: StateFlow<CommentSortMode>"))
         assertTrue(source.contains("fun setDynamicCommentSortMode(mode: CommentSortMode)"))
-        assertTrue(source.contains("commentNextPage = 1"))
+        assertTrue(source.contains("nextPage = 1"))
         assertTrue(source.contains("commentGrpcNextOffset = null"))
         assertTrue(source.contains("loadCommentsForDynamic(item)"))
     }
@@ -43,8 +49,8 @@ class DynamicCommentStructureTest {
         val source = File("src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt")
             .readText()
 
-        assertTrue(source.contains("paginationOffset = state.grpcNextOffset"))
-        assertTrue(source.contains("CommentRepository.getSortedSubCommentsForSubject("))
+        assertTrue(source.contains("paginationOffset = request.offset"))
+        assertTrue(source.contains("CommentRepository.getMobileSortedSubCommentsForSubject("))
         assertTrue(source.contains("mode = sortMode.apiMode"))
         assertTrue(source.contains("grpcNextOffset = data.grpcNextOffset"))
     }
@@ -67,56 +73,39 @@ class DynamicCommentStructureTest {
             .substringAfter("val commentContent:")
             .substringBefore("val commentComposer:")
 
-        assertTrue(source.contains("DynamicInlineCommentComposer("))
+        assertTrue(source.contains("val commentComposer: @Composable (Modifier) -> Unit = { modifier ->"))
+        assertTrue(source.contains("DynamicCommentEntryBar("))
         assertTrue(source.contains("shouldLoadMoreDynamicDetailComments("))
         assertTrue(source.contains("LaunchedEffect(detailListState, commentListState, useSplitLayout)"))
         assertTrue(commentContent.contains("dynamicInlineCommentItems("))
-        assertTrue(!commentContent.contains("DynamicInlineCommentComposer("))
+        assertTrue(!commentContent.contains("DynamicCommentEntryBar("))
         assertTrue(!source.contains("item(key = \"dynamic_detail_comment_composer\")"))
+        assertTrue(source.contains(".align(Alignment.BottomCenter)"))
     }
 
     @Test
     fun `dynamic detail comment composer becomes a liquid dock when enabled`() {
         val source = File("src/main/java/com/android/purebilibili/feature/dynamic/DynamicDetailScreen.kt")
             .readText()
-        val composer = source
-            .substringAfter("val commentComposer:")
-            .substringBefore("if (useSplitLayout)")
+        val entryBarSource = File(
+            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentEntryBar.kt"
+        ).readText()
 
-        assertTrue(!source.contains("detailDockBackdrop"))
-        assertTrue(!composer.contains("BottomBarMatchedReusableLiquidDock("))
-        assertTrue(composer.contains("liquidGlassEnabled = liquidGlassEnabled"))
+        assertTrue(entryBarSource.contains("BottomBarMatchedReusableLiquidDock("))
+        assertTrue(entryBarSource.contains("reuseEnabled = true"))
+        assertTrue(entryBarSource.contains("drawShellLens = true"))
+        assertTrue(entryBarSource.contains("backdrop = backdrop"))
+        assertTrue(entryBarSource.contains("CommentEntryBarContent("))
+        assertTrue(entryBarSource.contains(".height(44.dp)"))
+        assertTrue(entryBarSource.contains(".height(48.dp)"))
         assertTrue(source.contains("shouldUseFloatingLiquidBottomInputBar("))
         assertTrue(source.contains("resolveBottomInputBarContentBottomPadding("))
-        assertTrue(source.contains("val detailCommentBackdrop = if (liquidGlassEnabled) rememberLayerBackdrop() else null"))
-        assertTrue(source.contains(".layerBackdrop(detailCommentBackdrop)"))
+        assertTrue(source.contains("val detailCommentSource = if (liquidGlassEnabled) rememberChromeBackdropSource() else null"))
+        assertTrue(source.contains("val detailCommentBackdrop = detailCommentSource?.backdrop"))
         assertTrue(source.contains("bottom = commentContentBottomPadding"))
         assertTrue(source.contains("top = paddingValues.calculateTopPadding()"))
-        assertTrue(source.contains("const val CommentComposerMaxWidthDp = 360f"))
-        assertTrue(source.contains("widthIn(max = DynamicDetailScreenLayoutSpec.CommentComposerMaxWidthDp.dp)"))
+        assertTrue(source.contains(".widthIn(max = 360.dp)"))
         assertTrue(!source.contains(".weight(1f)"))
-
-        val componentSource = File(
-            "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentSheet.kt"
-        ).readText()
-        val inputComposer = componentSource
-            .substringAfter("private fun DynamicCommentComposer(")
-            .substringBefore("/**\n *  单条评论项")
-        assertTrue(inputComposer.split("BottomBarMatchedReusableLiquidDock(").size - 1 == 1)
-        assertTrue(inputComposer.contains("reuseEnabled = liquidGlassEnabled"))
-        assertTrue(inputComposer.contains("backdrop = backdrop"))
-        assertTrue(inputComposer.contains("drawShellLens = true"))
-        assertTrue(!inputComposer.contains("drawShellLens = false"))
-        assertTrue(inputComposer.contains("shellLensIntensity = composerLensIntensity"))
-        assertTrue(inputComposer.contains("resolveSharedBottomBarCapsuleShape()"))
-        assertTrue(inputComposer.contains("val fieldColor = if (liquidChromeActive) Color.Transparent"))
-        assertTrue(inputComposer.contains("focusedContainerColor = fieldColor"))
-        assertTrue(inputComposer.contains("unfocusedContainerColor = fieldColor"))
-        assertTrue(inputComposer.contains("fieldTextColor.copy(alpha = 0.82f)"))
-        assertTrue(inputComposer.contains("focusedTextColor = fieldTextColor"))
-        assertEquals(2, Regex("disabledTextColor = fieldTextColor.copy\\(alpha = 0.72f\\)").findAll(inputComposer).count())
-        assertEquals(2, Regex("disabledPlaceholderColor = placeholderColor").findAll(inputComposer).count())
-        assertTrue(inputComposer.contains("AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Small"))
     }
 
     @Test
@@ -127,7 +116,7 @@ class DynamicCommentStructureTest {
         assertTrue(source.contains("private var commentLoadJob: Job? = null"))
         assertTrue(source.contains("val requestId = ++commentLoadRequestId"))
         assertTrue(source.contains("commentLoadJob?.cancel()"))
-        assertTrue(source.contains("if (requestId != commentLoadRequestId) return@launch"))
+        assertTrue(source.contains("if (requestId != commentLoadRequestId) return@launchAccount"))
     }
 
     @Test

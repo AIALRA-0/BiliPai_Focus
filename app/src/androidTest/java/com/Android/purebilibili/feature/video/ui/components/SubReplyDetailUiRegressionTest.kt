@@ -5,45 +5,53 @@ import android.content.ClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.data.model.response.ReplyContent
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyMember
+import com.android.purebilibili.feature.dynamic.components.dynamicInlineCommentItems
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.video.ui.components.COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX
 import com.android.purebilibili.feature.video.ui.components.COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX
+import com.android.purebilibili.feature.video.ui.components.COMMENT_PICTURE_TAG_PREFIX
+import com.android.purebilibili.feature.video.ui.components.SUB_REPLY_DETAIL_ITEM_TAG_PREFIX
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-private const val SUB_REPLY_DETAIL_HEADER_TAG = "subreply_detail_header"
-private const val SUB_REPLY_DETAIL_CLOSE_TAG = "subreply_detail_close"
-private const val SUB_REPLY_DETAIL_ROOT_TAG = "subreply_detail_root"
 private const val SUB_REPLY_DETAIL_LIST_TAG = "subreply_detail_reply_list"
 private const val SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX = "subreply_detail_conversation_"
 
@@ -53,29 +61,100 @@ class SubReplyDetailUiRegressionTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+
     @Test
-    fun subReplyDetail_exposesDedicatedStructureTags() {
+    fun dynamicCommentDelete_isOwnerOnlyBeforeVotesAndAbsentFromMoreMenu() {
+        val currentMid = mutableStateOf<Long?>(42L)
+        var deleteCount = 0
+        val reply = ReplyItem(
+            rpid = 801L,
+            mid = 42L,
+            member = ReplyMember(mid = "42", uname = "comment author"),
+            content = ReplyContent(message = "ownership regression comment"),
+        )
         composeTestRule.setContent {
             MaterialTheme {
-                Box(
-                    modifier = Modifier.size(width = 390.dp, height = 844.dp)
-                ) {
-                    SubReplySheet(
-                        state = buildSubReplyState(),
-                        emoteMap = emptyMap(),
-                        onDismiss = {},
-                        onSortModeChange = {},
-                        onLoadMore = {}
+                LazyColumn {
+                    dynamicInlineCommentItems(
+                        comments = listOf(reply),
+                        isLoading = false,
+                        isLoadingMore = false,
+                        dynamicAuthorMid = 99L,
+                        currentUserMid = currentMid.value,
+                        onViewReplies = { _, _ -> },
+                        onDelete = { deleteCount++ },
+                        onUserClick = {},
+                        onImagePreview = { _, _, _, _ -> },
                     )
                 }
             }
         }
 
-        composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_HEADER_TAG).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_CLOSE_TAG).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_ROOT_TAG).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_LIST_TAG).assertIsDisplayed()
-        composeTestRule.onNodeWithText("相关回复共3条").assertIsDisplayed()
+        val delete = composeTestRule.onNodeWithContentDescription("删除")
+        delete.assertIsDisplayed()
+        val deleteBounds = delete.fetchSemanticsNode().boundsInRoot
+        val likeBounds = composeTestRule.onNodeWithContentDescription("Like", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        val hateBounds = composeTestRule.onNodeWithContentDescription("点踩评论", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(deleteBounds.right <= likeBounds.left)
+        assertTrue(likeBounds.right <= hateBounds.left)
+        delete.performClick()
+        composeTestRule.runOnIdle { assertEquals(1, deleteCount) }
+
+        composeTestRule.onNodeWithContentDescription("评论操作").performClick()
+        composeTestRule.onNodeWithText("复制全部").assertIsDisplayed()
+        composeTestRule.onNodeWithText("删除").assertDoesNotExist()
+        composeTestRule.onNodeWithText("删除评论").assertDoesNotExist()
+        composeTestRule.onNodeWithText("复制用户名").performClick()
+
+        // A dynamic's owner is still not allowed to delete somebody else's comment.
+        composeTestRule.runOnIdle { currentMid.value = 99L }
+        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.runOnIdle { currentMid.value = 77L }
+        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.runOnIdle { currentMid.value = 0L }
+        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+        composeTestRule.runOnIdle { currentMid.value = null }
+        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
+    }
+
+    @Test
+    fun threadDeletion_usesRealHandlerForRootAndChildWithoutDissolve() {
+        val currentMid = mutableStateOf(30L)
+        val deletionAvailable = mutableStateOf(true)
+        val deletedIds = mutableListOf<Long>()
+        val root = buildReplyWithPreview()
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = SubReplyUiState(
+                        visible = true,
+                        rootReply = root.copy(replies = null),
+                        items = root.replies.orEmpty().toImmutableList(),
+                        isEnd = true,
+                    ),
+                    emoteMap = emptyMap(),
+                    currentMid = currentMid.value,
+                    onDeleteComment = if (deletionAvailable.value) ({ deletedIds += it }) else null,
+                    onDismiss = {},
+                    onSortModeChange = {},
+                    onRefresh = {},
+                    onLoadMore = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithContentDescription("删除").assertIsDisplayed().performClick()
+        composeTestRule.runOnIdle {
+            assertEquals(listOf(301L), deletedIds)
+            currentMid.value = 10L
+        }
+        composeTestRule.onNodeWithContentDescription("删除").assertIsDisplayed().performClick()
+        composeTestRule.runOnIdle {
+            assertEquals(listOf(301L, 100L), deletedIds)
+            deletionAvailable.value = false
+        }
+        composeTestRule.onNodeWithContentDescription("删除").assertDoesNotExist()
     }
 
     @Test
@@ -89,6 +168,7 @@ class SubReplyDetailUiRegressionTest {
                     emoteMap = emptyMap(),
                     onDismiss = {},
                     onLoadMore = {},
+                    onRefresh = {},
                     onSortModeChange = { mode ->
                         requestedModes += mode
                         state.value = state.value.copy(sortMode = mode)
@@ -108,7 +188,7 @@ class SubReplyDetailUiRegressionTest {
     }
 
     @Test
-    fun directedChildReply_showsConversationAffordance() {
+    fun directedChildReply_opensConversationAndReturnsToAllReplies() {
         composeTestRule.setContent {
             MaterialTheme {
                 Box(
@@ -119,6 +199,7 @@ class SubReplyDetailUiRegressionTest {
                         emoteMap = emptyMap(),
                         onDismiss = {},
                         onSortModeChange = {},
+                        onRefresh = {},
                         onLoadMore = {}
                     )
                 }
@@ -126,16 +207,23 @@ class SubReplyDetailUiRegressionTest {
         }
 
         composeTestRule
-            .onNodeWithTag(SUB_REPLY_DETAIL_LIST_TAG)
+            .onNode(
+                hasScrollToIndexAction() and
+                    hasAnyAncestor(hasTestTag(SUB_REPLY_DETAIL_LIST_TAG))
+            )
             .performScrollToNode(hasTestTag("${SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX}203"))
 
         composeTestRule
             .onNodeWithTag("${SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX}203")
             .assertIsDisplayed()
+            .performClick()
+        composeTestRule.onNodeWithText("对话详情").assertIsDisplayed()
+        composeTestRule.onNodeWithText("返回全部回复").performClick()
+        composeTestRule.onNodeWithTag("${SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX}203").assertIsDisplayed()
     }
 
     @Test
-    fun clickingChildReplyPicture_usesPerReplyImageTag() {
+    fun clickingChildReplyPicture_opensThatReplyImage() {
         var previewedImage: String? = null
 
         composeTestRule.setContent {
@@ -149,6 +237,7 @@ class SubReplyDetailUiRegressionTest {
                         onDismiss = {},
                         onSortModeChange = {},
                         onLoadMore = {},
+                        onRefresh = {},
                         onImagePreview = { images, index, _, _ ->
                             previewedImage = images[index]
                         }
@@ -158,7 +247,10 @@ class SubReplyDetailUiRegressionTest {
         }
 
         composeTestRule
-            .onNodeWithTag("subreply_detail_image_201_0")
+            .onNode(
+                hasTestTag("${COMMENT_PICTURE_TAG_PREFIX}0") and
+                    hasAnyAncestor(hasTestTag("${SUB_REPLY_DETAIL_ITEM_TAG_PREFIX}201"))
+            )
             .performClick()
 
         composeTestRule.runOnIdle {
@@ -368,6 +460,139 @@ class SubReplyDetailUiRegressionTest {
         composeTestRule
             .onAllNodesWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}302")
             .assertCountEquals(0)
+    }
+
+    @Test
+    fun detailRootWithPreview_doesNotNestRepliesOrOpenComposerOnBodyTap() {
+        var replyTarget: Long? = null
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = SubReplyUiState(
+                        visible = true,
+                        rootReply = buildReplyWithPreview(),
+                        isEnd = true,
+                    ),
+                    emoteMap = emptyMap(),
+                    onDismiss = {},
+                    onSortModeChange = {},
+                    onRefresh = {},
+                    onLoadMore = {},
+                    onReplyClick = { replyTarget = it.rpid },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}301").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("${COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX}100").assertDoesNotExist()
+        composeTestRule.onNodeWithText("root").performTouchInput { click(center) }
+        composeTestRule.runOnIdle { assertEquals(null, replyTarget) }
+        composeTestRule.onNodeWithText("回复").performClick()
+        composeTestRule.runOnIdle { assertEquals(100L, replyTarget) }
+    }
+
+    @Test
+    fun missingNavigationTarget_isReportedOnlyAfterSuccessfulFinalPage() {
+        val state = mutableStateOf(
+            buildSubReplyState().copy(targetReplyId = 999L, error = "网络连接失败")
+        )
+        var loadMoreCount = 0
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = state.value,
+                    emoteMap = emptyMap(),
+                    onDismiss = {},
+                    onSortModeChange = {},
+                    onRefresh = {},
+                    onLoadMore = { loadMoreCount++ },
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("未找到目标回复，可能已删除或不可见").assertDoesNotExist()
+        composeTestRule.runOnIdle {
+            assertEquals(0, loadMoreCount)
+            state.value = state.value.copy(error = null, isEnd = true)
+        }
+        composeTestRule.onNodeWithText("未找到目标回复，可能已删除或不可见").assertIsDisplayed()
+    }
+
+    @Test
+    fun laterPageTarget_isLocatedOnceAndDoesNotOverrideSubsequentReading() {
+        val initial = buildSubReplyState()
+        val firstPage = (1L..20L).map { id ->
+            initial.items.first().copy(
+                rpid = id + 1000L,
+                content = ReplyContent(message = "分页回复 $id"),
+            )
+        }
+        val target = firstPage.last().copy(
+            rpid = 2000L,
+            content = ReplyContent(message = "需要定位的回复"),
+        )
+        val state = mutableStateOf(initial.copy(items = firstPage.toImmutableList(), targetReplyId = target.rpid))
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = state.value,
+                    emoteMap = emptyMap(),
+                    onDismiss = {},
+                    onSortModeChange = {},
+                    onRefresh = {},
+                    onLoadMore = {
+                        state.value = state.value.copy(
+                            items = (firstPage + target).toImmutableList(),
+                            page = 2,
+                            isEnd = true,
+                        )
+                    },
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("需要定位的回复").assertIsDisplayed()
+        composeTestRule.onNode(
+            hasScrollToIndexAction() and hasAnyAncestor(hasTestTag(SUB_REPLY_DETAIL_LIST_TAG))
+        ).performScrollToIndex(0)
+        composeTestRule.onNodeWithText("root comment with picture").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            state.value = state.value.copy(isRefreshing = true, isLoading = true)
+        }
+        composeTestRule.runOnIdle {
+            state.value = state.value.copy(isRefreshing = false, isLoading = false)
+        }
+        composeTestRule.onNodeWithText("root comment with picture").assertIsDisplayed()
+        composeTestRule.onNodeWithText("需要定位的回复").assertIsNotDisplayed()
+    }
+
+    @Test
+    fun failedTargetPage_retryLocatesReplyWithoutResettingTheNavigationRequest() {
+        val initial = buildSubReplyState()
+        val replies = (1L..20L).map { id ->
+            initial.items.first().copy(rpid = 1000L + id, content = ReplyContent(message = "已加载回复 $id"))
+        }
+        val target = replies.last().copy(rpid = 2000L, content = ReplyContent(message = "重试后定位的回复"))
+        val state = mutableStateOf(
+            initial.copy(items = replies.toImmutableList(), targetReplyId = target.rpid, error = "目标页读取失败")
+        )
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = state.value,
+                    emoteMap = emptyMap(),
+                    onDismiss = {},
+                    onSortModeChange = {},
+                    onRefresh = { state.value = state.value.copy(targetReplyId = 0L, error = null, isEnd = true) },
+                    onLoadMore = {
+                        state.value = state.value.copy(items = (replies + target).toImmutableList(), error = null, isEnd = true, page = 2)
+                    },
+                )
+            }
+        }
+        composeTestRule.onNode(
+            hasScrollToIndexAction() and hasAnyAncestor(hasTestTag(SUB_REPLY_DETAIL_LIST_TAG))
+        ).performScrollToNode(androidx.compose.ui.test.hasText("目标页读取失败，点击重试"))
+        composeTestRule.onNodeWithText("目标页读取失败，点击重试").performClick()
+        composeTestRule.onNodeWithText("重试后定位的回复").assertIsDisplayed()
     }
 
     private fun buildSubReplyState(): SubReplyUiState {

@@ -9,6 +9,89 @@ import kotlin.test.assertTrue
 class VideoCardTransitionHostDepthLayerTest {
 
     @Test
+    fun preparedSourceExcludesHostDrawingInEveryHeldOrReturnPhase() {
+        for (exposure in listOf(
+            VideoCardTransitionExposure.SettledHidden,
+            VideoCardTransitionExposure.BackPreview,
+            VideoCardTransitionExposure.Returning,
+            VideoCardTransitionExposure.Restoring,
+        )) {
+            assertFalse(
+                shouldPaintHostOwnedDepthLayer(
+                    exposure = exposure,
+                    hasRecordedContent = true,
+                    motionTier = MotionTier.Normal,
+                    realtimeBlurEnabled = true,
+                    sdkInt = 35,
+                    sourceRendererReady = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun remountedSourceTransfersDepthOwnershipAfterPreparation() {
+        val state = VideoCardTransitionSnapshotLayerState()
+        val source = Any()
+        fun hostPaints() = shouldPaintHostOwnedDepthLayer(
+            exposure = VideoCardTransitionExposure.BackPreview,
+            hasRecordedContent = true,
+            motionTier = MotionTier.Normal,
+            realtimeBlurEnabled = true,
+            sdkInt = 35,
+            sourceRendererReady = state.hasReadySourceRenderer,
+        )
+        state.attachSourceRenderer(source)
+        assertTrue(state.hasAttachedSourceRenderer)
+        assertTrue(hostPaints())
+        state.markSourceRendererReady(source, true)
+        assertFalse(hostPaints())
+        state.markSourceRendererReady(source, false)
+        assertTrue(hostPaints())
+        state.markSourceRendererReady(source, true)
+        state.detachSourceRenderer(source)
+        assertFalse(state.hasAttachedSourceRenderer)
+        assertTrue(hostPaints())
+        // A cancelled old effect cannot revive a detached renderer.
+        state.markSourceRendererReady(source, true)
+        assertFalse(state.hasReadySourceRenderer)
+    }
+
+    @Test
+    fun disposingOneSourceCannotRevokeAnotherPreparedSource() {
+        val state = VideoCardTransitionSnapshotLayerState()
+        val oldSource = Any()
+        val newSource = Any()
+        state.attachSourceRenderer(oldSource)
+        state.markSourceRendererReady(oldSource, true)
+        state.attachSourceRenderer(newSource)
+        state.markSourceRendererReady(newSource, true)
+        state.detachSourceRenderer(oldSource)
+        assertTrue(state.hasReadySourceRenderer)
+        assertTrue(state.hasAttachedSourceRenderer)
+        state.detachSourceRenderer(newSource)
+        assertFalse(state.hasReadySourceRenderer)
+        assertFalse(state.hasAttachedSourceRenderer)
+    }
+
+    @Test
+    fun unpreparedSourceNeverYieldsToHostWithoutDrawableSnapshot() {
+        for (recorded in listOf(false, true)) {
+            assertFalse(
+                shouldPaintHostOwnedDepthLayer(
+                    exposure = VideoCardTransitionExposure.Returning,
+                    hasRecordedContent = recorded,
+                    displayListStale = true,
+                    motionTier = MotionTier.Normal,
+                    realtimeBlurEnabled = true,
+                    sdkInt = 35,
+                    sourceRendererReady = false,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun hostLayerPaintsSettledBackPreviewRestoringAndReturning() {
         assertTrue(
             shouldPaintHostOwnedDepthLayer(
@@ -159,23 +242,6 @@ class VideoCardTransitionHostDepthLayerTest {
         assertTrue(shouldReleaseHostOwnedDepthLayer(VideoCardTransitionExposure.Idle))
         assertFalse(shouldReleaseHostOwnedDepthLayer(VideoCardTransitionExposure.SettledHidden))
         assertFalse(shouldReleaseHostOwnedDepthLayer(VideoCardTransitionExposure.BackPreview))
-    }
-
-    @Test
-    fun sourceNeverYieldsEmptyDrawToHost() {
-        // 空 yield 会黑洞；源页始终自己画 live/冻结层。
-        assertFalse(
-            shouldSourceYieldDepthLayerToHost(
-                isHostOwnedSnapshot = true,
-                exposure = VideoCardTransitionExposure.SettledHidden,
-            ),
-        )
-        assertFalse(
-            shouldSourceYieldDepthLayerToHost(
-                isHostOwnedSnapshot = true,
-                exposure = VideoCardTransitionExposure.BackPreview,
-            ),
-        )
     }
 
     @Test

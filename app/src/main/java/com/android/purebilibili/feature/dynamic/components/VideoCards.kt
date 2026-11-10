@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 
@@ -13,12 +15,13 @@ import com.android.purebilibili.core.ui.MediaContrastPalette
 
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.resolveAppTvIcon
+import androidx.compose.ui.res.painterResource
+import com.android.purebilibili.R
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +48,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -53,7 +56,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
 import coil3.request.ImageRequest
 import com.android.purebilibili.core.ui.feedContentTypography
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
@@ -72,6 +75,8 @@ import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionV
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
 import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
+import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
+import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCoverOverlayTextShadow
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
@@ -107,8 +112,9 @@ fun VideoCardLarge(
         with(density) { configuration.screenHeightDp.dp.toPx() }
     }
     val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
-    val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
-    val coverBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val cardBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
+    val coverBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
+    val infoBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(archive.bvid)
     val stationaryCoverRequest = remember(coverUrl) {
         ImageRequest.Builder(context)
@@ -119,8 +125,14 @@ fun VideoCardLarge(
             .diskCacheKey(coverUrl)
             .build()
     }
-    val triggerClick = {
-        cardBoundsRef.value?.let { bounds ->
+    val triggerClick = dynamicCardClick@{
+        if (CardPositionManager.isVideoNavigationDebounceActive()) {
+            // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
+            return@dynamicCardClick
+        }
+        cardBoundsRef.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()?.let { bounds ->
+            val sourceCoverBounds = coverBoundsRef.value
+                ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
             CardPositionManager.recordVideoCardPosition(
                 bvid = archive.bvid,
                 sourceRoute = sourceRoute,
@@ -129,7 +141,9 @@ fun VideoCardLarge(
                 screenHeight = screenHeightPx,
                 density = density.density,
                 sourceCornerDp = 10,
-                coverBounds = coverBoundsRef.value,
+                coverBounds = sourceCoverBounds,
+                infoBounds = infoBoundsRef.value
+                    ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
                 sourceLayout = VideoCardSourceLayout.STACKED,
                 sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
                     title = archive.title,
@@ -152,7 +166,7 @@ fun VideoCardLarge(
                     ),
                     coverUrl = coverUrl,
                     coverCacheKey = coverUrl,
-                ),
+                ).withMeasuredCoverDecodeSize(sourceCoverBounds),
             )
             nativeCardSnapshot.capture()
         }
@@ -161,7 +175,7 @@ fun VideoCardLarge(
 
     var modifier = Modifier
         .fillMaxWidth()
-        .clickable(onClick = triggerClick)
+        .appActionClickable(onClick = triggerClick)
 
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -225,7 +239,7 @@ fun VideoCardLarge(
             )
             .then(nativeCardSnapshot.modifier)
             .onGloballyPositioned { coordinates ->
-                cardBoundsRef.value = coordinates.boundsInRoot()
+                cardBoundsRef.value = coordinates
             }
     ) {
         VideoCardLargeCover(
@@ -243,15 +257,16 @@ fun VideoCardLarge(
                     sourceRoute = sourceRoute,
                 )
                 .onGloballyPositioned { coordinates ->
-                    coverBoundsRef.value = coordinates.boundsInRoot()
+                    coverBoundsRef.value = coordinates
                 },
         )
         Column(
-            modifier = Modifier.videoCardShellReturnChromeAlpha(
-                enabled = useCardShellSharedBounds,
-                bvid = archive.bvid,
-                sourceRoute = sourceRoute,
-            )
+            modifier = Modifier.onGloballyPositioned { infoBoundsRef.value = it }
+                .videoCardShellReturnChromeAlpha(
+                    enabled = useCardShellSharedBounds,
+                    bvid = archive.bvid,
+                    sourceRoute = sourceRoute,
+                )
         ) {
             Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
             VideoCardLargeInfo(
@@ -286,7 +301,7 @@ private fun VideoCardLargeCover(
             TextStyle(shadow = resolveVideoCardCoverOverlayTextShadow())
         }
         if (coverUrl.isNotEmpty()) {
-            AsyncImage(
+            PageAwareAsyncImage(
                 model = coverRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
@@ -301,14 +316,14 @@ private fun VideoCardLargeCover(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(AppSpacingTokens.Small)
-                    .background(MaterialTheme.colorScheme.primary, AppShapes.container(ContainerLevel.Tag))
+                    .background(AppContentColors.accent(), AppShapes.container(ContainerLevel.Tag))
                     .padding(horizontal = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro, vertical = AppSpacingTokens.Micro)
             ) {
                 AppText(
                     text = badgeText,
                     fontSize = MaterialTheme.typography.labelSmall.fontSize,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = AppContentColors.onAccent()
                 )
             }
         }
@@ -355,10 +370,10 @@ private fun VideoCardLargeCover(
                 Spacer(modifier = Modifier.weight(1f))
 
                 AppIcon(
-                    imageVector = resolveAppTvIcon(),
+                    painter = painterResource(R.drawable.ic_pili_tv_play),
                     contentDescription = "播放视频",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(AppSpacingTokens.DoubleExtraLarge),
+                    tint = AppContentColors.accent(),
+                    modifier = Modifier.size(50.dp),
                 )
             }
         }
@@ -381,7 +396,7 @@ private fun VideoCardLargeInfo(
             fontWeight = FontWeight.Bold,
             maxLines = videoCardTitleMaxLines(),
             overflow = videoCardTitleOverflow(),
-            color = MaterialTheme.colorScheme.onSurface
+            color = AppContentColors.primaryText()
         )
         Spacer(modifier = Modifier.height(AppSpacingTokens.Micro))
         AppText(
@@ -389,7 +404,7 @@ private fun VideoCardLargeInfo(
             fontSize = MaterialTheme.typography.labelMedium.fontSize,
             maxLines = videoCardTitleMaxLines(),
             overflow = videoCardTitleOverflow(),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = AppContentColors.secondaryText(),
             modifier = titleModifier
         )
     } else {
@@ -400,7 +415,7 @@ private fun VideoCardLargeInfo(
             maxLines = videoCardTitleMaxLines(),
             overflow = videoCardTitleOverflow(),
             lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = AppContentColors.primaryText(),
             modifier = titleModifier
         )
     }

@@ -12,7 +12,123 @@ import kotlin.test.assertTrue
 
 class VideoCardTransitionBackgroundPolicyTest {
     @Test
-    fun backgroundGeometryStaysStableWhileBlurAndScrimTrackTransition() {
+    fun reversingAtAnyDepthKeepsTheSameBlurRadiusAcrossPhasesAndDensities() {
+        for (density in listOf(1f, 1.5f, 2.75f, 3f)) {
+            for (step in 0..240) {
+                val depth = step / 240f
+                val opening = resolveVideoCardTransitionBackgroundFrame(
+                    progress = depth,
+                    phase = VideoCardTransitionBackgroundPhase.OPENING,
+                    sdkInt = 35,
+                    density = density,
+                )
+                for (phase in listOf(
+                    VideoCardTransitionBackgroundPhase.RETURNING,
+                    VideoCardTransitionBackgroundPhase.HELD,
+                )) {
+                    val reversed = resolveVideoCardTransitionBackgroundFrame(
+                        progress = depth,
+                        phase = phase,
+                        isGestureRestoreInProgress = true,
+                        sdkInt = 35,
+                        density = density,
+                    )
+                    assertEquals(opening.blurRadiusPx, reversed.blurRadiusPx)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun clearingPreservesFineDetailBeforeTheFinalSharpFrame() {
+        val radii = listOf(0f, 0.5f, 1f, 1.5f, 2f, 2.5f, 3f, 3.5f, 4f).map { radius ->
+            resolveVideoCardTransitionBackgroundFrame(
+                progress = radius / 12f,
+                phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                sdkInt = 35,
+            ).blurRadiusPx
+        }
+        assertEquals(listOf(0f, 0.5f, 1f, 1.5f, 2f, 2.5f, 3f, 3.5f, 4f), radii)
+    }
+
+    @Test
+    fun backdropHandoffHasGentleEndpointsAndRemainsReversible() {
+        val start = VideoCardTransitionVisualTimeline.WHOLE_SOURCE_CARD_RETURN_START
+        val end = VideoCardTransitionVisualTimeline.WHOLE_SOURCE_CARD_RETURN_END
+        val window = end - start
+        fun alphaAt(settle: Float, exposure: VideoCardTransitionExposure) =
+            resolveVideoCardTransitionFrozenLayerAlpha(exposure, 1f - settle)
+
+        // 交接窗刚开始/将结束时，每 1% 窗口的透明度变化应小于 0.1%。
+        assertTrue(1f - alphaAt(start + window * .01f, VideoCardTransitionExposure.Returning) < .001f)
+        assertTrue(alphaAt(end - window * .01f, VideoCardTransitionExposure.Returning) < .001f)
+        val samples = (0..100).map { start + window * it / 100f }
+        val forward = samples.map { alphaAt(it, VideoCardTransitionExposure.Returning) }
+        val reversed = samples.reversed().map { alphaAt(it, VideoCardTransitionExposure.Restoring) }
+        assertEquals(forward, reversed.reversed())
+        assertTrue(forward.zipWithNext().all { (a, b) -> b <= a })
+        assertEquals(1f, forward.first(), .0001f)
+        assertEquals(0f, forward.last(), .0001f)
+    }
+
+    @Test
+    fun hiddenFrozenLayerIsSkippedUntilAnInterruptedReturnRevealsItAgain() {
+        for (exposure in listOf(
+            VideoCardTransitionExposure.BackPreview,
+            VideoCardTransitionExposure.Returning,
+            VideoCardTransitionExposure.Restoring,
+        )) {
+            val depths = listOf(1f, 0.6f, 0.315f, 0.1f, 0f, 0.1f, 0.315f, 0.6f, 1f)
+            val visibility = depths.map {
+                shouldDrawVideoCardTransitionFrozenLayer(
+                    resolveVideoCardTransitionFrozenLayerAlpha(exposure, it),
+                )
+            }
+            assertEquals(listOf(true, true, true, false, false, false, true, true, true), visibility)
+        }
+        // Opening must still capture a frame even when its initial depth is zero.
+        assertTrue(shouldDrawVideoCardTransitionFrozenLayer(
+            resolveVideoCardTransitionFrozenLayerAlpha(VideoCardTransitionExposure.Opening, 0f),
+        ))
+        assertFalse(shouldDrawVideoCardTransitionFrozenLayer(0.001f))
+        assertTrue(shouldDrawVideoCardTransitionFrozenLayer(0.0011f))
+    }
+
+    @Test
+    fun scrimOnlyPathRetainsThemeOpacityAndIdleEndpoint() {
+        for (phase in VideoCardTransitionBackgroundPhase.entries) {
+            for (tier in MotionTier.entries) {
+                for (light in listOf(false, true)) {
+                    for (progress in listOf(0f, .25f, .5f, 1f)) {
+                        val expected = if (phase == VideoCardTransitionBackgroundPhase.IDLE) {
+                            0f
+                        } else {
+                            progress * (if (light || tier == MotionTier.Reduced) .08f else .14f)
+                        }
+                        assertEquals(
+                            expected,
+                            resolveVideoCardTransitionBackgroundScrimAlpha(progress, phase, tier, light),
+                            .0001f,
+                        )
+                        assertEquals(
+                            expected,
+                            resolveVideoCardTransitionBackgroundFrame(
+                                progress = progress,
+                                phase = phase,
+                                motionTier = tier,
+                                isLightBackground = light,
+                                sdkInt = 35,
+                            ).scrimAlpha,
+                            .0001f,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun backgroundScalesSmoothlyWithCornerRadiiDuringTransition() {
         for (phase in VideoCardTransitionBackgroundPhase.entries) {
             for (progress in listOf(0f, 0.25f, 0.5f, 1f)) {
                 for (restoring in listOf(false, true)) {
@@ -33,6 +149,30 @@ class VideoCardTransitionBackgroundPolicyTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun blurEffectsSurviveGestureReversalAndTheClearEndpoint() {
+        val cache = VideoCardTransitionBlurEffectCache()
+        val first = kotlin.test.assertNotNull(cache.resolve(12f, sdkInt = 35))
+        cache.resolve(24f, sdkInt = 35)
+        assertEquals(null, cache.resolve(0f, sdkInt = 35))
+        kotlin.test.assertSame(first, cache.resolve(12f, sdkInt = 35))
+        assertEquals(null, cache.resolve(Float.NaN, sdkInt = 35))
+        assertEquals(null, cache.resolve(Float.POSITIVE_INFINITY, sdkInt = 35))
+        assertEquals(null, cache.resolve(12f, sdkInt = 30))
+        cache.clear()
+        kotlin.test.assertNotSame(first, cache.resolve(12f, sdkInt = 35))
+    }
+
+    @Test
+    fun blurEffectCacheEvictsOldRadiiWhenItsCapacityIsExceeded() {
+        val cache = VideoCardTransitionBlurEffectCache()
+        val first = kotlin.test.assertNotNull(cache.resolve(1f, sdkInt = 35))
+        for (radius in 2..257) cache.resolve(radius.toFloat(), sdkInt = 35)
+        val recent = cache.resolve(257f, sdkInt = 35)
+        kotlin.test.assertNotSame(first, cache.resolve(1f, sdkInt = 35))
+        kotlin.test.assertSame(recent, cache.resolve(257f, sdkInt = 35))
     }
 
     @Test
@@ -608,8 +748,8 @@ class VideoCardTransitionBackgroundPolicyTest {
             assertEquals(0f, radii.first())
             assertEquals(12f * density, radii.last(), 0.001f)
             assertTrue(radii.zipWithNext().all { (a, b) -> b >= a })
-            // At 3x density, at most 19 radii instead of the previous 37.
-            assertTrue(radii.distinct().size <= 19)
+            // 仅 0–4px 细分；3x 密度仍限制为 25 档，不逐帧创建新 effect。
+            assertTrue(radii.distinct().size <= 25)
         }
     }
 
@@ -704,7 +844,6 @@ class VideoCardTransitionBackgroundPolicyTest {
                     progress = 1f,
                     phase = phase,
                     motionTier = MotionTier.Normal,
-                    isGestureRestoreInProgress = false,
                 ),
                 0.0001f,
             )
@@ -785,19 +924,16 @@ class VideoCardTransitionBackgroundPolicyTest {
         assertEquals(0f, partitionReduction, 0.0001f)
         assertTrue(
             shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                source = VideoCardTransitionBackgroundSource.RelatedVideo,
                 realtimeBlurEnabled = true,
             )
         )
         assertFalse(
             shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                source = VideoCardTransitionBackgroundSource.RelatedVideo,
                 realtimeBlurEnabled = false,
             )
         )
         assertTrue(
             shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                source = VideoCardTransitionBackgroundSource.Home,
                 realtimeBlurEnabled = true,
             )
         )
@@ -807,7 +943,6 @@ class VideoCardTransitionBackgroundPolicyTest {
                 progress = 1f,
                 phase = VideoCardTransitionBackgroundPhase.OPENING,
                 motionTier = MotionTier.Normal,
-                isGestureRestoreInProgress = false,
                 scaleReduction = relatedReduction,
             ),
             0.0001f,
@@ -818,7 +953,6 @@ class VideoCardTransitionBackgroundPolicyTest {
                 progress = 1f,
                 phase = VideoCardTransitionBackgroundPhase.OPENING,
                 motionTier = MotionTier.Normal,
-                isGestureRestoreInProgress = false,
                 scaleReduction = partitionReduction,
             ),
             0.0001f,
@@ -845,6 +979,25 @@ class VideoCardTransitionBackgroundPolicyTest {
     }
 
     @Test
+    fun liveBackgroundLayerReusesRenderEffectAndClipShapeAcrossFrames() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/core/ui/transition/" +
+                "VideoCardTransitionBackgroundPolicy.kt"
+        ).readText()
+        val live = source
+            .substringAfter("internal fun Modifier.videoCardTransitionLiveBackgroundEffect(")
+            .substringBefore("internal data class VideoCardTransitionNavBackdropFrame")
+        // 返回手势逐帧推进：若每帧重建 BlurEffect/RoundedCornerShape，会持续产生分配并
+        // 触发 GPU effect 重建。这里改为按量化半径复用，模糊仍然全程开启且对所有设备一致。
+        assertTrue(live.contains("var cachedLiveBlurRadiusPx = Float.NaN"))
+        assertTrue(live.contains("var cachedLiveClipShape: RoundedCornerShape? = null"))
+        assertTrue(live.contains("if (liveBlurRadiusPx != cachedLiveBlurRadiusPx)"))
+        assertTrue(live.contains("renderEffect = cachedLiveBlurEffect"))
+        assertTrue(live.contains("cachedLiveClipShape?.let { shape = it }"))
+        assertFalse(live.contains("renderEffect = if ("))
+    }
+
+    @Test
     fun openingBlurBuildsInLockstepWithDepth() {
         val early = resolveVideoCardTransitionBackgroundFrame(
             progress = 0.2f,
@@ -852,8 +1005,8 @@ class VideoCardTransitionBackgroundPolicyTest {
             motionTier = MotionTier.Normal,
             sdkInt = 35,
         )
-        // 0.2 × 12dp = 2.4 → 量化到 2px。
-        assertEquals(2f, early.blurRadiusPx, 0.01f)
+        // 清晰附近采用 0.5px 步长，2.4px → 2.5px。
+        assertEquals(2.5f, early.blurRadiusPx, 0.01f)
         assertTrue(early.scrimAlpha > 0f)
         assertTrue(early.blurRadiusPx > 0f)
         assertEquals(0f, early.cornerRadiusPx, 0.01f)
@@ -924,8 +1077,6 @@ class VideoCardTransitionBackgroundPolicyTest {
             ),
             0.0001f,
         )
-        // 遗留 soft-clear 曲线仍可算，但主路径不再使用。
-        assertEquals(0.5647f, softClearVideoCardTransitionDepth(0.5f), 0.01f)
     }
 
     @Test
@@ -983,8 +1134,7 @@ class VideoCardTransitionBackgroundPolicyTest {
         )
 
         assertEquals(12f, start.blurRadiusPx)
-        // RETURNING 使用 4px 量化：progress=0.5 → raw≈6 → quantize 到 4 或 8。
-        assertTrue(middle.blurRadiusPx in setOf(4f, 8f))
+        assertEquals(6f, middle.blurRadiusPx)
         assertTrue(middle.blurRadiusPx in 1f..<start.blurRadiusPx)
         assertEquals(0f, end.blurRadiusPx)
         assertTrue(start.scrimAlpha > middle.scrimAlpha)
@@ -1045,13 +1195,11 @@ class VideoCardTransitionBackgroundPolicyTest {
             progress = 1f,
             phase = VideoCardTransitionBackgroundPhase.OPENING,
             motionTier = MotionTier.Normal,
-            isGestureRestoreInProgress = false,
         )
         val restoreScale = resolveVideoCardTransitionContentScale(
             progress = 0.5f,
             phase = VideoCardTransitionBackgroundPhase.HELD,
             motionTier = MotionTier.Normal,
-            isGestureRestoreInProgress = true,
         )
 
         assertEquals(1f, openingScale, 0.0001f)
@@ -1341,48 +1489,6 @@ class VideoCardTransitionBackgroundPolicyTest {
         )
         assertFalse(
             shouldInterruptVideoCardOpeningOnReturn(VideoCardTransitionBackgroundPhase.RETURNING)
-        )
-    }
-
-    @Test
-    fun quickReturnSnapsDepthBlurClearToAvoidCoverBlurFlash() {
-        // 打断 OPENING：无论是否已 mark quick，都必须立刻清模糊。
-        assertTrue(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = false,
-                phase = VideoCardTransitionBackgroundPhase.OPENING,
-            )
-        )
-        assertTrue(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = true,
-                phase = VideoCardTransitionBackgroundPhase.OPENING,
-            )
-        )
-        // HELD / RETURNING（含快速返回）必须走连续消糊，禁止 snap 瞬间清晰。
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = true,
-                phase = VideoCardTransitionBackgroundPhase.HELD,
-            )
-        )
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = true,
-                phase = VideoCardTransitionBackgroundPhase.RETURNING,
-            )
-        )
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = false,
-                phase = VideoCardTransitionBackgroundPhase.HELD,
-            )
-        )
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = false,
-                phase = VideoCardTransitionBackgroundPhase.IDLE,
-            )
         )
     }
 

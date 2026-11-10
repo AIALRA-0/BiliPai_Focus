@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.plugin.googlecast
 
-import com.android.purebilibili.core.plugin.CastPluginPlaybackState
+import com.android.purebilibili.plugin.sdk.CastPluginPlaybackState
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.MediaMetadata
 import kotlinx.coroutines.CoroutineScope

@@ -8,6 +8,71 @@ import kotlin.test.assertTrue
 class PlaybackLifecycleCoordinatorTest {
 
     @Test
+    fun returnIntent_keepsManualPauseAcrossSuspensionAndPlayerRecreation() {
+        val state = PlaybackReturnState()
+        assertFalse(state.suspend("BVpaused", 1L, false, PlaybackPauseOwner.NAVIGATION))
+        state.recordPlaybackIntent("BVpaused", 1L, false)
+        state.suspend("BVpaused", 1L, false, PlaybackPauseOwner.LIFECYCLE)
+        assertFalse(state.resolveAutoPlay("BVpaused", 1L, initialPreference = true))
+        state.resume(PlaybackPauseOwner.NAVIGATION)
+        state.resume(PlaybackPauseOwner.LIFECYCLE)
+        assertFalse(state.resolveAutoPlay("BVpaused", 0L, initialPreference = true))
+    }
+
+    @Test
+    fun returnIntent_doesNotConfuseAutomaticPauseWithUserPause() {
+        val state = PlaybackReturnState()
+        assertTrue(state.suspend("BVplaying", 1L, true, PlaybackPauseOwner.LIFECYCLE))
+        state.recordPlaybackIntent("BVplaying", 1L, false)
+        assertTrue(state.suspend("BVplaying", 1L, false, PlaybackPauseOwner.NAVIGATION))
+        assertTrue(state.resolveAutoPlay("BVplaying", 1L, initialPreference = false))
+        state.resume(PlaybackPauseOwner.LIFECYCLE)
+        state.resume(PlaybackPauseOwner.NAVIGATION)
+        state.recordPlaybackIntent("BVplaying", 1L, false)
+        assertFalse(state.suspend("BVplaying", 1L, false, PlaybackPauseOwner.NAVIGATION))
+        assertFalse(state.resolveAutoPlay("BVplaying", 1L, initialPreference = true))
+    }
+
+    @Test
+    fun returnIntent_refreshesAfterEachResumeInsteadOfReusingOriginalEntryIntent() {
+        val state = PlaybackReturnState()
+        state.suspend("BVplaying", 1L, false, PlaybackPauseOwner.NAVIGATION)
+        state.resume(PlaybackPauseOwner.NAVIGATION)
+        state.recordPlaybackIntent("BVplaying", 1L, true)
+        state.suspend("BVplaying", 1L, true, PlaybackPauseOwner.NAVIGATION)
+        state.recordPlaybackIntent("BVplaying", 1L, false)
+        state.resume(PlaybackPauseOwner.NAVIGATION)
+        assertTrue(state.resolveAutoPlay("BVplaying", 1L, initialPreference = false))
+    }
+
+    @Test
+    fun returnIntent_doesNotLeakIntoAnotherVideoOrPart() {
+        val state = PlaybackReturnState()
+        state.suspend("BVparent", 1L, false, PlaybackPauseOwner.NAVIGATION)
+        assertTrue(state.resolveAutoPlay("BVchild", 1L, initialPreference = true))
+        assertTrue(state.resolveAutoPlay("BVparent", 2L, initialPreference = true))
+        state.suspend("BVchild", 2L, true, PlaybackPauseOwner.NAVIGATION)
+        state.recordPlaybackIntent("BVparent", 1L, false)
+        assertTrue(state.resolveAutoPlay("BVchild", 2L, initialPreference = false))
+    }
+
+    @Test
+    fun returnIntent_lifecycleResumeDoesNotReleaseNavigationPause() {
+        val state = PlaybackReturnState()
+        state.suspend("BVplaying", 1L, true, PlaybackPauseOwner.NAVIGATION)
+        state.suspend("BVplaying", 1L, false, PlaybackPauseOwner.LIFECYCLE)
+        state.resume(PlaybackPauseOwner.LIFECYCLE)
+        state.recordPlaybackIntent("BVplaying", 1L, false)
+        assertTrue(state.suspend("BVplaying", 1L, false, PlaybackPauseOwner.LIFECYCLE))
+        state.resume(PlaybackPauseOwner.NAVIGATION)
+        state.recordPlaybackIntent("BVplaying", 1L, false)
+        assertTrue(state.resolveAutoPlay("BVplaying", 1L, false))
+        state.resume(PlaybackPauseOwner.LIFECYCLE)
+        state.recordPlaybackIntent("BVplaying", 1L, false)
+        assertFalse(state.resolveAutoPlay("BVplaying", 1L, true))
+    }
+
+    @Test
     fun pauseDecision_keepsPlayingForPip() {
         val decision = resolvePlaybackPauseDecision(
             isMiniMode = false,

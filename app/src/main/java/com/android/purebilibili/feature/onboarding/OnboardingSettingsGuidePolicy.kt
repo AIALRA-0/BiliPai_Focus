@@ -12,11 +12,11 @@ enum class OnboardingSettingsProfile(
 ) {
     RECOMMENDED(
         title = "推荐默认",
-        subtitle = "MD3、安卓液态玻璃、悬浮底栏、Focus 默认关注标签"
+        subtitle = "MD3 跟随系统、原生底栏、关注与订阅顶部标签"
     ),
     PERFORMANCE(
         title = "流畅优先",
-        subtitle = "安卓液态玻璃与悬浮底栏，保留核心过渡"
+        subtitle = "原生材质与底栏，保留核心视频过渡"
     ),
     DATA_SAVER(
         title = "省流量",
@@ -50,15 +50,15 @@ fun resolveOnboardingSettingsGuidePreset(
 ): OnboardingSettingsGuidePreset {
     val sharedSummary = listOf(
         "默认使用 MD3 / Material 3",
-        "开启安卓液态玻璃和悬浮底栏",
+        "使用原生材质和底栏，液态玻璃按需开启",
         "Focus 默认显示关注标签；启用订阅插件后可显示订阅标签"
     )
     return when (profile) {
         OnboardingSettingsProfile.RECOMMENDED -> OnboardingSettingsGuidePreset(
             profile = profile,
-            bottomBarFloating = true,
-            bottomBarLiquidGlassEnabled = true,
-            androidNativeLiquidGlassEnabled = true,
+            bottomBarFloating = false,
+            bottomBarLiquidGlassEnabled = false,
+            androidNativeLiquidGlassEnabled = false,
             bottomBarSearchEnabled = false,
             topTabLabelMode = SettingsManager.TopTabLabelMode.TEXT_ONLY,
             topTabOrderIds = DEFAULT_ONBOARDING_TOP_TAB_IDS,
@@ -72,9 +72,9 @@ fun resolveOnboardingSettingsGuidePreset(
 
         OnboardingSettingsProfile.PERFORMANCE -> OnboardingSettingsGuidePreset(
             profile = profile,
-            bottomBarFloating = true,
-            bottomBarLiquidGlassEnabled = true,
-            androidNativeLiquidGlassEnabled = true,
+            bottomBarFloating = false,
+            bottomBarLiquidGlassEnabled = false,
+            androidNativeLiquidGlassEnabled = false,
             bottomBarSearchEnabled = false,
             topTabLabelMode = SettingsManager.TopTabLabelMode.TEXT_ONLY,
             topTabOrderIds = DEFAULT_ONBOARDING_TOP_TAB_IDS,
@@ -88,9 +88,9 @@ fun resolveOnboardingSettingsGuidePreset(
 
         OnboardingSettingsProfile.DATA_SAVER -> OnboardingSettingsGuidePreset(
             profile = profile,
-            bottomBarFloating = true,
-            bottomBarLiquidGlassEnabled = true,
-            androidNativeLiquidGlassEnabled = true,
+            bottomBarFloating = false,
+            bottomBarLiquidGlassEnabled = false,
+            androidNativeLiquidGlassEnabled = false,
             bottomBarSearchEnabled = false,
             topTabLabelMode = SettingsManager.TopTabLabelMode.TEXT_ONLY,
             topTabOrderIds = DEFAULT_ONBOARDING_TOP_TAB_IDS,
@@ -127,4 +127,6 @@ suspend fun applyOnboardingSettingsGuidePreset(
         value = preset.lowQualityHomeCoverInDataSaver
     )
     SettingsManager.setCardTransitionEnabled(context, preset.cardTransitionEnabled)
+    SettingsManager.setLiveSurfaceCardTransitionEnabled(context, true)
+    SettingsManager.setVideoReturnContentFollowProgressEnabled(context, true)
 }

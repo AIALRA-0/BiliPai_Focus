@@ -8,9 +8,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -18,16 +21,14 @@ import androidx.compose.ui.unit.sp
 internal data class UserUpBadgeVisualSpec(
     val cornerRadiusDp: Int,
     val horizontalPaddingDp: Int,
-    val verticalPaddingDp: Int,
-    val fontSp: Int
+    val verticalPaddingDp: Int
 )
 
 internal fun resolveUserUpBadgeVisualSpec(): UserUpBadgeVisualSpec {
     return UserUpBadgeVisualSpec(
         cornerRadiusDp = 3,
         horizontalPaddingDp = 3,
-        verticalPaddingDp = 2,
-        fontSp = 9
+        verticalPaddingDp = 2
     )
 }
 
@@ -45,12 +46,21 @@ fun UserUpBadge(
             .padding(
                 horizontal = spec.horizontalPaddingDp.dp,
                 vertical = spec.verticalPaddingDp.dp
-            )
+            ),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = "UP",
-            fontSize = spec.fontSp.sp,
-            lineHeight = spec.fontSp.sp,
+            style = MaterialTheme.typography.labelSmall.copy(
+                lineHeight = MaterialTheme.typography.labelSmall.fontSize,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both,
+                ),
+            ),
+            maxLines = 1,
+            softWrap = false,
             fontWeight = FontWeight.Bold,
             color = contentColor
         )

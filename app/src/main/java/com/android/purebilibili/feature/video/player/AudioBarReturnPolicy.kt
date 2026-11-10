@@ -6,5 +6,9 @@ internal fun shouldActivateAudioBarOnVideoExit(
     isLive: Boolean,
     isMiniOrPip: Boolean,
     isNavigatingToVideo: Boolean,
+    inAppMiniPlayerEnabled: Boolean = false,
+    stopPlaybackOnExit: Boolean = false,
 ): Boolean = barEnabled && hasVideoIdentity &&
-    !isLive && !isMiniOrPip && !isNavigatingToVideo
+    !isLive && !isMiniOrPip && !isNavigatingToVideo &&
+    // Stop-on-exit pauses playback; it must not hide the explicitly enabled resume entry.
+    !(inAppMiniPlayerEnabled && !stopPlaybackOnExit)

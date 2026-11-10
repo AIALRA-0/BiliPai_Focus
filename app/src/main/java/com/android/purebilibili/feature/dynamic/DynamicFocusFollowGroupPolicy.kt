@@ -19,6 +19,17 @@ internal fun filterDynamicItemsByFocusFollowGroups(
     }
 }
 
+internal fun DynamicPagePresentation.withFocusFollowGroupFilter(
+    config: FocusFollowGroupConfig,
+    filterEnabled: Boolean = true,
+): DynamicPagePresentation = copy(
+    items = filterDynamicItemsByFocusFollowGroups(
+        items = items,
+        config = config,
+        filterEnabled = filterEnabled,
+    ),
+)
+
 internal fun filterSidebarUsersByFocusFollowGroups(
     users: List<SidebarUser>,
     config: FocusFollowGroupConfig,

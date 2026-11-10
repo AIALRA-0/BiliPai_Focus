@@ -29,9 +29,9 @@ class AdaptiveLoadingIndicatorPolicyTest {
     }
 
     @Test
-    fun `material3 page uses official loading indicator`() {
+    fun `material3 page uses circular progress`() {
         assertEquals(
-            AdaptiveLoadingVisual.MATERIAL3_LOADING_INDICATOR,
+            AdaptiveLoadingVisual.MATERIAL3_PAGE_CIRCULAR,
             resolveAdaptiveLoadingVisual(
                 uiStyle = AppUiStyle.MATERIAL3,
                 density = AdaptiveLoadingDensity.PAGE,

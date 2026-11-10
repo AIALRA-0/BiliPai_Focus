@@ -46,9 +46,16 @@ internal fun Modifier.videoListBoundsAnimation(
 internal fun AnimatedVideoListItem(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    useLookaheadBounds: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(modifier = modifier) {
+        if (!useLookaheadBounds) {
+            // Deletable cards own their collapse animation. Keep lazy placement outside
+            // that subtree, without a Lookahead node that can be disposed mid-measure.
+            Box(content = content)
+            return@Box
+        }
         LookaheadScope {
             // Unlike animateContentSize, animateBounds also interpolates the child's constraints,
             // so covers resize gradually when a grid cell's fixed width changes.
@@ -112,5 +119,11 @@ internal fun VideoListLayoutToggle(
     }
 }
 
-internal fun resolveVideoListColumns(singleColumn: Boolean, availableWidthDp: Float): Int =
-    if (singleColumn || availableWidthDp < 320f) 1 else 2
+/**
+ * 视频列表列数策略：用户单列偏好优先；网格模式下每列保证 ≥320dp 的最小可读卡宽，
+ * ≥960dp 的大窗口推导出第 3 列并封顶，避免大平板内容利用不足。
+ */
+internal fun resolveVideoListColumns(singleColumn: Boolean, availableWidthDp: Float): Int {
+    if (singleColumn || availableWidthDp < 320f) return 1
+    return (availableWidthDp / 320f).toInt().coerceIn(2, 3)
+}

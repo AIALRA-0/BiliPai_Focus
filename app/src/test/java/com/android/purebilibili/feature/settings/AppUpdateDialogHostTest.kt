@@ -22,10 +22,8 @@ class AppUpdateDialogHostTest {
     @Test
     fun `alternate channel links retain the Focus fallback repository`() {
         val endpoints = AppUpdateChecker.resolveEndpointCandidates(
-            primary = AppUpdateEndpointSet(
+            primary = AppUpdateChecker.UpdateEndpoint(
                 releasesApi = "",
-                repositoryBuildGradleUrl = "",
-                repositoryUrl = "",
                 releasesPageUrl = "",
             ),
         )

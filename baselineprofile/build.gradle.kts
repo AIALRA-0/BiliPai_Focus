@@ -1,5 +1,7 @@
 plugins {
     id("com.android.test")
+    // Baseline profile 生成端：本模块宏基准的产物作为 profile 发布给 :app
+    alias(libs.plugins.androidx.baselineprofile)
     // AGP 9+ built-in Kotlin
 }
 
@@ -36,6 +38,12 @@ android {
                     apiLevel = 31
                     systemImageSource = "aosp"
                 }
+                // Android 13 起可采集 RuntimeShader 折射与玻璃控件分支。
+                create<com.android.build.api.dsl.ManagedVirtualDevice>("pixel6Api33") {
+                    device = "Pixel 6"
+                    apiLevel = 33
+                    systemImageSource = "aosp"
+                }
             }
         }
     }
@@ -48,7 +56,8 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.benchmark:benchmark-macro-junit4:1.4.1")
+    // 与 androidx.baselineprofile 插件 1.5.0 对齐（1.4.1 与 AGP 9 不兼容线配套）
+    implementation("androidx.benchmark:benchmark-macro-junit4:1.5.0")
     implementation("androidx.test.ext:junit:1.3.0")
     implementation("androidx.test.uiautomator:uiautomator:2.3.0")
     implementation("androidx.tracing:tracing-perfetto:1.0.0")

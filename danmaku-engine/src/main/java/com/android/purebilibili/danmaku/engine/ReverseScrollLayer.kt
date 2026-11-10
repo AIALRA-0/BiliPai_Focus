@@ -16,8 +16,6 @@ import com.bytedance.danmaku.render.engine.touch.ITouchDelegate
 import com.bytedance.danmaku.render.engine.touch.ITouchTarget
 import com.bytedance.danmaku.render.engine.utils.EVENT_DANMAKU_DISMISS
 import com.bytedance.danmaku.render.engine.utils.EVENT_DANMAKU_SHOW
-import com.bytedance.danmaku.render.engine.utils.HIGH_REFRESH_MAX_TIME
-import com.bytedance.danmaku.render.engine.utils.STEPPER_TIME
 import java.util.LinkedList
 
 internal const val REVERSE_LAYER_TYPE = DANMAKU_LAYER_REVERSE
@@ -56,6 +54,12 @@ internal class ReverseScrollLayer : IRenderLayer, ITouchDelegate, ConfigChangeLi
         buffer.addItems(list)
         buffer.trimBuffer(playTime)
     }
+
+    override fun addData(
+        playTime: Long,
+        list: List<DanmakuData>,
+        createItem: (DanmakuData) -> DrawItem<DanmakuData>,
+    ) = buffer.addData(playTime, list, createItem)
 
     override fun releaseItem(item: DrawItem<DanmakuData>) {
         controller.notifyEvent(Events.obtainEvent(EVENT_DANMAKU_DISMISS, item.data))
@@ -132,9 +136,6 @@ private class ReverseScrollLine(
     controller: DanmakuController,
     layer: IRenderLayer
 ) : BaseRenderLine(controller, layer) {
-    private var lastTypesettingTime = -1L
-    private var stepperTime = STEPPER_TIME
-
     override fun onLayoutChanged(width: Float, height: Float, x: Float, y: Float) {
         super.onLayoutChanged(width, height, x, y)
         measureAndLayout()
@@ -147,23 +148,17 @@ private class ReverseScrollLine(
         item.x = -item.width
         item.y = y
         item.showTime = playTime
+        beginItemTiming(item)
         mDrawingItems += item
         return true
     }
 
     override fun typesetting(playTime: Long, isPlaying: Boolean, configChanged: Boolean): Int {
-        val now = System.currentTimeMillis()
-        if (lastTypesettingTime >= 0L) {
-            stepperTime = (now - lastTypesettingTime).takeIf { it < HIGH_REFRESH_MAX_TIME } ?: STEPPER_TIME
-        }
-        lastTypesettingTime = now
-
         if (isPlaying) {
             mDrawingItems.forEach { item ->
-                if (!item.isPaused) {
-                    item.x += itemSpeed(item) * stepperTime
-                    item.showDuration += stepperTime
-                }
+                val elapsedMs = itemElapsedTimeMs(item)
+                item.x += itemSpeed(item) * elapsedMs
+                item.showDuration += elapsedMs
             }
             val iterator = mDrawingItems.iterator()
             while (iterator.hasNext()) {

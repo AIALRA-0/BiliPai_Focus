@@ -1,0 +1,7 @@
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">bilivideo.com</domain>
+        <domain includeSubdomains="true">hdslb.com</domain>
+    </domain-config>
+</network-security-config>

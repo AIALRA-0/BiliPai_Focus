@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.home.components.cards
 
 import com.android.purebilibili.feature.home.HomeCardWallpaperSurfaceMode
 import com.android.purebilibili.feature.home.resolveHomeCardWallpaperSurfaceMode
+import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.store.resolveHomeCardFrostedGlassEnabled
 import androidx.palette.graphics.Palette
 import androidx.compose.ui.graphics.Color
 import kotlin.test.Test
@@ -9,6 +11,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class VideoCardAdaptiveTintPolicyTest {
+
+    @Test
+    fun cardEffectsAreOffByDefault() {
+        assertEquals(false, HomeSettings().homeCardDynamicTintEnabled)
+        assertEquals(false, HomeSettings().homeCardFrostedGlassEnabled)
+    }
+
+    @Test
+    fun explicitLegacyCardSettingIsPreservedUntilGlassGetsItsOwnValue() {
+        assertEquals(false, resolveHomeCardFrostedGlassEnabled(null, null))
+        assertEquals(true, resolveHomeCardFrostedGlassEnabled(null, true))
+        assertEquals(false, resolveHomeCardFrostedGlassEnabled(false, true))
+        assertEquals(true, resolveHomeCardFrostedGlassEnabled(true, false))
+    }
 
     @Test
     fun resolveCoverBottomSamplingRegion_targetsWholeCover() {
@@ -171,6 +187,7 @@ class VideoCardAdaptiveTintPolicyTest {
             HomeCardWallpaperSurfaceMode.REALTIME_FROSTED,
             resolveHomeCardWallpaperSurfaceMode(
                 dynamicTintEnabled = true,
+                frostedGlassEnabled = true,
                 wallpaperVisible = true,
                 wallpaperIsStatic = true,
                 backdropReady = true,
@@ -186,6 +203,7 @@ class VideoCardAdaptiveTintPolicyTest {
     fun resolveHomeCardWallpaperSurfaceMode_fallsBackForAnimatedOrUnavailableWallpaper() {
         val animated = resolveHomeCardWallpaperSurfaceMode(
             dynamicTintEnabled = true,
+            frostedGlassEnabled = true,
             wallpaperVisible = true,
             wallpaperIsStatic = false,
             backdropReady = true,
@@ -196,6 +214,7 @@ class VideoCardAdaptiveTintPolicyTest {
         )
         val notReady = resolveHomeCardWallpaperSurfaceMode(
             dynamicTintEnabled = true,
+            frostedGlassEnabled = true,
             wallpaperVisible = true,
             wallpaperIsStatic = true,
             backdropReady = false,
@@ -212,6 +231,7 @@ class VideoCardAdaptiveTintPolicyTest {
     fun resolveHomeCardWallpaperSurfaceMode_disablesRealtimeForBudgetOrPlatform() {
         val dataSaver = resolveHomeCardWallpaperSurfaceMode(
             dynamicTintEnabled = true,
+            frostedGlassEnabled = true,
             wallpaperVisible = true,
             wallpaperIsStatic = true,
             backdropReady = true,
@@ -222,6 +242,7 @@ class VideoCardAdaptiveTintPolicyTest {
         )
         val oldApi = resolveHomeCardWallpaperSurfaceMode(
             dynamicTintEnabled = true,
+            frostedGlassEnabled = true,
             wallpaperVisible = true,
             wallpaperIsStatic = true,
             backdropReady = true,
@@ -240,6 +261,7 @@ class VideoCardAdaptiveTintPolicyTest {
             HomeCardWallpaperSurfaceMode.STANDARD,
             resolveHomeCardWallpaperSurfaceMode(
                 dynamicTintEnabled = false,
+                frostedGlassEnabled = false,
                 wallpaperVisible = true,
                 wallpaperIsStatic = true,
                 backdropReady = true,
@@ -253,6 +275,7 @@ class VideoCardAdaptiveTintPolicyTest {
             HomeCardWallpaperSurfaceMode.STANDARD,
             resolveHomeCardWallpaperSurfaceMode(
                 dynamicTintEnabled = true,
+                frostedGlassEnabled = true,
                 wallpaperVisible = false,
                 wallpaperIsStatic = true,
                 backdropReady = true,
@@ -262,6 +285,59 @@ class VideoCardAdaptiveTintPolicyTest {
                 sdkInt = 34,
             )
         )
+    }
+
+    @Test
+    fun cardTintAndFrostedGlassCanBeUsedSeparately() {
+        val tintOnly = resolveHomeCardWallpaperSurfaceMode(
+            dynamicTintEnabled = true,
+            frostedGlassEnabled = false,
+            wallpaperVisible = true,
+            wallpaperIsStatic = true,
+            backdropReady = true,
+            blurEnabled = true,
+            isDataSaverActive = false,
+            lowBlurBudgetForced = false,
+            sdkInt = 34,
+        )
+        val glassOnly = resolveHomeCardWallpaperSurfaceMode(
+            dynamicTintEnabled = false,
+            frostedGlassEnabled = true,
+            wallpaperVisible = true,
+            wallpaperIsStatic = true,
+            backdropReady = true,
+            blurEnabled = true,
+            isDataSaverActive = false,
+            lowBlurBudgetForced = false,
+            sdkInt = 34,
+        )
+        assertEquals(HomeCardWallpaperSurfaceMode.LIGHTWEIGHT_TINT, tintOnly)
+        assertEquals(HomeCardWallpaperSurfaceMode.REALTIME_FROSTED, glassOnly)
+
+        val tintedSurface = resolveVideoCardAmbientDrawSpec(
+            wallpaperPalette = WallpaperPalette(Color.Blue, Color.Red),
+            yFraction = 0.5f,
+            coverTint = null,
+            wallpaperTintEnabled = true,
+            isDarkTheme = false,
+            defaultContainerColor = Color.White,
+            defaultBorderColor = Color.Gray,
+            frostedGlassEnabled = false,
+            dynamicTintEnabled = true,
+        )
+        val neutralGlass = resolveVideoCardAmbientDrawSpec(
+            wallpaperPalette = WallpaperPalette(Color.Blue, Color.Red),
+            yFraction = 0.5f,
+            coverTint = null,
+            wallpaperTintEnabled = true,
+            isDarkTheme = false,
+            defaultContainerColor = Color.White,
+            defaultBorderColor = Color.Gray,
+            frostedGlassEnabled = true,
+            dynamicTintEnabled = false,
+        )
+        assertTrue(tintedSurface.containerColor.alpha > 0.8f)
+        assertEquals(Color.White.copy(alpha = 0.34f), neutralGlass.containerColor)
     }
 
     @Test

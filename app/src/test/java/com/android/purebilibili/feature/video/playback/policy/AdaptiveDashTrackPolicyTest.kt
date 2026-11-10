@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.playback.policy
 
+import com.android.purebilibili.core.player.policy.PlaybackQualityMode
+
 import com.android.purebilibili.data.model.response.Dash
 import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.data.model.response.DashVideo
@@ -7,6 +9,7 @@ import com.android.purebilibili.data.model.response.Dolby
 import com.android.purebilibili.data.model.response.Flac
 import com.android.purebilibili.feature.video.playback.audio.AUDIO_QUALITY_DOLBY
 import com.android.purebilibili.feature.video.playback.audio.AUDIO_QUALITY_HI_RES
+import com.android.purebilibili.feature.video.playback.audio.AudioStreamKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -105,28 +108,6 @@ class AdaptiveDashTrackPolicyTest {
     }
 
     @Test
-    fun `premium audio refreshes source when speed compatibility bucket changes`() {
-        val shouldRefresh = shouldRefreshPremiumAudioForPlaybackSpeedChange(
-            requestedAudioQuality = 30251,
-            previousPlaybackSpeed = 1.0f,
-            nextPlaybackSpeed = 2.0f
-        )
-
-        assertEquals(true, shouldRefresh)
-    }
-
-    @Test
-    fun `premium audio does not refresh source inside same speed compatibility bucket`() {
-        val shouldRefresh = shouldRefreshPremiumAudioForPlaybackSpeedChange(
-            requestedAudioQuality = 30251,
-            previousPlaybackSpeed = 2.0f,
-            nextPlaybackSpeed = 3.0f
-        )
-
-        assertEquals(false, shouldRefresh)
-    }
-
-    @Test
     fun `explicit hi res keeps only flac representation`() {
         val hiRes = DashAudio(
             id = AUDIO_QUALITY_HI_RES,
@@ -207,5 +188,14 @@ class AdaptiveDashTrackPolicyTest {
         )
 
         assertEquals(listOf(30280), result.audioTracks.map { it.id })
+    }
+    @Test
+    fun `speed transitions preserve raw special preferences using actual returned kind`() {
+        for (kind in listOf(AudioStreamKind.DOLBY, AudioStreamKind.HI_RES)) {
+            assertEquals(100010, resolveSpeedCompatibleAudioQualityPreference(100010, 1.5f, requestedAudioKind = kind))
+            assertEquals(-1, resolveSpeedCompatibleAudioQualityPreference(100010, 1.51f, requestedAudioKind = kind))
+        }
+        assertEquals(100010, resolveSpeedCompatibleAudioQualityPreference(100010, 2f, requestedAudioKind = AudioStreamKind.STANDARD))
+        assertEquals(-1, resolveSpeedCompatibleAudioQualityPreference(30255, 2f))
     }
 }

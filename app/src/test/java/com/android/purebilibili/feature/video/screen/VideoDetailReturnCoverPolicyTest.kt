@@ -12,6 +12,290 @@ import org.junit.Test
 import java.io.File
 
 class VideoDetailReturnCoverPolicyTest {
+    @Test
+    fun liveReturnAndCancelledReturnNeverExposeTheMediaBackdrop() {
+        val depths = (0..100).map { it / 100f }
+        for (committed in listOf(false, true)) {
+            val frames = (depths + depths.reversed()).map { depth ->
+                resolveVideoDetailReturnMediaFrame(
+                    transitionProgress = depth,
+                    isCommittedCardReturn = committed,
+                    isReturnGestureInProgress = !committed,
+                    hasResidentCover = true,
+                    liveReturnMorph = true,
+                )
+            }
+            for (frame in frames) {
+                val compositedAlpha = frame.coverAlpha + frame.playerAlpha * (1f - frame.coverAlpha)
+                assertEquals(1f, compositedAlpha, .0001f)
+            }
+            assertEquals(frames.take(depths.size), frames.takeLast(depths.size).reversed())
+        }
+    }
+
+    @Test
+    fun entryCoverFadeNeverExposesAnEmptyMediaSlot() {
+        for (step in 0..20) {
+            val frame = resolveVideoDetailReturnMediaFrame(
+                transitionProgress = 1f,
+                isCommittedCardReturn = false,
+                hasResidentCover = true,
+                entryCoverAlpha = step / 20f,
+            )
+            // Source-over alpha: the video stays opaque underneath throughout entry.
+            val compositedAlpha = frame.coverAlpha + frame.playerAlpha * (1f - frame.coverAlpha)
+            assertEquals(1f, compositedAlpha, 0.0001f)
+            assertEquals(1f, frame.playerAlpha, 0.0001f)
+        }
+        val waiting = resolveVideoDetailReturnMediaFrame(
+            transitionProgress = 1f,
+            isCommittedCardReturn = false,
+            hasResidentCover = true,
+            showResidentCoverUntilFirstFrame = true,
+            entryCoverAlpha = 0f,
+        )
+        assertEquals(VideoDetailReturnMediaFrame(1f, 0f), waiting)
+    }
+
+    @Test
+    fun returnAndGestureCancellationKeepTheirTimelineDuringFirstFrameFade() {
+        for (depth in listOf(1f, 0.6f, 0.2f, 0.05f, 0.2f, 0.6f, 1f)) {
+            for (committed in listOf(false, true)) {
+                fun frame(entryAlpha: Float) = resolveVideoDetailReturnMediaFrame(
+                    transitionProgress = depth,
+                    isCommittedCardReturn = committed,
+                    isReturnGestureInProgress = !committed,
+                    hasResidentCover = true,
+                    liveReturnMorph = true,
+                    entryCoverAlpha = entryAlpha,
+                )
+                assertEquals(frame(0f), frame(0.7f))
+            }
+        }
+        assertEquals(
+            VideoDetailReturnMediaFrame(0f, 1f),
+            resolveVideoDetailReturnMediaFrame(1f, false, false, entryCoverAlpha = 1f),
+        )
+    }
+
+    @Test
+    fun nativeCardInfoFillsTheBodyYieldDuringOpeningReturnAndCancel() {
+        for (layout in listOf(VideoCardSourceLayout.STACKED, VideoCardSourceLayout.SIDE_BY_SIDE)) {
+            for (phase in listOf(
+                VideoCardTransitionBackgroundPhase.OPENING,
+                VideoCardTransitionBackgroundPhase.RETURNING,
+                VideoCardTransitionBackgroundPhase.HELD,
+            )) {
+                var previousMedia: Float? = null
+                // Reverse direction without changing phase, as a cancelled or re-grabbed
+                // predictive gesture does. No frame may lose both information layers.
+                for (step in (0..100).toList() + (100 downTo 0).toList()) {
+                    val depth = step / 100f
+                    val gesture = phase == VideoCardTransitionBackgroundPhase.HELD
+                    val source = resolveVideoDetailFlyingSourceChromeAlpha(
+                        morphDepthProgress = depth,
+                        phase = phase,
+                        isReturnGestureInProgress = gesture,
+                        sourceLayout = layout,
+                        preserveNativeViewport = true,
+                    )
+                    val body = com.android.purebilibili.core.ui.transition
+                        .resolveVideoCardSecondaryContentVisualFrame(
+                            morphDepthProgress = depth,
+                            phase = phase,
+                            isReturnGestureInProgress = gesture,
+                            motionTier = com.android.purebilibili.core.ui.adaptive.MotionTier.Normal,
+                            sourceLayout = layout,
+                            preserveNativeViewport = true,
+                        )
+                    assertEquals("Missing information at $phase depth=$depth", 1f, source + body.alpha, .0001f)
+                    val media = com.android.purebilibili.core.ui.transition
+                        .resolveVideoDetailMediaLayoutHandoffProgress(
+                            morphDepthProgress = depth,
+                            phase = phase,
+                            isReturnGestureInProgress = gesture,
+                            sourceLayout = layout,
+                            sourceChromeAlpha = source,
+                            preserveNativeViewport = true,
+                        )
+                    assertEquals(source, media, .0001f)
+                    previousMedia?.let { assertTrue(kotlin.math.abs(media - it) < .025f) }
+                    previousMedia = media
+                }
+            }
+        }
+    }
+
+    @Test
+    fun nativeInfoHandoffKeepsTheLiveCoverSwapLateAndReleasesAfterCommit() {
+        val depth = .5f
+        assertTrue(resolveVideoDetailFlyingSourceChromeAlpha(
+            depth, VideoCardTransitionBackgroundPhase.RETURNING, false,
+            VideoCardSourceLayout.STACKED, preserveNativeViewport = true,
+        ) > 0f)
+        assertEquals(0f, com.android.purebilibili.core.ui.transition
+            .resolveVideoCardLiveReturnVisualHandoffAlpha(depth), .0001f)
+        assertEquals(0f, resolveVideoDetailFlyingSourceChromeAlpha(
+            0f, VideoCardTransitionBackgroundPhase.IDLE, false,
+            VideoCardSourceLayout.STACKED, isCommittedCardReturn = true,
+            preserveNativeViewport = true,
+        ), .0001f)
+        // Playback bars retain their separate capsule geometry and timing.
+        assertEquals(0f, resolveVideoDetailFlyingSourceChromeAlpha(
+            depth, VideoCardTransitionBackgroundPhase.RETURNING, false,
+            VideoCardSourceLayout.SIDE_BY_SIDE, isNowPlayingBar = true,
+            preserveNativeViewport = true,
+        ), .0001f)
+    }
+
+    @Test
+    fun horizontalInfoIsClippedBehindTheExpandingMediaEdge() {
+        // 800px viewport, 300px source cover + 500px info, compensated by 2x.
+        fun clip(progress: Float, localScale: Float = 1f) =
+            resolveVideoDetailHorizontalInfoClipLeftPx(
+                viewportWidthPx = 800f,
+                coverRightPx = 150f,
+                infoLeftPx = 150f,
+                inverseScaleX = 2f,
+                handoffProgress = progress,
+                localScaleX = localScale,
+            )
+        assertEquals(500f, clip(0f), 0.001f)
+        assertEquals(250f, clip(0.5f), 0.001f)
+        assertEquals(0f, clip(1f), 0.001f)
+        // Reconstructed content is drawn in source coordinates rather than entry coordinates.
+        assertEquals(125f, clip(0.5f, localScale = 2f), 0.001f)
+    }
+
+
+    @Test
+    fun loadingDetailRevealsFrozenCardEarlyOnlyOnReturn() {
+        assertEquals(
+            1f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 0.7f,
+                phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                detailContentLoading = true,
+            ),
+            0.001f,
+        )
+        assertEquals(
+            0f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 0.7f,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                detailContentLoading = true,
+            ),
+            0.001f,
+        )
+        assertEquals(
+            1f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 0.7f,
+                phase = VideoCardTransitionBackgroundPhase.HELD,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                detailContentLoading = true,
+            ),
+            0.001f,
+        )
+        assertEquals(
+            0f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 0.7f,
+                phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun ordinaryDetailMediaRemainsVisibleThroughoutNavigation() {
+        for (phase in VideoCardTransitionBackgroundPhase.entries) {
+            for (sourceAlpha in listOf(0f, 0.5f, 1f)) {
+                assertEquals(1f, resolveVideoDetailNowPlayingMediaAlpha(
+                    ownsNowPlayingTransition = false,
+                    isCommittedCardReturn = false,
+                    phase = phase,
+                    sourceChromeAlpha = sourceAlpha,
+                ), 0.001f)
+            }
+        }
+    }
+
+    @Test
+    fun nowPlayingOpeningHandsSnapshotOverToVisiblePlayer() {
+        for ((depth, expectedMediaAlpha) in listOf(0f to 0f, 0.1f to 0.5f, 0.7f to 1f, 1f to 1f)) {
+            val sourceAlpha = resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = depth,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                isNowPlayingBar = true,
+            )
+            assertEquals(expectedMediaAlpha, resolveVideoDetailNowPlayingMediaAlpha(
+                ownsNowPlayingTransition = true,
+                isCommittedCardReturn = false,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                sourceChromeAlpha = sourceAlpha,
+            ), 0.001f)
+        }
+    }
+
+    @Test
+    fun completedNowPlayingReturnRemovesDetailMedia() {
+        assertEquals(0f, resolveVideoDetailNowPlayingMediaAlpha(
+            ownsNowPlayingTransition = true,
+            isCommittedCardReturn = true,
+            phase = VideoCardTransitionBackgroundPhase.IDLE,
+            sourceChromeAlpha = 0f,
+        ), 0.001f)
+    }
+
+    @Test
+    fun nowPlayingBarUsesOneSnapshotWindowForOpeningReturnAndGestureRestore() {
+        for ((depth, expected) in listOf(1f to 0f, 0.7f to 0f, 0.1f to 0.5f, 0.02f to 1f, 0f to 1f)) {
+            for (phase in listOf(
+                VideoCardTransitionBackgroundPhase.OPENING,
+                VideoCardTransitionBackgroundPhase.RETURNING,
+                VideoCardTransitionBackgroundPhase.HELD,
+            )) {
+                assertEquals(
+                    expected,
+                    resolveVideoDetailFlyingSourceChromeAlpha(
+                        morphDepthProgress = depth,
+                        phase = phase,
+                        isReturnGestureInProgress = phase == VideoCardTransitionBackgroundPhase.HELD,
+                        sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                        isNowPlayingBar = true,
+                    ),
+                    0.001f,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun nowPlayingSnapshotDoesNotReappearAfterOwnershipReturnsToRealBar() {
+        assertEquals(
+            0f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 0f,
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                isNowPlayingBar = true,
+                isCommittedCardReturn = true,
+            ),
+            0.001f,
+        )
+    }
 
     @Test
     fun flyingSourceChromeOwnsClickFrameAndReturnLandingFrame() {
@@ -154,24 +438,40 @@ class VideoDetailReturnCoverPolicyTest {
             isVideoDetailEntryActiveMiuixTransitionSource(
                 entrySourceRoute = "video/BV_PARENT",
                 activeSourceRoute = "video/BV_PARENT",
+                miuixTransitionEnabled = true,
             )
         )
         assertTrue(
             isVideoDetailEntryActiveMiuixTransitionSource(
                 entrySourceRoute = "video/BV_PARENT?title=parent",
                 activeSourceRoute = "video/BV_PARENT?from=related",
+                miuixTransitionEnabled = true,
             )
         )
         assertFalse(
             isVideoDetailEntryActiveMiuixTransitionSource(
                 entrySourceRoute = "home",
                 activeSourceRoute = "video/BV_PARENT",
+                miuixTransitionEnabled = true,
             )
         )
         assertFalse(
             isVideoDetailEntryActiveMiuixTransitionSource(
                 entrySourceRoute = null,
                 activeSourceRoute = "video/BV_PARENT",
+                miuixTransitionEnabled = true,
+            )
+        )
+    }
+
+    @Test
+    fun matchingSourceDoesNotOwnDisabledCardTransition() {
+        // The now-playing bar still records its source route and capsule bounds with motion off.
+        assertFalse(
+            isVideoDetailEntryActiveMiuixTransitionSource(
+                entrySourceRoute = "home",
+                activeSourceRoute = "home",
+                miuixTransitionEnabled = false,
             )
         )
     }
@@ -249,15 +549,17 @@ class VideoDetailReturnCoverPolicyTest {
         assertTrue(chrome.contains("heightPx * inverse.scaleY"))
         assertTrue(chrome.contains("lastClickedNativeCoverOverlayLayer"))
         assertTrue(chrome.contains("shouldDrawNativeCoverOverlay("))
+        // Include the full multi-line ownership guard before each chrome call.
         val coverChromeGuard = holder
             .substringBefore("VideoDetailReturnCoverChrome(")
             .takeLast(1_500)
-        assertTrue(coverChromeGuard.contains("miuixVisualAssetsActive &&"))
+        // 源码里 `if (` 与条件分行，故断言条件标识符本身而非单行字面量。
+        assertTrue(coverChromeGuard.contains("miuixVisualAssetsActive"))
         assertTrue(coverChromeGuard.contains("shouldDrawFlyingReconstructedSourceChrome("))
         assertFalse(coverChromeGuard.contains("lastClickedNativeCardLayer == null"))
         val sourceChromeGuard = holder
             .substringBefore("VideoDetailReturnSourceCardChrome(")
-            .takeLast(1_000)
+            .takeLast(1_400)
         assertTrue(sourceChromeGuard.contains("miuixVisualAssetsActive"))
         assertTrue(sourceChromeGuard.contains("shouldDrawFlyingReconstructedSourceChrome("))
     }
@@ -789,7 +1091,7 @@ class VideoDetailReturnCoverPolicyTest {
             0.0001f,
         )
         assertEquals(
-            0.5f,
+            1f,
             resolveVideoDetailReturnPlayerAlpha(0.1f, true, true, liveReturnMorph = true),
             0.0001f,
         )
@@ -1011,7 +1313,7 @@ class VideoDetailReturnCoverPolicyTest {
             0.0001f,
         )
         assertEquals(
-            0.5f,
+            1f,
             resolveVideoDetailReturnPlayerAlpha(
                 transitionProgress = 0.1f,
                 isCommittedCardReturn = false,
@@ -1419,6 +1721,66 @@ class VideoDetailReturnCoverPolicyTest {
     }
 
     @Test
+    fun `flying entry mounts detail content before morph settles`() {
+        // 进场：Miuix 飞行 entry 的根过渡已接管正文 alpha（父层 graphicsLayer 按 morph 进度
+        // 淡入 + 自上而下裁剪），因此正文必须随 morph 提前挂载。否则数据到达后正文被
+        // AnimatedVisibility 整块隐藏，只剩近白容器背景 → 「进详情页一片白遮罩」。
+        assertTrue(
+            shouldShowVideoDetailContent(
+                isTransitionFinished = false,
+                isLeaving = false,
+                rootTransitionOwnsContentAlpha = true,
+            )
+        )
+        // 无根过渡接管（非 morph 路径）时仍等 settle，避免提前挂载重内容。
+        assertFalse(
+            shouldShowVideoDetailContent(
+                isTransitionFinished = false,
+                isLeaving = false,
+                rootTransitionOwnsContentAlpha = false,
+            )
+        )
+        // 退场语义保持不变：未 finish 不得重新放行。
+        assertFalse(
+            shouldShowVideoDetailContent(
+                isTransitionFinished = false,
+                isLeaving = true,
+                rootTransitionOwnsContentAlpha = true,
+            )
+        )
+    }
+
+    @Test
+    fun `fresh detail body waits for landing while an already loaded preview stays mounted`() {
+        assertFalse(shouldShowVideoDetailContent(
+            isTransitionFinished = false,
+            isLeaving = false,
+            rootTransitionOwnsContentAlpha = true,
+            deferFreshEntryContent = true,
+        ))
+        assertTrue(shouldShowVideoDetailContent(
+            isTransitionFinished = true,
+            isLeaving = false,
+            rootTransitionOwnsContentAlpha = true,
+            deferFreshEntryContent = true,
+        ))
+        assertTrue(shouldShowVideoDetailContent(
+            isTransitionFinished = false,
+            isLeaving = false,
+            rootTransitionOwnsContentAlpha = true,
+            keepContentVisibleAfterBackPreview = true,
+            deferFreshEntryContent = true,
+        ))
+        assertFalse(shouldShowVideoDetailContent(
+            isTransitionFinished = false,
+            isLeaving = true,
+            rootTransitionOwnsContentAlpha = true,
+            keepContentVisibleAfterBackPreview = true,
+            deferFreshEntryContent = true,
+        ))
+    }
+
+    @Test
     fun `explicit force cover still switches detail into returning visual state`() {
         assertTrue(
             shouldUseReturningVideoDetailVisualState(
@@ -1602,11 +1964,48 @@ class VideoDetailReturnCoverPolicyTest {
             clickChromeSnapshot = null,
             prefetchUrl = "https://prefetch@640w_400h.webp",
             prefetchCacheKey = "cover_BV1_n_640x400",
+            prefetchDecodeWidthPx = 640,
+            prefetchDecodeHeightPx = 400,
             routeCoverUrl = "https://route",
             bvid = "BV1",
         )
         assertEquals("https://prefetch@640w_400h.webp", fromPrefetch!!.url)
         assertEquals("cover_BV1_n_640x400", fromPrefetch.cacheKey)
+        assertEquals(640, fromPrefetch.decodeWidthPx)
+        assertEquals(400, fromPrefetch.decodeHeightPx)
+    }
+
+    @Test
+    fun residentCoverKeepsItsDecodeAndCacheIdentityAfterNavigationDropsSourceMetadata() {
+        val retained = VideoDetailResidentCoverSource(
+            url = "https://dynamic/cover.jpg",
+            cacheKey = "dynamic_cover",
+            decodeWidthPx = 640,
+            decodeHeightPx = 400,
+        )
+        val source = resolveVideoDetailResidentCoverSource(
+            sourceChromeSnapshot = null,
+            clickChromeSnapshot = null,
+            retainedStationarySource = retained,
+            prefetchUrl = "https://home/other-crop.jpg",
+            prefetchCacheKey = "home_cover",
+            routeCoverUrl = "https://detail/other-crop.jpg",
+            bvid = "BV1",
+        )
+        assertEquals(retained, source)
+        // A nested destination can still supply its own confirmed source.
+        val next = VideoCardSourceChromeSnapshot(
+            title = "child",
+            ownerName = "up",
+            coverUrl = "https://related/child.jpg",
+            coverCacheKey = "child_cover",
+        )
+        assertEquals(next.coverUrl, resolveVideoDetailResidentCoverSource(
+            sourceChromeSnapshot = next,
+            retainedStationarySource = retained,
+            routeCoverUrl = "https://detail/other-crop.jpg",
+            bvid = "BV2",
+        )?.url)
     }
 
     @Test
@@ -1627,5 +2026,105 @@ class VideoDetailReturnCoverPolicyTest {
             com.android.purebilibili.core.ui.transition.resolveVideoSharedCoverCacheKey("BV1"),
             source.cacheKey,
         )
+    }
+
+    @Test
+    fun committedIdleReturnZeroesFlyingChromeInsteadOfInvertingDetailChrome() {
+        // IDLE + 返回已提交时详情 chrome 已返回 0（让位给列表卡）。重建壳若继续沿用
+        // `1f − detailChromeAlpha` 的互补关系，就会得到 1f —— 一块全不透明的信息板
+        // 凭空盖在卡槽上，正是「白色遮罩」。两者必须同时为 0。
+        assertEquals(
+            0f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 1f,
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                isCommittedCardReturn = true,
+            ),
+            0.001f,
+        )
+        // 未提交的 IDLE 保持原语义：互补路径本身就让位（detailChromeAlpha = 1）。
+        assertEquals(
+            0f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 0f,
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            ),
+            0.001f,
+        )
+        // 预测返回手势进行中不走这条守卫，仍走互补路径：IDLE 下 depth 被强制为 0，
+        // 手势分支取 `1f − handoff` 得 detailChromeAlpha = 1 ⇒ 重建壳 alpha = 0。
+        // 若守卫不区分手势，手势起点会把重建壳拉满 1f（详情页此刻完全可见）。
+        assertEquals(
+            0f,
+            resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = 0f,
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+                isReturnGestureInProgress = true,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                isCommittedCardReturn = true,
+            ),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun ordinaryAndPredictiveReturnsKeepTheInfoBandMountedThroughoutHandoff() {
+        for (gesture in listOf(false, true)) {
+            assertTrue(
+                shouldDrawFlyingReconstructedSourceChrome(
+                    phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                    isReturnGestureInProgress = gesture,
+                ),
+            )
+            for (depth in listOf(0.18f, 0.1f, 0.02f)) {
+                val detailAlpha = com.android.purebilibili.core.ui.transition
+                    .resolveVideoCardDetailChromeAlpha(
+                        morphDepthProgress = depth,
+                        phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                        isReturnGestureInProgress = gesture,
+                    )
+                val sourceAlpha = resolveVideoDetailFlyingSourceChromeAlpha(
+                    morphDepthProgress = depth,
+                    phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                    isReturnGestureInProgress = gesture,
+                    sourceLayout = VideoCardSourceLayout.STACKED,
+                )
+                assertEquals(1f, detailAlpha + sourceAlpha, 0.001f)
+                if (depth == 0.1f) assertEquals(0.5f, sourceAlpha, 0.001f)
+            }
+        }
+        assertFalse(
+            shouldDrawFlyingReconstructedSourceChrome(
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+                isReturnGestureInProgress = false,
+            ),
+        )
+        assertTrue(
+            shouldDrawFlyingReconstructedSourceChrome(
+                phase = VideoCardTransitionBackgroundPhase.HELD,
+                isReturnGestureInProgress = false,
+                isGestureRestoreInProgress = true,
+            ),
+        )
+    }
+
+    @Test
+    fun reconstructedInfoSurfacePaintsAnOpaqueBaseUnderTheTint() {
+        val source = File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/" +
+                "VideoDetailReturnSourceCardChrome.kt"
+        ).readText()
+        val opaqueBase = source.indexOf(".background(baseContainer, shape)")
+        val tintLayer = source.indexOf(".background(surface.containerColor, shape)")
+        // tint 路径下 containerColor 只有 ~0.85 alpha。若只铺这一层，下层详情正文会在
+        // 信息槽里以 ~15% 透出，且 0.85×254 + 0.15×247 ≈ 254 比页面底色 247 更亮 ——
+        // 观感就是一块盖住卡片的白色遮罩。必须先铺不透明 cardContainer。
+        assertTrue(opaqueBase >= 0)
+        assertTrue(tintLayer >= 0)
+        assertTrue(opaqueBase < tintLayer)
     }
 }

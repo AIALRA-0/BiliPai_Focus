@@ -14,30 +14,33 @@ class HomeFeedSkeletonCardStructureTest {
             .substringAfter("Loading Skeleton per page")
             .substringBefore("} else if (categoryState.error")
 
-        assertTrue(loadingGridSource.contains("val skeletonPulse = rememberHomeFeedSkeletonPulse()"))
+        assertTrue(loadingGridSource.contains("rememberHomeFeedSkeletonPulseState()"))
+        assertTrue(loadingGridSource.contains("pulse = { skeletonPulseState.value }"))
         assertTrue(loadingGridSource.contains("HomeFeedSkeletonCard("))
         assertTrue(loadingGridSource.contains("contentType = { \"home_feed_skeleton_card\" }"))
+        // 骨架不再自建独立网格：改为交给内容网格，在同一 LazyLayout 内原地铺占位卡，
+        // 数据到达时是 item 原地替换而不是整屏重建。
+        assertTrue(loadingGridSource.contains("initialSkeletonContent = initialSkeletonContent"))
+        assertFalse(loadingGridSource.contains("LazyVerticalStaggeredGrid("))
         assertFalse(loadingGridSource.contains("VideoCardSkeleton("))
         assertFalse(loadingGridSource.contains("index % 10"))
     }
 
     @Test
-    fun featureSkeletonUsesSharedHomeGeometryAndReversePulse() {
+    fun featureSkeletonUsesSharedHomeGeometryAndDrawSweep() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeFeedSkeletonCard.kt")
 
-        assertTrue(source.contains("RepeatMode.Reverse"))
-        assertTrue(source.contains("durationMillis = HOME_FEED_SKELETON_PULSE_DURATION_MILLIS"))
-        assertTrue(source.contains("VIDEO_SHARED_COVER_ASPECT_RATIO"))
+        assertTrue(source.contains("rememberSkeletonSweepState()"))
+        assertTrue(source.contains("skeletonBackground(homeFeedSkeletonFill("))
+        assertTrue(source.contains("videoCardCoverAspectRatio()"))
         // 骨架几何与真实视频卡共享 Card 语义，且卡片自身不再叠加底部 padding
         //（间距统一由网格 verticalItemSpacingDp 决定）。
-        assertTrue(source.contains("cardCornerRadius = AppShapes.containerCornerDp(ContainerLevel.Card)"))
-        assertTrue(source.contains("cardShape = AppShapes.container(ContainerLevel.Card)"))
+        assertTrue(source.contains("cardCornerRadius = AppShapes.containerCornerDp(cardLevel)"))
+        assertTrue(source.contains("cardShape = AppShapes.container(cardLevel)"))
         assertFalse(source.contains(".padding(bottom = AppSpacingTokens.Medium)"))
-        assertTrue(
-            source.contains(
-                ".padding(horizontal = AppSpacingTokens.Small + AppSpacingTokens.Micro, vertical = AppSpacingTokens.Small)"
-            )
-        )
+        assertTrue(source.contains("ContentSkeletonText("))
+        assertTrue(source.contains("start = if (storyStyle) 0.dp else 10.dp"))
+        assertTrue(source.contains("compactStatsOnCover"))
     }
 
     private fun loadSource(path: String): String {

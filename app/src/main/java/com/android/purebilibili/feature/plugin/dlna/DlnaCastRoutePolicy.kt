@@ -1,8 +1,6 @@
 package com.android.purebilibili.feature.plugin.dlna
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Tv
-import com.android.purebilibili.core.plugin.CastPluginRoute
+import com.android.purebilibili.plugin.sdk.CastPluginRoute
 import com.android.purebilibili.feature.cast.SsdpDiscovery
 import com.android.purebilibili.feature.cast.VisibleSsdpDevice
 
@@ -13,8 +11,7 @@ sealed class DlnaRouteSelection {
 internal fun toDlnaCastRoute(device: VisibleSsdpDevice): CastPluginRoute = CastPluginRoute(
     routeId = "ssdp:${device.device.location}",
     name = device.title,
-    description = device.subtitle,
-    icon = Icons.Rounded.Tv
+    description = device.subtitle
 )
 
 data class DlnaRouteSnapshot(

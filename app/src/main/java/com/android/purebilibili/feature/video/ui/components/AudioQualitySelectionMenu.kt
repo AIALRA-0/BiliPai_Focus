@@ -8,13 +8,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntRect
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
 
 private val HiResGold = Color(0xFFFFD36A)
 private val DolbyBlue = Color(0xFF8DCDFF)
@@ -43,18 +42,22 @@ fun AudioQualitySelectionMenu(
     options: List<AudioQualityOption>, requestedAudioQuality: Int,
     onAudioQualitySelected: (Int) -> Unit, onDismiss: () -> Unit,
     placement: PlayerListPopupPlacement = PlayerListPopupPlacement.CENTER,
+    anchorBounds: IntRect? = null,
+    selectedAudioQuality: Int = requestedAudioQuality,
 ) {
-    PlayerMiuixListPopup(title = "音质选择", onDismissRequest = onDismiss, placement = placement) {
+    PlayerSelectionPopup(
+        title = "音质选择", showTitle = false, onDismissRequest = onDismiss, placement = placement,
+        anchorBounds = anchorBounds,
+    ) {
         options.forEachIndexed { index, option ->
-            val selected = option.preferenceId == requestedAudioQuality
-            val summary = listOfNotNull(
-                "Hi-Res".takeIf { option.isHiRes }, "杜比音效".takeIf { option.isDolby },
-            ).joinToString(" · ").ifEmpty { null }
-            DropdownImpl(
-                item = DropdownItem(text = option.label, summary = summary),
-                optionSize = options.size, isSelected = selected, index = index,
-                enabled = !selected,
-                onSelectedIndexChange = { onAudioQualitySelected(option.preferenceId) },
+            val selected = option.preferenceId == selectedAudioQuality
+            val summary = option.codecDescription.takeIf { it.isNotBlank() }
+            PlayerSelectionItem(
+                modifier = Modifier.playerPopupSelectedOption(selected),
+                text = option.label, summary = summary, selected = selected,
+                index = index, optionCount = options.size,
+                enabled = option.preferenceId != requestedAudioQuality,
+                onClick = { onAudioQualitySelected(option.preferenceId) },
             )
         }
     }
@@ -65,4 +68,9 @@ fun AudioQualitySelectionMenuDialog(
     options: List<AudioQualityOption>, requestedAudioQuality: Int,
     onAudioQualitySelected: (Int) -> Unit, onDismiss: () -> Unit,
     placement: PlayerListPopupPlacement = PlayerListPopupPlacement.CENTER,
-) = AudioQualitySelectionMenu(options, requestedAudioQuality, onAudioQualitySelected, onDismiss, placement)
+    anchorBounds: IntRect? = null,
+    selectedAudioQuality: Int = requestedAudioQuality,
+) = AudioQualitySelectionMenu(
+    options, requestedAudioQuality, onAudioQualitySelected, onDismiss, placement, anchorBounds,
+    selectedAudioQuality
+)

@@ -2,13 +2,14 @@ package dev.example.todaywatchremix
 
 import com.android.purebilibili.plugin.sdk.PluginCapability
 import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
+import com.android.purebilibili.plugin.sdk.PluginVideoCandidate
 import com.android.purebilibili.plugin.sdk.RecommendationMode
 import com.android.purebilibili.plugin.sdk.RecommendationPluginApi
 import com.android.purebilibili.plugin.sdk.RecommendationRequest
 import com.android.purebilibili.plugin.sdk.RecommendationResult
 import com.android.purebilibili.plugin.sdk.RecommendedVideo
 
-class TodayWatchRemixPlugin : RecommendationPluginApi {
+class TodayWatchRemixPlugin : RecommendationPluginApi<PluginVideoCandidate> {
     override val capabilityManifest = PluginCapabilityManifest(
         pluginId = "dev.example.today_watch_remix",
         displayName = "Today Watch Remix",
@@ -21,11 +22,11 @@ class TodayWatchRemixPlugin : RecommendationPluginApi {
         )
     )
 
-    override fun buildRecommendations(request: RecommendationRequest): RecommendationResult {
+    override fun buildRecommendations(request: RecommendationRequest<PluginVideoCandidate>): RecommendationResult<PluginVideoCandidate> {
         val ranked = request.candidateVideos
             .filterNot { candidate -> candidate.bvid in request.feedbackSignals.consumedBvids }
             .sortedWith(
-                compareByDescending<com.android.purebilibili.plugin.sdk.PluginVideoCandidate> {
+                compareByDescending<PluginVideoCandidate> {
                     it.likeCount
                 }.thenByDescending { it.playCount }
             )
@@ -44,7 +45,8 @@ class TodayWatchRemixPlugin : RecommendationPluginApi {
             mode = request.mode.takeIf { it == RecommendationMode.LEARN } ?: RecommendationMode.RELAX,
             items = ranked,
             historySampleCount = request.historyVideos.size,
-            sceneSignals = request.sceneSignals
+            sceneSignals = request.sceneSignals,
+            generatedAt = request.sceneSignals.nowEpochSec * 1000L
         )
     }
 }

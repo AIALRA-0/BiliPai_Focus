@@ -16,6 +16,23 @@ internal enum class VideoCardTransitionExposure {
     Restoring,
 }
 
+/** Background feed work resumes when the source is fully restored, including cancellation. */
+internal fun shouldDeferVideoCardSourceHeavyWork(
+    exposure: VideoCardTransitionExposure,
+): Boolean = exposure != VideoCardTransitionExposure.Idle
+
+/** 玻璃背景只在控件或其进出场需要时录制；完全被详情覆盖的底栏不算消费者。 */
+internal fun shouldRecordVideoCardFloatingBackdrop(
+    liquidGlassEnabled: Boolean,
+    isVideoDetailDestination: Boolean,
+    exposure: VideoCardTransitionExposure,
+    hasBottomBarConsumer: Boolean,
+    hasAudioBarConsumer: Boolean,
+    hasFloatingConsumer: Boolean,
+): Boolean = !liquidGlassEnabled || hasAudioBarConsumer || hasFloatingConsumer ||
+    (hasBottomBarConsumer && (!isVideoDetailDestination ||
+        exposure != VideoCardTransitionExposure.SettledHidden))
+
 internal data class VideoCardTransitionRenderDecision(
     val retainSourceSnapshot: Boolean,
     val drawSourceNormally: Boolean,

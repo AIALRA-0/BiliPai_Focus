@@ -1,11 +1,18 @@
 package com.android.purebilibili.core.ui.common
 
+import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.pager.PagerDefaults
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
+import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -69,10 +76,10 @@ internal fun resolveVerticalPriorityPagerGestureDirection(
             PagerGestureDirection.UNDECIDED
         }
     }
-    if (verticalDistance >= horizontalDistance) return PagerGestureDirection.VERTICAL
 
-    // A slightly horizontal diagonal gets a short grace distance to clarify intent. Clear
-    // horizontal and vertical gestures do not pay this extra threshold.
+    // 竖向与斜向共用同一条意图宽限距离：手指落下时的自然竖向漂移若立即锁死
+    // VERTICAL，横滑切页会在手势开头就被吞掉（不可逆），表现为「左右滑切不动
+    // 评论」。超过宽限后，非横向主导的位移一律归属竖向内容。
     val ambiguousDirectionSlop = systemTouchSlop *
         ambiguousDirectionSlopMultiplier.coerceAtLeast(1f)
     return if (totalDistanceSquared < ambiguousDirectionSlop * ambiguousDirectionSlop) {
@@ -138,11 +145,23 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
     enabled: Boolean,
     reverseLayout: Boolean = false,
     horizontalLockSlopMultiplier: Float = 1f,
+    forceVerticalPriority: Boolean = false,
+    dragInteractionSource: MutableInteractionSource? = null,
     shouldYield: () -> Boolean = { false },
 ): Modifier = composed {
     if (!enabled) return@composed this
+    // Glass comment lists need child-first arbitration even while the list is flinging.
+    // Other callers retain Miuix's native cross-axis takeover behavior by default.
+    if (!forceVerticalPriority && LocalAppUiStyle.current == AppUiStyle.MIUIX) {
+        return@composed pagerGestureOverride(
+            pagerState = state,
+            flingBehavior = PagerDefaults.flingBehavior(state, snapAnimationSpec = PagerNavigationSpringSpec),
+            enabled = !shouldYield(),
+        )
+    }
 
     val latestShouldYield = rememberUpdatedState(shouldYield)
+    val latestDragInteractionSource = rememberUpdatedState(dragInteractionSource)
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
     val minimumFlingVelocityPx = with(density) {
@@ -257,11 +276,18 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
 
             var accumulatedScrollDelta = initialHorizontalDelta * scrollDirectionMultiplier
             var releasedNormally = false
+            var gestureCancelled = false
+            // Custom state.scroll does not publish Pager drag interactions. Report the
+            // pointer lifetime separately from the subsequent settle animation.
+            val dragSource = latestDragInteractionSource.value
+            val dragInteraction = DragInteraction.Start()
+            dragSource?.tryEmit(dragInteraction)
             try {
                 var released = false
                 while (!released) {
                     val event = awaitPointerEvent(PointerEventPass.Main)
                     if (latestShouldYield.value()) {
+                        gestureCancelled = true
                         dragSession.cancel()
                         released = true
                         continue
@@ -269,6 +295,7 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                     val change = event.changes.firstOrNull { it.id == trackedPointerId }
                         ?: event.changes.firstOrNull { it.pressed }
                     if (change == null) {
+                        gestureCancelled = true
                         released = true
                         continue
                     }
@@ -297,6 +324,10 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                 )
                 releasedNormally = true
             } finally {
+                dragSource?.tryEmit(
+                    if (releasedNormally && !gestureCancelled) DragInteraction.Stop(dragInteraction)
+                    else DragInteraction.Cancel(dragInteraction)
+                )
                 if (!releasedNormally) {
                     dragSession.cancel()
                     if (!scrollJob.isCompleted) scrollJob.cancel()

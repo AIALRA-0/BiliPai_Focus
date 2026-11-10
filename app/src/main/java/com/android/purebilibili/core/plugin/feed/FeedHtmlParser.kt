@@ -39,9 +39,12 @@ fun parseFeedHtml(html: String, baseUrl: String? = null): List<FeedBlock> {
         if (content.isNotEmpty()) blocks += FeedBlock.Paragraph(content)
         pending.clear()
     }
-    fun visit(node: HtmlNode) {
+    fun visit(node: HtmlNode, bold: Boolean = false, italic: Boolean = false, link: String? = null) {
         when (node) {
-            is HtmlNode.Text -> pending += FeedInline.Text(decodeFeedEntities(node.value).replace(Regex("[\\t\\r\\n ]+"), " "))
+            is HtmlNode.Text -> {
+                val text = decodeFeedEntities(node.value).replace(Regex("[\\t\\r\\n ]+"), " ")
+                pending += if (link != null) FeedInline.Link(text, link) else FeedInline.Text(text, bold, italic)
+            }
             is HtmlNode.Element -> {
                 if (node.tag in ignoredTags) return
                 when (node.tag) {
@@ -76,18 +79,25 @@ fun parseFeedHtml(html: String, baseUrl: String? = null): List<FeedBlock> {
                             ?.let { blocks += FeedBlock.EmbeddedLink("打开嵌入内容", it) }
                     }
                     "a", "b", "strong", "i", "em", "span", "small", "code" ->
-                        pending += inlines(listOf(node), baseUrl)
+                        node.children.forEach {
+                            visit(
+                                it,
+                                bold || node.tag == "b" || node.tag == "strong",
+                                italic || node.tag == "i" || node.tag == "em",
+                                if (node.tag == "a") resolveFeedUrl(node.attrs["href"], baseUrl) else link,
+                            )
+                        }
                     else -> {
                         val boundary = node.tag in boundaryTags
                         if (boundary) flush()
-                        node.children.forEach(::visit)
+                        node.children.forEach { visit(it, bold, italic, link) }
                         if (boundary) flush()
                     }
                 }
             }
         }
     }
-    parseHtmlTree(html).children.forEach(::visit)
+    parseHtmlTree(html).children.forEach { visit(it) }
     flush()
     return blocks
 }

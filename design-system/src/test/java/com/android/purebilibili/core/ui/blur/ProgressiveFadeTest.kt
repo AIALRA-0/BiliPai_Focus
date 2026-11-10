@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.math.roundToInt
 
 class ProgressiveFadeTest {
 
@@ -39,10 +40,12 @@ class ProgressiveFadeTest {
         assertEquals(1.00f, stops[4].first)
 
         // 检查颜色与 Alpha 比例
-        assertEquals(0.8f * 1.0f, stops[0].second.alpha, 0.001f)
-        assertEquals(0.8f * (232f / 255f), stops[1].second.alpha, 0.001f)
-        assertEquals(0.8f * (176f / 255f), stops[2].second.alpha, 0.001f)
-        assertEquals(0.8f * (96f / 255f), stops[3].second.alpha, 0.001f)
+        fun packedAlpha(factor: Float): Float =
+            (baseColor.alpha * factor * 255f).roundToInt() / 255f
+        assertEquals(packedAlpha(1.0f), stops[0].second.alpha, 0.001f)
+        assertEquals(packedAlpha(232f / 255f), stops[1].second.alpha, 0.001f)
+        assertEquals(packedAlpha(176f / 255f), stops[2].second.alpha, 0.001f)
+        assertEquals(packedAlpha(96f / 255f), stops[3].second.alpha, 0.001f)
         assertEquals(0.0f, stops[4].second.alpha, 0.001f)
 
         // RGB 通道不变

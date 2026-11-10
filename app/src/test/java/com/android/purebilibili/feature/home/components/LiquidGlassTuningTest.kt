@@ -14,6 +14,20 @@ import org.junit.Test
 class LiquidGlassTuningTest {
 
     @Test
+    fun `readability can be disabled without changing material slider`() {
+        val settings = LiquidGlassAdvancedSettings(contentReadability = 0f)
+        val clear = resolveLiquidGlassTuning(progress = 0f, advancedSettings = settings)
+        val frosted = resolveLiquidGlassTuning(progress = 1f, advancedSettings = settings)
+
+        assertEquals(0f, clear.contentReadabilityScrimAlpha, 0.0001f)
+        assertEquals(0f, frosted.contentReadabilityScrimAlpha, 0.0001f)
+        assertEquals(0f, clear.contentReadabilityBoost, 0.0001f)
+        assertTrue(frosted.backdropBlurRadius > clear.backdropBlurRadius)
+        assertTrue(frosted.surfaceAlpha > clear.surfaceAlpha)
+        assertTrue(clear.refractionAmount > frosted.refractionAmount)
+    }
+
+    @Test
     fun `stable readability is default and adaptive mode is explicit`() {
         assertEquals(
             LiquidGlassReadabilityMode.STABLE,
@@ -231,7 +245,7 @@ class LiquidGlassTuningTest {
         assertEquals(24f, tuning.refractionAmount, 0.0001f)
         assertEquals(24f, tuning.refractionHeight, 0.0001f)
         assertEquals(0.28f, tuning.indicatorTintAlpha, 0.0001f)
-        assertTrue(tuning.contentReadabilityScrimAlpha in 0f..0.03f)
+        assertEquals(0.12648f, tuning.contentReadabilityScrimAlpha, 0.0001f)
         assertEquals(0f, tuning.shellChromaticAberrationAmount, 0.0001f)
         assertEquals(0.5f, tuning.indicatorChromaticAberrationAmount, 0.0001f)
     }
@@ -251,4 +265,14 @@ class LiquidGlassTuningTest {
             0.0001f,
         )
     }
+    @Test
+    fun `default indicator dispersion matches upstream across glass material strengths`() {
+        listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { progress ->
+            val tuning = resolveLiquidGlassTuning(progress = progress)
+            assertEquals(1f, tuning.indicatorChromaticBoost, 0.0001f)
+            assertEquals(0.5f, resolveLiquidGlassIndicatorChromaticAberration(tuning), 0.0001f)
+            assertEquals(0f, tuning.shellChromaticAberrationAmount, 0.0001f)
+        }
+    }
+
 }

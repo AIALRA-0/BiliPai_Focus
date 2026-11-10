@@ -24,11 +24,14 @@ class AudioNowPlayingBarStructureTest {
         assertTrue(source.contains("artistAvatarUrl"))
         assertTrue(source.contains("state.artistAvatarUrl"))
         assertTrue(source.contains("basicMarquee(iterations = Int.MAX_VALUE)"))
-        assertTrue(source.contains("modifier = if (state.isPlaying && isLayoutStable)"))
+        assertTrue(source.contains("modifier = if (state.isPlaying && decorativeMotionAllowed)"))
         assertTrue(source.contains("overflow = TextOverflow.Clip"))
         assertTrue(source.contains("iconOnlyProgress: () -> Float"))
         assertTrue(source.contains("resolveAudioNowPlayingSupplementalProgress"))
         assertTrue(source.contains("AudioNowPlayingBarContentRow("))
+        // 行高统一 64dp：与底栏导航行同高，percent=50 共享胶囊的圆角始终一致。
+        assertTrue(source.contains(".resolveBiliPaiBottomBarDockHeight(searchExpanded = false)"))
+        assertFalse(source.contains("if (dockHosted) 56.dp"))
         assertFalse(source.contains("if (primaryContentProgress > 0.001f)"))
         assertFalse(source.contains("if (supplementalContentProgress > 0.05f)"))
         assertFalse(source.contains("searchProgress >= 0.999f"))
@@ -36,6 +39,18 @@ class AudioNowPlayingBarStructureTest {
         assertFalse(source.contains("enabled = false"))
         assertFalse(source.contains("backdrop = null"))
         assertFalse(source.contains("ContainerLevel.Card"))
+    }
+
+    @Test
+    fun linkedDockAlignsAudioBarLengthAndHeightWithBottomBar() {
+        val source = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/LinkedBottomDock.kt"
+        )
+        // 展开态小横条与底栏整簇同宽同起点；槽高与导航行同为 barHeight。
+        assertTrue(source.contains("expandedAudioWidth = bottomBarClusterWidth"))
+        assertTrue(source.contains("expandedAudioX = navigationX"))
+        assertTrue(source.contains("Constraints.fixed(geometry.audioWidth, barHeight)"))
+        assertTrue(source.contains("navRowY - verticalGap - barHeight"))
     }
 
     @Test

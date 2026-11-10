@@ -112,6 +112,14 @@ internal sealed interface BiliPaiNavKey : NavKey {
         override val routeBase: String = "permission_settings"
     }
     @Serializable
+    data object SpacePrivacySettings : BiliPaiNavKey {
+        override val routeBase: String = "space_privacy_settings"
+    }
+    @Serializable
+    data object LoginActivitySettings : BiliPaiNavKey {
+        override val routeBase: String = "login_activity_settings"
+    }
+    @Serializable
     data object MessageNotificationSettings : BiliPaiNavKey {
         override val routeBase: String = "message_notification_settings"
     }
@@ -168,6 +176,16 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object ProfileAccountEdit : BiliPaiNavKey {
+        override val routeBase: String = "profile_account_edit"
+    }
+
+    @Serializable
+    data class AccountLedger(val kind: com.android.purebilibili.data.model.AccountLedgerKind) : BiliPaiNavKey {
+        override val routeBase: String = "account_ledger"
+    }
+
+    @Serializable
     data class AicuQuery(val uid: Long = 0L, val category: String = "COMMENT") : BiliPaiNavKey {
         override val routeBase: String = "aicu"
     }
@@ -196,6 +214,7 @@ internal sealed interface BiliPaiNavKey : NavKey {
     data class FavoriteSearch(
         val query: String = "",
         val scope: FavoriteSearchScope = FavoriteSearchScope.CURRENT_FOLDER,
+        val subscribed: Boolean = false,
     ) : BiliPaiNavKey {
         override val routeBase: String = "favorite_search"
     }
@@ -204,6 +223,7 @@ internal sealed interface BiliPaiNavKey : NavKey {
     data class LikedVideos(
         val mid: Long = 0L,
         val ownerName: String = "",
+        val isCoinArchive: Boolean = false,
     ) : BiliPaiNavKey {
         override val routeBase: String = "liked_videos"
 
@@ -229,9 +249,34 @@ internal sealed interface BiliPaiNavKey : NavKey {
 
     @Serializable
     data class Following(
-        val mid: Long
+        val mid: Long,
+        val fans: Boolean = false,
     ) : BiliPaiNavKey {
-        override val routeBase: String = "following"
+        override val routeBase: String = if (fans) "fans" else "following"
+    }
+
+    @Serializable
+    data class UpowerRank(
+        val mid: Long,
+        val name: String = "",
+        val count: Long = 0L,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "upower_rank"
+        companion object : BiliPaiNavKey {
+            override val routeBase: String = "upower_rank"
+        }
+    }
+
+    @Serializable
+    data class MemberGuard(
+        val mid: Long,
+        val name: String = "",
+        val count: Long = 0L,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "member_guard"
+        companion object : BiliPaiNavKey {
+            override val routeBase: String = "member_guard"
+        }
     }
 
     @Serializable
@@ -273,6 +318,17 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object LiveMatch : BiliPaiNavKey {
+        override val routeBase: String = "live_match"
+    }
+
+    /** 原生比赛详情页，cid 为比赛 id（x/esports/match/info）。 */
+    @Serializable
+    data class MatchInfo(val cid: Long) : BiliPaiNavKey {
+        override val routeBase: String = "match_info"
+    }
+
+    @Serializable
     data object LiveFollowing : BiliPaiNavKey {
         override val routeBase: String = "live_following"
     }
@@ -306,7 +362,8 @@ internal sealed interface BiliPaiNavKey : NavKey {
     data class Chat(
         val talkerId: Long,
         val sessionType: Int,
-        val userName: String = ""
+        val userName: String = "",
+        val userFace: String = ""
     ) : BiliPaiNavKey {
         override val routeBase: String = "chat"
     }
@@ -333,7 +390,10 @@ internal sealed interface BiliPaiNavKey : NavKey {
     data class AudioMode(
         val sourceBvid: String = "",
         val sourceCid: Long = 0L,
-        val sourceResumePositionMs: Long = 0L
+        val sourceResumePositionMs: Long = 0L,
+        val collectionMediaId: Long = 0L,
+        val collectionSeasonId: Long = 0L,
+        val collectionTitle: String = "",
     ) : BiliPaiNavKey {
         override val routeBase: String = "audio_mode"
     }
@@ -363,9 +423,25 @@ internal sealed interface BiliPaiNavKey : NavKey {
         val epId: Long,
         val resumePositionMs: Long = 0L,
         val isCourse: Boolean = false,
-        val preferredAid: Long = 0L
+        val preferredAid: Long = 0L,
+        val mediaId: Long = 0L,
     ) : BiliPaiNavKey {
         override val routeBase: String = "bangumi/play"
+    }
+
+    @Serializable
+    data class WeeklySeries(val number: Int? = null) : BiliPaiNavKey {
+        override val routeBase: String = "weekly_series"
+    }
+
+    @Serializable
+    data class BgmDetail(
+        val musicId: String,
+        val aid: Long = 0,
+        val cid: Long = 0,
+        val showVideos: Boolean = false,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "bgm_detail"
     }
 
     @Serializable
@@ -406,9 +482,20 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data class ArticleCollection(
+        val collectionId: Long,
+        val title: String = "",
+        val currentArticleId: Long = 0L,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "article_collection"
+    }
+
+    @Serializable
     data class ArticleDetail(
         val articleId: Long,
-        val title: String = ""
+        val title: String = "",
+        val commentRootRpid: Long = 0L,
+        val commentTargetRpid: Long = 0L,
     ) : BiliPaiNavKey {
         override val routeBase: String = "article"
     }
@@ -417,7 +504,8 @@ internal sealed interface BiliPaiNavKey : NavKey {
     data class DynamicDetail(
         val dynamicId: String,
         val commentRootRpid: Long = 0L,
-        val commentTargetRpid: Long = 0L
+        val commentTargetRpid: Long = 0L,
+        val openComments: Boolean = false,
     ) : BiliPaiNavKey {
         override val routeBase: String = "dynamic_detail"
     }
@@ -436,9 +524,19 @@ internal sealed interface BiliPaiNavKey : NavKey {
     @Serializable
     data class Space(
         val mid: Long,
-        val targetBvid: String = ""
+        val targetBvid: String = "",
     ) : BiliPaiNavKey {
         override val routeBase: String = "space"
+    }
+
+    @Serializable
+    data class SpaceWebVideos(
+        val mid: Long,
+        val ownerName: String,
+        val collectionType: String = "",
+        val collectionId: Long = 0L,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "space_web_videos"
     }
 
     @Serializable
@@ -463,7 +561,7 @@ internal sealed interface BiliPaiNavKey : NavKey {
     data class BangumiDetail(
         val seasonId: Long,
         val epId: Long = 0L,
-        val mediaId: Long = 0L
+        val mediaId: Long = 0L,
     ) : BiliPaiNavKey {
         override val routeBase: String = "bangumi"
     }
@@ -479,7 +577,9 @@ internal sealed interface BiliPaiNavKey : NavKey {
     @Serializable
     data class Web(
         val url: String,
-        val title: String = ""
+        val title: String = "",
+        /** 官方 H5 页面（如赛事主页）需要移动端 UA 才能按手机版渲染。 */
+        val mobileUserAgent: Boolean = false,
     ) : BiliPaiNavKey {
         override val routeBase: String = "web"
     }

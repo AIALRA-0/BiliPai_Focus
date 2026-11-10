@@ -23,7 +23,7 @@ internal fun HotItem.toSearchKeywordUiModel(): SearchKeywordUiModel {
     return SearchKeywordUiModel(
         keyword = keyword.ifBlank { show_name },
         title = show_name.ifBlank { keyword },
-        subtitle = recommend_reason.ifBlank { null },
+        subtitle = recommend_reason.replaceFirst('·', ' ').ifBlank { null },
         iconUrl = icon
             .trim()
             .takeIf { it.isNotBlank() }

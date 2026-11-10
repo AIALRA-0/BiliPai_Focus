@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -114,7 +116,7 @@ fun InteractiveChoiceOverlay(
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = AppContentColors.primaryText(),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -123,7 +125,7 @@ fun InteractiveChoiceOverlay(
                             AppText(
                                 text = "${(countdown / 1000L).coerceAtLeast(0L)}s",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
+                                color = AppContentColors.error()
                             )
                         }
                         AppTextButton(
@@ -174,13 +176,13 @@ private fun CoordinateModeHeader(
         AppText(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = AppContentColors.primaryText()
         )
         if (remainingMs != null) {
             AppText(
                 text = "${(remainingMs / 1000L).coerceAtLeast(0L)}s",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
+                color = AppContentColors.error()
             )
         }
         AppTextButton(

@@ -8,29 +8,30 @@ import kotlin.test.assertTrue
 class DynamicFocusPrefetchStructureTest {
 
     @Test
-    fun `dynamic timeline completes sparse focus-filtered pages before publishing state`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt")
-        val loadSource = source
-            .substringAfter("private suspend fun loadDynamicFeedRoundWithFocusCompletion")
-            .substringBefore("private fun requestFocusDynamicPrefetchIfSparse")
+    fun `dynamic screen appends upstream pages when focus filtering leaves a sparse batch`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt")
+            .replace("\r\n", "\n")
+        val prefetchSource = source
+            .substringAfter("LaunchedEffect(\n        unfilteredActivePresentation.items.size")
+            .substringBefore("val oldContentDividerLabel")
 
-        assertTrue(loadSource.contains("baselineItemsForCompletion"))
-        assertTrue(loadSource.contains("filterDynamicItemsForTimelineRequestType("))
-        assertTrue(loadSource.contains("shouldPrefetchMoreFocusDynamicItems("))
-        assertTrue(loadSource.contains("refresh = false"))
-        assertTrue(loadSource.contains("appendDistinctByKey("))
+        assertTrue(prefetchSource.contains("unfilteredActivePresentation.items.size"))
+        assertTrue(prefetchSource.contains("activePresentation.items.size"))
+        assertTrue(prefetchSource.contains("shouldPrefetchMoreFocusDynamicItems("))
+        assertTrue(prefetchSource.contains("refresh = false"))
+        assertTrue(prefetchSource.contains("resolveDynamicFeedRequestType(displayedLogicalTab)"))
     }
 
     @Test
-    fun `dynamic sparse focus prefetch counts current tab items only`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt")
-        val prefetchSource = source
-            .substringAfter("private fun requestFocusDynamicPrefetchIfSparse")
-            .substringBefore("fun refresh()")
+    fun `dynamic presentation keeps upstream pagination state while filtering feed items`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicFocusFollowGroupPolicy.kt")
+        val presentationFilter = source
+            .substringAfter("internal fun DynamicPagePresentation.withFocusFollowGroupFilter(")
+            .substringBefore("internal fun filterSidebarUsersByFocusFollowGroups(")
 
-        assertTrue(prefetchSource.contains("if (selectedTab == 4) return"))
-        assertTrue(prefetchSource.contains("filterDynamicItemsForTimelineRequestType(_uiState.value.items, requestType)"))
-        assertTrue(prefetchSource.contains("shouldPrefetchMoreFocusDynamicItems("))
+        assertTrue(presentationFilter.contains("copy("))
+        assertTrue(presentationFilter.contains("items = filterDynamicItemsByFocusFollowGroups("))
+        assertTrue(presentationFilter.contains("filterEnabled = filterEnabled"))
     }
 
     @Test
@@ -55,8 +56,7 @@ class DynamicFocusPrefetchStructureTest {
 
         assertTrue(pagePresentation.contains("focusFollowGroupConfig"))
         assertTrue(pagePresentation.contains("focusFollowGroupFilteringEnabled"))
-        assertTrue(pagePresentation.contains("filterDynamicItemsByFocusFollowGroups("))
-        assertTrue(pagePresentation.contains("filterEnabled = focusFollowGroupFilteringEnabled"))
+        assertTrue(pagePresentation.contains("withFocusFollowGroupFilter("))
         assertTrue(sidebarBranch.contains("filteredItems = pagePresentation.items"))
     }
 

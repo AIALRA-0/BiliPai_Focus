@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 
 /** Lightweight pointer-only lift used by card surfaces on mouse/trackpad devices. */
@@ -20,6 +21,7 @@ import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 internal fun Modifier.adaptiveCardHoverEffect(
     shape: Shape,
     enabled: Boolean = resolveInputDevicePolicy(LocalAppWindowAdaptiveInfo.current).enableHoverEffects,
+    hoverShadowElevation: Dp = 10.dp,
 ): Modifier {
     if (!enabled) return this
 
@@ -46,7 +48,7 @@ internal fun Modifier.adaptiveCardHoverEffect(
             )
         },
         label = "adaptiveCardHoverShadow",
-    ) { isHovered -> if (isHovered) 10f else 0f }
+    ) { isHovered -> if (isHovered) hoverShadowElevation.value else 0f }
 
     return hoverable(interactionSource = interactionSource)
         .graphicsLayer {

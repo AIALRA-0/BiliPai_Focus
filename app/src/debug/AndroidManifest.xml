@@ -1,1 +1,9 @@
-<manifest />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="com.android.purebilibili.feature.video.PlayerParityTestActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"
+            android:theme="@style/Theme.PureBiliBili" />
+    </application>
+</manifest>

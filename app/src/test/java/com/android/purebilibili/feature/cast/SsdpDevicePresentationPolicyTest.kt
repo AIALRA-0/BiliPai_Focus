@@ -7,6 +7,18 @@ import org.junit.Test
 
 class SsdpDevicePresentationPolicyTest {
 
+    @Test
+    fun `renderer advertisement remains selectable if its description is unavailable`() {
+        val root = SsdpDiscovery.SsdpDevice("http://192.168.1.4/desc.xml", "", "uuid:1", "upnp:rootdevice")
+        val renderer = root.copy(st = "urn:schemas-upnp-org:device:MediaRenderer:1")
+        assertEquals(renderer, preferSsdpDeviceAdvertisement(root, renderer))
+        assertEquals(renderer, preferSsdpDeviceAdvertisement(renderer, root))
+        val visible = resolveVisibleSsdpDevices(listOf(renderer, root.copy(location = "http://192.168.1.5/")), emptyMap())
+        assertEquals(1, visible.size)
+        assertEquals(renderer, visible.single().device)
+        assertTrue(visible.single().subtitle.contains("重试"))
+    }
+
     // --- associateNotNullBy (per-device exception isolation) ---
 
     @Test

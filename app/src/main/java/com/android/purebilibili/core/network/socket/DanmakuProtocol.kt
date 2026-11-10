@@ -134,13 +134,14 @@ object DanmakuProtocol {
                 break
             }
             
-            val headLength = buffer.short.toInt()
-            val version = buffer.short.toInt()
+            val headLength = buffer.short.toInt() and 0xffff
+            val version = buffer.short.toInt() and 0xffff
             val operation = buffer.int
             val sequence = buffer.int
 
             if (headLength < HEAD_LENGTH || headLength > totalLength) {
-                break
+                buffer.position(position + totalLength)
+                continue
             }
             
             val bodyLength = totalLength - headLength
@@ -153,6 +154,17 @@ object DanmakuProtocol {
                 break
             }
             buffer.position(buffer.position() + extendedHeaderLength)
+            if (version !in PROTO_VER_JSON..PROTO_VER_BROTLI) {
+                buffer.position(position + totalLength)
+                continue
+            }
+            if (
+                (version == PROTO_VER_ZLIB || version == PROTO_VER_BROTLI) &&
+                compressionDepth >= MAX_LIVE_DANMAKU_COMPRESSION_DEPTH
+            ) {
+                buffer.position(position + totalLength)
+                continue
+            }
 
             val maxBodyBytes = if (version == PROTO_VER_ZLIB || version == PROTO_VER_BROTLI) {
                 MAX_LIVE_DANMAKU_FRAME_BYTES
@@ -171,27 +183,17 @@ object DanmakuProtocol {
                     // 普通数据，直接添加
                     packets.add(Packet(version, operation, sequence, body))
                 }
-                PROTO_VER_ZLIB -> {
-                    // Zlib 解压后递归解析
+                PROTO_VER_ZLIB, PROTO_VER_BROTLI -> {
                     try {
-                        val decompressed = decompressZlib(body)
+                        val decompressed = if (version == PROTO_VER_ZLIB) {
+                            decompressZlib(body)
+                        } else {
+                            decompressBrotli(body)
+                        }
                         decodeInto(decompressed, compressionDepth + 1, packets)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    } catch (_: Exception) {
+                        // A damaged compressed packet must not discard its valid siblings.
                     }
-                }
-                PROTO_VER_BROTLI -> {
-                    // Brotli 解压后递归解析
-                    try {
-                        val decompressed = decompressBrotli(body)
-                        decodeInto(decompressed, compressionDepth + 1, packets)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-                else -> {
-                    // 未知版本，保留但不处理内容
-                    packets.add(Packet(version, operation, sequence, body))
                 }
             }
         }

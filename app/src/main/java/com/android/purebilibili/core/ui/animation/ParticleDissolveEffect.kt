@@ -4,31 +4,33 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
-import android.graphics.PixelFormat
-import android.graphics.Rect
-import android.opengl.GLSurfaceView
+import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
-import android.view.PixelCopy
-import android.view.View
 import android.view.Window
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.viewinterop.AndroidView
-import com.android.purebilibili.core.ui.animation.gl.ParticleRenderer
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.animation.gl.ThanosEffectView
+import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 // ==================== iOS 风格抖动效果系统 ====================
@@ -90,33 +92,6 @@ internal fun shouldDispatchDissolveCompletion(
     return !hasCompletedCurrentDissolve
 }
 
-private data class DissolveAnimationParams(
-    val durationSec: Float,
-    val particleStep: Int,
-    val waveDurationSec: Float,
-    val waveRandomSec: Float,
-    val collapseDurationMs: Int
-)
-
-private fun DissolveAnimationPreset.params(): DissolveAnimationParams {
-    return when (this) {
-        DissolveAnimationPreset.CLASSIC -> DissolveAnimationParams(
-            durationSec = 1.8f,
-            particleStep = 2,
-            waveDurationSec = 0.35f,
-            waveRandomSec = 0.08f,
-            collapseDurationMs = 200
-        )
-        DissolveAnimationPreset.TELEGRAM_FAST -> DissolveAnimationParams(
-            durationSec = 0.82f,
-            particleStep = 3,
-            waveDurationSec = 0.16f,
-            waveRandomSec = 0.05f,
-            collapseDurationMs = 135
-        )
-    }
-}
-
 @Composable
 fun Modifier.jiggleOnDissolve(
     cardId: String,
@@ -167,7 +142,7 @@ fun Modifier.jiggleOnDissolve(
     }
 }
 
-// ==================== OpenGL 粒子消散动画 ====================
+// ==================== Particle dissolve effect ====================
 
 @Composable
 fun DissolvableVideoCard(
@@ -179,222 +154,186 @@ fun DissolvableVideoCard(
     collapseAfterDissolve: Boolean = true,
     publishGlobalDissolveState: Boolean = true,
     keepInvisibleAfterDissolve: Boolean = false,
+    reflowDuringFinalTail: Boolean = false,
+    onReflowStarted: () -> Unit = {},
     content: @Composable () -> Unit
 ) {
-    val animationParams = remember(preset) { preset.params() }
-    var cardSize by remember { mutableStateOf(IntSize.Zero) }
-    var shouldCollapse by remember { mutableStateOf(false) }
-    var keepContentHidden by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val completionHandler = remember { Handler(Looper.getMainLooper()) }
+    val contentLayer = rememberGraphicsLayer()
+    var cardSize by remember(cardId) { mutableStateOf(IntSize.Zero) }
+    var cardWindowBounds by remember(cardId) { mutableStateOf<RectF?>(null) }
+    var hasRecordedContent by remember(cardId) { mutableStateOf(false) }
+    var shouldCollapse by remember(cardId) { mutableStateOf(false) }
+    var keepContentHidden by remember(cardId) { mutableStateOf(false) }
     var hasCompletedCurrentDissolve by remember(cardId) { mutableStateOf(false) }
+    var effectView by remember(cardId) { mutableStateOf<ThanosEffectView?>(null) }
+    val latestOnComplete by rememberUpdatedState(onDissolveComplete)
+    val latestOnReflowStarted by rememberUpdatedState(onReflowStarted)
+    val latestIsDissolving by rememberUpdatedState(isDissolving)
     val publishGlobalState = shouldPublishGlobalDissolveState(publishGlobalDissolveState)
 
-    fun dispatchDissolveCompletionOnce() {
+    fun dispatchCompletionOnce() {
         if (!shouldDispatchDissolveCompletion(hasCompletedCurrentDissolve)) return
         hasCompletedCurrentDissolve = true
-        onDissolveComplete()
-        if (publishGlobalState) {
+        if (publishGlobalState && DissolveAnimationManager.dissolvingCardId.value == cardId) {
             DissolveAnimationManager.stopDissolving()
+        }
+        latestOnComplete()
+    }
+
+    fun beginCollapse() {
+        if (hasCompletedCurrentDissolve || shouldCollapse) return
+        keepContentHidden = true
+        shouldCollapse = true
+        latestOnReflowStarted()
+    }
+
+    fun finishEffect() {
+        effectView?.dispose()
+        effectView = null
+        if (hasCompletedCurrentDissolve || shouldCollapse) return
+        if (collapseAfterDissolve) {
+            beginCollapse()
+        } else {
+            keepContentHidden = keepInvisibleAfterDissolve
+            dispatchCompletionOnce()
         }
     }
 
-    val finishWithoutParticle = {
-        if (!shouldDispatchDissolveCompletion(hasCompletedCurrentDissolve)) {
-            Unit
-        } else if (collapseAfterDissolve) {
-            shouldCollapse = true
-        } else {
-            keepContentHidden = keepInvisibleAfterDissolve
-            dispatchDissolveCompletionOnce()
-        }
-    }
-    
-    val collapseSpec: AnimationSpec<Float> = remember(animationParams.collapseDurationMs, preset) {
+    val collapseSpec: AnimationSpec<Float> = remember(preset, reflowDuringFinalTail) {
         when (preset) {
             DissolveAnimationPreset.CLASSIC -> spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessHigh
             )
-            DissolveAnimationPreset.TELEGRAM_FAST -> tween(
-                durationMillis = animationParams.collapseDurationMs,
-                easing = FastOutSlowInEasing
-            )
+            DissolveAnimationPreset.TELEGRAM_FAST -> if (reflowDuringFinalTail) {
+                tween(240, easing = AppMotionEasing.M1Decelerate)
+            } else {
+                tween(135, easing = AppMotionEasing.M1Standard)
+            }
         }
     }
-
-    // 动画：完成/收起
-    val heightMultiplier by animateFloatAsState(
+    val heightMultiplier = animateFloatAsState(
         targetValue = if (shouldCollapse) 0f else 1f,
         animationSpec = collapseSpec,
         label = "heightCollapse",
         finishedListener = {
-             if (shouldCollapse && collapseAfterDissolve) {
-                 // Animation fully done, NOW we dismiss
-                 dispatchDissolveCompletionOnce()
-             }
+            if (shouldCollapse && collapseAfterDissolve) dispatchCompletionOnce()
         }
     )
 
-    var captureBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var showGLView by remember { mutableStateOf(false) }
-    var isGLContentReady by remember { mutableStateOf(false) } //  New: Wait for GL to draw first frame
-    
-    // Coordinates
-    var cardWindowBounds by remember { mutableStateOf<Rect?>(null) }
-    val context = LocalContext.current
-    val composeView = LocalView.current
-    
-    LaunchedEffect(isDissolving) {
-        if (isDissolving) {
-            hasCompletedCurrentDissolve = false
-            keepContentHidden = false
-            // Note: startDissolving is called in onFirstFrame callback to sync jiggle with actual animation
-            // Trigger Capture
-            if (cardWindowBounds != null) {
-                val window = findWindow(context)
-                if (window != null) {
-                    val captureWidth = cardWindowBounds!!.width()
-                    val captureHeight = cardWindowBounds!!.height()
-                    if (!shouldCreateDissolveBitmap(captureWidth, captureHeight)) {
-                        finishWithoutParticle()
-                        return@LaunchedEffect
-                    }
-                    val bitmap = Bitmap.createBitmap(
-                        captureWidth,
-                        captureHeight,
-                        Bitmap.Config.ARGB_8888
-                    )
-                    
-                    try {
-                        // Use PixelCopy to capture the area
-                        PixelCopy.request(
-                            window,
-                            cardWindowBounds!!,
-                            bitmap,
-                            { copyResult ->
-                                if (copyResult == PixelCopy.SUCCESS) {
-                                    captureBitmap = bitmap
-                                    showGLView = true
-                                    // Don't hide content yet, wait for GL view to say "I'm drawing"
-                                } else {
-                                    finishWithoutParticle()
-                                }
-                            },
-                            Handler(Looper.getMainLooper())
-                        )
-                    } catch (e: Exception) {
-                         e.printStackTrace()
-                         finishWithoutParticle()
-                    }
-                } else {
-                    finishWithoutParticle()
-                }
-            } else {
-                finishWithoutParticle()
-            }
-        } else {
-            captureBitmap = null
-            showGLView = false
-            isGLContentReady = false
+    LaunchedEffect(isDissolving, cardId) {
+        if (!isDissolving) {
+            effectView?.dispose()
+            effectView = null
             shouldCollapse = false
-            if (
-                publishGlobalState &&
-                cardId.isNotEmpty() &&
-                DissolveAnimationManager.dissolvingCardId.value == cardId
-            ) {
-                DissolveAnimationManager.stopDissolving()
-            }
+            keepContentHidden = false
+            return@LaunchedEffect
         }
+        hasCompletedCurrentDissolve = false
+        val window = findWindow(context)
+        if (window == null || !isThanosEffectSupported(context)) {
+            finishEffect()
+            return@LaunchedEffect
+        }
+        val ready = withTimeoutOrNull(500L) {
+            snapshotFlow { hasRecordedContent && cardWindowBounds != null }
+                .first { it }
+        }
+        if (ready != true) {
+            finishEffect()
+            return@LaunchedEffect
+        }
+        // Capture the actual card subtree, including its transparent corners, without
+        // the window background or action sheet. This replaces upstream View.draw(Canvas).
+        val bitmap: Bitmap? = try {
+            withTimeoutOrNull(500L) {
+                contentLayer.toImageBitmap().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: RuntimeException) {
+            android.util.Log.w("ThanosEffect", "Cannot capture video card", error)
+            null
+        }
+        val bounds = cardWindowBounds
+        if (bitmap == null || bounds == null) {
+            bitmap?.recycle()
+            finishEffect()
+            return@LaunchedEffect
+        }
+        effectView = ThanosEffectView.attach(
+            window = window,
+            bitmap = bitmap,
+            windowBounds = bounds,
+            onFirstFrame = {
+                keepContentHidden = true
+                if (publishGlobalState && cardId.isNotEmpty()) {
+                    DissolveAnimationManager.startDissolving(cardId)
+                }
+            },
+            onComplete = { finishEffect() },
+            onFinalTail = {
+                if (reflowDuringFinalTail && collapseAfterDissolve) beginCollapse()
+            },
+        )
+        if (effectView == null) {
+            if (!bitmap.isRecycled) bitmap.recycle()
+            finishEffect()
+            return@LaunchedEffect
+        }
+        // Covers missing SurfaceTexture callbacks/device failures without a stuck removal.
+        // Normal upstream lifetime is (1.5 + 0.9) / 1.15, about 2.09 seconds.
+        delay(5000L)
+        if (!hasCompletedCurrentDissolve && !shouldCollapse) finishEffect()
     }
 
     DisposableEffect(cardId) {
         onDispose {
-            if (
-                publishGlobalState &&
-                cardId.isNotEmpty() &&
-                DissolveAnimationManager.dissolvingCardId.value == cardId
-            ) {
-                DissolveAnimationManager.stopDissolving()
+            effectView?.dispose()
+            effectView = null
+            // Lazy layouts dispose offscreen items during measurement. Mutating their
+            // item provider here invalidates the grid's in-flight index/Lookahead data.
+            // A queued callback also survives cancellation of this item's effect scope.
+            if (latestIsDissolving) {
+                completionHandler.post { dispatchCompletionOnce() }
             }
         }
     }
 
     Box(
         modifier = modifier
-            .onSizeChanged { cardSize = it }
+            .onSizeChanged { if (!shouldCollapse) cardSize = it }
             .onGloballyPositioned { coordinates ->
-                val boundsInWindow = coordinates.boundsInWindow()
-                val location = IntArray(2)
-                composeView.getLocationInWindow(location)
-                
-                val left = boundsInWindow.left.roundToInt()
-                val top = boundsInWindow.top.roundToInt()
-                val width = boundsInWindow.width.roundToInt()
-                val height = boundsInWindow.height.roundToInt()
-                
-                cardWindowBounds = Rect(left, top, left + width, top + height)
+                val position = coordinates.positionInWindow()
+                cardWindowBounds = RectF(
+                    position.x, position.y,
+                    position.x + coordinates.size.width,
+                    position.y + coordinates.size.height,
+                )
             }
-            .then(
-                if (shouldCollapse) {
-                    Modifier.height(
-                        with(LocalDensity.current) {
-                            (cardSize.height * heightMultiplier).toDp()
-                        }
-                    )
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                val height = if (shouldCollapse) {
+                    (cardSize.height * heightMultiplier.value).roundToInt().coerceAtLeast(0)
                 } else {
-                    Modifier
+                    placeable.height
                 }
-            )
+                layout(placeable.width, height) { placeable.placeRelative(0, 0) }
+            }
     ) {
-        // 1. Content Layer
-        // Keep visible until GL view renders first frame (seamless transition)
         Box(
-            modifier = Modifier.alpha(
-                if (isGLContentReady || keepContentHidden) 0f else 1f
-            )
-        ) {
-            content()
-        }
-        
-        // 2. GL Overlay
-        if (showGLView && captureBitmap != null) {
-            AndroidView(
-                factory = { ctx ->
-                    GLParticleView(ctx).apply {
-                        setZOrderOnTop(true)
-                        holder.setFormat(PixelFormat.TRANSLUCENT)
-                        
-                        setBitmap(
-                            bitmap = captureBitmap!!,
-                            durationSec = animationParams.durationSec,
-                            particleStep = animationParams.particleStep,
-                            waveDurationSec = animationParams.waveDurationSec,
-                            waveRandomSec = animationParams.waveRandomSec
-                        )
-                        setCallbacks(
-                            complete = {
-                                 if (collapseAfterDissolve) {
-                                     shouldCollapse = true // Trigger collapse animation
-                                 } else {
-                                     keepContentHidden = keepInvisibleAfterDissolve
-                                     dispatchDissolveCompletionOnce()
-                                 }
-                            },
-                            firstFrame = {
-                                isGLContentReady = true
-                                // Start jiggle effect on other cards now that animation is visible
-                                if (
-                                    publishGlobalState &&
-                                    cardId.isNotEmpty()
-                                ) {
-                                    DissolveAnimationManager.startDissolving(cardId)
-                                }
-                            }
-                        )
+            modifier = Modifier
+                .graphicsLayer { alpha = if (keepContentHidden) 0f else 1f }
+                .drawWithContent {
+                    contentLayer.record { this@drawWithContent.drawContent() }
+                    drawLayer(contentLayer)
+                    if (!hasRecordedContent && shouldCreateDissolveBitmap(size.width.toInt(), size.height.toInt())) {
+                        hasRecordedContent = true
                     }
-                },
-                modifier = Modifier.matchParentSize()
-            )
-        }
+                }
+        ) { content() }
     }
 }
 
@@ -408,7 +347,10 @@ fun MaybeDissolvableVideoCard(
     collapseAfterDissolve: Boolean = true,
     publishGlobalDissolveState: Boolean = true,
     keepInvisibleAfterDissolve: Boolean = false,
+    reflowDuringFinalTail: Boolean = false,
+    onReflowStarted: () -> Unit = {},
     preserveContentLayerWhenIdle: Boolean = false,
+    propagateMinConstraints: Boolean = false,
     content: @Composable () -> Unit
 ) {
     if (shouldWrapWithDissolveAnimation(isDissolving)) {
@@ -421,15 +363,17 @@ fun MaybeDissolvableVideoCard(
             collapseAfterDissolve = collapseAfterDissolve,
             publishGlobalDissolveState = publishGlobalDissolveState,
             keepInvisibleAfterDissolve = keepInvisibleAfterDissolve,
+            reflowDuringFinalTail = reflowDuringFinalTail,
+            onReflowStarted = onReflowStarted,
             content = content
         )
     } else {
-        Box(modifier = modifier) {
+        Box(modifier = modifier, propagateMinConstraints = propagateMinConstraints) {
             if (preserveContentLayerWhenIdle) {
                 // SharedBounds records its source relative to the card's existing graphics layer.
                 // Keep the same idle hierarchy as DissolvableVideoCard for transition-enabled
                 // cards, without restoring its per-frame size/window coordinate tracking.
-                Box(modifier = Modifier.alpha(1f)) {
+                Box(modifier = Modifier.alpha(1f), propagateMinConstraints = propagateMinConstraints) {
                     content()
                 }
             } else {
@@ -447,44 +391,3 @@ private fun findWindow(context: Context): Window? {
     }
     return null
 }
-
-class GLParticleView(context: Context) : GLSurfaceView(context) {
-    private var renderer: ParticleRenderer? = null
-    var onComplete: (() -> Unit)? = null
-    var onFirstFrame: (() -> Unit)? = null
-
-    init {
-        setEGLContextClientVersion(2)
-        setEGLConfigChooser(8, 8, 8, 8, 16, 0) // Enable Alpha
-    }
-
-    fun setBitmap(
-        bitmap: Bitmap,
-        durationSec: Float = 2.0f,
-        particleStep: Int = 2,
-        waveDurationSec: Float = 0.4f,
-        waveRandomSec: Float = 0.1f
-    ) {
-        renderer = ParticleRenderer(
-            textureBitmap = bitmap,
-            onAnimationComplete = {
-                post { onComplete?.invoke() }
-            },
-            onFirstFrame = {
-                post { onFirstFrame?.invoke() }
-            },
-            animationDurationSec = durationSec,
-            particleStep = particleStep,
-            waveDurationSec = waveDurationSec,
-            waveRandomSec = waveRandomSec
-        )
-        setRenderer(renderer)
-        renderMode = RENDERMODE_CONTINUOUSLY
-    }
-
-    fun setCallbacks(complete: () -> Unit, firstFrame: () -> Unit) {
-        this.onComplete = complete
-        this.onFirstFrame = firstFrame
-    }
-}
-// wait, I need to redefine GLParticleView properly to support both setup and logic

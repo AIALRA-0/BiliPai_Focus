@@ -1,7 +1,7 @@
 package com.android.purebilibili.core.plugin.js
 
 import android.content.Context
-import com.android.purebilibili.core.plugin.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapability
 import java.io.File
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json

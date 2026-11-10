@@ -14,6 +14,7 @@ internal fun scoreArticleBlocks(blocks: List<ArticleContentBlock>): Int {
             is ArticleContentBlock.Quote -> block.text.length
             is ArticleContentBlock.ListBlock -> block.items.sumOf { it.length }
             is ArticleContentBlock.Code -> block.content.length
+            is ArticleContentBlock.MediaCard -> block.card.title.length + block.card.description.length
             is ArticleContentBlock.Image -> 0
         }
     }
@@ -24,6 +25,7 @@ internal fun scoreArticleBlocks(blocks: List<ArticleContentBlock>): Int {
             is ArticleContentBlock.Quote -> 40
             is ArticleContentBlock.ListBlock -> 60 + block.items.size * 10
             is ArticleContentBlock.Code -> 80
+            is ArticleContentBlock.MediaCard -> 200
             is ArticleContentBlock.Paragraph,
             is ArticleContentBlock.Image -> 0
         }
@@ -51,6 +53,7 @@ internal fun shouldShowArticleSummary(
             is ArticleContentBlock.Quote -> block.text.isNotBlank()
             is ArticleContentBlock.ListBlock -> block.items.any { it.isNotBlank() }
             is ArticleContentBlock.Code -> block.content.isNotBlank()
+            is ArticleContentBlock.MediaCard,
             is ArticleContentBlock.Image -> false
         }
     }
@@ -130,8 +133,7 @@ internal fun opusContentBlocksToArticleBlocks(
                 }
             }
             is OpusContentBlock.LinkCard -> {
-                val title = block.card.title.ifBlank { block.card.description }
-                title.takeIf { it.isNotBlank() }?.let(ArticleContentBlock::Paragraph)
+                ArticleContentBlock.MediaCard(block.card)
             }
         }
     }
@@ -140,11 +142,4 @@ internal fun opusContentBlocksToArticleBlocks(
 internal fun buildArticleHistoryReportFields(
     articleId: Long,
     csrf: String
-): Map<String, String>? {
-    if (articleId <= 0L || csrf.isBlank()) return null
-    return mapOf(
-        "aid" to articleId.toString(),
-        "type" to ARTICLE_HISTORY_REPORT_TYPE.toString(),
-        "csrf" to csrf
-    )
-}
+): Map<String, String>? = com.android.purebilibili.data.repository.buildArticleHistoryReportFields(articleId, csrf)

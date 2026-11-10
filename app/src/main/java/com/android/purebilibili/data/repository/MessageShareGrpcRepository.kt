@@ -32,13 +32,14 @@ internal object MessageShareGrpcRepository {
         }
 
     /**
-     * Sends the same share-v2 card used by the native Bilibili client and PiliPlus.
+     * Sends a share-v2 or common content card through the IM protocol.
      * The web send endpoint accepts text messages reliably but is inconsistent for
      * share-v2 cards, so dynamic sharing deliberately stays on the IM gRPC path.
      */
     suspend fun sendDynamicShare(
         receiverId: Long,
         content: String,
+        messageType: Int = 7,
     ): Result<Long> = withContext(Dispatchers.IO) {
         runCatching {
             require(receiverId > 0L) { "无效的接收者" }
@@ -51,6 +52,7 @@ internal object MessageShareGrpcRepository {
                     senderUid = senderUid,
                     receiverId = receiverId,
                     content = content,
+                    messageType = messageType,
                     timestampSeconds = System.currentTimeMillis() / 1000,
                     deviceId = UUID.randomUUID().toString(),
                 ),
@@ -71,12 +73,13 @@ internal fun buildDynamicShareSendRequest(
     content: String,
     timestampSeconds: Long,
     deviceId: String,
+    messageType: Int = 7,
 ): ByteArray {
     val message = ProtoWire.message(
         ProtoWire.int64(1, senderUid),
         ProtoWire.int32(2, 1),
         ProtoWire.int64(3, receiverId),
-        ProtoWire.int32(5, 7),
+        ProtoWire.int32(5, messageType),
         ProtoWire.string(6, content),
         ProtoWire.int64(8, timestampSeconds),
         ProtoWire.int32(16, 1),

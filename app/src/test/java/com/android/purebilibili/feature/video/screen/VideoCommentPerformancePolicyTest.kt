@@ -8,6 +8,28 @@ import kotlin.test.assertTrue
 class VideoCommentPerformancePolicyTest {
 
     @Test
+    fun `first body frame does not also measure the hidden comment page`() {
+        assertEquals(0, resolveVideoDetailBeyondViewportPageCount(
+            selectedTabIndex = 0,
+            commentPagePreloadReady = false,
+        ))
+        assertEquals(1, resolveVideoDetailBeyondViewportPageCount(
+            selectedTabIndex = 0,
+            commentPagePreloadReady = true,
+        ))
+    }
+
+    @Test
+    fun `opening comments directly never preloads the intro page during handoff`() {
+        for (ready in listOf(false, true)) {
+            assertEquals(0, resolveVideoDetailBeyondViewportPageCount(
+                selectedTabIndex = 1,
+                commentPagePreloadReady = ready,
+            ))
+        }
+    }
+
+    @Test
     fun `video detail preloads comments while intro is visible`() {
         assertEquals(1, resolveVideoDetailBeyondViewportPageCount(selectedTabIndex = 0))
     }

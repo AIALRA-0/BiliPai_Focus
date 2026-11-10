@@ -8,19 +8,15 @@ import kotlin.test.assertTrue
 class VideoDetailShareSheetStructureTest {
 
     @Test
-    fun ordinaryVideoDetailShareEntrypoints_openSystemShareChooser() {
+    fun ordinaryVideoDetailShareEntrypoints_openShareSheetWithStylePicker() {
         val source = loadVideoDetailSource()
         val phoneContentSource = loadVideoDetailPhoneContentSource()
         val overlayAdapterSource = loadVideoDetailCommonOverlayAdapterSource()
 
         assertTrue(source.contains("VideoDetailCommonOverlayAdapter("))
-        assertTrue(source.contains("ShareUtils.shareVideo("))
-        assertTrue(source.contains("title = payload.title"))
-        assertTrue(source.contains("bvid = payload.bvid"))
-        assertFalse(source.contains("pendingVideoShare"))
         assertFalse(
             source.contains("VideoShareSheet("),
-            "VideoDetailScreenStateHolder should open the system chooser directly",
+            "VideoDetailScreenStateHolder should keep the share sheet outside the state holder",
         )
         assertFalse(overlayAdapterSource.contains("VideoShareSheet("))
         assertFalse(overlayAdapterSource.contains("pendingVideoShare"))
@@ -33,24 +29,35 @@ class VideoDetailShareSheetStructureTest {
             .substringBefore("onCommentClick = {")
 
         assertTrue(
-            detailActionShare.contains("onShareVideo(") &&
+            detailActionShare.contains("pendingVideoShare =") &&
                 detailActionShare.contains("buildVideoSharePayload"),
-            "Detail action row share should emit unified share payload"
+            "Detail action row share should open the in-app share sheet with a unified payload"
         )
         assertTrue(
             detailActionShare.contains("coverUrl = success.info.pic"),
             "Detail action row share should include the current video cover"
         )
         assertTrue(
-            bottomInputShare.contains("onShareVideo(") &&
+            detailActionShare.contains("upName = success.info.owner.name"),
+            "Detail action row share should include the uploader name for card mode"
+        )
+        assertTrue(
+            bottomInputShare.contains("pendingVideoShare =") &&
                 bottomInputShare.contains("buildVideoSharePayload"),
-            "Bottom input bar share should emit unified share payload"
+            "Bottom input bar share should open the in-app share sheet with a unified payload"
         )
         assertTrue(
             bottomInputShare.contains("coverUrl = success.info.pic"),
             "Bottom input bar share should include the current video cover"
         )
-        assertTrue(source.contains("ShareUtils.shareVideo("))
+        assertTrue(
+            phoneContentSource.contains("VideoShareSheet("),
+            "Phone detail content should host VideoShareSheet for share-style selection"
+        )
+        assertTrue(
+            phoneContentSource.contains("onDismiss = { pendingVideoShare = null }"),
+            "Share sheet dismiss should clear the pending payload"
+        )
     }
 
     private fun loadVideoDetailSource(): String {

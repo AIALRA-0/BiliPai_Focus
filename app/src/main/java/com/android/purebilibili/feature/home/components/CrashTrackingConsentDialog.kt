@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -73,7 +75,7 @@ fun CrashTrackingConsentDialog(
             AppIcon(
                 imageVector = Icons.Outlined.BugReport,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = AppContentColors.accent(),
                 modifier = Modifier.size(CrashConsentLayoutSpec.IconSizeDp.dp),
             )
         },
@@ -91,7 +93,7 @@ fun CrashTrackingConsentDialog(
                         "默认仅启用崩溃追踪；使用情况统计默认关闭。播放器诊断日志仍可手动开启，便于排查黑屏、卡顿等播放问题。\n\n" +
                         "数据仅用于改善稳定性，之后可随时在「设置」中调整。",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                 )
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
                 AppListItem(
@@ -106,7 +108,7 @@ fun CrashTrackingConsentDialog(
                         AppText(
                             text = if (isEnabled) "开启后将在崩溃时上传诊断信息" else "关闭后不上传崩溃报告",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = AppContentColors.secondaryText(),
                         )
                     },
                     trailingContent = {

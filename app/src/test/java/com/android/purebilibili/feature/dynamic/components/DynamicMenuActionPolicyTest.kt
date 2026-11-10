@@ -22,6 +22,59 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DynamicMenuActionPolicyTest {
+    @Test
+    fun missingRichNodesWarnWithoutInventingAssociations() {
+        val (tokens, unresolved) = restoreDynamicEditTokens("你好 @小明 [doge]", emptyList())
+        assertTrue(unresolved)
+        assertTrue(tokens.isEmpty())
+        val restored = restoreDynamicEditTokens("你好 @小明 [doge]", emptyList())
+        assertEquals(2, restored.issues.size)
+        assertFalse(restored.unlocated)
+        assertFalse(restoreDynamicEditTokens("普通文本和邮件 a@example.com", emptyList()).unresolved)
+    }
+
+    @Test
+    fun missingServerNodeWithoutTextKeepsUnlocatedWarning() {
+        val restored = restoreDynamicEditTokens("正文", listOf(RichTextNode(type = "AT", text = "@甲", rid = "42")))
+        assertTrue(restored.unresolved)
+        assertTrue(restored.unlocated)
+        assertTrue(restored.issues.isEmpty())
+        assertEquals(listOf("@ 用户：@甲"), restored.unlocatedItems.map { it.label })
+    }
+
+    @Test
+    fun missingNodesRetainSeparateCluesForReview() {
+        val restored = restoreDynamicEditTokens("正文", listOf(
+            RichTextNode(type = "AT", text = "@甲", rid = "42"),
+            RichTextNode(type = "EMOJI", orig_text = "[doge]"),
+        ))
+        assertEquals(listOf("@ 用户：@甲", "表情：[doge]"), restored.unlocatedItems.map { it.label })
+        assertTrue(restored.unlocated)
+    }
+
+    @Test
+    fun restoreRichNodesUsesFullNodeOrderForRepeatedMentions() {
+        val nodes = listOf(
+            RichTextNode(type = "TEXT", text = "@甲 "),
+            RichTextNode(type = "AT", text = "@甲", rid = "42"),
+        )
+        val (tokens, unresolved) = restoreDynamicEditTokens("@甲 @甲", nodes)
+        assertFalse(unresolved)
+        assertEquals(1, tokens.size)
+        assertEquals(3, tokens.single().start)
+        assertEquals("42", tokens.single().bizId)
+    }
+
+    @Test
+    fun restoreRichNodesUsesOriginalTextAndFlagsAmbiguousMatches() {
+        val node = RichTextNode(type = "EMOJI", text = "其他", orig_text = "[doge]")
+        val (tokens, unresolved) = restoreDynamicEditTokens("前缀 [doge] 后缀", listOf(node))
+        assertFalse(unresolved)
+        assertEquals("[doge]", tokens.single().text)
+        val (ambiguous, hasUnresolved) = restoreDynamicEditTokens("[doge] [doge]", listOf(node))
+        assertTrue(hasUnresolved)
+        assertTrue(ambiguous.isEmpty())
+    }
 
     @Test
     fun manageActionDispatcherUsesSameBranchesForListAndDetail() {

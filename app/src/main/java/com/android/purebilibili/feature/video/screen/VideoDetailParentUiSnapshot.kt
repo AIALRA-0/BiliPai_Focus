@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.screen
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.PagerState
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase
+import kotlinx.coroutines.CancellationException
 
 /** Click-time UI position retained while a related-detail entry covers its parent. */
 internal data class VideoDetailParentUiSnapshot(
@@ -31,10 +32,17 @@ internal suspend fun restoreVideoDetailParentUiSnapshot(
     commentListState: LazyListState,
     pagerState: PagerState,
 ) {
-    runCatching {
-        pagerState.scrollToPage(
-            snapshot.selectedTabIndex.coerceIn(0, (pagerState.pageCount - 1).coerceAtLeast(0)),
-        )
+    val targetPage = snapshot.selectedTabIndex.coerceIn(0, (pagerState.pageCount - 1).coerceAtLeast(0))
+    if (pagerState.isScrollInProgress || pagerState.currentPage != targetPage ||
+        pagerState.currentPageOffsetFraction != 0f
+    ) {
+        try {
+            pagerState.scrollToPage(targetPage)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: IllegalArgumentException) {
+            // 页面数量变化时保留当前页。
+        }
     }
     restoreVideoDetailListPosition(
         listState = introListState,
@@ -56,11 +64,19 @@ private suspend fun restoreVideoDetailListPosition(
     val totalItems = listState.layoutInfo.totalItemsCount
     if (totalItems <= 0) return
     val safeIndex = itemIndex.coerceIn(0, totalItems - 1)
-    runCatching {
+    val safeOffset = if (safeIndex == itemIndex) itemOffsetPx.coerceAtLeast(0) else 0
+    if (!listState.isScrollInProgress && listState.firstVisibleItemIndex == safeIndex &&
+        listState.firstVisibleItemScrollOffset == safeOffset
+    ) return
+    try {
         listState.scrollToItem(
             index = safeIndex,
-            scrollOffset = if (safeIndex == itemIndex) itemOffsetPx.coerceAtLeast(0) else 0,
+            scrollOffset = safeOffset,
         )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: IllegalArgumentException) {
+        // 列表数据变化时保留当前位置。
     }
 }
 

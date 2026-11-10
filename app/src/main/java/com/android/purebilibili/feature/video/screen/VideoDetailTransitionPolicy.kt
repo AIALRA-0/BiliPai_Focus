@@ -20,6 +20,7 @@ import com.android.purebilibili.core.ui.transition.shouldHandVisualOwnershipToRe
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardLiveReturnMorph
 
 private const val COVER_TAKEOVER_PRE_BACK_DELAY_MILLIS = 0L
+private const val RESIDENT_COVER_RETURN_TAKEOVER_DEPTH_SPAN = 0.82f
 internal const val VIDEO_CONTENT_COMMENT_TAB_INDEX = 1
 
 /**
@@ -30,7 +31,10 @@ internal const val VIDEO_CONTENT_COMMENT_TAB_INDEX = 1
 internal fun isVideoDetailEntryActiveMiuixTransitionSource(
     entrySourceRoute: String?,
     activeSourceRoute: String?,
+    miuixTransitionEnabled: Boolean,
 ): Boolean {
+    // Source metadata survives even when the navigation host disables the card morph.
+    if (!miuixTransitionEnabled) return false
     val normalizedEntrySource =
         normalizeSharedElementSourceRoute(entrySourceRoute) ?: return false
     val normalizedActiveSource =
@@ -57,8 +61,8 @@ internal fun shouldConsumeMiuixTransitionVisualAssets(
 }
 
 /**
- * The flying detail entry is opaque. Cover and info have to be painted on it or the
- * morph is cover-only and list chrome stays behind. Opening and return both need this.
+ * Keep source chrome mounted through the morph. Its draw-phase alpha shares the detail
+ * body's handoff timeline, so ordinary return and predictive return reveal the same pixels.
  */
 internal fun shouldDrawFlyingReconstructedSourceChrome(
     phase: VideoCardTransitionBackgroundPhase,
@@ -66,9 +70,7 @@ internal fun shouldDrawFlyingReconstructedSourceChrome(
     isGestureRestoreInProgress: Boolean = false,
 ): Boolean {
     if (isReturnGestureInProgress || isGestureRestoreInProgress) return true
-    return phase == VideoCardTransitionBackgroundPhase.OPENING ||
-        phase == VideoCardTransitionBackgroundPhase.RETURNING ||
-        phase == VideoCardTransitionBackgroundPhase.HELD
+    return phase != VideoCardTransitionBackgroundPhase.IDLE
 }
 
 /** Frozen cover overlay pixels are usable only after the list card actually recorded them. */
@@ -280,6 +282,9 @@ internal fun resolveVideoDetailReturnMediaFrame(
     liveReturnMorph: Boolean = false,
     isReturnGestureInProgress: Boolean = false,
     showResidentCoverUntilFirstFrame: Boolean = false,
+    followProgressEnabled: Boolean = true,
+    progressiveResidentCover: Boolean = false,
+    entryCoverAlpha: Float = 0f,
 ): VideoDetailReturnMediaFrame {
     if (!hasResidentCover) {
         return VideoDetailReturnMediaFrame(coverAlpha = 0f, playerAlpha = 1f)
@@ -289,19 +294,53 @@ internal fun resolveVideoDetailReturnMediaFrame(
     }
     val returnActive = isCommittedCardReturn || isReturnGestureInProgress
     if (!returnActive) {
-        return VideoDetailReturnMediaFrame(coverAlpha = 0f, playerAlpha = 1f)
+        // First frame is already rendered: keep it opaque beneath the fading cover.
+        // Return/seek ownership below deliberately ignores this entry-only effect.
+        return VideoDetailReturnMediaFrame(
+            coverAlpha = entryCoverAlpha.coerceIn(0f, 1f),
+            playerAlpha = 1f,
+        )
     }
     if (!liveReturnMorph) {
+        if (progressiveResidentCover && followProgressEnabled) {
+            // Take over early, while the playback surface stays fully opaque underneath.
+            // The same depth reverses on gesture cancellation; no new reveal is scheduled.
+            val fraction = ((1f - transitionProgress.coerceIn(0f, 1f)) /
+                RESIDENT_COVER_RETURN_TAKEOVER_DEPTH_SPAN)
+                .coerceIn(0f, 1f)
+            val coverAlpha = fraction * fraction * (3f - 2f * fraction)
+            return VideoDetailReturnMediaFrame(
+                coverAlpha = coverAlpha,
+                playerAlpha = if (coverAlpha < 1f) 1f else 0f,
+            )
+        }
         return VideoDetailReturnMediaFrame(coverAlpha = 1f, playerAlpha = 0f)
     }
     // Keep the flying media slot opaque. Transparent cover + fading player is the empty
     // card: Miuix will not composite the list card through the flying clip.
-    val coverTakeover = resolveVideoCardLiveReturnVisualHandoffAlpha(transitionProgress)
+    val coverTakeover = if (!followProgressEnabled && transitionProgress > 0f) {
+        0f
+    } else resolveVideoCardLiveReturnVisualHandoffAlpha(transitionProgress)
     return VideoDetailReturnMediaFrame(
         coverAlpha = coverTakeover,
-        playerAlpha = 1f - coverTakeover,
+        // 封面覆盖在视频上。两层互补淡出会在中点只剩 75% 合成不透明度。
+        playerAlpha = if (coverTakeover < 1f) 1f else 0f,
     )
 }
+
+/** Conservative SurfaceView/Compose gate; older systems retain cover-only return. */
+internal fun shouldUseProgressiveResidentCoverReturn(
+    sdkInt: Int,
+    ownsInlineCardTransition: Boolean,
+    hasRenderedFirstFrame: Boolean,
+    hasDecodedResidentCover: Boolean,
+    liveReturnMorph: Boolean,
+    forceCoverOnly: Boolean,
+    reduceMotion: Boolean,
+    followProgressEnabled: Boolean,
+): Boolean = sdkInt >= 35 && ownsInlineCardTransition && hasRenderedFirstFrame &&
+    hasDecodedResidentCover && !liveReturnMorph && !forceCoverOnly && !reduceMotion &&
+    followProgressEnabled
 
 internal fun resolveVideoDetailReturnCoverAlpha(
     transitionProgress: Float,
@@ -356,7 +395,7 @@ internal fun resolveVideoDetailReturnPlayerAlpha(
 /**
  * Resident / player-section cover — must match the **stationary list card** Coil request.
  *
- * Priority: Miuix session snapshot → click [CardPositionManager] snapshot → home prefetch
+ * Priority: session snapshot → click snapshot → retained entry source → home prefetch
  * registry → route cover (last resort, may not match list pixels).
  */
 internal data class VideoDetailResidentCoverSource(
@@ -375,6 +414,7 @@ internal fun resolveVideoDetailResidentCoverSource(
     prefetchCacheKey: String? = null,
     prefetchDecodeWidthPx: Int = 0,
     prefetchDecodeHeightPx: Int = 0,
+    retainedStationarySource: VideoDetailResidentCoverSource? = null,
 ): VideoDetailResidentCoverSource? {
     fun fromSnapshot(snapshot: VideoCardSourceChromeSnapshot?): VideoDetailResidentCoverSource? {
         val url = snapshot?.coverUrl?.trim()?.takeIf { it.isNotBlank() } ?: return null
@@ -388,6 +428,8 @@ internal fun resolveVideoDetailResidentCoverSource(
     }
     fromSnapshot(sourceChromeSnapshot)?.let { return it }
     fromSnapshot(clickChromeSnapshot)?.let { return it }
+    // 导航可能先清理来源元数据，再卸载详情 entry；落位末帧不能换成兜底图片。
+    retainedStationarySource?.let { return it }
     val prefetch = prefetchUrl?.trim()?.takeIf { it.isNotBlank() }
     val prefetchKey = prefetchCacheKey?.trim()?.takeIf { it.isNotBlank() }
     if (prefetch != null && prefetchKey != null) {
@@ -568,13 +610,23 @@ internal fun shouldUseVideoDetailRootTransitionProgress(
         !keepLoadedContentForBackPreview
 }
 
+/**
+ * 详情正文是否挂载。
+ *
+ * 首次入场显式延后重正文时，以静态骨架承接数据先到、导航未落位的区间，
+ * 不在 morph 中触发简介列表的子组合与测量。已加载的返回预览不重新关闭门控。
+ * 未启用首次挂载门控的入口仍允许根过渡控制提前挂载正文的 alpha。
+ * 退场仍要求入场已完成，避免已让位的正文再次出现。
+ */
 internal fun shouldShowVideoDetailContent(
     isTransitionFinished: Boolean,
     isLeaving: Boolean,
     rootTransitionOwnsContentAlpha: Boolean,
     keepContentVisibleAfterBackPreview: Boolean = false,
+    deferFreshEntryContent: Boolean = false,
 ): Boolean {
     if (keepContentVisibleAfterBackPreview && !isLeaving) return true
+    if (!isLeaving && rootTransitionOwnsContentAlpha && !deferFreshEntryContent) return true
     return isTransitionFinished && (!isLeaving || rootTransitionOwnsContentAlpha)
 }
 

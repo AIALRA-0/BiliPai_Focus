@@ -10,13 +10,66 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LiveRoomLayoutPolicyTest {
+    @Test
+    fun `landscape fullscreen keeps inline portrait layout until rotation arrives`() {
+        val mode = resolveLiveRequestedOrientationMode(isTabletDevice = false, isFullscreen = true)
+        val pending = shouldPresentLiveFullscreen(true, isLandscape = false, orientationMode = mode)
+        assertFalse(pending)
+        assertEquals(
+            LiveRoomLayoutMode.PortraitPanel,
+            resolveLiveRoomLayoutMode(false, false, pending, false),
+        )
+        val rotated = shouldPresentLiveFullscreen(true, isLandscape = true, orientationMode = mode)
+        assertTrue(rotated)
+        assertEquals(
+            LiveRoomLayoutMode.LandscapeOverlay,
+            resolveLiveRoomLayoutMode(true, false, rotated, false),
+        )
+    }
 
     @Test
-    fun `only landscape video overlay uses media chat colors`() {
-        assertTrue(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.LandscapeOverlay))
-        assertTrue(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.PortraitVerticalOverlay))
-        assertFalse(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.PortraitPanel))
-        assertFalse(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.LandscapeSplit))
+    fun `pending fullscreen ignores repeated enter swipe and back cancels late rotation`() {
+        val requested = true
+        assertFalse(shouldToggleLiveFullscreenForDrag(-20f, 2.5f, requested, reverse = false))
+        assertTrue(shouldToggleLiveFullscreenForDrag(20f, 2.5f, requested, reverse = false))
+        val cancelledMode = resolveLiveRequestedOrientationMode(isTabletDevice = false, isFullscreen = false)
+        assertEquals(LiveRequestedOrientationMode.Portrait, cancelledMode)
+        assertFalse(shouldPresentLiveFullscreen(false, isLandscape = true, orientationMode = cancelledMode))
+    }
+
+    @Test
+    fun `portrait live and tablet fullscreen do not wait for landscape`() {
+        val portraitMode = resolveLiveRequestedOrientationMode(false, true, isPortraitLive = true)
+        assertTrue(shouldPresentLiveFullscreen(true, isLandscape = false, orientationMode = portraitMode))
+        val tabletMode = resolveLiveRequestedOrientationMode(true, true)
+        assertTrue(shouldPresentLiveFullscreen(true, isLandscape = false, orientationMode = tabletMode))
+    }
+
+    @Test
+    fun `phone split window enters fullscreen without waiting for physical rotation`() {
+        val splitWindow = resolveAppDisplayContext(
+            AppDisplayContextInput(
+                currentWindowWidthDp = 390,
+                currentWindowHeightDp = 440,
+                maximumWindowWidthDp = 390,
+                maximumWindowHeightDp = 844,
+                configurationOrientation = Configuration.ORIENTATION_PORTRAIT,
+                displayRotation = Surface.ROTATION_0,
+                isInMultiWindowMode = true,
+            ),
+        )
+        val mode = resolveLiveRequestedOrientationMode(splitWindow, isFullscreen = true)
+        assertEquals(LiveRequestedOrientationMode.Unspecified, mode)
+        assertTrue(shouldPresentLiveFullscreen(true, isLandscape = false, orientationMode = mode))
+    }
+
+    @Test
+    fun `actual video dimensions include pixel aspect ratio and ignore unknown sizes`() {
+        assertEquals(true, resolveLiveVideoIsPortrait(1080, 1920))
+        assertEquals(false, resolveLiveVideoIsPortrait(1920, 1080))
+        assertEquals(false, resolveLiveVideoIsPortrait(1080, 1920, 2f))
+        assertEquals(null, resolveLiveVideoIsPortrait(0, 1920))
+        assertEquals(null, resolveLiveVideoIsPortrait(1080, 1920, Float.NaN))
     }
 
     @Test
@@ -110,275 +163,55 @@ class LiveRoomLayoutPolicyTest {
         )
     }
 
-    @Test
-    fun `portrait vertical live uses overlay layout like BiliPai portrait room`() {
-        val mode = resolveLiveRoomLayoutMode(
-            isLandscape = false,
-            isTablet = false,
-            isFullscreen = false,
-            isPortraitLive = true
-        )
 
-        assertEquals(LiveRoomLayoutMode.PortraitVerticalOverlay, mode)
+    @Test
+    fun `window orientation determines nonfullscreen layout across device classes`() {
+        listOf(false, true).forEach { tablet ->
+            assertEquals(LiveRoomLayoutMode.PortraitPanel, resolveLiveRoomLayoutMode(false, tablet, false, false))
+            assertEquals(LiveRoomLayoutMode.PortraitVerticalOverlay, resolveLiveRoomLayoutMode(false, tablet, false, true))
+            assertEquals(LiveRoomLayoutMode.LandscapeSplit, resolveLiveRoomLayoutMode(true, tablet, false, false))
+            assertEquals(LiveRoomLayoutMode.LandscapeSplit, resolveLiveRoomLayoutMode(true, tablet, false, true))
+        }
     }
 
     @Test
-    fun `landscape tablet outside fullscreen keeps split chat panel`() {
-        val mode = resolveLiveRoomLayoutMode(
-            isLandscape = true,
-            isTablet = true,
-            isFullscreen = false,
-            isPortraitLive = false
-        )
-
-        assertEquals(LiveRoomLayoutMode.LandscapeSplit, mode)
+    fun `fullscreen only keeps the video layout`() {
+        assertEquals(LiveRoomLayoutMode.LandscapeOverlay, resolveLiveRoomLayoutMode(true, false, true, false))
+        assertEquals(LiveRoomLayoutMode.PortraitVerticalOverlay, resolveLiveRoomLayoutMode(false, false, true, true))
+        assertEquals(LiveRoomLayoutMode.LandscapeOverlay, resolveLiveRoomLayoutMode(false, true, true, false))
     }
 
     @Test
-    fun `fullscreen landscape uses transparent overlay chat`() {
-        val mode = resolveLiveRoomLayoutMode(
-            isLandscape = true,
-            isTablet = true,
-            isFullscreen = true,
-            isPortraitLive = false
-        )
-
-        assertEquals(LiveRoomLayoutMode.LandscapeOverlay, mode)
+    fun `obstructing hinge keeps room interaction in its own pane`() {
+        assertEquals(LiveRoomLayoutMode.LandscapeSplit, resolveLiveRoomLayoutMode(false, false, false, true, true))
+        assertEquals(LiveRoomLayoutMode.LandscapeOverlay, resolveLiveRoomLayoutMode(false, false, true, true, true))
     }
 
     @Test
-    fun `overlaying live layouts expose chat toggle`() {
-        assertTrue(shouldShowLiveChatToggle(LiveRoomLayoutMode.PortraitVerticalOverlay))
-        assertFalse(shouldShowLiveChatToggle(LiveRoomLayoutMode.LandscapeSplit))
-        assertTrue(shouldShowLiveChatToggle(LiveRoomLayoutMode.LandscapeOverlay))
-        assertFalse(shouldShowLiveChatToggle(LiveRoomLayoutMode.PortraitPanel))
+    fun `split width follows local aspect ratio and caps the interaction column`() {
+        assertEquals(400, resolveLiveSplitChatPanelWidthDp(1200, screenHeightDp = 700))
+        assertEquals(352, resolveLiveSplitChatPanelWidthDp(800, screenHeightDp = 350))
+        assertEquals(240, resolveLiveSplitChatPanelWidthDp(800, screenHeightDp = 700))
+        assertEquals(181, resolveLiveSplitChatPanelWidthDp(440, screenHeightDp = 240))
+        assertTrue(resolveLiveSplitChatPanelWidthDp(1, screenHeightDp = 1) in 0..1)
     }
 
     @Test
-    fun `live interaction panel defaults to collapsed`() {
-        assertFalse(defaultLiveInteractionPanelVisible())
+    fun `player insets are consumed only in fullscreen`() {
+        LiveRoomLayoutMode.entries.forEach { mode ->
+            assertFalse(shouldApplyLiveTopControlSystemInsets(mode, false))
+            assertFalse(shouldApplyLiveBottomControlSystemInsets(mode, false, true))
+            assertTrue(shouldApplyLiveTopControlSystemInsets(mode, true))
+            assertTrue(shouldApplyLiveBottomControlSystemInsets(mode, true, false))
+            assertTrue(shouldShowLivePlayerControlsTopBar(mode, false))
+        }
     }
 
     @Test
-    fun `split mode and overlay mode use different chat containers`() {
-        assertTrue(
-            shouldShowLiveSplitChatPanel(
-                layoutMode = LiveRoomLayoutMode.LandscapeSplit,
-                isInteractionPanelVisible = true
-            )
-        )
-        assertTrue(
-            shouldShowLiveSplitChatPanel(
-                layoutMode = LiveRoomLayoutMode.LandscapeSplit,
-                isInteractionPanelVisible = false
-            )
-        )
-        assertFalse(
-            shouldShowLiveSplitChatPanel(
-                layoutMode = LiveRoomLayoutMode.LandscapeOverlay,
-                isInteractionPanelVisible = true
-            )
-        )
-        assertTrue(
-            shouldShowLiveLandscapeChatOverlay(
-                layoutMode = LiveRoomLayoutMode.LandscapeOverlay,
-                isInteractionPanelVisible = true
-            )
-        )
-        assertFalse(
-            shouldShowLiveLandscapeChatOverlay(
-                layoutMode = LiveRoomLayoutMode.LandscapeOverlay,
-                isInteractionPanelVisible = false
-            )
-        )
-        assertFalse(
-            shouldShowLiveLandscapeChatOverlay(
-                layoutMode = LiveRoomLayoutMode.LandscapeSplit,
-                isInteractionPanelVisible = true
-            )
-        )
-    }
-
-    @Test
-    fun `duration format matches live room compact labels`() {
+    fun `room duration and count labels remain compact`() {
         val startedAt = 1_700_000_000L
-        val now = startedAt * 1000L + 90L * 60_000L
-
-        assertEquals("开播1小时30分钟", formatLiveDuration(startedAt, now))
-    }
-
-    @Test
-    fun `viewer count uses compact chinese units`() {
+        assertEquals("开播1小时30分钟", formatLiveDuration(startedAt, startedAt * 1000 + 90 * 60_000))
         assertEquals("1.2万", formatLiveViewerCount(12_300))
         assertEquals("-", formatLiveViewerCount(0))
-    }
-
-    @Test
-    fun `embedded player controls do not consume system bar insets`() {
-        assertFalse(
-            shouldApplyLiveTopControlSystemInsets(
-                layoutMode = LiveRoomLayoutMode.PortraitPanel,
-                isFullscreen = false
-            )
-        )
-        assertFalse(
-            shouldApplyLiveBottomControlSystemInsets(
-                layoutMode = LiveRoomLayoutMode.LandscapeSplit,
-                isFullscreen = false,
-                hasReservedBottomOverlay = false
-            )
-        )
-    }
-
-    @Test
-    fun `edge player controls only reserve bottom insets when no lower panel is present`() {
-        assertTrue(
-            shouldApplyLiveTopControlSystemInsets(
-                layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-                isFullscreen = false
-            )
-        )
-        assertFalse(
-            shouldApplyLiveBottomControlSystemInsets(
-                layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-                isFullscreen = false,
-                hasReservedBottomOverlay = true
-            )
-        )
-        assertTrue(
-            shouldApplyLiveBottomControlSystemInsets(
-                layoutMode = LiveRoomLayoutMode.LandscapeOverlay,
-                isFullscreen = false,
-                hasReservedBottomOverlay = false
-            )
-        )
-    }
-
-    @Test
-    fun `portrait overlay panel keeps video as primary content`() {
-        val metrics = resolveLivePortraitOverlayMetrics(screenHeightDp = 844)
-        val panelHeight = resolveLivePortraitOverlayPanelHeightDp(
-            screenHeightDp = 844,
-            metrics = metrics
-        )
-
-        assertEquals(0.26f, metrics.panelHeightFraction)
-        assertTrue(panelHeight <= (844 * 0.30f).toInt())
-        assertTrue(844 - panelHeight >= metrics.minPlayerClearanceDp)
-        assertTrue(metrics.playerControlsGapDp >= 8)
-    }
-
-    @Test
-    fun `portrait overlay uses room app bar instead of duplicate player top bar`() {
-        assertFalse(
-            shouldShowLivePlayerControlsTopBar(
-                layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-                isFullscreen = false
-            )
-        )
-        assertTrue(
-            shouldShowLivePlayerControlsTopBar(
-                layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-                isFullscreen = true
-            )
-        )
-        assertTrue(
-            shouldShowLivePlayerControlsTopBar(
-                layoutMode = LiveRoomLayoutMode.LandscapeOverlay,
-                isFullscreen = false
-            )
-        )
-    }
-
-    @Test
-    fun `portrait overlay danmaku avoids app bar controls and visible interaction panel`() {
-        val metrics = resolveLivePortraitOverlayMetrics(screenHeightDp = 844)
-        val panelHeight = resolveLivePortraitOverlayPanelHeightDp(
-            screenHeightDp = 844,
-            metrics = metrics
-        )
-        val insets = resolveLiveOverlayContentInsets(
-            layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-            portraitPanelHeightDp = panelHeight,
-            portraitMetrics = metrics,
-            isInteractionPanelVisible = true
-        )
-
-        assertTrue(insets.topDp >= metrics.topChromeReserveDp)
-        assertTrue(insets.bottomDp > panelHeight)
-        assertTrue(844 - insets.topDp - insets.bottomDp >= 320)
-        assertEquals(
-            LiveOverlayContentInsets(topDp = 0, bottomDp = 0),
-            resolveLiveOverlayContentInsets(
-                layoutMode = LiveRoomLayoutMode.PortraitPanel,
-                portraitPanelHeightDp = panelHeight,
-                portraitMetrics = metrics,
-                isInteractionPanelVisible = true
-            )
-        )
-    }
-
-    @Test
-    fun `portrait overlay does not reserve interaction panel when it is collapsed`() {
-        val metrics = resolveLivePortraitOverlayMetrics(screenHeightDp = 844)
-        val panelHeight = resolveLivePortraitOverlayPanelHeightDp(
-            screenHeightDp = 844,
-            metrics = metrics
-        )
-        val insets = resolveLiveOverlayContentInsets(
-            layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-            portraitPanelHeightDp = panelHeight,
-            portraitMetrics = metrics,
-            isInteractionPanelVisible = false
-        )
-
-        assertEquals(metrics.topChromeReserveDp, insets.topDp)
-        assertEquals(
-            metrics.playerControlsGapDp + metrics.playerControlsReserveDp,
-            insets.bottomDp
-        )
-        assertFalse(
-            shouldReserveLivePortraitInteractionPanel(
-                layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-                isInteractionPanelVisible = false
-            )
-        )
-        assertTrue(
-            shouldReserveLivePortraitInteractionPanel(
-                layoutMode = LiveRoomLayoutMode.PortraitVerticalOverlay,
-                isInteractionPanelVisible = true
-            )
-        )
-    }
-
-    @Test
-    fun `landscape chat overlay is bounded away from player chrome`() {
-        val metrics = resolveLiveLandscapeChatOverlayMetrics(
-            screenWidthDp = 844,
-            screenHeightDp = 390
-        )
-        val overlayHeight = resolveLiveLandscapeChatOverlayHeightDp(
-            screenHeightDp = 390,
-            metrics = metrics
-        )
-        val overlayWidth = resolveLiveLandscapeChatOverlayWidthDp(
-            screenWidthDp = 844,
-            metrics = metrics
-        )
-
-        assertTrue(metrics.bottomControlReserveDp >= 88)
-        assertTrue(overlayHeight <= 390 - metrics.topControlReserveDp - metrics.bottomControlReserveDp)
-        assertTrue(overlayWidth <= metrics.maxWidthDp)
-        assertTrue(overlayWidth >= metrics.minWidthDp)
-    }
-
-    @Test
-    fun `split chat column matches desktop live room width bounds`() {
-        val tablet = resolveLiveSplitChatPanelWidthDp(screenWidthDp = 1200)
-        assertEquals(LIVE_SPLIT_CHAT_MAX_WIDTH_DP, tablet)
-
-        val compact = resolveLiveSplitChatPanelWidthDp(screenWidthDp = 800)
-        assertTrue(compact in 260..LIVE_SPLIT_CHAT_MAX_WIDTH_DP)
-        assertTrue(compact < 800 - 24)
     }
 }

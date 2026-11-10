@@ -5,8 +5,10 @@ import android.app.Activity
 import android.content.Context
 import android.media.AudioManager
 import android.provider.Settings
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -18,7 +20,9 @@ import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -245,7 +249,8 @@ fun GestureIndicator(
             val alignment = resolveGestureLevelOverlaySpec(
                 style = overlayStyle,
                 kind = kind,
-                percent = value
+                percent = value,
+                brightnessColor = androidx.compose.ui.res.colorResource(com.android.purebilibili.R.color.player_brightness_accent),
             ).alignment
             Box(
                 modifier = modifier.fillMaxSize(),
@@ -268,16 +273,126 @@ fun GestureIndicator(
 }
 
 /**
- * Create tap gesture detector
+ * A stable Compose hit target above passive Android rendering views. It does not consume
+ * events: the parent owns tap/drag/long-press recognition. Interactive overlays are placed
+ * above this surface, so their buttons and BAS links keep priority over player gestures.
+ */
+@Composable
+internal fun PlayerGestureInputSurface(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) awaitPointerEvent()
+            }
+        },
+    )
+}
+
+/**
+ * Only short presses can enter the double-tap stream. Long presses remain owned by
+ * the optional speed callback or the separate drag detector; release always restores speed.
+ * Distant taps are independent, and the second can still start a new double tap.
  */
 suspend fun PointerInputScope.detectPlayerTapGestures(
-    onTap: () -> Unit,
-    onDoubleTap: () -> Unit
+    onTap: (Offset) -> Unit,
+    onDoubleTap: (Offset) -> Unit,
+    doubleTapSlopPx: Float,
+    captureSingleTap: (Offset) -> com.android.purebilibili.danmaku.engine.DanmakuClickCapture? = { null },
+    onLongPress: ((Offset) -> Unit)? = null,
+    onPressEnd: () -> Unit = {},
 ) {
-    detectTapGestures(
-        onTap = { onTap() },
-        onDoubleTap = { onDoubleTap() }
-    )
+    val doubleTapSlopSquared = doubleTapSlopPx * doubleTapSlopPx
+    val danmakuSlopSquared = (2.dp.toPx()).let { it * it }
+    awaitEachGesture {
+        var down = awaitFirstDown()
+        var captured: com.android.purebilibili.danmaku.engine.DanmakuClickCapture? = null
+        var confirmed = false
+        try {
+            while (true) {
+                down.consume()
+                captured = captureSingleTap(down.position)
+                confirmed = false
+                val strictHit = captured != null
+                var pressCancelled = false
+                val up = withTimeoutOrNull(if (strictHit) 300L else viewConfiguration.longPressTimeoutMillis) {
+                    waitForPlayerTapRelease(
+                        down.position,
+                        if (strictHit) danmakuSlopSquared else viewConfiguration.touchSlop * viewConfiguration.touchSlop,
+                    ).also { pressCancelled = it == null }
+                }
+                if (up == null) {
+                    captured?.cancel()
+                    captured = null
+                    // A cancelled drag must not turn into a speed gesture.
+                    if (!pressCancelled) {
+                        if (onLongPress != null) {
+                            onLongPress(down.position)
+                            // The speed gesture owns this press until every finger is released.
+                            do {
+                                val event = awaitPointerEvent()
+                                event.changes.forEach { it.consume() }
+                            } while (event.changes.any { it.pressed })
+                        } else {
+                            waitForUpOrCancellation()
+                        }
+                    }
+                    return@awaitEachGesture
+                }
+                up.consume()
+                val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                    val minUptime = up.uptimeMillis + viewConfiguration.doubleTapMinTimeMillis
+                    var candidate = awaitFirstDown()
+                    while (candidate.uptimeMillis < minUptime) candidate = awaitFirstDown()
+                    candidate
+                }
+                if (secondDown == null) {
+                    captured?.invoke() ?: onTap(up.position)
+                    confirmed = true
+                    return@awaitEachGesture
+                }
+                if ((secondDown.position - down.position).getDistanceSquared() > doubleTapSlopSquared) {
+                    captured?.invoke() ?: onTap(up.position)
+                    confirmed = true
+                    down = secondDown
+                    continue
+                }
+                // A second tap belongs to playback; release the frozen item immediately.
+                captured?.cancel()
+                captured = null
+                secondDown.consume()
+                val secondUp = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    waitForUpOrCancellation()
+                }
+                if (secondUp != null) {
+                    secondUp.consume()
+                    onDoubleTap(secondUp.position)
+                }
+                return@awaitEachGesture
+            }
+        } finally {
+            if (!confirmed) captured?.cancel()
+            onPressEnd()
+        }
+    }
+}
+
+/** Movement is checked on every event, including a finger that returns to its origin. */
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.waitForPlayerTapRelease(
+    origin: Offset,
+    maxDistanceSquared: Float?,
+): androidx.compose.ui.input.pointer.PointerInputChange? {
+    while (true) {
+        val event = awaitPointerEvent()
+        if (event.changes.size != 1 || event.changes.any {
+                it.isConsumed || it.position.x < 0 || it.position.y < 0 ||
+                    it.position.x > size.width || it.position.y > size.height ||
+                    (maxDistanceSquared != null && (it.position - origin).getDistanceSquared() > maxDistanceSquared)
+            }) return null
+        val change = event.changes.first()
+        if (!change.pressed) return change
+        if (awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
+                .changes.any { it.isConsumed }) return null
+    }
 }
 
 /**

@@ -21,6 +21,8 @@ internal data class BiliPaiNavSourceMetadata(
     val coverIdentity: String? = null,
     val sourceBounds: Rect? = null,
     val sourceCoverBounds: Rect? = null,
+    /** 点击时冻结的信息面矩形（与 [sourceBounds] 同坐标系），供重建来源卡壳落位。 */
+    val sourceInfoBounds: Rect? = null,
     val sourceLayout: VideoCardSourceLayout = VideoCardSourceLayout.COVER_ONLY,
     val sourceChromeSnapshot: VideoCardSourceChromeSnapshot? = null,
 ) {
@@ -38,6 +40,7 @@ internal fun BiliPaiNavSourceMetadata.relativeToHost(originInRoot: Offset): Bili
     return copy(
         sourceBounds = sourceBounds?.toHostRect(),
         sourceCoverBounds = sourceCoverBounds?.toHostRect(),
+        sourceInfoBounds = sourceInfoBounds?.toHostRect(),
     )
 }
 
@@ -112,6 +115,7 @@ internal fun resolveBiliPaiNavSourceMetadata(
     coverIdentity: String? = null,
     sourceBounds: Rect? = null,
     sourceCoverBounds: Rect? = null,
+    sourceInfoBounds: Rect? = null,
     sourceLayout: VideoCardSourceLayout = VideoCardSourceLayout.COVER_ONLY,
     sourceChromeSnapshot: VideoCardSourceChromeSnapshot? = null,
 ): BiliPaiNavSourceMetadata {
@@ -125,6 +129,7 @@ internal fun resolveBiliPaiNavSourceMetadata(
         coverIdentity = coverIdentity?.trim()?.takeIf(String::isNotEmpty),
         sourceBounds = sourceBounds,
         sourceCoverBounds = sourceCoverBounds,
+        sourceInfoBounds = sourceInfoBounds,
         sourceLayout = sourceLayout,
         sourceChromeSnapshot = sourceChromeSnapshot,
     )

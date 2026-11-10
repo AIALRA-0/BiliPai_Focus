@@ -91,16 +91,37 @@ internal fun resolveMiuixPreferredHomeNavigationIcon(
     return resolveMiuixHomeNavigationIcon(role, selected)
 }
 
-/**
- * Miuix Home and Recent remain visually solid even at Light weight. Their idle layer uses the
- * thin local outline while the selected layer uses a filled glyph, allowing the moving indicator
- * to crossfade real interior fill without leaving an idle black solid icon behind.
- */
+/** Top tabs and bottom navigation share the same selected glyph for the same role. */
+private fun resolveMiuixNavigationFilledResource(role: HomeNavigationIconRole): Int? = when (role) {
+    HomeNavigationIconRole.HOME -> R.drawable.ms_home_fill_24
+    HomeNavigationIconRole.DYNAMIC -> R.drawable.bp_nav_community_filled_24
+    HomeNavigationIconRole.STORY, HomeNavigationIconRole.ANIME -> R.drawable.ic_home_nav_story_filled
+    HomeNavigationIconRole.HISTORY -> R.drawable.ms_history_fill_24
+    HomeNavigationIconRole.LISTEN_VIDEO -> R.drawable.bp_nav_music_filled_24
+    HomeNavigationIconRole.PROFILE -> R.drawable.ic_home_nav_profile_filled
+    HomeNavigationIconRole.FAVORITE -> R.drawable.bp_nav_favorite_filled_24
+    HomeNavigationIconRole.LIVE -> R.drawable.ic_home_nav_live_filled
+    HomeNavigationIconRole.WATCH_LATER -> R.drawable.ms_watch_later_fill_24
+    HomeNavigationIconRole.SETTINGS -> null
+    HomeNavigationIconRole.PLUGINS -> R.drawable.bp_nav_folder_filled_24
+    HomeNavigationIconRole.FOLLOW -> R.drawable.ms_person_fill_24
+    HomeNavigationIconRole.POPULAR -> R.drawable.ms_trending_up_fill_24
+    HomeNavigationIconRole.GAME -> R.drawable.bp_nav_store_filled_24
+    HomeNavigationIconRole.PARTITION -> R.drawable.ms_grid_view_fill_24
+    HomeNavigationIconRole.KNOWLEDGE -> R.drawable.bp_nav_notes_filled_24
+    HomeNavigationIconRole.TECH -> R.drawable.bp_nav_palette_filled_24
+    HomeNavigationIconRole.SUBSCRIPTIONS -> R.drawable.ms_rss_feed_24
+}
+
 @Composable
 internal fun resolveMiuixBottomNavigationIcon(
     item: BottomNavItem,
     selected: Boolean,
-): ImageVector = resolveMiuixPreferredHomeNavigationIcon(item.name, selected)
+): ImageVector = if (item == BottomNavItem.LIVE && !selected) {
+    ImageVector.vectorResource(R.drawable.ic_home_nav_live)
+} else {
+    resolveMiuixPreferredHomeNavigationIcon(item.name, selected = selected)
+}
 
 @Composable
 private fun resolveMiuixHomeNavigationIcon(
@@ -108,15 +129,8 @@ private fun resolveMiuixHomeNavigationIcon(
     selected: Boolean,
 ): ImageVector {
     if (selected) {
-        val filledResource = when (role) {
-            HomeNavigationIconRole.HOME -> R.drawable.ms_home_fill_24
-            HomeNavigationIconRole.HISTORY -> R.drawable.ms_history_fill_24
-            HomeNavigationIconRole.SUBSCRIPTIONS -> R.drawable.ms_rss_feed_24
-            else -> null
-        }
+        val filledResource = resolveMiuixNavigationFilledResource(role)
         if (filledResource != null) return ImageVector.vectorResource(filledResource)
-        // Keep the same Miuix silhouette under the moving tint mask. Unrelated Material
-        // filled glyphs (for example a bell for Community) do not align with the idle icon.
     }
     return when (role) {
         HomeNavigationIconRole.HOME -> ImageVector.vectorResource(R.drawable.bp_nav_home_outline_24)
@@ -128,7 +142,7 @@ private fun resolveMiuixHomeNavigationIcon(
         HomeNavigationIconRole.FAVORITE -> MiuixIcons.Light.Favorites
         HomeNavigationIconRole.LIVE -> MiuixIcons.Light.Recording
         HomeNavigationIconRole.WATCH_LATER -> MiuixIcons.Light.Stopwatch
-        HomeNavigationIconRole.SETTINGS -> MiuixIcons.Light.Settings
+        HomeNavigationIconRole.SETTINGS -> if (selected) MiuixIcons.Demibold.Settings else MiuixIcons.Light.Settings
         HomeNavigationIconRole.PLUGINS -> MiuixIcons.Light.Folder
         HomeNavigationIconRole.FOLLOW -> MiuixIcons.Light.Contacts
         HomeNavigationIconRole.POPULAR -> MiuixIcons.Light.TopDownloads

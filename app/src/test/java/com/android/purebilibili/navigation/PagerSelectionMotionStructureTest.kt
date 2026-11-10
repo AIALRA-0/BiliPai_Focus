@@ -8,13 +8,13 @@ import kotlin.test.assertTrue
 class PagerSelectionMotionStructureTest {
 
     @Test
-    fun `tab selection motion scrolls through intermediate pages`() {
+    fun `tab selection separates rail motion from page traversal`() {
         val source = loadSource("navigation/PagerSelectionMotion.kt")
 
-        assertTrue(source.contains("pagerState.scroll(MutatePriority.UserInput)"))
-        assertTrue(source.contains("scrollBy(value - consumedPx)"))
-        assertTrue(source.contains("resolveBottomPagerNavigationDurationMillis(pageDistance)"))
-        assertFalse(source.contains("pagerState.animateScrollToPage("))
+        assertTrue(source.contains("PagerState.tabIndicatorPosition"))
+        assertFalse(source.contains("scrollBy(value - consumedPx)"))
+        assertTrue(source.contains("pagerState.animateScrollToPage(target, animationSpec = spec)"))
+        assertTrue(source.contains("pagerState.animateScrollToPage("))
     }
 
     @Test
@@ -26,10 +26,10 @@ class PagerSelectionMotionStructureTest {
         val commonList = loadSource("feature/list/CommonListScreen.kt")
 
         assertTrue(bottom.contains("animatePagerSelection(pagerState, safeTargetIndex)"))
-        assertTrue(home.contains("animatePagerSelection(pagerState, index)"))
+        assertTrue(home.contains("animatePagerSelection(pagerState, index, homeTabSelectionAnimationSpec)"))
         assertTrue(dynamic.contains("animatePagerSelection(pagerState, visibleIndex)"))
         assertTrue(search.contains("animatePagerSelection(searchPagerState, page)"))
-        assertTrue(commonList.contains("animatePagerSelection(pagerState, targetPage)"))
+        assertTrue(commonList.contains("animatePagerSelection(historyPagerState, targetPage)"))
     }
 
     private fun loadSource(relativePath: String): String {

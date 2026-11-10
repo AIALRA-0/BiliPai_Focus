@@ -136,4 +136,13 @@ class FollowedLiveDataParsingTest {
         assertEquals(109000, room?.online)
         assertEquals("新游推荐", room?.areaName)
     }
+    @Test
+    fun omittedLivingCountIsUnknownButExplicitZeroIsKnown() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val unknown = json.decodeFromString(FollowedLiveData.serializer(), """{"list":[]}""")
+        val zero = json.decodeFromString(FollowedLiveData.serializer(), """{"list":[],"living_num":0}""")
+        kotlin.test.assertNull(unknown.livingNum)
+        assertEquals(0, zero.livingNum)
+    }
+
 }

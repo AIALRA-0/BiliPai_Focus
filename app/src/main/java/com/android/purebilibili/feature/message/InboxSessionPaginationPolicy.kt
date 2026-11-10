@@ -13,6 +13,7 @@ internal data class InboxSessionPageMergeResult(
 internal object InboxSessionPaginationPolicy {
 
     fun resolveSessionKey(session: SessionItem): String {
+        if (session.identity_key.isNotBlank()) return session.identity_key
         if (session.talker_id > 0L) {
             return "${session.talker_id}_${session.session_type}"
         }
@@ -28,6 +29,21 @@ internal object InboxSessionPaginationPolicy {
             else -> "content_${lastMessage?.content.orEmpty().hashCode()}_${session.biz}_${session.status}"
         }
         return "invalid_${session.talker_id}_${session.session_type}_$fallback"
+    }
+
+    fun applyReadAck(
+        session: SessionItem,
+        talkerId: Long,
+        sessionType: Int,
+        ackSeqno: Long,
+    ): SessionItem {
+        if (session.talker_id != talkerId || session.session_type != sessionType ||
+            ackSeqno <= session.ack_seqno
+        ) return session
+        return session.copy(
+            ack_seqno = ackSeqno,
+            unread_count = if (ackSeqno >= session.max_seqno) 0 else session.unread_count,
+        )
     }
 
     fun normalizeSessions(sessions: List<SessionItem>): List<SessionItem> =

@@ -52,11 +52,13 @@ afterEvaluate {
 }
 
 dependencies {
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
     testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.10.2")
-    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.22")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.4.0")
 }

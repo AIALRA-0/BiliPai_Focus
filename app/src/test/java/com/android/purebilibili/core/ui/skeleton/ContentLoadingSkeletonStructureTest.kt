@@ -23,9 +23,11 @@ class ContentLoadingSkeletonStructureTest {
         assertTrue(source.contains("fun PosterDetailSkeleton("))
         assertTrue(source.contains("fun ContentCategoryGridSkeleton("))
         assertTrue(source.contains("fun TrendingListSkeleton("))
-        assertTrue(source.contains("rememberContentSkeletonPulse("))
-        // Home-style soft pulse; no left-right shimmer sweep flicker.
-        assertTrue(source.contains("RepeatMode.Reverse"))
+        assertTrue(source.contains("rememberContentSkeletonPulseState("))
+        // Sweep progress stays in the shared State and is consumed by draw helpers.
+        assertTrue(source.contains("rememberSkeletonSweepState()"))
+        assertTrue(source.contains("colorProvider.skeletonBrush(size)"))
+        assertFalse(source.contains("fun rememberContentSkeletonPulse(): Float"))
         assertFalse(source.contains("shimmerEffect()"))
     }
 
@@ -52,12 +54,20 @@ class ContentLoadingSkeletonStructureTest {
 
         assertTrue(space.contains("SpaceLoadingSkeleton("))
         assertFalse(space.contains("SpaceUiState.Loading -> {\n                        com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton("))
-        assertTrue(spaceSkeleton.contains("resolveSpaceContentGridColumnCount("))
-        assertTrue(spaceSkeleton.contains("resolveSpaceAdaptiveLayoutSpec("))
-        assertTrue(spaceSkeleton.contains("adaptiveLayoutSpec.contentMaxWidthDp.dp"))
-        assertTrue(spaceSkeleton.contains("adaptiveLayoutSpec.useExpandedHeader"))
-        assertTrue(spaceSkeleton.contains("resolveSpaceBannerMetrics("))
-        assertTrue(spaceSkeleton.contains("GridItemSpan(maxLineSpan)"))
+        // 空间首屏骨架不再自建独立网格：它作为 item 提供者铺进 SpaceContent 的同一个
+        // LazyVerticalStaggeredGrid（同一个 gridState），Loading → Success 是 item 原地替换而不是
+        // 整棵网格重建。骨架里因此不应再出现 LazyVerticalStaggeredGrid，色块也必须是固定色
+        // （rememberStaticSkeletonBlockColor）而非呼吸脉冲，避免灰块闪烁。
+        assertTrue(space.contains("isInitialLoading = isLoadingSpace"))
+        assertFalse(spaceSkeleton.contains("LazyVerticalStaggeredGrid("))
+        assertFalse(spaceSkeleton.contains("rememberContentSkeletonPulse("))
+        assertTrue(spaceSkeleton.contains("LazyStaggeredGridScope.SpaceLoadingSkeleton("))
+        assertTrue(spaceSkeleton.contains("StaggeredGridItemSpan.FullLine"))
+        // 列数 / 封面比例 / 头部形态都按真实内容同规则算好后传入，保证骨架与卡片同形。
+        assertTrue(space.contains("columns = gridColumns"))
+        assertTrue(space.contains("coverAspectRatio = spaceFeedCoverAspectRatio"))
+        assertTrue(space.contains("resolveSpaceBannerMetrics("))
+        assertTrue(space.contains("adaptiveLayoutSpec.useExpandedHeader"))
         assertTrue(article.contains("ArticleDetailSkeleton("))
         assertTrue(bangumiDetail.contains("PosterDetailSkeleton("))
         assertTrue(liveArea.contains("ContentCategoryGridSkeleton("))
@@ -116,11 +126,19 @@ class ContentLoadingSkeletonStructureTest {
         assertTrue(bangumi.contains("BangumiPosterGridSkeleton()"))
         assertTrue(bangumi.contains("BangumiTimelineSkeleton()"))
         assertTrue(bangumi.contains("BangumiFollowManagerSkeleton()"))
-        assertTrue(videoComments.contains("state.isRepliesLoading && state.replies.isEmpty()"))
-        assertTrue(videoComments.contains("CommentListSkeleton("))
+        assertTrue(videoComments.contains("state.isRepliesLoading &&"))
+        // 视频评论骨架同样改为「稳定槽位」：拆成多个 lazy item（videoCommentSkeletonItems），
+        // 真实评论项加 animateItem；骨架换成内容时是槽位原地替换，列表不会跳。
+        assertTrue(videoComments.contains("videoCommentSkeletonItems("))
+        assertTrue(videoComments.contains("videoCommentItemModifier()"))
+        assertTrue(videoComments.contains("commentSkeletonSlotCount"))
+        assertFalse(videoComments.contains("CommentListColumnSkeleton("))
         assertTrue(dynamicComments.contains("isLoading && comments.isEmpty()"))
-        assertTrue(dynamicComments.contains("CommentListSkeleton("))
-        assertTrue(dynamicComments.contains("CommentListColumnSkeleton("))
+        // 动态评论骨架改为「稳定槽位」：拆成多个 lazy item，并复用与真实评论一致的
+        // CommentListItemSkeleton；不再用「单个 item 塞 N 行」的 CommentListColumnSkeleton，
+        // 否则骨架换成内容时 item 结构整体替换、列表会跳。
+        assertTrue(dynamicComments.contains("dynamicCommentSkeletonItems("))
+        assertTrue(dynamicComments.contains("CommentListItemSkeleton("))
     }
 
     private fun loadSource(path: String): String {

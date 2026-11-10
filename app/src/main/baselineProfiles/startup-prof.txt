@@ -1,0 +1,7 @@
+HSPLcom/android/purebilibili/app/PureApplication;->onCreate()V
+HSPLcom/android/purebilibili/MainActivity;->onCreate(Landroid/os/Bundle;)V
+Lcom/android/purebilibili/app/PureApplication;
+Lcom/android/purebilibili/MainActivity;
+Lcom/android/purebilibili/navigation/AppNavigationKt;
+Lcom/android/purebilibili/feature/home/HomeScreenKt;
+Lcom/android/purebilibili/core/store/SettingsManager;

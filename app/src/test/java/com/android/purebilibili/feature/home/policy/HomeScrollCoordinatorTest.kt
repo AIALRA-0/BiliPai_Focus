@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.policy
 
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
+import com.android.purebilibili.core.store.HomeBarHideType
 import com.android.purebilibili.core.store.HomeHeaderCollapseMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,29 +10,151 @@ import kotlin.test.assertNull
 class HomeScrollCoordinatorTest {
 
     @Test
-    fun homeRecommendationHeader_usesItsOwnPreference() {
-        assertEquals(
-            HomeHeaderCollapseMode.BOTH,
-            resolveHomeRecommendationHeaderCollapseMode(
-                homeHeaderCollapseMode = HomeHeaderCollapseMode.BOTH
-            )
-        )
+    fun atTop_revealConsumptionLeavesOnlyRemainingDeltaForRefresh() {
+        assertEquals(15f, resolveHomeHeaderRevealConsumedY(-15f, 30f, true, true))
+        assertEquals(0f, resolveHomeHeaderRevealConsumedY(-15f, 30f, false, true))
+        assertEquals(0f, resolveHomeHeaderRevealConsumedY(-15f, 30f, true, false))
+        assertEquals(0f, resolveHomeHeaderRevealConsumedY(-15f, -30f, true, true))
     }
 
     @Test
-    fun otherListHeaderModes_preserveHomeRecommendationHeaderPreference() {
-        assertEquals(
-            HomeHeaderCollapseMode.SEARCH_ONLY,
-            resolveHomeRecommendationHeaderCollapseMode(
-                homeHeaderCollapseMode = HomeHeaderCollapseMode.SEARCH_ONLY
+    fun firstItemStillVisible_reverseScrollMustWaitUntilListActuallyReachesTop() {
+        for (listAtTop in listOf(false, true)) {
+            val result = reduceHomePreScroll(
+                currentHeaderOffsetPx = -120f,
+                deltaY = 48f,
+                minHeaderOffsetPx = -120f,
+                canRevealHeader = true,
+                listAtTop = listAtTop,
+                isHeaderCollapseEnabled = true,
+                isBottomBarAutoHideEnabled = false,
+                useSideNavigation = false,
+                liquidGlassEnabled = false,
+                currentGlobalScrollOffset = 0f,
             )
+            assertEquals(if (listAtTop) -72f else -120f, result.headerOffsetPx)
+        }
+    }
+
+    @Test
+    fun leavingTop_preservesGradualHeaderCollapseWhileFirstItemIsVisible() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -15f,
+            deltaY = -10f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = true,
+            listAtTop = false,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 0f,
         )
-        assertEquals(
-            HomeHeaderCollapseMode.TABS_ONLY,
-            resolveHomeRecommendationHeaderCollapseMode(
-                homeHeaderCollapseMode = HomeHeaderCollapseMode.TABS_ONLY
+        assertEquals(-25f, result.headerOffsetPx)
+    }
+
+    @Test
+    fun homeRecommendationHeader_preservesSelectedCollapseScope() {
+        for (mode in HomeHeaderCollapseMode.entries) {
+            assertEquals(mode, resolveHomeRecommendationHeaderCollapseMode(mode))
+        }
+    }
+
+    @Test
+    fun topOnlyHeader_waitsForActualTopAcrossMaterialsAndHideTypes() {
+        for (glass in listOf(false, true)) {
+            for (hideType in HomeBarHideType.entries) {
+                for (listAtTop in listOf(false, true)) {
+                    val result = reduceHomePreScroll(
+                        currentHeaderOffsetPx = -120f,
+                        deltaY = 36f,
+                        minHeaderOffsetPx = -120f,
+                        canRevealHeader = true,
+                        listAtTop = listAtTop,
+                        collapseMode = CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+                        isHeaderCollapseEnabled = true,
+                        isBottomBarAutoHideEnabled = false,
+                        useSideNavigation = false,
+                        liquidGlassEnabled = glass,
+                        currentGlobalScrollOffset = 0f,
+                        hideType = hideType,
+                        headerConsumedY = if (listAtTop) 36f else 0f,
+                    )
+                    assertEquals(if (listAtTop) -84f else -120f, result.headerOffsetPx)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun homeHeaderAlwaysVisible_remainsOptedOut() {
+        assertEquals(HomeHeaderCollapseMode.OFF, resolveHomeRecommendationHeaderCollapseMode(HomeHeaderCollapseMode.OFF))
+    }
+
+    @Test
+    fun reverseScroll_hasSameHeaderMotionForGlassAndNativeStyles() {
+        for (glass in listOf(false, true)) {
+            val result = reduceHomePreScroll(
+                currentHeaderOffsetPx = -120f,
+                deltaY = 36f,
+                minHeaderOffsetPx = -120f,
+                canRevealHeader = false,
+                collapseMode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+                isHeaderCollapseEnabled = true,
+                isBottomBarAutoHideEnabled = false,
+                useSideNavigation = false,
+                liquidGlassEnabled = glass,
+                currentGlobalScrollOffset = 0f,
             )
+            assertEquals(-84f, result.headerOffsetPx)
+            assertEquals(false, result.shouldAnimateHeader)
+        }
+    }
+
+    @Test
+    fun instantMode_changesTargetWithDirectionWhileInertiaKeepsCurrentHeader() {
+        for ((delta, headerDelta, expected) in listOf(
+            Triple(-10f, -10f, -120f),
+            Triple(10f, 10f, 0f),
+            Triple(10f, 0f, -40f),
+        )) {
+            val result = reduceHomePreScroll(
+                currentHeaderOffsetPx = -40f,
+                deltaY = delta,
+                headerDeltaY = headerDelta,
+                minHeaderOffsetPx = -120f,
+                canRevealHeader = false,
+                collapseMode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+                isHeaderCollapseEnabled = true,
+                isBottomBarAutoHideEnabled = false,
+                useSideNavigation = false,
+                liquidGlassEnabled = false,
+                currentGlobalScrollOffset = 0f,
+                hideType = HomeBarHideType.INSTANT,
+            )
+            assertEquals(expected, result.headerOffsetPx)
+            assertEquals(headerDelta != 0f, result.shouldAnimateHeader)
+        }
+    }
+
+    @Test
+    fun instantMode_atTopConsumesOnlyRevealBeforeRefresh() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -40f,
+            deltaY = 12f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = true,
+            collapseMode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 0f,
+            hideType = HomeBarHideType.INSTANT,
+            headerConsumedY = 12f,
         )
+        assertEquals(-28f, result.headerOffsetPx)
+        assertEquals(false, result.shouldAnimateHeader)
     }
 
     @Test

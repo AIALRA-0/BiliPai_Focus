@@ -42,7 +42,7 @@ class DrawCachePool : IDrawCachePool {
         }
         var pool = mCachedPool[drawType]
         if (pool == null) {
-            pool = Pools.SimplePool(8)
+            pool = Pools.SimplePool(64)
             mCachedPool.put(drawType, pool)
         }
         @Suppress("UNCHECKED_CAST")
@@ -55,7 +55,7 @@ class DrawCachePool : IDrawCachePool {
     override fun release(item: DrawItem<DanmakuData>) {
         var pool = mCachedPool[item.getDrawType()]
         if (pool == null) {
-            pool = Pools.SimplePool(8)
+            pool = Pools.SimplePool(64)
             mCachedPool.put(item.getDrawType(), pool)
         }
         pool.release(item.apply { recycle() })

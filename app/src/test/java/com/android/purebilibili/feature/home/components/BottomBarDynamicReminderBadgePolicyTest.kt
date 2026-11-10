@@ -28,8 +28,11 @@ class BottomBarDynamicReminderBadgePolicyTest {
     fun `dynamic reminder badge formats concrete unread count`() {
         assertEquals(null, formatBottomBarDynamicReminderBadge(0))
         assertEquals("1", formatBottomBarDynamicReminderBadge(1))
-        assertEquals("180", formatBottomBarDynamicReminderBadge(180))
-        assertEquals("999+", formatBottomBarDynamicReminderBadge(1_000))
+        assertEquals("99", formatBottomBarDynamicReminderBadge(99))
+        assertEquals("99+", formatBottomBarDynamicReminderBadge(100))
+        assertEquals("•", formatBottomBarDynamicReminderBadge(BOTTOM_BAR_DYNAMIC_BADGE_DOT))
+        assertEquals("99+", formatBottomBarDynamicReminderBadge(180))
+        assertEquals("99+", formatBottomBarDynamicReminderBadge(1_000))
     }
 
     @Test

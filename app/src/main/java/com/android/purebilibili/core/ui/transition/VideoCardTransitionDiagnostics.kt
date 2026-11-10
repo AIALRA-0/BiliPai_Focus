@@ -16,6 +16,17 @@ internal object VideoCardTransitionDiagnostics {
     private var liveSurfaceEnabled: Boolean? = null
     private const val TAG = "VideoCardMotion"
 
+    /** 只在点击解析失败时记录一次，区分未测量与来源身份失配；不进入逐帧路径。 */
+    fun onSourceGeometryRejected(sourceKey: String?, recordedSourceKey: String?, hasRecordedBounds: Boolean) {
+        if (!Log.isLoggable(TAG, Log.DEBUG)) return
+        val reason = when {
+            !hasRecordedBounds -> "missing_bounds"
+            sourceKey != recordedSourceKey -> "source_identity_mismatch"
+            else -> "unusable_bounds"
+        }
+        Log.d(TAG, "phase=SOURCE_FALLBACK reason=$reason source_key=$sourceKey recorded_key=$recordedSourceKey")
+    }
+
     fun onOwnershipChanged(value: VideoCardReturnCoverOwnership, liveSurface: Boolean) {
         ownership = value.name
         liveSurfaceEnabled = liveSurface

@@ -1,6 +1,10 @@
 // 文件路径: feature/plugin/DanmakuEnhancePlugin.kt
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
+import com.android.purebilibili.core.ui.AppContentColors
+
 import android.content.Context
 import androidx.compose.foundation.layout.*
 //  Material Icons
@@ -12,16 +16,16 @@ import com.android.purebilibili.core.ui.components.AppSwitch
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.plugin.DanmakuItem
-import com.android.purebilibili.core.plugin.DanmakuPluginApi
-import com.android.purebilibili.core.plugin.DanmakuStyle
+import com.android.purebilibili.core.plugin.BuiltinPlugin
+import com.android.purebilibili.plugin.sdk.DanmakuItem
+import com.android.purebilibili.plugin.sdk.DanmakuPluginApi
+import com.android.purebilibili.plugin.sdk.DanmakuStyle
 import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_DANMAKU_COOLDOWN_MS
-import com.android.purebilibili.core.plugin.PluginCapability
-import com.android.purebilibili.core.plugin.PluginCapabilityManifest
+import com.android.purebilibili.plugin.sdk.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 import com.android.purebilibili.core.plugin.PluginEffectHintBus
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
@@ -37,14 +41,14 @@ private const val TAG = "DanmakuEnhancePlugin"
 
 /**
  *  弹幕增强插件
- * 
+ *
  * 提供弹幕过滤和高亮功能：
  * - 关键词屏蔽
  * - 同传弹幕高亮
  */
-class DanmakuEnhancePlugin : DanmakuPluginApi {
-    
-    override val id = "danmaku_enhance"
+class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
+
+    override val id = BuiltinPluginIds.DANMAKU_ENHANCE
     override val name = "弹幕增强"
     override val description = "关键词屏蔽、按用户ID屏蔽、同传弹幕高亮"
     override val version = "1.1.1"
@@ -62,7 +66,7 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
             PluginCapability.PLUGIN_STORAGE
         )
     )
-    
+
     private var config: DanmakuEnhanceConfig = DanmakuEnhanceConfig()
     private var filteredCount = 0
     private var blockedKeywordsCache: List<String> = splitKeywords(config.blockedKeywords)
@@ -120,7 +124,7 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
                 )
         }
     }
-    
+
     override suspend fun onEnable() {
         filteredCount = 0
         try {
@@ -130,12 +134,12 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
         }
         Logger.d(TAG, " 弹幕增强已启用")
     }
-    
+
     override suspend fun onDisable() {
         Logger.d(TAG, "🔴 弹幕增强已禁用，本次过滤了 $filteredCount 条弹幕")
         filteredCount = 0
     }
-    
+
     override fun filterDanmaku(danmaku: DanmakuItem): DanmakuItem? {
         if (!config.enableFilter) return danmaku
 
@@ -153,22 +157,22 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
 
         return danmaku
     }
-    
+
     override fun styleDanmaku(danmaku: DanmakuItem): DanmakuStyle? {
         if (!config.enableHighlight) return null
 
         if (highlightKeywordsCache.any { danmaku.content.contains(it, ignoreCase = true) }) {
             return DanmakuStyle(
-                textColor = Color(0xFFFFD700),
-                backgroundColor = Color.Black.copy(alpha = 0.5f),
+                textColor = 0xFFFFD700.toInt(),
+                backgroundColor = 0x80000000.toInt(),
                 bold = true,
                 scale = 1.05f
             )
         }
-        
+
         return null
     }
-    
+
     @Composable
     override fun SettingsContent() {
         val context = LocalContext.current
@@ -178,7 +182,7 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
         var blockedKeywords by remember { mutableStateOf(config.blockedKeywords) }
         var blockedUserIds by remember { mutableStateOf(config.blockedUserIds) }
         var highlightKeywords by remember { mutableStateOf(config.highlightKeywords) }
-        
+
         // 加载配置
         LaunchedEffect(Unit) {
             loadConfig(context)
@@ -188,7 +192,7 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
             blockedUserIds = config.blockedUserIds
             highlightKeywords = config.highlightKeywords
         }
-        
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -207,20 +211,20 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
                     checked = enableFilter,
                     onCheckedChange = { newValue ->
                         enableFilter = newValue
-                        scope.launch { 
+                        scope.launch {
                             persistConfig(context, config.copy(enableFilter = newValue))
                         }
                     },
                 )
             }
-            
+
             // 屏蔽关键词输入
             if (enableFilter) {
                 AppOutlinedTextField(
                     value = blockedKeywords,
                     onValueChange = { newValue ->
                         blockedKeywords = newValue
-                        scope.launch { 
+                        scope.launch {
                             persistConfig(context, config.copy(blockedKeywords = newValue))
                         }
                     },
@@ -248,9 +252,9 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
                     maxLines = 3
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // 启用高亮
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -261,27 +265,27 @@ class DanmakuEnhancePlugin : DanmakuPluginApi {
                     AppText(
                         "高亮显示同传/翻译弹幕",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AppContentColors.secondaryText()
                     )
                 }
                 AppSwitch(
                     checked = enableHighlight,
                     onCheckedChange = { newValue ->
                         enableHighlight = newValue
-                        scope.launch { 
+                        scope.launch {
                             persistConfig(context, config.copy(enableHighlight = newValue))
                         }
                     },
                 )
             }
-            
+
             // 高亮关键词输入
             if (enableHighlight) {
                 AppOutlinedTextField(
                     value = highlightKeywords,
                     onValueChange = { newValue ->
                         highlightKeywords = newValue
-                        scope.launch { 
+                        scope.launch {
                             persistConfig(context, config.copy(highlightKeywords = newValue))
                         }
                     },

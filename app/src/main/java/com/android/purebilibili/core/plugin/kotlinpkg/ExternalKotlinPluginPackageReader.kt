@@ -1,7 +1,7 @@
 package com.android.purebilibili.core.plugin.kotlinpkg
 
 import com.android.purebilibili.core.plugin.ExternalPluginPackageDescriptor
-import com.android.purebilibili.core.plugin.PluginCapabilityManifest
+import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayInputStream

@@ -193,7 +193,7 @@ class BottomBarMiuixPolicyTest {
                 RegexOption.MULTILINE
             ).containsMatchIn(floating)
         )
-        assertTrue(floating.contains("resolveLiquidGlassIndicatorChromaticAberration("))
+        assertTrue(floating.contains("homeIndicatorLens("))
         assertTrue(floating.contains("depthEffect = true"))
     }
 

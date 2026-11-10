@@ -1,7 +1,5 @@
 package com.android.purebilibili.core.ui.motion
 
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -16,29 +14,6 @@ import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.resolveAndroidNativeChromeTokens
 import top.yukonga.miuix.kmp.anim.folmeSpring
-
-object AppMotionEasing {
-    /** Apple/SwiftUI easeInOut unit curve for reversible on-screen morphs. */
-    val IosEaseInOut: Easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
-    val EmphasizedEnter: Easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-    val EmphasizedExit: Easing = CubicBezierEasing(0.32f, 0f, 0.67f, 0f)
-    val Continuity: Easing = CubicBezierEasing(0.20f, 0.90f, 0.22f, 1.00f)
-    val GentleEnter: Easing = CubicBezierEasing(0.18f, 0.80f, 0.20f, 1.00f)
-    /** 景深返回清晰：ease-in 向 0，先留住模糊再柔化，避免 Continuity 在 1→0 时过早掐清。 */
-    val SoftClear: Easing = CubicBezierEasing(0.40f, 0.00f, 0.55f, 0.30f)
-
-    // ═══ Material Design 3 官方标准曲线 (Material Motion Spec) ═══
-    /** MD3 官方强调入场减速 (Emphasized Decelerate) */
-    val Md3EmphasizedDecelerate: Easing = CubicBezierEasing(0.05f, 0.70f, 0.10f, 1.00f)
-    /** MD3 官方强调离场加速 (Emphasized Accelerate) */
-    val Md3EmphasizedAccelerate: Easing = CubicBezierEasing(0.30f, 0.00f, 0.80f, 0.15f)
-    /** MD3 官方标准曲线 (Standard Easing) */
-    val Md3Standard: Easing = CubicBezierEasing(0.20f, 0.00f, 0.00f, 1.00f)
-    /** MD3 官方标准减速 (Standard Decelerate) */
-    val Md3StandardDecelerate: Easing = CubicBezierEasing(0.00f, 0.00f, 0.00f, 1.00f)
-    /** MD3 官方标准加速 (Standard Accelerate) */
-    val Md3StandardAccelerate: Easing = CubicBezierEasing(0.30f, 0.00f, 1.00f, 1.00f)
-}
 
 fun <T> emphasizedEnterTween(durationMillis: Int): TweenSpec<T> =
     tween(durationMillis = durationMillis, easing = AppMotionEasing.EmphasizedEnter)
@@ -66,6 +41,10 @@ fun interactiveSnapSpring(): SpringSpec<Float> =
         dampingRatio = 0.78f,
         stiffness = 420f
     )
+
+/** Navigation expands and settles on one continuous trajectory with a restrained overshoot. */
+fun scrollCompactExpansionSpring(): SpringSpec<Float> =
+    spring(dampingRatio = 0.74f, stiffness = 420f)
 
 fun pullRefreshReleaseSpring(): SpringSpec<Float> =
     spring(
@@ -102,34 +81,35 @@ fun indicatorSpring(): SpringSpec<Float> =
  * 两值主题的运动 tokens。Screens should call the @Composable accessors
  * (e.g. [AppMotionTokens.standardSpec]) instead of writing literal `tween(...)`
  * or `spring(...)` calls. MIUIX resolves to denser tween durations; MATERIAL3
- * resolves to the standard Material tween durations.
+ * resolves to the standard Material tween durations. Durations are single-sourced
+ * from [resolveAndroidNativeChromeTokens] so both token layers stay in sync.
  */
 object AppMotionTokens {
 
     fun <T> resolveStandardSpec(
         uiStyle: AppUiStyle
-    ): FiniteAnimationSpec<T> = when (uiStyle) {
-        AppUiStyle.MIUIX -> tween(
-            durationMillis = 180,
-            easing = AppMotionEasing.Continuity
-        )
-        AppUiStyle.MATERIAL3 -> tween(
-            durationMillis = 200,
-            easing = AppMotionEasing.Md3Standard
-        )
+    ): FiniteAnimationSpec<T> {
+        val tokens = resolveAndroidNativeChromeTokens(uiStyle)
+        return when (uiStyle) {
+            AppUiStyle.MIUIX -> continuityTween(tokens.motionStandardMillis)
+            AppUiStyle.MATERIAL3 -> tween(
+                durationMillis = tokens.motionStandardMillis,
+                easing = AppMotionEasing.Md3Standard
+            )
+        }
     }
 
     fun <T> resolveEmphasizedSpec(
         uiStyle: AppUiStyle
-    ): FiniteAnimationSpec<T> = when (uiStyle) {
-        AppUiStyle.MIUIX -> tween(
-            durationMillis = 240,
-            easing = AppMotionEasing.EmphasizedEnter
-        )
-        AppUiStyle.MATERIAL3 -> tween(
-            durationMillis = 300,
-            easing = AppMotionEasing.Md3EmphasizedDecelerate
-        )
+    ): FiniteAnimationSpec<T> {
+        val tokens = resolveAndroidNativeChromeTokens(uiStyle)
+        return when (uiStyle) {
+            AppUiStyle.MIUIX -> emphasizedEnterTween(tokens.motionEmphasizedMillis)
+            AppUiStyle.MATERIAL3 -> tween(
+                durationMillis = tokens.motionEmphasizedMillis,
+                easing = AppMotionEasing.Md3EmphasizedDecelerate
+            )
+        }
     }
 
     fun <T> resolveExpressiveSpec(

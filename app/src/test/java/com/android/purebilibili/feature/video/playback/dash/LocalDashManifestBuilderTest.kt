@@ -1,4 +1,4 @@
-package com.android.purebilibili.feature.video.playback.dash
+package com.android.purebilibili.core.player.dash
 
 import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.data.model.response.DashVideo

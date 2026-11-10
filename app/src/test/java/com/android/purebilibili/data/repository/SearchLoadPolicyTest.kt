@@ -15,7 +15,7 @@ class SearchLoadPolicyTest {
         val first = resolveVideoSearchPageInfo(1, 1, 0, 41, 20, 20)
         assertEquals(3, first.totalPages)
         assertTrue(first.hasMore)
-        assertTrue(resolveVideoSearchPageInfo(3, 3, 0, 41, 20, 1).hasMore)
+        assertFalse(resolveVideoSearchPageInfo(3, 3, 0, 41, 20, 1).hasMore)
     }
 
     @Test
@@ -31,9 +31,9 @@ class SearchLoadPolicyTest {
     }
 
     @Test
-    fun `thirteen sorted results probe next page like PiliPlus before ending`() {
+    fun `服务端明确仅有一页时不再探测`() {
         val first = resolveVideoSearchPageInfo(1, 1, 1, 13, 20, 13)
-        assertTrue(first.hasMore)
+        assertFalse(first.hasMore)
         assertEquals(13, first.totalResults)
         val next = resolveVideoSearchPageInfo(2, 2, 1, 13, 20, 0)
         assertFalse(next.hasMore)
@@ -43,6 +43,13 @@ class SearchLoadPolicyTest {
     @Test
     fun `empty server page stops even when pagination metadata claims more`() {
         assertFalse(resolveVideoSearchPageInfo(2, 2, 9, 180, 20, 0).hasMore)
+    }
+
+    @Test
+    fun `服务端返回20时不按请求30提前结束`() {
+        assertTrue(resolveVideoSearchPageInfo(2, 2, 0, 50, 20, 20).hasMore)
+        assertFalse(resolveVideoSearchPageInfo(3, 3, 0, 50, 20, 10).hasMore)
+        assertTrue(resolveVideoSearchPageInfo(1, 1, 0, 0, 0, 20).hasMore)
     }
 
     @Test

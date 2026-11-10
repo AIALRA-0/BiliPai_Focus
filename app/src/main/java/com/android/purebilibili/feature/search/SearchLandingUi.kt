@@ -1,7 +1,9 @@
 package com.android.purebilibili.feature.search
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,10 +15,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -34,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -41,7 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.database.entity.SearchHistory
@@ -76,16 +80,8 @@ internal fun resolveSearchKeywordSectionHiddenText(title: String): String {
     return "已隐藏$title"
 }
 
-internal fun shouldShowSearchLandingSection(
-    section: SearchLandingSection,
-    hotSearchEnabled: Boolean,
-    historySectionEnabled: Boolean,
-    discoverSectionEnabled: Boolean,
-): Boolean = when (section) {
-    SearchLandingSection.TRENDING -> hotSearchEnabled
-    SearchLandingSection.HISTORY -> historySectionEnabled
-    SearchLandingSection.DISCOVER -> discoverSectionEnabled
-}
+internal fun shouldUseCompactSearchSectionActions(widthDp: Int, fontScale: Float): Boolean =
+    widthDp < 360 || fontScale > 1.3f
 
 internal fun shouldUseOriginalSearchDiscoverStyle(
     showTrendingAction: Boolean
@@ -153,9 +149,14 @@ fun SearchLandingContent(
     discoverListError: String? = null,
     isRefreshingDiscoverList: Boolean = false,
     historyList: List<SearchHistory>,
+    recordSearchHistory: Boolean,
+    globalPrivacyMode: Boolean,
+    onToggleHistoryRecording: () -> Unit,
+    showHotSection: Boolean,
+    showHistorySection: Boolean,
+    showDiscoverSection: Boolean,
     hotSearchEnabled: Boolean,
     discoverSectionEnabled: Boolean,
-    historySectionEnabled: Boolean,
     onToggleHotSearch: () -> Unit,
     onToggleDiscoverSection: () -> Unit,
     onRefreshHot: () -> Unit,
@@ -167,6 +168,12 @@ fun SearchLandingContent(
     modifier: Modifier = Modifier
 ) {
     val sectionOrder = remember { resolveSearchLandingSectionOrder() }
+    val visibleSectionOrder = resolveVisibleSearchLandingSectionOrder(
+        sectionOrder = sectionOrder,
+        showHotSection = showHotSection,
+        showHistorySection = showHistorySection,
+        showDiscoverSection = showDiscoverSection,
+    )
 
     @Composable
     fun TrendingSection() {
@@ -205,6 +212,9 @@ fun SearchLandingContent(
     fun HistorySection() {
         SearchHistorySectionModern(
             historyList = historyList,
+            recordSearchHistory = recordSearchHistory,
+            globalPrivacyMode = globalPrivacyMode,
+            onToggleHistoryRecording = onToggleHistoryRecording,
             columns = layoutPolicy.hotSearchColumns,
             onItemClick = onKeywordClick,
             onClear = onClearHistory,
@@ -218,34 +228,37 @@ fun SearchLandingContent(
                 .responsiveContentWidth(maxWidth = resolveSearchMaxContentWidth())
                 .fillMaxSize()
         ) {
-            LazyColumn(
+            if (
+                SearchLandingSection.TRENDING in visibleSectionOrder ||
+                SearchLandingSection.DISCOVER in visibleSectionOrder
+            ) LazyColumn(
                 modifier = Modifier
                     .weight(layoutPolicy.leftPaneWeight)
                     .fillMaxSize(),
                 contentPadding = PaddingValues(
-                    top = contentTopPadding + 16.dp,
+                    top = contentTopPadding,
                     bottom = bottomPadding,
                     start = layoutPolicy.splitOuterPaddingDp.dp,
                     end = layoutPolicy.splitInnerGapDp.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                if (hotSearchEnabled) item { TrendingSection() }
-                if (discoverSectionEnabled) item { DiscoverSection() }
+                if (SearchLandingSection.TRENDING in visibleSectionOrder) item { TrendingSection() }
+                if (SearchLandingSection.DISCOVER in visibleSectionOrder) item { DiscoverSection() }
             }
-            LazyColumn(
+            if (SearchLandingSection.HISTORY in visibleSectionOrder) LazyColumn(
                 state = historyListState,
                 modifier = Modifier
                     .weight(layoutPolicy.rightPaneWeight)
                     .fillMaxSize(),
                 contentPadding = PaddingValues(
-                    top = contentTopPadding + 16.dp,
+                    top = contentTopPadding,
                     bottom = bottomPadding,
                     start = layoutPolicy.splitInnerGapDp.dp,
                     end = layoutPolicy.splitOuterPaddingDp.dp
                 )
             ) {
-                if (historySectionEnabled) item { HistorySection() }
+                item { HistorySection() }
             }
         }
     } else {
@@ -255,21 +268,14 @@ fun SearchLandingContent(
                 .fillMaxSize()
                 .responsiveContentWidth(),
             contentPadding = PaddingValues(
-                top = contentTopPadding + 16.dp,
+                top = contentTopPadding,
                 bottom = bottomPadding,
                 start = layoutPolicy.resultHorizontalPaddingDp.dp,
                 end = layoutPolicy.resultHorizontalPaddingDp.dp
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            sectionOrder.filter { section ->
-                shouldShowSearchLandingSection(
-                    section = section,
-                    hotSearchEnabled = hotSearchEnabled,
-                    historySectionEnabled = historySectionEnabled,
-                    discoverSectionEnabled = discoverSectionEnabled,
-                )
-            }.forEach { section ->
+            visibleSectionOrder.forEach { section ->
                 item(key = section.name) {
                     when (section) {
                         SearchLandingSection.TRENDING -> TrendingSection()
@@ -303,14 +309,14 @@ fun SearchSuggestionDropdown(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSuggestionClick(suggestion.keyword) }
+                        .appActionClickable { onSuggestionClick(suggestion.keyword) }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AppIcon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        tint = AppContentColors.secondaryText().copy(alpha = 0.7f),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
@@ -319,7 +325,7 @@ fun SearchSuggestionDropdown(
                             richText = suggestion.richText,
                             fallback = suggestion.keyword
                         ),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = AppContentColors.primaryText(),
                         style = MaterialTheme.typography.bodyLarge,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -371,14 +377,14 @@ private fun SearchKeywordSection(
         )
         when (sectionMode) {
             SearchLandingSectionMode.CONTENT -> {
-                Spacer(modifier = Modifier.height(if (useOriginalDiscoverStyle) 12.dp else 6.dp))
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(if (useOriginalDiscoverStyle) 12.dp else 4.dp)
+                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)
                 ) {
                     items.chunked(safeColumns).forEach { rowItems ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
                         ) {
                             rowItems.forEach { item ->
                                 if (useOriginalDiscoverStyle) {
@@ -434,7 +440,7 @@ private fun SearchKeywordSection(
                 AppText(
                     text = resolveSearchKeywordSectionHiddenText(title),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppContentColors.secondaryText()
                 )
             }
         }
@@ -457,20 +463,19 @@ private fun SearchInlineMessage(
         AppText(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = AppContentColors.secondaryText()
         )
         if (!message.isNullOrBlank()) {
             AppText(
                 text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppContentColors.secondaryText()
             )
         }
         if (actionLabel != null && onAction != null) {
             AppTextButton(onClick = onAction) {
                 AppText(
                     text = actionLabel,
-                    color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelLarge
                 )
             }
@@ -490,6 +495,10 @@ private fun SearchKeywordSectionHeader(
 ) {
     val outline = MaterialTheme.colorScheme.outline
     val secondary = MaterialTheme.colorScheme.secondary
+    val useCompactActions = shouldUseCompactSearchSectionActions(
+        widthDp = LocalConfiguration.current.screenWidthDp,
+        fontScale = LocalDensity.current.fontScale,
+    )
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -503,23 +512,23 @@ private fun SearchKeywordSectionHeader(
             AppText(
                 text = title,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (showTrendingAction && enabled && onOpenTrending != null) {
-                Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+            if (!useCompactActions && showTrendingAction && enabled && onOpenTrending != null) {
+                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
                 AppTextButton(onClick = onOpenTrending) {
                     AppText(
                         text = "完整榜单",
-                        color = outline,
-                        style = MaterialTheme.typography.labelMedium
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     AppIcon(
                         imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                         contentDescription = null,
-                        tint = outline,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -530,34 +539,53 @@ private fun SearchKeywordSectionHeader(
             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (enabled) {
-                AppTextButton(onClick = onRefresh) {
+            if (useCompactActions && showTrendingAction && enabled && onOpenTrending != null) {
+                AppIconButton(onClick = onOpenTrending, modifier = Modifier.size(48.dp)) {
                     AppIcon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = "刷新",
-                        tint = secondary,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = "完整榜单",
+                        tint = AppContentColors.secondaryText(),
+                        modifier = Modifier.size(20.dp),
                     )
-                    Spacer(modifier = Modifier.width(2.dp))
-                    AppText(
-                        text = "刷新",
-                        color = secondary,
-                        style = MaterialTheme.typography.labelMedium
-                    )
+                }
+            }
+            if (enabled) {
+                if (useCompactActions) {
+                    AppIconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
+                        AppIcon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "刷新",
+                            tint = AppContentColors.secondaryText(),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                } else {
+                    AppTextButton(onClick = onRefresh) {
+                        AppIcon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "刷新",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        AppText(
+                            text = "刷新",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
                 }
             }
             val showVisibilityToggle = shouldShowSearchKeywordSectionVisibilityToggle(
                 hasToggleHandler = onToggleEnabled != null,
             )
             if (showVisibilityToggle && onToggleEnabled != null) {
-                AppIconButton(onClick = onToggleEnabled, modifier = Modifier.size(40.dp)) {
+                AppIconButton(onClick = onToggleEnabled, modifier = Modifier.size(48.dp)) {
                     AppIcon(
                         imageVector = if (enabled) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                         contentDescription = resolveSearchKeywordSectionToggleContentDescription(
                             enabled = enabled,
                             title = title,
                         ),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = AppContentColors.secondaryText(),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -578,30 +606,51 @@ private fun SearchDiscoverOriginalCell(
     val colors = resolveSearchDiscoverOriginalCellColors(MaterialTheme.colorScheme)
     AppSurface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp),
         shape = AppShapes.container(ContainerLevel.Field),
         color = colors.containerColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small)
+            modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.ExtraSmall)
         ) {
-            AppText(
-                text = item.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Medium,
-                    color = colors.titleColor
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppText(
+                    text = item.title,
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                        color = colors.titleColor
+                    )
                 )
-            )
-            if (!displaySubtitle.isNullOrBlank()) {
+                when {
+                    item.iconUrl != null -> {
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                        AsyncImage(
+                            model = item.iconUrl,
+                            contentDescription = null,
+                            modifier = Modifier.size(width = 20.dp, height = 15.dp)
+                        )
+                    }
+                    item.showLiveBadge -> {
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
+                        SearchKeywordBadge(
+                            text = "直播中",
+                            containerColor = AppContentColors.error(),
+                            contentColor = MaterialTheme.colorScheme.onError
+                        )
+                    }
+                }
+            }
+            if (item.iconUrl == null && !item.showLiveBadge && !displaySubtitle.isNullOrBlank()) {
                 AppText(
                     text = displaySubtitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall.copy(
+                    style = MaterialTheme.typography.bodyMedium.copy(
                         color = colors.subtitleColor
                     )
                 )
@@ -618,7 +667,7 @@ private fun SearchKeywordCell(
 ) {
     Row(
         modifier = modifier
-            .clickable(onClick = onClick)
+            .appActionClickable(onClick = onClick)
             .padding(vertical = 5.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -638,7 +687,7 @@ private fun SearchKeywordCell(
             )
             item.showLiveBadge -> SearchKeywordBadge(
                 text = "直播中",
-                containerColor = MaterialTheme.colorScheme.error,
+                containerColor = AppContentColors.error(),
                 contentColor = MaterialTheme.colorScheme.onError
             )
             !item.subtitle.isNullOrBlank() -> AppText(
@@ -646,7 +695,7 @@ private fun SearchKeywordCell(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.outline,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodyMedium
             )
         }
     }
@@ -679,13 +728,14 @@ internal fun SearchKeywordBadge(
 @Composable
 private fun SearchHistorySectionModern(
     historyList: List<SearchHistory>,
+    recordSearchHistory: Boolean,
+    globalPrivacyMode: Boolean,
+    onToggleHistoryRecording: () -> Unit,
     columns: Int,
     onItemClick: (String) -> Unit,
     onClear: () -> Unit,
     onDelete: (SearchHistory) -> Unit
 ) {
-    if (historyList.isEmpty()) return
-    val secondary = MaterialTheme.colorScheme.secondary
     val safeColumns = resolveSearchKeywordSectionColumns(columns, showTrendingAction = false)
 
     Column {
@@ -697,57 +747,86 @@ private fun SearchHistorySectionModern(
             AppText(
                 text = "搜索历史",
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             )
-            AppTextButton(onClick = onClear) {
-                AppIcon(
-                    imageVector = Icons.Outlined.ClearAll,
-                    contentDescription = "清空",
-                    tint = secondary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                AppText(
-                    text = "清空",
-                    color = secondary,
-                    style = MaterialTheme.typography.labelMedium
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppTextButton(
+                    onClick = onToggleHistoryRecording,
+                    enabled = !globalPrivacyMode,
+                ) {
+                    val recording = shouldRecordSearchHistory(recordSearchHistory, globalPrivacyMode)
+                    AppIcon(
+                        imageVector = if (recording) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                        contentDescription = if (recording) "关闭搜索历史记录" else "开启搜索历史记录",
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    AppText(
+                        text = when {
+                            globalPrivacyMode -> "全局无痕"
+                            recording -> "记录中"
+                            else -> "无痕搜索"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                if (historyList.isNotEmpty()) {
+                    AppTextButton(onClick = onClear) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.ClearAll,
+                            contentDescription = "清空",
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        AppText(text = "清空", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        // 与「搜索发现」同构的紧凑网格：历史项 14sp 文字行 + 删除角标，
-        // 行间距 4dp，替代此前间距过大的气泡 FlowRow。
+        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+        if (historyList.isEmpty()) {
+            AppText(
+                text = if (recordSearchHistory && !globalPrivacyMode) "暂无搜索历史" else "新搜索不会记录到历史，已有记录会保留",
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppContentColors.secondaryText(),
+            )
+        }
+        // 与「搜索发现」同构的两列网格，正文使用 bodyMedium，保留删除入口。
         historyList.chunked(safeColumns).forEach { rowItems ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
             ) {
                 rowItems.forEach { history ->
                     Row(
                         modifier = Modifier
                             .weight(1f)
                             .clip(AppShapes.container(ContainerLevel.Chip))
-                            .clickable { onItemClick(history.keyword) }
-                            .padding(horizontal = AppSpacingTokens.Small, vertical = 5.dp),
+                            .appActionClickable { onItemClick(history.keyword) }
+                            .heightIn(min = 44.dp)
+                            .padding(horizontal = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppText(
                             text = history.keyword,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = AppContentColors.primaryText(),
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier.weight(1f)
                         )
-                        AppIconButton(
-                            onClick = { onDelete(history) },
-                            modifier = Modifier.size(28.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(AppShapes.container(ContainerLevel.Chip))
+                                .appActionClickable { onDelete(history) },
+                            contentAlignment = Alignment.Center,
                         ) {
                             AppIcon(
                                 imageVector = Icons.Outlined.Close,
                                 contentDescription = "删除",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
+                                tint = AppContentColors.secondaryText().copy(0.5f),
                                 modifier = Modifier.size(14.dp)
                             )
                         }
@@ -766,7 +845,7 @@ private fun rememberSuggestionAnnotatedText(
     richText: String,
     fallback: String
 ): AnnotatedString {
-    val highlightColor = MaterialTheme.colorScheme.primary
+    val highlightColor = AppContentColors.accent()
     return remember(richText, fallback, highlightColor) {
         buildSuggestionAnnotatedString(
             richText = richText,

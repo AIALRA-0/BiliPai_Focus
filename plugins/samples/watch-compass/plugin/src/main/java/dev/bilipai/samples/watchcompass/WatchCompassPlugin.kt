@@ -13,7 +13,7 @@ import com.android.purebilibili.plugin.sdk.RecommendationResult
 import com.android.purebilibili.plugin.sdk.RecommendedVideo
 import kotlin.math.ln
 
-class WatchCompassPlugin : RecommendationPluginApi {
+class WatchCompassPlugin : RecommendationPluginApi<PluginVideoCandidate> {
     override val capabilityManifest = PluginCapabilityManifest(
         pluginId = "dev.bilipai.samples.watch_compass",
         displayName = "观感罗盘",
@@ -27,7 +27,7 @@ class WatchCompassPlugin : RecommendationPluginApi {
         )
     )
 
-    override fun buildRecommendations(request: RecommendationRequest): RecommendationResult {
+    override fun buildRecommendations(request: RecommendationRequest<PluginVideoCandidate>): RecommendationResult<PluginVideoCandidate> {
         val historyCreatorMids = request.historyVideos
             .mapNotNull { it.authorMid }
             .filter { it > 0L }
@@ -37,7 +37,9 @@ class WatchCompassPlugin : RecommendationPluginApi {
             .filter { it.bvid.isNotBlank() && it.title.isNotBlank() }
             .filterNot { it.bvid in request.feedbackSignals.consumedBvids }
             .filterNot { it.bvid in request.feedbackSignals.dislikedBvids }
-            .filterNot { it.authorMid != null && it.authorMid in request.feedbackSignals.dislikedCreatorMids }
+            .filterNot { candidate ->
+                candidate.authorMid?.let { it in request.feedbackSignals.dislikedCreatorMids } == true
+            }
             .filterNot { candidate ->
                 request.feedbackSignals.dislikedKeywords.any { keyword ->
                     keyword.isNotBlank() && candidate.title.contains(keyword, ignoreCase = true)
@@ -83,7 +85,7 @@ class WatchCompassPlugin : RecommendationPluginApi {
             groups = buildGroups(scored, request.groupLimit.coerceAtLeast(1)),
             historySampleCount = request.historyVideos.size,
             sceneSignals = request.sceneSignals,
-            generatedAt = request.sceneSignals.nowEpochSec
+            generatedAt = request.sceneSignals.nowEpochSec * 1000L
         )
     }
 }
@@ -112,7 +114,7 @@ private fun resolveLane(
     nightActive: Boolean
 ): CompassLane {
     val durationMin = candidate.durationSeconds / 60.0
-    val knownCreator = candidate.authorMid != null && candidate.authorMid in historyCreatorMids
+    val knownCreator = candidate.authorMid?.let { it in historyCreatorMids } == true
     val title = candidate.title.lowercase()
     val wantsDeep = mode == RecommendationMode.LEARN ||
         title.contains("教程") ||
@@ -140,7 +142,7 @@ private fun scoreCandidate(
 ): Double {
     val heat = ln(candidate.playCount.coerceAtLeast(1).toDouble()) * 0.8 +
         ln(candidate.likeCount.coerceAtLeast(1).toDouble()) * 0.6
-    val creatorBonus = if (candidate.authorMid != null && candidate.authorMid in historyCreatorMids) 2.4 else 0.0
+    val creatorBonus = if (candidate.authorMid?.let { it in historyCreatorMids } == true) 2.4 else 0.0
     val freshnessBonus = candidate.publishTimeEpochSec
         ?.let { published ->
             val ageDays = ((nowEpochSec - published).coerceAtLeast(0L) / 86_400.0).coerceAtMost(90.0)

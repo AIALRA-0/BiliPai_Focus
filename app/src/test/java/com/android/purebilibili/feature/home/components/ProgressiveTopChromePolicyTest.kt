@@ -50,6 +50,18 @@ class ProgressiveTopChromePolicyTest {
     }
 
     @Test
+    fun progressiveBlurDoesNotNeedSamplingWithoutAValidRadius() {
+        for (radius in listOf(0f, -1f, 0.001f, Float.NaN, Float.POSITIVE_INFINITY)) {
+            assertFalse(
+                shouldUseBiliPaiProgressiveTopBlur(true, true, sdkInt = 33, blurRadiusDp = radius),
+                "Invalid radius must not request a backdrop: $radius",
+            )
+        }
+        assertTrue(shouldUseBiliPaiProgressiveTopBlur(true, true, sdkInt = 33, blurRadiusDp = 0.01f))
+        assertTrue(shouldUseBiliPaiProgressiveTopBlur(true, true, sdkInt = 33, blurRadiusDp = 40f))
+    }
+
+    @Test
     fun progressiveBlurExtendsBelowTheTopDock() {
         assertEquals(20.dp, resolveProgressiveTopBlurBottomExtension(true, 0f))
         assertEquals(41.dp, resolveProgressiveTopBlurBottomExtension(true, 0.75f))
@@ -95,7 +107,7 @@ class ProgressiveTopChromePolicyTest {
         assertFalse(space.contains("onPinnedChromeHeightChanged"))
         assertFalse(space.contains("val tabPinned = gridState.firstVisibleItemIndex > 0"))
         assertTrue(profile.contains("captureBackground()"))
-        assertTrue(profile.contains("profileProgressiveBackdrop(progressiveTopChrome.backdrop)"))
+        assertTrue(profile.contains("profileProgressiveBackdrop(progressiveTopChrome)"))
         assertTrue(profile.contains("globalWallpaperAwareBackground(colorScheme.surface)"))
         assertTrue(bangumiHub.contains("BiliPaiImmersiveTopBar("))
         assertTrue(bangumiHub.contains(".then(chromeSource?.modifier ?: Modifier)"))

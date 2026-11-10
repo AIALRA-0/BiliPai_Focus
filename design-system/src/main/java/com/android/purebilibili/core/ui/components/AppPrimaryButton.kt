@@ -1,8 +1,34 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.android.purebilibili.core.ui.components
 
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppContentColors
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.unit.Dp
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
+import com.android.purebilibili.core.ui.rememberVisualWorkActive
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
@@ -26,6 +52,7 @@ import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.resolveButtonContentColor
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.LocalContentColor as MiuixLocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -38,87 +65,155 @@ fun AppPrimaryButton(
     enabled: Boolean = true,
     isLoading: Boolean = false,
     leadingIcon: ImageVector? = null,
-) {
-    val haptic = LocalHapticFeedback.current
-    val hapticEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
-    val interactionSource = remember { MutableInteractionSource() }
+): Unit = AppExactTouchTargets {
+    val elasticFeedbackEnabled = enabled && !isLoading && LocalAppUiStyle.current == AppUiStyle.MIUIX &&
+        LocalAppThemeConfig.current.liquidGlassEnabled
+    ProvideAppElasticFeedback(enabled = elasticFeedbackEnabled) {
+        val haptic = LocalHapticFeedback.current
+        val hapticEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
+        val feedbackClick = appActionWithFeedback {
+            onClick()
+            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+        val interactionSource = remember { MutableInteractionSource() }
+        val primaryContentColor = resolveButtonContentColor(
+            containerColor = AppContentColors.accent(),
+            contentColor = AppContentColors.onAccent(),
+            colorScheme = MaterialTheme.colorScheme,
+        )
 
-    if (LocalAppUiStyle.current == AppUiStyle.MATERIAL3) {
-        Button(
-            onClick = {
-                if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            },
-            modifier = modifier,
+        if (LocalAppUiStyle.current == AppUiStyle.MATERIAL3) {
+            Button(
+                onClick = feedbackClick,
+                modifier = modifier,
+                enabled = enabled && !isLoading,
+                shape = ButtonDefaults.shape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppContentColors.accent(),
+                    contentColor = primaryContentColor,
+                    disabledContainerColor = AppContentColors.primaryText().copy(alpha = 0.12f),
+                    disabledContentColor = AppContentColors.primaryText().copy(alpha = 0.38f),
+                ),
+                contentPadding = AppButtonDefaults.ContentPadding,
+                interactionSource = interactionSource,
+            ) {
+                PrimaryButtonLoadingContent(
+                    isLoading = isLoading,
+                    indicatorSize = 20.dp,
+                    indicatorColor = primaryContentColor,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        if (leadingIcon != null) {
+                            Icon(
+                                imageVector = leadingIcon,
+                                contentDescription = null,
+                                tint = primaryContentColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+                        }
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+            return@ProvideAppElasticFeedback
+        }
+
+        AppButton(
+            onClick = feedbackClick,
+            modifier = modifier.heightIn(min = AppChromeSizeTokens.CompactActionHeight),
             enabled = enabled && !isLoading,
-            shape = ButtonDefaults.shape,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-            ),
-            contentPadding = PaddingValues(horizontal = AppSpacingTokens.ExtraLarge, vertical = AppSpacingTokens.Medium),
             interactionSource = interactionSource,
         ) {
-            if (isLoading) {
-                AppCircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
+            val contentColor = MiuixLocalContentColor.current
+            PrimaryButtonLoadingContent(
+                isLoading = isLoading,
+                indicatorSize = 24.dp,
+                indicatorColor = contentColor,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     if (leadingIcon != null) {
                         Icon(
                             imageVector = leadingIcon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = contentColor,
                             modifier = Modifier.size(20.dp),
                         )
                         Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
                     }
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    MiuixText(text = text, style = MiuixTheme.textStyles.button)
                 }
             }
         }
-        return
     }
+}
 
-    AppButton(
-        onClick = {
-            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
-        modifier = modifier.heightIn(min = 48.dp),
-        enabled = enabled && !isLoading,
-        interactionSource = interactionSource,
+
+/** 文案持续参与测量；加载指示覆盖在同一槽位，文字变化不依赖历史测量缓存。 */
+@Composable
+private fun PrimaryButtonLoadingContent(
+    isLoading: Boolean,
+    indicatorSize: Dp,
+    indicatorColor: Color,
+    modifier: Modifier = Modifier,
+    label: @Composable () -> Unit,
+) {
+    val motionEnabled = LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current
+    val visualWorkActive = rememberVisualWorkActive()
+    var inViewport by remember { mutableStateOf(false) }
+    val labelAlpha = animateFloatAsState(
+        targetValue = if (isLoading) 0f else 1f,
+        animationSpec = tween(if (motionEnabled) 150 else 0),
+        label = "primaryButtonLabelAlpha",
+    )
+    Box(
+        modifier = modifier
+            .sizeIn(minWidth = indicatorSize, minHeight = indicatorSize)
+            .onGloballyPositioned { coordinates ->
+                inViewport = coordinates.isAttached && run {
+                    val bounds = coordinates.boundsInWindow()
+                    val viewport = coordinates.findRootCoordinates().boundsInWindow()
+                    bounds.width > 0f && bounds.height > 0f && bounds.overlaps(viewport)
+                }
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        val contentColor = MiuixLocalContentColor.current
-        if (isLoading) {
-            AppCircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                color = contentColor,
-                strokeWidth = 2.dp,
-            )
-        } else {
-            if (leadingIcon != null) {
-                Icon(
-                    imageVector = leadingIcon,
-                    contentDescription = null,
-                    tint = contentColor,
-                    modifier = Modifier.size(20.dp),
+        Box(
+            modifier = Modifier
+                .graphicsLayer { alpha = labelAlpha.value }
+                .then(if (isLoading) Modifier.clearAndSetSemantics { } else Modifier),
+        ) { label() }
+        AnimatedVisibility(
+            visible = isLoading,
+            enter = fadeIn(tween(if (motionEnabled) 150 else 0)),
+            exit = fadeOut(tween(if (motionEnabled) 100 else 0)),
+        ) {
+            if (isLoading && motionEnabled && visualWorkActive && inViewport) {
+                AppCircularProgressIndicator(
+                    modifier = Modifier.size(indicatorSize),
+                    color = indicatorColor,
+                    strokeWidth = 2.dp,
                 )
-                Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+            } else {
+                // 隐藏、减少动态效果和退出淡出阶段不保留无限动画；静态弧仍表达未知进度。
+                AppCircularProgressIndicator(
+                    progress = { 0.75f },
+                    modifier = Modifier
+                        .size(indicatorSize)
+                        .clearAndSetSemantics {
+                            if (isLoading) progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                        },
+                    color = indicatorColor,
+                    strokeWidth = 2.dp,
+                )
             }
-            MiuixText(text = text, style = MiuixTheme.textStyles.button)
         }
     }
 }

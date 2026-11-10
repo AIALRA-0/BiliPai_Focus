@@ -38,6 +38,8 @@ internal fun parseLiveFeedHomeSnapshot(data: LiveFeedIndexData): LiveFeedHomeSna
     val rooms = linkedMapOf<Long, LiveRoom>()
     val followRooms = linkedMapOf<Long, LiveRoom>()
     val areaEntries = linkedMapOf<String, LiveFeedAreaEntry>()
+    var followedLiveCount: Int? = null
+    var hasFollowModule = false
 
     data.cardList.orEmpty().forEach { card ->
         val type = card.cardType
@@ -51,8 +53,12 @@ internal fun parseLiveFeedHomeSnapshot(data: LiveFeedIndexData): LiveFeedHomeSna
                 rooms.putIfAbsent(room.roomid, room)
             }
             "my_idol_v1" -> {
-                card.cardData?.myIdolV1?.list.orEmpty().forEach { roomCard ->
-                    if (!isUsableLiveFeedRoom(roomCard)) return@forEach
+                val module = card.cardData?.myIdolV1 ?: return@forEach
+                hasFollowModule = true
+                followedLiveCount = module.extraInfo?.totalCount
+                module.list.orEmpty().forEach { roomCard ->
+                    // 关注横栏只依赖房间与主播资料，不要求直播卡片的标题、封面。
+                    if (roomCard.isAd || roomCard.resolvedRoomId() <= 0L) return@forEach
                     val room = roomCard.toLiveRoom()
                     followRooms.putIfAbsent(room.roomid, room)
                 }
@@ -78,10 +84,12 @@ internal fun parseLiveFeedHomeSnapshot(data: LiveFeedIndexData): LiveFeedHomeSna
     }
 
     return LiveFeedHomeSnapshot(
+        hasFollowModule = hasFollowModule,
         rooms = rooms.values.toList(),
         followRooms = followRooms.values.toList(),
         areaEntries = areaEntries.values.toList(),
         hasMore = data.hasMore == 1,
+        totalCount = followedLiveCount?.takeIf { it >= 0 }?.coerceAtLeast(followRooms.size),
     )
 }
 
@@ -90,3 +98,18 @@ internal fun shouldKeepLiveSecondListRoom(room: LiveRoom): Boolean {
     if (room.title.isBlank() && room.displayCover().isBlank()) return false
     return true
 }
+
+/** 无模块与明确空模块不同；已有零值不触发补取。 */
+internal fun needsLiveFollowSupplement(snapshot: LiveFeedHomeSnapshot): Boolean =
+    !snapshot.hasFollowModule || (snapshot.totalCount != 0 && snapshot.followRooms.isEmpty()) ||
+        (snapshot.totalCount?.let { it > snapshot.followRooms.size } == true) ||
+        (snapshot.totalCount == null && snapshot.followRooms.size >= 10)
+
+internal fun supplementLiveFollowSnapshot(
+    snapshot: LiveFeedHomeSnapshot, rooms: List<LiveRoom>, totalCount: Int?,
+): LiveFeedHomeSnapshot = snapshot.copy(
+    hasFollowModule = true,
+    followRooms = rooms.distinctBy { it.roomid },
+    totalCount = totalCount?.takeIf { it >= 0 }?.coerceAtLeast(rooms.distinctBy { it.roomid }.size),
+    followError = null,
+)

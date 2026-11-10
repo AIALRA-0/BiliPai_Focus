@@ -30,9 +30,11 @@ import com.android.purebilibili.core.store.navigation.parseBottomBarItemLabels
 import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.core.store.player.defaultAudioQualityPreferenceKey
 import com.android.purebilibili.core.theme.AppFontSizePreset
+import com.android.purebilibili.core.theme.AppFontWeightPreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
 import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.SeedPaletteStyle
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.normalizeThemeColorIndex
 import com.android.purebilibili.core.theme.resolveColorSpecPreference
@@ -43,6 +45,7 @@ import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinit
 import com.android.purebilibili.feature.settings.share.SettingsShareSection
 import com.android.purebilibili.feature.settings.AppLanguage
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.DarkThemeSchedule
 import com.android.purebilibili.feature.settings.DarkThemeStyle
 import com.android.purebilibili.feature.settings.Md3ColorSource
 import com.android.purebilibili.feature.settings.normalizeMd3CustomColorHex
@@ -65,6 +68,7 @@ import com.android.purebilibili.core.util.ENHANCED_DIAGNOSTIC_LOG_PREF_KEY
 import com.android.purebilibili.core.util.ENHANCED_DIAGNOSTIC_LOG_PREFS_NAME
 import com.android.purebilibili.core.util.isLargeScreenOrFoldableConfiguration
 import com.materialkolor.PaletteStyle
+import com.materialkolor.Contrast
 import com.materialkolor.dynamiccolor.ColorSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -83,7 +87,6 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
-import kotlin.math.abs
 
 /**
  *  首页设置合并类 - 减少 HomeScreen 重组次数
@@ -421,16 +424,32 @@ enum class FullscreenMode(val value: Int, val label: String, val description: St
 }
 
 enum class FullscreenAspectRatio(val value: Int, val label: String, val description: String) {
-    FIT(0, "适应", "完整显示画面，尽量不裁切"),
-    FILL(1, "填充", "填满屏幕，可能裁切边缘"),
+    FIT(0, "自动", "完整显示画面，尽量不裁切"),
+    FILL(1, "裁剪", "填满屏幕，可能裁切边缘"),
     RATIO_16_9(2, "16:9", "优先按 16:9 展示画面"),
     RATIO_4_3(3, "4:3", "优先按 4:3 展示画面"),
-    STRETCH(4, "拉伸", "铺满屏幕，可能导致画面变形");
+    STRETCH(4, "拉伸", "铺满屏幕，可能导致画面变形"),
+    FIT_WIDTH(5, "等宽", "保持源比例与播放器等宽"),
+    FIT_HEIGHT(6, "等高", "保持源比例与播放器等高"),
+    ORIGINAL(7, "原始", "按视频原始像素尺寸居中展示"),
+    SCALE_DOWN(8, "限制", "仅缩小超过播放器的画面，不放大小画面");
 
     companion object {
         fun fromValue(value: Int): FullscreenAspectRatio {
             return entries.find { it.value == value } ?: FIT
         }
+    }
+}
+
+/** 章节可视层的展示方式；隐藏时仍保留章节列表入口。 */
+enum class ChapterDisplayMode(val value: Int, val label: String, val description: String) {
+    HIDDEN(0, "彻底隐藏", "隐藏章节分段条和当前章节标题，仍可打开章节列表"),
+    WITH_CONTROLS(1, "随控制栏显示", "仅在控制栏展开时显示章节，收起后不遮挡画面字幕"),
+    PERSISTENT(2, "底部常驻", "横屏全屏收起控制栏后仍显示章节条，可能遮挡视频自带字幕");
+
+    companion object {
+        fun fromValue(value: Int): ChapterDisplayMode =
+            entries.find { it.value == value } ?: WITH_CONTROLS
     }
 }
 
@@ -467,18 +486,18 @@ enum class PlayerProgressPlacement(
 
 data class PlayerControlVisibilitySettings(
     val showCastButton: Boolean = true,
-    val showFollowButton: Boolean = true
+    val showFollowButton: Boolean = true,
+    /** 紧凑播放器控件：隐藏顶栏分享并收紧顶底栏间距。默认经典布局。 */
+    val compactPlayerChrome: Boolean = false,
 )
 
-internal fun normalizeDanmakuDisplayArea(value: Float): Float {
-    val normalized = value.coerceIn(0.25f, 1.0f)
-    val supportedOptions = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f)
-    return supportedOptions.minByOrNull { abs(it - normalized) } ?: 0.5f
-}
+internal fun normalizeDanmakuDisplayArea(value: Float): Float =
+    if (value.isFinite()) value.coerceIn(0.1f, 1f) else 0.5f
 
-internal fun normalizeDanmakuFontScale(value: Float): Float = value.coerceIn(0.3f, 2.0f)
+internal fun normalizeDanmakuFontScale(value: Float): Float =
+    if (value.isFinite()) value.coerceIn(0.5f, 2.5f) else 1f
 
-internal const val DEFAULT_HOME_REFRESH_COUNT = 20
+internal const val DEFAULT_HOME_REFRESH_COUNT = 12
 internal const val MIN_HOME_REFRESH_COUNT = 10
 internal const val MAX_HOME_REFRESH_COUNT = 30
 
@@ -604,6 +623,7 @@ data class HomeSettings(
     val navigationIconCrossScaleEnabled: Boolean = true,
     val bottomBarLabelMode: Int = 0,       // (0=图标+文字, 1=仅图标, 2=仅文字)
     val topTabLabelMode: Int = 2,          // (0=图标+文字, 1=仅图标, 2=仅文字)
+    val partitionSideRailOnRight: Boolean = false,
     val hideTopTabs: Boolean = false,
     val homeTopRightAction: HomeTopRightAction = HomeTopRightAction.SETTINGS,
     val homeTopLayoutOrder: HomeTopLayoutOrder = HomeTopLayoutOrder.SEARCH_THEN_TABS,
@@ -616,6 +636,10 @@ data class HomeSettings(
     val bottomBarLiquidGlassPreset: BottomBarLiquidGlassPreset =
         BottomBarLiquidGlassPreset.BILIPAI_TUNED,
     val isBottomBarSearchEnabled: Boolean = false,
+    val keepHomeTopSearchWithBottomSearch: Boolean = false,
+    val listScopedSearchEnabled: Boolean = false,
+    val linkedDockMergeOnScrollEnabled: Boolean = true,
+    val bottomBarScrollCompactEnabled: Boolean = true,
     val bottomBarSearchAutoExpandMode: BottomBarSearchAutoExpandMode =
         BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP,
     val bottomBarSearchLayoutMode: BottomBarSearchLayoutMode =
@@ -631,15 +655,20 @@ data class HomeSettings(
     val homeHeaderCollapseMode: HomeHeaderCollapseMode = HomeHeaderCollapseMode.BOTH,
     val homeBarHideType: HomeBarHideType = HomeBarHideType.SYNC,
     val commonListHeaderCollapseMode: CommonListHeaderCollapseMode =
-        CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+        CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
     val isHeaderCollapseEnabled: Boolean = true,
     val showPgcTimeline: Boolean = true,
-    val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-6=固定)
+    val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-7=固定)
+    val gridColumnCountCompact: Int = 0, // 窄屏（折叠屏外屏/手机竖屏）独立列数记忆 (0=自动)
+    val gridColumnCustomizationEnabled: Boolean = true,
+    val gridColumnsSharedAcrossPages: Boolean = true,
     val pinchToChangeGridColumnsEnabled: Boolean = true, // [新增] 双指缩放切换网格列数
     val homeFeedCardWidthPreset: HomeFeedCardWidthPreset = HomeFeedCardWidthPreset.AUTO,
     val homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
     val homeHeroCarouselEnabled: Boolean = true,
     val homeHeroCarouselAutoplayEnabled: Boolean = false,
+    val homeRefreshTipVisible: Boolean = true,
+    val homeRefreshUndoVisible: Boolean = false,
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = true,    //  卡片过渡动画（默认开启）
     val videoSharedTransitionSpeed: VideoSharedTransitionSpeed = VideoSharedTransitionSpeed.STANDARD,
@@ -665,7 +694,8 @@ data class HomeSettings(
     val showHomePublishTime: Boolean = true, // 首页视频卡片发布时间（默认显示，可关闭）
     val showFullVideoCardContent: Boolean = false, // 视频卡片标题完整展示(默认关闭,设置后全局生效)
     val videoCardLongPressActionEnabled: Boolean = false, // 长按视频卡片快捷操作与预览（默认关闭）
-    val homeCardDynamicTintEnabled: Boolean = true, // 卡片毛玻璃与动态取色
+    val homeCardDynamicTintEnabled: Boolean = false,
+    val homeCardFrostedGlassEnabled: Boolean = false,
     val homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
     val easterEggEnabled: Boolean = false, // 下拉刷新趣味提示开关
     //  [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
@@ -676,18 +706,28 @@ data class HomeSettings(
         get() = androidNativeLiquidGlassEnabled
 }
 
+internal fun resolveHomeCardFrostedGlassEnabled(
+    storedValue: Boolean?,
+    legacyCombinedValue: Boolean?,
+): Boolean = storedValue ?: legacyCombinedValue ?: false
+
 data class AppThemeSettings(
     val uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
+    val darkThemeSchedule: DarkThemeSchedule = DarkThemeSchedule(),
     val darkThemeStyle: DarkThemeStyle = DarkThemeStyle.DEFAULT,
     val appLanguage: AppLanguage = AppLanguage.FOLLOW_SYSTEM,
     val md3ColorSource: Md3ColorSource = Md3ColorSource.FOLLOW_WALLPAPER,
     val md3CustomColorHex: String = "#007AFF",
     val themeRoleOverrides: ThemeRoleOverrides = ThemeRoleOverrides(),
+    val wallpaperPaletteOverrides: WallpaperPaletteOverrides = WallpaperPaletteOverrides(),
+    val seedPaletteStyle: SeedPaletteStyle = SeedPaletteStyle.Standard,
     val colorStyle: PaletteStyle = PaletteStyle.TonalSpot,
-    val colorSpec: ColorSpec.SpecVersion = ColorSpec.SpecVersion.SPEC_2021,
+    val colorSpec: ColorSpec.SpecVersion = ColorSpec.SpecVersion.SPEC_2025,
+    val colorContrast: Contrast = Contrast.Default,
     val themeColorIndex: Int = 0,
     val appFontSizePreset: AppFontSizePreset = AppFontSizePreset.DEFAULT,
+    val appFontWeightPreset: AppFontWeightPreset = AppFontWeightPreset.FOLLOW_THEME,
     val appFontFileName: String = "",
     val appUiScalePreset: AppUiScalePreset = AppUiScalePreset.STANDARD,
     val appDpiOverridePercent: Int = 0,
@@ -798,7 +838,8 @@ enum class HomeHeaderCollapseMode(
     SEARCH_ONLY(0, "仅搜索", "列表下滑时只收起搜索行，标签页保持显示", true, false),
     TABS_ONLY(1, "仅标签", "列表下滑时只收起标签页，搜索行保持显示", false, true),
     BOTH(2, "都折叠", "搜索行和标签页都会随列表下滑收起", true, true),
-    OFF(3, "都不折叠", "搜索行和标签页始终展开", false, false);
+    OFF(3, "都不折叠", "搜索行和标签页始终展开", false, false),
+    SHOW_AT_TOP_ONLY(4, "仅回顶显示", "浏览下方内容时收起搜索框和分类栏，仅回到列表顶部时恢复", true, true);
 
     val hasAnyCollapse: Boolean
         get() = collapseSearch || collapseTabs
@@ -840,7 +881,7 @@ enum class CommonListHeaderCollapseMode(
 
     companion object {
         fun fromValue(value: Int): CommonListHeaderCollapseMode =
-            entries.find { it.value == value } ?: SHOW_ON_REVERSE_SCROLL
+            entries.find { it.value == value } ?: SHOW_AT_TOP_ONLY
     }
 }
 
@@ -887,11 +928,11 @@ enum class DanmakuPanelWidthMode(val value: Int, val label: String, val widthFra
 
 enum class PortraitDanmakuDisplayAreaMode(val value: Int, val label: String) {
     VIDEO_VIEWPORT(0, "视频画面"),
-    SCREEN_TOP(1, "屏幕顶部");
+    SCREEN_TOP(1, "视频上方");
 
     companion object {
         fun fromValue(value: Int): PortraitDanmakuDisplayAreaMode =
-            entries.find { it.value == value } ?: VIDEO_VIEWPORT
+            entries.find { it.value == value } ?: SCREEN_TOP
     }
 }
 
@@ -960,18 +1001,19 @@ data class DanmakuSettings(
     val staticDanmakuToScroll: Boolean = false,
     val massiveMode: Boolean = false,
     val mergeDuplicates: Boolean = true,
-    val duplicateMergeWindowMs: Int = 500,
+    val duplicateMergeWindowMs: Int = 15_000,
     val duplicateMergeCountThreshold: Int = 2,
     val allowScroll: Boolean = true,
     val allowTop: Boolean = true,
     val allowBottom: Boolean = true,
     val allowColorful: Boolean = true,
     val allowSpecial: Boolean = true,
+    val weightFilterLevel: Int = 0,
     val hideInteractiveCommands: Boolean = false,
     val blockAttentionCommands: Boolean = false,
     val smartOcclusion: Boolean = false,
     val portraitDisplayAreaMode: PortraitDanmakuDisplayAreaMode =
-        PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT,
+        PortraitDanmakuDisplayAreaMode.SCREEN_TOP,
     val fullscreenPanelWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
     val blockRulesRaw: String = "",
     val blockRules: List<String> = emptyList()
@@ -991,6 +1033,16 @@ data class AppNavigationSettings(
     val miuixTransitionBlurEnabled: Boolean = true,
     val miuixPredictiveBackMaxProgressPercent: Int = 100,
     val videoSharedReturnGestureFollowEnabled: Boolean = true,
+    val videoSharedReturnGestureTranslationEnabled: Boolean = true,
+    val videoReturnContentFollowProgressEnabled: Boolean = true,
+    val settingsContainerMorphEnabled: Boolean = true,
+    val settingsContainerRealtimeBlurEnabled: Boolean = false,
+    val liquidIndicatorWobbleEnabled: Boolean = true,
+    val liquidIndicatorDynamicLengthEnabled: Boolean = true,
+    // 编辑器保留原始配置，不能用运行时过滤后的可见项或生效策略反写用户选择。
+    val bottomBarOrder: List<String> = listOf("HOME", "DYNAMIC", "HISTORY", "LISTEN_VIDEO", "PROFILE"),
+    val bottomBarVisibleTabs: Set<String> = setOf("HOME", "DYNAMIC", "HISTORY", "LISTEN_VIDEO", "PROFILE"),
+    val savedBottomBarVisibilityMode: SettingsManager.BottomBarVisibilityMode = bottomBarVisibilityMode,
 )
 
 internal data class BottomTabMigrationResult(
@@ -1129,6 +1181,22 @@ internal fun resolveFocusHomeTopTabMigration(
         orderIds = finalOrder,
         visibleIds = finalVisible.ifEmpty { setOf("FOLLOW") },
     )
+}
+
+internal fun resolveFocusHomeTopTabMigrationBoundary(
+    orderIds: List<String>?,
+    visibleIds: Set<String>?,
+    focusSettings: LegacyFocusHomeTabVisibility,
+    hasLegacyFocusVisibilitySettings: Boolean,
+): FocusHomeTopTabMigrationResult {
+    if (orderIds == null && visibleIds == null && !hasLegacyFocusVisibilitySettings) {
+        val defaults = HomeTopTabSettings()
+        return FocusHomeTopTabMigrationResult(
+            orderIds = defaults.orderIds,
+            visibleIds = defaults.visibleIds,
+        )
+    }
+    return resolveFocusHomeTopTabMigration(orderIds, visibleIds, focusSettings)
 }
 
 /**

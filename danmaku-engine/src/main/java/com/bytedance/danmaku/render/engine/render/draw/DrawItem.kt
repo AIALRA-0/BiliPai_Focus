@@ -31,6 +31,11 @@ abstract class DrawItem<T: DanmakuData> {
 
     open var data: T? = null
 
+    val isVisible: Boolean get() = data?.isVisible == true
+
+    /** Shared horizontal hit test for scrolling and pinned render lines. */
+    fun containsX(pointX: Float): Boolean = isVisible && pointX >= x && pointX <= x + width
+
     open var x: Float = 0F
     open var y: Float = 0F
     open var rotate: Float = 0F
@@ -53,6 +58,9 @@ abstract class DrawItem<T: DanmakuData> {
      */
 
     open var showDuration: Long = 0L
+
+    /** Baseline on the controller's pause-aware render clock; set when entering a line. */
+    internal var lastRenderTimeMs: Long = 0L
 
     /**
      * If paused, [showDuration] will not increase.
@@ -87,6 +95,7 @@ abstract class DrawItem<T: DanmakuData> {
      * Actually do the drawing work in main thread.
      */
     fun draw(canvas: Canvas, config: DanmakuConfig) {
+        if (!isVisible) return
         canvas.save()
         canvas.rotate(rotate, x, y)
         onDraw(canvas, config)
@@ -94,6 +103,7 @@ abstract class DrawItem<T: DanmakuData> {
     }
 
     fun drawBounds(canvas: Canvas) {
+        if (!isVisible) return
         canvas.save()
         canvas.rotate(rotate, x, y)
         mBoundsPaint.color = Color.argb(100, 255, 0, 0)

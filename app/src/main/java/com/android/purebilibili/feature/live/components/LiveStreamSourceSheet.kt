@@ -1,20 +1,23 @@
 package com.android.purebilibili.feature.live.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SettingsInputComponent
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -25,6 +28,7 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -46,6 +50,20 @@ internal fun LiveStreamSourceSheet(
     onSelect: (candidateIndex: Int, urlIndex: Int) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val active = candidates.getOrNull(activeCandidateIndex)
+    val expanded = remember(candidates) {
+        mutableStateMapOf<String, Boolean>().apply {
+            active?.let {
+                put(it.protocolName, true)
+                put("${it.protocolName}/${it.formatName}", true)
+                put("${it.protocolName}/${it.formatName}/${it.codecName}/${it.currentQuality}", true)
+            }
+        }
+    }
+    val groups = remember(candidates) { candidates.withIndex().groupBy { it.value.protocolName } }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val panelFraction = if (configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 1f else 0.7f
+    val listHeight = (configuration.screenHeightDp * panelFraction - 100f).coerceAtLeast(48f).dp
     AppModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -58,35 +76,54 @@ internal fun LiveStreamSourceSheet(
         ) {
             AppText(
                 text = "直播线路",
-                color = MaterialTheme.colorScheme.onSurface,
+                color = AppContentColors.primaryText(),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             if (candidates.isEmpty()) {
                 AppText(
                     text = "暂无可用线路，请稍后重试",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = AppSpacingTokens.Large)
                 )
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                    modifier = Modifier.height(420.dp)
+                    modifier = Modifier.heightIn(max = listHeight)
                 ) {
-                    itemsIndexed(candidates) { candidateIndex, candidate ->
-                        val urls = candidate.urls
-                        if (urls.isNotEmpty()) {
-                            urls.forEachIndexed { urlIndex, _ ->
-                                val isActive =
-                                    candidateIndex == activeCandidateIndex && urlIndex == activeUrlIndex
-                                LiveSourceRow(
-                                    candidate = candidate,
-                                    urlIndex = urlIndex,
-                                    totalUrls = urls.size,
-                                    isActive = isActive,
-                                    onClick = { onSelect(candidateIndex, urlIndex) }
-                                )
+                    items(groups.entries.toList(), key = { it.key }) { protocol ->
+                        Column(Modifier.fillMaxWidth()) {
+                            AppTextButton(onClick = { expanded[protocol.key] = expanded[protocol.key] != true }) {
+                                AppText(resolveLiveStreamProtocolLabel(protocol.key), fontWeight = FontWeight.Bold)
+                            }
+                            if (expanded[protocol.key] == true) {
+                                protocol.value.groupBy { it.value.formatName }.forEach { (format, formats) ->
+                                    val formatKey = "${protocol.key}/$format"
+                                    Column(Modifier.fillMaxWidth().padding(start = 12.dp)) {
+                                        AppTextButton(onClick = { expanded[formatKey] = expanded[formatKey] != true }) { AppText(format) }
+                                        if (expanded[formatKey] == true) formats.forEach { indexed ->
+                                            val candidate = indexed.value
+                                            val candidateKey = "$formatKey/${candidate.codecName}/${candidate.currentQuality}"
+                                            val quality = candidate.qualityList.firstOrNull { it.qn == candidate.currentQuality }?.desc ?: candidate.currentQuality.toString()
+                                            Column(Modifier.fillMaxWidth().padding(start = 12.dp)) {
+                                                AppTextButton(onClick = { expanded[candidateKey] = expanded[candidateKey] != true }) {
+                                                    AppText("${candidate.codecName.uppercase()} · $quality", fontWeight = if (indexed.index == activeCandidateIndex) FontWeight.Bold else FontWeight.Normal)
+                                                }
+                                                if (expanded[candidateKey] == true) candidate.urls.forEachIndexed { urlIndex, url ->
+                                                    LiveSourceRow(
+                                                        candidate = candidate,
+                                                        urlIndex = urlIndex,
+                                                        totalUrls = candidate.urls.size,
+                                                        host = android.net.Uri.parse(url).host.orEmpty(),
+                                                        isActive = indexed.index == activeCandidateIndex && urlIndex == activeUrlIndex,
+                                                        onClick = { onSelect(indexed.index, urlIndex) },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -101,11 +138,13 @@ private fun LiveSourceRow(
     candidate: LivePlaybackCandidate,
     urlIndex: Int,
     totalUrls: Int,
+    host: String,
     isActive: Boolean,
     onClick: () -> Unit
 ) {
     AppSingleChoiceRow(
         selected = isActive,
+        enabled = !isActive,
         onClick = onClick,
         shape = AppShapes.container(ContainerLevel.Card),
         modifier = Modifier.fillMaxWidth()
@@ -132,7 +171,9 @@ private fun LiveSourceRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 AppText(
-                    text = "线路 ${urlIndex + 1}/$totalUrls",
+                    text = "线路 ${urlIndex + 1}/$totalUrls · $host",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     color = AppSurfaceTokens.onSurfaceVariantSummary(),
                     style = MaterialTheme.typography.bodySmall
                 )

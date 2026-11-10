@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.search
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
@@ -7,7 +9,7 @@ import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -104,12 +106,12 @@ fun SearchTrendingScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .clickable(onClick = viewModel::refresh),
+                    .appActionClickable(onClick = viewModel::refresh),
                 contentAlignment = Alignment.Center
             ) {
                 AppText(
                     text = state.error ?: "加载失败，点击重试",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppContentColors.secondaryText()
                 )
             }
 
@@ -145,7 +147,7 @@ fun SearchTrendingScreen(
 
 @Composable
 private fun SearchTrendingHero() {
-    val heroPrimary = MaterialTheme.colorScheme.primary
+    val heroPrimary = AppContentColors.accent()
     val heroPrimaryContainer = MaterialTheme.colorScheme.primaryContainer
     val heroTertiary = MaterialTheme.colorScheme.tertiary
     Box(
@@ -264,13 +266,13 @@ private fun SearchTrendingRow(
 
                     item.showLiveBadge -> SearchKeywordBadge(
                         text = "直播中",
-                        containerColor = MaterialTheme.colorScheme.error,
+                        containerColor = AppContentColors.error(),
                         contentColor = MaterialTheme.colorScheme.onError
                     )
 
                     !item.subtitle.isNullOrBlank() -> AppText(
                         text = item.subtitle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -292,7 +294,7 @@ private fun SearchTrendingRank(
         AppIcon(
             imageVector = Icons.Rounded.North,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
+            tint = AppContentColors.error(),
             modifier = Modifier.size(20.dp)
         )
         return
@@ -304,8 +306,8 @@ private fun SearchTrendingRank(
         color = when (rank) {
             1 -> MaterialTheme.colorScheme.tertiary
             2 -> MaterialTheme.colorScheme.secondary
-            3 -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+            3 -> AppContentColors.accent()
+            else -> AppContentColors.secondaryText().copy(alpha = 0.72f)
         },
         style = MaterialTheme.typography.titleLarge.copy(
             fontWeight = FontWeight.Black,

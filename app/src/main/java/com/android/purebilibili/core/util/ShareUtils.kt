@@ -32,7 +32,6 @@ object ShareUtils {
         "ts",               // 时间戳
         "is_story_h5",      // 故事模式标记
         "mid",              // 用户ID
-        "p",                // 分P
         "plat_id",          // 平台ID
         "buvid",            // 设备标识
         "up_id",            // UP主ID
@@ -98,6 +97,29 @@ object ShareUtils {
             AnalyticsHelper.logShare(bvid, "system_share")
         } catch (e: Exception) {
             Logger.e("ShareUtils", "分享失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 分享合集/列表页
+     *
+     * @param mid UP主 uid（合集页挂在空间频道下）
+     * @param seasonId 合集 id (ugc_season.id)
+     */
+    fun shareCollection(context: Context, title: String, mid: Long, seasonId: Long) {
+        val url = "https://space.bilibili.com/$mid/channel/collectiondetail?sid=$seasonId"
+        val shareText = "$title\n$url"
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, title)
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+
+        try {
+            context.startActivity(Intent.createChooser(intent, "分享合集"))
+        } catch (e: Exception) {
+            Logger.e("ShareUtils", "分享合集失败: ${e.message}")
         }
     }
 

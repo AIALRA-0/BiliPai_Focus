@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.dynamic
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.util.FormatUtils
+import kotlin.math.roundToInt
 
 internal enum class DynamicVideoCardLayoutMode {
     VERTICAL,
@@ -17,7 +19,7 @@ internal fun resolveDynamicTimelineMinColumnWidth(): Dp = 360.dp
 
 internal fun resolveDynamicTimelineHorizontalSpacing(): Dp = 18.dp
 
-internal fun resolveDynamicTimelineVerticalSpacing(): Dp = 10.dp
+internal fun resolveDynamicTimelineVerticalSpacing(): Dp = 6.dp
 
 internal fun shouldUseDynamicManualPrependAnchor(
     feedLayoutMode: SettingsManager.DynamicFeedLayoutMode,
@@ -43,27 +45,10 @@ internal fun resolveDynamicSidebarDividerTopOffset(topPadding: Dp): Dp {
     return topPadding + resolveDynamicSidebarReturnHeaderHeightDp().dp
 }
 
-internal data class DynamicTopBarLiquidTabSpec(
-    val topPaddingDp: Int,
-    val bottomPaddingDp: Int,
-    val heightDp: Int,
-    val indicatorHeightDp: Int,
-    val labelFontSizeSp: Int
-)
-
-internal fun resolveDynamicTopBarTabItemWidthDp(): Int = 72
-
-internal fun resolveDynamicTopBarLiquidTabSpec(): DynamicTopBarLiquidTabSpec {
-    val heightDp = resolveDynamicTopBarHeightDp()
-    return DynamicTopBarLiquidTabSpec(
-        topPaddingDp = 0,
-        bottomPaddingDp = 0,
-        heightDp = heightDp,
-        // Top docks use a tighter 4dp vertical inset than the taller bottom navigation dock.
-        indicatorHeightDp = heightDp - 8,
-        labelFontSizeSp = 13
-    )
-}
+// Shared requested geometry, not a glass-only override: tabs and toggle grow together.
+internal fun resolveDynamicTopBarTabHeightDp(fontScale: Float): Float =
+    com.android.purebilibili.core.ui.AppChromeSizeTokens.TopBarIconVisualSize.value *
+        fontScale.coerceAtLeast(1f)
 
 internal fun resolveDynamicTabIndicatorPosition(
     selectedIndex: Int,
@@ -108,17 +93,10 @@ internal fun resolveDynamicActionButtonText(
     }
 }
 
-private fun formatDynamicActionCount(count: Int): String {
-    return when {
-        count >= 10000 -> "${count / 10000}万"
-        count >= 1000 -> String.format("%.1fk", count / 1000f)
-        else -> count.toString()
-    }
-}
+private fun formatDynamicActionCount(count: Int): String = FormatUtils.formatStat(count.toLong())
 
 internal const val DYNAMIC_SIDEBAR_MAX_CASCADE_ITEMS = 8
-internal const val DYNAMIC_SIDEBAR_INITIAL_AVATAR_PREFETCH_COUNT = 30
-internal const val DYNAMIC_SIDEBAR_SCROLL_AVATAR_PREFETCH_COUNT = 20
+internal const val DYNAMIC_SIDEBAR_AVATAR_PREFETCH_COUNT = 6
 internal const val DYNAMIC_SIDEBAR_PREFETCH_IDLE_COUNT = 6
 internal const val DYNAMIC_SIDEBAR_PREFETCH_SCROLLING_COUNT = 15
 internal const val DYNAMIC_SIDEBAR_FLING_VELOCITY_MULTIPLIER = 0.70f
@@ -149,6 +127,7 @@ internal fun resolveDynamicSidebarUserAvatarUrl(face: String): String {
     val raw = face.trim()
     return when {
         raw.isEmpty() -> ""
+        raw.startsWith("file://") || raw.startsWith("content://") -> raw
         raw.startsWith("https://") -> raw
         raw.startsWith("http://") -> raw.replace("http://", "https://")
         raw.startsWith("//") -> "https:$raw"
@@ -159,11 +138,31 @@ internal fun resolveDynamicSidebarUserAvatarUrl(face: String): String {
 internal fun resolveDynamicSidebarAvatarPrefetchUrls(
     users: List<SidebarUser>,
     startIndex: Int = 0,
-    limit: Int = DYNAMIC_SIDEBAR_INITIAL_AVATAR_PREFETCH_COUNT
+    limit: Int = DYNAMIC_SIDEBAR_AVATAR_PREFETCH_COUNT
 ): List<String> {
     if (startIndex < 0 || startIndex >= users.size || limit <= 0) return emptyList()
-    val endIndex = minOf(startIndex + limit, users.size)
+    val endIndex = startIndex + minOf(limit, users.size - startIndex)
     return users.subList(startIndex, endIndex).mapNotNull { user ->
         resolveDynamicSidebarUserAvatarUrl(user.face).ifEmpty { null }
-    }
+    }.distinct()
+}
+
+internal fun resolveDynamicUserAvatarDecodeSizePx(density: Float): Int =
+    (48f * (density.takeIf { it.isFinite() && it > 0f } ?: 1f))
+        .coerceIn(48f, 256f).roundToInt()
+
+/** Headers have no user identity; prefetch only three neighbors on each side of real visible users. */
+internal fun resolveDynamicSidebarNeighborAvatarUrls(
+    users: List<SidebarUser>,
+    visibleUserIds: List<Long>,
+): List<String> {
+    val visibleIds = visibleUserIds.toSet()
+    val first = users.indexOfFirst { it.uid in visibleIds }
+    val last = users.indexOfLast { it.uid in visibleIds }
+    if (first < 0) return emptyList()
+    val before = resolveDynamicSidebarAvatarPrefetchUrls(
+        users, (first - 3).coerceAtLeast(0), minOf(first, 3),
+    )
+    val after = resolveDynamicSidebarAvatarPrefetchUrls(users, last + 1, 3)
+    return (after + before.asReversed()).distinct()
 }

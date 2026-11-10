@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.plugin.sdk.PlaybackCdnCandidateSource
+
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -23,14 +25,6 @@ class CdnRegionPolicyTest {
         "西安" to listOf("cn-sxxa-ct-01-01.bilivideo.com"),
         "武汉" to listOf("cn-hbwh-ct-01-01.bilivideo.com")
     )
-
-    @Test
-    fun `plugin capability manifest keeps CDN optimizer release version`() {
-        val plugin = CdnRegionPlugin()
-
-        assertEquals("1.4.0", plugin.version)
-        assertEquals(plugin.version, plugin.capabilityManifest.version)
-    }
 
     @Test
     fun `ip snapshot preserves public address and isp for internal cdn decisions`() {

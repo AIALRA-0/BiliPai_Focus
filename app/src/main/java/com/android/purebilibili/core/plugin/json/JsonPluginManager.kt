@@ -1,11 +1,12 @@
 // 文件路径: core/plugin/json/JsonPluginManager.kt
 package com.android.purebilibili.core.plugin.json
 
+import com.android.purebilibili.core.network.buildAppDns
 import android.content.Context
 import android.net.Uri
 import com.android.purebilibili.core.network.NetworkModule
-import com.android.purebilibili.core.plugin.DanmakuItem
-import com.android.purebilibili.core.plugin.DanmakuStyle
+import com.android.purebilibili.plugin.sdk.DanmakuItem
+import com.android.purebilibili.plugin.sdk.DanmakuStyle
 import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_DANMAKU_COOLDOWN_MS
 import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_ENABLED_COOLDOWN_MS
 import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_FEED_COOLDOWN_MS
@@ -17,6 +18,10 @@ import com.android.purebilibili.core.plugin.resolvePluginEnabledEffectHint
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,46 +39,52 @@ private val PLUGIN_ID_REGEX = Regex("^[a-zA-Z0-9_.-]{1,64}$")
 
 /**
  *  JSON 规则插件管理器
- * 
+ *
  * 管理通过 URL 导入的 JSON 规则插件
  */
 object JsonPluginManager {
-    
+
     private val json = Json { ignoreUnknownKeys = true }
     private val httpClient by lazy {
         OkHttpClient.Builder()
+            .dns(buildAppDns())
             .protocols(NetworkModule.resolveSharedNetworkProtocols())
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .build()
     }
     private lateinit var appContext: Context
-    
+
     /** 已加载的插件列表 */
     private val _plugins = MutableStateFlow<List<LoadedJsonPlugin>>(emptyList())
     val plugins: StateFlow<List<LoadedJsonPlugin>> = _plugins.asStateFlow()
-    
+
     /**  过滤统计 (插件ID -> 过滤数量) */
     private val _filterStats = MutableStateFlow<Map<String, Int>>(emptyMap())
     val filterStats: StateFlow<Map<String, Int>> = _filterStats.asStateFlow()
-    
+
     private var isInitialized = false
-    
+    private val storeMutex = Mutex()
+
+    /** Restoration and edits share one ordered IO boundary; no delayed snapshot can overwrite an edit. */
+    private suspend fun <T> withStore(block: () -> T): T = withContext(Dispatchers.IO) {
+        storeMutex.withLock { block() }
+    }
+
     /**
      * 初始化
      */
-    fun initialize(context: Context) {
-        if (isInitialized) return
+    suspend fun initialize(context: Context): Unit = withStore {
+        if (isInitialized) return@withStore
         appContext = context.applicationContext
-        isInitialized = true
-        
-        // 加载已保存的插件
-        loadSavedPlugins()
-        //  加载持久化统计
+        // Publish counters before rules: filtering can begin as soon as rules are visible.
         loadFilterStats()
+        loadSavedPlugins()
+        isInitialized = true
+        PluginManager.notifyDanmakuPluginsUpdated()
         Logger.d(TAG, " JsonPluginManager initialized")
     }
-    
+
     /**
      * 从 URL 导入插件
      */
@@ -85,22 +96,27 @@ object JsonPluginManager {
                     return@withContext Result.failure(error)
                 }
 
-                val existing = _plugins.value.find { it.plugin.id == plugin.id }
-                val enabled = existing?.enabled ?: true
+                withStore {
+                    check(isInitialized) { "规则管理器尚未初始化" }
+                    val existing = _plugins.value.find { it.plugin.id == plugin.id }
+                    val enabled = existing?.enabled ?: true
 
-                // 保存到本地
-                savePlugin(plugin)
+                    // 保存到本地
+                    savePlugin(plugin)
 
-                // 添加到列表
-                val loaded = LoadedJsonPlugin(plugin, enabled = enabled, sourceUrl = normalizedUrl)
-                _plugins.value = _plugins.value.filter { it.plugin.id != plugin.id } + loaded
-                persistEnabledState(plugin.id, enabled)
-                if (plugin.type == "danmaku") {
-                    PluginManager.notifyDanmakuPluginsUpdated()
+                    // 添加到列表
+                    val loaded = LoadedJsonPlugin(plugin, enabled = enabled, sourceUrl = normalizedUrl)
+                    _plugins.value = _plugins.value.filter { it.plugin.id != plugin.id } + loaded
+                    persistEnabledState(plugin.id, enabled)
+                    if (plugin.type == "danmaku") {
+                        PluginManager.notifyDanmakuPluginsUpdated()
+                    }
                 }
 
                 Logger.d(TAG, " 插件导入成功: ${plugin.name}")
                 Result.success(plugin)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: java.net.SocketTimeoutException) {
                 Logger.e(TAG, " 连接超时", e)
                 Result.failure(Exception("连接超时，请检查网络或 URL 是否正确"))
@@ -125,6 +141,8 @@ object JsonPluginManager {
             try {
                 val normalizedUrl = url.trim()
                 fetchPluginFromUrl(normalizedUrl)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: java.net.SocketTimeoutException) {
                 Logger.e(TAG, " 连接超时", e)
                 Result.failure(Exception("连接超时，请检查网络或 URL 是否正确"))
@@ -140,15 +158,16 @@ object JsonPluginManager {
             }
         }
     }
-    
+
     /**
      * 删除插件
      */
-    fun removePlugin(pluginId: String) {
+    suspend fun removePlugin(pluginId: String): Unit = withStore {
+        check(isInitialized) { "规则管理器尚未初始化" }
         val removedType = _plugins.value.find { it.plugin.id == pluginId }?.plugin?.type
         val file = File(getPluginDir(), "$pluginId.json")
         if (file.exists()) file.delete()
-        
+
         _plugins.value = _plugins.value.filter { it.plugin.id != pluginId }
         _filterStats.value = _filterStats.value - pluginId
         clearEnabledState(pluginId)
@@ -158,15 +177,16 @@ object JsonPluginManager {
         }
         Logger.d(TAG, " 删除插件: $pluginId")
     }
-    
+
     /**
      * 启用/禁用插件
      */
-    fun setEnabled(pluginId: String, enabled: Boolean) {
+    suspend fun setEnabled(pluginId: String, enabled: Boolean): Unit = withStore {
+        check(isInitialized) { "规则管理器尚未初始化" }
         val targetType = _plugins.value.find { it.plugin.id == pluginId }?.plugin?.type
         if (targetType == null) {
             Logger.w(TAG, " 插件不存在: $pluginId")
-            return
+            return@withStore
         }
 
         var changed = false
@@ -194,13 +214,13 @@ object JsonPluginManager {
             }
         }
     }
-    
+
     // ============ 过滤方法 ============
-    
+
     /**  最近一次过滤掉的视频数量（用于 UI 提示） */
     private val _lastFilteredCount = MutableStateFlow(0)
     val lastFilteredCount: StateFlow<Int> = _lastFilteredCount.asStateFlow()
-    
+
     /**
      * 过滤视频列表（带统计和计数）
      * @return 过滤后的视频列表
@@ -229,18 +249,21 @@ object JsonPluginManager {
                 result.add(video)
             } else {
                 filteredCount++
-                val pluginId = hiddenBy.plugin.id
+                val hiddenPlugin = hiddenBy.plugin
+                val pluginId = hiddenPlugin.id
                 statsDelta[pluginId] = statsDelta.getOrDefault(pluginId, 0) + 1
-                Logger.d(TAG, "🚫 过滤视频: ${video.title.take(20)}... (插件: ${hiddenBy.plugin.name})")
+                Logger.d(TAG) { "🚫 过滤视频: ${video.title.take(20)}... (插件: ${hiddenPlugin.name})" }
             }
         }
 
         if (statsDelta.isNotEmpty()) {
-            val merged = _filterStats.value.toMutableMap()
-            statsDelta.forEach { (pluginId, delta) ->
-                merged[pluginId] = merged.getOrDefault(pluginId, 0) + delta
+            _filterStats.update { current ->
+                current.toMutableMap().apply {
+                    statsDelta.forEach { (pluginId, delta) ->
+                        this[pluginId] = getOrDefault(pluginId, 0) + delta
+                    }
+                }
             }
-            _filterStats.value = merged
             saveFilterStats()
         }
 
@@ -259,39 +282,41 @@ object JsonPluginManager {
 
         return result
     }
-    
+
     /**
      *  更新插件规则
      */
-    fun updatePlugin(plugin: JsonRulePlugin) {
+    suspend fun updatePlugin(plugin: JsonRulePlugin): Unit = withStore {
+        check(isInitialized) { "规则管理器尚未初始化" }
         validatePlugin(plugin)?.let { error ->
             Logger.w(TAG, " 更新插件失败: $error")
-            return
+            return@withStore
         }
         // 保存到本地
         savePlugin(plugin)
-        
+
         // 更新列表（保留 enabled 状态）
         _plugins.value = _plugins.value.map { loaded ->
             if (loaded.plugin.id == plugin.id) {
                 loaded.copy(plugin = plugin)
             } else loaded
         }
-        
+
         // 重置该插件的统计
         _filterStats.value = _filterStats.value - plugin.id
         saveFilterStats()
         if (plugin.type == "danmaku") {
             PluginManager.notifyDanmakuPluginsUpdated()
         }
-        
+
         Logger.d(TAG, " 插件已更新: ${plugin.name}")
     }
-    
+
     /**
      *  重置统计（同时清除持久化数据）
      */
-    fun resetStats(pluginId: String? = null) {
+    suspend fun resetStats(pluginId: String? = null): Unit = withStore {
+        check(isInitialized) { "规则管理器尚未初始化" }
         if (pluginId != null) {
             _filterStats.value = _filterStats.value - pluginId
         } else {
@@ -301,10 +326,10 @@ object JsonPluginManager {
         saveFilterStats()
         Logger.d(TAG, " 统计已重置: ${pluginId ?: "全部"}")
     }
-    
+
     /**
      *  测试插件规则（用于验证插件是否生效）
-     * 
+     *
      * @param pluginId 要测试的插件 ID
      * @param sampleVideos 测试用的视频列表（来自首页）
      * @return Pair(原始数量, 过滤后数量)
@@ -312,26 +337,26 @@ object JsonPluginManager {
     fun testPluginRules(pluginId: String, sampleVideos: List<VideoItem>): Pair<Int, Int> {
         val loaded = _plugins.value.find { it.plugin.id == pluginId }
             ?: return Pair(sampleVideos.size, sampleVideos.size)
-        
+
         val filtered = sampleVideos.filter { video ->
             RuleEngine.shouldShowVideo(video, loaded.plugin.rules)
         }
-        
+
         return Pair(sampleVideos.size, filtered.size)
     }
-    
+
     /**
      *  获取被测试过滤的视频列表（用于展示哪些视频会被过滤）
      */
     fun getFilteredVideosByPlugin(pluginId: String, sampleVideos: List<VideoItem>): List<VideoItem> {
         val loaded = _plugins.value.find { it.plugin.id == pluginId }
             ?: return emptyList()
-        
+
         return sampleVideos.filter { video ->
             !RuleEngine.shouldShowVideo(video, loaded.plugin.rules)
         }
     }
-    
+
     /**
      * 过滤单个弹幕
      */
@@ -348,7 +373,7 @@ object JsonPluginManager {
         }
         return true
     }
-    
+
     /**
      * 获取弹幕高亮样式
      */
@@ -360,7 +385,7 @@ object JsonPluginManager {
         }
         return null
     }
-    
+
     // ============ 私有方法 ============
 
     private fun fetchPluginFromUrl(normalizedUrl: String): Result<JsonRulePlugin> {
@@ -424,6 +449,7 @@ object JsonPluginManager {
         if (plugin.rules.any { it.toCondition() == null }) {
             return "存在无效规则（缺少 condition 或 field/op/value）"
         }
+        RuleEngine.prepare(plugin.rules)
         return null
     }
 
@@ -436,24 +462,42 @@ object JsonPluginManager {
         val prefs = appContext.getSharedPreferences(ENABLED_PREFS, Context.MODE_PRIVATE)
         prefs.edit().remove("$ENABLED_PREFIX$pluginId").apply()
     }
-    
+
     private fun getPluginDir(): File {
         val dir = File(appContext.filesDir, "json_plugins")
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
-    
+
     private fun savePlugin(plugin: JsonRulePlugin) {
         val file = File(getPluginDir(), "${plugin.id}.json")
         file.writeText(json.encodeToString(JsonRulePlugin.serializer(), plugin))
     }
-    
+
+    /** Import through the live store so preference caches and rule consumers update together. */
+    internal suspend fun importTransferredRules(files: Map<String, String>, enabledStates: Map<String, Boolean>): Unit = withStore {
+        check(isInitialized) { "规则管理器尚未初始化" }
+        val imported = files.map { (name, content) ->
+            val plugin = json.decodeFromString<JsonRulePlugin>(content)
+            validatePlugin(plugin)?.let { error(it) }
+            require(name == "${plugin.id}.json" && !plugin.id.contains("..")) { "规则文件名无效：$name" }
+            plugin
+        }
+        require(imported.map { it.id }.distinct().size == imported.size) { "规则 ID 重复" }
+        imported.forEach { savePlugin(it) }
+        val editor = appContext.getSharedPreferences(ENABLED_PREFS, Context.MODE_PRIVATE).edit()
+        imported.forEach { editor.putBoolean("$ENABLED_PREFIX${it.id}", enabledStates[it.id] ?: true) }
+        check(editor.commit()) { "规则启用状态保存失败" }
+        loadSavedPlugins()
+        PluginManager.notifyDanmakuPluginsUpdated()
+    }
+
     private fun loadSavedPlugins() {
         val dir = getPluginDir()
         if (!dir.exists()) return
-        
+
         val prefs = appContext.getSharedPreferences(ENABLED_PREFS, Context.MODE_PRIVATE)
-        
+
         val loaded = dir.listFiles()
             ?.sortedBy { it.name }
             ?.mapNotNull { file ->
@@ -471,43 +515,43 @@ object JsonPluginManager {
                 null
             }
         } ?: emptyList()
-        
+
         _plugins.value = loaded
         Logger.d(TAG, " 加载了 ${loaded.size} 个 JSON 插件")
     }
-    
+
     /**
      *  加载持久化过滤统计
      */
     private fun loadFilterStats() {
         val prefs = appContext.getSharedPreferences(STATS_PREFS, Context.MODE_PRIVATE)
         val statsMap = mutableMapOf<String, Int>()
-        
+
         prefs.all.forEach { (key, value) ->
             if (value is Int) {
                 statsMap[key] = value
             }
         }
-        
+
         _filterStats.value = statsMap
         Logger.d(TAG, " 加载了 ${statsMap.size} 个插件的过滤统计")
     }
-    
+
     /**
      *  保存过滤统计到持久化存储
      */
     private fun saveFilterStats() {
         val prefs = appContext.getSharedPreferences(STATS_PREFS, Context.MODE_PRIVATE)
         val editor = prefs.edit()
-        
+
         // 清空旧数据
         editor.clear()
-        
+
         // 写入新数据
         _filterStats.value.forEach { (pluginId, count) ->
             editor.putInt(pluginId, count)
         }
-        
+
         editor.apply()
     }
 }

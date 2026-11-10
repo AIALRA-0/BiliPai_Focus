@@ -53,6 +53,9 @@ class RelatedVideoItemPolicyTest {
         assertEquals("video/BV1", resolveRelatedVideoSharedElementSourceRoute("video/BV1?from=related"))
         assertEquals("home", resolveRelatedVideoSharedElementSourceRoute("home"))
         // Source sessions remain host route + target bvid so nested return can restore history.
+        assertEquals("video/BV_ENTRY", resolveRelatedVideoCardHostRoute("video/BV_ENTRY?cid=4", "BV_CHANGED"))
+        assertEquals("video/BV_ENTRY", resolveRelatedVideoCardHostRoute("video/BV_ENTRY", "BV_CHANGED_AGAIN"))
+        assertEquals("video/BV_CHANGED", resolveRelatedVideoCardHostRoute(null, "BV_CHANGED"))
     }
 
     @Test
@@ -61,7 +64,7 @@ class RelatedVideoItemPolicyTest {
             .readText()
 
         assertTrue(source.contains("RELATED_VIDEO_CARD_COVER_ASPECT_RATIO"))
-        assertTrue(source.contains("coverAspectRatio: Float = RELATED_VIDEO_CARD_COVER_ASPECT_RATIO"))
+        assertTrue(source.contains("coverAspectRatio: Float = com.android.purebilibili.core.ui.videoCardCoverAspectRatio()"))
         assertTrue(source.contains("HorizontalVideoCardFrame("))
         assertTrue(source.contains("VideoStatRow("))
         assertTrue(source.contains(".align(Alignment.BottomEnd)"))
@@ -165,11 +168,11 @@ class RelatedVideoItemPolicyTest {
     }
 
     @Test
-    fun `related cards expose official style more menu entry`() {
+    fun `related cards expose more menu entry`() {
         val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt")
             .readText()
         assertTrue(source.contains("onMoreClick: (() -> Unit)? = null"))
-        assertTrue(source.contains("RelatedVideoActionSheet("))
-        assertTrue(source.contains("onVideoHidden"))
+        assertTrue(source.contains("AppDropdownMenu("))
+        assertFalse(source.contains("RelatedVideoActionSheet("))
     }
 }

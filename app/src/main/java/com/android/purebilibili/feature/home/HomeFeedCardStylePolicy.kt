@@ -32,18 +32,12 @@ internal const val HOME_FEED_CURRENT_COVER_ASPECT_RATIO = HOME_FEED_FULL_COVER_A
 /**
  * 解析首页/相关推荐等视频卡封面框比例。
  */
+@Suppress("UNUSED_PARAMETER") // Column count and window size affect layout, never the selected cover ratio.
 internal fun resolveHomeFeedCoverAspectRatio(
     style: HomeFeedCardStyle,
     gridColumns: Int = 2,
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
 ): Float {
-    if (widthSizeClass >= WindowWidthSizeClass.Expanded &&
-        (gridColumns <= 1 || style == HomeFeedCardStyle.BILIPAI)
-    ) {
-        return HOME_FEED_FULL_COVER_ASPECT_RATIO
-    }
-    // 单列横卡封面固定为 16:10；双列及以上继续尊重用户选择。
-    if (gridColumns <= 1) return HOME_FEED_BILIPAI_COVER_ASPECT_RATIO
     return when (style) {
         HomeFeedCardStyle.CURRENT -> HOME_FEED_FULL_COVER_ASPECT_RATIO
         HomeFeedCardStyle.OFFICIAL -> HOME_FEED_OFFICIAL_COVER_ASPECT_RATIO

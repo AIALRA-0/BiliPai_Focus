@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.profile
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 
 data class ProfileHeroChrome(
     val textColor: Color,
@@ -29,11 +28,6 @@ data class ProfileContentChrome(
     val cardShadowElevationDp: Int,
     val sheetShadowElevationDp: Int,
     val sheetBorderColor: Color
-)
-
-data class ProfileHeroFallbackGradient(
-    val topColor: Color,
-    val bottomColor: Color
 )
 
 fun resolveProfileHeroChrome(
@@ -95,27 +89,6 @@ fun resolveProfileContentChrome(
         sheetShadowElevationDp = if (isDarkTheme) 0 else 2,
         sheetBorderColor = onSurfaceColor.copy(alpha = if (isDarkTheme) 0.08f else 0.04f)
     )
-}
-
-fun resolveProfileHeroFallbackGradient(
-    hasWallpaper: Boolean,
-    isDarkTheme: Boolean,
-    surfaceColor: Color,
-    surfaceVariantColor: Color,
-    primaryContainerColor: Color
-): ProfileHeroFallbackGradient? {
-    if (hasWallpaper) return null
-    return if (isDarkTheme) {
-        ProfileHeroFallbackGradient(
-            topColor = surfaceVariantColor.copy(alpha = 0.92f),
-            bottomColor = surfaceColor
-        )
-    } else {
-        ProfileHeroFallbackGradient(
-            topColor = primaryContainerColor.copy(alpha = 0.55f),
-            bottomColor = surfaceColor
-        )
-    }
 }
 
 fun resolveProfileContentUsesOpaqueSurface(hasWallpaper: Boolean): Boolean = true

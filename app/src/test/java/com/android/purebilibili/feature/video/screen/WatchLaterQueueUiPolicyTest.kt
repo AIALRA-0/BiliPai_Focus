@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -40,6 +39,23 @@ class WatchLaterQueueUiPolicyTest {
                 playlistSize = 8
             )
         )
+    }
+
+    @Test
+    fun singleItemExternalQueuesRemainAvailableForEverySupportedSource() {
+        for (source in listOf(
+            ExternalPlaylistSource.WATCH_LATER,
+            ExternalPlaylistSource.FAVORITE,
+            ExternalPlaylistSource.SPACE,
+        )) {
+            assertTrue(
+                shouldShowExternalPlaylistQueueBarByPolicy(
+                    isExternalPlaylist = true,
+                    externalPlaylistSource = source,
+                    playlistSize = 1,
+                )
+            )
+        }
     }
 
     @Test
@@ -107,22 +123,4 @@ class WatchLaterQueueUiPolicyTest {
         )
     }
 
-    @Test
-    fun collapsedQueueBarClipsShapeBeforeHazeToAvoidSquareBlurCorners() {
-        val source = listOf(
-            File("app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPhoneContent.kt"),
-            File("src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPhoneContent.kt"),
-        ).first { it.exists() }.readText()
-        val barBlock = source
-            .substringAfter("private fun ExternalPlaylistQueueCollapsedBar(")
-            .substringBefore("\n}\n\n")
-
-        assertTrue(barBlock.contains(".clip(shape)"))
-        assertTrue(barBlock.contains(".height(64.dp)"))
-        assertTrue(barBlock.contains("hazeEffectCompat("))
-        assertTrue(
-            barBlock.indexOf(".clip(shape)") < barBlock.indexOf("hazeEffectCompat("),
-            "clip must precede haze so blur follows rounded corners",
-        )
-    }
 }

@@ -25,6 +25,8 @@ internal fun resolveSettingsSearchNavigation(result: SettingsSearchResult): Bili
         SettingsSearchTarget.PLAYBACK -> BiliPaiNavKey.PlaybackSettings
         SettingsSearchTarget.BOTTOM_BAR -> BiliPaiNavKey.BottomBarSettings
         SettingsSearchTarget.PERMISSION -> BiliPaiNavKey.PermissionSettings
+        SettingsSearchTarget.SPACE_PRIVACY -> BiliPaiNavKey.SpacePrivacySettings
+        SettingsSearchTarget.LOGIN_ACTIVITY -> BiliPaiNavKey.LoginActivitySettings
         SettingsSearchTarget.MESSAGE_NOTIFICATION -> BiliPaiNavKey.MessageNotificationSettings
         SettingsSearchTarget.PLUGINS -> BiliPaiNavKey.PluginsSettings()
         SettingsSearchTarget.SETTINGS_SHARE -> BiliPaiNavKey.SettingsShare

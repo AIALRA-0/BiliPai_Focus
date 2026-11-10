@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.util
 
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -114,4 +115,43 @@ class HingeLayoutPolicyTest {
             AppFoldingFeatureInfo().hasObstructingHinge
         )
     }
+
+    @Test
+    fun `flat non separating flexible crease leaves the full viewport available`() {
+        val hinge = AppHingeFeature(AppHingeOrientation.Vertical, IntRect(500, 0, 500, 800), false, false, true)
+        assertEquals(listOf(IntRect(0, 0, 1000, 800)), resolveHingeSafeContentRegions(1000, 800, listOf(hinge), clearancePx = 16))
+    }
+
+    @Test
+    fun `flat physical hinge still splits a short window`() {
+        val hinge = AppHingeFeature(AppHingeOrientation.Vertical, IntRect(400, 0, 416, 300), true, true, true)
+        val info = AppWindowAdaptiveInfo(
+            windowSizeClass = WindowSizeClass(WindowWidthSizeClass.Expanded, WindowHeightSizeClass.Compact,
+                800.dp, 300.dp),
+            foldingFeature = AppFoldingFeatureInfo(posture = AppFoldPosture.Flat, hinges = listOf(hinge)),
+        )
+        assertTrue(info.shouldAvoidHinge)
+        assertEquals(listOf(IntRect(0, 0, 400, 300), IntRect(416, 0, 800, 300)),
+            resolveHingeSafeContentRegions(800, 300, listOf(hinge)))
+    }
+
+    @Test
+    fun `container wholly inside an occluding hinge has no usable region`() {
+        val hinge = AppHingeFeature(AppHingeOrientation.Vertical, IntRect(0, 0, 1000, 800), true, true, true)
+        assertEquals(emptyList(), resolveHingeSafeContentRegions(1000, 800, listOf(hinge)))
+    }
+
+    @Test
+    fun `a hinge outside the local viewport does not consume its width`() {
+        val hinge = AppHingeFeature(AppHingeOrientation.Vertical, IntRect(500, 0, 516, 800), true, true, true)
+        assertEquals(listOf(IntRect(0, 0, 400, 800)), resolveHingeSafeContentRegions(
+            400, 800, listOf(hinge), androidx.compose.ui.unit.IntOffset(600, 0), 16))
+    }
+
+    @Test
+    fun `IME cropped tabletop host keeps only the visible upper safe region`() {
+        val hinge = AppHingeFeature(AppHingeOrientation.Horizontal, IntRect(0, 390, 800, 410), true, false, false)
+        assertEquals(listOf(IntRect(0, 0, 800, 374)), resolveHingeSafeContentRegions(800, 400, listOf(hinge), clearancePx = 16))
+    }
+
 }

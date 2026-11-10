@@ -47,6 +47,26 @@ enum class SpaceCollectionDetailType(val raw: String) {
     }
 }
 
+internal fun canCopySpaceFavoriteResources(type: String, accountMid: Long?): Boolean =
+    type == SpaceCollectionDetailType.FAVORITE.raw && (accountMid ?: 0L) > 0L
+
+internal fun canManageSpaceFavoriteResources(
+    type: String,
+    ownerMid: Long,
+    accountMid: Long?,
+): Boolean = canCopySpaceFavoriteResources(type, accountMid) &&
+    ownerMid > 0L && ownerMid == accountMid
+
+internal fun resolveSpaceCollectionHasMore(
+    type: String,
+    pageItemCount: Int,
+    favoriteHasMore: Boolean = false,
+): Boolean = when (type) {
+    SpaceCollectionDetailType.FAVORITE.raw,
+    SpaceCollectionDetailType.FAVORITE_SEASON.raw -> favoriteHasMore
+    else -> pageItemCount >= 30
+}
+
 data class SpaceCollectionDetailRequest(
     val type: SpaceCollectionDetailType,
     val id: Long,
@@ -72,7 +92,10 @@ fun buildExternalPlaylistFromSpaceVideos(
             title = video.title,
             cover = video.pic,
             owner = video.author,
-            duration = parseSpaceVideoLengthToSeconds(video.length)
+            duration = parseSpaceVideoLengthToSeconds(video.length),
+            playCount = video.play.toLong().takeIf { it >= 0L },
+            commentCount = video.comment.toLong().takeIf { it >= 0L },
+            publishedAt = video.created.takeIf { it > 0L },
         )
     }
 

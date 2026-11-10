@@ -2,8 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppSemanticIconFamily
-import com.android.purebilibili.testutil.projectSourceFile
-import com.android.purebilibili.testutil.readProjectSource
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -29,10 +28,6 @@ class SettingsSemanticIconPolicyTest {
 
     @Test
     fun batteryStatus_usesBatteryResourceInsteadOfPhoneGlyph() {
-        val source = readProjectSource(
-            "app/src/main/java/com/android/purebilibili/feature/settings/SettingsSemanticIconPolicy.kt"
-        )
-
         assertEquals(
             R.drawable.ms_battery_full_24,
             resolveSettingsMaterialSymbolResource(SettingsIconRole.BATTERY_STATUS),
@@ -40,10 +35,18 @@ class SettingsSemanticIconPolicyTest {
     }
 
     @Test
-    fun allSettingsSkinsUseRoleSpecificLocalVectors() {
-        val source = readProjectSource(
-            "app/src/main/java/com/android/purebilibili/feature/settings/SettingsSemanticIconPolicy.kt"
+    fun focusSettings_usesHomeFeedSemanticIcon() {
+        assertEquals(
+            SettingsIconRole.HOME_FEED,
+            resolveSettingsSearchTargetIconRole(SettingsSearchTarget.FOCUS_SETTINGS),
         )
+    }
+
+    @Test
+    fun allSettingsSkinsUseRoleSpecificLocalVectors() {
+        val source = File(
+            "app/src/main/java/com/android/purebilibili/feature/settings/SettingsSemanticIconPolicy.kt"
+        ).readText()
         val rememberFunction = source
             .substringAfter("internal fun rememberSettingsSemanticIcon(")
             .substringBefore("internal fun resolveSettingsMaterialSymbolResource(")
@@ -54,9 +57,9 @@ class SettingsSemanticIconPolicyTest {
 
     @Test
     fun settingsSource_hasNoLegacyComposeMaterialIconReferences() {
-        val source = projectSourceFile("app/src/main/java/com/android/purebilibili/feature/settings")
+        val source = File("app/src/main/java/com/android/purebilibili/feature/settings")
             .walkTopDown().filter { it.isFile && it.extension == "kt" }.joinToString("\n") { it.readText() }
         assertTrue("androidx.compose.material.icons" !in source)
-        assertTrue(Regex("""(?<![A-Za-z0-9_])Icons\.""").find(source) == null)
+        assertTrue(Regex("""(?<!App)(?<!Miuix)Icons\.""").find(source) == null)
     }
 }

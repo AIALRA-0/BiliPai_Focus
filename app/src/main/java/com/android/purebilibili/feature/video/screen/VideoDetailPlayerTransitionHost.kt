@@ -19,6 +19,7 @@ import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActions
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionState
+import com.android.purebilibili.feature.video.viewmodel.VideoEngagementUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import kotlin.math.roundToInt
 
@@ -30,6 +31,9 @@ internal data class ContinuousPlayerHostLayout(
     val isFullscreen: Boolean,
     val contentTopInset: Dp = 0.dp,
 )
+
+// 视口宽度 override 的量化步长：消费方策略全部断点式，量化后过渡期状态稳定。
+private const val VIEWPORT_WIDTH_OVERRIDE_QUANTIZE_STEP_DP = 16
 
 internal data class ContinuousPlayerFullscreenExtras(
     val danmakuComposerVisible: Boolean,
@@ -50,10 +54,15 @@ internal data class ContinuousPlayerFullscreenExtras(
     val relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
     val ugcSeason: com.android.purebilibili.data.model.response.UgcSeason?,
     val isFollowed: Boolean,
+    val followStatusKnown: Boolean,
+    val isFollowSubmitting: Boolean,
+    val isTripleSubmitting: Boolean,
     val isLiked: Boolean,
+    val likeStatusKnown: Boolean,
     val isCoined: Boolean,
     val isFavorited: Boolean,
     val onToggleFollow: () -> Unit,
+    val onFollow: () -> Unit,
     val onToggleLike: () -> Unit,
     val onDislike: () -> Unit,
     val onCoin: () -> Unit,
@@ -61,11 +70,13 @@ internal data class ContinuousPlayerFullscreenExtras(
     val onTriple: () -> Unit,
     val onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     val onPageSelect: (Int) -> Unit,
-    val hasFavoritePlaylist: Boolean,
-    val onFavoritePlaylistClick: () -> Unit,
+    val hasExternalPlaylist: Boolean,
+    val onExternalPlaylistClick: () -> Unit,
     val onLandscapeCommentClick: () -> Unit,
     val landscapeCommentPanelVisible: Boolean,
     val landscapeCommentPanelOnLeft: Boolean,
+    val landscapeCommentCloseProgressProvider: () -> Float = { 0f },
+    val commentStateHandle: androidx.compose.runtime.State<com.android.purebilibili.feature.video.viewmodel.CommentUiState>? = null,
 )
 
 /**
@@ -73,26 +84,28 @@ internal data class ContinuousPlayerFullscreenExtras(
  * while the inline viewport grows into the landscape viewport.
  */
 /**
- * @param preferLayoutWidth16x9Inline 横屏 16:9 详情播放器：展开态按**实际布局宽度**算高度，
+ * @param preferLayoutWidthInline 普通视频竖屏详情播放器：展开态按**实际布局宽度**算高度，
  * 避免 `configuration.screenWidthDp` 与真机可用宽度不一致时出现左右黑边（vivo 等窄机更常见）。
- * 折叠/半折叠时必须仍尊重 [inlineHeight]（评论上滑缩小播放器），不能盖成固定 16:9。
- * @param inlineTopInset 沉浸状态栏额外高度；只加在 inline 高度上，不参与 16:9 比例本体。
+ * 折叠/半折叠时必须仍尊重 [inlineHeight]（评论上滑缩小播放器），不能盖成固定展开比例。
+ * @param inlineTopInset 沉浸状态栏额外高度；只加在 inline 高度上，不参与媒体比例本体。
  */
 internal fun Modifier.continuousPlayerViewportHeight(
     progressProvider: () -> Float,
     inlineHeight: Dp,
     fullscreenHeight: Dp,
     enabled: Boolean,
-    preferLayoutWidth16x9Inline: Boolean = false,
+    preferLayoutWidthInline: Boolean = false,
     inlineTopInset: Dp = 0.dp,
+    removedInlineTopInsetProvider: () -> Dp = { 0.dp },
 ): Modifier {
     return layout { measurable, constraints ->
         val layoutWidth = constraints.maxWidth.coerceAtLeast(1)
-        val insetPx = inlineTopInset.roundToPx().coerceAtLeast(0)
-        val callerInlinePx = inlineHeight.roundToPx().coerceAtLeast(0)
+        val removedInset = removedInlineTopInsetProvider()
+        val insetPx = (inlineTopInset - removedInset).roundToPx().coerceAtLeast(0)
+        val callerInlinePx = (inlineHeight - removedInset).roundToPx().coerceAtLeast(0)
         val inlinePx = resolveContinuousPlayerInlineHeightPx(
             layoutWidthPx = layoutWidth,
-            preferLayoutWidth16x9Inline = preferLayoutWidth16x9Inline,
+            preferLayoutWidthInline = preferLayoutWidthInline,
             callerInlineHeightPx = callerInlinePx,
             inlineTopInsetPx = insetPx,
         )
@@ -128,23 +141,23 @@ internal fun Modifier.continuousPlayerViewportHeight(
  * 解析 continuous player 的 inline 高度。
  *
  * - 默认：直接使用调用方传入的 [callerInlineHeightPx]（已含评论上滑折叠进度）。
- * - [preferLayoutWidth16x9Inline]：展开时用真实布局宽算 16:9，消除 screenWidthDp 黑边；
+ * - [preferLayoutWidthInline]：展开时用真实布局宽计算加载封面与播放画面的统一 16:9 高度，消除 screenWidthDp 黑边；
  *   折叠时取与调用方高度的较小值，避免盖掉「上滑缩小播放器」。
  */
 internal fun resolveContinuousPlayerInlineHeightPx(
     layoutWidthPx: Int,
-    preferLayoutWidth16x9Inline: Boolean,
+    preferLayoutWidthInline: Boolean,
     callerInlineHeightPx: Int,
     inlineTopInsetPx: Int,
 ): Int {
     val callerPx = callerInlineHeightPx.coerceAtLeast(0)
-    if (!preferLayoutWidth16x9Inline) {
+    if (!preferLayoutWidthInline) {
         return callerPx.coerceAtLeast(1)
     }
     val expandedFromLayoutPx =
-        resolveLandscapeDetailPlayerContentHeightPx(layoutWidthPx = layoutWidthPx) +
+        resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = layoutWidthPx) +
             inlineTopInsetPx.coerceAtLeast(0)
-    // 展开：layout 宽 16:9 通常 ≤ screenWidthDp 估高，取 min 消黑边。
+    // 展开：layout 宽计算的高度通常 ≤ screenWidthDp 估高，取 min 消黑边。
     // 折叠/半折叠：caller 更小，取 min 保留上滑缩小。
     return minOf(expandedFromLayoutPx, callerPx).coerceAtLeast(1)
 }
@@ -159,6 +172,8 @@ internal fun PortraitInlineVideoPlayerHost(
     isFullscreen: Boolean = false,
     playerState: VideoPlayerState,
     uiState: VideoPlaybackUiState,
+    engagementState: VideoEngagementUiState,
+    engagementActions: VideoDetailEngagementActions,
     isPipMode: Boolean,
     transitionEnabled: Boolean,
     transitionChromeAlphaProvider: () -> Float,
@@ -189,6 +204,7 @@ internal fun PortraitInlineVideoPlayerHost(
     preserveCurrentFrameOnFullscreenChange: Boolean,
     liveBackPreview: Boolean,
     useTextureSurfaceForNavigation: Boolean,
+    isPlayerSurfaceReady: Boolean = true,
     predictiveBackCancelRecoveryGeneration: Int,
     allowLivePlayerSharedElement: Boolean,
     sourceRouteForSharedElement: String?,
@@ -198,6 +214,8 @@ internal fun PortraitInlineVideoPlayerHost(
     onSubtitleDisplayModePreferenceOverrideChange: (SubtitleDisplayMode) -> Unit,
     fullscreenExtras: ContinuousPlayerFullscreenExtras? = null,
     residentCoverSource: VideoDetailResidentCoverSource? = null,
+    suppressTransientOverlaysForTransition: Boolean = false,
+    showPlaybackErrorNotice: Boolean = false,
 ) {
     val successState = uiState as? VideoPlaybackUiState.Success
     // 竖屏全屏由 PortraitVideoPager 接管播放面；内联 section 不得再合成。
@@ -219,16 +237,20 @@ internal fun PortraitInlineVideoPlayerHost(
             state = VideoPlayerSectionState(
                 playerState = playerState,
                 uiState = uiState,
+                engagementState = engagementState,
+                commentStateHandle = fullscreenExtras?.commentStateHandle,
                 isFullscreen = isFullscreen,
                 isInPipMode = isPipMode,
                 contentTopInset = contentTopInset,
                 transitionEnabled = transitionEnabled,
                 transitionChromeAlphaProvider = transitionChromeAlphaProvider,
                 danmakuHostActive = danmakuHostActive,
+                suppressTransientOverlaysForTransition = suppressTransientOverlaysForTransition,
                 endDrawerRequestKey = endDrawerRequestKey,
                 landscapeCommentPanelVisible = isFullscreen &&
                     fullscreenExtras?.landscapeCommentPanelVisible == true,
                 landscapeCommentPanelOnLeft = fullscreenExtras?.landscapeCommentPanelOnLeft ?: true,
+                landscapeCommentCloseProgressProvider = fullscreenExtras?.landscapeCommentCloseProgressProvider ?: { 0f },
                 danmakuComposerVisible = isFullscreen &&
                     fullscreenExtras?.danmakuComposerVisible == true,
                 isSendingDanmakuComposer = fullscreenExtras?.isSendingDanmakuComposer == true,
@@ -261,7 +283,13 @@ internal fun PortraitInlineVideoPlayerHost(
                 isVerticalVideo = isVerticalVideo,
                 isPortraitFullscreen = isPortraitFullscreen,
                 viewportWidthDpOverride = if (animatedViewportWidth.isSpecified) {
-                    animatedViewportWidth.value.roundToInt().coerceAtLeast(1)
+                    // 消费方（播放器 UI/控制栏布局策略）全部是断点式档位；
+                    // 连续动画宽度若逐帧直传，会让 VideoPlayerSectionState 每帧
+                    // 失去 equals，过渡期间整段 section 反复重组。量化成 16dp 桶，
+                    // 档位切换点之外完全稳定。
+                    ((animatedViewportWidth.value.roundToInt() /
+                        VIEWPORT_WIDTH_OVERRIDE_QUANTIZE_STEP_DP) *
+                        VIEWPORT_WIDTH_OVERRIDE_QUANTIZE_STEP_DP).coerceAtLeast(1)
                 } else {
                     null
                 },
@@ -272,15 +300,21 @@ internal fun PortraitInlineVideoPlayerHost(
                     ?: com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
                 relatedVideos = fullscreenExtras?.relatedVideos.orEmpty(),
                 ugcSeason = fullscreenExtras?.ugcSeason,
-                isFollowed = fullscreenExtras?.isFollowed == true,
-                isLiked = fullscreenExtras?.isLiked == true,
-                isCoined = fullscreenExtras?.isCoined == true,
-                isFavorited = fullscreenExtras?.isFavorited == true,
-                hasFavoritePlaylist = fullscreenExtras?.hasFavoritePlaylist == true,
+                isFollowed = fullscreenExtras?.isFollowed ?: engagementState.isFollowing,
+                followStatusKnown = fullscreenExtras?.followStatusKnown ?: engagementState.followStatusKnown,
+                isFollowSubmitting = fullscreenExtras?.isFollowSubmitting ?: engagementState.isFollowSubmitting,
+                isTripleSubmitting = fullscreenExtras?.isTripleSubmitting ?: engagementState.isTripleSubmitting,
+                isLiked = fullscreenExtras?.isLiked ?: engagementState.isLiked,
+                isDisliked = engagementState.isDisliked,
+                likeStatusKnown = fullscreenExtras?.likeStatusKnown ?: engagementState.likeStatusKnown,
+                isCoined = fullscreenExtras?.isCoined ?: (engagementState.coinCount > 0),
+                isFavorited = fullscreenExtras?.isFavorited ?: engagementState.isFavorited,
+                hasExternalPlaylist = fullscreenExtras?.hasExternalPlaylist == true,
                 forceCoverOnly = forceCoverOnly,
                 preserveCurrentFrameOnFullscreenChange = preserveCurrentFrameOnFullscreenChange,
                 liveBackPreview = liveBackPreview,
                 useTextureSurfaceForNavigation = useTextureSurfaceForNavigation,
+                isPlayerSurfaceReady = isPlayerSurfaceReady,
                 predictiveBackCancelRecoveryGeneration = predictiveBackCancelRecoveryGeneration,
                 allowLivePlayerSharedElement = allowLivePlayerSharedElement,
                 sourceRouteForSharedElement = sourceRouteForSharedElement,
@@ -290,10 +324,14 @@ internal fun PortraitInlineVideoPlayerHost(
                 subtitleDisplayModePreferenceOverride = subtitleDisplayModePreferenceOverride,
             ),
             actions = VideoPlayerSectionActions(
+                    resolveNextWatch = playbackActions.resolveNextWatch,
+                    playNextWatch = playbackActions.playNextWatch,
                 onToggleFullscreen = onToggleFullscreen,
                 onQualityChange = { qid -> playbackActions.changeQuality(qid) },
                 onBack = onBack,
                 onHomeClick = onHomeClick,
+                menuActions = playbackActions.menuActions,
+                onQuickFavorite = { engagementActions.onFavoriteAction(true) },
                 onLandscapeCommentClick = if (isFullscreen) {
                     fullscreenExtras?.onLandscapeCommentClick ?: {}
                 } else {
@@ -312,6 +350,7 @@ internal fun PortraitInlineVideoPlayerHost(
                 onSponsorDismiss = { playbackActions.dismissSponsorSkipButton() },
                 onSponsorVote = { playbackActions.voteSponsorSegment(it) },
                 onSponsorContributionMarkBoundary = { playbackActions.markSponsorContributionBoundary() },
+                onSponsorContributionMarkWholeVideo = { playbackActions.markWholeVideoAsSponsor() },
                 onSponsorContributionCategoryChange = { playbackActions.setSponsorContributionCategory(it) },
                 onSponsorContributionActionTypeChange = { playbackActions.setSponsorContributionActionType(it) },
                 onSponsorContributionSubmit = { playbackActions.submitSponsorContribution() },
@@ -335,20 +374,33 @@ internal fun PortraitInlineVideoPlayerHost(
                 onDownloadAudio = fullscreenExtras?.onDownloadAudio
                     ?: { playbackActions.downloadAudio() },
                 onRelatedVideoClick = fullscreenExtras?.onRelatedVideoClick ?: { _, _ -> },
-                onToggleFollow = fullscreenExtras?.onToggleFollow ?: {},
-                onToggleLike = fullscreenExtras?.onToggleLike ?: {},
-                onDislike = fullscreenExtras?.onDislike ?: {},
-                onCoin = fullscreenExtras?.onCoin ?: {},
-                onToggleFavorite = fullscreenExtras?.onToggleFavorite ?: {},
-                onTriple = fullscreenExtras?.onTriple ?: {},
-                onPageSelect = fullscreenExtras?.onPageSelect ?: {},
-                onFavoritePlaylistClick = fullscreenExtras?.onFavoritePlaylistClick ?: {},
+                onToggleFollow = fullscreenExtras?.onToggleFollow ?: engagementActions.toggleFollow,
+                onFollow = fullscreenExtras?.onFollow ?: engagementActions.followOwner,
+                onToggleLike = fullscreenExtras?.onToggleLike ?: engagementActions.toggleLike,
+                onDislike = fullscreenExtras?.onDislike ?: engagementActions.toggleDislike,
+                onCoin = fullscreenExtras?.onCoin ?: engagementActions.openCoinDialog,
+                onToggleFavorite = fullscreenExtras?.onToggleFavorite ?: engagementActions.toggleFavorite,
+                onTriple = fullscreenExtras?.onTriple ?: engagementActions.doTripleAction,
+                onPageSelect = fullscreenExtras?.onPageSelect ?: playbackActions.switchPage,
+                onJumpToLastPlayedPart = playbackActions.jumpToLastPlayedPart,
+                onDismissPartResumeNotice = playbackActions.dismissPartResumeNotice,
+                onExternalPlaylistClick = fullscreenExtras?.onExternalPlaylistClick ?: {},
                 onSubtitleDisplayModePreferenceOverrideChange =
                     onSubtitleDisplayModePreferenceOverrideChange,
                 onSubtitleTrackSelected = playbackActions.selectSubtitleTrack,
                 onLikeDanmaku = playbackActions.likeDanmaku,
+                onLikeDanmakuToggle = playbackActions.likeDanmakuToggle,
+                likedDanmakuIds = playbackActions.likedDanmakuIds,
+                onReportDanmaku = playbackActions.reportDanmaku,
                 onRecallDanmaku = playbackActions.recallDanmaku,
             ),
         )
+        if (showPlaybackErrorNotice && uiState is VideoPlaybackUiState.Error && !suppressTransientOverlaysForTransition) {
+            VideoDetailPlaybackErrorNotice(
+                state = uiState,
+                onRetry = playbackActions.retryPlayback,
+                modifier = Modifier.matchParentSize()
+            )
+        }
     }
 }

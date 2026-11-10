@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.controller
 
+import com.android.purebilibili.core.player.PlaybackProgressManager
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

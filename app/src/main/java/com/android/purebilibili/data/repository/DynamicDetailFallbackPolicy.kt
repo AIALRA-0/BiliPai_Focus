@@ -134,7 +134,9 @@ internal fun mergeRicherOpusDetailContent(
             (descNodes + summaryNodes + blockNodes).asSequence()
         }
         .filter(::containsDynamicRichTextMetadata)
-        .distinctBy(::dynamicEmojiMetadataKey)
+        .groupBy(::dynamicEmojiMetadataKey)
+        .values
+        .mapNotNull { nodes -> nodes.maxByOrNull(::dynamicRichTextMetadataScore) }
         .toList()
     val mergedSummary = if (candidateEmojiNodes.isNotEmpty()) {
         val s = if ((richestOpus.summary?.text?.length ?: 0) >= (baseOpus?.summary?.text?.length ?: 0)) {
@@ -220,7 +222,9 @@ internal fun mergeDynamicDetailInteractionMetadata(
     }
     val seedEmojiNodes = collectDynamicDetailSeedEmojiNodes(seedItem)
     val mergedContent = if (detailContent != null && seedEmojiNodes.isNotEmpty()) {
-        val mergedSummary = detailContent.major?.opus?.summary?.let { summary ->
+        val major = detailContent.major
+        val desc = detailContent.desc
+        val mergedSummary = major?.opus?.summary?.let { summary ->
             summary.copy(
                 rich_text_nodes = mergeDynamicDetailRichTextNodes(
                     detailNodes = summary.rich_text_nodes,
@@ -229,16 +233,16 @@ internal fun mergeDynamicDetailInteractionMetadata(
             )
         }
         val mergedMajor = if (mergedSummary != null) {
-            detailContent.major?.copy(
-                opus = detailContent.major.opus?.copy(summary = mergedSummary)
+            major?.copy(
+                opus = major.opus?.copy(summary = mergedSummary)
             )
         } else {
             detailContent.major
         }
         detailContent.copy(
-            desc = detailContent.desc?.copy(
+            desc = desc?.copy(
                 rich_text_nodes = mergeDynamicDetailRichTextNodes(
-                    detailNodes = detailContent.desc.rich_text_nodes,
+                    detailNodes = desc.rich_text_nodes,
                     seedEmojiNodes = seedEmojiNodes,
                 )
             )
@@ -304,7 +308,9 @@ internal fun collectDynamicDetailSeedEmojiNodes(item: DynamicItem): List<RichTex
     return (content.desc?.rich_text_nodes.orEmpty() +
         content.major?.opus?.summary?.rich_text_nodes.orEmpty())
         .filter(::containsDynamicRichTextMetadata)
-        .distinctBy(::dynamicEmojiMetadataKey)
+        .groupBy(::dynamicEmojiMetadataKey)
+        .values
+        .mapNotNull { nodes -> nodes.maxByOrNull(::dynamicRichTextMetadataScore) }
 }
 
 internal fun mergeDynamicDetailRichTextNodes(
@@ -312,18 +318,40 @@ internal fun mergeDynamicDetailRichTextNodes(
     seedEmojiNodes: List<RichTextNode>,
 ): List<RichTextNode> {
     if (seedEmojiNodes.isEmpty()) return detailNodes
-    val existingEmojiKeys = detailNodes
-        .filter(::containsDynamicRichTextMetadata)
-        .mapTo(mutableSetOf(), ::dynamicEmojiMetadataKey)
-    return detailNodes + seedEmojiNodes
-        .distinctBy(::dynamicEmojiMetadataKey)
-        .filter { node -> dynamicEmojiMetadataKey(node) !in existingEmojiKeys }
+    val merged = detailNodes.toMutableList()
+    seedEmojiNodes.forEach { seedNode ->
+        val key = dynamicEmojiMetadataKey(seedNode)
+        val existingIndex = merged.indexOfFirst { node ->
+            containsDynamicRichTextMetadata(node) && dynamicEmojiMetadataKey(node) == key
+        }
+        when {
+            existingIndex < 0 -> merged += seedNode
+            dynamicRichTextMetadataScore(seedNode) > dynamicRichTextMetadataScore(merged[existingIndex]) ->
+                merged[existingIndex] = seedNode
+        }
+    }
+    return merged
+}
+
+private fun dynamicRichTextMetadataScore(node: RichTextNode): Int {
+    val type = node.type.removePrefix("RICH_TEXT_NODE_TYPE_")
+    return when {
+        type.equals("AT", ignoreCase = true) -> when {
+            node.rid?.toLongOrNull()?.let { it > 0L } == true -> 3
+            !node.jump_url.isNullOrBlank() -> 2
+            else -> 1
+        }
+        type.equals("EMOJI", ignoreCase = true) -> 2
+        else -> 0
+    }
 }
 
 private fun containsDynamicRichTextMetadata(node: RichTextNode): Boolean {
     val type = node.type.removePrefix("RICH_TEXT_NODE_TYPE_")
     return when {
-        type.equals("AT", ignoreCase = true) -> node.rid?.toLongOrNull()?.let { it > 0L } == true
+        // The preview can highlight AT nodes without rid; space feeds may provide only
+        // jump_url, and a missing user target still has a visible mention style.
+        type.equals("AT", ignoreCase = true) -> node.text.isNotBlank() || node.orig_text.isNotBlank()
         type.equals("EMOJI", ignoreCase = true) -> node.emoji?.let { emoji ->
             emoji.icon_url.isNotBlank() || emoji.webp_url.isNotBlank() || emoji.gif_url.isNotBlank()
         } == true
@@ -383,6 +411,7 @@ internal fun articleContentBlocksToOpusBlocks(
                 text = block.content,
                 language = block.language,
             )
+            is ArticleContentBlock.MediaCard -> OpusContentBlock.LinkCard(block.card)
             is ArticleContentBlock.Image -> OpusContentBlock.Image(
                 OpusPic(url = block.url, width = block.width, height = block.height)
             )

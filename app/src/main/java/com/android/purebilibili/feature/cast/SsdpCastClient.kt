@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.cast
 
-import com.android.purebilibili.core.plugin.CastPluginPlaybackState
+import com.android.purebilibili.core.lifecycle.BackgroundManager
+import com.android.purebilibili.plugin.sdk.CastPluginPlaybackState
 import com.android.purebilibili.core.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,12 +27,21 @@ import java.net.URI
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
+ * 投屏状态轮询间隔：前台 1 秒保证进度条/播放态精度；后台降到 5 秒，
+ * 避免挂着的投屏会话整夜每秒唤醒无线电。
+ */
+private const val FOREGROUND_CAST_POLL_INTERVAL_MS = 1_000L
+private const val BACKGROUND_CAST_POLL_INTERVAL_MS = 5_000L
+
+internal fun resolveCastPlaybackPollIntervalMs(isInBackground: Boolean): Long =
+    if (isInBackground) BACKGROUND_CAST_POLL_INTERVAL_MS else FOREGROUND_CAST_POLL_INTERVAL_MS
+
+/**
  * SSDP/DLNA caster.
  * 通过 SOAP 调 AVTransport。
  */
 object SsdpCastClient {
     private const val TAG = "SsdpCastClient"
-    private const val POLL_INTERVAL_MS = 1_000L
     private val soapContentType = "text/xml; charset=utf-8".toMediaType()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -67,19 +77,29 @@ object SsdpCastClient {
         title: String,
         creator: String,
         startPositionMs: Long = 0L,
-        autoplay: Boolean = true
+        autoplay: Boolean = true,
+        contentType: String = "video/mp4",
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val profile = fetchDeviceProfile(device.location)
             val endpoint = profile?.avTransportEndpoint
                 ?: error("设备不支持 AVTransport 控制")
-            val metadata = buildDidlMetadata(mediaUrl, title, creator)
+            val previousEndpoint = activeEndpoint
+            val metadata = buildDidlMetadata(mediaUrl, title, creator, contentType)
 
             sendSoapAction(
                 endpoint = endpoint,
                 action = "SetAVTransportURI",
                 actionBody = buildSetUriActionBody(endpoint.serviceType, mediaUrl, metadata)
             )
+
+            if (autoplay) {
+                sendSoapAction(
+                    endpoint = endpoint,
+                    action = "Play",
+                    actionBody = buildPlayActionBody(endpoint.serviceType)
+                )
+            }
 
             if (startPositionMs > 0L) {
                 runCatching {
@@ -93,12 +113,16 @@ object SsdpCastClient {
                 }
             }
 
-            if (autoplay) {
-                sendSoapAction(
-                    endpoint = endpoint,
-                    action = "Play",
-                    actionBody = buildPlayActionBody(endpoint.serviceType)
-                )
+            if (previousEndpoint != null && previousEndpoint != endpoint) {
+                runCatching {
+                    sendSoapAction(
+                        endpoint = previousEndpoint,
+                        action = "Pause",
+                        actionBody = buildPauseActionBody(previousEndpoint.serviceType),
+                    )
+                }.onFailure { error ->
+                    Logger.w(TAG, "📺 [SSDP] Previous device pause failed: ${error.message}")
+                }
             }
 
             attachSession(
@@ -213,6 +237,10 @@ object SsdpCastClient {
         if (descriptionXml.isBlank()) return null
         return runCatching {
             val document = parseDocument(descriptionXml)
+            val urlBase = document.firstTagText("URLBase").takeIf { it.isNotBlank() }
+                ?.let { value -> runCatching { URI(descriptionLocation).resolve(value) }.getOrNull() }
+                ?.takeIf { it.isAbsolute && (it.scheme.equals("http", true) || it.scheme.equals("https", true)) }
+                ?.toString() ?: descriptionLocation
             val deviceNodes = document.getElementsByTagNameNS("*", "device")
             if (deviceNodes.length == 0) return null
 
@@ -221,7 +249,7 @@ object SsdpCastClient {
             var endpoint: AvTransportEndpoint? = null
             for (i in 0 until deviceNodes.length) {
                 val device = deviceNodes.item(i) as? Element ?: continue
-                val candidate = findDirectAvTransportEndpoint(device, descriptionLocation) ?: continue
+                val candidate = findDirectAvTransportEndpoint(device, urlBase) ?: continue
                 val deviceType = device.getFirstChildContent("deviceType")
                 val isRenderer = deviceType.contains("MediaRenderer", ignoreCase = true)
                 if (endpoint == null || isRenderer) {
@@ -354,7 +382,9 @@ object SsdpCastClient {
         pollJob = scope.launch {
             while (isActive && activeEndpoint == endpoint) {
                 refreshPlaybackState(endpoint)
-                delay(POLL_INTERVAL_MS)
+                // 投屏会话可能整夜挂着：后台时把每秒一次的 SOAP 轮询降到 5 秒，
+                // 减少无线电唤醒；回前台立即恢复 1 秒精度。
+                delay(resolveCastPlaybackPollIntervalMs(isInBackground = BackgroundManager.isInBackground))
             }
         }
     }
@@ -428,10 +458,13 @@ object SsdpCastClient {
         )
     }
 
-    private fun buildDidlMetadata(url: String, title: String, creator: String): String {
+    internal fun buildDidlMetadata(url: String, title: String, creator: String, contentType: String): String {
         val escapedUrl = escapeXml(url)
         val escapedTitle = escapeXml(title.ifBlank { "BiliPai Video" })
         val escapedCreator = escapeXml(creator.ifBlank { "BiliPai" })
+        val mimeType = contentType.substringBefore(';').trim()
+            .takeIf { it.matches(Regex("[A-Za-z0-9.+_-]+/[A-Za-z0-9.+_-]+")) }
+            ?: "video/mp4"
         return """
             <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/"
                 xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"
@@ -440,7 +473,7 @@ object SsdpCastClient {
                     <dc:title>$escapedTitle</dc:title>
                     <upnp:class>object.item.videoItem</upnp:class>
                     <dc:creator>$escapedCreator</dc:creator>
-                    <res protocolInfo="http-get:*:video/mp4:*">$escapedUrl</res>
+                    <res protocolInfo="http-get:*:${escapeXml(mimeType)}:*">$escapedUrl</res>
                 </item>
             </DIDL-Lite>
         """.trimIndent()

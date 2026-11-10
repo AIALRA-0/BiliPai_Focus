@@ -8,8 +8,9 @@ class TopTabIndicatorGeometryTest {
 
     @Test
     fun `liquid capsule width interpolates between adjacent labels`() {
+        // 内容宽 50 + 两侧 14dp 胶囊内边距 + 2×2dp 槽距 = 82。
         assertEquals(
-            54f,
+            82f,
             resolveTopTabInterpolatedIndicatorWidthDp(
                 position = 0.5f,
                 itemWidthDp = 100f,
@@ -198,7 +199,7 @@ class TopTabIndicatorGeometryTest {
             0.01f
         )
         assertEquals(
-            3f,
+            1f,
             resolveTopTabDockIndicatorVerticalGapDp(hasOuterChromeSurface = true),
             0.01f
         )
@@ -207,7 +208,7 @@ class TopTabIndicatorGeometryTest {
     @Test
     fun `reused liquid glass top indicator keeps a narrow edge gap`() {
         assertEquals(
-            1f,
+            4f,
             resolveTopTabDockIndicatorHorizontalGapDp(
                 hasOuterChromeSurface = true,
                 isLiquidGlassReuseEnabled = true
@@ -224,7 +225,7 @@ class TopTabIndicatorGeometryTest {
             0.01f
         )
         assertEquals(
-            3f,
+            1f,
             resolveTopTabDockIndicatorVerticalGapDp(hasOuterChromeSurface = false),
             0.01f
         )
@@ -249,7 +250,8 @@ class TopTabIndicatorGeometryTest {
         )
 
         assertEquals(92f, width, 0.01f)
-        assertEquals(30f, height, 0.01f)
+        // 竖直 gap 收窄到 1dp 后，胶囊高度顶到 36 - 2×1。
+        assertEquals(34f, height, 0.01f)
     }
 
     @Test

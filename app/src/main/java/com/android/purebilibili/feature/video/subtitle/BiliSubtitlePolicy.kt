@@ -1,356 +1,68 @@
 package com.android.purebilibili.feature.video.subtitle
 
 import com.android.purebilibili.data.model.response.SubtitleItem
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
-data class SubtitleCue(
-    val startMs: Long,
-    val endMs: Long,
-    val content: String
-)
+typealias SubtitleCue = com.android.purebilibili.core.subtitle.SubtitleCue
+typealias SubtitleWordSpan = com.android.purebilibili.core.subtitle.SubtitleWordSpan
+typealias SubtitleLoadResult = com.android.purebilibili.core.subtitle.SubtitleLoadResult
+typealias SubtitleTrackMeta = com.android.purebilibili.core.subtitle.SubtitleTrackMeta
+typealias SubtitleTrackOption = com.android.purebilibili.core.subtitle.SubtitleTrackOption
+typealias SubtitleLanguageSelection = com.android.purebilibili.core.subtitle.SubtitleLanguageSelection
+typealias SubtitleDisplayMode = com.android.purebilibili.core.subtitle.SubtitleDisplayMode
+typealias SubtitleDisplayOption = com.android.purebilibili.core.subtitle.SubtitleDisplayOption
+typealias SubtitlePreferenceSession = com.android.purebilibili.core.subtitle.SubtitlePreferenceSession
+typealias SubtitleControlAvailability = com.android.purebilibili.core.subtitle.SubtitleControlAvailability
+typealias SubtitleTextSizeSpec = com.android.purebilibili.core.subtitle.SubtitleTextSizeSpec
+typealias SubtitleAutoPreference = com.android.purebilibili.core.subtitle.SubtitleAutoPreference
 
-data class SubtitleLoadResult(
-    val track: SubtitleTrackMeta,
-    val cues: List<SubtitleCue>
-)
+fun normalizeBilibiliSubtitleUrl(raw: String): String = com.android.purebilibili.core.subtitle.normalizeBilibiliSubtitleUrl(raw = raw)
 
-data class SubtitleTrackMeta(
-    val id: Long = 0L,
-    val idStr: String = "",
-    val lan: String,
-    val lanDoc: String,
-    val subtitleUrl: String,
-    val aiStatus: Int = 0,
-    val aiType: Int = 0,
-    val type: Int = 0
-) {
-    val trackKey: String
-        get() = buildSubtitleTrackKey(
-            subtitleId = id,
-            subtitleIdStr = idStr,
-            languageCode = lan,
-            subtitleUrl = subtitleUrl
-        )
-}
+fun isTrustedBilibiliSubtitleUrl(raw: String): Boolean = com.android.purebilibili.core.subtitle.isTrustedBilibiliSubtitleUrl(raw = raw)
 
-data class SubtitleTrackOption(
-    val trackKey: String,
-    val languageCode: String,
-    val label: String,
-    val selected: Boolean,
-    val likelyAi: Boolean
-)
-
-data class SubtitleLanguageSelection(
-    val primaryLanguage: String?,
-    val secondaryLanguage: String?
-)
-
-enum class SubtitleDisplayMode {
-    OFF,
-    PRIMARY_ONLY,
-    SECONDARY_ONLY,
-    BILINGUAL
-}
-
-data class SubtitleDisplayOption(
-    val mode: SubtitleDisplayMode,
-    val label: String,
-    val enabled: Boolean
-)
-
-data class SubtitlePreferenceSession(
-    val key: String,
-    val initialMode: SubtitleDisplayMode
-)
-
-data class SubtitleControlAvailability(
-    val trackAvailable: Boolean,
-    val primarySelectable: Boolean,
-    val secondarySelectable: Boolean
-)
-
-data class SubtitleTextSizeSpec(
-    val primarySp: Int,
-    val secondarySp: Int
-)
-
-enum class SubtitleAutoPreference {
-    OFF,
-    ON,
-    WITHOUT_AI,
-    AUTO
-}
-
-private val SUBTITLE_JSON = Json {
-    ignoreUnknownKeys = true
-    coerceInputValues = true
-}
-
-fun normalizeBilibiliSubtitleUrl(raw: String): String {
-    val trimmed = raw.trim()
-    return when {
-        trimmed.isEmpty() -> ""
-        trimmed.startsWith("//") -> "https:$trimmed"
-        trimmed.startsWith("http://") -> "https://${trimmed.removePrefix("http://")}"
-        else -> trimmed
-    }
-}
-
-fun isTrustedBilibiliSubtitleUrl(raw: String): Boolean {
-    val normalized = normalizeBilibiliSubtitleUrl(raw)
-    if (normalized.isBlank()) return false
-    val uri = runCatching { java.net.URI(normalized) }.getOrNull() ?: return false
-    val host = uri.host?.lowercase().orEmpty()
-    if (host.isBlank()) return false
-
-    val trustedHost = host == "hdslb.com" ||
-        host.endsWith(".hdslb.com") ||
-        host == "bilibili.com" ||
-        host.endsWith(".bilibili.com")
-    if (!trustedHost) return false
-
-    val path = uri.path?.lowercase().orEmpty()
-    return path.contains("subtitle")
-}
-
-fun isLikelyAiSubtitleTrack(track: SubtitleTrackMeta): Boolean {
-    if (track.aiStatus > 0 || track.aiType > 0) return true
-    val label = track.lanDoc.lowercase()
-    return label.contains("ai") ||
-        label.contains("自动") ||
-        label.contains("机翻") ||
-        label.contains("机器")
-}
+fun isLikelyAiSubtitleTrack(track: SubtitleTrackMeta): Boolean = com.android.purebilibili.core.subtitle.isLikelyAiSubtitleTrack(track = track)
 
 fun buildSubtitleTrackKey(
     subtitleId: Long,
     subtitleIdStr: String,
     languageCode: String?,
     subtitleUrl: String
-): String {
-    return listOf(
-        subtitleId.coerceAtLeast(0L).toString(),
-        subtitleIdStr.trim(),
-        languageCode?.trim().orEmpty(),
-        normalizeBilibiliSubtitleUrl(subtitleUrl)
-    ).joinToString("|")
-}
+): String = com.android.purebilibili.core.subtitle.buildSubtitleTrackKey(subtitleId = subtitleId, subtitleIdStr = subtitleIdStr, languageCode = languageCode, subtitleUrl = subtitleUrl)
 
-fun mapPlayerInfoSubtitleTracks(subtitles: List<SubtitleItem>): List<SubtitleTrackMeta> {
-    return orderSubtitleTracksByPreference(
-        subtitles.mapNotNull { item ->
-            val normalizedUrl = normalizeBilibiliSubtitleUrl(item.subtitleUrl)
-            if (!isTrustedBilibiliSubtitleUrl(normalizedUrl)) return@mapNotNull null
-            SubtitleTrackMeta(
-                id = item.id,
-                idStr = item.idStr,
-                lan = item.lan,
-                lanDoc = item.lanDoc,
-                subtitleUrl = normalizedUrl,
-                aiStatus = item.aiStatus,
-                aiType = item.aiType,
-                type = item.type
-            )
-        }.distinctBy { meta -> meta.trackKey }
-    )
-}
+fun mapPlayerInfoSubtitleTracks(subtitles: List<SubtitleItem>): List<SubtitleTrackMeta> = com.android.purebilibili.core.subtitle.mapPlayerInfoSubtitleTracks(subtitles = subtitles)
 
-fun resolveSubtitleTrackDisplayLabel(track: SubtitleTrackMeta): String {
-    val baseLabel = track.lanDoc.trim().ifBlank { track.lan.trim() }
-    val aiSuffix = if (isLikelyAiSubtitleTrack(track) &&
-        !baseLabel.contains("AI", ignoreCase = true) &&
-        !baseLabel.contains("自动") &&
-        !baseLabel.contains("机翻")
-    ) {
-        " · AI"
-    } else {
-        ""
-    }
-    return (baseLabel + aiSuffix).ifBlank { "未知字幕" }
-}
+fun resolveSubtitleTrackDisplayLabel(track: SubtitleTrackMeta): String = com.android.purebilibili.core.subtitle.resolveSubtitleTrackDisplayLabel(track = track)
 
 fun buildSubtitleTrackOptions(
     tracks: List<SubtitleTrackMeta>,
     selectedTrackKey: String?
-): List<SubtitleTrackOption> {
-    return tracks.map { track ->
-        SubtitleTrackOption(
-            trackKey = track.trackKey,
-            languageCode = track.lan,
-            label = resolveSubtitleTrackDisplayLabel(track),
-            selected = track.trackKey == selectedTrackKey,
-            likelyAi = isLikelyAiSubtitleTrack(track)
-        )
-    }
-}
+): List<SubtitleTrackOption> = com.android.purebilibili.core.subtitle.buildSubtitleTrackOptions(tracks = tracks, selectedTrackKey = selectedTrackKey)
 
-fun normalizeSubtitleVerticalOffsetFraction(value: Float): Float {
-    return value.coerceIn(-0.30f, 0.30f)
-}
+fun normalizeSubtitleVerticalOffsetFraction(value: Float): Float = com.android.purebilibili.core.subtitle.normalizeSubtitleVerticalOffsetFraction(value = value)
 
 fun resolveSubtitleTextSizeSpec(
     playerWidthDp: Int,
     largeTextEnabled: Boolean
-): SubtitleTextSizeSpec {
-    return when {
-        playerWidthDp >= 840 -> SubtitleTextSizeSpec(
-            primarySp = if (largeTextEnabled) 26 else 22,
-            secondarySp = if (largeTextEnabled) 23 else 20
-        )
-        playerWidthDp >= 600 -> SubtitleTextSizeSpec(
-            primarySp = if (largeTextEnabled) 24 else 20,
-            secondarySp = if (largeTextEnabled) 21 else 18
-        )
-        else -> SubtitleTextSizeSpec(
-            primarySp = if (largeTextEnabled) 18 else 16,
-            secondarySp = if (largeTextEnabled) 16 else 14
-        )
-    }
-}
+): SubtitleTextSizeSpec = com.android.purebilibili.core.subtitle.resolveSubtitleTextSizeSpec(playerWidthDp = playerWidthDp, largeTextEnabled = largeTextEnabled)
 
-private fun subtitleTrackPreferenceScore(track: SubtitleTrackMeta): Int {
-    var score = 0
-    if (!isLikelyAiSubtitleTrack(track)) score += 100
-    if (isTrustedBilibiliSubtitleUrl(track.subtitleUrl)) score += 20
-    if (track.lanDoc.contains("官方")) score += 8
-    if (track.id > 0L) score += 1
-    return score
-}
+fun orderSubtitleTracksByPreference(tracks: List<SubtitleTrackMeta>): List<SubtitleTrackMeta> = com.android.purebilibili.core.subtitle.orderSubtitleTracksByPreference(tracks = tracks)
 
-fun orderSubtitleTracksByPreference(tracks: List<SubtitleTrackMeta>): List<SubtitleTrackMeta> {
-    if (tracks.size <= 1) return tracks
-    return tracks.sortedWith(
-        compareByDescending<SubtitleTrackMeta> { subtitleTrackPreferenceScore(it) }
-            .thenByDescending { it.id }
-            .thenBy { it.lanDoc }
-    )
-}
-
-fun parseBiliSubtitleBody(rawJson: String): List<SubtitleCue> {
-    if (rawJson.isBlank()) return emptyList()
-    return try {
-        val root = SUBTITLE_JSON.parseToJsonElement(rawJson).jsonObject
-        val body = root["body"]?.asJsonArrayOrNull().orEmpty()
-        body.mapNotNull { item ->
-            val obj = item.asJsonObjectOrNull() ?: return@mapNotNull null
-            val fromSeconds = obj["from"].asDoubleOrNull() ?: return@mapNotNull null
-            val toSeconds = obj["to"].asDoubleOrNull() ?: return@mapNotNull null
-            val content = obj["content"]?.jsonPrimitive?.content?.trim().orEmpty()
-            if (content.isBlank()) return@mapNotNull null
-            val startMs = (fromSeconds * 1000.0).toLong().coerceAtLeast(0L)
-            val endMs = (toSeconds * 1000.0).toLong().coerceAtLeast(startMs)
-            SubtitleCue(
-                startMs = startMs,
-                endMs = endMs,
-                content = content
-            )
-        }.sortedBy { cue -> cue.startMs }
-    } catch (_: Throwable) {
-        emptyList()
-    }
-}
-
-private fun resolveLanguageFamily(languageCode: String?): String? {
-    val normalized = languageCode?.trim()?.takeIf { it.isNotBlank() } ?: return null
-    return normalized.substringBefore('-').lowercase()
-}
-
-private fun findTrackByPreferredLanguage(
-    tracks: List<SubtitleTrackMeta>,
-    preferredLanguage: String?
-): SubtitleTrackMeta? {
-    val preferred = preferredLanguage?.trim()?.takeIf { it.isNotBlank() } ?: return null
-    tracks.firstOrNull { track ->
-        track.lan.equals(preferred, ignoreCase = true)
-    }?.let { return it }
-
-    val preferredFamily = resolveLanguageFamily(preferred) ?: return null
-    return tracks.firstOrNull { track ->
-        resolveLanguageFamily(track.lan) == preferredFamily
-    }
-}
+fun parseBiliSubtitleBody(rawJson: String): List<SubtitleCue> = com.android.purebilibili.core.subtitle.parseBiliSubtitleBody(rawJson = rawJson)
 
 fun resolveDefaultSubtitleLanguages(
     tracks: List<SubtitleTrackMeta>,
     preferredPrimaryLanguage: String? = null
-): SubtitleLanguageSelection {
-    if (tracks.isEmpty()) {
-        return SubtitleLanguageSelection(
-            primaryLanguage = null,
-            secondaryLanguage = null
-        )
-    }
-
-    val primary = tracks.firstOrNull { track ->
-        track.lan.equals("zh-Hans", ignoreCase = true)
-    } ?: tracks.firstOrNull { track ->
-        track.lan.equals("zh-CN", ignoreCase = true)
-    } ?: tracks.firstOrNull { track ->
-        track.lan.startsWith("zh", ignoreCase = true)
-    } ?: findTrackByPreferredLanguage(
-        tracks = tracks,
-        preferredLanguage = preferredPrimaryLanguage
-    ) ?: tracks.first()
-
-    val englishSecondary = tracks.firstOrNull { track ->
-        track.lan.equals("en-US", ignoreCase = true)
-    } ?: tracks.firstOrNull { track ->
-        track.lan.equals("en-GB", ignoreCase = true)
-    } ?: tracks.firstOrNull { track ->
-        track.lan.startsWith("en", ignoreCase = true)
-    }
-    val secondary = englishSecondary?.takeIf { it.lan != primary.lan } ?: tracks.firstOrNull { track ->
-        track.lan != primary.lan
-    }
-
-    return SubtitleLanguageSelection(
-        primaryLanguage = primary.lan,
-        secondaryLanguage = secondary?.lan?.takeIf { it != primary.lan }
-    )
-}
+): SubtitleLanguageSelection = com.android.purebilibili.core.subtitle.resolveDefaultSubtitleLanguages(tracks = tracks, preferredPrimaryLanguage = preferredPrimaryLanguage)
 
 fun resolveDefaultSubtitleDisplayMode(
     hasPrimaryTrack: Boolean,
     hasSecondaryTrack: Boolean
-): SubtitleDisplayMode = when {
-    hasPrimaryTrack && hasSecondaryTrack -> SubtitleDisplayMode.BILINGUAL
-    hasPrimaryTrack -> SubtitleDisplayMode.PRIMARY_ONLY
-    hasSecondaryTrack -> SubtitleDisplayMode.SECONDARY_ONLY
-    else -> SubtitleDisplayMode.OFF
-}
+): SubtitleDisplayMode = com.android.purebilibili.core.subtitle.resolveDefaultSubtitleDisplayMode(hasPrimaryTrack = hasPrimaryTrack, hasSecondaryTrack = hasSecondaryTrack)
 
 fun normalizeSubtitleDisplayMode(
     preferredMode: SubtitleDisplayMode,
     hasPrimaryTrack: Boolean,
     hasSecondaryTrack: Boolean
-): SubtitleDisplayMode {
-    if (!hasPrimaryTrack && !hasSecondaryTrack) {
-        return SubtitleDisplayMode.OFF
-    }
-    return when (preferredMode) {
-        SubtitleDisplayMode.OFF -> SubtitleDisplayMode.OFF
-        SubtitleDisplayMode.PRIMARY_ONLY -> {
-            if (hasPrimaryTrack) SubtitleDisplayMode.PRIMARY_ONLY else SubtitleDisplayMode.SECONDARY_ONLY
-        }
-        SubtitleDisplayMode.SECONDARY_ONLY -> {
-            if (hasSecondaryTrack) SubtitleDisplayMode.SECONDARY_ONLY else SubtitleDisplayMode.PRIMARY_ONLY
-        }
-        SubtitleDisplayMode.BILINGUAL -> {
-            resolveDefaultSubtitleDisplayMode(
-                hasPrimaryTrack = hasPrimaryTrack,
-                hasSecondaryTrack = hasSecondaryTrack
-            )
-        }
-    }
-}
+): SubtitleDisplayMode = com.android.purebilibili.core.subtitle.normalizeSubtitleDisplayMode(preferredMode = preferredMode, hasPrimaryTrack = hasPrimaryTrack, hasSecondaryTrack = hasSecondaryTrack)
 
 fun resolveSubtitleDisplayModeByAutoPreference(
     preference: SubtitleAutoPreference,
@@ -358,32 +70,10 @@ fun resolveSubtitleDisplayModeByAutoPreference(
     hasSecondaryTrack: Boolean,
     primaryTrackLikelyAi: Boolean,
     secondaryTrackLikelyAi: Boolean,
-    isMuted: Boolean
-): SubtitleDisplayMode {
-    val defaultMode = resolveDefaultSubtitleDisplayMode(
-        hasPrimaryTrack = hasPrimaryTrack,
-        hasSecondaryTrack = hasSecondaryTrack
-    )
-    if (defaultMode == SubtitleDisplayMode.OFF) return SubtitleDisplayMode.OFF
-
-    val defaultModeLikelyAi = when (defaultMode) {
-        SubtitleDisplayMode.OFF -> false
-        SubtitleDisplayMode.PRIMARY_ONLY -> primaryTrackLikelyAi
-        SubtitleDisplayMode.SECONDARY_ONLY -> secondaryTrackLikelyAi
-        SubtitleDisplayMode.BILINGUAL -> primaryTrackLikelyAi && secondaryTrackLikelyAi
-    }
-
-    return when (preference) {
-        SubtitleAutoPreference.OFF -> SubtitleDisplayMode.OFF
-        SubtitleAutoPreference.ON -> defaultMode
-        SubtitleAutoPreference.WITHOUT_AI -> {
-            if (defaultModeLikelyAi) SubtitleDisplayMode.OFF else defaultMode
-        }
-        SubtitleAutoPreference.AUTO -> {
-            if (!defaultModeLikelyAi || isMuted) defaultMode else SubtitleDisplayMode.OFF
-        }
-    }
-}
+    isMuted: Boolean,
+    primaryTrackLanguage: String?,
+    secondaryTrackLanguage: String?
+): SubtitleDisplayMode = com.android.purebilibili.core.subtitle.resolveSubtitleDisplayModeByAutoPreference(preference = preference, hasPrimaryTrack = hasPrimaryTrack, hasSecondaryTrack = hasSecondaryTrack, primaryTrackLikelyAi = primaryTrackLikelyAi, secondaryTrackLikelyAi = secondaryTrackLikelyAi, isMuted = isMuted, primaryTrackLanguage = primaryTrackLanguage, secondaryTrackLanguage = secondaryTrackLanguage)
 
 fun resolveSubtitlePreferenceSession(
     bvid: String,
@@ -396,167 +86,50 @@ fun resolveSubtitlePreferenceSession(
     hasSecondaryTrack: Boolean,
     preference: SubtitleAutoPreference,
     isMuted: Boolean = false
-): SubtitlePreferenceSession {
-    val sessionKey = "${bvid.trim()}_${cid}_${primaryLanguage}_${secondaryLanguage}_${primaryTrackLikelyAi}_${secondaryTrackLikelyAi}_${preference.name}"
-    val initialMode = resolveSubtitleDisplayModeByAutoPreference(
-        preference = preference,
-        hasPrimaryTrack = hasPrimaryTrack,
-        hasSecondaryTrack = hasSecondaryTrack,
-        primaryTrackLikelyAi = primaryTrackLikelyAi,
-        secondaryTrackLikelyAi = secondaryTrackLikelyAi,
-        isMuted = isMuted
-    )
-    return SubtitlePreferenceSession(
-        key = sessionKey,
-        initialMode = initialMode
-    )
-}
+): SubtitlePreferenceSession = com.android.purebilibili.core.subtitle.resolveSubtitlePreferenceSession(bvid = bvid, cid = cid, primaryLanguage = primaryLanguage, secondaryLanguage = secondaryLanguage, primaryTrackLikelyAi = primaryTrackLikelyAi, secondaryTrackLikelyAi = secondaryTrackLikelyAi, hasPrimaryTrack = hasPrimaryTrack, hasSecondaryTrack = hasSecondaryTrack, preference = preference, isMuted = isMuted)
 
 fun resolveSubtitleDisplayModePreference(
     previousSessionKey: String?,
     nextSessionKey: String,
     previousMode: SubtitleDisplayMode,
     nextInitialMode: SubtitleDisplayMode
-): SubtitleDisplayMode {
-    return if (previousSessionKey == nextSessionKey) previousMode else nextInitialMode
-}
+): SubtitleDisplayMode = com.android.purebilibili.core.subtitle.resolveSubtitleDisplayModePreference(previousSessionKey = previousSessionKey, nextSessionKey = nextSessionKey, previousMode = previousMode, nextInitialMode = nextInitialMode)
 
 fun resolveSubtitleControlAvailability(
     primaryTrackBound: Boolean,
     secondaryTrackBound: Boolean,
     primaryCueAvailable: Boolean,
     secondaryCueAvailable: Boolean
-): SubtitleControlAvailability {
-    val primarySelectable = primaryTrackBound || primaryCueAvailable
-    val secondarySelectable = secondaryTrackBound || secondaryCueAvailable
-    return SubtitleControlAvailability(
-        trackAvailable = primarySelectable || secondarySelectable,
-        primarySelectable = primarySelectable,
-        secondarySelectable = secondarySelectable
-    )
-}
+): SubtitleControlAvailability = com.android.purebilibili.core.subtitle.resolveSubtitleControlAvailability(primaryTrackBound = primaryTrackBound, secondaryTrackBound = secondaryTrackBound, primaryCueAvailable = primaryCueAvailable, secondaryCueAvailable = secondaryCueAvailable)
 
 fun resolveSubtitleDisplayOptions(
     primaryLabel: String,
     secondaryLabel: String,
     hasPrimaryTrack: Boolean,
     hasSecondaryTrack: Boolean
-): List<SubtitleDisplayOption> {
-    val options = mutableListOf(
-        SubtitleDisplayOption(
-            mode = SubtitleDisplayMode.OFF,
-            label = "关闭",
-            enabled = true
-        )
-    )
-    if (hasPrimaryTrack) {
-        options += SubtitleDisplayOption(
-            mode = SubtitleDisplayMode.PRIMARY_ONLY,
-            label = primaryLabel,
-            enabled = true
-        )
-    }
-    if (hasSecondaryTrack) {
-        options += SubtitleDisplayOption(
-            mode = SubtitleDisplayMode.SECONDARY_ONLY,
-            label = secondaryLabel,
-            enabled = true
-        )
-    }
-    if (hasPrimaryTrack && hasSecondaryTrack) {
-        options += SubtitleDisplayOption(
-            mode = SubtitleDisplayMode.BILINGUAL,
-            label = "双语",
-            enabled = true
-        )
-    }
-    return options
-}
+): List<SubtitleDisplayOption> = com.android.purebilibili.core.subtitle.resolveSubtitleDisplayOptions(primaryLabel = primaryLabel, secondaryLabel = secondaryLabel, hasPrimaryTrack = hasPrimaryTrack, hasSecondaryTrack = hasSecondaryTrack)
 
-fun shouldRenderPrimarySubtitle(mode: SubtitleDisplayMode): Boolean {
-    return mode == SubtitleDisplayMode.PRIMARY_ONLY || mode == SubtitleDisplayMode.BILINGUAL
-}
+fun shouldRenderPrimarySubtitle(mode: SubtitleDisplayMode): Boolean = com.android.purebilibili.core.subtitle.shouldRenderPrimarySubtitle(mode = mode)
 
-fun shouldRenderSecondarySubtitle(mode: SubtitleDisplayMode): Boolean {
-    return mode == SubtitleDisplayMode.SECONDARY_ONLY || mode == SubtitleDisplayMode.BILINGUAL
-}
+fun shouldRenderSecondarySubtitle(mode: SubtitleDisplayMode): Boolean = com.android.purebilibili.core.subtitle.shouldRenderSecondarySubtitle(mode = mode)
 
-fun resolveSubtitleTextAt(cues: List<SubtitleCue>, positionMs: Long): String? {
-    if (cues.isEmpty()) return null
-    if (positionMs < 0L) return null
+fun resolveSubtitleTextAt(cues: List<SubtitleCue>, positionMs: Long): String? = com.android.purebilibili.core.subtitle.resolveSubtitleTextAt(cues = cues, positionMs = positionMs)
 
-    var low = 0
-    var high = cues.lastIndex
-    while (low <= high) {
-        val mid = (low + high) ushr 1
-        val cue = cues[mid]
-        when {
-            positionMs < cue.startMs -> high = mid - 1
-            positionMs > cue.endMs -> low = mid + 1
-            else -> return cue.content
-        }
-    }
-    return null
-}
-
-/**
- * 字幕进度轮询 identity：只绑定 bvid/cid，禁止把整份 [uiState] 当 key。
- * Success 对象频繁替换会让 produceState 以 initialValue=0 重启 → 字幕整页乱跳闪烁。
- */
 fun resolveSubtitlePositionPollingIdentity(
     bvid: String?,
     cid: Long,
-): String {
-    val safeBvid = bvid?.trim().orEmpty()
-    val safeCid = cid.coerceAtLeast(0L)
-    return if (safeBvid.isEmpty() && safeCid <= 0L) {
-        "no-video"
-    } else {
-        "${safeBvid}_$safeCid"
-    }
-}
+): String = com.android.purebilibili.core.subtitle.resolveSubtitlePositionPollingIdentity(bvid = bvid, cid = cid)
 
-/**
- * 字幕叠层是否保持挂载（容器常驻，只换文案）。
- * 不要用「当前有无 cue 文本」控制整层 if，否则句间空窗会反复进出 composition → 闪。
- */
 fun shouldKeepSubtitleOverlayMounted(
     overlayEnabled: Boolean,
     isInPipMode: Boolean,
     isAudioOnly: Boolean,
     suppressOverlay: Boolean,
-): Boolean {
-    return overlayEnabled && !isInPipMode && !isAudioOnly && !suppressOverlay
-}
+): Boolean = com.android.purebilibili.core.subtitle.shouldKeepSubtitleOverlayMounted(overlayEnabled = overlayEnabled, isInPipMode = isInPipMode, isAudioOnly = isAudioOnly, suppressOverlay = suppressOverlay)
 
-/**
- * 句间短空窗是否沿用上一句，避免 120ms 轮询在边界 null/有字来回切。
- * [blankGapMs] 内仍显示 [previousText]。
- */
 fun resolveStickySubtitleText(
     currentText: String?,
     previousText: String?,
     blankGapMs: Long,
     maxHoldMs: Long = 280L,
-): String? {
-    val current = currentText?.takeIf { it.isNotBlank() }
-    if (current != null) return current
-    val previous = previousText?.takeIf { it.isNotBlank() } ?: return null
-    if (blankGapMs < 0L || blankGapMs > maxHoldMs) return null
-    return previous
-}
-
-private fun JsonElement?.asJsonObjectOrNull(): JsonObject? {
-    return (this as? JsonObject) ?: runCatching { this?.jsonObject }.getOrNull()
-}
-
-private fun JsonElement?.asJsonArrayOrNull(): JsonArray? {
-    return (this as? JsonArray) ?: runCatching { this?.jsonArray }.getOrNull()
-}
-
-private fun JsonElement?.asDoubleOrNull(): Double? {
-    return when (this) {
-        null -> null
-        else -> this.jsonPrimitive.doubleOrNull
-    }
-}
+): String? = com.android.purebilibili.core.subtitle.resolveStickySubtitleText(currentText = currentText, previousText = previousText, blankGapMs = blankGapMs, maxHoldMs = maxHoldMs)

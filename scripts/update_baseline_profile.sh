@@ -4,21 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-OUTPUT_DIR="baselineprofile/build/outputs"
-TARGET_FILE="app/src/main/baseline-prof.txt"
+# 只运行配置采集规则；由插件合并本次各场景并保存，避免挑中旧产物或覆盖手写规则。
+./gradlew :app:generateBaselineProfile \
+  -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
+  "$@"
 
-echo "[1/3] Running baseline profile generation on connected device..."
-./gradlew :baselineprofile:connectedReleaseAndroidTest
-
-echo "[2/3] Locating generated baseline-prof.txt..."
-PROFILE_FILE="$(find "$OUTPUT_DIR" -type f -name '*baseline-prof.txt' | head -n 1)"
-
-if [[ -z "$PROFILE_FILE" ]]; then
-  echo "No generated baseline-prof.txt found under $OUTPUT_DIR"
-  exit 1
-fi
-
-echo "[3/3] Updating $TARGET_FILE from $PROFILE_FILE"
-cp "$PROFILE_FILE" "$TARGET_FILE"
-
-echo "Done. Baseline profile updated from Macrobenchmark run."
+echo "Profiles saved to app/src/main/generated/baselineProfiles."
+echo "App hotspot rules in app/src/main/baseline-prof.txt are preserved."
+echo "Startup seeds in app/src/main/baselineProfiles/startup-prof.txt are preserved."

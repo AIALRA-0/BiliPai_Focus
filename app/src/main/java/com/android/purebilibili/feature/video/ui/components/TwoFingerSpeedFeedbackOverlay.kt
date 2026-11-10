@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -61,7 +63,7 @@ fun BoxScope.TwoFingerSpeedFeedbackOverlay(
         TwoFingerSpeedGestureMode.Off -> Icons.Outlined.SwapVert
     }
     val gradientColors = listOf(
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+        AppContentColors.accent().copy(alpha = 0.18f),
         MaterialTheme.colorScheme.surface.copy(alpha = 0.10f),
         MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)
     )

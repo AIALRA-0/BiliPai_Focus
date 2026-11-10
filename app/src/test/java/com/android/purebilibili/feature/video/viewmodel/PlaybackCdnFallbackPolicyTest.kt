@@ -3,9 +3,9 @@ package com.android.purebilibili.feature.video.viewmodel
 import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.data.model.response.DashVideo
 import com.android.purebilibili.feature.plugin.CdnCandidateHealth
-import com.android.purebilibili.feature.plugin.CdnHealthEvent
-import com.android.purebilibili.feature.plugin.PlaybackCdnCandidate
-import com.android.purebilibili.feature.plugin.PlaybackCdnCandidateSource
+import com.android.purebilibili.plugin.sdk.CdnHealthEvent
+import com.android.purebilibili.plugin.sdk.PlaybackCdnCandidate
+import com.android.purebilibili.plugin.sdk.PlaybackCdnCandidateSource
 import com.android.purebilibili.feature.plugin.recordCdnHealthEvent
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -26,10 +26,10 @@ class AudioModeAudioQualityStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/audio/screen/MusicPlayerContent.kt"
         )
 
-        assertTrue(source.contains("MusicAudioQualityControl("))
-        assertTrue(source.contains(".heightIn(min = 48.dp)"))
-        assertTrue(source.contains("HiResBadge()"))
-        assertTrue(source.contains("DolbyBadge()"))
+        // 音质入口收敛到顶栏右侧胶囊（GlassTextButton），菜单仍为共享的 AudioQualitySelectionMenu。
+        assertTrue(source.contains("leadingActions"))
+        assertTrue(source.contains("GlassTextButton("))
+        assertTrue(source.contains("label = audioQualityLabel.ifBlank { \"音质\" }"))
         assertTrue(source.contains("AudioQualitySelectionMenu("))
         assertTrue(source.contains("options = audioQualityOptions"))
         assertTrue(source.contains("requestedAudioQuality = requestedAudioQuality"))

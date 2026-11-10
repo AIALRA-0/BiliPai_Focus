@@ -39,7 +39,7 @@ fun FocusSettingsScreen(
         lazyListContent = {
             item {
                 Text(
-                    text = "Focus 专属功能：关注分组过滤、相关推荐、搜索历史和历史清空入口。\n首页标签统一在「设置 → 导航与交互 → 导航 → 顶部标签」管理；热搜与搜索发现可在搜索首页直接开关。新安装默认显示关注；订阅标签需启用订阅插件。",
+                    text = "Focus 专属功能包括关注分组过滤、相关推荐和历史清空入口。首页标签与搜索首页各区块都在现有设置中管理。新安装默认显示关注；订阅标签需启用订阅插件。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 22.sp,
@@ -66,7 +66,7 @@ fun FocusSettingsScreen(
             item {
                 FocusSettingsSection(title = "视频") {
                     AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.RELATED_VIDEO_TRANSITION),
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.VERTICAL_RECOMMENDATIONS),
                         title = "显示相关推荐",
                         subtitle = "控制视频详情页中的相关推荐与更多推荐区块",
                         checked = settings.showVideoRelatedVideosSection,
@@ -74,20 +74,6 @@ fun FocusSettingsScreen(
                             scope.launch {
                                 SettingsManager.setFocusVideoRelatedVideosSectionVisible(context, enabled)
                             }
-                        },
-                    )
-                }
-            }
-
-            item {
-                FocusSettingsSection(title = "搜索") {
-                    AppSwitchPreference(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_HISTORY),
-                        title = "显示搜索历史",
-                        subtitle = "在搜索首页显示搜索历史列表",
-                        checked = settings.showSearchHistorySection,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setSearchHistorySectionEnabled(context, enabled) }
                         },
                     )
                 }

@@ -249,6 +249,20 @@ class VideoGestureFeedbackPolicyTest {
     }
 
     @Test
+    fun `portrait entry requires clear vertical direction and respects reverse gesture`() {
+        fun enters(dx: Float, dy: Float, reversed: Boolean = false, fullscreen: Boolean = false, vertical: Boolean = true) =
+            shouldTriggerPortraitFullscreenDuringDrag(fullscreen, vertical, reversed, dx, dy, 2.5f)
+
+        assertEquals(true, enters(0f, -3f))
+        assertEquals(false, enters(1f, -3f))
+        assertEquals(false, enters(0f, -2.5f))
+        assertEquals(false, enters(0f, 3f))
+        assertEquals(true, enters(0f, 3f, reversed = true))
+        assertEquals(false, enters(0f, -3f, fullscreen = true))
+        assertEquals(false, enters(0f, -3f, vertical = false))
+    }
+
+    @Test
     fun `resolveVerticalGestureMode uses portrait swipe setting for upward entry`() {
         assertEquals(
             VideoGestureMode.SwipeToFullscreen,

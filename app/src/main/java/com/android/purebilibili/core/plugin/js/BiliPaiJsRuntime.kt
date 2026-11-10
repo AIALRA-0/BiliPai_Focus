@@ -7,6 +7,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.plugin.sdk.PluginCapability
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -25,7 +26,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class BiliPaiJsRuntime(
     context: Context,
     private val storageRoot: File = File(context.filesDir, "bilipai_js_plugin_storage"),
-    private val timeoutMillis: Long = 15_000L
+    private val timeoutMillis: Long = 15_000L,
+    private val moduleCache: BiliPaiJsModuleResultCache = BiliPaiJsModuleResultCache.createDefault(context)
 ) {
     private val appContext = context.applicationContext
     private val json = Json {
@@ -51,17 +53,137 @@ class BiliPaiJsRuntime(
         module: BiliPaiJsModule,
         paramsJson: String = "{}"
     ): Result<List<BiliPaiJsMediaItem>> = runCatching {
+        val normalizedParams = paramsJson.ifBlank { "{}" }
+        val moduleId = module.id.ifBlank { module.functionName }
+        moduleCache.read(
+            pluginId = installed.manifest.id,
+            moduleId = moduleId,
+            paramsJson = normalizedParams,
+            cacheDurationSeconds = module.cacheDuration
+        )?.let { cachedPayload ->
+            return@runCatching decodeMediaItems(cachedPayload)
+        }
         val script = File(installed.scriptPath).readText(Charsets.UTF_8)
         val expression = buildBiliPaiJsModuleExpression(
             functionName = module.functionName,
-            paramsJson = paramsJson.ifBlank { "{}" }
+            paramsJson = normalizedParams
         )
         val payload = runScript(
             pluginId = installed.manifest.id,
             script = script,
             expression = expression
         )
-        json.decodeFromString(ListSerializer(BiliPaiJsMediaItem.serializer()), payload)
+        moduleCache.write(
+            pluginId = installed.manifest.id,
+            moduleId = moduleId,
+            paramsJson = normalizedParams,
+            cacheDurationSeconds = module.cacheDuration,
+            payload = payload
+        )
+        decodeMediaItems(payload)
+    }
+
+    fun clearPluginCache(pluginId: String) {
+        moduleCache.clearPlugin(pluginId)
+    }
+
+    /**
+     * 调用插件的详情函数（manifest.detailFunctionName），参数为 `{"link": ...}`，
+     * 结果按 manifest.detailCacheDuration 缓存（moduleId 固定为 `__detail__`）。
+     */
+    suspend fun loadDetailItems(
+        installed: InstalledBiliPaiJsPlugin,
+        link: String
+    ): Result<List<BiliPaiJsMediaItem>> = runCatching {
+        val functionName = installed.manifest.detailFunctionName
+        if (functionName.isBlank()) {
+            throw IllegalArgumentException("插件未声明详情函数（detailFunctionName）")
+        }
+        val cacheKey = """{"link":${Json.encodeToString(link)}}"""
+        moduleCache.read(
+            pluginId = installed.manifest.id,
+            moduleId = DETAIL_CACHE_MODULE_ID,
+            paramsJson = cacheKey,
+            cacheDurationSeconds = installed.manifest.detailCacheDuration
+        )?.let { cachedPayload ->
+            return@runCatching decodeMediaItems(cachedPayload)
+        }
+        val script = File(installed.scriptPath).readText(Charsets.UTF_8)
+        val expression = buildBiliPaiJsModuleExpression(
+            functionName = functionName,
+            paramsJson = cacheKey
+        )
+        val payload = runScript(
+            pluginId = installed.manifest.id,
+            script = script,
+            expression = expression
+        )
+        moduleCache.write(
+            pluginId = installed.manifest.id,
+            moduleId = DETAIL_CACHE_MODULE_ID,
+            paramsJson = cacheKey,
+            cacheDurationSeconds = installed.manifest.detailCacheDuration,
+            payload = payload
+        )
+        decodeMediaItems(payload)
+    }
+
+    private fun decodeMediaItems(payload: String): List<BiliPaiJsMediaItem> {
+        return json.decodeFromString(ListSerializer(BiliPaiJsMediaItem.serializer()), payload)
+    }
+
+    /**
+     * 调用插件的弹幕函数（manifest.danmakuFunctionName），参数为 `{"title": ...}`。
+     * 仅在插件被授予 [com.android.purebilibili.plugin.sdk.PluginCapability.DANMAKU_STREAM]
+     * 时可用；结果按 manifest.danmakuCacheDuration 缓存（moduleId 固定为 `__danmaku__`）。
+     */
+    suspend fun loadDanmuComments(
+        installed: InstalledBiliPaiJsPlugin,
+        title: String
+    ): Result<List<BiliPaiJsDanmuComment>> = runCatching {
+        val functionName = installed.manifest.danmakuFunctionName
+        if (functionName.isBlank()) {
+            throw IllegalArgumentException("插件未声明弹幕函数（danmakuFunctionName）")
+        }
+        if (PluginCapability.DANMAKU_STREAM !in installed.grantedCapabilities) {
+            throw SecurityException("插件未获得 DANMAKU_STREAM 弹幕流权限")
+        }
+        val cacheKey = """{"title":${Json.encodeToString(title)}}"""
+        moduleCache.read(
+            pluginId = installed.manifest.id,
+            moduleId = DANMAKU_CACHE_MODULE_ID,
+            paramsJson = cacheKey,
+            cacheDurationSeconds = installed.manifest.danmakuCacheDuration
+        )?.let { cachedPayload ->
+            return@runCatching decodeDanmuComments(cachedPayload)
+        }
+        val script = File(installed.scriptPath).readText(Charsets.UTF_8)
+        val expression = buildBiliPaiJsModuleExpression(
+            functionName = functionName,
+            paramsJson = cacheKey
+        )
+        val payload = runScript(
+            pluginId = installed.manifest.id,
+            script = script,
+            expression = expression
+        )
+        moduleCache.write(
+            pluginId = installed.manifest.id,
+            moduleId = DANMAKU_CACHE_MODULE_ID,
+            paramsJson = cacheKey,
+            cacheDurationSeconds = installed.manifest.danmakuCacheDuration,
+            payload = payload
+        )
+        decodeDanmuComments(payload)
+    }
+
+    private fun decodeDanmuComments(payload: String): List<BiliPaiJsDanmuComment> {
+        return json.decodeFromString(ListSerializer(BiliPaiJsDanmuComment.serializer()), payload)
+    }
+
+    private companion object {
+        const val DETAIL_CACHE_MODULE_ID = "__detail__"
+        const val DANMAKU_CACHE_MODULE_ID = "__danmaku__"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -69,44 +191,52 @@ class BiliPaiJsRuntime(
         pluginId: String,
         script: String,
         expression: String
-    ): String = withTimeout(timeoutMillis) {
-        withContext(Dispatchers.Main) {
-            val callId = UUID.randomUUID().toString()
-            val result = CompletableDeferred<String>()
-            val webView = WebView(appContext)
-            val callbacks = CallbackBridge(result)
-            webView.settings.javaScriptEnabled = true
-            webView.settings.domStorageEnabled = false
-            webView.settings.allowFileAccess = false
-            webView.settings.allowContentAccess = false
-            webView.settings.databaseEnabled = false
-            webView.settings.setGeolocationEnabled(false)
-            webView.addJavascriptInterface(callbacks, "BiliPaiNative")
-            webView.addJavascriptInterface(HttpBridge(), "BiliPaiHttpNative")
-            webView.addJavascriptInterface(StorageBridge(File(storageRoot, pluginId)), "BiliPaiStorageNative")
-            webView.addJavascriptInterface(LogBridge(pluginId), "BiliPaiLogNative")
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    view.evaluateJavascript(buildExecutionScript(callId, script, expression), null)
+    ): String = try {
+        withTimeout(timeoutMillis) {
+            withContext(Dispatchers.Main.immediate) {
+                val callId = UUID.randomUUID().toString()
+                val result = CompletableDeferred<String>()
+                val webView = WebView(appContext)
+                val callbacks = CallbackBridge(result)
+                webView.settings.javaScriptEnabled = true
+                webView.settings.domStorageEnabled = false
+                webView.settings.allowFileAccess = false
+                webView.settings.allowContentAccess = false
+                webView.settings.databaseEnabled = false
+                webView.settings.setGeolocationEnabled(false)
+                webView.addJavascriptInterface(callbacks, "BiliPaiNative")
+                webView.addJavascriptInterface(HttpBridge(), "BiliPaiHttpNative")
+                webView.addJavascriptInterface(StorageBridge(File(storageRoot, pluginId)), "BiliPaiStorageNative")
+                webView.addJavascriptInterface(LogBridge(pluginId), "BiliPaiLogNative")
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        view.evaluateJavascript(buildExecutionScript(callId, script, expression), null)
+                    }
+                }
+                webView.loadDataWithBaseURL(
+                    "https://plugins.bilipai.local/",
+                    "<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>",
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+                try {
+                    result.await()
+                } finally {
+                    webView.removeJavascriptInterface("BiliPaiNative")
+                    webView.removeJavascriptInterface("BiliPaiHttpNative")
+                    webView.removeJavascriptInterface("BiliPaiStorageNative")
+                    webView.removeJavascriptInterface("BiliPaiLogNative")
+                    webView.destroy()
                 }
             }
-            webView.loadDataWithBaseURL(
-                "https://plugins.bilipai.local/",
-                "<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>",
-                "text/html",
-                "UTF-8",
-                null
-            )
-            try {
-                result.await()
-            } finally {
-                webView.removeJavascriptInterface("BiliPaiNative")
-                webView.removeJavascriptInterface("BiliPaiHttpNative")
-                webView.removeJavascriptInterface("BiliPaiStorageNative")
-                webView.removeJavascriptInterface("BiliPaiLogNative")
-                webView.destroy()
-            }
         }
+    } catch (error: kotlinx.coroutines.TimeoutCancellationException) {
+        // 手势层面整次调用作废，转换成用户可读的失败原因。
+        @Suppress("NAME_SHADOWING")
+        throw IllegalStateException(
+            "执行超时（${timeoutMillis / 1000} 秒）：数据源未在时限内返回，请检查网络或数据源地址是否可达"
+        )
     }
 
     private fun buildExecutionScript(
@@ -135,7 +265,7 @@ class BiliPaiJsRuntime(
             val request = Request.Builder()
                 .url(url)
                 .headers(parseHeaders(headersJson))
-                .header("User-Agent", "BiliPai JS Plugin")
+                .apply { defaultUserAgentIfMissing(this) }
                 .get()
                 .build()
             return executeRequest(request)
@@ -147,10 +277,16 @@ class BiliPaiJsRuntime(
             val request = Request.Builder()
                 .url(url)
                 .headers(parseHeaders(headersJson))
-                .header("User-Agent", "BiliPai JS Plugin")
+                .apply { defaultUserAgentIfMissing(this) }
                 .post(requestBody)
                 .build()
             return executeRequest(request)
+        }
+
+        private fun defaultUserAgentIfMissing(builder: Request.Builder) {
+            if (builder.build().header("User-Agent") == null) {
+                builder.header("User-Agent", "BiliPai JS Plugin")
+            }
         }
 
         private fun executeRequest(request: Request): String {
@@ -261,6 +397,25 @@ internal fun buildBiliPaiJsExecutionScript(
     return """
         (function() {
           const callId = ${Json.encodeToString(callId)};
+          function biliPaiWrapDomNode(node) {
+            if (!node) return null;
+            return {
+              node: node,
+              get tagName() { return node.tagName ? String(node.tagName).toLowerCase() : ''; },
+              get text() { return String(node.textContent == null ? '' : node.textContent).trim(); },
+              get html() { return String(node.innerHTML == null ? '' : node.innerHTML); },
+              attr: function(name) { return node.getAttribute ? node.getAttribute(String(name)) : null; },
+              select: function(selector) { return biliPaiWrapDomAll(node.querySelectorAll(String(selector))); },
+              selectOne: function(selector) { return biliPaiWrapDomNode(node.querySelector(String(selector))); }
+            };
+          }
+          function biliPaiWrapDomAll(nodeList) {
+            var wrapped = [];
+            for (var i = 0; i < nodeList.length; i++) {
+              wrapped.push(biliPaiWrapDomNode(nodeList[i]));
+            }
+            return wrapped;
+          }
           window.BiliPai = {
             http: {
               get: function(url, headers) {
@@ -268,6 +423,15 @@ internal fun buildBiliPaiJsExecutionScript(
               },
               post: function(url, body, headers) {
                 return JSON.parse(BiliPaiHttpNative.post(String(url), String(body || ''), JSON.stringify(headers || {})));
+              }
+            },
+            dom: {
+              parse: function(html) {
+                var parsed = new DOMParser().parseFromString(String(html == null ? '' : html), 'text/html');
+                var root = biliPaiWrapDomNode(parsed);
+                root.title = String(parsed.title == null ? '' : parsed.title);
+                root.body = biliPaiWrapDomNode(parsed.body);
+                return root;
               }
             },
             storage: {

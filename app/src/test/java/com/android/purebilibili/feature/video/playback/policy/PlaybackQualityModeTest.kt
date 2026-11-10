@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.playback.policy
 
+import com.android.purebilibili.core.player.policy.PlaybackQualityMode
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

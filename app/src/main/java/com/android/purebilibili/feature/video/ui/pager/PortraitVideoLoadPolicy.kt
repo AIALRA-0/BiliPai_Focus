@@ -16,7 +16,8 @@ import com.android.purebilibili.data.model.response.PlayUrlData
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.getBestVideo
-import com.android.purebilibili.feature.plugin.PlaybackCdnPlugin
+import com.android.purebilibili.data.repository.playableVideoQualityIds
+import com.android.purebilibili.plugin.sdk.PlaybackCdnPlugin
 import com.android.purebilibili.feature.video.playback.audio.AudioSelectionDecision
 import com.android.purebilibili.feature.video.playback.audio.resolveAudioStreamSelection
 import com.android.purebilibili.feature.video.viewmodel.buildPlaybackAudioUrlCandidates
@@ -85,7 +86,7 @@ internal fun resolvePortraitQualityLabel(qualityId: Int): String {
 
 /**
  * Qualities shown in the portrait quality menu.
- * Prefer DASH track ids (switchable now); union accept_quality so higher tiers remain requestable.
+ * Advertised tiers remain visible; the menu separately enables only actual playable DASH ids.
  */
 internal fun resolvePortraitAvailableQualityIds(
     acceptQualities: List<Int>,
@@ -132,9 +133,12 @@ internal fun resolvePortraitDisplayedQualityId(
     returnedQuality: Int,
     dashVideoIds: List<Int>
 ): Int {
-    if (requestedQuality > 0 && requestedQuality in dashVideoIds) return requestedQuality
-    if (returnedQuality > 0) return returnedQuality
-    return dashVideoIds.maxOrNull() ?: requestedQuality.takeIf { it > 0 } ?: PORTRAIT_PLAYBACK_TARGET_QUALITY
+    val available = dashVideoIds.filter { it > 0 }
+    if (requestedQuality >= 127) return available.maxOrNull() ?: returnedQuality
+    return available.filter { it <= requestedQuality }.maxOrNull()
+        ?: available.minOrNull()
+        ?: returnedQuality.takeIf { it > 0 }
+        ?: PORTRAIT_PLAYBACK_TARGET_QUALITY
 }
 
 internal fun shouldUsePortraitParallelPlaybackBootstrap(
@@ -261,14 +265,22 @@ internal fun resolvePortraitPlaybackStreamUrls(
     isDolbyAudioSupported: Boolean,
     isDolbyAudioSoftwareDecoded: Boolean,
     requestedAudioQuality: Int = -1,
-    playbackSpeed: Float = 1.0f
+    playbackSpeed: Float = 1.0f,
+    preferCodec: String = "hev1",
+    secondPreferCodec: String = "avc1",
 ): PortraitPlaybackStreamUrls? {
     val dash = playData.dash
     if (dash != null) {
         val dashVideo = dash.getBestVideo(
-            targetQn = targetQuality,
+            targetQn = resolvePortraitDisplayedQualityId(
+                requestedQuality = targetQuality,
+                returnedQuality = playData.quality,
+                dashVideoIds = playData.playableVideoQualityIds()
+            ),
             isHevcSupported = isHevcSupported,
-            isAv1Supported = isAv1Supported
+            isAv1Supported = isAv1Supported,
+            preferCodec = preferCodec,
+            secondPreferCodec = secondPreferCodec,
         )
         val audioSelection = resolveAudioStreamSelection(
             dash = dash,
@@ -304,11 +316,16 @@ internal fun resolvePortraitPlaybackCdnUrls(
     targetQuality: Int = PORTRAIT_PLAYBACK_TARGET_QUALITY,
     cdnPlugin: PlaybackCdnPlugin?
 ): PortraitPlaybackStreamUrls {
+    // Discovery can select a different quality (or codec) than the preference.
+    // Only take backups from that exact URL's track, never from the requested tier.
+    val selectedTrack = cachedDashVideos.find {
+        it.id == targetQuality && it.getValidUrl() == streamUrls.videoUrl
+    } ?: cachedDashVideos.find {
+        it.getValidUrl() == streamUrls.videoUrl || streamUrls.videoUrl in it.backupUrl.orEmpty()
+    }
     val rawVideoUrls = buildList {
         add(streamUrls.videoUrl)
-        cachedDashVideos
-            .find { it.id == targetQuality }
-            ?.backupUrl
+        selectedTrack?.backupUrl
             .orEmpty()
             .filter { it.isNotBlank() }
             .let(::addAll)
@@ -390,13 +407,32 @@ internal fun resolvePortraitPlayUrlPreloadTargets(
     var pageIndex = committedPage + 1
     while (targets.size < preloadCount && pageIndex < pageItems.size) {
         resolvePortraitPagePlaybackIdentity(pageItems[pageIndex])?.let { identity ->
-            if (targets.none { it.bvid == identity.bvid }) {
+            if (targets.none { it.bvid == identity.bvid && it.cid == identity.cid }) {
                 targets += identity
             }
         }
         pageIndex += 1
     }
     return targets
+}
+
+/** Only the candidate and the forward window remain eligible for background warming. */
+internal fun resolvePortraitPrefetchWindowTargets(
+    anchorPage: Int,
+    pageItems: List<Any>,
+    preloadCount: Int,
+    swipeTargetPage: Int? = null,
+    warmAnchor: Boolean = false,
+): List<PortraitPagePlaybackIdentity> {
+    if (anchorPage !in pageItems.indices) return emptyList()
+    return buildList {
+        swipeTargetPage?.let { pageItems.getOrNull(it) }
+            ?.let(::resolvePortraitPagePlaybackIdentity)?.let { add(it) }
+        if (warmAnchor) {
+            pageItems.getOrNull(anchorPage)?.let(::resolvePortraitPagePlaybackIdentity)?.let { add(it) }
+        }
+        addAll(resolvePortraitPlayUrlPreloadTargets(anchorPage, pageItems, preloadCount))
+    }.distinctBy { resolvePortraitMediaId(it.bvid, it.cid) }
 }
 
 internal fun buildPortraitPlaybackHttpHeaders(): Map<String, String> {
@@ -412,6 +448,8 @@ internal suspend fun prefetchPortraitPlaybackHead(
     context: Context,
     streamUrls: PortraitPlaybackStreamUrls
 ) {
+    // 头部预取是纯加速项：蜂窝网络下跳过，滑动多页累积的流量不小。
+    if (!com.android.purebilibili.core.util.NetworkUtils.isWifi(context)) return
     coroutineScope {
         val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
             .setDefaultRequestProperties(buildPortraitPlaybackHttpHeaders())

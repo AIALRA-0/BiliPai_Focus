@@ -1,6 +1,8 @@
 // 文件路径: feature/home/components/HomeRefreshIndicator.kt
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import com.android.purebilibili.core.ui.AppShapes
@@ -65,8 +67,8 @@ fun Md3ScreenshotRefreshIndicator(
         animationSpec = md3RefreshScaleMotionSpec(),
         label = "md3_screenshot_pull_scale"
     )
-    val strokeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
-    val textColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f)
+    val strokeColor = AppContentColors.accent().copy(alpha = 0.72f)
+    val textColor = AppContentColors.secondaryText().copy(alpha = 0.74f)
 
     Box(
         modifier = modifier
@@ -86,7 +88,7 @@ fun Md3ScreenshotRefreshIndicator(
             if (isRefreshing) {
                 // Official M3 morphing LoadingIndicator (dynamic primary).
                 AdaptiveLoadingIndicator(
-                    color = MaterialTheme.colorScheme.primary,
+                    color = AppContentColors.accent(),
                 )
             } else {
                 Box(
@@ -118,10 +120,10 @@ fun Md3ScreenshotRefreshIndicator(
 
 /**
  *  iOS 风格下拉刷新指示器
- * 
+ *
  * 特点：
  * - 下拉时显示"下拉刷新..."
- * - 达到阈值时显示"松手刷新"  
+ * - 达到阈值时显示"松手刷新"
  * - 刷新中显示 iOS 风格旋转动画
  * - 刷新完成显示"刷新成功"
  */
@@ -134,31 +136,31 @@ fun HomeRefreshIndicator(
 ) {
     //  进度值（0.0 ~ 1.0+）
     val progress = state.distanceFraction
-    
+
     //  是否达到刷新阈值
     val isOverThreshold = progress >= 1f && !state.isAnimating
-    
+
     //  提示文字
     val hintText = resolvePullRefreshHintText(
         progress = progress,
         isRefreshing = isRefreshing,
         isStateAnimating = state.isAnimating
     )
-    
+
     //  箭头只表达阈值状态，使用高阻尼避免松手前后出现夸张回弹。
     val arrowRotation by animateFloatAsState(
         targetValue = if (isOverThreshold) 180f else 0f,
         animationSpec = iosRefreshArrowMotionSpec(),
         label = "arrow_rotation"
     )
-    
+
     //  透明度动画
     val alpha by animateFloatAsState(
         targetValue = if (progress > 0.1f || isRefreshing) 1f else 0f,
         animationSpec = iosRefreshAlphaMotionSpec(),
         label = "alpha"
     )
-    
+
     //  缩放跟随手势强度，阈值态只做轻强调，不制造果冻感。
     val scale by animateFloatAsState(
         targetValue = when {
@@ -169,7 +171,7 @@ fun HomeRefreshIndicator(
         animationSpec = iosRefreshScaleMotionSpec(),
         label = "scale"
     )
-    
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -195,19 +197,19 @@ fun HomeRefreshIndicator(
                     text = "↓",
                     fontSize = MaterialTheme.typography.titleMedium.fontSize,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = AppContentColors.accent(),
                     modifier = Modifier.rotate(arrowRotation)
                 )
             }
-            
+
             if (hintText.isNotEmpty()) {
                 Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
-                
+
                 AppText(
                     text = hintText,
                     fontSize = MaterialTheme.typography.labelMedium.fontSize,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppContentColors.secondaryText()
                 )
             }
         }

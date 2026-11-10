@@ -5,10 +5,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.BangumiRepository
+import com.android.purebilibili.feature.bangumi.currentBangumiFollowSession
+import com.android.purebilibili.feature.bangumi.BangumiFollowSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 
 /**
  * 番剧列表 UI 状态
@@ -78,59 +87,56 @@ enum class BangumiDisplayMode {
     SEARCH      // 搜索结果
 }
 
+data class BangumiUiState(
+    val displayMode: BangumiDisplayMode = BangumiDisplayMode.LIST,
+    val selectedType: Int = 1,
+    val listState: BangumiListState = BangumiListState.Loading,
+    val timelineState: TimelineState = TimelineState.Loading,
+    val detailState: BangumiDetailState = BangumiDetailState.Loading,
+    val searchState: BangumiSearchState = BangumiSearchState.Idle,
+    val myFollowState: MyFollowState = MyFollowState.Loading,
+    val myFollowType: Int = defaultMyFollowTypeForSeasonType(1),
+    val myFollowStats: MyFollowStats = MyFollowStats(),
+    val filter: BangumiFilter = BangumiFilter(),
+    val searchKeyword: String = ""
+)
+
 /**
  * 番剧/影视 ViewModel
  */
 class BangumiViewModel : ViewModel() {
-    
-    // 当前显示模式
-    private val _displayMode = MutableStateFlow(BangumiDisplayMode.LIST)
-    val displayMode: StateFlow<BangumiDisplayMode> = _displayMode.asStateFlow()
-    
-    // 当前选中的类型 (1=番剧 2=电影 3=纪录片 4=国创 5=电视剧 7=综艺)
-    private val _selectedType = MutableStateFlow(1)
-    val selectedType: StateFlow<Int> = _selectedType.asStateFlow()
-    
-    // 番剧列表状态
-    private val _listState = MutableStateFlow<BangumiListState>(BangumiListState.Loading)
-    val listState: StateFlow<BangumiListState> = _listState.asStateFlow()
-    
-    // 时间表状态
-    private val _timelineState = MutableStateFlow<TimelineState>(TimelineState.Loading)
-    val timelineState: StateFlow<TimelineState> = _timelineState.asStateFlow()
-    
-    // 番剧详情状态
-    private val _detailState = MutableStateFlow<BangumiDetailState>(BangumiDetailState.Loading)
-    val detailState: StateFlow<BangumiDetailState> = _detailState.asStateFlow()
-    
-    //  新增：搜索状态
-    private val _searchState = MutableStateFlow<BangumiSearchState>(BangumiSearchState.Idle)
-    val searchState: StateFlow<BangumiSearchState> = _searchState.asStateFlow()
-    
-    //  新增：我的追番状态
-    private val _myFollowState = MutableStateFlow<MyFollowState>(MyFollowState.Loading)
-    val myFollowState: StateFlow<MyFollowState> = _myFollowState.asStateFlow()
-
-    //  我的追番类型 (1=追番 2=追剧)
-    private val _myFollowType = MutableStateFlow(defaultMyFollowTypeForSeasonType(1))
-    val myFollowType: StateFlow<Int> = _myFollowType.asStateFlow()
-
-    //  我的追番统计（来自 API total，更接近真实数据）
-    private val _myFollowStats = MutableStateFlow(MyFollowStats())
-    val myFollowStats: StateFlow<MyFollowStats> = _myFollowStats.asStateFlow()
-    
-    //  新增：筛选条件
-    private val _filter = MutableStateFlow(BangumiFilter())
-    val filter: StateFlow<BangumiFilter> = _filter.asStateFlow()
-    
-    //  新增：搜索关键词
-    private val _searchKeyword = MutableStateFlow("")
-    val searchKeyword: StateFlow<String> = _searchKeyword.asStateFlow()
+    private val _uiState = MutableStateFlow(BangumiUiState())
+    val uiState = _uiState.asStateFlow()
+    val displayMode: StateFlow<BangumiDisplayMode> = uiState.map { it.displayMode }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.displayMode)
+    val selectedType: StateFlow<Int> = uiState.map { it.selectedType }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.selectedType)
+    val listState: StateFlow<BangumiListState> = uiState.map { it.listState }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.listState)
+    val timelineState: StateFlow<TimelineState> = uiState.map { it.timelineState }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.timelineState)
+    val detailState: StateFlow<BangumiDetailState> = uiState.map { it.detailState }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.detailState)
+    val searchState: StateFlow<BangumiSearchState> = uiState.map { it.searchState }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.searchState)
+    val myFollowState: StateFlow<MyFollowState> = uiState.map { it.myFollowState }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.myFollowState)
+    val myFollowType: StateFlow<Int> = uiState.map { it.myFollowType }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.myFollowType)
+    val myFollowStats: StateFlow<MyFollowStats> = uiState.map { it.myFollowStats }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.myFollowStats)
+    val filter: StateFlow<BangumiFilter> = uiState.map { it.filter }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.filter)
+    val searchKeyword: StateFlow<String> = uiState.map { it.searchKeyword }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value.searchKeyword)
     
     // 分页
     private var currentPage = 1
     private var isLoadingMore = false
     private var searchPage = 1
+    private var searchGeneration = 0L
+    private var listGeneration = 0L
+    private var timelineGeneration = 0L
     private var myFollowPage = 1
     
     //  [修复] 本地追番状态缓存
@@ -141,105 +147,149 @@ class BangumiViewModel : ViewModel() {
     
     //  [修复] 预加载的已追番 seasonId 集合（从"我的追番"API 获取）
     private val followedSeasonIds = mutableSetOf<Long>()
-    private val loadedFollowTypes = mutableSetOf<Int>()
+    private var followVerificationJob: Job? = null
+    private var detailRequestGeneration = 0L
+    private val loadedFollowStatsTypes = mutableSetOf<Int>()
+    private var followStatsJob: Job? = null
+    private var myFollowLoadJob: Job? = null
+    private var myFollowGeneration = 0L
+    private var myFollowLoadingType: Int? = null
+    private var followCacheSession: BangumiFollowSession = currentBangumiFollowSession()
+
+    private fun ensureFollowCacheSession(): BangumiFollowSession {
+        val session = currentBangumiFollowSession()
+        if (session != followCacheSession) {
+            followCacheSession = session
+            followStatusCache.clear()
+            followStatusValueCache.clear()
+            followedSeasonIds.clear()
+            loadedFollowStatsTypes.clear()
+            followVerificationJob?.cancel()
+            followStatsJob?.cancel()
+            myFollowLoadJob?.cancel()
+            ++detailRequestGeneration
+            ++myFollowGeneration
+            myFollowPage = 1
+            myFollowLoadingType = null
+            _uiState.update {
+                it.copy(
+                    detailState = BangumiDetailState.Loading,
+                    myFollowState = MyFollowState.Loading,
+                    myFollowStats = MyFollowStats()
+                )
+            }
+        }
+        return session
+    }
+
+    private fun isActiveFollowRequest(session: BangumiFollowSession, generation: Long): Boolean =
+        session == ensureFollowCacheSession() && generation == myFollowGeneration
     
     init {
         loadBangumiList()
         loadHomeFeed()
-        //  预加载用户的追番列表以获取正确的追番状态
-        preloadFollowedSeasons()
+        // 首页只加载展示所需的追番页，不自动扫描全部追番。
     }
 
     fun loadHomeFeed() {
-        val shouldShowTimeline = _selectedType.value == BangumiType.ANIME.value ||
-            _selectedType.value == BangumiType.GUOCHUANG.value
-        if (shouldShowTimeline && _timelineState.value is TimelineState.Loading) {
-            loadTimeline(timelineTypeForSelectedType(_selectedType.value))
+        val shouldShowTimeline = _uiState.value.selectedType == BangumiType.ANIME.value ||
+            _uiState.value.selectedType == BangumiType.GUOCHUANG.value
+        if (shouldShowTimeline && _uiState.value.timelineState is TimelineState.Loading) {
+            loadTimeline(timelineTypeForSelectedType(_uiState.value.selectedType))
         }
-        if (_myFollowState.value is MyFollowState.Loading) {
-            loadMyFollowBangumi(type = _myFollowType.value)
+        if (_uiState.value.myFollowState is MyFollowState.Loading) {
+            loadMyFollowBangumi(type = _uiState.value.myFollowType)
         }
     }
     
-    /**
-     *  [新增] 预加载用户已追番的 seasonId 列表
-     */
-    private fun preloadFollowedSeasons() {
-        viewModelScope.launch {
-            val bangumiTotal = ensureFollowedSeasonsLoaded(MY_FOLLOW_TYPE_BANGUMI)
-            val cinemaTotal = ensureFollowedSeasonsLoaded(MY_FOLLOW_TYPE_CINEMA)
-            _myFollowStats.value = buildMyFollowStats(
-                bangumiTotal = bangumiTotal,
-                cinemaTotal = cinemaTotal
+    private fun verifyDetailFollowStatus(detail: BangumiDetail, generation: Long) {
+        val session = ensureFollowCacheSession()
+        val seasonId = detail.seasonId
+        if (followStatusCache.containsKey(seasonId) ||
+            followStatusValueCache.containsKey(seasonId) ||
+            followedSeasonIds.contains(seasonId) || isBangumiFollowed(detail.userStatus)) return
+        if (session.session.isNullOrEmpty()) return
+        followVerificationJob = viewModelScope.launch {
+            val foundIds = mutableSetOf<Long>()
+            val type = defaultMyFollowTypeForSeasonType(detail.seasonType)
+            val result = preloadFollowedSeasonsForType(
+                type = type,
+                followedSeasonIds = foundIds,
+                targetSeasonId = seasonId
             )
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (generation != detailRequestGeneration || session != currentBangumiFollowSession()) return@launch
+            if (result.requestSucceeded) updateMyFollowStatsForType(type, result.total)
+            followedSeasonIds.addAll(foundIds)
+            if (seasonId !in foundIds) return@launch
+            val current = (_uiState.value.detailState as? BangumiDetailState.Success)?.detail
+                ?.takeIf { it.seasonId == seasonId } ?: return@launch
+            val verifiedDetail = if (!followStatusCache.containsKey(seasonId) &&
+                !followStatusValueCache.containsKey(seasonId) && result.targetFollowStatus != null) {
+                current.copy(userStatus = (current.userStatus ?: UserStatus()).copy(
+                    follow = 1, followStatus = result.targetFollowStatus
+                ))
+            } else current
+            _uiState.update { it.copy(detailState = BangumiDetailState.Success(correctFollowStatus(verifiedDetail))) }
         }
     }
 
-    private suspend fun ensureFollowedSeasonsLoaded(type: Int): Int {
-        if (loadedFollowTypes.contains(type)) {
-            return if (type == MY_FOLLOW_TYPE_BANGUMI) {
-                _myFollowStats.value.bangumiTotal
-            } else {
-                _myFollowStats.value.cinemaTotal
-            }
-        }
-
-        val preloadResult = preloadFollowedSeasonsForType(
-            type = type,
-            followedSeasonIds = followedSeasonIds
+    private fun correctFollowStatus(detail: BangumiDetail): BangumiDetail {
+        ensureFollowCacheSession()
+        val merged = resolveBangumiMergedFollowStatus(
+            detail.seasonId, detail.userStatus, followStatusCache,
+            followStatusValueCache, followedSeasonIds
         )
-        if (preloadResult.requestSucceeded) {
-            loadedFollowTypes.add(type)
-            android.util.Log.d(
-                "BangumiVM",
-                "📌 预加载追番列表完成: type=$type, total=${preloadResult.total}, followedCache=${followedSeasonIds.size}"
-            )
-        } else {
-            android.util.Log.w("BangumiVM", "⚠️ 预加载追番列表失败: type=$type")
-        }
-        return preloadResult.total
+        return detail.copy(userStatus = (detail.userStatus ?: UserStatus()).copy(
+            follow = if (merged.isFollowing) 1 else 0,
+            followStatus = merged.followStatus
+        ))
     }
     
     /**
      * 切换显示模式
      */
     fun setDisplayMode(mode: BangumiDisplayMode) {
-        _displayMode.value = mode
+        _uiState.update { it.copy(displayMode = mode) }
         when (mode) {
             BangumiDisplayMode.TIMELINE -> {
-                if (_timelineState.value is TimelineState.Loading) {
-                    loadTimeline(timelineTypeForSelectedType(_selectedType.value))
+                if (_uiState.value.timelineState is TimelineState.Loading) {
+                    loadTimeline(timelineTypeForSelectedType(_uiState.value.selectedType))
                 }
             }
             BangumiDisplayMode.MY_FOLLOW -> {
-                loadMyFollowBangumi(type = _myFollowType.value)
+                loadMyFollowBangumi(type = _uiState.value.myFollowType)
             }
             else -> {}
         }
     }
 
     fun openMyFollowEntry() {
-        val preferredType = defaultMyFollowTypeForSeasonType(_selectedType.value)
-        if (_myFollowType.value != preferredType) {
-            _myFollowType.value = preferredType
-        }
-        setDisplayMode(BangumiDisplayMode.MY_FOLLOW)
+        val preferredType = defaultMyFollowTypeForSeasonType(_uiState.value.selectedType)
+        _uiState.update { it.copy(myFollowType = preferredType, displayMode = BangumiDisplayMode.MY_FOLLOW) }
+        loadMyFollowBangumi(type = preferredType)
     }
     
     /**
      * 切换番剧类型
      */
     fun selectType(type: Int) {
-        if (_selectedType.value != type) {
-            _selectedType.value = type
-            _filter.value = BangumiFilter()
-            _myFollowType.value = defaultMyFollowTypeForSeasonType(type)
+        if (_uiState.value.selectedType != type) {
+            _uiState.update {
+                it.copy(
+                    selectedType = type,
+                    filter = BangumiFilter(),
+                    myFollowType = defaultMyFollowTypeForSeasonType(type),
+                    listState = BangumiListState.Loading,
+                    myFollowState = MyFollowState.Loading
+                )
+            }
             currentPage = 1
             loadBangumiList()
-            loadMyFollowBangumi(type = _myFollowType.value)
+            loadMyFollowBangumi(type = _uiState.value.myFollowType)
             val shouldReloadTimeline = type == BangumiType.ANIME.value ||
                 type == BangumiType.GUOCHUANG.value ||
-                _displayMode.value == BangumiDisplayMode.TIMELINE
+                _uiState.value.displayMode == BangumiDisplayMode.TIMELINE
             if (shouldReloadTimeline) {
                 loadTimeline(timelineTypeForSelectedType(type))
             }
@@ -247,9 +297,9 @@ class BangumiViewModel : ViewModel() {
     }
 
     fun selectMyFollowType(type: Int) {
-        if (_myFollowType.value == type) return
-        _myFollowType.value = type
-        if (_displayMode.value == BangumiDisplayMode.MY_FOLLOW) {
+        if (_uiState.value.myFollowType == type) return
+        _uiState.update { it.copy(myFollowType = type, myFollowState = MyFollowState.Loading) }
+        if (_uiState.value.displayMode == BangumiDisplayMode.MY_FOLLOW) {
             loadMyFollowBangumi(type)
         }
     }
@@ -266,7 +316,7 @@ class BangumiViewModel : ViewModel() {
      *  更新筛选条件
      */
     fun updateFilter(newFilter: BangumiFilter) {
-        _filter.value = newFilter
+        _uiState.update { it.copy(filter = newFilter) }
         currentPage = 1
         loadBangumiListWithFilter()
     }
@@ -275,61 +325,39 @@ class BangumiViewModel : ViewModel() {
      * 加载番剧列表
      */
     fun loadBangumiList() {
+        val session = ensureFollowCacheSession()
+        val generation = ++listGeneration
+        val requestState = _uiState.value
+        _uiState.update {
+            val previous = it.listState
+            it.copy(listState = if (previous is BangumiListState.Success) {
+                previous.copy(isRefreshing = true)
+            } else BangumiListState.Loading)
+        }
         viewModelScope.launch {
-            val previousState = _listState.value
-            _listState.value = if (previousState is BangumiListState.Success) {
-                previousState.copy(isRefreshing = true)
-            } else {
-                BangumiListState.Loading
-            }
-            currentPage = 1
-            
             BangumiRepository.getBangumiIndexWithFilter(
-                seasonType = _selectedType.value,
-                page = currentPage,
-                filter = _filter.value
+                seasonType = requestState.selectedType,
+                page = 1,
+                filter = requestState.filter
             ).fold(
                 onSuccess = { data ->
-                    _listState.value = BangumiListState.Success(
+                    if (generation != listGeneration || session != ensureFollowCacheSession()) return@fold
+                    currentPage = 1
+                    _uiState.update { it.copy(listState = BangumiListState.Success(
                         items = data.list ?: emptyList(),
                         hasMore = data.hasNext == 1
-                    )
+                    )) }
                 },
                 onFailure = { error ->
-                    _listState.value = BangumiListState.Error(error.message ?: "加载失败")
+                    if (generation != listGeneration || session != ensureFollowCacheSession()) return@fold
+                    _uiState.update { it.copy(listState = BangumiListState.Error(error.message ?: "加载失败")) }
                 }
             )
         }
     }
-    
-    /**
-     *  带筛选条件加载番剧列表
-     */
+
     private fun loadBangumiListWithFilter() {
-        viewModelScope.launch {
-            val previousState = _listState.value
-            _listState.value = if (previousState is BangumiListState.Success) {
-                previousState.copy(isRefreshing = true)
-            } else {
-                BangumiListState.Loading
-            }
-            
-            BangumiRepository.getBangumiIndexWithFilter(
-                seasonType = _selectedType.value,
-                page = currentPage,
-                filter = _filter.value
-            ).fold(
-                onSuccess = { data ->
-                    _listState.value = BangumiListState.Success(
-                        items = data.list ?: emptyList(),
-                        hasMore = data.hasNext == 1
-                    )
-                },
-                onFailure = { error ->
-                    _listState.value = BangumiListState.Error(error.message ?: "加载失败")
-                }
-            )
-        }
+        loadBangumiList()
     }
     
     /**
@@ -337,24 +365,27 @@ class BangumiViewModel : ViewModel() {
      */
     fun loadMore() {
         if (isLoadingMore) return
-        val currentState = _listState.value
-        if (currentState !is BangumiListState.Success || !currentState.hasMore) return
-        
+        val currentState = _uiState.value.listState
+        if (currentState !is BangumiListState.Success || !currentState.hasMore || currentState.isRefreshing) return
+
         isLoadingMore = true
+        val session = ensureFollowCacheSession()
+        val generation = listGeneration
+        val requestedPage = currentPage + 1
+        val requestState = _uiState.value
         viewModelScope.launch {
-            currentPage++
-            
             BangumiRepository.getBangumiIndexWithFilter(
-                seasonType = _selectedType.value,
-                page = currentPage,
-                filter = _filter.value
+                seasonType = requestState.selectedType,
+                page = requestedPage,
+                filter = requestState.filter
             ).fold(
                 onSuccess = { data ->
+                    if (generation != listGeneration || session != ensureFollowCacheSession()) return@fold
                     val newItems = currentState.items + (data.list ?: emptyList())
-                    _listState.value = BangumiListState.Success(
+                    _uiState.update { it.copy(listState = BangumiListState.Success(
                         items = newItems,
                         hasMore = data.hasNext == 1
-                    )
+                    )) }
                 },
                 onFailure = {
                     currentPage--
@@ -368,15 +399,19 @@ class BangumiViewModel : ViewModel() {
      * 加载时间表
      */
     fun loadTimeline(type: Int = 1) {
+        val session = ensureFollowCacheSession()
+        val generation = ++timelineGeneration
         viewModelScope.launch {
-            _timelineState.value = TimelineState.Loading
+            _uiState.update { it.copy(timelineState = TimelineState.Loading) }
             
             BangumiRepository.getTimeline(type).fold(
                 onSuccess = { days ->
-                    _timelineState.value = TimelineState.Success(days)
+                    if (generation != timelineGeneration || session != ensureFollowCacheSession()) return@fold
+                    _uiState.update { it.copy(timelineState = TimelineState.Success(days)) }
                 },
                 onFailure = { error ->
-                    _timelineState.value = TimelineState.Error(error.message ?: "加载失败")
+                    if (generation != timelineGeneration || session != ensureFollowCacheSession()) return@fold
+                    _uiState.update { it.copy(timelineState = TimelineState.Error(error.message ?: "加载失败")) }
                 }
             )
         }
@@ -386,27 +421,23 @@ class BangumiViewModel : ViewModel() {
      * 加载番剧详情
      */
     fun loadSeasonDetail(seasonId: Long, epId: Long = 0, mediaId: Long = 0) {
+        val session = ensureFollowCacheSession()
+        val generation = ++detailRequestGeneration
+        followVerificationJob?.cancel()
         viewModelScope.launch {
-            _detailState.value = BangumiDetailState.Loading
+            _uiState.update { it.copy(detailState = BangumiDetailState.Loading) }
             
             val detailResult = if (mediaId > 0L && seasonId <= 0L && epId <= 0L) {
                 BangumiRepository.getSeasonDetailByMediaId(mediaId)
             } else {
                 BangumiRepository.getSeasonDetail(seasonId, epId)
             }
+            if (generation != detailRequestGeneration || session != ensureFollowCacheSession()) return@launch
             detailResult.fold(
                 onSuccess = { detail ->
                     //  获取真实的 seasonId (如果传入的是 0 或错误的 ID，这里会纠正)
                     val realSeasonId = detail.seasonId
-                    val followType = defaultMyFollowTypeForSeasonType(detail.seasonType)
-
-                    //  [修复] 如果当前类型的追番列表还没加载，先按分页预加载，避免仅第一页导致误判
-                    if (!loadedFollowTypes.contains(followType)) {
-                        val total = ensureFollowedSeasonsLoaded(followType)
-                        if (total > 0) {
-                            updateMyFollowStatsForType(type = followType, total = total)
-                        }
-                    }
+                    // 先发布详情；不让追番分页校验阻塞内容。
                     
                     val mergedFollowStatus = resolveBangumiMergedFollowStatus(
                         seasonId = realSeasonId,
@@ -425,10 +456,12 @@ class BangumiViewModel : ViewModel() {
                             followStatus = mergedFollowStatus.followStatus
                         )
                     )
-                    _detailState.value = BangumiDetailState.Success(correctedDetail)
+                    _uiState.update { it.copy(detailState = BangumiDetailState.Success(correctedDetail)) }
+                    verifyDetailFollowStatus(detail, generation)
                 },
                 onFailure = { error ->
-                    _detailState.value = BangumiDetailState.Error(error.message ?: "加载失败")
+                    if (generation != detailRequestGeneration || session != ensureFollowCacheSession()) return@fold
+                    _uiState.update { it.copy(detailState = BangumiDetailState.Error(error.message ?: "加载失败")) }
                 }
             )
         }
@@ -449,8 +482,10 @@ class BangumiViewModel : ViewModel() {
     }
 
     fun updateFollowStatus(seasonId: Long, status: Int) {
+        val session = ensureFollowCacheSession()
+        val generation = ++detailRequestGeneration
         viewModelScope.launch {
-            val currentDetail = (_detailState.value as? BangumiDetailState.Success)?.detail
+            val currentDetail = (_uiState.value.detailState as? BangumiDetailState.Success)?.detail
                 ?.takeIf { it.seasonId == seasonId }
             val wasFollowing = isBangumiFollowed(currentDetail?.userStatus) ||
                 followStatusCache[seasonId] == true ||
@@ -468,7 +503,7 @@ class BangumiViewModel : ViewModel() {
                 }
                 else -> {
                     val followResult = BangumiRepository.followBangumi(seasonId)
-                    if (followResult.isSuccess) {
+                    if (followResult.isSuccess && session == ensureFollowCacheSession()) {
                         BangumiRepository.updateBangumiFollowStatus(seasonId, status)
                     } else {
                         Result.failure(followResult.exceptionOrNull() ?: Exception("追番失败"))
@@ -478,6 +513,7 @@ class BangumiViewModel : ViewModel() {
             
             result.fold(
                 onSuccess = {
+                    if (generation != detailRequestGeneration || session != ensureFollowCacheSession()) return@fold
                     //  [修复] 成功后更新本地缓存和预加载列表
                     val isNowFollowing = status != BANGUMI_FOLLOW_STATUS_UNFOLLOW
                     followStatusCache[seasonId] = isNowFollowing
@@ -488,7 +524,7 @@ class BangumiViewModel : ViewModel() {
                         followedSeasonIds.remove(seasonId)
                         followStatusValueCache.remove(seasonId)
                     }
-                    val currentState = _detailState.value as? BangumiDetailState.Success
+                    val currentState = _uiState.value.detailState as? BangumiDetailState.Success
                     if (currentState?.detail?.seasonId == seasonId) {
                         val updatedUserStatus = currentState.detail.userStatus?.copy(
                             follow = if (isNowFollowing) 1 else 0,
@@ -497,13 +533,14 @@ class BangumiViewModel : ViewModel() {
                             follow = if (isNowFollowing) 1 else 0,
                             followStatus = if (isNowFollowing) status else 0
                         )
-                        _detailState.value = BangumiDetailState.Success(
+                        _uiState.update { it.copy(detailState = BangumiDetailState.Success(
                             currentState.detail.copy(userStatus = updatedUserStatus)
-                        )
+                        )) }
                     }
                     android.util.Log.d("BangumiVM", "追番状态更新成功: seasonId=$seasonId, status=$status")
                 },
                 onFailure = { error ->
+                    if (generation != detailRequestGeneration || session != ensureFollowCacheSession()) return@fold
                     android.util.Log.e("BangumiVM", "Toggle follow failed: ${error.message}")
                     //  失败时清除缓存并重新加载详情，恢复正确状态
                     followStatusCache.remove(seasonId)
@@ -522,27 +559,31 @@ class BangumiViewModel : ViewModel() {
     fun searchBangumi(keyword: String) {
         if (keyword.isBlank()) return
         
-        _searchKeyword.value = keyword
-        _displayMode.value = BangumiDisplayMode.SEARCH
+        _uiState.update {
+            it.copy(searchKeyword = keyword, displayMode = BangumiDisplayMode.SEARCH,
+                searchState = BangumiSearchState.Loading)
+        }
         searchPage = 1
-        
+        val generation = ++searchGeneration
+        val seasonType = _uiState.value.selectedType
         viewModelScope.launch {
-            _searchState.value = BangumiSearchState.Loading
             
             BangumiRepository.searchBangumi(
                 keyword = keyword,
-                seasonType = _selectedType.value,
-                page = searchPage
+                seasonType = seasonType,
+                page = 1
             ).fold(
                 onSuccess = { data ->
-                    _searchState.value = BangumiSearchState.Success(
+                    if (generation != searchGeneration) return@fold
+                    _uiState.update { it.copy(searchState = BangumiSearchState.Success(
                         items = data.result ?: emptyList(),
                         hasMore = data.page < data.numPages,
                         keyword = keyword
-                    )
+                    )) }
                 },
                 onFailure = { error ->
-                    _searchState.value = BangumiSearchState.Error(error.message ?: "搜索失败")
+                    if (generation != searchGeneration) return@fold
+                    _uiState.update { it.copy(searchState = BangumiSearchState.Error(error.message ?: "搜索失败")) }
                 }
             )
         }
@@ -552,27 +593,30 @@ class BangumiViewModel : ViewModel() {
      *  加载更多搜索结果
      */
     fun loadMoreSearchResults() {
-        val currentState = _searchState.value
+        val currentState = _uiState.value.searchState
         if (currentState !is BangumiSearchState.Success || !currentState.hasMore || isLoadingMore) return
         
         isLoadingMore = true
-        searchPage++
-        
+        val requestedPage = searchPage + 1
+        val generation = searchGeneration
+        val seasonType = _uiState.value.selectedType
         viewModelScope.launch {
             BangumiRepository.searchBangumi(
                 keyword = currentState.keyword,
-                seasonType = _selectedType.value,
-                page = searchPage
+                seasonType = seasonType,
+                page = requestedPage
             ).fold(
                 onSuccess = { data ->
-                    _searchState.value = BangumiSearchState.Success(
+                    if (generation != searchGeneration) return@fold
+                    searchPage = requestedPage
+                    _uiState.update { it.copy(searchState = BangumiSearchState.Success(
                         items = currentState.items + (data.result ?: emptyList()),
                         hasMore = data.page < data.numPages,
                         keyword = currentState.keyword
-                    )
+                    )) }
                 },
                 onFailure = {
-                    searchPage--
+                    // 页码仅在成功后提交。
                 }
             )
             isLoadingMore = false
@@ -583,36 +627,50 @@ class BangumiViewModel : ViewModel() {
      *  清除搜索
      */
     fun clearSearch() {
-        _searchKeyword.value = ""
-        _searchState.value = BangumiSearchState.Idle
-        _displayMode.value = BangumiDisplayMode.LIST
+        ++searchGeneration
+        _uiState.update {
+            it.copy(searchKeyword = "", searchState = BangumiSearchState.Idle,
+                displayMode = BangumiDisplayMode.LIST)
+        }
     }
     
     /**
      *  加载我的追番列表
      */
     fun loadMyFollowBangumi(type: Int? = null) {
-        val targetType = resolveMyFollowRequestType(type, _myFollowType.value)
-        _myFollowType.value = targetType
+        val session = ensureFollowCacheSession()
+        val targetType = resolveMyFollowRequestType(type, _uiState.value.myFollowType)
+        if (myFollowLoadJob?.isActive == true && myFollowLoadingType == targetType) return
+        myFollowLoadingType = targetType
+        _uiState.update { it.copy(myFollowType = targetType, myFollowState = MyFollowState.Loading) }
+        val generation = ++myFollowGeneration
+        myFollowLoadJob?.cancel()
         myFollowPage = 1
         
-        viewModelScope.launch {
-            _myFollowState.value = MyFollowState.Loading
-            
+        myFollowLoadJob = viewModelScope.launch {
             BangumiRepository.getMyFollowBangumi(
                 type = targetType,
-                page = myFollowPage
+                page = 1
             ).fold(
                 onSuccess = { data ->
-                    updateMyFollowStatsForType(type = targetType, total = data.total)
-                    _myFollowState.value = MyFollowState.Success(
-                        items = data.list ?: emptyList(),
-                        hasMore = (data.list?.size ?: 0) >= data.ps,
-                        total = data.total
-                    )
+                    if (!isActiveFollowRequest(session, generation)) return@fold
+                    followedSeasonIds.addAll(data.list.orEmpty().map { it.seasonId })
+                    loadedFollowStatsTypes.add(targetType)
+                    _uiState.update {
+                        it.copy(
+                            myFollowStats = statsForType(it.myFollowStats, targetType, data.total),
+                            myFollowState = MyFollowState.Success(
+                                items = data.list ?: emptyList(),
+                                hasMore = (data.list?.size ?: 0) >= data.ps,
+                                total = data.total
+                            )
+                        )
+                    }
+                    loadRemainingFollowStats(targetType)
                 },
                 onFailure = { error ->
-                    _myFollowState.value = MyFollowState.Error(error.message ?: "加载失败")
+                    if (!isActiveFollowRequest(session, generation)) return@fold
+                    _uiState.update { it.copy(myFollowState = MyFollowState.Error(error.message ?: "加载失败")) }
                 }
             )
         }
@@ -622,37 +680,68 @@ class BangumiViewModel : ViewModel() {
      *  加载更多追番
      */
     fun loadMoreMyFollow() {
-        val currentState = _myFollowState.value
+        val session = ensureFollowCacheSession()
+        val currentState = _uiState.value.myFollowState
         if (currentState !is MyFollowState.Success || !currentState.hasMore || isLoadingMore) return
         
         isLoadingMore = true
-        myFollowPage++
+        val generation = myFollowGeneration
+        val targetType = _uiState.value.myFollowType
+        val requestedPage = myFollowPage + 1
         
         viewModelScope.launch {
             BangumiRepository.getMyFollowBangumi(
-                type = _myFollowType.value,
-                page = myFollowPage
+                type = targetType,
+                page = requestedPage
             ).fold(
                 onSuccess = { data ->
-                    updateMyFollowStatsForType(type = _myFollowType.value, total = data.total)
-                    _myFollowState.value = MyFollowState.Success(
-                        items = currentState.items + (data.list ?: emptyList()),
-                        hasMore = (data.list?.size ?: 0) >= data.ps,
-                        total = data.total
-                    )
+                    if (!isActiveFollowRequest(session, generation)) return@fold
+                    myFollowPage = requestedPage
+                    followedSeasonIds.addAll(data.list.orEmpty().map { it.seasonId })
+                    loadedFollowStatsTypes.add(targetType)
+                    _uiState.update {
+                        it.copy(
+                            myFollowStats = statsForType(it.myFollowStats, targetType, data.total),
+                            myFollowState = MyFollowState.Success(
+                                items = currentState.items + (data.list ?: emptyList()),
+                                hasMore = (data.list?.size ?: 0) >= data.ps,
+                                total = data.total
+                            )
+                        )
+                    }
                 },
                 onFailure = {
-                    myFollowPage--
+                    // 页码仅在成功后提交，失败重试仍请求同一页。
                 }
             )
             isLoadingMore = false
         }
     }
 
+    private fun loadRemainingFollowStats(displayedType: Int) {
+        val session = ensureFollowCacheSession()
+        val otherType = if (displayedType == MY_FOLLOW_TYPE_BANGUMI) {
+            MY_FOLLOW_TYPE_CINEMA
+        } else MY_FOLLOW_TYPE_BANGUMI
+        if (otherType in loadedFollowStatsTypes || followStatsJob?.isActive == true) return
+        followStatsJob = viewModelScope.launch {
+            BangumiRepository.getMyFollowBangumi(type = otherType, page = 1).onSuccess { data ->
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (session != ensureFollowCacheSession()) return@onSuccess
+                followedSeasonIds.addAll(data.list.orEmpty().map { it.seasonId })
+                updateMyFollowStatsForType(otherType, data.total)
+            }
+        }
+    }
+
     private fun updateMyFollowStatsForType(type: Int, total: Int) {
-        val current = _myFollowStats.value
+        loadedFollowStatsTypes.add(type)
+        _uiState.update { it.copy(myFollowStats = statsForType(it.myFollowStats, type, total)) }
+    }
+
+    private fun statsForType(current: MyFollowStats, type: Int, total: Int): MyFollowStats {
         val normalized = total.coerceAtLeast(0)
-        _myFollowStats.value = if (type == MY_FOLLOW_TYPE_BANGUMI) {
+        return if (type == MY_FOLLOW_TYPE_BANGUMI) {
             buildMyFollowStats(
                 bangumiTotal = normalized,
                 cinemaTotal = current.cinemaTotal

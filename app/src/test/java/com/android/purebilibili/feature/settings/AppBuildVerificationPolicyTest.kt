@@ -218,7 +218,7 @@ class AppBuildVerificationPolicyTest {
             hasAttestation = true
         )
 
-        assertEquals("与 GitHub Release SHA-256 一致，Release 已锁定，含 provenance。", subtitle)
+        assertEquals("SHA-256 与 GitHub Release 一致；发布已锁定，并有 provenance。", subtitle)
     }
 
     @Test
@@ -228,7 +228,7 @@ class AppBuildVerificationPolicyTest {
             summary = "当前安装包缺少足够的发布侧证据，暂时无法核对源码与安装包是否一致。"
         )
 
-        assertEquals("源码一致性", content.title)
+        assertEquals("安装包来源验证", content.title)
         assertEquals("未验证", content.value)
         assertEquals("当前安装包缺少足够的发布侧证据，暂时无法核对源码与安装包是否一致。", content.body)
         assertEquals("查看证明", content.actionLabel)
@@ -241,7 +241,7 @@ class AppBuildVerificationPolicyTest {
             subtitle = "workflow #123456 · tag v7.4.0"
         )
 
-        assertEquals("构建来源", content.title)
+        assertEquals("版本来源", content.title)
         assertEquals("GitHub Release", content.value)
         assertEquals("workflow #123456 · tag v7.4.0", content.body)
         assertEquals("查看来源", content.actionLabel)

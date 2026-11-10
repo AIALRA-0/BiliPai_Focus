@@ -1,6 +1,8 @@
 // 文件路径: feature/video/ui/components/EmotePanelSheet.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import coil3.request.crossfade
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
@@ -12,7 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -47,7 +49,7 @@ fun EmotePanelSheet(
     onEmoteSelect: (EmoteItem) -> Unit
 ) {
     if (!visible) return
-    
+
     com.android.purebilibili.core.ui.AppModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -68,10 +70,10 @@ fun EmotePanelSheet(
                 AppText(
                     text = "表情",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = AppContentColors.primaryText()
                 )
             }
-            
+
             if (isLoading) {
                 Box(
                     modifier = Modifier
@@ -90,15 +92,19 @@ fun EmotePanelSheet(
                 ) {
                     AppText(
                         text = "暂无表情包",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             } else {
                 // 表情包 Tab 栏
                 var selectedPackageIndex by remember { mutableIntStateOf(0) }
-                
+
                 AppThemeAdaptiveTabRow(
+                    // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                    liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                    role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+                    centerContent = false,
                     options = packages.mapIndexed { index, pkg ->
                         AppSegmentOption(index, pkg.text)
                     },
@@ -106,18 +112,18 @@ fun EmotePanelSheet(
                     onSelectionChange = { selectedPackageIndex = it },
                     modifier = Modifier.fillMaxWidth(),
                     scrollable = true,
-                    labelFontSize = 13.sp,
+                    labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
                 )
-                
+
                 AppHorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                     thickness = 0.5.dp
                 )
-                
+
                 // 表情网格
                 val selectedPackage = packages.getOrNull(selectedPackageIndex)
                 val emotes = selectedPackage?.emote ?: emptyList()
-                
+
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(7),
                     modifier = Modifier

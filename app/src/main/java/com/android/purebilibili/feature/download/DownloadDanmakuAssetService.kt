@@ -73,10 +73,20 @@ internal object DownloadDanmakuAssetService {
             durationMs = durationMs,
             metadataSegmentCount = viewReply?.dmSge?.total?.toInt()
         )
-        val specialSegments = DanmakuRepository.getSpecialDanmakuSegments(viewReply?.specialDms.orEmpty())
-        val segments = standardSegments + specialSegments
-
-        if (segments.isEmpty()) {
+        val danmakuDir = File(taskDir, "danmaku").apply { mkdirs() }
+        val standardSegmentPaths = standardSegments.mapIndexed { index, bytes ->
+            val file = File(danmakuDir, "${task.id}_seg_${index + 1}.pb")
+            file.writeBytes(bytes)
+            file.absolutePath
+        }
+        val specialSegmentPaths = viewReply?.specialDms.orEmpty().mapIndexedNotNull { index, url ->
+            val file = File(danmakuDir, "${task.id}_special_${index + 1}.pb")
+            DanmakuRepository.downloadSpecialDanmaku(url, file)
+                ?.takeIf { it > 0L }
+                ?.let { file.absolutePath }
+        }
+        val segmentPaths = standardSegmentPaths + specialSegmentPaths
+        if (segmentPaths.isEmpty()) {
             updateState(
                 DownloadAssetState(
                     kind = DownloadAssetKind.DANMAKU,
@@ -86,19 +96,8 @@ internal object DownloadDanmakuAssetService {
             )
             return@withContext DownloadDanmakuAssetResult(emptyList(), null)
         }
-
-        val danmakuDir = File(taskDir, "danmaku").apply { mkdirs() }
-        val standardSegmentPaths = standardSegments.mapIndexed { index, bytes ->
-            val file = File(danmakuDir, "${task.id}_seg_${index + 1}.pb")
-            file.writeBytes(bytes)
-            file.absolutePath
-        }
-        val specialSegmentPaths = specialSegments.mapIndexed { index, bytes ->
-            val file = File(danmakuDir, "${task.id}_special_${index + 1}.pb")
-            file.writeBytes(bytes)
-            file.absolutePath
-        }
-        val segmentPaths = standardSegmentPaths + specialSegmentPaths
+        val totalBytes = standardSegments.sumOf { it.size.toLong() } +
+            specialSegmentPaths.sumOf { File(it).length() }
         val manifestFile = File(danmakuDir, "${task.id}_manifest.json")
         manifestFile.writeText(
             json.encodeToString(
@@ -118,10 +117,10 @@ internal object DownloadDanmakuAssetService {
             DownloadAssetState(
                 kind = DownloadAssetKind.DANMAKU,
                 status = DownloadAssetStatus.COMPLETED,
-                totalBytes = segments.sumOf { it.size.toLong() },
-                downloadedBytes = segments.sumOf { it.size.toLong() },
+                totalBytes = totalBytes,
+                downloadedBytes = totalBytes,
                 filePath = manifestFile.absolutePath,
-                segmentCount = segments.size
+                segmentCount = segmentPaths.size
             )
         )
         DownloadDanmakuAssetResult(

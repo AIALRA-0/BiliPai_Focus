@@ -1,13 +1,18 @@
 package com.android.purebilibili.feature.message.feed
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.ui.components.AppButton
 import androidx.compose.material3.MaterialTheme
@@ -25,24 +30,22 @@ import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.rememberContentCardSurfaceSpec
+import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
+import com.android.purebilibili.core.ui.skeleton.rememberStaticSkeletonBlockColor
 import com.android.purebilibili.feature.message.messageGlassContainer
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.android.purebilibili.core.util.FormatUtils
 
-internal fun formatMessageFeedTime(timestampSeconds: Int): String {
-    if (timestampSeconds <= 0) return ""
-    val now = System.currentTimeMillis()
-    val msgTime = timestampSeconds * 1000L
-    val diff = now - msgTime
-    return when {
-        diff < 60_000L -> "刚刚"
-        diff < 3_600_000L -> "${diff / 60_000L}分钟前"
-        diff < 86_400_000L -> "${diff / 3_600_000L}小时前"
-        diff < 172_800_000L -> "昨天"
-        else -> SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(msgTime))
-    }
-}
+/**
+ * 消息通知卡片的 lazy item 身份。骨架卡片与真实卡片共用同一个 contentType，
+ * 加载完成时 LazyList 才能在原地替换 item，而不是整批删除 + 整批新增。
+ */
+internal const val MESSAGE_FEED_CARD_CONTENT_TYPE = "message_feed_card"
+
+/** 消息通知首屏骨架卡片数量。 */
+internal const val MESSAGE_FEED_SKELETON_ITEM_COUNT = 8
+
+internal fun formatMessageFeedTime(timestampSeconds: Int): String =
+    FormatUtils.formatPublishTime(timestampSeconds.toLong())
 
 internal fun firstNonBlank(vararg values: String?): String? {
     return values.firstOrNull { !it.isNullOrBlank() }?.trim()
@@ -172,7 +175,7 @@ internal fun MessageFeedEmpty(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        AppText(text = text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        AppText(text = text, color = AppContentColors.secondaryText())
     }
 }
 
@@ -187,7 +190,7 @@ internal fun MessageFeedError(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        AppText(text = text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        AppText(text = text, color = AppContentColors.secondaryText())
         AppButton(onClick = onRetry, modifier = Modifier.padding(top = 8.dp)) {
             AppText("重试")
         }
@@ -225,7 +228,7 @@ internal fun MessageFeedSectionHeader(text: String) {
         text = text,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
+        color = AppContentColors.accent(),
         fontWeight = FontWeight.SemiBold
     )
 }
@@ -251,5 +254,112 @@ internal fun MessageFeedCard(
             )
     ) {
         content()
+    }
+}
+
+/**
+ * 通知卡片骨架（头像版，对齐 @我 / 回复我的 / 收到的赞 的卡片布局）。
+ *
+ * 复用 [MessageFeedCard] 的容器与 14dp 内边距、46dp 头像，因此骨架与真实卡片行高一致；
+ * 颜色用 [rememberStaticSkeletonBlockColor] 固定色，不参与呼吸脉冲——呼吸中的灰块与随后的
+ * 内容淡入叠加，观感上就是「闪」。
+ */
+@Composable
+internal fun MessageFeedCardSkeleton(
+    modifier: Modifier = Modifier,
+    slotIndex: Int = 0,
+) {
+    val blockColor = rememberStaticSkeletonBlockColor()
+    MessageFeedCard(modifier = modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(14.dp)) {
+            ContentSkeletonBlock(
+                color = blockColor,
+                shape = CircleShape,
+                modifier = Modifier.size(46.dp),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                ContentSkeletonBlock(
+                    color = blockColor,
+                    modifier = Modifier
+                        .fillMaxWidth(if (slotIndex % 2 == 0) 0.78f else 0.62f)
+                        .height(17.dp),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ContentSkeletonBlock(
+                    color = blockColor,
+                    modifier = Modifier
+                        .fillMaxWidth(0.94f)
+                        .height(14.dp),
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                ContentSkeletonBlock(
+                    color = blockColor,
+                    modifier = Modifier
+                        .fillMaxWidth(0.66f)
+                        .height(14.dp),
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ContentSkeletonBlock(
+                        color = blockColor,
+                        modifier = Modifier
+                            .width(52.dp)
+                            .height(12.dp),
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    ContentSkeletonBlock(
+                        color = blockColor,
+                        modifier = Modifier
+                            .width(28.dp)
+                            .height(12.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 系统通知骨架：标题 + 两行正文 + 右对齐时间，对齐 [MessageFeedCard] 的 14dp 内边距与 8dp 行距。
+ */
+@Composable
+internal fun MessageFeedNoticeSkeleton(
+    modifier: Modifier = Modifier,
+    slotIndex: Int = 0,
+) {
+    val blockColor = rememberStaticSkeletonBlockColor()
+    MessageFeedCard(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ContentSkeletonBlock(
+                color = blockColor,
+                modifier = Modifier
+                    .fillMaxWidth(if (slotIndex % 2 == 0) 0.46f else 0.36f)
+                    .height(17.dp),
+            )
+            ContentSkeletonBlock(
+                color = blockColor,
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .height(14.dp),
+            )
+            ContentSkeletonBlock(
+                color = blockColor,
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .height(14.dp),
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            ContentSkeletonBlock(
+                color = blockColor,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .fillMaxWidth(0.28f)
+                    .height(12.dp),
+            )
+        }
     }
 }

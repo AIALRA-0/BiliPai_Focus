@@ -4,6 +4,7 @@ fun hasVideoNoteBodyContent(document: VideoNoteEditorDocument): Boolean {
     return document.blocks.any { block ->
         when (block) {
             is VideoNoteBlock.Text -> block.text.isNotBlank()
+            is VideoNoteBlock.Quote -> block.text.isNotBlank()
             is VideoNoteBlock.Timestamp -> true
         }
     }

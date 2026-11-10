@@ -8,6 +8,44 @@ import kotlin.test.assertTrue
 class DanmakuPlaybackSyncPolicyTest {
 
     @Test
+    fun `cancelled back preserves a synced timeline but rebuilds a replacement renderer`() {
+        for (synced in listOf(true, false)) {
+            assertEquals(
+                if (synced) DanmakuSyncAction.SoftResync else DanmakuSyncAction.HardResync,
+                resolveDanmakuActionForForegroundRecovery(
+                    playWhenReady = true,
+                    isPlayerPlaying = true,
+                    playbackState = androidx.media3.common.Player.STATE_READY,
+                    danmakuEnabled = true,
+                    hasData = true,
+                    preserveTimeline = true,
+                    timelineAlreadySynced = synced
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `cancelled back never enables disabled danmaku or restarts an ended video`() {
+        assertEquals(
+            DanmakuSyncAction.None,
+            resolveDanmakuActionForForegroundRecovery(
+                true, true, androidx.media3.common.Player.STATE_READY,
+                danmakuEnabled = false, hasData = true,
+                preserveTimeline = true, timelineAlreadySynced = true
+            )
+        )
+        assertEquals(
+            DanmakuSyncAction.PauseOnly,
+            resolveDanmakuActionForForegroundRecovery(
+                true, false, androidx.media3.common.Player.STATE_ENDED,
+                danmakuEnabled = true, hasData = true,
+                preserveTimeline = true, timelineAlreadySynced = true
+            )
+        )
+    }
+
+    @Test
     fun `engine play speed should follow video playback speed percent`() {
         assertEquals(100, resolveDanmakuEnginePlaySpeedPercent(1.0f))
         assertEquals(150, resolveDanmakuEnginePlaySpeedPercent(1.5f))

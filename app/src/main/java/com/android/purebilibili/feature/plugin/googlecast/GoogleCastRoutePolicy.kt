@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.plugin.googlecast
 
 import androidx.mediarouter.media.MediaRouter
-import com.android.purebilibili.core.plugin.CastPluginRoute
+import com.android.purebilibili.plugin.sdk.CastPluginRoute
 
 internal fun toCastPluginRoute(
     routeId: String,

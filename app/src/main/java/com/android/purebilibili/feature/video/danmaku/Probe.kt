@@ -15,7 +15,6 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import com.android.purebilibili.danmaku.engine.DanmakuItem
 import com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper
-import java.util.regex.Pattern
 
 /**
  * 创建支持表情的 BitmapDanmaku
@@ -33,10 +32,15 @@ fun createBitmapDanmaku(
     showAtTime: Long,
     enableEmoticon: Boolean = true,
     typeface: Typeface = Typeface.DEFAULT,
+    // 消息级表情（直播 emots、整条表情弹幕）优先于全局映射表。
+    extraEmotes: Map<String, String> = emptyMap(),
+    emoteAspectRatios: Map<String, Float> = emptyMap(),
+    // Worker rasterization defers image callbacks until the base bitmap is fully painted.
+    deferredImageRequests: MutableList<() -> Unit>? = null,
     onUpdate: () -> Unit
 ): DanmakuItem {
     // 1. 解析文本
-    val segments = parseSegments(text, enableEmoticon)
+    val segments = parseSegments(text, enableEmoticon, extraEmotes)
     
     // 2. 测量尺寸
     val paint = TextPaint().apply {
@@ -56,12 +60,16 @@ fun createBitmapDanmaku(
     val textHeight = fontMetrics.descent - fontMetrics.ascent
     // 图片高度稍微大一点 (1.3倍)
     val iconSize = (textSize * 1.3f).toInt()
+    fun emoteWidth(key: String): Int {
+        val ratio = emoteAspectRatios[key]?.takeIf { it.isFinite() && it > 0f } ?: 1f
+        return (iconSize * ratio.coerceIn(0.25f, 4f)).toInt().coerceAtLeast(1)
+    }
     val contentHeight = maxOf(textHeight, iconSize.toFloat())
     
     var totalWidth = 0f
     segments.forEach { seg ->
         if (seg.isEmoticon) {
-            totalWidth += iconSize + 4 // 图片 + 间距
+            totalWidth += emoteWidth(seg.content) + 4 // 图片 + 间距
         } else {
             totalWidth += paint.measureText(seg.content)
         }
@@ -89,7 +97,7 @@ fun createBitmapDanmaku(
     
     // 4. 绘制内容
     try {
-        drawContent(context, canvas, segments, paint, iconSize, heightInt, onUpdate, bitmap)
+        drawContent(context, canvas, segments, paint, iconSize, heightInt, onUpdate, bitmap, deferredImageRequests, extraEmotes, ::emoteWidth)
     } catch (e: Exception) {
         android.util.Log.e("Probe", "❌ Draw content failed: ${e.message}")
     }
@@ -104,60 +112,21 @@ fun createBitmapDanmaku(
     }
 }
 
-private data class Segment(
-    val content: String,
-    val isEmoticon: Boolean
-)
-
-private val emoticonPattern = Pattern.compile("\\[(.*?)\\]")
-
-private fun parseSegments(text: String, enableEmoticon: Boolean): List<Segment> {
-    if (!enableEmoticon) {
-        return listOf(Segment(text, false))
-    }
-
-    val list = mutableListOf<Segment>()
-    val matcher = emoticonPattern.matcher(text)
-    var lastIndex = 0
-    
-    while (matcher.find()) {
-        val start = matcher.start()
-        val end = matcher.end()
-        val key = matcher.group(1) ?: ""
-        
-        if (start > lastIndex) {
-            list.add(Segment(text.substring(lastIndex, start), false))
-        }
-        
-        // Check map
-        val currentMap = DanmakuEmoticonMapper.emoticonMap.value
-        val mapKey = if (currentMap.containsKey(key)) key else if (currentMap.containsKey("[$key]")) "[$key]" else null
-        
-        if (mapKey != null) {
-            // Store the key to look up URL later
-            list.add(Segment(mapKey, true))
-        } else {
-            list.add(Segment(text.substring(start, end), false))
-        }
-        
-        lastIndex = end
-    }
-    
-    if (lastIndex < text.length) {
-        list.add(Segment(text.substring(lastIndex), false))
-    }
-    return list
-}
+private fun parseSegments(text: String, enableEmoticon: Boolean, extraEmotes: Map<String, String>): List<DanmakuContentSegment> =
+    resolveDanmakuContentSegments(text, enableEmoticon, extraEmotes, DanmakuEmoticonMapper.emoticonMap.value)
 
 private fun drawContent(
     context: Context,
     canvas: Canvas,
-    segments: List<Segment>,
+    segments: List<DanmakuContentSegment>,
     paint: TextPaint,
     iconSize: Int,
     canvasHeight: Int,
     onUpdate: () -> Unit,
-    targetBitmap: Bitmap // 用于重绘
+    targetBitmap: Bitmap, // 用于重绘
+    deferredImageRequests: MutableList<() -> Unit>?,
+    extraEmotes: Map<String, String> = emptyMap(),
+    emoteWidth: (String) -> Int,
 ) {
     val strokePaint = TextPaint(paint).apply {
         style = Paint.Style.STROKE
@@ -184,15 +153,18 @@ private fun drawContent(
     segments.forEach { seg ->
         if (seg.isEmoticon) {
             if (emoticonCount >= maxEmoticonPerDanmaku) {
-                canvas.drawText(seg.content, xOffset, textBaseLine, strokePaint)
-                canvas.drawText(seg.content, xOffset, textBaseLine, paint)
-                xOffset += paint.measureText(seg.content)
+                // 超出数量上限的表情回退为文字；无括号键补回括号，与未命中分支一致。
+                val fallback = if (seg.content.startsWith("[")) seg.content else "[${seg.content}]"
+                canvas.drawText(fallback, xOffset, textBaseLine, strokePaint)
+                canvas.drawText(fallback, xOffset, textBaseLine, paint)
+                xOffset += paint.measureText(fallback)
                 return@forEach
             }
-            val url = DanmakuEmoticonMapper.emoticonMap.value[seg.content]
+            val url = extraEmotes[seg.content] ?: DanmakuEmoticonMapper.emoticonMap.value[seg.content]
             if (url != null) {
                 // 尝试加载
                 val startX = xOffset
+                val imageWidth = emoteWidth(seg.content)
                 emoticonCount++
                 
                 // 加载图片
@@ -209,16 +181,20 @@ private fun drawContent(
                         // 简单策略：直接覆盖绘制。
                         // 计算位置
                         val top = centerY - iconSize / 2f
-                        val dstRect = Rect(startX.toInt(), top.toInt(), (startX + iconSize).toInt(), (top + iconSize).toInt())
+                        val dstRect = Rect(startX.toInt(), top.toInt(), (startX + imageWidth).toInt(), (top + iconSize).toInt())
                         asyncCanvas.drawBitmap(loadedBitmap, null, dstRect, null)
 
                         // 通知 UI 刷新
                         onUpdate()
                     }
                     .build()
-                imageLoader.enqueue(request)
+                if (deferredImageRequests == null) imageLoader.enqueue(request)
+                else deferredImageRequests.add {
+                    imageLoader.enqueue(request)
+                    Unit
+                }
                 
-                xOffset += iconSize + 4
+                xOffset += imageWidth + 4
             } else {
                  canvas.drawText("[${seg.content}]", xOffset, textBaseLine, strokePaint)
                  canvas.drawText("[${seg.content}]", xOffset, textBaseLine, paint)

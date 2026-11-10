@@ -39,7 +39,7 @@ internal class NeteaseLyricsProvider(
     override suspend fun fetch(candidate: LyricCandidate): RawLyrics {
         return parseNeteaseLyrics(
             client.getBody(
-                "https://music.163.com/api/song/lyric?id=${urlEncode(candidate.remoteId)}&lv=-1&tv=-1&rv=-1&kv=-1&yv=-1"
+                "https://music.163.com/api/song/lyric?id=${urlEncode(candidate.remoteId)}&lv=-1&tv=-1&rv=-1&kv=-1&yv=1"
             )
         )
     }

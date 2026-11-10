@@ -17,12 +17,25 @@ class SearchTopBarLayoutPolicyTest {
     }
 
     @Test
-    fun topBarRowMinHeight_matchesHomeSearchRowHeight() {
-        // 首页搜索胶囊 36dp、行高 48dp；搜索页输入框同为 compactChrome.primaryHeightDp，
-        // 行高应保持与首页一致（48dp），不再被 64dp 下限抬高。
-        assertEquals(48, resolveSearchTopBarRowMinHeightDp(inputHeightDp = 36))
-        assertEquals(52, resolveSearchTopBarRowMinHeightDp(inputHeightDp = 44))
-        assertEquals(64, resolveSearchTopBarRowMinHeightDp(inputHeightDp = 56))
+    fun topBarRow_reservesTouchHeightAndVerticalPadding() {
+        val paddingDp = 8
+        val compactRowHeight = resolveSearchTopBarRowMinHeightDp(inputHeightDp = 36, verticalPaddingDp = paddingDp)
+        val tallRowHeight = resolveSearchTopBarRowMinHeightDp(inputHeightDp = 72, verticalPaddingDp = paddingDp)
+
+        assertTrue(compactRowHeight >= 48 + paddingDp)
+        assertTrue(tallRowHeight >= 72 + paddingDp)
+    }
+
+    @Test
+    fun inputHeight_doesNotGrowWhenTypographyFits() {
+        val minimumHeightDp = 48
+        assertEquals(minimumHeightDp, resolveSearchInputHeightDp(minimumHeightDp, lineHeightDp = 20f, fontSizeDp = 16f))
+    }
+
+    @Test
+    fun inputHeight_accommodatesLargeLinesAndOversizedGlyphs() {
+        assertTrue(resolveSearchInputHeightDp(48, lineHeightDp = 60f, fontSizeDp = 48f) > 60)
+        assertTrue(resolveSearchInputHeightDp(48, lineHeightDp = 20f, fontSizeDp = 64f) > 64)
     }
 
     @Test

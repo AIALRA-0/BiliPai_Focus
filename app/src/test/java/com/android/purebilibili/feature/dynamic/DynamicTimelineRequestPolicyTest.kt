@@ -65,26 +65,21 @@ class DynamicTimelineRequestPolicyTest {
     }
 
     @Test
-    fun `late cache hydration cannot replace a fresh empty feed result`() {
+    fun `superseded timeline request cannot replace the latest feed result`() {
+        val activeRequestTokens = mapOf("all" to 3L)
+
         assertTrue(
-            shouldApplyCachedDynamicTimeline(
-                cacheReadRevision = 3L,
-                latestFreshTimelineRevision = 3L,
-                currentPage = DynamicTimelinePageState(),
+            shouldApplyTimelineFeedResult(
+                activeRequestTokens = activeRequestTokens,
+                requestType = "all",
+                requestToken = 3L,
             )
         )
         assertFalse(
-            shouldApplyCachedDynamicTimeline(
-                cacheReadRevision = 2L,
-                latestFreshTimelineRevision = 3L,
-                currentPage = DynamicTimelinePageState(),
-            )
-        )
-        assertFalse(
-            shouldApplyCachedDynamicTimeline(
-                cacheReadRevision = 3L,
-                latestFreshTimelineRevision = 3L,
-                currentPage = DynamicTimelinePageState(isCachePlaceholder = true),
+            shouldApplyTimelineFeedResult(
+                activeRequestTokens = activeRequestTokens,
+                requestType = "all",
+                requestToken = 2L,
             )
         )
     }

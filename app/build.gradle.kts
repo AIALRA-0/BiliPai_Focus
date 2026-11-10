@@ -337,6 +337,7 @@ android {
             excludes += "/META-INF/DEPENDENCIES"
             excludes += "/META-INF/LICENSE*"
             excludes += "/META-INF/NOTICE*"
+            excludes += "META-INF/maven/**"
             excludes += "/META-INF/*.kotlin_module"
             excludes += "/kotlin/**"
             excludes += "DebugProbesKt.bin"
@@ -483,8 +484,11 @@ dependencies {
     val roomVersion = "2.8.4"
     val hazeVersion = "2.0.0-alpha03"
 
+    implementation(project(":brand-motion"))
     implementation(project(":settings-core"))
     implementation(project(":network-core"))
+    implementation(project(":core-data"))
+    implementation(project(":core-player"))
     implementation(project(":plugin-sdk"))
     implementation(project(":design-system"))
     implementation(project(":danmaku-engine"))
@@ -505,37 +509,38 @@ dependencies {
     implementation("androidx.compose.material3:material3:$material3Version")
     implementation("androidx.compose.material3:material3-window-size-class:$material3Version") // [新增] 窗口大小类
     implementation("androidx.compose.material3.adaptive:adaptive:$material3AdaptiveVersion")
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:$material3AdaptiveVersion")
     implementation(libs.miuix.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.blur)
     implementation(libs.miuix.shader)
     implementation(libs.miuix.squircle)
     implementation(libs.miuix.icons)
-    implementation(libs.miuix.navigation)
+    implementation(project(":miuix-navigation"))
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")
-    implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc14")
+    implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-cmp-1.12.0-beta03")
 
     // --- 2. Network (网络请求) ---
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
     // Official converter since Retrofit 2.10; binary-compatible with Retrofit 3
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:3.0.0")
-    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
     // 🔥 Brotli Decompression (for Bilibili Live Danmaku ProtoVer=3)
     implementation("org.brotli:dec:0.1.2")
 
     // --- 3. Image (图片加载) ---
-    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
-    implementation("io.coil-kt.coil3:coil-network-cache-control:3.5.0")
-    implementation("io.coil-kt.coil3:coil-gif:3.5.0")  // 🔥 GIF 动图支持
+    implementation("io.coil-kt.coil3:coil-compose:3.6.3")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")
+    implementation("io.coil-kt.coil3:coil-network-cache-control:3.6.3")
+    implementation("io.coil-kt.coil3:coil-gif:3.6.3")  // 🔥 GIF 动图支持
     
     // --- 3.1 Palette (颜色提取 - 动态取色) ---
     implementation("androidx.palette:palette-ktx:1.0.0")
-    implementation("com.materialkolor:material-kolor:4.1.1")
+    implementation("com.materialkolor:material-kolor-material3:6.0.0-beta01")
     implementation("com.github.skydoves:colorpicker-compose:1.1.4")
     
     // --- 3.2 Lottie (动画效果) ---
@@ -564,6 +569,8 @@ dependencies {
     
     // --- 3.7 Startup (应用初始化) ---
     implementation("androidx.startup:startup-runtime:1.2.0")
+    implementation("net.dankito.readability4j:readability4j:1.0.8")
+    implementation("org.jsoup:jsoup:1.23.2")
     
     // --- 4. Player (视频播放器 Media3) ---
     implementation("androidx.media3:media3-exoplayer:$media3Version")
@@ -572,6 +579,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-datasource:$media3Version")
     implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
+    implementation("androidx.media3:media3-extractor:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation(project(":dolby-ffmpeg-decoder"))
 
@@ -582,12 +590,14 @@ dependencies {
     // 注：FFmpegKit 已于 2025 年停止维护，改用 ExoPlayer 直接播放分离音视频
 
     // --- 6. Database (Room 数据库) ---
+    implementation("androidx.paging:paging-common:3.4.2")
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
     // --- 7. DataStore (本地存储 Cookie/设置) ---
     implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.collection:collection:1.5.0")
 
     // --- 8. Utils (工具类) ---
     // 二维码生成
@@ -598,6 +608,8 @@ dependencies {
     implementation("androidx.camera:camera-view:1.4.2")
     // Pinyin 拼音转换 (用于模糊搜索)
     implementation("com.belerweb:pinyin4j:2.5.0")
+    implementation("io.github.biezhi:TinyPinyin:2.0.3.RELEASE")
+    implementation("androidx.webkit:webkit:1.18.0")
     // Core KTX
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
@@ -643,6 +655,7 @@ dependencies {
     // --- 12. Testing (测试框架) ---
     // JUnit 4 (兼容旧测试)
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
     // 真实 org.json 实现：android.jar 的 org.json 在单测里是桩（returnDefaultValues 下
     // 静默返回空值），CommandDanmakuPolicy 等生产解析路径需要真实实现才能单测。
     testImplementation("org.json:json:20240303")
@@ -657,11 +670,12 @@ dependencies {
     // MockK for Kotlin mocking
     testImplementation("io.mockk:mockk:1.13.9")
     // Coroutines testing
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     // Turbine for Flow testing
     testImplementation("app.cash.turbine:turbine:1.0.0")
     
     // --- 13. Android Instrumented Tests ---
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -80,9 +80,9 @@ internal fun resolveAppBuildVerificationState(
         return AppBuildVerificationState(
             status = AppBuildVerificationStatus.UNVERIFIED,
             summary = if (hasAttestation) {
-                "已找到同版本发布与 provenance，但这个 Release 还可被修改，暂时不能当成最终证据。"
+                "已找到同版本GitHub Release和provenance，但发布内容仍可修改，暂不能确认。"
             } else {
-                "已找到同版本发布，但这个 Release 还可被修改，暂时不能当成最终证据。"
+                "已找到同版本GitHub Release，但发布内容仍可修改，暂不能确认。"
             },
             sourceCommitSha = remoteCommit ?: localBuildCommitSha,
             workflowRunId = remoteRunId ?: localWorkflowRunId,
@@ -104,9 +104,9 @@ internal fun resolveAppBuildVerificationState(
         return AppBuildVerificationState(
             status = AppBuildVerificationStatus.LIKELY_VERIFIED,
             summary = if (hasAttestation) {
-                "当前安装包 SHA-256 已对上当前 GitHub Release，并已找到 provenance；但该 Release 还可被修改，暂不能当成最终校验结果。"
+                "安装包 SHA-256与GitHub Release一致，并有provenance；发布内容仍可修改，暂不能确认。"
             } else {
-                "当前安装包 SHA-256 已对上当前 GitHub Release；但该 Release 还可被修改，暂不能当成最终校验结果。"
+                "安装包 SHA-256与GitHub Release一致；发布内容仍可修改，暂不能确认。"
             },
             sourceCommitSha = remoteCommit,
             workflowRunId = remoteRunId,
@@ -130,9 +130,9 @@ internal fun resolveAppBuildVerificationState(
         return AppBuildVerificationState(
             status = AppBuildVerificationStatus.VERIFIED,
             summary = if (hasAttestation) {
-                "版本、来源与 SHA-256 已对上 GitHub Release，且 Release 已锁定并附带 provenance。"
+                "版本、来源和安装包 SHA-256与GitHub Release一致；发布已锁定，并有provenance。"
             } else {
-                "版本、来源与 SHA-256 已对上 GitHub Release，且 Release 已锁定。"
+                "版本、来源和安装包 SHA-256与GitHub Release一致，发布内容已锁定。"
             },
             sourceCommitSha = remoteCommit ?: localBuildCommitSha,
             workflowRunId = remoteRunId ?: localWorkflowRunId,
@@ -154,9 +154,9 @@ internal fun resolveAppBuildVerificationState(
         return AppBuildVerificationState(
             status = AppBuildVerificationStatus.LIKELY_VERIFIED,
             summary = if (hasAttestation) {
-                "当前安装包 SHA-256 已对上 GitHub Release，且 Release 已锁定并附带 provenance；但安装包内未写入完整构建来源，只能做发布侧校验。"
+                "安装包 SHA-256与已锁定的GitHub Release一致，并有provenance；包内来源信息不完整，只能核对发布信息。"
             } else {
-                "当前安装包 SHA-256 已对上 GitHub Release，且 Release 已锁定；但安装包内未写入完整构建来源，只能做发布侧校验。"
+                "安装包 SHA-256与已锁定的GitHub Release一致；包内来源信息不完整，只能核对发布信息。"
             },
             sourceCommitSha = remoteCommit,
             workflowRunId = remoteRunId,
@@ -172,15 +172,15 @@ internal fun resolveAppBuildVerificationState(
     if (hasEmbeddedProvenance) {
         val likelySummary = if (remoteRelease?.releaseIsImmutable == false) {
             if (hasAttestation) {
-                "已拿到构建来源与 provenance，但对应 Release 还可被修改，先不要把它当成最终校验结果。"
+                "已找到版本来源和provenance，但GitHub Release仍可修改，暂不能确认。"
             } else {
-                "已拿到构建来源，但对应 Release 还可被修改，先不要把它当成最终校验结果。"
+                "已找到版本来源，但GitHub Release仍可修改，暂不能确认。"
             }
         } else {
             if (hasAttestation) {
-                "当前安装包已写入构建来源，并带有 provenance；再对上 Release SHA-256 就能形成完整证据链。"
+                "已有版本来源和provenance，还需核对GitHub Release的安装包 SHA-256。"
             } else {
-                "当前安装包已写入构建来源；再对上 Release SHA-256 就能形成更完整的证据链。"
+                "已有版本来源，还需核对GitHub Release的安装包 SHA-256。"
             }
         }
         return AppBuildVerificationState(
@@ -200,9 +200,9 @@ internal fun resolveAppBuildVerificationState(
     return AppBuildVerificationState(
         status = AppBuildVerificationStatus.UNVERIFIED,
         summary = if (hasAttestation) {
-            "已发现 provenance，但还缺少足够的发布侧证据来核对当前安装包。"
+            "已有provenance，但GitHub Release信息不足，暂时无法核对安装包。"
         } else {
-            "当前安装包缺少足够的发布侧证据，暂时无法核对源码与安装包是否一致。"
+            "GitHub Release信息不足，暂时无法确认源码与安装包是否一致。"
         },
         sourceCommitSha = remoteCommit,
         workflowRunId = remoteRunId,
@@ -240,7 +240,7 @@ internal fun resolveBuildSourceSubtitle(
 ): String {
     val workflow = workflowRunId?.takeIf { it.isNotBlank() }?.let { "workflow #$it" }
     val tag = releaseTag?.takeIf { it.isNotBlank() }?.let { "tag $it" }
-    return listOfNotNull(workflow, tag).joinToString(" · ").ifBlank { "未绑定 GitHub Release" }
+    return listOfNotNull(workflow, tag).joinToString(" · ").ifBlank { "未关联 GitHub GitHub Release" }
 }
 
 internal fun resolveBuildFingerprintValue(
@@ -259,33 +259,33 @@ internal fun resolveBuildFingerprintSubtitle(
     hasAttestation: Boolean
 ): String {
     if (localApkSha256.isNullOrBlank()) {
-        return "暂未读取到当前安装包 SHA-256。"
+        return "尚未读取安装包 SHA-256。"
     }
     if (remoteApkSha256.isNullOrBlank()) {
         return if (hasAttestation) {
-            "这是当前安装包的 SHA-256，已找到 provenance，等待发布侧摘要一起核对。"
+            "这是当前安装包的SHA-256。已有provenance，等待GitHub Release的SHA-256。"
         } else {
-            "这是当前安装包的 SHA-256，可与 GitHub Release 里的摘要手动对照。"
+            "这是当前安装包的SHA-256，可与 GitHub 发布页中的SHA-256对照。"
         }
     }
 
     val digestMatches = localApkSha256.equals(remoteApkSha256, ignoreCase = true)
     if (!digestMatches) {
-        return "当前安装包 SHA-256 与发布页摘要不一致，请确认来源。"
+        return "安装包 SHA-256与GitHub Release不一致，请检查安装包来源。"
     }
 
     return when (releaseIsImmutable) {
         true -> if (hasAttestation) {
-            "与 GitHub Release SHA-256 一致，Release 已锁定，含 provenance。"
+            "SHA-256与GitHub Release一致；发布已锁定，并有provenance。"
         } else {
-            "与 GitHub Release SHA-256 一致，Release 已锁定。"
+            "SHA-256与GitHub Release一致，发布内容已锁定。"
         }
         false -> if (hasAttestation) {
-            "与当前 Release SHA-256 一致，但该 Release 还可被修改。"
+            "SHA-256与当前GitHub Release一致，但发布内容仍可修改。"
         } else {
-            "与当前 Release SHA-256 一致，但该 Release 还可被修改。"
+            "SHA-256与当前GitHub Release一致，但发布内容仍可修改。"
         }
-        else -> "已读取到发布页 SHA-256，可继续结合构建来源核对。"
+        else -> "已读取GitHub Release的SHA-256，还需结合版本来源核对。"
     }
 }
 
@@ -294,7 +294,7 @@ internal fun resolveVerificationDialogContent(
     summary: String
 ): AppBuildInfoDialogContent {
     return AppBuildInfoDialogContent(
-        title = "源码一致性",
+        title = "安装包来源验证",
         value = label,
         body = summary,
         actionLabel = "查看证明",
@@ -307,7 +307,7 @@ internal fun resolveBuildSourceDialogContent(
     subtitle: String
 ): AppBuildInfoDialogContent {
     return AppBuildInfoDialogContent(
-        title = "构建来源",
+        title = "版本来源",
         value = value,
         body = subtitle,
         actionLabel = "查看来源",

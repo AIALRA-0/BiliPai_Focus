@@ -130,7 +130,7 @@ class FullscreenPlayerOverlayPolicyTest {
         assertTrue(buttonSource.contains("IconButton("))
         assertTrue(buttonSource.contains("Icons.Filled.Pause"))
         assertTrue(buttonSource.contains("Icons.Filled.PlayArrow"))
-        assertTrue(buttonSource.contains("tint = MaterialTheme.colorScheme.primary"))
+        assertTrue(buttonSource.contains("tint = AppContentColors.accent()"))
         assertFalse(buttonSource.contains("Surface("))
     }
 

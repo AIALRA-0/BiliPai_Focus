@@ -5,19 +5,8 @@ import com.android.purebilibili.data.model.response.HistoryItem
 
 internal enum class HistoryDeleteAnimationMode {
     SINGLE_DISSOLVE,
+    BATCH_DISSOLVE,
     DIRECT_DELETE
-}
-
-/**
- * MIUI 14 on Android 13 can crash in the native EGL/GL driver when a temporary transparent
- * GLSurfaceView is mounted for the history-card dissolve effect. Keep deletion functional on
- * affected devices by skipping that optional animation.
- */
-internal fun isHistoryDissolveAnimationSafe(
-    sdkInt: Int,
-    manufacturer: String
-): Boolean {
-    return sdkInt != 33 || !manufacturer.equals("xiaomi", ignoreCase = true)
 }
 
 internal data class HistoryDeleteSession(
@@ -73,10 +62,10 @@ internal fun resolveHistoryDeleteAnimationMode(
     itemCount: Int,
     dissolveAnimationSafe: Boolean = true
 ): HistoryDeleteAnimationMode {
-    return if (itemCount <= 1 && dissolveAnimationSafe) {
-        HistoryDeleteAnimationMode.SINGLE_DISSOLVE
-    } else {
-        HistoryDeleteAnimationMode.DIRECT_DELETE
+    return when {
+        !dissolveAnimationSafe || itemCount <= 0 -> HistoryDeleteAnimationMode.DIRECT_DELETE
+        itemCount == 1 -> HistoryDeleteAnimationMode.SINGLE_DISSOLVE
+        else -> HistoryDeleteAnimationMode.BATCH_DISSOLVE
     }
 }
 
@@ -91,13 +80,15 @@ internal fun resolveDeleteBatchParallelism(itemCount: Int): Int {
 
 internal fun createHistoryDeleteSession(
     targetKeys: Set<String>,
-    dissolveAnimationSafe: Boolean = true
+    dissolveAnimationSafe: Boolean = true,
+    visibleKeys: Set<String> = targetKeys
 ): HistoryDeleteSession? {
     val normalizedKeys = targetKeys.map(String::trim).filter(String::isNotEmpty).toSet()
     if (normalizedKeys.isEmpty()) return null
     return HistoryDeleteSession(
         targetKeys = normalizedKeys,
-        completedKeys = emptySet(),
+        // Lazy rows outside the viewport never create an animation or send its completion.
+        completedKeys = normalizedKeys - visibleKeys.map(String::trim).toSet(),
         animationMode = resolveHistoryDeleteAnimationMode(
             itemCount = normalizedKeys.size,
             dissolveAnimationSafe = dissolveAnimationSafe

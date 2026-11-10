@@ -79,7 +79,8 @@ class AppNavigationTransitionPolicyTest {
         assertTrue(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = ScreenRoutes.Home.route
+                toRoute = ScreenRoutes.Home.route,
+                isVideoEntryRetained = false,
             )
         )
     }
@@ -89,7 +90,8 @@ class AppNavigationTransitionPolicyTest {
         assertFalse(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = ScreenRoutes.AudioMode.route
+                toRoute = ScreenRoutes.AudioMode.route,
+                isVideoEntryRetained = false,
             )
         )
     }
@@ -99,7 +101,8 @@ class AppNavigationTransitionPolicyTest {
         assertFalse(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = VideoRoute.route
+                toRoute = VideoRoute.route,
+                isVideoEntryRetained = false,
             )
         )
     }
@@ -109,7 +112,19 @@ class AppNavigationTransitionPolicyTest {
         assertFalse(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = null
+                toRoute = null,
+                isVideoEntryRetained = false,
+            )
+        )
+    }
+
+    @Test
+    fun retainedVideoEntry_keepsPlaybackWhenNavigatingToHome() {
+        assertFalse(
+            shouldStopPlaybackEagerlyOnVideoRouteExit(
+                fromRoute = VideoRoute.route,
+                toRoute = ScreenRoutes.Home.route,
+                isVideoEntryRetained = true,
             )
         )
     }

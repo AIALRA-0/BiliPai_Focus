@@ -3,9 +3,9 @@ package com.android.purebilibili.core.ui.components
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.theme.ACCESSIBLE_TEXT_MIN_CONTRAST
 import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
 import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
@@ -34,51 +33,30 @@ fun resolveUserVipBadgeLabel(
     }
 }
 
-/**
- * Theme-colored VIP chip (personal-space style).
- *
- * Soft filled pill from the theme secondary container pair
- * ([AppSurfaceTokens.secondaryContainer] / [AppSurfaceTokens.onSecondaryContainer]),
- * not hard-coded brand pink. Matches the space-header “大会员 / 年度大会员” look.
- *
- * Dark mode: translucent secondaryContainer is flattened over surface, then text is
- * resolved to WCAG 4.5:1 so the label never washes out on dark chips.
- */
+/** PiliPlus VIP pink, independent of the app accent color. */
+fun resolveUserVipPink(isDark: Boolean): Color =
+    if (isDark) Color(0xFFD44E7D) else Color(0xFFFF6699)
+
+@Composable
+fun userVipPink(): Color =
+    resolveUserVipPink(MaterialTheme.colorScheme.surface.luminance() < 0.5f)
+
+/** Pink filled VIP label with white text, matching PiliPlus space headers. */
 @Composable
 fun UserVipBadge(
     label: String = "大会员",
     modifier: Modifier = Modifier,
-    fontSize: TextUnit = 11.sp,
+    fontSize: TextUnit = MaterialTheme.typography.labelSmall.fontSize,
     compact: Boolean = false,
 ) {
     val text = resolveUserVipBadgeLabel(label)
-    val colorScheme = MaterialTheme.colorScheme
-    // Prefer Miuix-bridged tokens so MD3 and Miuix themes stay aligned.
-    val themeContainer = AppSurfaceTokens.secondaryContainer()
-    val themeContent = AppSurfaceTokens.onSecondaryContainer()
-    val accessible = remember(
-        themeContainer,
-        themeContent,
-        colorScheme.surface,
-        colorScheme.onSurface,
-        colorScheme.onBackground,
-        colorScheme.inverseOnSurface,
-    ) {
-        resolveVipBadgeColors(
-            containerColor = themeContainer,
-            preferredContentColor = themeContent,
-            surfaceColor = colorScheme.surface,
-            onSurface = colorScheme.onSurface,
-            onBackground = colorScheme.onBackground,
-            inverseOnSurface = colorScheme.inverseOnSurface,
-        )
-    }
+    val vipPink = userVipPink()
 
     AppSurface(
         modifier = modifier,
         shape = AppShapes.container(ContainerLevel.Pill),
-        color = accessible.containerColor,
-        contentColor = accessible.contentColor,
+        color = vipPink,
+        contentColor = Color.White,
     ) {
         AppText(
             text = text,
@@ -88,7 +66,7 @@ fun UserVipBadge(
             ),
             fontSize = fontSize,
             fontWeight = FontWeight.SemiBold,
-            color = accessible.contentColor,
+            color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

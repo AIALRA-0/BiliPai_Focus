@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.renderer.miuix
 
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
@@ -43,14 +44,26 @@ internal fun AppMiuixCard(
             pressFeedbackType = PressFeedbackType.Sink,
             onClick = onClick,
             onLongPress = onLongClick,
-            content = content,
+            content = {
+                CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides top.yukonga.miuix.kmp.theme.LocalContentColor.current,
+                ) {
+                    content()
+                }
+            },
         )
     } else {
         Card(
             modifier = modifier,
             cornerRadius = resolvedCornerRadius,
             colors = resolvedColors,
-            content = content,
+            content = {
+                CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides top.yukonga.miuix.kmp.theme.LocalContentColor.current,
+                ) {
+                    content()
+                }
+            },
         )
     }
 }

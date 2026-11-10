@@ -5,17 +5,17 @@ import com.android.purebilibili.core.theme.AppUiStyle
 /**
  * Visual recipe for indeterminate loading chrome across UI presets.
  *
- * - [MATERIAL3_LOADING_INDICATOR]: official M3 morphing [androidx.compose.material3.LoadingIndicator]
+ * - [MATERIAL3_PAGE_CIRCULAR]: official M3 [androidx.compose.material3.CircularProgressIndicator]
  *   with [ColorScheme.primary] (dynamic color when enabled).
  * - [MATERIAL3_CIRCULAR]: official M3 [androidx.compose.material3.CircularProgressIndicator]
- *   for compact / inline slots where the morphing indicator is too large.
+ *   for compact / inline slots with a smaller default size.
  * - [MIUIX_INFINITE]: Miuix orbiting-dot [top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator]
  *   for page-level loading.
  * - [MIUIX_CIRCULAR]: Miuix [top.yukonga.miuix.kmp.basic.CircularProgressIndicator]
  *   for compact / inline slots.
  */
 enum class AdaptiveLoadingVisual {
-    MATERIAL3_LOADING_INDICATOR,
+    MATERIAL3_PAGE_CIRCULAR,
     MATERIAL3_CIRCULAR,
     MIUIX_INFINITE,
     MIUIX_CIRCULAR,
@@ -45,7 +45,7 @@ fun resolveAdaptiveLoadingVisual(
     density: AdaptiveLoadingDensity = AdaptiveLoadingDensity.PAGE,
 ): AdaptiveLoadingVisual = when (renderer) {
     PresetPrimitiveRenderer.MATERIAL3 -> when (density) {
-        AdaptiveLoadingDensity.PAGE -> AdaptiveLoadingVisual.MATERIAL3_LOADING_INDICATOR
+        AdaptiveLoadingDensity.PAGE -> AdaptiveLoadingVisual.MATERIAL3_PAGE_CIRCULAR
         AdaptiveLoadingDensity.COMPACT -> AdaptiveLoadingVisual.MATERIAL3_CIRCULAR
     }
     PresetPrimitiveRenderer.MIUIX_BRIDGED -> when (density) {

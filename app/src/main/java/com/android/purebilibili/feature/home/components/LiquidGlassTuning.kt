@@ -55,19 +55,15 @@ internal fun resolveLiquidGlassTuning(
         normalizedProgress < 0.68f -> LiquidGlassMode.BALANCED
         else -> LiquidGlassMode.FROSTED
     }
-    val frostWeight = normalizedProgress
     val configuredReadability = advancedSettings.contentReadability.coerceIn(0f, 1f)
-    // A smooth fourth-power response keeps the balanced preset subtle while making the whole
-    // 0..1 control range effective. The old threshold mapping made every value below 0.62 a
-    // visual no-op even though the settings UI exposed that range.
-    val readabilityProtection = configuredReadability * configuredReadability *
-        configuredReadability * configuredReadability
+    // Use the configured strength directly: the former fourth-power curve reduced the
+    // default 62% protection to a barely visible scrim over detailed video covers.
+    val readabilityProtection = configuredReadability
     // Readability protection must remain active across the full slider. It is strongest for
     // transparent glass, but a user-selected 100% must not become a no-op around 50%.
     val readabilityWeight = midpointLerp(1f, 0.6f, 0.25f, normalizedProgress)
     val contentReadabilityBoost = readabilityWeight * readabilityProtection
-    val contentReadabilityScrimAlpha = contentReadabilityBoost *
-        (0.12f + readabilityProtection * 0.22f)
+    val contentReadabilityScrimAlpha = contentReadabilityBoost * 0.34f
     val chromaticControl = advancedSettings.chromaticAberration.coerceIn(0f, 1f)
     // Miuix keeps the 24dp shell achromatic and applies 0.5 dispersion to the moving
     // 10dp/14dp indicator. The balanced anchor reproduces that split exactly.
@@ -127,7 +123,7 @@ internal fun resolveLiquidGlassTuning(
         // 会把 CLEAR 端的折射推到 11.8dp/17.15dp，比参考长一截（上下色散被摊薄）。
         indicatorLensBoost = 1f,
         indicatorEdgeWarpBoost = 1f,
-        indicatorChromaticBoost = midpointLerp(1.20f, 1f, 0.70f, frostWeight),
+        indicatorChromaticBoost = 1f,
         contentReadabilityBoost = contentReadabilityBoost,
         contentReadabilityScrimAlpha = contentReadabilityScrimAlpha,
         contentDistortionScale = contentDistortionScale,

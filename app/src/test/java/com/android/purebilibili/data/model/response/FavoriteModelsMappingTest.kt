@@ -10,6 +10,19 @@ class FavoriteModelsMappingTest {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
+    fun `folder metadata keeps existing editor values`() {
+        val response = json.decodeFromString<FavoriteInfoResponse>(
+            """{"code":0,"data":{"id":123,"title":"现有收藏夹","intro":"原有简介","cover":"https://example.com/folder.jpg","attr":22}}"""
+        )
+        val info = requireNotNull(response.data)
+        assertEquals(123L, info.id)
+        assertEquals("现有收藏夹", info.title)
+        assertEquals("原有简介", info.intro)
+        assertEquals("https://example.com/folder.jpg", info.cover)
+        assertEquals(22, info.attr)
+    }
+
+    @Test
     fun `toVideoItem maps cid from ugc first_cid`() {
         val response = json.decodeFromString<FavoriteResourceResponse>(
             """

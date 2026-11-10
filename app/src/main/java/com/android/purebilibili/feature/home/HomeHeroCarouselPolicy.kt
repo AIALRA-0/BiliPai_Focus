@@ -9,7 +9,6 @@ internal const val HOME_HERO_CAROUSEL_TABLET_ASPECT_RATIO = 2f
 internal const val HOME_HERO_CAROUSEL_WIDE_ASPECT_RATIO = 21f / 9f
 internal const val HOME_HERO_CAROUSEL_TABLET_BREAKPOINT_DP = 600f
 internal const val HOME_HERO_CAROUSEL_WIDE_BREAKPOINT_DP = 840f
-internal const val HOME_HERO_CAROUSEL_TABLET_MAX_WIDTH_DP = 760f
 internal const val HOME_HERO_CAROUSEL_WIDE_MAX_WIDTH_DP = 980f
 // Keep the hero below the top category dock. The dock's selection indicator can
 // extend beyond its measured bounds, so reducing this reserved gap causes the
@@ -29,7 +28,6 @@ internal data class HomeHeroCarouselCardTransform(
     val contentScale: Float,
     val edgeShadeAlpha: Float,
     val edgeShadeStartFromLeft: Boolean,
-    val shadowElevationFraction: Float
 )
 
 internal fun resolveHomeFeedTopPaddingDp(
@@ -56,10 +54,11 @@ internal fun <T> resolveHomeHeroCarouselItemKey(
 
 internal fun <T> selectHomeHeroCarouselItems(
     items: List<T>,
-    maxItems: Int = HOME_HERO_CAROUSEL_MAX_ITEMS
+    maxItems: Int = HOME_HERO_CAROUSEL_MAX_ITEMS,
+    eligible: (T) -> Boolean = { true },
 ): List<T> {
     if (maxItems <= 0) return emptyList()
-    return items.take(maxItems)
+    return items.asSequence().filter(eligible).take(maxItems).toList()
 }
 
 internal fun <T, K> excludeHomeHeroCarouselItems(
@@ -99,8 +98,10 @@ internal fun resolveHomeHeroCarouselWidthDp(containerWidthDp: Float): Float {
     return when {
         availableWidthDp >= HOME_HERO_CAROUSEL_WIDE_BREAKPOINT_DP ->
             availableWidthDp.coerceAtMost(HOME_HERO_CAROUSEL_WIDE_MAX_WIDTH_DP)
+        //  [满宽] 840dp 以下（手机与小平板/折叠内屏）banner 不再收窄：
+        //  容器超过 760dp 时两侧会露出邻卡边条，直接取满容器宽度。
         availableWidthDp >= HOME_HERO_CAROUSEL_TABLET_BREAKPOINT_DP ->
-            availableWidthDp.coerceAtMost(HOME_HERO_CAROUSEL_TABLET_MAX_WIDTH_DP)
+            availableWidthDp
         else -> availableWidthDp
     }
 }
@@ -164,10 +165,20 @@ internal fun resolveHomeHeroCarouselCardTransform(
 ): HomeHeroCarouselCardTransform {
     val clampedOffset = pageOffset.coerceIn(-1f, 1f)
     val distance = kotlin.math.abs(clampedOffset)
-    val baseScale = 1f - distance * 0.04f
+    val baseScale = 1f - distance * 0.10f
     val pressMultiplier = 1f - pressedProgress.coerceIn(0f, 1f) * 0.02f
     val scale = baseScale * pressMultiplier
-    val alpha = 1f - distance * 0.08f
+    val alpha = (1f - distance * 0.20f).coerceAtLeast(0.35f)
+
+    // Cover-flow 折角：侧卡绕自身内缘向中心旋转，配合透视相机构成弧形展台。
+    val rotationY = (-clampedOffset * 26f).coerceIn(-40f, 40f)
+    val pivotFractionX = when {
+        clampedOffset < 0f -> 0f // 右侧卡绕左缘（内缘）旋转
+        clampedOffset > 0f -> 1f // 左侧卡绕右缘（内缘）旋转
+        else -> 0.5f
+    }
+    // 向中心聚拢：pageOffset>0 为左邻卡（右移），<0 为右邻卡（左移）。
+    val translationXFraction = kotlin.math.sign(clampedOffset) * 0.04f * distance
 
     // Parallax: inner content shifts opposite to gesture by 8% of card width for tactile depth.
     // Content scale: expands content by 16% at max offset so bounds never expose behind parallax shift.
@@ -178,24 +189,19 @@ internal fun resolveHomeHeroCarouselCardTransform(
     val edgeShadeAlpha = (distance * 0.25f).coerceIn(0f, 0.25f)
     val edgeShadeStartFromLeft = clampedOffset < 0f
 
-    // Dynamic elevation: prominent when centered, subtle dip when pressed or swiped away
-    val shadowElevationFraction = ((1f - distance * 0.6f).coerceIn(0f, 1f) *
-        (1f - pressedProgress.coerceIn(0f, 1f) * 0.3f)) * 0.35f
-
     return HomeHeroCarouselCardTransform(
-        rotationY = 0f,
+        rotationY = rotationY,
         rotationZ = 0f,
         scale = scale,
         alpha = alpha,
-        cameraDistanceMultiplier = 8f,
-        translationXFraction = 0f,
-        pivotFractionX = 0.5f,
+        cameraDistanceMultiplier = 10f,
+        translationXFraction = translationXFraction,
+        pivotFractionX = pivotFractionX,
         zIndex = 1f - distance * 0.01f,
         contentParallaxFraction = contentParallaxFraction,
         contentScale = contentScale,
         edgeShadeAlpha = edgeShadeAlpha,
         edgeShadeStartFromLeft = edgeShadeStartFromLeft,
-        shadowElevationFraction = shadowElevationFraction,
     )
 }
 

@@ -21,6 +21,9 @@ sealed class ScreenRoutes(val route: String) {
     object Settings : ScreenRoutes("settings")
     object Login : ScreenRoutes("login")
     object Profile : ScreenRoutes("profile")
+    object AccountLedger : ScreenRoutes("account_ledger/{kind}") {
+        fun createRoute(kind: com.android.purebilibili.data.model.AccountLedgerKind): String = "account_ledger/${kind.name.lowercase()}"
+    }
 
     //  新增路由：历史记录和收藏
     object AicuQuery : ScreenRoutes("aicu?uid={uid}&category={category}") {
@@ -30,9 +33,14 @@ sealed class ScreenRoutes(val route: String) {
     object History : ScreenRoutes("history")
     object Favorite : ScreenRoutes("favorite")
     object LikedVideos : ScreenRoutes("liked_videos") {
-        fun createRoute(mid: Long = 0L, ownerName: String = ""): String {
+        fun createRoute(
+            mid: Long = 0L,
+            ownerName: String = "",
+            isCoinArchive: Boolean = false,
+        ): String {
             return if (mid > 0L) {
-                "liked_videos?mid=$mid&ownerName=${encodeUrlComponentCompat(ownerName)}"
+                val archiveType = if (isCoinArchive) "&type=coin" else ""
+                "liked_videos?mid=$mid&ownerName=${encodeUrlComponentCompat(ownerName)}$archiveType"
             } else {
                 "liked_videos"
             }
@@ -46,6 +54,12 @@ sealed class ScreenRoutes(val route: String) {
         fun createRoute(parentAreaId: Int, areaId: Int, title: String): String {
             return "live_area_detail/$parentAreaId/$areaId?title=${encodeUrlComponentCompat(title)}"
         }
+    }
+    object LiveMatch : ScreenRoutes("live_match")
+
+    //  比赛详情页（赛事）
+    object MatchInfo : ScreenRoutes("match_info/{cid}") {
+        fun createRoute(cid: Long): String = "match_info/$cid"
     }
     object LiveFollowing : ScreenRoutes("live_following")
     
@@ -70,23 +84,33 @@ sealed class ScreenRoutes(val route: String) {
     object Dynamic : ScreenRoutes("dynamic")
 
     //  动态详情页面
-    object DynamicDetail : ScreenRoutes("dynamic_detail/{dynamicId}?commentRootRpid={commentRootRpid}&commentTargetRpid={commentTargetRpid}") {
+    object DynamicDetail : ScreenRoutes("dynamic_detail/{dynamicId}?commentRootRpid={commentRootRpid}&commentTargetRpid={commentTargetRpid}&openComments={openComments}") {
         fun createRoute(
             dynamicId: String,
             commentRootRpid: Long = 0L,
-            commentTargetRpid: Long = 0L
+            commentTargetRpid: Long = 0L,
+            openComments: Boolean = false,
         ): String {
             val encodedDynamicId = URLEncoder.encode(dynamicId, StandardCharsets.UTF_8.name())
             return "dynamic_detail/$encodedDynamicId" +
                 "?commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}" +
-                "&commentTargetRpid=${commentTargetRpid.coerceAtLeast(0L)}"
+                "&commentTargetRpid=${commentTargetRpid.coerceAtLeast(0L)}" +
+                if (openComments) "&openComments=true" else ""
         }
     }
 
-    object ArticleDetail : ScreenRoutes("article/{articleId}?title={title}") {
-        fun createRoute(articleId: Long, title: String? = null): String {
+    object ArticleCollection : ScreenRoutes("article_collection/{collectionId}?title={title}&currentArticleId={currentArticleId}") {
+        fun createRoute(collectionId: Long, title: String = "", currentArticleId: Long = 0L): String =
+            "article_collection/$collectionId?title=${encodeUrlComponentCompat(title)}&currentArticleId=$currentArticleId"
+    }
+
+    object ArticleDetail : ScreenRoutes("article/{articleId}?title={title}&commentRootRpid={commentRootRpid}&commentTargetRpid={commentTargetRpid}") {
+        fun createRoute(articleId: Long, title: String? = null, commentRootRpid: Long = 0L, commentTargetRpid: Long = 0L): String {
             val encodedTitle = title?.let(::encodeUrlComponentCompat).orEmpty()
-            return "article/$articleId?title=$encodedTitle"
+            val base = "article/$articleId?title=$encodedTitle"
+            if (commentRootRpid <= 0L && commentTargetRpid <= 0L) return base
+            return base + "&commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}" +
+                "&commentTargetRpid=${commentTargetRpid.coerceAtLeast(0L)}"
         }
     }
     
@@ -114,6 +138,8 @@ sealed class ScreenRoutes(val route: String) {
     object HomeSettings : ScreenRoutes("home_settings")
     object PlaybackSettings : ScreenRoutes("playback_settings")
     object FocusSettings : ScreenRoutes("focus_settings")
+    object SpacePrivacySettings : ScreenRoutes("space_privacy_settings")
+    object LoginActivitySettings : ScreenRoutes("login_activity_settings")
     object PermissionSettings : ScreenRoutes("permission_settings")  //  权限管理
     object MessageNotificationSettings : ScreenRoutes("message_notification_settings")
     object PluginsSettings : ScreenRoutes("plugins_settings?importUrl={importUrl}") {  //  插件中心
@@ -258,14 +284,24 @@ sealed class ScreenRoutes(val route: String) {
     
     // [新增] In-app Browser
     object Web : ScreenRoutes("web?url={url}&title={title}") {
-        fun createRoute(url: String, title: String? = null): String {
+        fun createRoute(url: String, title: String? = null, mobileUserAgent: Boolean = false): String {
             val encodedUrl = encodeUrlComponentCompat(url)
             val encodedTitle = title?.let(::encodeUrlComponentCompat) ?: ""
-            return "web?url=$encodedUrl&title=$encodedTitle"
+            return "web?url=$encodedUrl&title=$encodedTitle&mua=${if (mobileUserAgent) "1" else "0"}"
         }
     }
     
     // [新增] Audio Player
+    object WeeklySeries : ScreenRoutes("weekly_series?number={number}") {
+        fun createRoute(number: Int? = null): String =
+            "weekly_series" + (number?.takeIf { it > 0 }?.let { "?number=$it" } ?: "")
+    }
+
+    object BgmDetail : ScreenRoutes("bgm_detail") {
+        fun createRoute(musicId: String, aid: Long = 0, cid: Long = 0, showVideos: Boolean = false): String =
+            "bgm_detail?musicId=${encodeUrlComponentCompat(musicId)}&aid=$aid&cid=$cid&showVideos=$showVideos"
+    }
+
     object MusicDetail : ScreenRoutes("music/{sid}") {
         fun createRoute(sid: Long): String {
             return "music/$sid"
@@ -278,4 +314,16 @@ sealed class ScreenRoutes(val route: String) {
             return "native_music?title=${encodeUrlComponentCompat(title)}&bvid=${encodeUrlComponentCompat(bvid)}&cid=$cid"
         }
     }
+    companion object {
+        fun createMusicRoute(musicId: String): String? {
+            val id = musicId.trim()
+            val auSid = id.removePrefix("au").removePrefix("AU").toLongOrNull()
+            return when {
+                auSid != null && auSid > 0 -> MusicDetail.createRoute(auSid)
+                Regex("MA[0-9A-Za-z]+", RegexOption.IGNORE_CASE).matches(id) -> BgmDetail.createRoute(id)
+                else -> null
+            }
+        }
+    }
+
 }

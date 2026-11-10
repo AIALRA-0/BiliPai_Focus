@@ -4,7 +4,8 @@ import android.graphics.SurfaceTexture
 import android.view.Surface
 
 /**
- * 解码器输入 surface 必须和其 OES 纹理在同一个 GL 线程创建、消费和释放。
+ * 解码器输入与 OES 纹理由 GL 线程创建、消费和释放。
+ * GL 线程退出后的兜底清理只归还 Surface/SurfaceTexture，不再操作 OES 纹理。
  */
 internal class Anime4KInputSurface(
     externalTextureId: Int,
@@ -22,6 +23,7 @@ internal class Anime4KInputSurface(
     }
 
     fun release() {
+        surfaceTexture.setOnFrameAvailableListener(null)
         surface.release()
         surfaceTexture.release()
     }

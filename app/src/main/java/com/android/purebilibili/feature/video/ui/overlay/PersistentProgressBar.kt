@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +27,9 @@ internal fun PersistentBottomProgressBar(
     duration: Long,
     modifier: Modifier = Modifier
 ) {
+    val activeColor = AppContentColors.selectionAccent(
+        com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+    )
     val progress = resolvePersistentProgressFraction(current = current, duration = duration)
     if (duration <= 0L) return
 
@@ -41,7 +46,7 @@ internal fun PersistentBottomProgressBar(
             modifier = Modifier
                 .fillMaxWidth(progress)
                 .height(2.dp)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(activeColor)
         )
     }
 }

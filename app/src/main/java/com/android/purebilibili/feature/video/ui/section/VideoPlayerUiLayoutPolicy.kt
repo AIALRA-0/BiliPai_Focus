@@ -10,13 +10,16 @@ data class VideoPlayerUiLayoutPolicy(
     val restoreButtonVerticalPaddingDp: Int,
     val restoreButtonIconSizeDp: Int,
     val longPressBadgeHorizontalPaddingDp: Int,
-    val longPressBadgeVerticalPaddingDp: Int
+    val longPressBadgeVerticalPaddingDp: Int,
+    val compactWindowHeight: Boolean = false,
+    val seekCancelHintOffsetDp: Int = 96,
 )
 
 fun resolveVideoPlayerUiLayoutPolicy(
-    widthDp: Int
+    widthDp: Int,
+    windowHeightDp: Int = Int.MAX_VALUE,
 ): VideoPlayerUiLayoutPolicy {
-    return when {
+    val widthPolicy = when {
         widthDp < 240 -> VideoPlayerUiLayoutPolicy(
             gestureOverlaySizeDp = 96,
             gestureIconSizeDp = 36,
@@ -66,4 +69,16 @@ fun resolveVideoPlayerUiLayoutPolicy(
             longPressBadgeVerticalPaddingDp = 12
         )
     }
+    if (windowHeightDp <= 0 || windowHeightDp >= 480) return widthPolicy
+    val veryShort = windowHeightDp < 320
+    // 矮窗口只收紧反馈与留白，不缩小原生按钮触摸目标；所有材质共用该几何策略。
+    return widthPolicy.copy(
+        compactWindowHeight = true,
+        gestureOverlaySizeDp = minOf(widthPolicy.gestureOverlaySizeDp, if (veryShort) 80 else 96),
+        gestureIconSizeDp = minOf(widthPolicy.gestureIconSizeDp, 36),
+        seekFeedbackSizeDp = minOf(widthPolicy.seekFeedbackSizeDp, if (veryShort) 64 else 84),
+        gestureBoundaryPaddingDp = minOf(widthPolicy.gestureBoundaryPaddingDp, if (veryShort) 12 else 16),
+        restoreButtonBottomOffsetDp = minOf(widthPolicy.restoreButtonBottomOffsetDp, 72),
+        seekCancelHintOffsetDp = if (veryShort) 32 else 48,
+    )
 }

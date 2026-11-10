@@ -2,7 +2,7 @@ package com.android.purebilibili.plugin.sdk
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlin.test.Test
+import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class PluginSdkManifestTest {

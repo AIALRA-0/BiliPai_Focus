@@ -1,44 +1,29 @@
 package com.android.purebilibili.feature.settings
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import com.android.purebilibili.core.theme.ThemeColors
-import com.android.purebilibili.core.theme.iOSBlue
-import com.android.purebilibili.core.theme.iOSCoral
-import com.android.purebilibili.core.theme.iOSGreen
-import com.android.purebilibili.core.theme.iOSOrange
-import com.android.purebilibili.core.theme.iOSPink
-import com.android.purebilibili.core.theme.iOSPurple
-import com.android.purebilibili.core.theme.iOSRed
-import com.android.purebilibili.core.theme.iOSTeal
-import com.android.purebilibili.core.theme.iOSYellow
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AppEntryIconPalette
 
 /**
- * 设置页同级条目的多彩色板。前八项延续现有视觉语言，后八项用于较长列表，
- * 从而在单个可见设置组内最多支持 16 个互不重复的图标色。
+ * 设置页同级条目的多彩色板，与偏好分组内的入口彩色分配共用同一份定义。
+ *
+ * Miuix 主题沿用这套七彩入口色；Material 3 下同级图标统一请求中性色，
+ * 由偏好渲染层按语义色解析。
  */
-internal val SettingsSiblingIconPalette: List<Color> = listOf(
-    iOSBlue,
-    iOSOrange,
-    iOSGreen,
-    iOSPurple,
-    iOSTeal,
-    iOSPink,
-    ThemeColors[8],
-    iOSYellow,
-    ThemeColors[22],
-    iOSRed,
-    iOSCoral,
-    ThemeColors[9],
-    ThemeColors[5],
-    ThemeColors[6],
-    ThemeColors[15],
-    ThemeColors[17],
-)
+internal val SettingsSiblingIconPalette: List<Color> = AppEntryIconPalette
 
+/**
+ * @param colorful Miuix 传 true 取七彩入口色，其余主题传 false 请求中性色。
+ */
 internal fun resolveSettingsSiblingIconTint(
     siblingIndex: Int,
     paletteOffset: Int = 0,
+    colorful: Boolean = false,
 ): Color {
+    if (!colorful) return Color.Unspecified
     val paletteIndex = Math.floorMod(siblingIndex + paletteOffset, SettingsSiblingIconPalette.size)
     return SettingsSiblingIconPalette[paletteIndex]
 }
@@ -46,11 +31,22 @@ internal fun resolveSettingsSiblingIconTint(
 internal fun resolveSettingsSiblingIconTints(
     siblingCount: Int,
     paletteOffset: Int = 0,
+    colorful: Boolean = false,
 ): List<Color> {
-    require(siblingCount in 0..SettingsSiblingIconPalette.size) {
-        "A visible settings group supports at most ${SettingsSiblingIconPalette.size} unique icon colors"
-    }
+    require(siblingCount >= 0) { "Sibling count must not be negative" }
     return List(siblingCount) { index ->
-        resolveSettingsSiblingIconTint(index, paletteOffset)
+        resolveSettingsSiblingIconTint(index, paletteOffset, colorful)
+    }
+}
+
+/** 按当前界面风格解析同级图标色：Miuix 保留七彩入口色，Material 3 使用中性色。 */
+@Composable
+internal fun rememberSettingsSiblingIconTints(
+    siblingCount: Int,
+    paletteOffset: Int = 0,
+): List<Color> {
+    val colorful = LocalAppUiStyle.current == AppUiStyle.MIUIX
+    return remember(siblingCount, paletteOffset, colorful) {
+        resolveSettingsSiblingIconTints(siblingCount, paletteOffset, colorful)
     }
 }

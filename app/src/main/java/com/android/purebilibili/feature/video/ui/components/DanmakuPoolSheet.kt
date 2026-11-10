@@ -1,6 +1,11 @@
 // File: feature/video/ui/components/DanmakuPoolSheet.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
+import com.android.purebilibili.core.ui.components.appSearchElasticPress
+import com.android.purebilibili.core.ui.components.AppTextButton
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -8,14 +13,16 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -37,6 +44,7 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AnimatedCountText
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -68,25 +76,36 @@ private enum class DanmakuPoolSortMode(val label: String) {
 fun DanmakuPoolSheet(
     danmakuList: List<DanmakuItem>,
     currentPositionMs: Long = 0L,
+    videoCid: Long = 0L,
     onSeekTo: (Long) -> Unit,
-    onLikeDanmaku: (Long) -> Unit,
+    likedDanmakuIds: Set<Long> = emptySet(),
+    onLikeDanmaku: (dmid: Long, like: Boolean) -> Unit = { _, _ -> },
     onRecallDanmaku: (Long) -> Unit = {},
+    onReportDanmaku: (dmid: Long, reason: Int) -> Unit = { _, _ -> },
+    onBlockSender: (userHash: String) -> Unit = {},
+    onSendSame: (String) -> Unit = {},
+    isSending: Boolean = false,
+    upOwnerUserHash: String? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onRefreshSnapshot: (() -> List<DanmakuItem>)? = null,
+    onReportDanmakuWithDetails: ((dmid: Long, reason: Int, explanation: String, blockUser: Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var sortMode by remember { mutableStateOf(DanmakuPoolSortMode.TIME) }
-    var selectedItemForAction by remember { mutableStateOf<DanmakuItem?>(null) }
-    var likedDanmakuIds by remember { mutableStateOf(setOf<Long>()) }
+    var selectedItemForAction by remember(videoCid) { mutableStateOf<DanmakuItem?>(null) }
+    var showReportReasons by remember { mutableStateOf(false) }
+    var pendingSendText by remember(videoCid) { mutableStateOf<String?>(null) }
+    var snapshot by remember(videoCid) { mutableStateOf(danmakuList.toList()) }
 
-    val filteredList by remember(danmakuList, searchQuery, sortMode) {
+    val filteredList by remember(snapshot, searchQuery, sortMode) {
         derivedStateOf {
             val query = searchQuery.trim()
             val base = if (query.isEmpty()) {
-                danmakuList
+                snapshot
             } else {
-                danmakuList.filter { (it.text ?: "").contains(query, ignoreCase = true) }
+                snapshot.filter { (it.text ?: "").contains(query, ignoreCase = true) }
             }
             when (sortMode) {
                 DanmakuPoolSortMode.TIME -> base.sortedBy { it.showAtTime }
@@ -120,16 +139,19 @@ fun DanmakuPoolSheet(
                         text = "弹幕列表",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = AppContentColors.primaryText(),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     AppText(
-                        text = "共 ${danmakuList.size} 条",
+                        text = "共 ${snapshot.size} 条",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppTextButton(onClick = { snapshot = (onRefreshSnapshot?.invoke() ?: danmakuList).toList() }) {
+                        AppText("刷新")
+                    }
                     // 排序切换按钮
                     Row(
                         modifier = Modifier
@@ -143,7 +165,7 @@ fun DanmakuPoolSheet(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(DanmakuPoolShapeSpec.Radius6Dp.dp))
                                     .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        if (isSelected) AppContentColors.accent()
                                         else Color.Transparent
                                     )
                                     .clickable { sortMode = mode }
@@ -154,8 +176,8 @@ fun DanmakuPoolSheet(
                                     text = mode.label,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = if (isSelected) AppContentColors.onAccent()
+                                    else AppContentColors.secondaryText(),
                                 )
                             }
                         }
@@ -180,12 +202,13 @@ fun DanmakuPoolSheet(
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 4.dp)
+                    .appSearchElasticPress(),
                 placeholder = {
                     AppText(
                         text = "搜索当前已加载的弹幕...",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        color = AppContentColors.secondaryText(),
                     )
                 },
                 leadingIcon = {
@@ -193,7 +216,7 @@ fun DanmakuPoolSheet(
                         imageVector = Icons.Default.Search,
                         contentDescription = "搜索",
                         modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = AppContentColors.secondaryText(),
                     )
                 },
                 trailingIcon = {
@@ -226,7 +249,7 @@ fun DanmakuPoolSheet(
                     AppText(
                         text = if (searchQuery.isNotEmpty()) "未找到包含「$searchQuery」的弹幕" else "暂无弹幕数据",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AppContentColors.secondaryText(),
                     )
                 }
             } else {
@@ -246,6 +269,8 @@ fun DanmakuPoolSheet(
                             item = item,
                             isLiked = isLiked,
                             isHighlighted = isNearCurrentTime,
+                            isUpOwner = item.isUpOwner ||
+                                (upOwnerUserHash != null && item.userHash == upOwnerUserHash),
                             onItemClick = {
                                 onSeekTo(item.showAtTime)
                                 Toast.makeText(
@@ -258,11 +283,7 @@ fun DanmakuPoolSheet(
                                 selectedItemForAction = item
                             },
                             onLikeClick = {
-                                if (!isLiked) {
-                                    likedDanmakuIds = likedDanmakuIds + item.danmakuId
-                                    onLikeDanmaku(item.danmakuId)
-                                    Toast.makeText(context, "已赞同弹幕", Toast.LENGTH_SHORT).show()
-                                }
+                                onLikeDanmaku(item.danmakuId, !isLiked)
                             },
                         )
                     }
@@ -271,101 +292,191 @@ fun DanmakuPoolSheet(
         }
     }
 
+    pendingSendText?.let { text ->
+        DanmakuSameSendConfirmation(
+            text = text,
+            isSending = isSending,
+            onDismiss = { pendingSendText = null },
+            onConfirm = { pendingSendText = null; onSendSame(text) },
+        )
+    }
+
     // 弹幕长按操作菜单 Dialog
     selectedItemForAction?.let { item ->
         AppAlertDialog(
-            onDismissRequest = { selectedItemForAction = null },
+            onDismissRequest = {
+                showReportReasons = false
+                selectedItemForAction = null
+            },
             title = {
                 AppText(
-                    text = "弹幕操作",
+                    text = if (showReportReasons) "举报原因" else "弹幕操作",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
             },
             text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    AppText(
-                        text = item.text.orEmpty(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
+                if (showReportReasons) {
+                    DanmakuReportForm(
+                        canBlockUser = item.userHash.isNotBlank() && !item.isSelf,
+                        onSubmit = { reason, explanation, block ->
+                            if (onReportDanmakuWithDetails != null) {
+                                onReportDanmakuWithDetails(item.danmakuId, reason, explanation, block)
+                            } else {
+                                onReportDanmaku(item.danmakuId, reason)
+                                if (block) onBlockSender(item.userHash)
+                            }
+                            showReportReasons = false
+                            selectedItemForAction = null
+                        },
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                    // 跳转播放
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onSeekTo(item.showAtTime)
-                                selectedItemForAction = null
-                                onDismiss()
-                            }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        AppIcon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(10.dp))
                         AppText(
-                            text = "跳转到该时间 (${FormatUtils.formatDuration(item.showAtTime)})",
+                            text = item.text.orEmpty(),
                             style = MaterialTheme.typography.bodyMedium,
+                            color = AppContentColors.primaryText(),
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                    }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-                    // 复制文本
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("danmaku", item.text.orEmpty())
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "已复制弹幕内容", Toast.LENGTH_SHORT).show()
-                                selectedItemForAction = null
-                            }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        AppIcon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(10.dp))
-                        AppText(text = "复制弹幕内容", style = MaterialTheme.typography.bodyMedium)
-                    }
-
-                    // 撤回弹幕（仅自己发送的弹幕）
-                    if (item.isSelf) {
+                        // 跳转播放
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    onRecallDanmaku(item.danmakuId)
+                                    onSeekTo(item.showAtTime)
+                                    selectedItemForAction = null
+                                    onDismiss()
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AppIcon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            AppText(
+                                text = "跳转到该时间 (${FormatUtils.formatDuration(item.showAtTime)})",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+
+                        if (!item.text.isNullOrBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable(enabled = !isSending) {
+                                    pendingSendText = item.text
+                                    selectedItemForAction = null
+                                }.padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                PiliPlusDanmakuSendIcon(size = 20.dp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                AppText("发送同款", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+
+                        // 复制文本
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("danmaku", item.text.orEmpty())
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "已复制弹幕内容", Toast.LENGTH_SHORT).show()
                                     selectedItemForAction = null
                                 }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            AppIcon(
-                                Icons.Outlined.Delete,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.error,
-                            )
+                            AppIcon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(10.dp))
-                            AppText(
-                                text = "撤回该弹幕",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                            )
+                            AppText(text = "复制弹幕内容", style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        // 撤回弹幕（仅自己发送的弹幕）
+                        if (item.isSelf) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onRecallDanmaku(item.danmakuId)
+                                        selectedItemForAction = null
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                AppIcon(
+                                    Icons.Outlined.Delete,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = AppContentColors.error(),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                AppText(
+                                    text = "撤回该弹幕",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = AppContentColors.error(),
+                                )
+                            }
+                        }
+
+                        // 屏蔽发送者
+                        if (item.userHash.isNotBlank() && !item.isSelf) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onBlockSender(item.userHash)
+                                        selectedItemForAction = null
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                AppIcon(
+                                    Icons.Filled.Block,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                AppText(text = "屏蔽发送者", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+
+                        // 举报弹幕
+                        if (item.danmakuId > 0L) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showReportReasons = true }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                AppIcon(
+                                    Icons.Filled.Report,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = AppContentColors.error(),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                AppText(
+                                    text = "举报弹幕",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = AppContentColors.error(),
+                                )
+                            }
                         }
                     }
                 }
             },
             confirmButton = {
-                AppTextButton(onClick = { selectedItemForAction = null }) {
-                    AppText("关闭")
+                AppTextButton(onClick = {
+                    if (showReportReasons) showReportReasons = false else selectedItemForAction = null
+                }) {
+                    AppText(if (showReportReasons) "返回" else "关闭")
                 }
             },
         )
@@ -377,6 +488,7 @@ private fun DanmakuPoolItemRow(
     item: DanmakuItem,
     isLiked: Boolean,
     isHighlighted: Boolean,
+    isUpOwner: Boolean,
     onItemClick: () -> Unit,
     onLongClick: () -> Unit,
     onLikeClick: () -> Unit,
@@ -414,24 +526,42 @@ private fun DanmakuPoolItemRow(
                     text = FormatUtils.formatDuration(item.showAtTime),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppContentColors.secondaryText(),
                 )
             }
 
             Spacer(modifier = Modifier.width(8.dp))
+
+            // UP 主弹幕：粉色 UP 标签（与播放器内徽章同色系）
+            if (isUpOwner) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                ) {
+                    AppText(
+                        text = "UP",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+            }
 
             // 如果是自己的弹幕，显示“我的”标签
             if (item.isSelf) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(DanmakuPoolShapeSpec.Radius3Dp.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        .background(AppContentColors.accent().copy(alpha = 0.15f))
                         .padding(horizontal = 4.dp, vertical = 1.dp),
                 ) {
                     AppText(
                         text = "我的",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = AppContentColors.accent(),
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -454,7 +584,7 @@ private fun DanmakuPoolItemRow(
             AppText(
                 text = item.text.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = AppContentColors.primaryText(),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -474,17 +604,16 @@ private fun DanmakuPoolItemRow(
                     imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = "赞同",
                     modifier = Modifier.size(16.dp),
-                    tint = if (isLiked) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (isLiked) AppContentColors.accent() else AppContentColors.secondaryText(),
                 )
-                val totalLikes = item.likeCount + if (isLiked) 1 else 0
-                if (totalLikes > 0) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    AppText(
-                        text = totalLikes.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isLiked) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                val totalLikes = item.likeCount.coerceAtLeast(0L) +
+                    if (isLiked && item.likeCount < Long.MAX_VALUE) 1L else 0L
+                Spacer(modifier = Modifier.width(4.dp))
+                AnimatedCountText(
+                    count = totalLikes,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isLiked) AppContentColors.accent() else AppContentColors.secondaryText(),
+                )
             }
         }
     }

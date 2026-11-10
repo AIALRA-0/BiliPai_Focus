@@ -20,6 +20,9 @@ internal object DynamicEmoteCatalog {
     private var cached: Map<String, String> = emptyMap()
 
     @Volatile
+    private var cachedPackages: List<EmotePackage> = emptyList()
+
+    @Volatile
     private var loadedSessionKey: DynamicEmoteCatalogSessionKey? = null
 
     @Volatile
@@ -29,6 +32,10 @@ internal object DynamicEmoteCatalog {
     private var lastAttemptMs = 0L
 
     fun snapshot(): Map<String, String> = cached.takeIf {
+        loadedSessionKey == currentSessionKey()
+    }.orEmpty()
+
+    fun snapshotPackages(): List<EmotePackage> = cachedPackages.takeIf {
         loadedSessionKey == currentSessionKey()
     }.orEmpty()
 
@@ -64,10 +71,12 @@ internal object DynamicEmoteCatalog {
             }
             if (loadedSessionKey != requestedSessionKey) {
                 cached = emptyMap()
+                cachedPackages = emptyList()
                 fullyLoaded = false
             }
             val loadResult = loadEmoteUrlMap()
             cached = loadResult.entries
+            cachedPackages = loadResult.packages
             fullyLoaded = loadResult.complete
             loadedSessionKey = requestedSessionKey
             lastAttemptMs = lockedNowMs
@@ -75,8 +84,14 @@ internal object DynamicEmoteCatalog {
         }
     }
 
+    suspend fun ensurePackagesLoaded(): List<EmotePackage> {
+        ensureLoaded()
+        return snapshotPackages()
+    }
+
     private suspend fun loadEmoteUrlMap(): DynamicEmoteCatalogLoadResult {
         val result = linkedMapOf<String, String>()
+        val packages = linkedMapOf<Long, EmotePackage>()
         // Seed a few common shortcodes so first paint is not empty if the panel request fails.
         result["[doge]"] =
             "https://i0.hdslb.com/bfs/emote/6f8743c3c13009f4705307b2750e32f5068225e3.png"
@@ -84,6 +99,8 @@ internal object DynamicEmoteCatalog {
         listOf("dynamic", "reply").forEach { business ->
             runCatching {
                 fetchPackages(business).forEach { pkg ->
+                    // dynamic 业务先加载；重复包 id 以 dynamic 为准，reply 只补缺。
+                    packages.putIfAbsent(pkg.id, pkg)
                     pkg.emote.orEmpty().forEach { emote ->
                         val text = emote.text.trim()
                         val url = emote.url.trim()
@@ -96,6 +113,7 @@ internal object DynamicEmoteCatalog {
         }
         return DynamicEmoteCatalogLoadResult(
             entries = result,
+            packages = packages.values.toList(),
             complete = completedBusinessCount == DYNAMIC_EMOTE_BUSINESS_COUNT,
         )
     }
@@ -124,6 +142,7 @@ internal data class DynamicEmoteCatalogSessionKey(
 
 private data class DynamicEmoteCatalogLoadResult(
     val entries: Map<String, String>,
+    val packages: List<EmotePackage>,
     val complete: Boolean,
 )
 

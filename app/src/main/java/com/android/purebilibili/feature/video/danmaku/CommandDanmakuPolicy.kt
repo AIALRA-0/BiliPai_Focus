@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.video.danmaku
 
+import com.android.purebilibili.danmaku.parser.*
+import com.android.purebilibili.data.model.response.GradeDanmakuSummary
+import com.android.purebilibili.data.model.response.parseGradeDanmakuSummary
+
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -29,7 +33,8 @@ enum class VoteDanmakuKind {
 data class VoteOption(
     val id: String,
     val label: String,
-    val score: Int? = null
+    val score: Int? = null,
+    val optionIndex: Int? = null
 )
 
 /**
@@ -74,13 +79,20 @@ data class CommandDanmakuItem(
     val voteKind: VoteDanmakuKind = VoteDanmakuKind.UNKNOWN,
     val voteId: String = "",
     val voteTitle: String = "",
-    val voteOptions: List<VoteOption> = emptyList()
+    val voteOptions: List<VoteOption> = emptyList(),
+    val gradeSummary: GradeDanmakuSummary? = null,
+    val voteSelectedIndex: Int? = null,
+    val positionXRatio: Float? = null,
+    val positionYRatio: Float? = null
 )
+
+internal fun CommandDanmakuItem.isActiveAt(positionMs: Long): Boolean =
+    positionMs >= startTimeMs && positionMs - startTimeMs < durationMs
 
 internal const val COMMAND_DANMAKU_OVERLAY_DURATION_MS = 3000L
 private const val LEGACY_ADVANCED_COMMAND_DURATION_MS = 5000L
 
-// 投票弹幕需要更长的展示时间供用户点选
+// 服务端未提供有效时长时，给投票和评分保留点选时间。
 internal const val VOTE_DANMAKU_OVERLAY_DURATION_MS = 8000L
 
 private val NON_VISUAL_COMMAND_TYPES = setOf(
@@ -156,13 +168,17 @@ internal fun buildCommandDanmakuItem(cmd: DanmakuProto.CommandDm): CommandDanmak
             return CommandDanmakuItem(
                 id = "cmd_${cmd.id}",
                 type = type,
-                content = voteData.title.ifBlank { "互动投票" },
+                content = voteData.title.ifBlank {
+                    if (voteKind == VoteDanmakuKind.GRADE) "打分" else "互动投票"
+                },
                 startTimeMs = cmd.progress.coerceAtLeast(0).toLong(),
-                durationMs = VOTE_DANMAKU_OVERLAY_DURATION_MS,
+                durationMs = voteData.durationMs,
                 voteKind = voteKind,
                 voteId = voteData.voteId,
                 voteTitle = voteData.title,
-                voteOptions = voteData.options
+                voteOptions = voteData.options,
+                gradeSummary = voteData.gradeSummary,
+                voteSelectedIndex = voteData.selectedIndex
             )
         }
         // 解析失败：降级为文本卡片，保持原有"投票提示"展示行为
@@ -183,6 +199,7 @@ internal fun buildCommandDanmakuItem(cmd: DanmakuProto.CommandDm): CommandDanmak
             CommandDanmakuType.VOTE -> null
         }
         ?: return null
+    val attentionExtra = if (type == CommandDanmakuType.ATTENTION) parseJsonObject(extra) else null
     return CommandDanmakuItem(
         id = "cmd_${cmd.id}",
         type = fallbackType,
@@ -191,14 +208,19 @@ internal fun buildCommandDanmakuItem(cmd: DanmakuProto.CommandDm): CommandDanmak
             else -> text
         },
         startTimeMs = cmd.progress.coerceAtLeast(0).toLong(),
-        durationMs = COMMAND_DANMAKU_OVERLAY_DURATION_MS,
+        durationMs = attentionExtra?.optLong("duration", 0L)?.takeIf { it > 0L }
+            ?: COMMAND_DANMAKU_OVERLAY_DURATION_MS,
         iconUrl = extractJsonString(extra, "icon").orEmpty(),
         linkAid = extractJsonLong(extra, "aid") ?: 0L,
         linkBvid = extractJsonString(extra, "bvid").orEmpty(),
         linkTitle = extractJsonString(extra, "title").orEmpty(),
         posX = extractJsonFloat(extra, "posX") ?: 0f,
         posY = extractJsonFloat(extra, "posY") ?: 0f,
-        attentionType = extractJsonLong(extra, "type")?.toInt() ?: 0
+        attentionType = extractJsonLong(extra, "type")?.toInt() ?: 0,
+        positionXRatio = attentionExtra?.optDouble("posX_2", Double.NaN)
+            ?.takeIf { it.isFinite() }?.toFloat()?.div(100f)?.coerceIn(0f, 1f),
+        positionYRatio = attentionExtra?.optDouble("posY_2", Double.NaN)
+            ?.takeIf { it.isFinite() }?.toFloat()?.div(100f)?.coerceIn(0f, 1f)
     )
 }
 
@@ -214,7 +236,10 @@ internal fun resolveCommandDanmakuText(cmd: DanmakuProto.CommandDm): String? {
 private data class VoteDanmakuPayload(
     val voteId: String,
     val title: String,
-    val options: List<VoteOption>
+    val options: List<VoteOption>,
+    val gradeSummary: GradeDanmakuSummary?,
+    val selectedIndex: Int?,
+    val durationMs: Long
 )
 
 private fun resolveVoteKind(commandType: String): VoteDanmakuKind {
@@ -241,12 +266,18 @@ private fun parseVoteDanmakuData(
     var options: List<VoteOption>? = null
 
     if (payloadJson != null) {
-        voteId = payloadJson.optString("vote_id", "").orEmpty()
-            .ifBlank { payloadJson.optString("id", "").orEmpty() }
-            .ifBlank { payloadJson.optString("grade_id", "").orEmpty() }
-        title = payloadJson.optString("title", "").orEmpty()
+        voteId = if (kind == VoteDanmakuKind.GRADE) {
+            payloadJson.optString("grade_id", "").orEmpty()
+                .ifBlank { payloadJson.optString("id", "").orEmpty() }
+        } else {
+            payloadJson.optString("vote_id", "").orEmpty()
+                .ifBlank { payloadJson.optString("id", "").orEmpty() }
+                .ifBlank { payloadJson.optString("grade_id", "").orEmpty() }
+        }
+        title = if (kind == VoteDanmakuKind.GRADE) payloadJson.optString("msg", "").orEmpty() else ""
+        title = title.ifBlank { payloadJson.optString("title", "").orEmpty() }
             .ifBlank { payloadJson.optString("question", "").orEmpty() }
-        options = parseVoteOptions(payloadJson)
+        options = parseVoteOptions(payloadJson, kind)
     }
 
     // 打分弹幕：从 content/extra 中兜底提取 grade_id（可能是纯数字）
@@ -262,21 +293,39 @@ private fun parseVoteDanmakuData(
         }
     }
 
+    if (kind == VoteDanmakuKind.GRADE && title.isBlank()) {
+        title = extractReadableCommandText(cmd.content)
+            ?: extractReadableCommandText(cmd.extra)
+            ?: ""
+    }
+
     if (voteId.isBlank() && title.isBlank() && options.isNullOrEmpty()) return null
     return VoteDanmakuPayload(
         voteId = voteId,
         title = title,
-        options = options.orEmpty()
+        options = options.orEmpty(),
+        gradeSummary = if (kind == VoteDanmakuKind.GRADE && payloadJson != null) {
+            parseGradeDanmakuSummary(payloadJson)
+        } else {
+            null
+        },
+        selectedIndex = if (kind != VoteDanmakuKind.GRADE) {
+            payloadJson?.optInt("my_vote", 0)?.takeIf { it > 0 }
+        } else {
+            null
+        },
+        durationMs = payloadJson?.optLong("duration", 0L)?.takeIf { it > 0L }
+            ?: VOTE_DANMAKU_OVERLAY_DURATION_MS
     )
 }
 
 /**
  * 从 JSON 中提取选项列表，兼容多种格式：
- * - 数组 of 对象: [{"id":1,"title":"A"}, ...]（键也兼容 score/name/text/label）
+ * - 数组 of 对象: [{"idx":1,"desc":"A"}, ...]，兼容 id/title/name/text/label
  * - 数组 of 字符串: ["A","B"]
  * - 对象 map: {"1":"A","2":"B"}
  */
-private fun parseVoteOptions(json: JSONObject): List<VoteOption>? {
+private fun parseVoteOptions(json: JSONObject, kind: VoteDanmakuKind): List<VoteOption>? {
     val raw = json.opt("options") ?: json.opt("choices") ?: return null
     val result = mutableListOf<VoteOption>()
 
@@ -286,27 +335,43 @@ private fun parseVoteOptions(json: JSONObject): List<VoteOption>? {
                 val element = raw.opt(i) ?: continue
                 when (element) {
                     is JSONObject -> {
+                        val optionIndex = if (kind == VoteDanmakuKind.GRADE) null else {
+                            element.optInt("idx", 0).takeIf { it > 0 }
+                                ?: element.optInt("opt_idx", 0).takeIf { it > 0 }
+                                ?: (i + 1)
+                        }
                         val id = element.optString("id", "").orEmpty()
                             .ifBlank { element.optString("value", "").orEmpty() }
-                            .ifBlank { i.toString() }
+                            .ifBlank { optionIndex?.toString() ?: i.toString() }
                         val score = element.optInt("score", -1).takeIf { it >= 0 }
                         val label = element.optString("title", "").orEmpty()
                             .ifBlank { element.optString("name", "").orEmpty() }
                             .ifBlank { element.optString("text", "").orEmpty() }
                             .ifBlank { element.optString("label", "").orEmpty() }
+                            .ifBlank { element.optString("desc", "").orEmpty() }
+                            .ifBlank { element.optString("opt_desc", "").orEmpty() }
                             // 打分弹幕选项可能只有 id+score，用分数兜底做可读标签
                             .ifBlank { score?.toString().orEmpty() }
                         if (label.isNotBlank()) {
-                            result.add(VoteOption(id = id, label = label, score = score))
+                            result.add(VoteOption(id = id, label = label, score = score, optionIndex = optionIndex))
                         }
                     }
                     is String -> {
                         if (element.isNotBlank()) {
-                            result.add(VoteOption(id = i.toString(), label = element))
+                            result.add(VoteOption(
+                                id = i.toString(),
+                                label = element,
+                                optionIndex = if (kind == VoteDanmakuKind.GRADE) null else i + 1
+                            ))
                         }
                     }
                     is Number -> {
-                        result.add(VoteOption(id = element.toString(), label = element.toString(), score = element.toInt()))
+                        result.add(VoteOption(
+                            id = element.toString(),
+                            label = element.toString(),
+                            score = element.toInt(),
+                            optionIndex = if (kind == VoteDanmakuKind.GRADE) null else i + 1
+                        ))
                     }
                 }
             }
@@ -317,7 +382,13 @@ private fun parseVoteOptions(json: JSONObject): List<VoteOption>? {
                 val key = keys.next()
                 val value = raw.optString(key, "").orEmpty()
                 if (value.isNotBlank()) {
-                    result.add(VoteOption(id = key, label = value))
+                    result.add(VoteOption(
+                        id = key,
+                        label = value,
+                        optionIndex = if (kind == VoteDanmakuKind.GRADE) null else {
+                            key.toIntOrNull()?.takeIf { it > 0 } ?: result.size + 1
+                        }
+                    ))
                 }
             }
         }

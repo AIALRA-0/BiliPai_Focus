@@ -66,6 +66,6 @@ class DynamicFeatureCompletionStructureTest {
 
     private fun source(relativePath: String): String {
         val path = "src/main/java/com/android/purebilibili/$relativePath"
-        return listOf(File(path), File("app/$path")).first(File::exists).readText()
+        return listOf(File(path), File("app/$path"), File("../core-data/$path"), File("core-data/$path")).first(File::exists).readText()
     }
 }

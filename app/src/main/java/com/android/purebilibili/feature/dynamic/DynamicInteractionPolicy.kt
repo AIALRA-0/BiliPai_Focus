@@ -77,12 +77,6 @@ internal fun shouldIncludeDynamicItemInArticleTab(item: DynamicItem): Boolean {
     }
 }
 
-internal fun shouldIncludeDynamicItemInUpTab(item: DynamicItem): Boolean {
-    return !shouldIncludeDynamicItemInVideoTab(item) &&
-        !shouldIncludeDynamicItemInPgcTab(item) &&
-        !shouldIncludeDynamicItemInArticleTab(item)
-}
-
 internal fun resolveDynamicCommentTarget(item: DynamicItem): DynamicCommentTarget? {
     if (item.type.trim() == "DYNAMIC_TYPE_FORWARD") {
         item.id_str.toPositiveLongOrNull()?.let {

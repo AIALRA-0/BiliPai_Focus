@@ -3,6 +3,8 @@ package com.android.purebilibili.core.ui.renderer.material3
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.theme.resolveControlGlyphColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -17,6 +19,8 @@ internal fun AppMaterial3RadioButton(
     interactionSource: MutableInteractionSource?,
 ) {
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+    val nativeColors = RadioButtonDefaults.colors()
+    val surface = MaterialTheme.colorScheme.surface
     RadioButton(
         selected = selected,
         onClick = onClick,
@@ -25,7 +29,7 @@ internal fun AppMaterial3RadioButton(
             enabled && onClick != null,
         ),
         enabled = enabled,
-        colors = RadioButtonDefaults.colors(),
+        colors = nativeColors.copy(selectedColor = resolveControlGlyphColor(nativeColors.selectedColor, surface, surface)),
         interactionSource = resolvedInteractionSource,
     )
 }

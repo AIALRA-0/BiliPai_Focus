@@ -40,6 +40,18 @@ abstract class BaseRenderLine(private val mController: DanmakuController,
     protected val mConfig = mController.config
     protected val mDrawingItems = LinkedList<DrawItem<DanmakuData>>()
 
+    protected fun beginItemTiming(item: DrawItem<DanmakuData>) {
+        item.lastRenderTimeMs = mController.renderTimeMs
+    }
+
+    /** Update even individually paused items so they never catch up their paused interval. */
+    protected fun itemElapsedTimeMs(item: DrawItem<DanmakuData>): Long {
+        val now = mController.renderTimeMs
+        val elapsed = (now - item.lastRenderTimeMs).coerceAtLeast(0L)
+        item.lastRenderTimeMs = now
+        return if (item.isPaused) 0L else elapsed
+    }
+
     private val mBoundsPaint: Paint by lazy {
         Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     }
@@ -89,21 +101,24 @@ abstract class BaseRenderLine(private val mController: DanmakuController,
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                mCurrentTouchItem = null
                 mDrawingItems.asReversed().forEach { item ->
-                    if (event.x >= item.x && event.x <= item.x + item.width) {
+                    if (item.containsX(event.x) && event.y >= item.y && event.y <= item.y + item.height) {
                         mCurrentTouchItem = item
                         return true
                     }
                 }
             }
             MotionEvent.ACTION_UP -> {
-                mCurrentTouchItem?.let { item ->
+                val item = mCurrentTouchItem
+                mCurrentTouchItem = null
+                if (item != null) {
+                    if (!item.isVisible) return false
                     if (touchValidate(event, item)) {
                         handleItemClick(item, event.x, event.y)
                     }
                     return true
                 }
-                mCurrentTouchItem = null
             }
         }
         return false
@@ -113,10 +128,11 @@ abstract class BaseRenderLine(private val mController: DanmakuController,
      * Do not handle click if touch event is out of item area
      */
     private fun touchValidate(event: MotionEvent, item: DrawItem<DanmakuData>): Boolean {
-        return event.x in item.x..item.x + item.width
+        return item.containsX(event.x)
     }
 
     open fun handleItemClick(item: DrawItem<DanmakuData>, upX: Float, upY: Float) {
+        if (!item.isVisible) return
         mController.itemClickListener?.let { listener ->
             item.data?.let { danmaku ->
                 listener.onDanmakuClick(danmaku, mClickPositionRect.apply {
@@ -143,6 +159,7 @@ abstract class BaseRenderLine(private val mController: DanmakuController,
     private fun pauseItem(data: DanmakuData) {
         mDrawingItems.forEach { item ->
             if (item.data == data) {
+                item.lastRenderTimeMs = mController.renderTimeMs
                 item.isPaused = true
             }
         }
@@ -151,6 +168,7 @@ abstract class BaseRenderLine(private val mController: DanmakuController,
     private fun resumeItem(data: DanmakuData) {
         mDrawingItems.forEach { item ->
             if (item.data == data) {
+                item.lastRenderTimeMs = mController.renderTimeMs
                 item.isPaused = false
             }
         }

@@ -3,7 +3,9 @@ package com.android.purebilibili.core.ui.transition
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.os.Build
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -207,13 +209,15 @@ internal class PredictiveBackBlurRenderEffectCache {
     }
 }
 
+@Composable
 internal fun Modifier.predictiveBackBackgroundEffect(
     progressProvider: () -> Float,
     motionTierProvider: () -> MotionTier = { MotionTier.Normal },
     isLightBackgroundProvider: () -> Boolean = { false },
 ): Modifier {
-    val frameCache = PredictiveBackBlurFrameCache()
-    val effectCache = PredictiveBackBlurRenderEffectCache()
+    // 手势期间反复重组时，保留同一半径对应的模糊对象，避免逐帧创建。
+    val frameCache = remember { PredictiveBackBlurFrameCache() }
+    val effectCache = remember { BlurRenderEffectCache() }
     return graphicsLayer {
         val frame = frameCache.resolve(
             progressProvider(),

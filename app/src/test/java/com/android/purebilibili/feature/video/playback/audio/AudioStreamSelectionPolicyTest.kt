@@ -7,6 +7,7 @@ import com.android.purebilibili.data.model.response.Flac
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class AudioStreamSelectionPolicyTest {
@@ -57,7 +58,7 @@ class AudioStreamSelectionPolicyTest {
             requestedAudioQuality = AUDIO_QUALITY_AUTO
         )
 
-        assertEquals(AUDIO_QUALITY_AUTO, decision.selectedPreferenceId)
+        assertEquals(30280, decision.selectedPreferenceId)
         assertEquals(AudioStreamKind.STANDARD, decision.selected?.kind)
         assertEquals(30280, decision.selected?.track?.id)
         assertNull(decision.fallbackReason)
@@ -83,7 +84,7 @@ class AudioStreamSelectionPolicyTest {
         )
 
         assertEquals(AUDIO_QUALITY_HI_RES, decision.requestedPreferenceId)
-        assertEquals(AUDIO_QUALITY_AUTO, decision.selectedPreferenceId)
+        assertEquals(30280, decision.selectedPreferenceId)
         assertEquals(AudioFallbackReason.REQUESTED_UNAVAILABLE, decision.fallbackReason)
     }
 
@@ -97,14 +98,14 @@ class AudioStreamSelectionPolicyTest {
 
         assertEquals(AUDIO_QUALITY_HI_RES, decision.requestedPreferenceId)
         assertEquals(AUDIO_QUALITY_AUTO, decision.effectivePreferenceId)
-        assertEquals(AUDIO_QUALITY_AUTO, decision.selectedPreferenceId)
+        assertEquals(30280, decision.selectedPreferenceId)
         assertEquals(AudioFallbackReason.SPEED_INCOMPATIBLE, decision.fallbackReason)
     }
 
     @Test
-    fun `legacy concrete AAC default maps to high quality AAC`() {
+    fun `concrete AAC default remains an exact bitrate preference`() {
         assertEquals(
-            AUDIO_QUALITY_AUTO,
+            30280,
             resolveRequestedAudioQuality(
                 defaultAudioQuality = 30280,
                 rememberedAudioQuality = AUDIO_QUALITY_HI_RES
@@ -131,8 +132,9 @@ class AudioStreamSelectionPolicyTest {
             )
         )
 
-        assertEquals(listOf(AUDIO_QUALITY_AUTO), options.map { it.preferenceId })
-        assertEquals("AAC", options.single().label)
+        assertEquals(listOf(AUDIO_QUALITY_AUTO, 30280), options.map { it.preferenceId })
+        assertNull(options.first().kind)
+        assertEquals("192K", options.last().label)
         assertTrue(options.none { it.isHiRes })
         assertTrue(options.none { it.isDolby })
     }
@@ -155,20 +157,18 @@ class AudioStreamSelectionPolicyTest {
     }
 
     @Test
-    fun `dolby track requires both dolby id and E AC 3 codec`() {
-        val dolbyIdWithAacCodec = dolby.copy(codecs = "mp4a.40.2")
-        val wrongIdWithDolbyCodec = dolby.copy(id = 30280)
-
-        val candidates = collectAudioStreamCandidates(
-            Dash(
-                dolby = Dolby(
-                    type = 1,
-                    audio = listOf(dolbyIdWithAacCodec, wrongIdWithDolbyCodec)
-                )
-            )
+    fun `alternate dolby IDs are selected by actual codec rather than one hardcoded ID`() {
+        val alternateDolby = dolby.copy(id = 30255, baseUrl = "https://example.com/dolby-30255.m4s")
+        val decision = resolveAudioStreamSelection(
+            Dash(audio = listOf(standard192), dolby = Dolby(type = 1, audio = listOf(dolby, alternateDolby))),
+            requestedAudioQuality = 30255
         )
 
-        assertTrue(candidates.none { it.kind == AudioStreamKind.DOLBY })
+        assertEquals(30255, decision.selectedPreferenceId)
+        assertSame(alternateDolby, decision.selected?.track)
+        assertEquals("https://example.com/dolby-30255.m4s", decision.selected?.track?.getValidUrl())
+        assertEquals(AudioStreamKind.DOLBY, decision.selected?.kind)
+        assertNull(decision.fallbackReason)
     }
 
     @Test
@@ -190,7 +190,7 @@ class AudioStreamSelectionPolicyTest {
             isDolbyAudioSupported = false
         )
 
-        assertEquals(AUDIO_QUALITY_AUTO, decision.selectedPreferenceId)
+        assertEquals(30280, decision.selectedPreferenceId)
         assertEquals(AudioStreamKind.STANDARD, decision.selected?.kind)
         assertEquals(AudioFallbackReason.REQUESTED_UNAVAILABLE, decision.fallbackReason)
         assertTrue(decision.availableOptions.none { it.isDolby })
@@ -204,10 +204,10 @@ class AudioStreamSelectionPolicyTest {
 
         val hiResOption = options.first { it.preferenceId == AUDIO_QUALITY_HI_RES }
         val dolbyOption = options.first { it.preferenceId == AUDIO_QUALITY_DOLBY }
-        val aacOption = options.first { it.preferenceId == AUDIO_QUALITY_AUTO }
+        val aacOption = options.first { it.preferenceId == 30280 }
 
         assertEquals(
-            listOf(AUDIO_QUALITY_HI_RES, AUDIO_QUALITY_DOLBY, AUDIO_QUALITY_AUTO),
+            listOf(AUDIO_QUALITY_AUTO, AUDIO_QUALITY_HI_RES, AUDIO_QUALITY_DOLBY, 30280, 30216),
             options.map { it.preferenceId }
         )
         assertTrue(hiResOption.isHiRes)
@@ -272,10 +272,10 @@ class AudioStreamSelectionPolicyTest {
 
         val presentation = resolveAudioQualityControlPresentation(
             options = options,
-            selectedAudioQuality = AUDIO_QUALITY_AUTO
+            selectedAudioQuality = 30280
         )
 
-        assertEquals("AAC", presentation.label)
+        assertEquals("192K", presentation.label)
     }
 
     @Test
@@ -291,6 +291,132 @@ class AudioStreamSelectionPolicyTest {
 
         assertEquals("Hi-Res", presentation.label)
         assertTrue(presentation.showHiResBadge)
+    }
+
+    @Test
+    fun `each returned ordinary bitrate selects its own source and reports its actual ID`() {
+        val standard132 = standard192.copy(
+            id = 30232,
+            bandwidth = 132_000,
+            baseUrl = "https://example.com/audio-132.m4s"
+        )
+        val tracks = listOf(standard64, standard132, standard192)
+        for (track in tracks) {
+            val decision = resolveAudioStreamSelection(Dash(audio = tracks), track.id)
+
+            assertEquals(track.id, decision.requestedPreferenceId)
+            assertEquals(track.id, decision.effectivePreferenceId)
+            assertEquals(track.id, decision.selectedPreferenceId)
+            assertSame(track, decision.selected?.track)
+            assertEquals(track.getValidUrl(), decision.selected?.track?.getValidUrl())
+            assertNull(decision.fallbackReason)
+        }
+    }
+
+    @Test
+    fun `unavailable raw request falls back to best ordinary source without rewriting preference`() {
+        val decision = resolveAudioStreamSelection(fullDash(), requestedAudioQuality = 30232)
+
+        assertEquals(30232, decision.requestedPreferenceId)
+        assertEquals(30232, decision.effectivePreferenceId)
+        assertEquals(30280, decision.selectedPreferenceId)
+        assertSame(standard192, decision.selected?.track)
+        assertEquals(standard192.getValidUrl(), decision.selected?.track?.getValidUrl())
+        assertEquals(AudioFallbackReason.REQUESTED_UNAVAILABLE, decision.fallbackReason)
+    }
+
+    @Test
+    fun `raw IDs unknown to built in labels retain identity and raw codec metadata`() {
+        val tracks = listOf(100008, 100009, 100010, 77777).mapIndexed { index, id ->
+            DashAudio(id, baseUrl = "https://example.com/$id.m4s", bandwidth = index + 1, codecs = "mp4a.40.2")
+        }
+        for (track in tracks) {
+            val decision = resolveAudioStreamSelection(Dash(audio = tracks), track.id)
+            val option = decision.availableOptions.single { it.preferenceId == track.id }
+
+            assertSame(track, decision.selected?.track)
+            assertEquals(track.id, decision.selectedPreferenceId)
+            assertEquals(track.id.toString(), option.label)
+            assertEquals(track.codecs, option.codecDescription)
+            assertEquals(AudioStreamKind.STANDARD, option.kind)
+        }
+    }
+
+    @Test
+    fun `raw special IDs from base list honor software decoding and speed boundaries`() {
+        val alternateDolby = dolby.copy(id = 30255, baseUrl = "https://example.com/dolby-alt.m4s")
+        val dash = Dash(audio = listOf(standard64, standard192, alternateDolby))
+        val normal = resolveAudioStreamSelection(
+            dash, 30255, playbackSpeed = 1.5f, isDolbyAudioSoftwareDecoded = true
+        )
+        val fast = resolveAudioStreamSelection(
+            dash, 30255, playbackSpeed = 1.51f, isDolbyAudioSoftwareDecoded = true
+        )
+        val restored = resolveAudioStreamSelection(dash, fast.requestedPreferenceId, playbackSpeed = 1f)
+
+        assertSame(alternateDolby, normal.selected?.track)
+        assertTrue(normal.selected?.isSoftwareDecoded == true)
+        assertEquals("ec-3", normal.availableOptions.single { it.preferenceId == 30255 }.codecDescription)
+        assertEquals(30255, fast.requestedPreferenceId)
+        assertEquals(AUDIO_QUALITY_AUTO, fast.effectivePreferenceId)
+        assertEquals(30280, fast.selectedPreferenceId)
+        assertSame(standard192, fast.selected?.track)
+        assertEquals(AudioFallbackReason.SPEED_INCOMPATIBLE, fast.fallbackReason)
+        assertSame(alternateDolby, restored.selected?.track)
+        assertNull(restored.fallbackReason)
+    }
+
+    @Test
+    fun `invalid empty and duplicate rows expose only actual playable identities`() {
+        val alternate = standard192.copy(baseUrl = "https://example.com/audio-192-better.m4s", bandwidth = 200_000)
+        val decision = resolveAudioStreamSelection(
+            Dash(audio = listOf(standard192, alternate, standard64.copy(baseUrl = ""), standard64.copy(id = 0))),
+            requestedAudioQuality = 30280
+        )
+
+        assertSame(alternate, decision.selected?.track)
+        assertEquals(listOf(30280), decision.availableOptions.filter { it.kind != null }.map { it.preferenceId })
+        assertEquals(listOf(AUDIO_QUALITY_AUTO), decision.availableOptions.filter { it.kind == null }.map { it.preferenceId })
+    }
+
+    @Test
+    fun `follow last preserves raw preference and rejects only nontrack sentinels`() {
+        for (id in listOf(30216, 30232, 30280, 30250, 30255, 30251, 100008, 100009, 100010)) {
+            assertEquals(id, resolveRequestedAudioQuality(AUDIO_QUALITY_FOLLOW_LAST_SELECTED, id))
+            assertEquals(id, normalizeAudioQualityPreference(id))
+        }
+        assertEquals(AUDIO_QUALITY_AUTO, normalizeAudioQualityPreference(0))
+        assertEquals(AUDIO_QUALITY_AUTO, normalizeAudioQualityPreference(-10))
+    }
+
+    @Test
+    fun `flac container preserves noncanonical raw identity through speed fallback and restoration`() {
+        val rawFlac = hiRes.copy(id = 100010, baseUrl = "https://example.com/raw-flac.m4s")
+        val dash = Dash(audio = listOf(standard192), flac = Flac(audio = rawFlac))
+        val normal = resolveAudioStreamSelection(dash, 100010)
+        val fast = resolveAudioStreamSelection(dash, 100010, playbackSpeed = 2f)
+        val restored = resolveAudioStreamSelection(dash, fast.requestedPreferenceId, playbackSpeed = 1f)
+
+        assertEquals(100010, normal.selectedPreferenceId)
+        assertSame(rawFlac, normal.selected?.track)
+        assertEquals(AudioStreamKind.HI_RES, normal.availableOptions.single { it.preferenceId == 100010 }.kind)
+        assertEquals("fLaC", normal.availableOptions.single { it.preferenceId == 100010 }.codecDescription)
+        assertEquals(100010, fast.requestedPreferenceId)
+        assertSame(standard192, fast.selected?.track)
+        assertEquals(AudioFallbackReason.SPEED_INCOMPATIBLE, fast.fallbackReason)
+        assertSame(rawFlac, restored.selected?.track)
+        assertEquals(100010, restored.selectedPreferenceId)
+    }
+
+    @Test
+    fun `no playable source retains request without reporting a fabricated track`() {
+        val decision = resolveAudioStreamSelection(Dash(audio = emptyList()), 30232)
+
+        assertEquals(30232, decision.requestedPreferenceId)
+        assertNull(decision.selected)
+        assertEquals(AUDIO_QUALITY_AUTO, decision.selectedPreferenceId)
+        assertTrue(decision.availableOptions.isEmpty())
+        assertEquals(AudioFallbackReason.NO_PLAYABLE_AUDIO, decision.fallbackReason)
     }
 
     private fun fullDash(): Dash {

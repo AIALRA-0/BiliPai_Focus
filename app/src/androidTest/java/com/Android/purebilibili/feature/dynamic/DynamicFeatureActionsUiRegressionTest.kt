@@ -20,7 +20,6 @@ import com.android.purebilibili.data.model.response.DynamicAuthorModule
 import com.android.purebilibili.data.model.response.DynamicAdditional
 import com.android.purebilibili.data.model.response.DynamicAdditionalReserve
 import com.android.purebilibili.data.model.response.DynamicAdditionalText
-import com.android.purebilibili.data.model.response.DynamicBasic
 import com.android.purebilibili.data.model.response.DynamicCardButton
 import com.android.purebilibili.data.model.response.DynamicCardButtonStyle
 import com.android.purebilibili.data.model.response.DynamicContentModule
@@ -111,56 +110,6 @@ class DynamicFeatureActionsUiRegressionTest {
             assertEquals(200L, collectionId)
             assertEquals("https://www.bilibili.com/cheese/play/ss300", courseUrl)
             assertEquals(400L, liveRoomId)
-        }
-    }
-
-    @Test
-    fun ownDynamicOverflowMenuDispatchesSaveMessageShareAndCheck() {
-        var saveClicks = 0
-        var messageShareClicks = 0
-        var checkClicks = 0
-        val item = DynamicItem(
-            id_str = "dynamic-own",
-            basic = DynamicBasic(comment_type = 17),
-            modules = DynamicModules(
-                module_author = DynamicAuthorModule(mid = 42L, name = "作者"),
-                module_dynamic = DynamicContentModule(),
-            ),
-        )
-
-        composeTestRule.setContent {
-            val context = LocalContext.current
-            val imageLoader = remember(context) { ImageLoader.Builder(context).build() }
-            ProvideAppThemeConfig(AppThemeConfig(nativeMiuixPopupsEnabled = false)) {
-                MaterialTheme {
-                    DynamicCardV2(
-                        item = item,
-                        gifImageLoader = imageLoader,
-                        actions = DynamicCardActions(
-                            navigation = DynamicCardNavigationActions(
-                                onVideoClick = {},
-                                onUserClick = {},
-                            ),
-                            interaction = DynamicCardInteractionActions(
-                                onSaveDynamicClick = { saveClicks++ },
-                                onShareToMessageClick = { messageShareClicks++ },
-                                onCheckDynamicClick = { checkClicks++ },
-                            ),
-                        ),
-                        presentation = DynamicCardPresentation(currentUserMid = 42L),
-                    )
-                }
-            }
-        }
-
-        clickOverflowAction("保存动态")
-        clickOverflowAction("分享至消息")
-        clickOverflowAction("检查动态")
-
-        composeTestRule.runOnIdle {
-            assertEquals(1, saveClicks)
-            assertEquals(1, messageShareClicks)
-            assertEquals(1, checkClicks)
         }
     }
 

@@ -14,7 +14,9 @@ class LinkedBottomDockStructureTest {
         )
         assertTrue(source.contains("mergeProgressProvider"))
         assertTrue(source.contains("searchProgressProvider"))
-        assertTrue(source.contains("nowPlayingContent?.invoke("))
+        assertTrue(source.contains("nowPlayingSlot.invoke("))
+        assertTrue(source.contains("keepSlotComposed"))
+        assertTrue(source.contains("presenceProgressProvider"))
         assertTrue(source.contains("navigationContent()"))
         assertFalse(source.contains("if (merge.value < 0.999f)"))
         assertFalse(source.contains("if (merge.value > 0.001f)"))
@@ -34,6 +36,20 @@ class LinkedBottomDockStructureTest {
         assertTrue(visual.contains("val scale = iconScale()"))
         assertTrue(visual.contains("graphicsLayer { alpha = fieldAlpha() }"))
         assertFalse(visual.contains(".alpha(fieldAlpha"))
+        assertTrue(visual.contains("pendingUserImeRequest: Boolean = false"))
+        assertTrue(visual.contains("shouldRequestBottomBarSearchIme(pendingUserImeRequest)"))
+        assertFalse(visual.contains("if (expanded && interactive) focusRequester.requestFocus()"))
+    }
+
+    @Test
+    fun searchSubmitCollapsesPhaseAndOnlyUserTapRequestsIme() {
+        val source = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/LinkedBottomDock.kt"
+        )
+        assertTrue(source.contains("pendingUserImeRequest = true"))
+        assertTrue(source.contains("resolveLinkedDockPhaseOnSearchDismiss("))
+        assertTrue(source.contains("pendingUserImeRequest = false"))
+        assertTrue(source.contains("keyboardController?.hide()"))
     }
 
     private fun loadSource(path: String): String {

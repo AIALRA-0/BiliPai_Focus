@@ -1,5 +1,10 @@
 package com.android.purebilibili.feature.anime4k
 
+import com.android.purebilibili.plugin.sdk.Anime4KConfig
+import com.android.purebilibili.plugin.sdk.Anime4KPreset
+import com.android.purebilibili.plugin.sdk.DEFAULT_FSR_SHARPNESS
+import com.android.purebilibili.plugin.sdk.VideoEnhancementAlgorithm
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

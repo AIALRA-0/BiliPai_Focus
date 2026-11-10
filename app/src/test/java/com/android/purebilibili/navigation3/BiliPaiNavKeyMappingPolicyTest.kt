@@ -8,6 +8,84 @@ import kotlin.test.assertNotEquals
 
 class BiliPaiNavKeyMappingPolicyTest {
     @Test
+    fun webUploadsRestoreOwnerAndCurrentCollectionWithoutBecomingAWebPage() {
+        listOf(
+            BiliPaiNavKey.SpaceWebVideos(42L, "UP + 空间 & 100%"),
+            BiliPaiNavKey.SpaceWebVideos(42L, "UP", "season", 123L),
+            BiliPaiNavKey.SpaceWebVideos(42L, "UP", "series", 456L),
+        ).forEach { key ->
+            assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+            assertEquals(BiliPaiNavEntryContentRole.SPACE_WEB_VIDEOS, resolveBiliPaiNavEntryContentRole(key))
+        }
+    }
+
+    @Test
+    fun profileAccountEditorHasItsOwnRestorableDestination() {
+        assertEquals(BiliPaiNavKey.ProfileAccountEdit, legacyRouteToBiliPaiNavKey(BiliPaiNavKey.ProfileAccountEdit.toLegacyRoute()))
+        assertNotEquals(BiliPaiNavKey.Profile.toLegacyRoute(), BiliPaiNavKey.ProfileAccountEdit.toLegacyRoute())
+        assertEquals(BiliPaiNavEntryContentRole.PROFILE, resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.ProfileAccountEdit))
+    }
+
+    @Test
+    fun dynamicCommentEntryAndReplyLocationSurviveRouteRestoration() {
+        listOf(
+            BiliPaiNavKey.DynamicDetail("123"),
+            BiliPaiNavKey.DynamicDetail("123", openComments = true),
+            BiliPaiNavKey.DynamicDetail("123", 456L, 789L, openComments = true),
+            BiliPaiNavKey.DynamicDetail("123", 456L, 789L),
+        ).forEach { key ->
+            assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+            assertEquals(
+                key,
+                legacyRouteToBiliPaiNavKey(ScreenRoutes.DynamicDetail.createRoute(
+                    dynamicId = key.dynamicId,
+                    commentRootRpid = key.commentRootRpid,
+                    commentTargetRpid = key.commentTargetRpid,
+                    openComments = key.openComments,
+                )),
+            )
+        }
+        assertEquals(BiliPaiNavKey.DynamicDetail("123"), legacyRouteToBiliPaiNavKey("dynamic_detail/123"))
+        assertEquals(
+            BiliPaiNavKey.DynamicDetail("123"),
+            legacyRouteToBiliPaiNavKey("dynamic_detail/123?openComments=false"),
+        )
+    }
+
+    @Test
+    fun articleCommentLocationSurvivesRouteRestoration() {
+        val key = BiliPaiNavKey.ArticleDetail(123L, "专栏 & 评论", 456L, 789L)
+        assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+        assertEquals(BiliPaiNavKey.ArticleDetail(123L), legacyRouteToBiliPaiNavKey("article/123?title="))
+    }
+
+    @Test
+    fun liveMatchesRestoreIntoNativeScheduleDestination() {
+        assertEquals(ScreenRoutes.LiveMatch.route, BiliPaiNavKey.LiveMatch.toLegacyRoute())
+        assertEquals(BiliPaiNavKey.LiveMatch, legacyRouteToBiliPaiNavKey("live_match"))
+        assertEquals(BiliPaiNavEntryContentRole.LIVE_MATCH, resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.LiveMatch))
+    }
+
+    @Test
+    fun audioCollectionKeysPreserveSourceAndTitleAcrossRouteRestoration() {
+        for (key in listOf(
+            BiliPaiNavKey.AudioMode(collectionMediaId = 42L, collectionTitle = "默认收藏夹 + 100% & 音乐"),
+            BiliPaiNavKey.AudioMode(collectionSeasonId = 81L, collectionTitle = "专辑"),
+        )) {
+            assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+            assertEquals(BiliPaiNavEntryContentRole.AUDIO_MODE, resolveBiliPaiNavEntryContentRole(key))
+        }
+    }
+
+    @Test
+    fun weeklySeriesKeysPreservePeriodAcrossRouteRestoration() {
+        for (key in listOf(BiliPaiNavKey.WeeklySeries(), BiliPaiNavKey.WeeklySeries(133))) {
+            assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+            assertEquals(BiliPaiNavEntryContentRole.WEEKLY_SERIES, resolveBiliPaiNavEntryContentRole(key))
+        }
+    }
+
+    @Test
     fun personalListSearchKeysRoundTripThroughLegacyRoutes() {
         val keys = listOf(
             BiliPaiNavKey.HistorySearch("猫 咪"),
@@ -16,6 +94,7 @@ class BiliPaiNavKeyMappingPolicyTest {
                 "Compose",
                 com.android.purebilibili.data.model.response.FavoriteSearchScope.ALL_VIDEO_FOLDERS,
             ),
+            BiliPaiNavKey.FavoriteSearch(query = "教程 + 合集", subscribed = true),
             BiliPaiNavKey.WatchLaterSearch("稍后"),
         )
 

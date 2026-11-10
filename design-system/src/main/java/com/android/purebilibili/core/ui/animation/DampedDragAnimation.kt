@@ -33,6 +33,7 @@ import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sign
@@ -115,15 +116,14 @@ class DampedDragAnimationState internal constructor(
     private val notifyIndexChangedOnReleaseStart: Boolean = false,
     @Suppress("UNUSED_PARAMETER") private val holdPressUntilReleaseTargetSettles: Boolean = false
 ) {
-    private val valueAnimationSpec = spring(1f, 1000f, 0.001f)
-    private val velocityAnimationSpec = spring(0.5f, 300f, 0.01f)
-    private val pressProgressAnimationSpec = spring(1f, 1000f, 0.001f)
+    private val valueAnimationSpec = LiquidIndicatorMotion.positionSpec()
+    private val pressProgressAnimationSpec = LiquidIndicatorMotion.pressSpec()
     // Motion tuning copied from HyperIsland's LiquidGlassNavigationBar.
-    private val scaleXAnimationSpec = spring(0.6f, 250f, 0.001f)
-    private val scaleYAnimationSpec = spring(0.7f, 250f, 0.001f)
+    private val scaleXAnimationSpec = LiquidIndicatorMotion.scaleXSpec()
+    private val scaleYAnimationSpec = LiquidIndicatorMotion.scaleYSpec()
 
     private val valueAnimation = Animatable(initialIndex.toFloat(), 0.001f)
-    private val velocityAnimation = Animatable(0f, 5f)
+    private val velocityAnimation = LiquidIndicatorVelocity(scope)
     private val pressProgressAnimation = Animatable(0f, 0.001f)
     private val scaleXAnimation = Animatable(1f, 0.001f)
     private val scaleYAnimation = Animatable(1f, 0.001f)
@@ -133,7 +133,6 @@ class DampedDragAnimationState internal constructor(
 
     private var motionGeneration = 0
     private var valueJob: Job? = null
-    private var velocityJob: Job? = null
     private var releaseJob: Job? = null
     private var pressJob: Job? = null
     private var offsetJob: Job? = null
@@ -184,23 +183,33 @@ class DampedDragAnimationState internal constructor(
     }
 
     fun release(onSettled: (() -> Unit)? = null) {
-        pressJob?.cancel()
         releaseJob?.cancel()
-        velocityJob?.cancel()
         releaseJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            awaitFrame()
-            if (value != targetValue) {
-                val threshold = ((itemCount - 1).toFloat() * 0.025f).coerceAtLeast(0.001f)
-                snapshotFlow { valueAnimation.value }
-                    .filter { abs(it - valueAnimation.targetValue) < threshold }
-                    .first()
+            if (pressJob?.isActive == true || pressProgressAnimation.value > 0f) {
+                withTimeoutOrNull(LiquidIndicatorMotion.BloomWaitMillis) {
+                    snapshotFlow { minOf(scaleXAnimation.value, scaleYAnimation.value) }
+                        .first { it >= pressedScale }
+                }
             }
+            val settled = withTimeoutOrNull(LiquidIndicatorMotion.SettleWaitMillis) {
+                awaitFrame()
+                val threshold = ((itemCount - 1).toFloat() * LiquidIndicatorMotion.SettleTolerance)
+                    .coerceAtLeast(0.001f)
+                snapshotFlow { abs(valueAnimation.value - targetValue) }
+                    .first { it <= threshold }
+                true
+            }
+            if (settled == null) {
+                valueJob?.cancel()
+                valueAnimation.snapTo(targetValue)
+            }
+            pressJob?.cancel()
             onSettled?.invoke()
             launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
             launch { scaleXAnimation.animateTo(1f, scaleXAnimationSpec) }
             launch { scaleYAnimation.animateTo(1f, scaleYAnimationSpec) }
             // 速度形变是非对称的，不归零会留下椭圆残影。
-            launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
+            velocityAnimation.updateTarget(0f)
         }
     }
 
@@ -211,10 +220,7 @@ class DampedDragAnimationState internal constructor(
             Offset(value, 0f)
         )
         val targetVelocity = deformationVelocityTracker.calculateVelocity().x / valueRange
-        velocityJob?.cancel()
-        velocityJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            velocityAnimation.animateTo(targetVelocity, velocityAnimationSpec)
-        }
+        velocityAnimation.updateTarget(targetVelocity)
     }
 
     fun snapTo(targetValue: Float) {
@@ -241,10 +247,13 @@ class DampedDragAnimationState internal constructor(
                 val nextTarget = value.fastCoerceIn(0f, (itemCount - 1).toFloat())
                 targetIndex = nextTarget.roundToInt().coerceIn(0, itemCount - 1)
                 valueJob?.cancel()
-                valueJob = launch { valueAnimation.animateTo(nextTarget, valueAnimationSpec) }
+                valueJob = launch {
+                    valueAnimation.animateTo(nextTarget, valueAnimationSpec) {
+                        updateDeformationVelocity(this.value)
+                    }
+                }
                 if (velocity != 0f) {
-                    velocityJob?.cancel()
-                    velocityJob = launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
+                    velocityAnimation.updateTarget(0f)
                 }
                 release(onSettled = onSettled)
             }
@@ -271,8 +280,7 @@ class DampedDragAnimationState internal constructor(
             offsetJob?.cancel()
             desiredValue = valueAnimation.value
             velocityPxPerSecond = 0f
-            velocityJob?.cancel()
-            velocityJob = scope.launch(start = CoroutineStart.UNDISPATCHED) { velocityAnimation.snapTo(0f) }
+            velocityAnimation.snapTo(0f)
             press()
         }
         velocityPxPerSecond = gestureVelocityPxPerSecond
@@ -288,7 +296,9 @@ class DampedDragAnimationState internal constructor(
                     if (isDragging) {
                         valueAnimation.snapTo(desiredValue)
                     } else {
-                        valueAnimation.animateTo(desiredValue, valueAnimationSpec)
+                        valueAnimation.animateTo(desiredValue, valueAnimationSpec) {
+                            updateDeformationVelocity(this.value)
+                        }
                     }
                     updateDeformationVelocity(desiredValue)
                 }

@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.ui
 
-import androidx.compose.material3.Surface
+import com.android.purebilibili.core.ui.components.AppSurface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -44,7 +44,7 @@ fun AppPopupSurface(
 ) {
     val renderer = LocalAppPopupSurfaceRenderer.current
     val resolvedContentColor = if (contentColor == Color.Unspecified) {
-        MaterialTheme.colorScheme.onSurface
+        AppContentColors.primaryText()
     } else {
         contentColor
     }
@@ -59,7 +59,7 @@ fun AppPopupSurface(
             content = content,
         )
     } else {
-        Surface(
+        AppSurface(
             modifier = modifier,
             shape = shape,
             color = containerColor,

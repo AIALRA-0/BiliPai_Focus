@@ -1,12 +1,8 @@
 package com.android.purebilibili.feature.profile
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import com.android.purebilibili.core.ui.AppSurfaceTokens
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,19 +16,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import com.android.purebilibili.core.ui.skeleton.skeletonBackground
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -46,10 +40,8 @@ import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
-import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 
-private const val PROFILE_SKELETON_PULSE_DURATION_MILLIS = 950
 
 @Composable
 internal fun ProfileLoadingSkeleton(
@@ -75,7 +67,7 @@ internal fun ProfileLoadingSkeleton(
 }
 
 @Composable
-private fun ProfilePhoneLoadingSkeleton(blockColor: Color) {
+private fun ProfilePhoneLoadingSkeleton(blockColor: () -> Color) {
     val configuration = LocalConfiguration.current
     val windowSizeClass = LocalWindowSizeClass.current
     val layoutTokens = remember { resolveProfileLayoutTokens() }
@@ -99,27 +91,31 @@ private fun ProfilePhoneLoadingSkeleton(blockColor: Color) {
             ) {
                 Column(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = layoutTokens.heroBottomInsetDp.dp),
+                        .align(Alignment.TopCenter)
+                        .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 35.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ProfileSkeletonBlock(80.dp, 80.dp, blockColor, CircleShape)
-                        Spacer(modifier = Modifier.weight(1f))
-                        repeat(3) { index ->
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                ProfileSkeletonBlock(28.dp, 14.dp, blockColor)
-                                ProfileSkeletonBlock(40.dp, 10.dp, blockColor)
-                            }
-                            if (index != 2) Spacer(modifier = Modifier.width(18.dp))
+                    ProfileSkeletonBlock(96.dp, 96.dp, blockColor, CircleShape)
+                    ProfileSkeletonBlock(156.dp, 24.dp, blockColor)
+                    ProfileSkeletonBlock(100.dp, 14.dp, blockColor)
+                }
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = layoutTokens.heroBottomInsetDp.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    repeat(3) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            ProfileSkeletonBlock(28.dp, 14.dp, blockColor)
+                            ProfileSkeletonBlock(40.dp, 10.dp, blockColor)
                         }
                     }
-                    ProfileSkeletonBlock(156.dp, 24.dp, blockColor)
-                    ProfileSkeletonBlock(232.dp, 14.dp, blockColor)
                 }
             }
         }
@@ -145,7 +141,7 @@ private fun ProfilePhoneLoadingSkeleton(blockColor: Color) {
 }
 
 @Composable
-private fun ProfileTabletLoadingSkeleton(blockColor: Color) {
+private fun ProfileTabletLoadingSkeleton(blockColor: () -> Color) {
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -199,7 +195,7 @@ private fun ProfileTabletLoadingSkeleton(blockColor: Color) {
 }
 
 @Composable
-private fun ProfileSkeletonServiceGroup(blockColor: Color) {
+private fun ProfileSkeletonServiceGroup(blockColor: () -> Color) {
     val shape = AppShapes.container(ContainerLevel.Card)
     Column(
         modifier = Modifier
@@ -222,7 +218,7 @@ private fun ProfileSkeletonServiceGroup(blockColor: Color) {
 }
 
 @Composable
-private fun ProfileSkeletonFeedGroup(blockColor: Color) {
+private fun ProfileSkeletonFeedGroup(blockColor: () -> Color) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ProfileSkeletonBlock(104.dp, 20.dp, blockColor)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -249,7 +245,7 @@ private fun ProfileSkeletonFeedGroup(blockColor: Color) {
 private fun ProfileSkeletonBlock(
     width: Dp,
     height: Dp,
-    color: Color,
+    color: () -> Color,
     shape: Shape = AppShapes.container(ContainerLevel.Chip),
     modifier: Modifier = Modifier,
 ) {
@@ -258,36 +254,20 @@ private fun ProfileSkeletonBlock(
             .then(if (width != Dp.Unspecified) Modifier.width(width) else Modifier)
             .height(height)
             .clip(shape)
-            .background(color),
+            .skeletonBackground(color),
     )
 }
 
 @Composable
-private fun rememberProfileSkeletonBlockColor(animated: Boolean): Color {
-    val reduceMotion = rememberSystemReduceMotion()
-    val pulse = if (!animated || reduceMotion) {
-        0.45f
-    } else if (com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()) {
-        com.android.purebilibili.core.ui.skeleton.rememberGentleSkeletonPulse().value
-    } else {
-        val transition = rememberInfiniteTransition(label = "profileSkeletonPulse")
-        val animatedPulse by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = PROFILE_SKELETON_PULSE_DURATION_MILLIS,
-                    easing = FastOutSlowInEasing,
-                ),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "profileSkeletonPulseAlpha",
-        )
-        animatedPulse
-    }
+private fun rememberProfileSkeletonBlockColor(animated: Boolean): () -> Color {
+    val sweep = com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(animated)
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    return remember(pulse, surfaceVariant, onSurfaceVariant) {
-        lerp(surfaceVariant, onSurfaceVariant.copy(alpha = 0.20f), pulse)
+    val onSurfaceVariant = AppContentColors.secondaryText()
+    return remember(sweep, surfaceVariant, onSurfaceVariant) {
+        com.android.purebilibili.core.ui.skeleton.skeletonFill(
+            base = surfaceVariant,
+            highlight = lerp(surfaceVariant, onSurfaceVariant.copy(alpha = 0.20f), 0.7f),
+            position = { sweep.value },
+        )
     }
 }

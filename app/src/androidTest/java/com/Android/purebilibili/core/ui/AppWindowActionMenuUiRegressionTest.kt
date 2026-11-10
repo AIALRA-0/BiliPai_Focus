@@ -1,6 +1,7 @@
 package com.Android.purebilibili.core.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.core.ui.AppThemeConfig
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.ProvideAppThemeConfig
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppWindowAction
@@ -26,6 +29,30 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 class AppWindowActionMenuUiRegressionTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun miuixWithoutNativePopup_opensNestedMenuAndDispatchesAction() {
+        var clicks = 0
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalAppUiStyle provides AppUiStyle.MIUIX) {
+                ProvideAppThemeConfig(AppThemeConfig(liquidGlassEnabled = false, nativeMiuixPopupsEnabled = false)) {
+                    MiuixTheme {
+                        MaterialTheme {
+                            AppWindowActionMenu(groups = listOf(listOf(
+                                AppWindowAction(label = "排序", children = listOf(
+                                    AppWindowAction(label = "最新", onClick = { clicks++ }),
+                                )),
+                            ))) { AppText("更多") }
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onNodeWithText("更多").performClick()
+        composeTestRule.onNodeWithText("排序").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithText("最新").assertIsDisplayed().performClick()
+        composeTestRule.runOnIdle { assertEquals(1, clicks) }
+    }
 
     @Test
     fun nativeMenu_switchesLayoutOnce_andReopensWithUpdatedAction() {

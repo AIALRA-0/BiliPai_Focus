@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.audio.screen
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -25,6 +26,11 @@ internal fun MusicDetailScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val pageActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    LaunchedEffect(viewModel, pageActive) { viewModel.setPageActive(pageActive) }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.setPageActive(false) }
+    }
 
     LaunchedEffect(sid) {
         viewModel.initPlayer(context)
@@ -79,7 +85,7 @@ private fun MusicDetailContent(
     )
 
     MusicPlayerContent(
-        state = MusicPlayerUiState(
+        sourceState = MusicPlayerUiState(
             title = title,
             artist = artist,
             coverUrl = cover,

@@ -1,5 +1,12 @@
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.navigation.tabIndicatorPosition
+import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -7,9 +14,11 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -19,6 +28,7 @@ import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -41,11 +51,17 @@ fun HomeBangumiTabPage(
     contentPadding: PaddingValues,
     onBangumiClick: (Long) -> Unit,
     onBangumiEpisodeClick: (Long, Long) -> Unit,
+    onPlayFollow: (Long) -> Unit,
     initialType: Int = 1,
     scrollToTopRequestId: Int = 0,
     viewModel: BangumiHubViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val channelPager = rememberBangumiChannelPagerState(
+        channel = state.channel,
+        enabled = state.page == BangumiHubPage.HOME,
+        onChannelSelected = viewModel::selectChannel,
+    )
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val showPgcTimeline by SettingsManager.getShowPgcTimeline(context)
@@ -60,7 +76,7 @@ fun HomeBangumiTabPage(
     val layoutDirection = LocalLayoutDirection.current
     val themeConfig = LocalAppThemeConfig.current
     val chromeSource = if (themeConfig.liquidGlassEnabled) {
-        rememberChromeBackdropSource()
+        rememberChromeBackdropSource(recordingBackground = MaterialTheme.colorScheme.background)
     } else null
     val channelBackdrop = chromeSource?.takeIf {
         shouldCaptureBangumiHubChrome(state) && it.isReady
@@ -68,6 +84,10 @@ fun HomeBangumiTabPage(
     val density = LocalDensity.current
     var channelHeightPx by remember { mutableIntStateOf(0) }
     val channelHeight = with(density) { channelHeightPx.toDp() }
+    // 频道 tab 行（番剧/影视）：下滑折叠隐藏，上滑/回顶重新出现
+    var channelTabsVisible by remember { mutableStateOf(true) }
+    var lastScrollIndex by remember { mutableStateOf(0) }
+    var lastScrollOffset by remember { mutableStateOf(0) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -82,56 +102,101 @@ fun HomeBangumiTabPage(
                 .then(chromeSource?.modifier ?: Modifier)
                 .globalWallpaperAwareBackground(AppSurfaceTokens.background()),
         ) {
-            BangumiHubContent(
-                state = state,
-                onBangumiClick = onBangumiClick,
-                onEpisodeClick = onBangumiEpisodeClick,
-                onRefreshHome = { viewModel.refreshHome() },
-                onLoadMoreHomeRecommendations = viewModel::loadMoreHomeRecommendations,
-                onLoadMoreHomeFollows = viewModel::loadMoreHomeFollows,
-                onRetryTimeline = viewModel::retryTimeline,
-                onTimelineRangeSelected = viewModel::selectTimelineRange,
-                onOpenIndex = viewModel::openIndex,
-                onOpenFollow = viewModel::openFollowManager,
-                onIndexCategorySelected = viewModel::selectIndexCategory,
-                onIndexFilterSelected = viewModel::selectIndexFilter,
-                onToggleFiltersExpanded = viewModel::toggleIndexFiltersExpanded,
-                onRetryIndexConditions = viewModel::retryIndexConditions,
-                onRetryIndexResults = viewModel::retryIndexResults,
-                onLoadMoreIndexResults = viewModel::loadMoreIndexResults,
-                onFollowStatusSelected = viewModel::selectFollowStatus,
-                onRefreshFollow = viewModel::refreshFollowManager,
-                onLoadMoreFollow = viewModel::loadMoreFollowManager,
-                onToggleFollowSelection = viewModel::toggleFollowSelection,
-                onSelectAllFollow = viewModel::selectAllFollowItems,
-                onClearFollowSelection = viewModel::clearFollowSelection,
-                onMoveSelectedFollow = viewModel::moveSelectedFollowItems,
-                onMoveSingleFollow = viewModel::updateSingleFollowItem,
-                onUnfollowSingle = viewModel::unfollowSingleItem,
-                onSearchCategorySelected = viewModel::selectSearchCategory,
-                onLoadMoreSearch = viewModel::loadMoreSearch,
-                onSaveCover = { url, title ->
-                    scope.launch {
-                        DownloadManager.saveImageToGallery(context, url, title)
-                    }
+            // Keep scrolling posters out of the channel header in both display and capture.
+            Box(Modifier.fillMaxSize().padding(top = channelHeight).clipToBounds()) {
+                BangumiHubContent(
+                    state = state,
+                    channelPagerState = channelPager,
+                    onPrepareChannel = viewModel::prepareHomeChannel,
+                    onBangumiClick = onBangumiClick,
+                    onEpisodeClick = onBangumiEpisodeClick,
+                    onPlayFollow = onPlayFollow,
+                    onRefreshHome = { viewModel.refreshHome() },
+                    onLoadMoreHomeRecommendations = viewModel::loadMoreHomeRecommendations,
+                    onLoadMoreHomeFollows = viewModel::loadMoreHomeFollows,
+                    onRetryTimeline = viewModel::retryTimeline,
+                    onTimelineRangeSelected = viewModel::selectTimelineRange,
+                    onOpenIndex = viewModel::openIndex,
+                    onOpenFollow = viewModel::openFollowManager,
+                    onIndexCategorySelected = viewModel::selectIndexCategory,
+                    onIndexFilterSelected = viewModel::selectIndexFilter,
+                    onToggleFiltersExpanded = viewModel::toggleIndexFiltersExpanded,
+                    onRetryIndexConditions = viewModel::retryIndexConditions,
+                    onRetryIndexResults = viewModel::retryIndexResults,
+                    onLoadMoreIndexResults = viewModel::loadMoreIndexResults,
+                    onFollowStatusSelected = viewModel::selectFollowStatus,
+                    onRefreshFollow = viewModel::refreshFollowManager,
+                    onLoadMoreFollow = viewModel::loadMoreFollowManager,
+                    onToggleFollowSelection = viewModel::toggleFollowSelection,
+                    onSelectAllFollow = viewModel::selectAllFollowItems,
+                    onClearFollowSelection = viewModel::clearFollowSelection,
+                    onMoveSelectedFollow = viewModel::moveSelectedFollowItems,
+                    onMoveSingleFollow = viewModel::updateSingleFollowItem,
+                    onUnfollowSingle = viewModel::unfollowSingleItem,
+                    onSearchCategorySelected = viewModel::selectSearchCategory,
+                    onLoadMoreSearch = viewModel::loadMoreSearch,
+                    onSaveCover = { url, title ->
+                        scope.launch {
+                            DownloadManager.saveImageToGallery(context, url, title)
+                        }
+                    },
+                    scrollToTopRequestId = scrollToTopRequestId,
+                    listBottomPadding = contentPadding.calculateBottomPadding(),
+                    listTopPadding = 0.dp,
+                    tabBackdrop = null,
+                    onHomeScrollChanged = { index, offset ->
+                        channelTabsVisible = if (index == 0 && offset < 100) {
+                            true
+                        } else {
+                            val scrollingDown = when {
+                                index > lastScrollIndex -> true
+                                index < lastScrollIndex -> false
+                                else -> offset > lastScrollOffset + 50
+                            }
+                            val scrollingUp = when {
+                                index < lastScrollIndex -> true
+                                index > lastScrollIndex -> false
+                                else -> offset < lastScrollOffset - 50
+                            }
+                            if (scrollingDown) false else if (scrollingUp) true else channelTabsVisible
+                        }
+                        lastScrollIndex = index
+                        lastScrollOffset = offset
+                    },
+                )
+            }
+        }
+        AnimatedVisibility(
+            visible = channelTabsVisible,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            AppLiquidAwareTabRow(
+                // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+                options = channelOptions,
+                selectedValue = state.channel,
+                indicatorPositionProvider = if (state.page == BangumiHubPage.HOME) {
+                    { channelPager.tabIndicatorPosition }
+                } else null,
+                isScrollInProgressProvider = {
+                    state.page == BangumiHubPage.HOME && channelPager.isScrollInProgress
                 },
-                scrollToTopRequestId = scrollToTopRequestId,
-                listBottomPadding = contentPadding.calculateBottomPadding(),
-                listTopPadding = channelHeight,
-                tabBackdrop = null,
+                onSelectionChange = viewModel::selectChannel,
+                dragSelectionEnabled = channelOptions.size > 1,
+                tapPressRefractionEnabled = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { channelHeightPx = it.height }
+                    .then(
+                        if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+                            Modifier.background(MaterialTheme.colorScheme.background)
+                        } else Modifier
+                    )
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                miuixBackdrop = channelBackdrop,
             )
         }
-        AppLiquidAwareTabRow(
-            options = channelOptions,
-            selectedValue = state.channel,
-            onSelectionChange = viewModel::selectChannel,
-            dragSelectionEnabled = channelOptions.size > 1,
-            tapPressRefractionEnabled = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .onSizeChanged { channelHeightPx = it.height }
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            miuixBackdrop = channelBackdrop,
-        )
     }
 }

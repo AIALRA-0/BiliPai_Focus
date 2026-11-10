@@ -20,34 +20,43 @@ internal enum class PlaybackNavigationTarget {
 }
 
 private fun resolvePlayInOrderSource(
-    hasPageOrSeasonTarget: Boolean,
+    isExternalPlaylist: Boolean,
+    hasPageTarget: Boolean,
+    hasSeasonTarget: Boolean,
     hasPlaylistTarget: Boolean
 ): PlayInOrderNextSource {
     return when {
-        hasPageOrSeasonTarget -> PlayInOrderNextSource.PAGE_OR_SEASON
+        hasPageTarget -> PlayInOrderNextSource.PAGE_OR_SEASON
+        !isExternalPlaylist && hasSeasonTarget -> PlayInOrderNextSource.PAGE_OR_SEASON
         hasPlaylistTarget -> PlayInOrderNextSource.PLAYLIST
         else -> PlayInOrderNextSource.NONE
     }
 }
 
 internal fun resolvePlayInOrderNextSource(
+    isExternalPlaylist: Boolean,
     hasNextPage: Boolean,
     hasNextSeasonEpisode: Boolean,
-    hasNextPlaylistItem: Boolean
+    hasNextPlaylistItem: Boolean,
 ): PlayInOrderNextSource {
     return resolvePlayInOrderSource(
-        hasPageOrSeasonTarget = hasNextPage || hasNextSeasonEpisode,
+        isExternalPlaylist = isExternalPlaylist,
+        hasPageTarget = hasNextPage,
+        hasSeasonTarget = hasNextSeasonEpisode,
         hasPlaylistTarget = hasNextPlaylistItem
     )
 }
 
 internal fun resolvePlayInOrderPreviousSource(
+    isExternalPlaylist: Boolean,
     hasPreviousPage: Boolean,
     hasPreviousSeasonEpisode: Boolean,
     hasPreviousPlaylistItem: Boolean
 ): PlayInOrderNextSource {
     return resolvePlayInOrderSource(
-        hasPageOrSeasonTarget = hasPreviousPage || hasPreviousSeasonEpisode,
+        isExternalPlaylist = isExternalPlaylist,
+        hasPageTarget = hasPreviousPage,
+        hasSeasonTarget = hasPreviousSeasonEpisode,
         hasPlaylistTarget = hasPreviousPlaylistItem
     )
 }
@@ -64,21 +73,21 @@ internal fun resolveAudioNextPlaybackStrategy(
 
 internal fun resolvePlaybackNavigationTargets(
     strategy: AudioNextPlaybackStrategy,
-    hasPageOrSeasonTarget: Boolean,
+    hasPageTarget: Boolean,
+    hasSeasonTarget: Boolean,
     hasPlaylistTarget: Boolean
 ): List<PlaybackNavigationTarget> {
     if (strategy == AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST) {
-        // 收藏夹/稍后再看等外部队列：只按列表顺序续播，不插入分P/合集内下一集。
-        return buildList {
-            if (hasPlaylistTarget) {
-                add(PlaybackNavigationTarget.PLAYLIST)
-            }
-            add(PlaybackNavigationTarget.DIRECT_QUEUE)
+        // Parts stay in the current video; only the video boundary belongs to the external queue.
+        return when {
+            hasPageTarget -> listOf(PlaybackNavigationTarget.PAGE_OR_SEASON)
+            hasPlaylistTarget -> listOf(PlaybackNavigationTarget.PLAYLIST)
+            else -> emptyList()
         }
     }
 
     return buildList {
-        if (hasPageOrSeasonTarget) {
+        if (hasPageTarget || hasSeasonTarget) {
             add(PlaybackNavigationTarget.PAGE_OR_SEASON)
         }
         if (hasPlaylistTarget) {

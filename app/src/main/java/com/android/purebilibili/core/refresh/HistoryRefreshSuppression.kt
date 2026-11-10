@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * 列表元素位置中途变化导致预测性返回表现错误。
  *
  * 抑制期间到达的刷新信号被记录为待补发;全部抑制解除时补发一次,保证
- * 返回完成后列表仍能反映最新观看进度。
+ * 返回完成后列表原位反映最新观看进度，不改变当前浏览顺序。
  */
 object HistoryRefreshSuppression {
 

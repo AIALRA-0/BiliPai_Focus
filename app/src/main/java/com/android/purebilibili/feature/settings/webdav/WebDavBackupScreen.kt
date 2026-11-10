@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.settings.webdav
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -33,10 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.R
-import com.android.purebilibili.core.theme.iOSBlue
-import com.android.purebilibili.core.theme.iOSGreen
-import com.android.purebilibili.core.theme.iOSOrange
-import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.feature.settings.SettingsPageScrollHost
 import com.android.purebilibili.feature.settings.rememberThemeAwareSettingsIcon
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
@@ -118,7 +116,7 @@ fun WebDavBackupScreen(
                 AppPreferenceSectionTitle("连接状态")
                 AppPreferenceGroup {
                     val statusText = when {
-                        uiState.isBusy -> uiState.statusMessage ?: "正在处理..."
+                        uiState.isBusy -> uiState.statusMessage ?: "正在处理…"
                         // 恢复会覆盖本地持久化文件，进程重启后才能稳定读取新内容。
                         uiState.restoreRequiresRestart -> uiState.statusMessage ?: "恢复完成，重启应用后生效"
                         !uiState.statusMessage.isNullOrBlank() -> uiState.statusMessage ?: ""
@@ -129,7 +127,7 @@ fun WebDavBackupScreen(
                         title = if (uiState.restoreRequiresRestart) "需要重启应用" else "执行状态",
                         value = statusText,
                         onClick = if (uiState.statusMessage != null) ({ viewModel.clearStatus() }) else null,
-                        iconTint = if (uiState.restoreRequiresRestart) iOSOrange else iOSBlue,
+                        iconTint = if (uiState.restoreRequiresRestart) AppContentColors.warning() else AppContentColors.accent(),
                         showChevron = false
                     )
                 }
@@ -141,11 +139,11 @@ fun WebDavBackupScreen(
                     // 配置项图标按“能力/服务器/账号/目录”映射，降低识别成本。
                     AppSwitchPreference(
                         icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_cloud_fill_24),
-                        title = "启用 WebDAV 云备份",
-                        subtitle = "开启后每天自动备份，同时保留手动备份能力",
+                        title = "每天自动备份",
+                        subtitle = "每天备份设置和插件，也可手动备份",
                         checked = uiState.config.enabled,
                         onCheckedChange = { viewModel.setEnabled(it) },
-                        iconTint = iOSBlue
+                        iconTint = AppContentColors.secondaryText()
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
@@ -156,7 +154,7 @@ fun WebDavBackupScreen(
                             editMode = WebDavEditMode.SERVER
                             showEditDialog = true
                         },
-                        iconTint = iOSBlue
+                        iconTint = AppContentColors.secondaryText()
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
@@ -167,18 +165,18 @@ fun WebDavBackupScreen(
                             editMode = WebDavEditMode.ACCOUNT
                             showEditDialog = true
                         },
-                        iconTint = iOSBlue
+                        iconTint = AppContentColors.secondaryText()
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
                         icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_drive_folder_upload_fill_24),
-                        title = "远端目录",
+                        title = "云端文件夹",
                         value = uiState.config.remoteDir,
                         onClick = {
                             editMode = WebDavEditMode.REMOTE_DIR
                             showEditDialog = true
                         },
-                        iconTint = iOSBlue
+                        iconTint = AppContentColors.secondaryText()
                     )
                 }
             }
@@ -192,9 +190,9 @@ fun WebDavBackupScreen(
                             miuixIcon = MiuixIcons.UploadCloud,
                         ),
                         title = "测试连接",
-                        subtitle = "验证账号与目录可用性",
+                        subtitle = "检查账号和云端文件夹是否可用",
                         onClick = { viewModel.testConnection() },
-                        iconTint = iOSGreen
+                        iconTint = AppContentColors.secondaryText()
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
@@ -202,7 +200,7 @@ fun WebDavBackupScreen(
                         title = "立即备份",
                         subtitle = "上传当前设置与插件配置",
                         onClick = { viewModel.backupNow() },
-                        iconTint = iOSBlue
+                        iconTint = AppContentColors.secondaryText()
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
@@ -213,21 +211,21 @@ fun WebDavBackupScreen(
                         title = "恢复最新备份",
                         subtitle = "会覆盖本地设置，建议先手动备份",
                         onClick = { showRestoreConfirm = true },
-                        iconTint = iOSPink
+                        iconTint = AppContentColors.secondaryText()
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
                         icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_refresh_fill_24),
-                        title = "刷新远端列表",
+                        title = "刷新备份列表",
                         subtitle = "读取 WebDAV 目录中的备份文件",
                         onClick = { viewModel.refreshRemoteBackups() },
-                        iconTint = iOSOrange
+                        iconTint = AppContentColors.secondaryText()
                     )
                 }
             }
 
             item {
-                AppPreferenceSectionTitle("远端备份")
+                AppPreferenceSectionTitle("云端备份")
                 AppPreferenceGroup {
                     if (uiState.remoteBackups.isEmpty()) {
                         AppPreference(
@@ -235,7 +233,7 @@ fun WebDavBackupScreen(
                             title = "暂无备份",
                             value = "可先点击“立即备份”生成第一份快照",
                             onClick = null,
-                            iconTint = iOSOrange,
+                            iconTint = AppContentColors.secondaryText(),
                             showChevron = false
                         )
                     } else {
@@ -245,7 +243,7 @@ fun WebDavBackupScreen(
                                 title = entry.fileName,
                                 value = "${entry.sizeBytes} B",
                                 onClick = null,
-                                iconTint = iOSBlue,
+                                iconTint = AppContentColors.secondaryText(),
                                 showChevron = false
                             )
                             if (index != uiState.remoteBackups.take(10).lastIndex) {
@@ -272,7 +270,7 @@ fun WebDavBackupScreen(
         val dialogTitle = when (editMode) {
             WebDavEditMode.SERVER -> "服务器地址"
             WebDavEditMode.ACCOUNT -> "账号信息"
-            WebDavEditMode.REMOTE_DIR -> "远端目录"
+            WebDavEditMode.REMOTE_DIR -> "云端文件夹"
         }
         AppAlertDialog(
             onDismissRequest = { showEditDialog = false },
@@ -309,7 +307,7 @@ fun WebDavBackupScreen(
                             AppTextField(
                                 value = draftRemoteDir,
                                 onValueChange = { draftRemoteDir = it },
-                                label = "远端目录",
+                                label = "云端文件夹",
                                 placeholder = "/BiliPai/backups",
                                 singleLine = true
                             )

@@ -3,8 +3,9 @@ package com.android.purebilibili.data.model.response
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
-import kotlin.test.assertNotNull
 import org.junit.Test
+// kotlin.test 的 assertNotNull 返回非空值（JUnit 的版本返回 void，链式取字段无法编译）。
+import kotlin.test.assertNotNull
 
 class PugvSeasonModelsParsingTest {
 

@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-import com.android.purebilibili.core.plugin.CastPluginPlaybackState
+import com.android.purebilibili.plugin.sdk.CastPluginPlaybackState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

@@ -18,9 +18,13 @@ internal fun shouldRenderLiveDanmakuOverlayForAudioOnly(
 
 internal fun shouldUseTextureSurfaceForLivePlayer(
     hasSharedTransitionScope: Boolean,
-    hasAnimatedVisibilityScope: Boolean
+    hasAnimatedVisibilityScope: Boolean,
+    requiresHdrSurfaceOutput: Boolean = false,
+    preferCompatibleTextureSurface: Boolean = com.android.purebilibili.core.util.prefersTextureVideoSurface(),
+    hasContainerTransition: Boolean = false,
 ): Boolean {
-    return hasSharedTransitionScope && hasAnimatedVisibilityScope
+    return !requiresHdrSurfaceOutput && (preferCompatibleTextureSurface || hasContainerTransition ||
+        (hasSharedTransitionScope && hasAnimatedVisibilityScope))
 }
 
 internal fun resolveLiveTrackSelectionParametersForAudioOnly(

@@ -15,12 +15,12 @@ class AdaptivePullToRefreshIntegrationTest {
         assertTrue(source.contains("mergedContentPadding"))
         assertTrue(source.contains("padding(top = indicatorTopInset)"))
         assertTrue(source.contains("AdaptivePullToRefreshDefaultIndicator("))
-        assertTrue(source.contains("PullToRefreshDefaults.LoadingIndicator("))
+        assertTrue(source.contains("PullToRefreshDefaults.Indicator("))
         assertTrue(source.contains("PresetPrimitiveRenderer.MATERIAL3"))
     }
 
     @Test
-    fun `home material default pull refresh uses official loading indicator`() {
+    fun `home material default pull refresh uses adaptive indicator`() {
         val home = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
         assertTrue(home.contains("AppPullRefreshLoadingIndicator("))
         assertTrue(home.contains("AppPullRefreshIndicatorStyle.MATERIAL_DEFAULT"))

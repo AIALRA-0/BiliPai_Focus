@@ -17,6 +17,7 @@ object SettingsSearchFocusIds {
     const val PLAYBACK_GESTURE = "playback_gesture"
     const val PLAYBACK_DEBUG = "playback_debug"
     const val PLAYBACK_INTERACTION = "playback_interaction"
+    const val PLAYBACK_COMMENTS = "playback_comments"
     const val PLAYBACK_FULLSCREEN = "playback_fullscreen"
     const val PLAYBACK_NETWORK = "playback_network"
     const val PLAYBACK_DATA_SAVER = "playback_data_saver"
@@ -25,6 +26,7 @@ object SettingsSearchFocusIds {
     const val BOTTOM_BAR_START = "bottom_bar_start"
     const val BOTTOM_BAR_DISPLAY = "bottom_bar_display"
     const val BOTTOM_BAR_TOP_TABS = "bottom_bar_top_tabs"
+    const val BOTTOM_BAR_SEARCH_TABS = "bottom_bar_search_tabs"
     const val BOTTOM_BAR_TABLET = "bottom_bar_tablet"
     const val BOTTOM_BAR_CURRENT = "bottom_bar_current"
     const val BOTTOM_BAR_AVAILABLE = "bottom_bar_available"
@@ -36,7 +38,9 @@ object SettingsSearchFocusIds {
 data class SettingsSearchFocusRequest(
     val target: SettingsSearchTarget,
     val focusId: String,
-    val token: Long = System.nanoTime()
+    val token: Long = System.nanoTime(),
+    val settingId: String? = null,
+    val query: String = "",
 )
 
 data class SettingsSceneDetailFocus(
@@ -44,21 +48,50 @@ data class SettingsSceneDetailFocus(
     val focusId: String
 )
 
+internal fun resolveSettingsItemScrollKey(settingId: String?): String? =
+    settingId?.let { id -> settingsItemDirectory.firstOrNull { it.settingId == id }?.sectionKey }
+
+internal object SettingsSearchHighlightTiming {
+    const val HOLD_MILLIS = 1_600L
+    const val FADE_MILLIS = 280
+    const val UNCLAIMED_TIMEOUT_MILLIS = 5_000L
+}
+
+/** One timeout per page request; a row that is already locating owns its completion. */
+internal suspend fun clearUnclaimedSettingsFocusRequest(token: Long) {
+    kotlinx.coroutines.delay(SettingsSearchHighlightTiming.UNCLAIMED_TIMEOUT_MILLIS)
+    SettingsSearchFocusController.clearIfUnclaimed(token)
+}
+
 object SettingsSearchFocusController {
     private val _request = MutableStateFlow<SettingsSearchFocusRequest?>(null)
     val request = _request.asStateFlow()
 
-    fun submit(target: SettingsSearchTarget, focusId: String?) {
+    private var claimedToken: Long? = null
+
+    internal fun claim(token: Long): Boolean {
+        if (_request.value?.token != token) return false
+        claimedToken = token
+        return true
+    }
+
+    internal fun clearIfUnclaimed(token: Long) {
+        if (claimedToken != token) clear(token)
+    }
+
+    fun submit(target: SettingsSearchTarget, focusId: String?, settingId: String? = null, query: String = "") {
+        claimedToken = null
         if (focusId.isNullOrBlank()) {
             _request.value = null
             return
         }
-        _request.value = SettingsSearchFocusRequest(target = target, focusId = focusId)
+        _request.value = SettingsSearchFocusRequest(target = target, focusId = focusId, settingId = settingId, query = query.trim())
     }
 
     fun clear(token: Long? = null) {
         val current = _request.value ?: return
         if (token == null || current.token == token) {
+            claimedToken = null
             _request.value = null
         }
     }
@@ -83,21 +116,26 @@ internal fun resolveHomeSettingsScrollIndex(focusId: String): Int? = when (focus
     else -> null
 }
 
-internal fun resolvePlaybackSettingsScrollIndex(
-    focusId: String
-): Int? {
-    return when (focusId) {
-        SettingsSearchFocusIds.PLAYBACK_DECODER -> 0
-        SettingsSearchFocusIds.PLAYBACK_SPEED -> 2
-        SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER -> 4
-        SettingsSearchFocusIds.PLAYBACK_GESTURE -> 6
-        SettingsSearchFocusIds.PLAYBACK_DEBUG -> 8
-        SettingsSearchFocusIds.PLAYBACK_NETWORK -> 10
-        SettingsSearchFocusIds.PLAYBACK_DATA_SAVER -> 12
-        SettingsSearchFocusIds.PLAYBACK_INTERACTION -> 14
-        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN -> 16
-        else -> null
-    }
+/** Ordered section keys shared by search positioning and the merged playback page. */
+internal val playbackSettingsSectionKeys = listOf(
+    SettingsSearchFocusIds.PLAYBACK_DECODER,
+    SettingsSearchFocusIds.PLAYBACK_SPEED,
+    SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER,
+    SettingsSearchFocusIds.PLAYBACK_DEBUG,
+    SettingsSearchFocusIds.PLAYBACK_NETWORK,
+    SettingsSearchFocusIds.PLAYBACK_DATA_SAVER,
+    SettingsSearchFocusIds.PLAYBACK_INTERACTION,
+    SettingsSearchFocusIds.PLAYBACK_COMMENTS,
+    SettingsSearchFocusIds.PLAYBACK_FULLSCREEN,
+)
+
+internal fun resolvePlaybackSettingsScrollIndex(focusId: String): Int? {
+    val sectionKey = if (focusId == SettingsSearchFocusIds.PLAYBACK_GESTURE) {
+        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
+    } else focusId
+    return playbackSettingsSectionKeys.indexOf(sectionKey)
+        .takeIf { it >= 0 }
+        ?.times(2)
 }
 
 internal fun resolveBottomBarSettingsScrollIndex(
@@ -108,9 +146,10 @@ internal fun resolveBottomBarSettingsScrollIndex(
         SettingsSearchFocusIds.BOTTOM_BAR_BEHAVIOR -> 1
         SettingsSearchFocusIds.BOTTOM_BAR_DISPLAY -> 3
         SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS -> 5
-        SettingsSearchFocusIds.BOTTOM_BAR_TABLET -> 7
-        SettingsSearchFocusIds.BOTTOM_BAR_CURRENT -> 9
-        SettingsSearchFocusIds.BOTTOM_BAR_AVAILABLE -> 11
+        SettingsSearchFocusIds.BOTTOM_BAR_SEARCH_TABS -> 7
+        SettingsSearchFocusIds.BOTTOM_BAR_TABLET -> 9
+        SettingsSearchFocusIds.BOTTOM_BAR_CURRENT -> 11
+        SettingsSearchFocusIds.BOTTOM_BAR_AVAILABLE -> 13
         else -> null
     }
 }
@@ -150,7 +189,7 @@ internal fun resolveSettingsSceneDetailFocus(
     )
     SettingsSearchTarget.INTERACTION_COMMENT -> SettingsSceneDetailFocus(
         target = SettingsSearchTarget.PLAYBACK,
-        focusId = SettingsSearchFocusIds.PLAYBACK_INTERACTION
+        focusId = SettingsSearchFocusIds.PLAYBACK_COMMENTS
     )
     SettingsSearchTarget.DIAGNOSTICS -> SettingsSceneDetailFocus(
         target = SettingsSearchTarget.PLAYBACK,
@@ -166,6 +205,8 @@ internal fun resolveSettingsSceneDetailFocus(
     SettingsSearchTarget.PLAYBACK,
     SettingsSearchTarget.BOTTOM_BAR,
     SettingsSearchTarget.PERMISSION,
+    SettingsSearchTarget.SPACE_PRIVACY,
+    SettingsSearchTarget.LOGIN_ACTIVITY,
     SettingsSearchTarget.BLOCKED_LIST,
     SettingsSearchTarget.SETTINGS_SHARE,
     SettingsSearchTarget.WEBDAV_BACKUP,
@@ -173,6 +214,8 @@ internal fun resolveSettingsSceneDetailFocus(
     SettingsSearchTarget.IMAGE_SAVE_PATH,
     SettingsSearchTarget.CLEAR_CACHE,
     SettingsSearchTarget.PLUGINS,
+    // 设备接力未开发完成：入口隐藏后与其他隐藏目标一样映射空焦点，恢复开关时随组生效。
+    SettingsSearchTarget.NEARBY_HANDOFF,
     SettingsSearchTarget.EXPORT_LOGS,
     SettingsSearchTarget.OPEN_SOURCE_LICENSES,
     SettingsSearchTarget.OPEN_SOURCE_HOME,

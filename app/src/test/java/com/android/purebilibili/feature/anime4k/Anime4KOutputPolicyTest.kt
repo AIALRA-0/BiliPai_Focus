@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.anime4k
 
 import androidx.media3.common.C
 import com.android.purebilibili.feature.anime4k.gl.resolveAnime4KShaderFiles
+import com.android.purebilibili.plugin.sdk.Anime4KPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

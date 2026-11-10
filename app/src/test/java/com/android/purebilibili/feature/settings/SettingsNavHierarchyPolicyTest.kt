@@ -34,7 +34,7 @@ class SettingsNavHierarchyPolicyTest {
 
     @Test
     fun resolveSettingsNavParentRoute_keepsIndependentCategoriesAtRootDetailDepth() {
-        assertEquals("settings_category", resolveSettingsNavParentRoute("animation_settings"))
+        assertEquals("appearance_settings", resolveSettingsNavParentRoute("animation_settings"))
         assertEquals("settings_category", resolveSettingsNavParentRoute("home_settings"))
         assertEquals("appearance_settings", resolveSettingsNavParentRoute("icon_settings"))
         assertEquals("settings_category", resolveSettingsNavParentRoute("message_notification_settings"))
@@ -79,7 +79,7 @@ class SettingsNavHierarchyPolicyTest {
                 childRoute = "message_notification_settings",
             )
         )
-        assertFalse(
+        assertTrue(
             isSettingsNavHierarchyTransition(
                 parentRoute = "appearance_settings",
                 childRoute = "animation_settings",
@@ -211,17 +211,28 @@ class SettingsNavHierarchyPolicyTest {
     }
 
     @Test
+    fun playbackCategory_directlyTargetsPlaybackSettings() {
+        // 播放设置分类页不再提供「播放器与画质 / 互动与评论」二选一,点击分类直跳播放器设置页
+        assertEquals(
+            BiliPaiNavKey.PlaybackSettings,
+            resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.PLAYBACK_QUALITY),
+        )
+        assertEquals(
+            BiliPaiNavKey.PlaybackSettings,
+            resolveSettingsCategoryNavKey(SettingsRootCategory.PLAYBACK_QUALITY),
+        )
+    }
+
+    @Test
     fun multiEntryOrInlineCategories_keepCategoryScreen() {
-        // 播放/首页/隐私等分类含内联设置或多个入口,保留中间层
-        assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.PLAYBACK_QUALITY))
-        assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.HOME_RECOMMENDATION))
+        // 首页分类已直跳「首页与推荐」页;隐私等分类含内联设置或多个入口,保留中间层
+        assertEquals(
+            BiliPaiNavKey.HomeSettings,
+            resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.HOME_RECOMMENDATION),
+        )
         assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.NAVIGATION_INTERACTION))
         assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.PRIVACY_PERMISSION))
         assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.STORAGE_BACKUP))
         assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.SYSTEM_ABOUT))
-        assertEquals(
-            BiliPaiNavKey.SettingsCategory(SettingsRootCategory.PLAYBACK_QUALITY),
-            resolveSettingsCategoryNavKey(SettingsRootCategory.PLAYBACK_QUALITY),
-        )
     }
 }

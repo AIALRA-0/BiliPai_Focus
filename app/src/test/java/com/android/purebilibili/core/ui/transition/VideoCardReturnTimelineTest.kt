@@ -8,6 +8,166 @@ import kotlin.test.assertTrue
 
 class VideoCardReturnTimelineTest {
     @Test
+    fun wholeCardAndMediaFinishTogetherAndRewindFromTheSameDepth() {
+        val start = VideoCardTransitionVisualTimeline.WHOLE_CARD_RETURN_START
+        val end = VideoCardTransitionVisualTimeline.WHOLE_CARD_RETURN_END
+        assertEquals(end, VideoCardTransitionVisualTimeline.MEDIA_RETURN_END)
+        assertEquals(0f, resolveVideoCardWholeCardReturnHandoffAlpha(1f - start), .0001f)
+        assertEquals(1f, resolveVideoCardWholeCardReturnHandoffAlpha(1f - end), .0001f)
+        val samples = (0..100).map { step ->
+            val depth = 1f - step / 100f
+            val alpha = resolveVideoCardWholeCardReturnHandoffAlpha(depth)
+            assertTrue(alpha + .0001f >= resolveVideoCardLiveReturnVisualHandoffAlpha(depth))
+            alpha
+        }
+        assertTrue(samples.zipWithNext().all { (before, after) -> before <= after })
+        val reversed = (100 downTo 0).map { step ->
+            resolveVideoCardWholeCardReturnHandoffAlpha(1f - step / 100f)
+        }
+        assertEquals(samples, reversed.reversed())
+    }
+
+    @Test
+    fun landingMediaAndTitleShareGentleEndpointsAndReverseTogether() {
+        val start = VideoCardTransitionVisualTimeline.MEDIA_RETURN_START
+        val end = VideoCardTransitionVisualTimeline.MEDIA_RETURN_END
+        val window = end - start
+        fun media(settle: Float) = resolveVideoCardLiveReturnVisualHandoffAlpha(1f - settle)
+        assertTrue(media(start + window * .01f) < .001f)
+        assertTrue(1f - media(end - window * .01f) < .001f)
+        for (step in 0..100) {
+            val depth = 1f - (start + window * step / 100f)
+            val alpha = resolveVideoCardLiveReturnVisualHandoffAlpha(depth)
+            assertEquals(alpha, resolveVideoCardSourceChromeReturnAlpha(depth), .0001f)
+            assertEquals(alpha, resolveVideoCardContentHandoffProgress(
+                depth, VideoCardTransitionBackgroundPhase.HELD, true,
+            ), .0001f)
+            assertEquals(1f, alpha + resolveVideoCardDetailChromeAlpha(
+                depth, VideoCardTransitionBackgroundPhase.RETURNING, false,
+            ), .0001f)
+        }
+    }
+
+    @Test
+    fun nativeViewportBodyStaysVisibleMidReturnAndRestoresOnCancel() {
+        fun frame(depth: Float, phase: VideoCardTransitionBackgroundPhase) =
+            resolveVideoCardSecondaryContentVisualFrame(
+                morphDepthProgress = depth,
+                phase = phase,
+                isReturnGestureInProgress = phase == VideoCardTransitionBackgroundPhase.HELD,
+                motionTier = MotionTier.Normal,
+                preserveNativeViewport = true,
+            )
+        val boundary = 1f - VideoCardTransitionVisualTimeline.NATIVE_BODY_RETURN_END
+        val fadeStart = 1f - VideoCardTransitionVisualTimeline.NATIVE_BODY_RETURN_START
+        assertEquals(1f, frame(1f, VideoCardTransitionBackgroundPhase.RETURNING).alpha, .0001f)
+        assertEquals(1f, frame(fadeStart, VideoCardTransitionBackgroundPhase.RETURNING).alpha, .0001f)
+        assertEquals(.5f, frame((fadeStart + boundary) / 2f, VideoCardTransitionBackgroundPhase.RETURNING).alpha, .0001f)
+        assertEquals(0f, frame(boundary, VideoCardTransitionBackgroundPhase.RETURNING).alpha, .0001f)
+        // Neither the old 35% boundary nor mid-return should show an empty detail shell.
+        assertTrue(frame(.65f, VideoCardTransitionBackgroundPhase.RETURNING).alpha > .5f)
+        assertTrue(frame(.5f, VideoCardTransitionBackgroundPhase.RETURNING).alpha > .25f)
+        for (depth in listOf(0f, .2f, boundary, .8f, 1f)) {
+            assertEquals(
+                frame(depth, VideoCardTransitionBackgroundPhase.RETURNING).alpha,
+                frame(depth, VideoCardTransitionBackgroundPhase.HELD).alpha,
+                .0001f,
+            )
+            assertEquals(
+                frame(depth, VideoCardTransitionBackgroundPhase.RETURNING).alpha,
+                frame(depth, VideoCardTransitionBackgroundPhase.OPENING).alpha,
+                .0001f,
+            )
+        }
+        // The player's late cover handoff stays independent from the earlier body yield.
+        assertEquals(0f, resolveVideoCardLiveReturnVisualHandoffAlpha(boundary), .0001f)
+    }
+
+    @Test
+    fun stackedOpeningStartsAtTheMeasuredCoverAndReleasesWithSourceChrome() {
+        for (depth in listOf(0f, 0.1f, 0.3f, 0.5f, 0.72f, 1f)) {
+            val expected = 1f - resolveVideoCardDetailChromeAlpha(
+                depth, VideoCardTransitionBackgroundPhase.OPENING, false,
+            )
+            assertEquals(expected, resolveVideoDetailMediaLayoutHandoffProgress(
+                morphDepthProgress = depth,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            ), 0.0001f)
+        }
+    }
+
+    @Test
+    fun heldPredictiveSeekCannotRevealSourceChromeOnADetailSizedCover() {
+        for (depth in listOf(0f, 0.02f, 0.1f, 0.17f)) {
+            val alpha = 1f - resolveVideoCardDetailChromeAlpha(
+                depth, VideoCardTransitionBackgroundPhase.HELD, false,
+            )
+            assertTrue(alpha > 0f)
+            assertEquals(1f, resolveVideoDetailMediaLayoutHandoffProgress(
+                morphDepthProgress = depth,
+                phase = VideoCardTransitionBackgroundPhase.HELD,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                sourceChromeAlpha = alpha,
+            ))
+        }
+        // Ordinary playback and cancelled back must retain the detail viewport.
+        for (depth in listOf(0.5f, 0.99f, 1f)) {
+            assertEquals(0f, resolveVideoDetailMediaLayoutHandoffProgress(
+                morphDepthProgress = depth,
+                phase = VideoCardTransitionBackgroundPhase.HELD,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            ))
+        }
+    }
+
+    @Test
+    fun committedIdleKeepsTheMeasuredCoverUntilTheOutgoingEntryLeaves() {
+        for (committed in listOf(false, true)) {
+            assertEquals(if (committed) 1f else 0f,
+                resolveVideoDetailMediaLayoutHandoffProgress(
+                    morphDepthProgress = 0f,
+                    phase = VideoCardTransitionBackgroundPhase.IDLE,
+                    isReturnGestureInProgress = false,
+                    sourceLayout = VideoCardSourceLayout.STACKED,
+                    sourceChromeAlpha = 0f,
+                    isCommittedCardReturn = committed,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun disabledContentFollowKeepsDetailBodyUntilLandingIncludingGestureRestore() {
+        for (gesture in listOf(false, true)) {
+            for (depth in listOf(1f, .5f, .1f, .01f, .0001f)) {
+                val frame = resolveVideoCardSecondaryContentVisualFrame(
+                    morphDepthProgress = depth,
+                    phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                    isReturnGestureInProgress = gesture,
+                    motionTier = MotionTier.Normal,
+                    followProgressEnabled = false,
+                )
+                assertEquals(1f, frame.alpha)
+                assertEquals(1f, frame.scale)
+                assertEquals(0f, frame.translationYDp)
+            }
+        }
+        val landed = resolveVideoCardSecondaryContentVisualFrame(
+            morphDepthProgress = 0f,
+            phase = VideoCardTransitionBackgroundPhase.RETURNING,
+            isReturnGestureInProgress = false,
+            motionTier = MotionTier.Normal,
+            followProgressEnabled = false,
+        )
+        assertEquals(0f, landed.alpha)
+    }
+
+
+    @Test
     fun effectsStayClampedAndHandoffRemainsComplementaryDuringLanding() {
         for (i in -10..1010) {
             val depth = i / 1000f
@@ -453,7 +613,7 @@ class VideoCardReturnTimelineTest {
             0.001f,
         )
         assertEquals(
-            0f,
+            1f - resolveVideoCardNativeBodyPresence(0.5f),
             resolveVideoDetailReturnMediaLayoutHandoffProgress(
                 morphDepthProgress = 0.5f,
                 phase = VideoCardTransitionBackgroundPhase.HELD,
@@ -462,6 +622,39 @@ class VideoCardReturnTimelineTest {
             ),
             0.001f,
         )
+    }
+
+    @Test
+    fun horizontalMediaAndInfoShareTheOpeningAndReturnHandoff() {
+        for (phase in listOf(
+            VideoCardTransitionBackgroundPhase.OPENING,
+            VideoCardTransitionBackgroundPhase.RETURNING,
+        )) {
+            for (depth in listOf(0f, 0.02f, 0.1f, 0.18f, 0.45f, 0.72f, 1f)) {
+                val infoAlpha = 1f - resolveVideoCardDetailChromeAlpha(
+                    depth, phase, false, sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                )
+                val mediaLayout = resolveVideoDetailReturnMediaLayoutHandoffProgress(
+                    morphDepthProgress = depth,
+                    phase = phase,
+                    isReturnGestureInProgress = false,
+                    sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                )
+                assertEquals(infoAlpha, mediaLayout, 0.001f)
+                // A fully contracted cover must never leave the adjacent info slot empty.
+                if (mediaLayout == 1f) assertEquals(1f, infoAlpha)
+            }
+        }
+        // Loading and disabled content-follow use their actual visible chrome progress.
+        for (alpha in listOf(0f, 0.5f, 1f)) {
+            assertEquals(alpha, resolveVideoDetailReturnMediaLayoutHandoffProgress(
+                morphDepthProgress = 0.5f,
+                phase = VideoCardTransitionBackgroundPhase.RETURNING,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                sourceChromeAlpha = alpha,
+            ))
+        }
     }
 
     @Test
@@ -583,6 +776,80 @@ class VideoCardReturnTimelineTest {
         assertEquals(1f, mid.alpha + chrome.alpha, 0.001f)
         // Geometry multiplier stays 1 so land frame matches the stationary list card.
         assertEquals(1f, chrome.layoutScaleMultiplier, 0.0001f)
+    }
+
+    @Test
+    fun idleAfterCommittedReturnKeepsDetailBodyYielded() {
+        // 壳已落位（phase 回 IDLE）但详情 entry 仍在退场动画里：正文与 chrome 必须保持让位。
+        // 否则 `else -> 1f` 会把标题/简介/评论整块弹回不透明，闪现在卡槽（标题错位）。
+        val body = resolveVideoCardSecondaryContentVisualFrame(
+            morphDepthProgress = 0f,
+            phase = VideoCardTransitionBackgroundPhase.IDLE,
+            isReturnGestureInProgress = false,
+            motionTier = MotionTier.Normal,
+            isCommittedCardReturn = true,
+        )
+        assertEquals(0f, body.alpha, 0.0001f)
+
+        assertEquals(
+            0f,
+            resolveVideoCardDetailChromeAlpha(
+                morphDepthProgress = 0f,
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+                isReturnGestureInProgress = false,
+                isCommittedCardReturn = true,
+            ),
+            0.0001f,
+        )
+    }
+
+    @Test
+    fun idleWithoutCommittedReturnStillShowsDetailBody() {
+        // 详情页稳态（未返回，或预测返回已取消）：IDLE 下正文与 chrome 必须完整可见。
+        val body = resolveVideoCardSecondaryContentVisualFrame(
+            morphDepthProgress = 0f,
+            phase = VideoCardTransitionBackgroundPhase.IDLE,
+            isReturnGestureInProgress = false,
+            motionTier = MotionTier.Normal,
+        )
+        assertEquals(1f, body.alpha, 0.0001f)
+        assertEquals(1f, body.scale, 0.0001f)
+
+        assertEquals(
+            1f,
+            resolveVideoCardDetailChromeAlpha(
+                morphDepthProgress = 0f,
+                phase = VideoCardTransitionBackgroundPhase.IDLE,
+                isReturnGestureInProgress = false,
+            ),
+            0.0001f,
+        )
+    }
+
+    @Test
+    fun committedReturnFlagNeverLeaksIntoOpeningWindow() {
+        // 进场窗口不受提交标志影响：仍按 morph 进度淡入。
+        assertEquals(
+            0f,
+            resolveVideoCardSecondaryContentVisualFrame(
+                morphDepthProgress = VideoCardTransitionVisualTimeline.SECONDARY_CONTENT_ENTER_START,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                isReturnGestureInProgress = false,
+                motionTier = MotionTier.Normal,
+                isCommittedCardReturn = true,
+            ).alpha,
+            0.0001f,
+        )
+        assertEquals(
+            1f,
+            resolveVideoCardDetailChromeAlpha(
+                morphDepthProgress = VideoCardTransitionVisualTimeline.DETAIL_CHROME_ENTER_END,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                isReturnGestureInProgress = false,
+                isCommittedCardReturn = true,
+            ),
+            0.0001f,
+        )
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DarkMode
@@ -7,12 +9,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.core.plugin.PLUGIN_EFFECT_HINT_EYE_COOLDOWN_MS
-import com.android.purebilibili.core.plugin.Plugin
+import com.android.purebilibili.core.plugin.BuiltinPlugin
 import com.android.purebilibili.core.plugin.PluginEffectHintBus
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.plugin.resolveEyeProtectionEffectHint
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.plugin.sdk.EyeCareReminder
+import com.android.purebilibili.plugin.sdk.EyeProtectionPluginApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,14 +49,6 @@ data class EyeCareProfile(
     val warmFilterStrength: Float,
     val reminderIntervalMinutes: Int,
     val snoozeMinutes: Int
-)
-
-@Serializable
-data class EyeCareReminder(
-    val usageMinutes: Int,
-    val title: String,
-    val message: String,
-    val suggestion: String
 )
 
 @Serializable
@@ -91,11 +87,11 @@ data class EyeProtectionConfig(
     val showEffectHint: Boolean = true
 )
 
-class EyeProtectionPlugin : Plugin {
+class EyeProtectionPlugin : BuiltinPlugin, EyeProtectionPluginApi {
 
-    override val id = EYE_PROTECTION_PLUGIN_ID
+    override val id = BuiltinPluginIds.EYE_PROTECTION
     override val name = "夜间护眼"
-    override val description = "柔和降蓝光、定时护眼与休息提醒"
+    override val description = "暖色滤镜、定时调节与休息提醒"
     override val version = "2.2.0"
     override val author = "BiliPai项目组"
     override val icon: ImageVector = Icons.Outlined.DarkMode
@@ -110,25 +106,25 @@ class EyeProtectionPlugin : Plugin {
     private var lastReminderMinute: Int? = null
 
     private val _isNightModeActive = MutableStateFlow(false)
-    val isNightModeActive: StateFlow<Boolean> = _isNightModeActive.asStateFlow()
+    override val isNightModeActive: StateFlow<Boolean> = _isNightModeActive.asStateFlow()
 
     private val _brightnessLevel = MutableStateFlow(1.0f)
-    val brightnessLevel: StateFlow<Float> = _brightnessLevel.asStateFlow()
+    override val brightnessLevel: StateFlow<Float> = _brightnessLevel.asStateFlow()
 
     private val _warmFilterStrength = MutableStateFlow(0f)
-    val warmFilterStrength: StateFlow<Float> = _warmFilterStrength.asStateFlow()
+    override val warmFilterStrength: StateFlow<Float> = _warmFilterStrength.asStateFlow()
 
     private val _settingsPreviewEnabled = MutableStateFlow(false)
-    val settingsPreviewEnabled: StateFlow<Boolean> = _settingsPreviewEnabled.asStateFlow()
+    override val settingsPreviewEnabled: StateFlow<Boolean> = _settingsPreviewEnabled.asStateFlow()
 
     private val _careReminder = MutableStateFlow<EyeCareReminder?>(null)
-    val careReminder: StateFlow<EyeCareReminder?> = _careReminder.asStateFlow()
+    override val careReminder: StateFlow<EyeCareReminder?> = _careReminder.asStateFlow()
 
     private val _usageMinutes = MutableStateFlow(0)
     val usageMinutesFlow: StateFlow<Int> = _usageMinutes.asStateFlow()
 
     private val _weakenDuringPlayback = MutableStateFlow(true)
-    val weakenDuringPlayback: StateFlow<Boolean> = _weakenDuringPlayback.asStateFlow()
+    override val weakenDuringPlayback: StateFlow<Boolean> = _weakenDuringPlayback.asStateFlow()
 
     private var allowActivationHint = false
     private var usageElapsedMs = 0L
@@ -158,17 +154,17 @@ class EyeProtectionPlugin : Plugin {
         Logger.d(TAG, "夜间护眼插件已禁用")
     }
 
-    fun dismissReminder() {
+    override fun dismissReminder() {
         _careReminder.value = null
     }
 
-    fun snoozeReminder() {
+    override fun snoozeReminder() {
         snoozeUntilMinute = usageMinutes + config.reminderSnoozeMinutes
         _careReminder.value = null
         Logger.d(TAG, "提醒已暂缓 ${config.reminderSnoozeMinutes} 分钟")
     }
 
-    fun confirmRest() {
+    override fun confirmRest() {
         usageMinutes = 0
         _usageMinutes.value = 0
         snoozeUntilMinute = null
@@ -177,9 +173,11 @@ class EyeProtectionPlugin : Plugin {
         Logger.d(TAG, "用户已确认休息，计时重置")
     }
 
-    fun getSnoozeMinutes(): Int = config.reminderSnoozeMinutes
+    override fun getSnoozeMinutes(): Int = config.reminderSnoozeMinutes
 
     fun snoozeUntilMinute(): Int? = snoozeUntilMinute
+
+    fun lastReminderMinute(): Int? = lastReminderMinute
 
     fun snapshotConfig(): EyeProtectionConfig = config
 
@@ -236,6 +234,7 @@ class EyeProtectionPlugin : Plugin {
                     )
                 ) {
                     lastReminderMinute = usageMinutes
+                    snoozeUntilMinute = null
                     _careReminder.value = EyeCareReminder(
                         usageMinutes = usageMinutes,
                         title = "给眼睛一个小休息",
@@ -386,13 +385,5 @@ class EyeProtectionPlugin : Plugin {
     @Composable
     override fun SettingsContent(modifier: Modifier) {
         EyeProtectionSettings(modifier = modifier, plugin = this)
-    }
-
-    companion object {
-        fun getInstance(): EyeProtectionPlugin? {
-            return PluginManager.plugins.find {
-                it.plugin.id == EYE_PROTECTION_PLUGIN_ID
-            }?.plugin as? EyeProtectionPlugin
-        }
     }
 }

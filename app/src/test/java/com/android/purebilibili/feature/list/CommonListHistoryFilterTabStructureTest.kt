@@ -90,7 +90,7 @@ class CommonListHistoryFilterTabStructureTest {
             "历史筛选 Tab 栏指示器必须跟随 Pager 滑动手势平滑位移"
         )
         assertTrue(
-            source.contains("historyPagerState.currentPage + historyPagerState.currentPageOffsetFraction"),
+            source.contains("historyPagerState.tabIndicatorPosition"),
             "指示器位置需由 historyPagerState 的 currentPage 与 offsetFraction 驱动"
         )
         assertTrue(

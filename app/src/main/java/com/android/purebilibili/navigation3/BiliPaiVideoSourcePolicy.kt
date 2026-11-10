@@ -13,15 +13,9 @@ internal fun resolveBiliPaiVideoSource(
 ): BiliPaiVideoSource {
     val route = normalizeBiliPaiVideoSourceRoute(
         explicitSourceRoute ?: when (currentKey) {
-            is BiliPaiNavKey.VideoDetail -> {
-                // Prefer explicit related host `video/{parent}` when provided by callers.
-                // Without explicit: keep list origin (home/search/…) so multi-hop returns
-                // still land on the original card, not an intermediate detail.
-                previousSourceRoute
-                    ?.takeIf { it.isNotBlank() }
-                    ?: currentKey.sourceRoute
-                    ?: "video/${currentKey.bvid}"
-            }
+            // A nested link returns to its immediate parent. The parent's list origin is
+            // retained separately in BiliPaiReturnSessionState, not borrowed by the child.
+            is BiliPaiNavKey.VideoDetail -> "video/${currentKey.bvid}"
             null -> previousSourceRoute
             else -> currentKey.toLegacyRoute()
         }
@@ -46,14 +40,6 @@ internal fun isRelatedVideoCardMorphSourceRoute(sourceRoute: String?): Boolean {
     val route = sourceRoute?.substringBefore('?')?.trim().orEmpty()
     return route.startsWith("video/")
 }
-
-internal fun resolveVideoCardTransitionEnabledForSource(
-    cardTransitionEnabled: Boolean,
-    relatedVideoTransitionEnabled: Boolean,
-    sourceRoute: String?,
-): Boolean = cardTransitionEnabled && (
-    relatedVideoTransitionEnabled || !isRelatedVideoCardMorphSourceRoute(sourceRoute)
-)
 
 /**
  * Card morph mode is part of the navigation meaning, not a card-local animation choice.

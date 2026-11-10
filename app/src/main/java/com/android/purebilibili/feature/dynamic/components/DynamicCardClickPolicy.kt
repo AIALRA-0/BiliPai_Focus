@@ -4,6 +4,7 @@ import com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLay
 import com.android.purebilibili.core.util.BilibiliUrlParser
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
+import com.android.purebilibili.core.util.hasCommentLocation
 import com.android.purebilibili.data.model.response.ArchiveMajor
 import com.android.purebilibili.data.model.response.ArticleMajor
 import com.android.purebilibili.data.model.response.DrawItem
@@ -46,6 +47,7 @@ internal sealed interface DynamicOpusLinkCardAction {
     data class OpenLive(val roomId: Long) : DynamicOpusLinkCardAction
     data class OpenUser(val mid: Long) : DynamicOpusLinkCardAction
     data class OpenBangumi(val seasonId: Long, val epId: Long) : DynamicOpusLinkCardAction
+    data class OpenMatch(val contestId: Long) : DynamicOpusLinkCardAction
     data class OpenExternalUrl(val url: String) : DynamicOpusLinkCardAction
     data object None : DynamicOpusLinkCardAction
 }
@@ -199,6 +201,14 @@ internal fun resolveDynamicOpusPresentationBlocks(
     return buildList {
         opus.contentBlocks.forEach { block ->
             when (block) {
+                is OpusContentBlock.Text -> {
+                    // 空白段落不参与布局，避免在文末/图前多出一行高度。
+                    if (normalizeDynamicBodyText(block.text).isNotBlank() ||
+                        block.richTextNodes.any { resolveDynamicRichTextNodeToken(it).isNotBlank() }
+                    ) {
+                        add(block.copy(text = normalizeDynamicBodyText(block.text)))
+                    }
+                }
                 is OpusContentBlock.Image -> keepImage(block.pic)?.let { add(block.copy(pic = it)) }
                 is OpusContentBlock.Divider -> {
                     val dividerPic = block.pic
@@ -232,6 +242,17 @@ internal fun shouldExpandDynamicOpusDetailImages(
     imageLayout: DynamicDetailImageLayout,
 ): Boolean {
     return imageLayout == DynamicDetailImageLayout.EXPANDED
+}
+
+/**
+ * 仅有 opus.pics、尚未解析出正文块时（seed / 部分详情），详情页仍按图片布局设置展开，
+ * 避免先画九宫格再在完整详情到达后整块跳成大图。
+ */
+internal fun shouldExpandDynamicOpusFallbackImages(
+    isDetail: Boolean,
+    imageLayout: DynamicDetailImageLayout,
+): Boolean {
+    return isDetail && shouldExpandDynamicOpusDetailImages(imageLayout)
 }
 
 internal fun toggleDynamicDetailImageLayout(
@@ -301,7 +322,9 @@ internal fun shouldShowDynamicDetailImageLayoutToggle(
 internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLinkCardAction {
     val url = card.jumpUrl.trim()
     if (url.isBlank()) return DynamicOpusLinkCardAction.None
-    return when (val target = BilibiliNavigationTargetParser.parse(url)) {
+    val target = BilibiliNavigationTargetParser.parse(url)
+    if (target?.hasCommentLocation == true) return DynamicOpusLinkCardAction.OpenExternalUrl(url)
+    return when (target) {
         is BilibiliNavigationTarget.Video -> DynamicOpusLinkCardAction.OpenVideo(target.videoId)
         is BilibiliNavigationTarget.Dynamic -> DynamicOpusLinkCardAction.OpenDynamicDetail(target.dynamicId)
         is BilibiliNavigationTarget.Article -> DynamicOpusLinkCardAction.OpenArticle(
@@ -318,8 +341,12 @@ internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLi
             seasonId = 0L,
             epId = target.epId
         )
+        is BilibiliNavigationTarget.Match -> DynamicOpusLinkCardAction.OpenMatch(target.contestId)
+        is BilibiliNavigationTarget.ArticleCollection,
+        is BilibiliNavigationTarget.CommentDetail,
         is BilibiliNavigationTarget.Music,
         is BilibiliNavigationTarget.Search,
+        is BilibiliNavigationTarget.PopularFeed,
         null -> DynamicOpusLinkCardAction.OpenExternalUrl(url)
     }
 }
@@ -329,7 +356,8 @@ internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLi
  * 对于合集/系列/番剧等非独立 UP 主发布的动态，避免将虚拟 ID / 赛季 ID 误当作个人 UID 打开个人空间导致“获取用户信息失败”报错。
  */
 internal fun resolveDynamicAuthorClickMid(item: DynamicItem): Long? {
-    val target = item.orig ?: item
+    // Resolve the author of this rendered header, not the forwarded content's author.
+    val target = item
     val type = target.type.trim()
     val major = target.modules.module_dynamic?.major
 
@@ -360,21 +388,14 @@ internal fun resolveDynamicCardPrimaryAction(item: DynamicItem): DynamicCardPrim
     }
 
     major?.article?.let { article ->
-            when (val target = BilibiliNavigationTargetParser.parse(article.jump_url)) {
-                is BilibiliNavigationTarget.Dynamic -> {
-                    return DynamicCardPrimaryAction.OpenDynamicDetail(target.dynamicId)
-                }
-                is BilibiliNavigationTarget.Article -> {
-                    return DynamicCardPrimaryAction.OpenArticle(
-                        articleId = target.articleId,
-                        title = article.title.ifBlank { article.desc }
-                    )
-                }
-                else -> Unit
-            }
-            if (article.id > 0L) {
+            // 专栏卡片统一打开专栏渲染器。新专栏的 jump_url 常是 /opus/ 链接，
+            // 不能据此把专栏当图文动态打开详情页。
+            val jumpTarget = BilibiliNavigationTargetParser.parse(article.jump_url)
+            val articleId = (jumpTarget as? BilibiliNavigationTarget.Article)?.articleId
+                ?: article.id
+            if (articleId > 0L) {
                 return DynamicCardPrimaryAction.OpenArticle(
-                    articleId = article.id,
+                    articleId = articleId,
                     title = article.title.ifBlank { article.desc }
                 )
             }
@@ -394,10 +415,11 @@ internal fun resolveDynamicCardPrimaryAction(item: DynamicItem): DynamicCardPrim
         )?.let { return it }
     }
 
-    major?.live?.id?.trim()?.toLongOrNull()?.takeIf { it > 0L }?.let { roomId ->
+    val live = major?.live
+    live?.id?.trim()?.toLongOrNull()?.takeIf { it > 0L }?.let { roomId ->
         return DynamicCardPrimaryAction.OpenLive(
             roomId = roomId,
-            title = major.live.title.ifBlank { "直播间" },
+            title = live.title.ifBlank { "直播间" },
             uname = target.modules.module_author?.name.orEmpty()
         )
     }
@@ -435,7 +457,7 @@ internal fun resolveDynamicCardMediaAction(
     val images = when {
         opusImages.isNotEmpty() -> opusImages.map { it.url }
         drawImages.isNotEmpty() -> drawImages.map { it.src }
-        major.article != null -> resolveArticleCoverUrls(major.article)
+        major.article != null -> resolveArticleCoverUrls(requireNotNull(major.article))
         else -> emptyList()
     }
     if (clickedIndex !in images.indices) return DynamicCardMediaAction.None

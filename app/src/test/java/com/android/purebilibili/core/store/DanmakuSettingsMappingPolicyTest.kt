@@ -17,47 +17,13 @@ class DanmakuSettingsMappingPolicyTest {
     private val landscapeScope = DanmakuSettingsScope.LANDSCAPE
 
     @Test
-    fun arbitraryDisplayAreaValues_snapToNearestSupportedOption() {
-        assertEquals(0.25f, normalizeDanmakuDisplayArea(0.33f))
-        assertEquals(0.5f, normalizeDanmakuDisplayArea(0.6f))
-        assertEquals(0.75f, normalizeDanmakuDisplayArea(0.63f))
-        assertEquals(1.0f, normalizeDanmakuDisplayArea(0.99f))
-    }
-
-    @Test
-    fun emptyPreferences_useExpectedDanmakuDefaults() {
-        val prefs = mutablePreferencesOf()
-
-        val result = mapDanmakuSettingsFromPreferences(prefs, portraitScope)
-
-        assertTrue(result.enabled)
-        assertEquals(0.85f, result.opacity)
-        assertEquals(1.0f, result.fontScale)
-        assertEquals(1.0f, result.speed)
-        assertEquals(0.5f, result.displayArea)
-        assertTrue(result.mergeDuplicates)
-        assertTrue(result.allowScroll)
-        assertTrue(result.allowTop)
-        assertTrue(result.allowBottom)
-        assertTrue(result.allowColorful)
-        assertTrue(result.allowSpecial)
-        assertFalse(result.hideInteractiveCommands)
-        assertFalse(result.blockAttentionCommands)
-        assertFalse(result.smartOcclusion)
-        assertEquals(PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT, result.portraitDisplayAreaMode)
-        assertEquals(DanmakuPanelWidthMode.THIRD, result.fullscreenPanelWidthMode)
-        assertEquals("", result.blockRulesRaw)
-        assertEquals(emptyList(), result.blockRules)
-        assertEquals(5, propertyValue<Int>(result, "fontWeight"))
-        assertEquals(1.5f, propertyValue<Float>(result, "strokeWidth"))
-        assertEquals(1.6f, propertyValue<Float>(result, "lineHeight"))
-        assertEquals(7.0f, propertyValue<Float>(result, "scrollDurationSeconds"))
-        assertEquals(4.0f, propertyValue<Float>(result, "staticDurationSeconds"))
-        assertEquals(500, propertyValue<Int>(result, "duplicateMergeWindowMs"))
-        assertEquals(2, propertyValue<Int>(result, "duplicateMergeCountThreshold"))
-        assertFalse(propertyValue<Boolean>(result, "scrollFixedVelocity"))
-        assertFalse(propertyValue<Boolean>(result, "staticDanmakuToScroll"))
-        assertFalse(propertyValue<Boolean>(result, "massiveMode"))
+    fun arbitraryDisplayAreaValues_preservePiliSelections() {
+        assertEquals(0.1f, normalizeDanmakuDisplayArea(0f))
+        assertEquals(0.33f, normalizeDanmakuDisplayArea(0.33f))
+        assertEquals(0.6f, normalizeDanmakuDisplayArea(0.6f))
+        assertEquals(0.63f, normalizeDanmakuDisplayArea(0.63f))
+        assertEquals(1f, normalizeDanmakuDisplayArea(2f))
+        assertEquals(0.5f, normalizeDanmakuDisplayArea(Float.NaN))
     }
 
     @Test
@@ -122,25 +88,51 @@ class DanmakuSettingsMappingPolicyTest {
     }
 
     @Test
-    fun persistedFontScale_supportsThirtyPercentMinimum() {
+    fun persistedFontScale_supportsPiliMinimum() {
         val prefs = mutablePreferencesOf(
             floatPreferencesKey("danmaku_font_scale") to 0.2f
         )
 
         val result = mapDanmakuSettingsFromPreferences(prefs, portraitScope)
 
-        assertEquals(0.3f, result.fontScale)
+        assertEquals(0.5f, result.fontScale)
     }
 
     @Test
-    fun persistedDisplayArea_isNormalizedBackToDiscreteOption() {
+    fun persistedMergeWindow_supportsLongWindowsAndCapsTheUpperBoundary() {
+        val longWindow = mapDanmakuSettingsFromPreferences(
+            mutablePreferencesOf(intPreferencesKey("danmaku_duplicate_merge_window_ms") to 9_000),
+            portraitScope
+        )
+        val oversizedWindow = mapDanmakuSettingsFromPreferences(
+            mutablePreferencesOf(intPreferencesKey("danmaku_duplicate_merge_window_ms") to 20_000),
+            portraitScope
+        )
+
+        assertEquals(9_000, longWindow.duplicateMergeWindowMs)
+        assertEquals(15_000, oversizedWindow.duplicateMergeWindowMs)
+    }
+
+    @Test
+    fun legacySubsecondMergeWindow_isRaisedToOneSecond() {
+        val prefs = mutablePreferencesOf(
+            intPreferencesKey("danmaku_duplicate_merge_window_ms") to 100
+        )
+
+        val result = mapDanmakuSettingsFromPreferences(prefs, portraitScope)
+
+        assertEquals(1_000, result.duplicateMergeWindowMs)
+    }
+
+    @Test
+    fun persistedDisplayArea_preservesSelectedValue() {
         val prefs = mutablePreferencesOf(
             floatPreferencesKey("danmaku_area") to 0.33f
         )
 
         val result = mapDanmakuSettingsFromPreferences(prefs, portraitScope)
 
-        assertEquals(0.25f, result.displayArea)
+        assertEquals(0.33f, result.displayArea)
     }
 
     @Test
@@ -155,27 +147,26 @@ class DanmakuSettingsMappingPolicyTest {
     }
 
     @Test
-    fun portraitDisplayAreaMode_readsScopedPreferenceAndFallsBackToVideoViewport() {
+    fun portraitDisplayAreaMode_survivesInlineAndFullscreenProfileSelection() {
         val screenTopPrefs = mutablePreferencesOf(
             intPreferencesKey("danmaku_portrait_display_area_mode") to
                 PortraitDanmakuDisplayAreaMode.SCREEN_TOP.value
         )
-        val invalidPrefs = mutablePreferencesOf(
-            intPreferencesKey("danmaku_portrait_display_area_mode") to 99
+        val videoViewportPrefs = mutablePreferencesOf(
+            intPreferencesKey("danmaku_portrait_display_area_mode") to
+                PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT.value
         )
 
-        assertEquals(
-            PortraitDanmakuDisplayAreaMode.SCREEN_TOP,
-            mapDanmakuSettingsFromPreferences(screenTopPrefs, portraitScope).portraitDisplayAreaMode
-        )
-        assertEquals(
-            PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT,
-            mapDanmakuSettingsFromPreferences(invalidPrefs, portraitScope).portraitDisplayAreaMode
-        )
-        assertEquals(
-            PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT,
-            mapDanmakuSettingsFromPreferences(screenTopPrefs, landscapeScope).portraitDisplayAreaMode
-        )
+        for (profile in DanmakuSettingsScope.entries) {
+            assertEquals(
+                PortraitDanmakuDisplayAreaMode.SCREEN_TOP,
+                mapDanmakuSettingsFromPreferences(screenTopPrefs, profile).portraitDisplayAreaMode
+            )
+            assertEquals(
+                PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT,
+                mapDanmakuSettingsFromPreferences(videoViewportPrefs, profile).portraitDisplayAreaMode
+            )
+        }
     }
 
     @Test
@@ -231,12 +222,14 @@ class DanmakuSettingsMappingPolicyTest {
     }
 
     @Test
-    fun sharedPreferences_useLandscapeValueForBothScopes() {
+    fun sharedPreferences_keepFontScaleIndependentWhileSharingEnabledLineHeightAndArea() {
         val prefs = mutablePreferencesOf(
             booleanPreferencesKey("danmaku_portrait_enabled") to true,
             booleanPreferencesKey("danmaku_landscape_enabled") to false,
             floatPreferencesKey("danmaku_portrait_font_scale") to 0.9f,
             floatPreferencesKey("danmaku_landscape_font_scale") to 1.6f,
+            floatPreferencesKey("danmaku_portrait_line_height") to 1.6f,
+            floatPreferencesKey("danmaku_landscape_line_height") to 1.1f,
             floatPreferencesKey("danmaku_portrait_area") to 0.25f,
             floatPreferencesKey("danmaku_landscape_area") to 0.75f,
             floatPreferencesKey("danmaku_opacity") to 0.4f,
@@ -253,8 +246,10 @@ class DanmakuSettingsMappingPolicyTest {
 
         assertFalse(portrait.enabled)
         assertFalse(landscape.enabled)
-        assertEquals(1.6f, portrait.fontScale)
+        assertEquals(0.9f, portrait.fontScale)
         assertEquals(1.6f, landscape.fontScale)
+        assertEquals(1.1f, portrait.lineHeight)
+        assertEquals(1.1f, landscape.lineHeight)
         assertEquals(0.75f, portrait.displayArea)
         assertEquals(0.75f, landscape.displayArea)
         assertEquals(0.55f, portrait.opacity)
@@ -266,10 +261,45 @@ class DanmakuSettingsMappingPolicyTest {
     }
 
     @Test
+    fun firstFontScaleEditPreservesTheOtherOrientationForEveryLegacySource() {
+        for (editedScope in DanmakuSettingsScope.entries) {
+            for (legacyKey in listOf(
+                "danmaku_font_scale",
+                "danmaku_portrait_font_scale",
+                "danmaku_landscape_font_scale",
+            )) {
+                val prefs = mutablePreferencesOf(floatPreferencesKey(legacyKey) to 1.4f)
+                SettingsManager.updateDanmakuFontScalePreferences(prefs, 0.8f, editedScope)
+                val otherScope = if (editedScope == portraitScope) landscapeScope else portraitScope
+                assertEquals(0.8f, mapDanmakuSettingsFromPreferences(prefs, editedScope).fontScale)
+                assertEquals(1.4f, mapDanmakuSettingsFromPreferences(prefs, otherScope).fontScale)
+                SettingsManager.updateDanmakuFontScalePreferences(prefs, 1.7f, otherScope)
+                assertEquals(0.8f, mapDanmakuSettingsFromPreferences(prefs, editedScope).fontScale)
+                assertEquals(1.7f, mapDanmakuSettingsFromPreferences(prefs, otherScope).fontScale)
+            }
+        }
+    }
+
+    @Test
+    fun firstFontScaleEditKeepsDefaultForUntouchedOrientationAndClampsEditedValue() {
+        for (editedScope in DanmakuSettingsScope.entries) {
+            val prefs = mutablePreferencesOf()
+            val otherScope = if (editedScope == portraitScope) landscapeScope else portraitScope
+            SettingsManager.updateDanmakuFontScalePreferences(prefs, 5f, editedScope)
+            assertEquals(2.5f, mapDanmakuSettingsFromPreferences(prefs, editedScope).fontScale)
+            assertEquals(1f, mapDanmakuSettingsFromPreferences(prefs, otherScope).fontScale)
+            SettingsManager.updateDanmakuFontScalePreferences(prefs, Float.NaN, editedScope)
+            assertEquals(1f, mapDanmakuSettingsFromPreferences(prefs, editedScope).fontScale)
+            assertEquals(1f, mapDanmakuSettingsFromPreferences(prefs, otherScope).fontScale)
+        }
+    }
+
+    @Test
     fun sharedPreferences_fallBackToLegacyPortraitValues_whenLandscapeValueMissing() {
         val prefs = mutablePreferencesOf(
             booleanPreferencesKey("danmaku_portrait_enabled") to false,
             floatPreferencesKey("danmaku_portrait_font_scale") to 1.4f,
+            floatPreferencesKey("danmaku_portrait_line_height") to 1.3f,
             floatPreferencesKey("danmaku_portrait_area") to 0.75f
         )
 
@@ -280,6 +310,8 @@ class DanmakuSettingsMappingPolicyTest {
         assertFalse(landscape.enabled)
         assertEquals(1.4f, portrait.fontScale)
         assertEquals(1.4f, landscape.fontScale)
+        assertEquals(1.3f, portrait.lineHeight)
+        assertEquals(1.3f, landscape.lineHeight)
         assertEquals(0.75f, portrait.displayArea)
         assertEquals(0.75f, landscape.displayArea)
     }

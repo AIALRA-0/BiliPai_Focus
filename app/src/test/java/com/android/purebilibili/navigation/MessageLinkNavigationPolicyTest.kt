@@ -5,6 +5,127 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class MessageLinkNavigationPolicyTest {
+    @Test
+    fun dynamicCommentTabUsesDynamicCommentActionEvenWithoutReplyIds() {
+        assertEquals(
+            MessageLinkNavigationAction.DynamicComment("123", 0L, openComments = true),
+            resolveMessageLinkNavigationAction("bilibili://following/detail/123?tab=comment"),
+        )
+        assertEquals(
+            MessageLinkNavigationAction.DynamicComment("123", 456L, 789L, openComments = true),
+            resolveMessageLinkNavigationAction("bilibili://following/detail/123?tab=comment&root=456&comment_id=789"),
+        )
+        assertEquals(
+            MessageLinkNavigationAction.Dynamic("123"),
+            resolveMessageLinkNavigationAction("bilibili://following/detail/123"),
+        )
+    }
+
+
+    @Test
+    fun articleLinksPreserveRootAndTargetAcrossEntryForms() {
+        val links = listOf(
+            "https://www.bilibili.com/read/cv123?comment_root_id=456#reply789",
+            "bilibili://read/cv123?root_reply_id=456&comment_secondary_id=789",
+            "https://www.bilibili.com/h5/comment/sub?oid=123&pageType=12&root=456&comment_secondary_id=789",
+            "bilibili://comment/msg_fold/12/123/456/789?enterUri=https%3A%2F%2Fwww.bilibili.com%2Fopus%2F999",
+            "bilibili://browser/?url=https%3A%2F%2Fwww.bilibili.com%2Fread%2Fcv123%3Froot_id%3D456%26comment_id%3D789",
+        )
+        links.forEach { link ->
+            assertEquals(MessageLinkNavigationAction.Article(123L, 456L, 789L), resolveMessageLinkNavigationAction(link), link)
+        }
+    }
+
+    @Test
+    fun articleFragmentAlonePreservesTargetWithoutInventingRoot() {
+        assertEquals(
+            MessageLinkNavigationAction.Article(123L, 0L, 456L),
+            resolveMessageLinkNavigationAction("https://www.bilibili.com/read/cv123#reply456"),
+        )
+    }
+
+    @Test
+    fun commentEntryFormsShareRootAliasesAndNormalizeRootTargetEquality() {
+        listOf(
+            "https://www.bilibili.com/h5/comment/sub?oid=123&pageType=1&root_id=456&comment_id=456",
+            "bilibili://comment/detail/1/123/456?comment_id=456",
+            "bilibili://video/123?root=456&comment_id=456",
+        ).forEach { link ->
+            assertEquals(
+                MessageLinkNavigationAction.CommentDetail(123L, 456L, 0L, 1, "bilibili://video/123"),
+                resolveMessageLinkNavigationAction(link),
+                link,
+            )
+        }
+    }
+
+    @Test
+    fun encodedFragmentsAndQueriesKeepLocationAndQueryTargetWins() {
+        assertEquals(
+            MessageLinkNavigationAction.VideoComment("BV1xx411c7mD", 456L, 789L),
+            resolveMessageLinkNavigationAction("https://www.bilibili.com/video/BV1xx411c7mD?root=%34%35%36#reply%37%38%39"),
+        )
+        assertEquals(
+            MessageLinkNavigationAction.VideoComment("BV1xx411c7mD", 456L, 999L),
+            resolveMessageLinkNavigationAction("https://www.bilibili.com/video/BV1xx411c7mD?root=456&comment_id=999#reply789"),
+        )
+    }
+
+    @Test
+    fun targetOnlyLinksOpenSubjectWithoutPretendingTargetIsRoot() {
+        assertEquals(
+            MessageLinkNavigationAction.VideoComment("av123", 0L, 789L),
+            resolveMessageLinkNavigationAction("bilibili://comment/detail/1/123/0?comment_id=789"),
+        )
+        assertEquals(
+            MessageLinkNavigationAction.DynamicComment("123", 0L, 789L),
+            resolveMessageLinkNavigationAction("https://www.bilibili.com/h5/comment/sub?oid=123&pageType=17&reply_id=789"),
+        )
+    }
+
+    @Test
+    fun malformedCommentRoutesDoNotCreateNativeCommentDestinations() {
+        listOf(
+            "bilibili://comment/detail/0/123/456",
+            "bilibili://comment/detail/-1/123/456",
+            "bilibili://comment/detail/1/0/456",
+            "bilibili://comment/detail/1/-1/456",
+            "bilibili://comment/detail/1/123/-1",
+            "bilibili://comment/detail/1/123/0",
+        ).forEach { link ->
+            assertEquals(MessageLinkNavigationAction.Web(""), resolveMessageLinkNavigationAction(link), link)
+        }
+        listOf(
+            "https://bilibili.com.example.org/h5/comment/sub?oid=123&root=456",
+            "https://www.bilibili.com/h5/comment/sub?oid=-1&root=456",
+            "https://www.bilibili.com/h5/comment/sub?oid=123&root=456&pageType=0",
+        ).forEach { link ->
+            assertEquals(MessageLinkNavigationAction.Web(link), resolveMessageLinkNavigationAction(link), link)
+        }
+    }
+
+    @Test
+    fun musicCommentBusinessKeepsOidTypeAndExplicitEntryUri() {
+        val enterUri = "https://music.bilibili.com/h5/music-detail?music_id=MA123"
+        assertEquals(
+            MessageLinkNavigationAction.CommentDetail(999L, 456L, 789L, 47, enterUri),
+            resolveMessageLinkNavigationAction(
+                "bilibili://comment/detail/47/999/456/789?enterUri=https%3A%2F%2Fmusic.bilibili.com%2Fh5%2Fmusic-detail%3Fmusic_id%3DMA123"
+            ),
+        )
+        assertEquals(
+            MessageLinkNavigationAction.CommentDetail(999L, 456L, 789L, 47, ""),
+            resolveMessageLinkNavigationAction("https://www.bilibili.com/h5/comment/sub?oid=999&pageType=47&root=456&comment_id=789"),
+        )
+    }
+
+    @Test
+    fun wrappedUnknownWebLinkStillOpensItsOriginalUrl() {
+        assertEquals(
+            MessageLinkNavigationAction.Web("https://www.bilibili.com/blackboard/activity"),
+            resolveMessageLinkNavigationAction("bilibili://browser/?url=https%3A%2F%2Fwww.bilibili.com%2Fblackboard%2Factivity"),
+        )
+    }
 
     @Test
     fun resolveMessageLinkNavigationAction_routesAidDeepLinkWithCommentRootToCommentDetail() {
@@ -87,17 +208,15 @@ class MessageLinkNavigationPolicyTest {
     }
 
     @Test
-    fun resolveMessageLinkNavigationAction_routesArticleCommentBusinessToCommentDetail() {
+    fun resolveMessageLinkNavigationAction_routesArticleCommentBusinessToArticle() {
         val action = resolveMessageLinkNavigationAction(
             "bilibili://comment/detail/12/34646640/265141324256"
         )
 
-        val commentAction = assertIs<MessageLinkNavigationAction.CommentDetail>(action)
-        assertEquals(34646640L, commentAction.oid)
+        val commentAction = assertIs<MessageLinkNavigationAction.Article>(action)
+        assertEquals(34646640L, commentAction.articleId)
         assertEquals(265141324256L, commentAction.rootReplyId)
         assertEquals(0L, commentAction.targetReplyId)
-        assertEquals(12, commentAction.businessId)
-        assertEquals("bilibili://read/cv34646640", commentAction.enterUri)
     }
 
     @Test

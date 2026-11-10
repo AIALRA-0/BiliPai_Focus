@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,7 +26,8 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
 import androidx.media3.exoplayer.ExoPlayer
 import coil3.compose.AsyncImage
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
+import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.data.repository.StoryRepository
 import com.android.purebilibili.feature.story.storyItemToRelatedVideo
 import com.android.purebilibili.feature.video.ui.pager.PortraitVideoPager
@@ -41,6 +41,8 @@ internal fun VideoDetailPortraitOverlayAdapter(
     uiState: VideoPlaybackUiState,
     portraitExperienceEnabled: Boolean,
     isPortraitFullscreen: Boolean,
+    /** 系统小窗：竖屏流只保留播放面，装饰层（标题 / 互动 / 进度）全部让位给系统 PiP。 */
+    isInPipMode: Boolean = false,
     useOfficialInlinePortraitDetailExperience: Boolean,
     isLandscape: Boolean,
     shouldAnimatePortraitPager: Boolean,
@@ -52,6 +54,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
     engagementViewModel: VideoEngagementViewModel,
     sharedPlayer: ExoPlayer?,
     useTextureSurfaceForNavigation: Boolean,
+    isPlayerSurfaceReady: Boolean = true,
     onBack: () -> Unit,
     onHomeClick: () -> Unit,
     onVideoChange: (String) -> Unit,
@@ -104,22 +107,15 @@ internal fun VideoDetailPortraitOverlayAdapter(
             )
         }
     }
-    // Enter is direct so swipe-to-fullscreen never cross-fades through the centered inline player.
-    // Exit keeps the soft scale/slide so manual leave still feels polished.
+    // 内嵌进入直接更新全屏布局并复用播放器，退出保留原有缩放与位移。
     val portraitExitTransition = remember(motionSpec) {
-        val exitSpec = tween<Float>(
-            durationMillis = motionSpec.exitDurationMillis,
-            easing = AppMotionEasing.EmphasizedExit,
-        )
+        val exitSpec = emphasizedExitTween<Float>(motionSpec.exitDurationMillis)
         fadeOut(exitSpec) + scaleOut(
             targetScale = motionSpec.exitScaleTarget,
             animationSpec = exitSpec,
             transformOrigin = TransformOrigin(0.5f, 0f),
         ) + slideOutVertically(
-            animationSpec = tween(
-                durationMillis = motionSpec.exitDurationMillis,
-                easing = AppMotionEasing.EmphasizedExit,
-            ),
+            animationSpec = emphasizedExitTween(motionSpec.exitDurationMillis),
             targetOffsetY = { -(it * motionSpec.exitTranslateUpFraction).roundToInt() },
         )
     }
@@ -129,7 +125,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
     AnimatedVisibility(
         visible = showPortraitFullscreen && success != null,
         enter = if (shouldAnimatePortraitPager) {
-            fadeIn(tween(motionSpec.enterDurationMillis, easing = AppMotionEasing.EmphasizedEnter))
+            fadeIn(emphasizedEnterTween(motionSpec.enterDurationMillis))
         } else {
             EnterTransition.None
         },
@@ -162,6 +158,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
                 initialInfo = info,
                 recommendations = portraitRecommendations,
                 onlyVerticalRecommendations = portraitOnlyVerticalRecommendations,
+                isInPipMode = isInPipMode,
                 onBack = onBack,
                 onHomeClick = onHomeClick,
                 onVideoChange = onVideoChange,
@@ -170,6 +167,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
                 engagementViewModel = engagementViewModel,
                 sharedPlayer = sharedPlayer,
                 useTextureSurfaceForNavigation = useTextureSurfaceForNavigation,
+                isPlayerSurfaceReady = isPlayerSurfaceReady,
                 initialStartPositionMs = initialStartPositionMs,
                 onProgressUpdate = onProgressUpdate,
                 onExitSnapshot = onExitSnapshot,

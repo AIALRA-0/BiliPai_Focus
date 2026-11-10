@@ -2,24 +2,19 @@ package com.android.purebilibili.feature.audio.screen
 
 import kotlin.math.roundToInt
 
+internal fun resolveAudioNowPlayingCoverSizeDp(mergeProgress: Float, searchProgress: Float): Float =
+    32f - 4f * mergeProgress.coerceIn(0f, 1f) * (1f - searchProgress.coerceIn(0f, 1f))
+
+internal fun resolveAudioNowPlayingBarHeightDp(mergeProgress: Float, searchProgress: Float): Float =
+    resolveAudioNowPlayingCoverSizeDp(mergeProgress, searchProgress) + 14f
+
 /**
  * The source bar is hidden only while the shared-transition host owns the
- * return handoff. A separate landing animation is intentionally not used:
+ * return handoff; that contract lives in
+ * [com.android.purebilibili.core.ui.transition.resolveNowPlayingBarReturnVisibility].
+ * A separate landing animation is intentionally not used:
  * the shared morph is the only geometry timeline.
  */
-internal fun shouldHideAudioNowPlayingBarForSharedReturn(
-    isReturningFromDetail: Boolean,
-    targetBvid: String?,
-    currentBvid: String,
-    isSharedTransitionRunning: Boolean,
-    isSharedTransitionSourceOwner: Boolean,
-): Boolean {
-    if (!isReturningFromDetail || !isSharedTransitionRunning || !isSharedTransitionSourceOwner) {
-        return false
-    }
-    if (currentBvid.isBlank()) return false
-    return targetBvid.isNullOrBlank() || targetBvid == currentBvid
-}
 
 internal fun canOpenAudioNowPlayingBarSource(
     layoutStable: Boolean,
@@ -72,17 +67,18 @@ internal fun resolveAudioNowPlayingBarRowMetrics(
     val primary = resolveAudioNowPlayingPrimaryProgress(search)
     val supplemental = resolveAudioNowPlayingSupplementalProgress(merge, search)
     fun dp(value: Float): Int = (value * density).roundToInt().coerceAtLeast(0)
-    val cover = dp(40f - 8f * merge)
-    val horizontalPadding = dp(10f * primary)
+    val cover = dp(resolveAudioNowPlayingCoverSizeDp(merge, search))
+    val horizontalPadding = dp((12f - 2f * merge) * primary)
     val spacer = dp((10f - 4f * merge) * primary)
-    val playWidth = dp(48f * primary)
-    val extraWidth = dp(48f * supplemental)
-    val artistHeight = dp(20f * supplemental)
-    val controlHeight = dp(48f)
+    val controlHeightDp = resolveAudioNowPlayingBarHeightDp(merge, search)
+    val playWidth = dp(controlHeightDp * primary)
+    val extraWidth = dp(controlHeightDp * supplemental)
+    val artistHeight = dp(16f * supplemental)
+    val controlHeight = dp(controlHeightDp)
     val innerWidth = (maxWidthPx - horizontalPadding * 2).coerceAtLeast(0)
-    val remaining = (innerWidth - cover - spacer - playWidth - extraWidth * 2).coerceAtLeast(0)
+    val remaining = (innerWidth - cover - spacer - playWidth - extraWidth).coerceAtLeast(0)
     val titleWidth = (remaining * primary).roundToInt()
-    val packed = cover + spacer + titleWidth + playWidth + extraWidth * 2
+    val packed = cover + spacer + titleWidth + playWidth + extraWidth
     val contentStart = horizontalPadding +
         ((innerWidth - packed).coerceAtLeast(0) * search / 2f).roundToInt()
     return AudioNowPlayingBarRowMetrics(

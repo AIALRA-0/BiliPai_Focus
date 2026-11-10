@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.danmaku
 
+import com.android.purebilibili.danmaku.parser.*
+
 import com.android.purebilibili.danmaku.engine.DanmakuItem
 import android.util.Log
 
@@ -15,21 +17,14 @@ object DanmakuMerger {
      * 合并重复弹幕
      *
      * @param list 原始弹幕列表 (必须已按时间排序)
-     * @param intervalMs 合并的时间窗口 (毫秒)，默认 500ms
-     * @return 合并后的弹幕列表
-     */
-    /**
-     * 合并重复弹幕
-     *
-     * @param list 原始弹幕列表 (必须已按时间排序)
-     * @param intervalMs 合并的时间窗口 (毫秒)，默认 500ms
+     * @param intervalMs 以每批首条为起点的固定时间窗口 (毫秒)，默认 15000ms
      * @param countThreshold 显示 xN 计数的最小重复数，默认 2
      * @return Pair(标准弹幕列表, 高级合并弹幕列表)
      *         标准弹幕继续在原层渲染；不再将重复弹幕转换为黄色高级弹幕。
      */
     fun merge(
         list: List<DanmakuItem>,
-        intervalMs: Long = 500,
+        intervalMs: Long = 15_000,
         countThreshold: Int = 2
     ): Pair<List<DanmakuItem>, List<AdvancedDanmakuData>> {
         if (list.isEmpty()) return Pair(list, emptyList())
@@ -59,8 +54,8 @@ object DanmakuMerger {
                     if (currentBatch.isEmpty()) {
                         currentBatch.add(item)
                     } else {
-                        val lastItem = currentBatch.last()
-                        if (item.showAtTime - lastItem.showAtTime <= intervalMs) {
+                        val firstItem = currentBatch.first()
+                        if (item.showAtTime - firstItem.showAtTime <= intervalMs) {
                             currentBatch.add(item)
                         } else {
                             // 结算上一批
@@ -118,6 +113,8 @@ object DanmakuMerger {
         val count = batch.size
         
         val mergedText = base.copy().also { it.duplicateCount = count }
+        mergedText.mergedOriginalText = base.mergedOriginalText ?: base.text
+        mergedText.likeCount = batch.sumOf { it.likeCount }
         mergedText.text = if (count >= countThreshold) {
             "${base.text} x$count"
         } else {

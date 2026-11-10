@@ -1,0 +1,12 @@
+<!-- App-authored: three sample cards distinguish palette presets from the style brush. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="1.8"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M5,3H7Q9,3 9,5V19Q9,21 7,21H5Q3,21 3,19V5Q3,3 5,3ZM12,5H14Q16,5 16,7V17Q16,19 14,19H12M19,7H20Q22,7 22,9V15Q22,17 20,17H19" />
+    <path android:fillColor="@android:color/white"
+        android:pathData="M5,16H7V18H5ZM12,14H14V16H12ZM19,12H20V14H19Z" />
+</vector>

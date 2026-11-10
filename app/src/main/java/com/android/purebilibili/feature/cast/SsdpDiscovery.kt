@@ -5,6 +5,9 @@ import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
 import com.android.purebilibili.core.util.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.InetAddress
@@ -38,7 +41,7 @@ object SsdpDiscovery {
         MX: 2
         ST: $searchTarget
 
-    """.trimIndent().replace("\n", "\r\n")
+    """.trimIndent().replace("\n", "\r\n") + "\r\n\r\n"
 
     data class SsdpDevice(
         val location: String,
@@ -54,14 +57,14 @@ object SsdpDiscovery {
     suspend fun discover(
         context: Context,
         timeoutMs: Int = DEFAULT_TIMEOUT_MS,
+        onDevice: (SsdpDevice) -> Unit = {},
     ): List<SsdpDevice> = withContext(Dispatchers.IO) {
         val devices = LinkedHashMap<String, SsdpDevice>()
+        val emittedDevices = LinkedHashMap<String, SsdpDevice>()
         var socket: MulticastSocket? = null
         var multicastLock: WifiManager.MulticastLock? = null
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val previousProcessNetwork = runCatching { connectivityManager.boundNetworkForProcess }.getOrNull()
-        var processNetworkBound = false
 
         try {
             Logger.i(TAG, "📺 [DLNA] Starting SSDP discovery (timeout: ${timeoutMs}ms)")
@@ -79,17 +82,6 @@ object SsdpDiscovery {
                 Logger.w(TAG, "📺 [DLNA] No Wi-Fi/Ethernet network available; SSDP cannot reach LAN devices")
             }
 
-            val localNetwork = binding.network
-            if (localNetwork != null) {
-                runCatching {
-                    connectivityManager.bindProcessToNetwork(localNetwork)
-                    processNetworkBound = true
-                    Logger.i(TAG, "📺 [DLNA] Process bound to local network for discovery")
-                }.onFailure { error ->
-                    Logger.w(TAG, "📺 [DLNA] bindProcessToNetwork failed: ${error.message}")
-                }
-            }
-
             socket = openDiscoverySocket(binding)
             val multicastAddress = InetAddress.getByName(SSDP_ADDRESS)
             val joinedInterface = binding.networkInterface
@@ -104,6 +96,7 @@ object SsdpDiscovery {
             var responseCount = 0
 
             while (System.currentTimeMillis() - startTime < timeoutMs) {
+                currentCoroutineContext().ensureActive()
                 val now = System.currentTimeMillis()
                 if (now >= nextSendAt) {
                     sendMSearch(socket, multicastAddress, payloads)
@@ -129,6 +122,12 @@ object SsdpDiscovery {
                     val response = String(responsePacket.data, 0, responsePacket.length)
                     val device = parseResponse(response)
                     if (device != null) {
+                        val previous = emittedDevices[device.location]
+                        val preferred = preferSsdpDeviceAdvertisement(previous, device)
+                        if (previous != preferred) {
+                            emittedDevices[device.location] = preferred
+                            onDevice(preferred)
+                        }
                         val key = device.usn.ifBlank { device.location }
                         if (key.isNotBlank() && key !in devices) {
                             devices[key] = device
@@ -151,13 +150,12 @@ object SsdpDiscovery {
                     "rounds=$sendRounds, responses=$responseCount, unique=${devices.size}"
             )
             leaveSsdpGroup(socket, multicastAddress, joinedInterface)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Logger.e(TAG, "📺 [DLNA] Discovery error: ${e.javaClass.simpleName} - ${e.message}")
         } finally {
             runCatching { socket?.close() }
-            if (processNetworkBound) {
-                runCatching { connectivityManager.bindProcessToNetwork(previousProcessNetwork) }
-            }
             releaseMulticastLock(multicastLock)
         }
 
@@ -184,8 +182,14 @@ object SsdpDiscovery {
         // packets on Android/OEM kernels, even after successfully joining the group.
         // Bind INADDR_ANY:1900 so both multicast adverts and unicast M-SEARCH replies are
         // delivered; Network.bindSocket and networkInterface still pin traffic to Wi-Fi.
-        socket.bind(InetSocketAddress(SSDP_PORT))
-        Logger.i(TAG, "📺 [DLNA] Socket bound to wildcard local address on SSDP port $SSDP_PORT")
+        try {
+            socket.bind(InetSocketAddress(SSDP_PORT))
+        } catch (error: java.net.BindException) {
+            // 端口被其他应用占用时仍可通过临时端口接收 M-SEARCH 单播响应。
+            Logger.w(TAG, "📺 [DLNA] SSDP port unavailable; using an ephemeral port")
+            socket.bind(InetSocketAddress(0))
+        }
+        Logger.i(TAG, "📺 [DLNA] Socket bound to wildcard local port ${socket.localPort}")
 
         binding.networkInterface?.let { nif ->
             runCatching {

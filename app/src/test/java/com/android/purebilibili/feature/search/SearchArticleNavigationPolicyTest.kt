@@ -54,14 +54,13 @@ class SearchArticleNavigationPolicyTest {
     }
 
     @Test
-    fun `resolveArticleNavigationTargetFromRedirect routes opus to native dynamic detail`() {
+    fun `cv identity stays in native article even when web redirects to opus`() {
         val target = resolveArticleNavigationTargetFromRedirect(
             articleId = 12345L,
             redirectUrl = "https://m.bilibili.com/opus/1015637114125025318"
         )
 
-        assertTrue(target is ArticleNavigationTarget.NativeDynamic)
-        assertEquals("1015637114125025318", target.dynamicId)
+        assertEquals(ArticleNavigationTarget.NativeArticle(12345L), target)
     }
 
     @Test
@@ -74,4 +73,12 @@ class SearchArticleNavigationPolicyTest {
         assertTrue(target is ArticleNavigationTarget.NativeArticle)
         assertEquals(12345L, target.articleId)
     }
+    @Test
+    fun `native entries classify known ids without a redirect request`() {
+        assertEquals(ArticleNavigationTarget.NativeArticle(12345), resolveArticleNavigationTarget(12345))
+        assertEquals(ArticleNavigationTarget.NativeDynamic("1201902028962398230"), resolveArticleNavigationTarget(1201902028962398230))
+        assertNull(resolveArticleNavigationTarget(0))
+        assertNull(resolveArticleNavigationTarget(-1))
+    }
+
 }

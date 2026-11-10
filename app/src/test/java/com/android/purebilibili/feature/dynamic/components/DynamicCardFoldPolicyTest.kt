@@ -73,6 +73,64 @@ class DynamicCardFoldPolicyTest {
     }
 
     @Test
+    fun missingRelatedCardsCanBeInsertedWithoutRevealingUnrelatedNeighbors() {
+        val anchor = foldAnchor(listOf("related-b", "related-a"))
+        val unrelated = DynamicItem(id_str = "unrelated", visible = false)
+        val items = listOf(anchor, unrelated, DynamicItem(id_str = "related-a", visible = false))
+
+        val unfolded = unfoldRelatedDynamicItems(
+            items, "anchor", loadedItems = listOf(DynamicItem(id_str = "related-b", visible = false)),
+        )
+
+        assertEquals(listOf("anchor", "related-b", "related-a", "unrelated"), unfolded.map { it.id_str })
+        assertTrue(unfolded[1].visible)
+        assertTrue(unfolded[2].visible)
+        assertFalse(unfolded[3].visible)
+        assertNull(unfolded[0].modules.module_fold)
+    }
+
+    @Test
+    fun partialLoadKeepsOnlyMissingIdsForRetry() {
+        val unfolded = unfoldRelatedDynamicItems(
+            listOf(foldAnchor(listOf("loaded", "missing"))),
+            "anchor",
+            loadedItems = listOf(DynamicItem(id_str = "loaded")),
+        )
+
+        assertEquals(listOf("missing"), unfolded[0].modules.module_fold?.ids)
+        assertEquals("重试加载1条相关动态", unfolded[0].modules.module_fold?.statement)
+        assertEquals("loaded", unfolded[1].id_str)
+        val retried = unfoldRelatedDynamicItems(
+            unfolded, "anchor", loadedItems = listOf(DynamicItem(id_str = "missing")),
+        )
+        assertNull(retried[0].modules.module_fold)
+        assertEquals(setOf("anchor", "loaded", "missing"), retried.map { it.id_str }.toSet())
+    }
+
+    @Test
+    fun emptyFoldIdsCanBeRecoveredFromDetailMetadata() {
+        val anchor = foldAnchor(emptyList())
+        val unfolded = unfoldRelatedDynamicItems(
+            listOf(anchor), "anchor",
+            loadedItems = listOf(DynamicItem(id_str = "related")),
+            resolvedFold = DynamicFoldModule(ids = listOf("related")),
+        )
+        assertEquals(listOf("anchor", "related"), unfolded.map { it.id_str })
+        assertNull(unfolded[0].modules.module_fold)
+    }
+
+    @Test
+    fun totalLoadFailureRetainsRetryEntryAndDoesNotRevealAdjacentCards() {
+        val items = listOf(foldAnchor(listOf("missing")), DynamicItem(id_str = "unrelated", visible = false))
+        assertEquals(items, unfoldRelatedDynamicItems(items, "anchor"))
+    }
+
+    private fun foldAnchor(ids: List<String>) = DynamicItem(
+        id_str = "anchor",
+        modules = DynamicModules(module_fold = DynamicFoldModule(ids = ids, statement = "展开相关动态")),
+    )
+
+    @Test
     fun foldStatementKeepsUsersForAvatarStack() {
         val fold = DynamicFoldModule(
             ids = listOf("1"),

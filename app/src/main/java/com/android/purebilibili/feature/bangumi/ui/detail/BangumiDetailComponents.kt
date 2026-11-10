@@ -1,5 +1,7 @@
 // 文件路径: feature/bangumi/ui/detail/BangumiDetailComponents.kt
 package com.android.purebilibili.feature.bangumi.ui.detail
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -32,13 +34,34 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Star
-import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
-import com.android.purebilibili.core.theme.resolveAdaptiveTertiaryAccentColors
-import com.android.purebilibili.core.theme.iOSYellow
+import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.BangumiDetail
 import com.android.purebilibili.data.model.response.BangumiEpisode
 import com.android.purebilibili.data.model.response.SeasonInfo
+import com.android.purebilibili.core.player.PlaybackProgressManager
+
+/** 每集本地观看进度（0..1）；无 bvid / 无时长 / 无观看记录时返回 null。 */
+@Composable
+fun rememberBangumiEpisodeProgressLookup(): (BangumiEpisode) -> Float? {
+    val context = LocalContext.current
+    val manager = remember { PlaybackProgressManager.getInstance(context) }
+    return remember(manager) {
+        { episode: BangumiEpisode ->
+            val bvid = episode.bvid
+            val durationMs = episode.duration
+            if (bvid.isBlank() || durationMs <= 0L) {
+                null
+            } else {
+                manager.getCachedPosition(bvid)
+                    .takeIf { it > 0L }
+                    ?.div(durationMs.toFloat())
+                    ?.coerceIn(0f, 1f)
+            }
+        }
+    }
+}
+
 
 /**
  * 番剧详情头部组件 - 手机端
@@ -61,7 +84,7 @@ fun BangumiDetailHeader(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        
+
         // 渐变遮罩
         Box(
             modifier = Modifier
@@ -75,7 +98,7 @@ fun BangumiDetailHeader(
                     )
                 )
         )
-        
+
         // 信息区域
         Row(
             modifier = Modifier
@@ -94,9 +117,9 @@ fun BangumiDetailHeader(
                     .clip(AppShapes.container(ContainerLevel.Chip)),
                 contentScale = ContentScale.Crop
             )
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             // 标题和信息
             Column(modifier = Modifier.weight(1f)) {
                 AppText(
@@ -106,18 +129,18 @@ fun BangumiDetailHeader(
                     fontWeight = FontWeight.Bold,
                     maxLines = 2
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 // 评分
                 detail.rating?.let { rating ->
                     if (rating.score > 0) {
                         RatingRow(score = rating.score, count = rating.count)
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 // 更新状态
                 detail.newEp?.desc?.let { desc ->
                     AppText(
@@ -126,9 +149,9 @@ fun BangumiDetailHeader(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 // 播放量
                 detail.stat?.let { stat ->
                     AppText(
@@ -158,13 +181,13 @@ fun RatingRow(
         AppIcon(
             Icons.Outlined.Star,
             contentDescription = null,
-            tint = iOSYellow,
+            tint = AppContentColors.rating(),
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         AppText(
             text = String.format("%.1f", score),
-            color = iOSYellow,
+            color = AppContentColors.rating(),
             fontWeight = FontWeight.Bold
         )
         AppText(
@@ -189,11 +212,11 @@ fun FollowButton(
         AppOutlinedButton(
             onClick = onToggle,
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.primary
+                contentColor = AppContentColors.accent()
             ),
             border = androidx.compose.foundation.BorderStroke(
                 1.dp,
-                MaterialTheme.colorScheme.primary
+                AppContentColors.accent()
             ),
             modifier = modifier
         ) {
@@ -203,7 +226,7 @@ fun FollowButton(
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
-            AppText("已追番")
+            AppText("已追番", maxLines = 1, softWrap = false)
         }
     } else {
         AppButton(
@@ -221,7 +244,7 @@ fun FollowButton(
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
-            AppText("追番")
+            AppText("追番", maxLines = 1, softWrap = false)
         }
     }
 }
@@ -237,7 +260,7 @@ fun SeasonSelector(
     modifier: Modifier = Modifier
 ) {
     if (seasons.size <= 1) return
-    
+
     Column(modifier = modifier) {
         AppText(
             text = "相关季度",
@@ -245,7 +268,7 @@ fun SeasonSelector(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
-        
+
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -260,7 +283,7 @@ fun SeasonSelector(
                     },
                     shape = AppShapes.container(ContainerLevel.Chip),
                     color = if (isCurrentSeason) {
-                        MaterialTheme.colorScheme.primary
+                        AppContentColors.accent()
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant
                     }
@@ -270,9 +293,9 @@ fun SeasonSelector(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (isCurrentSeason) {
-                            MaterialTheme.colorScheme.onPrimary
+                            AppContentColors.onAccent()
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            AppContentColors.secondaryText()
                         }
                     )
                 }
@@ -288,6 +311,7 @@ fun SeasonSelector(
 fun EpisodeChip(
     episode: BangumiEpisode,
     isSelected: Boolean = false,
+    progressFraction: Float? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -297,7 +321,7 @@ fun EpisodeChip(
             .width(140.dp)
             .aspectRatio(16f / 9f),
         shape = AppShapes.container(ContainerLevel.Chip),
-        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+        color = if (isSelected) AppContentColors.accent() else MaterialTheme.colorScheme.surfaceVariant
     ) {
         Box {
             // 封面
@@ -307,7 +331,7 @@ fun EpisodeChip(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            
+
             // 渐变遮罩
             Box(
                 modifier = Modifier
@@ -319,30 +343,17 @@ fun EpisodeChip(
                         )
                     )
             )
-            
+
             // 角标
             if (episode.badge.isNotEmpty()) {
-                val badgeColors = if (episode.badge.contains("会员")) {
-                    resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
-                } else {
-                    resolveAdaptiveTertiaryAccentColors(MaterialTheme.colorScheme)
-                }
-                AppSurface(
+                com.android.purebilibili.feature.bangumi.ui.list.BangumiBadge(
+                    text = episode.badge,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(4.dp),
-                    color = badgeColors.backgroundColor,
-                    shape = AppShapes.container(ContainerLevel.Tag)
-                ) {
-                    AppText(
-                        text = episode.badge,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = badgeColors.contentColor
-                    )
-                }
+                )
             }
-            
+
             // 集数和标题
             Column(
                 modifier = Modifier
@@ -367,6 +378,36 @@ fun EpisodeChip(
                     )
                 }
             }
+
+            // 时长（右下角，毫秒 → m:ss）
+            if (episode.duration > 0L) {
+                AppText(
+                    text = FormatUtils.formatDuration((episode.duration / 1000L).toInt()),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                )
+            }
+
+            // 单集观看进度条
+            if (progressFraction != null && progressFraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(AppContentColors.accent())
+                    )
+                }
+            }
         }
     }
 }
@@ -378,12 +419,13 @@ fun EpisodeChip(
 fun EpisodePreviewRow(
     episodes: List<BangumiEpisode>,
     maxPreviewCount: Int = 6,
+    progressLookup: ((BangumiEpisode) -> Float?)? = null,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onShowAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val previewEpisodes = episodes.take(maxPreviewCount)
-    
+
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -392,10 +434,11 @@ fun EpisodePreviewRow(
         items(previewEpisodes, key = { it.id }) { episode ->
             EpisodeChip(
                 episode = episode,
+                progressFraction = progressLookup?.invoke(episode),
                 onClick = { onEpisodeClick(episode) }
             )
         }
-        
+
         // 更多按钮
         if (episodes.size > maxPreviewCount) {
             item {
@@ -412,12 +455,12 @@ fun EpisodePreviewRow(
                             AppIcon(
                                 Icons.Outlined.MoreHoriz,
                                 contentDescription = "更多",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = AppContentColors.secondaryText()
                             )
                             AppText(
                                 text = "全部${episodes.size}集",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = AppContentColors.secondaryText()
                             )
                         }
                     }

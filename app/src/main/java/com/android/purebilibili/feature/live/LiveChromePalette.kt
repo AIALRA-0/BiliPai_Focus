@@ -106,7 +106,7 @@ internal fun resolveLiveChromePalette(
         scrim = LiveStatusPalette.MediaScrim.copy(alpha = if (isDark) 0.78f else 0.52f),
         primaryText = onBackground,
         secondaryText = onSurfaceVariant,
-        tertiaryText = outline,
+        tertiaryText = onSurfaceVariant,
         onAccent = onPrimary
     )
 }
@@ -114,5 +114,17 @@ internal fun resolveLiveChromePalette(
 internal fun LiveChromePalette.backgroundBrush(): Brush {
     return Brush.verticalGradient(
         colors = listOf(backgroundTop, backgroundBottom)
+    )
+}
+
+/** Server badge colors retain their identity on an opaque fill with a readable label. */
+@Composable
+internal fun readableLiveBadgeColors(containerColor: Color): com.android.purebilibili.core.theme.AccessibleContainerColors {
+    val scheme = MaterialTheme.colorScheme
+    return com.android.purebilibili.core.theme.resolveAccessibleContainerColors(
+        containerColor = containerColor.copy(alpha = 1f),
+        contentColor = scheme.onPrimary,
+        backgroundColor = scheme.surface,
+        fallbackContentColors = listOf(scheme.onSurface, Color.Black, Color.White),
     )
 }

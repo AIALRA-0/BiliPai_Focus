@@ -47,6 +47,10 @@ internal fun resolveSpaceDynamicClickAction(dynamic: SpaceDynamicItem): SpaceDyn
 }
 
 internal fun resolveSpaceArticleClickAction(article: SpaceArticleItem): SpaceDynamicClickAction {
+    // 已知 cv 身份优先，迁移后的 opus 跳转链接不能覆盖专栏号。
+    if (article.id in 1 until OPUS_ID_MIN_VALUE) {
+        return SpaceDynamicClickAction.OpenArticle(article.id, article.title)
+    }
     when (val target = BilibiliNavigationTargetParser.parse(article.jump_url)) {
         is BilibiliNavigationTarget.Dynamic -> {
             return SpaceDynamicClickAction.OpenDynamicDetail(target.dynamicId)

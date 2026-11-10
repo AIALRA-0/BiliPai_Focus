@@ -89,6 +89,16 @@ internal fun resolvePullContentMaxOffsetDp(
     }
 }
 
+/** Native indicator's lower edge follows fraction * threshold; feed stays below that edge. */
+internal fun resolveMd3PullContentOffsetPx(
+    distanceFraction: Float,
+    indicatorThresholdPx: Float,
+    gapPx: Float,
+): Float {
+    val distance = distanceFraction.coerceAtLeast(0f)
+    return distance * indicatorThresholdPx + distance.coerceAtMost(1f) * gapPx
+}
+
 internal fun resolveMd3ScreenshotPullOffsetFraction(distanceFraction: Float): Float {
     val clamped = distanceFraction.coerceIn(0f, 1.12f)
     val resistance = 1f + 0.35f * clamped

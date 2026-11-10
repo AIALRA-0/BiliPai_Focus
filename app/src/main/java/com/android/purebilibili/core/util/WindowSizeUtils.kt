@@ -2,11 +2,11 @@
 package com.android.purebilibili.core.util
 
 import android.app.Activity
+import android.os.Build
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.hardware.input.InputManager
-import android.os.Build
 import android.view.InputDevice
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -167,9 +167,9 @@ data class WindowSizeClass(
     val shouldUseSplitLayout: Boolean
         get() = isTablet && heightSizeClass != WindowHeightSizeClass.Compact
     
-    /** 是否应该使用侧边导航栏（仅大屏） */
+    /** 平板在中等宽度竖屏保留侧栏；紧凑分屏回退底栏，恢复宽度后自动还原。 */
     val shouldUseSideNavigation: Boolean
-        get() = widthSizeClass >= WindowWidthSizeClass.Expanded
+        get() = isTablet && (isTabletDevice || widthSizeClass >= WindowWidthSizeClass.Expanded)
 
     val shouldUseExpandedNavigationRail: Boolean
         get() = widthSizeClass >= WindowWidthSizeClass.Large
@@ -218,8 +218,8 @@ data class AppWindowAdaptiveInfo(
         get() = foldingFeature.posture
 
     val shouldAvoidHinge: Boolean
-        get() = foldingFeature.hasObstructingHinge &&
-            windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact
+        get() = foldingFeature.hasObstructingHinge ||
+            foldingFeature.layoutHinges().any { !it.isFlat }
 }
 
 /**
@@ -367,7 +367,8 @@ private fun Context.hasPrecisePointer(): Boolean {
     val inputManager = getSystemService(InputManager::class.java) ?: return false
     return inputManager.inputDeviceIds.any { deviceId ->
         val device = inputManager.getInputDevice(deviceId) ?: return@any false
-        (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 || device.isEnabled) && (
+        val deviceEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 || device.isEnabled
+        deviceEnabled && (
             device.supportsSource(InputDevice.SOURCE_MOUSE) ||
                 device.supportsSource(InputDevice.SOURCE_MOUSE_RELATIVE) ||
                 device.supportsSource(InputDevice.SOURCE_TOUCHPAD)
@@ -408,9 +409,15 @@ fun calculateWindowSizeClass(
 }
 
 /**
- * 🎯 响应式值选择器
+ * 📐 单列信息流（列表/会话/搜索结果）在大屏上的内容上限。
+ * 各列表页通过 [responsiveContentWidth] 套用，避免平板横屏整行拉伸。
+ */
+fun resolveSingleColumnFeedMaxWidth(): Dp = 840.dp
+
+/**
+ * 📐 响应式值选择器
  * 根据当前窗口尺寸选择合适的值
- * 
+ *
  * @param compact 紧凑模式值（手机）
  * @param medium 中等模式值（平板竖屏），默认使用 compact 值
  * @param expanded 展开模式值（平板横屏），默认使用 medium 值

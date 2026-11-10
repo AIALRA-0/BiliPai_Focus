@@ -65,6 +65,6 @@ class OpenSourceLicensesPolicyTest {
         ).first { it.exists() }.readText()
 
         assertTrue(source.contains("可能不包含全部传递依赖或完整法律清单"))
-        assertTrue(source.contains("MaterialTheme.colorScheme.primary"))
+        assertTrue(source.contains("AppContentColors.accent()"))
     }
 }

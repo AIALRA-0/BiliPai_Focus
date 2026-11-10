@@ -30,7 +30,8 @@ class AnimationSettingsScreenStructureTest {
     fun animationSettingsScreen_exposesRealtimeTransitionBlurToggle() {
         val source = animationSettingsSource()
 
-        assertTrue(source.contains("title = \"转场时模糊背景\""))
+        // 标题经 localizedAnimationSettingTitle 映射到字符串资源
+        assertTrue(source.contains("localizedAnimationSettingTitle(\"animation.video_transition_realtime_blur_enabled\")"))
         assertTrue(source.contains("checked = videoTransitionRealtimeBlurEnabled"))
         assertTrue(source.contains("toggleVideoTransitionRealtimeBlur"))
     }
@@ -39,7 +40,7 @@ class AnimationSettingsScreenStructureTest {
     fun animationSettingsScreen_exposesLiveSurfaceCardTransitionToggle() {
         val source = animationSettingsSource()
 
-        assertTrue(source.contains("title = \"实时画面转场\""))
+        assertTrue(source.contains("localizedAnimationSettingTitle(\"animation.live_surface_card_transition_enabled\")"))
         assertTrue(source.contains("checked = liveSurfaceCardTransitionEnabled"))
         assertTrue(source.contains("toggleLiveSurfaceCardTransition"))
         assertTrue(source.contains("enabled = state.cardTransitionEnabled"))
@@ -50,8 +51,8 @@ class AnimationSettingsScreenStructureTest {
     fun animationSettingsScreen_exposesVideoSharedReturnGestureFollowToggle() {
         val source = animationSettingsSource()
 
-        assertTrue(source.contains("title = \"视频返回跟手姿态\""))
-        assertTrue(source.contains("整卡跟手平移"))
+        assertTrue(source.contains("title = \"返回时倾斜\""))
+        assertTrue(source.contains("滑动返回时，画面随手指移动"))
         assertTrue(source.contains("checked = appNavigationSettings.videoSharedReturnGestureFollowEnabled"))
         assertTrue(source.contains("SettingsManager.setVideoSharedReturnGestureFollowEnabled("))
         assertTrue(source.contains("enabled = state.cardTransitionEnabled"))

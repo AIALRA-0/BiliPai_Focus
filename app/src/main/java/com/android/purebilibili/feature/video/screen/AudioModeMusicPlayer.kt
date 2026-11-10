@@ -14,7 +14,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +32,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.feature.audio.lyrics.BiliSubtitleLyricsPolicy
+import com.android.purebilibili.feature.audio.lyrics.LyricSource
 import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
 import com.android.purebilibili.feature.audio.player.MusicPlayerUiState
 import com.android.purebilibili.feature.audio.player.MusicLyricCandidateUi
@@ -36,12 +40,18 @@ import com.android.purebilibili.feature.audio.player.MusicQueueItemUi
 import com.android.purebilibili.feature.audio.screen.MusicPlayerContent
 import com.android.purebilibili.feature.audio.viewmodel.MusicViewModel
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.core.store.PlayHistoryEntry
+import com.android.purebilibili.core.store.PlayHistoryStore
+import com.android.purebilibili.core.store.PlayLastSession
+import com.android.purebilibili.feature.video.player.PlaylistItem
 import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.feature.video.subtitle.buildSubtitleTrackOptions
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.playback.audio.resolveAudioQualityControlPresentation
 import com.android.purebilibili.feature.video.share.VideoShareSheet
 import com.android.purebilibili.feature.video.share.buildVideoSharePayload
 import com.android.purebilibili.feature.video.ui.components.CollectionSheet
-import com.android.purebilibili.feature.video.ui.components.PagesSelector
+import com.android.purebilibili.feature.video.ui.components.PlayerEpisodeMenu
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
 import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDialog
 import com.android.purebilibili.feature.video.ui.components.VideoCommentSheetHost
@@ -49,7 +59,11 @@ import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoEngagementViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 
 private data class AudioPlaybackSnapshot(
@@ -69,6 +83,14 @@ internal fun resolveAudioModeTrackTitle(
         ?.part
         ?.takeIf { it.isNotBlank() }
         ?: videoTitle
+}
+
+/** 对外分享用视频标题，避免分 P 名/曲目 override 顶掉真实标题。 */
+internal fun resolveAudioModeShareTitle(
+    videoTitle: String,
+    displayTitle: String,
+): String {
+    return videoTitle.trim().ifBlank { displayTitle.trim() }
 }
 
 internal data class AudioModeLyricMetadata(
@@ -135,7 +157,9 @@ internal fun AudioModeMusicPlayer(
     val lyricsViewModel = androidx.lifecycle.viewmodel.compose.viewModel<MusicViewModel>(
         key = "audio_mode_lyrics"
     )
-    val lyricsState by lyricsViewModel.uiState.collectAsStateWithLifecycle()
+    val suppliedLyricsState by lyricsViewModel.uiState.collectAsStateWithLifecycle()
+    val lyricsState = suppliedLyricsState.takeIf { it.lyricsOwnerKey == "video:${info.bvid}:${info.cid}" }
+        ?: com.android.purebilibili.feature.audio.viewmodel.MusicUiState(isLyricsSearching = true)
     var showCollectionSheet by remember { mutableStateOf(false) }
     var showPageSelector by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
@@ -143,10 +167,77 @@ internal fun AudioModeMusicPlayer(
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showShare by remember { mutableStateOf(false) }
     val engagementState by engagementViewModel.uiState.collectAsStateWithLifecycle()
+
+    // ---- 播放历史记录与冷启动续播 ----
+    val historyScope = rememberCoroutineScope()
+    LaunchedEffect(info.bvid, info.cid) {
+        PlayHistoryStore.record(
+            context = context,
+            entry = PlayHistoryEntry(
+                bvid = info.bvid,
+                cid = info.cid,
+                title = displayTitle,
+                cover = info.pic,
+                owner = info.owner.name,
+                durationSec = 0L,
+                lastPlayedAtMs = System.currentTimeMillis()
+            )
+        )
+    }
+    // 播放中每 5 秒保存续播会话，供「启动自动播放」使用
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(player, playback.isPlaying, info.bvid, info.cid, lifecycleOwner) {
+        if (player == null || !playback.isPlaying) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                delay(5_000L)
+                if (!player.isPlaying) continue
+                PlayHistoryStore.saveLastSession(
+                    context,
+                    PlayLastSession(
+                        bvid = info.bvid,
+                        cid = info.cid,
+                        title = displayTitle,
+                        cover = info.pic,
+                        owner = info.owner.name,
+                        positionMs = player.currentPosition.coerceAtLeast(0L),
+                        savedAtMs = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+    }
+    LaunchedEffect(player) {
+        if (AudioStartupAutoPlayGuard.handled) return@LaunchedEffect
+        AudioStartupAutoPlayGuard.handled = true
+        val enabled = SettingsManager.getStartupAutoPlayEnabledSync(context)
+        if (!enabled) return@LaunchedEffect
+        if (PlaylistManager.playlist.value.isNotEmpty()) return@LaunchedEffect
+        val session = PlayHistoryStore.lastSession(context).firstOrNull() ?: return@LaunchedEffect
+        if (session.bvid.isBlank()) return@LaunchedEffect
+        PlaylistManager.addToPlaylist(
+            PlaylistItem(
+                bvid = session.bvid,
+                cid = session.cid,
+                title = session.title,
+                cover = session.cover,
+                owner = session.owner
+            )
+        )
+        viewModel.loadVideo(bvid = session.bvid, cid = session.cid, autoPlay = true)
+    }
+    val coinSuccessHaptic = rememberUpdatedState(
+        com.android.purebilibili.feature.video.ui.components.rememberVideoActionSuccessHaptic()
+    )
     LaunchedEffect(engagementViewModel) {
         engagementViewModel.events.collect { event ->
             if (event is com.android.purebilibili.feature.video.viewmodel.VideoEngagementEvent.Message) {
                 viewModel.toast(event.text)
+            } else if (event is com.android.purebilibili.feature.video.viewmodel.VideoEngagementEvent.CoinSucceeded &&
+                engagementViewModel.uiState.value.subject == event.subject &&
+                com.android.purebilibili.feature.video.viewmodel.matchesVideoEngagementAccount(event.accountSession)
+            ) {
+                coinSuccessHaptic.value()
             }
         }
     }
@@ -172,55 +263,64 @@ internal fun AudioModeMusicPlayer(
             artist = lyricMetadata.artist,
             bvid = info.bvid,
             cid = info.cid,
-            durationMs = lyricsDurationMs
+            durationMs = lyricsDurationMs,
+            originalTitle = displayTitle,
+            artistIsUploader = lyricMetadata.artist == info.owner.name,
         )
     }
 
-    val queue = if (playlist.isEmpty()) {
-        if (info.pages.size > 1) {
-            info.pages.mapIndexed { index, page ->
-                MusicQueueItemUi(
-                    stableId = "video:${info.bvid}:${page.cid}",
-                    title = if (page.part.isNotBlank()) page.part else "${displayTitle} P${page.page}",
-                    artist = info.owner.name,
-                    coverUrl = FormatUtils.fixImageUrl(info.pic)
-                )
-            }
-        } else if (successState.related.isNotEmpty()) {
-            val currentItem = MusicQueueItemUi(
-                stableId = "video:${info.bvid}:${info.cid}",
-                title = displayTitle,
-                artist = info.owner.name,
-                coverUrl = FormatUtils.fixImageUrl(info.pic)
-            )
-            listOf(currentItem) + successState.related.take(10).map { rel ->
-                MusicQueueItemUi(
-                    stableId = "video:${rel.bvid}:${rel.cid}",
-                    title = rel.title,
-                    artist = rel.owner.name,
-                    coverUrl = FormatUtils.fixImageUrl(rel.pic)
-                )
-            }
-        } else {
-            listOf(
-                MusicQueueItemUi(
+    val queue = remember(playlist, info, displayTitle, successState.related) {
+        if (playlist.isEmpty()) {
+            if (info.pages.size > 1) {
+                info.pages.mapIndexed { index, page ->
+                    MusicQueueItemUi(
+                        stableId = "video:${info.bvid}:${page.cid}",
+                        title = if (page.part.isNotBlank()) page.part else "${displayTitle} P${page.page}",
+                        artist = info.owner.name,
+                        coverUrl = FormatUtils.fixImageUrl(info.pic)
+                    )
+                }
+            } else if (successState.related.isNotEmpty()) {
+                val currentItem = MusicQueueItemUi(
                     stableId = "video:${info.bvid}:${info.cid}",
                     title = displayTitle,
                     artist = info.owner.name,
                     coverUrl = FormatUtils.fixImageUrl(info.pic)
                 )
-            )
-        }
-    } else {
-        playlist.mapIndexed { index, item ->
-            MusicQueueItemUi(
-                stableId = "video:${item.bvid}:$index",
-                title = item.title,
-                artist = item.owner,
-                coverUrl = FormatUtils.fixImageUrl(item.cover)
-            )
+                listOf(currentItem) + successState.related.take(10).map { rel ->
+                    MusicQueueItemUi(
+                        stableId = "video:${rel.bvid}:${rel.cid}",
+                        title = rel.title,
+                        artist = rel.owner.name,
+                        coverUrl = FormatUtils.fixImageUrl(rel.pic)
+                    )
+                }
+            } else {
+                listOf(
+                    MusicQueueItemUi(
+                        stableId = "video:${info.bvid}:${info.cid}",
+                        title = displayTitle,
+                        artist = info.owner.name,
+                        coverUrl = FormatUtils.fixImageUrl(info.pic)
+                    )
+                )
+            }
+        } else {
+            val occurrences = mutableMapOf<Pair<String, Long>, Int>()
+            playlist.map { item ->
+                val identity = item.bvid to item.cid
+                val occurrence = occurrences.getOrDefault(identity, 0)
+                occurrences[identity] = occurrence + 1
+                MusicQueueItemUi(
+                    stableId = "video:${item.bvid}:${item.cid}:$occurrence",
+                    title = item.title,
+                    artist = item.owner,
+                    coverUrl = FormatUtils.fixImageUrl(item.cover)
+                )
+            }
         }
     }
+    val sleepAfterCurrent by viewModel.sleepAfterCurrent.collectAsStateWithLifecycle()
     val currentIndex = if (playlist.isNotEmpty()) {
         playlistIndex.takeIf { it in queue.indices } ?: 0
     } else if (info.pages.size > 1) {
@@ -254,30 +354,90 @@ internal fun AudioModeMusicPlayer(
             selectedAudioQuality = successState.selectedAudioQuality
         )
     }
+    val favoriteQuickSaveDefaultFolder by com.android.purebilibili.core.store.FavoriteInteractionSettingsStore
+        .getQuickSaveDefaultFolder(LocalContext.current)
+        .collectAsStateWithLifecycle(initialValue = false)
 
+    var audioSecondaryTrackKey by remember(info.bvid, info.cid) { mutableStateOf<String?>(null) }
+    var audioSecondaryRequestId by remember(info.bvid, info.cid) { androidx.compose.runtime.mutableIntStateOf(0) }
+    val secondaryTrack = successState.subtitleTracks.firstOrNull {
+        it.trackKey == (audioSecondaryTrackKey ?: successState.subtitleSecondaryTrackKey) &&
+            it.trackKey != successState.subtitlePrimaryTrackKey
+    }
+    val selectedSecondaryCues = androidx.compose.runtime.key(info.bvid, info.cid, secondaryTrack?.trackKey, audioSecondaryTrackKey, audioSecondaryRequestId) {
+        androidx.compose.runtime.produceState<Result<List<com.android.purebilibili.feature.video.subtitle.SubtitleCue>>?>(initialValue = null) {
+            if (audioSecondaryTrackKey != null && secondaryTrack != null) {
+                value = com.android.purebilibili.data.repository.VideoRepository.getSubtitleCues(
+                    subtitleUrl = secondaryTrack.subtitleUrl,
+                    bvid = info.bvid,
+                    cid = info.cid,
+                    subtitleId = secondaryTrack.id,
+                    subtitleIdStr = secondaryTrack.idStr,
+                    subtitleLan = secondaryTrack.lan,
+                )
+            }
+        }
+    }
+    val audioSecondaryCues = when {
+        secondaryTrack == null -> emptyList()
+        audioSecondaryTrackKey == null -> successState.subtitleSecondaryCues
+        else -> selectedSecondaryCues.value?.getOrNull().orEmpty()
+    }
     val subtitleLyrics = remember(
         successState.subtitlePrimaryCues,
-        successState.subtitleSecondaryCues,
+        audioSecondaryCues,
         successState.subtitlePrimaryLikelyAi,
-        successState.subtitlePrimaryLanguage
+        successState.subtitlePrimaryLanguage,
+        successState.subtitleTracks,
+        successState.subtitlePrimaryTrackKey
     ) {
+        val selectedTrack = successState.subtitleTracks.firstOrNull {
+            it.trackKey == successState.subtitlePrimaryTrackKey
+        }
         BiliSubtitleLyricsPolicy.convertSubtitlesToLyricDocument(
             primaryCues = successState.subtitlePrimaryCues,
-            secondaryCues = successState.subtitleSecondaryCues,
+            secondaryCues = audioSecondaryCues,
             isAiGenerated = successState.subtitlePrimaryLikelyAi,
-            languageLabel = successState.subtitlePrimaryLanguage
+            languageLabel = selectedTrack?.lanDoc ?: successState.subtitlePrimaryLanguage
         )
     }
+    val subtitleLanguageOptions = remember(successState.subtitleTracks, successState.subtitlePrimaryTrackKey) {
+        buildSubtitleTrackOptions(
+            tracks = successState.subtitleTracks,
+            selectedTrackKey = successState.subtitlePrimaryTrackKey
+        ).map { it.trackKey to it.label }
+    }
+    var subtitleLanguageManuallySelected by remember(info.bvid, info.cid) { mutableStateOf(false) }
+    var videoSubtitlesEnabled by rememberSaveable { mutableStateOf(true) }
+    var subtitleOffsetMs by remember(info.bvid, info.cid) { mutableStateOf(0L) }
+    val adjustedSubtitleLyrics = remember(subtitleLyrics, subtitleOffsetMs) {
+        subtitleLyrics?.withOffset(subtitleOffsetMs)
+    }
 
-    val effectiveLyrics = remember(lyricsState.lyricsDocument, subtitleLyrics) {
-        BiliSubtitleLyricsPolicy.resolveEffectiveLyrics(
-            musicLyrics = lyricsState.lyricsDocument,
-            subtitleLyrics = subtitleLyrics
-        )
+    val effectiveLyrics = remember(
+        lyricsState.lyricsDocument,
+        adjustedSubtitleLyrics,
+        subtitleLanguageManuallySelected,
+        videoSubtitlesEnabled,
+    ) {
+        // 视频字幕与搜索歌词都存在时，按时间轴对齐度取舍，避免错位的搜索歌词盖过本地字幕
+        if (!videoSubtitlesEnabled) {
+            lyricsState.lyricsDocument
+        } else if (subtitleLanguageManuallySelected) {
+            BiliSubtitleLyricsPolicy.resolveEffectiveLyrics(
+                musicLyrics = null,
+                subtitleLyrics = adjustedSubtitleLyrics
+            )
+        } else {
+            BiliSubtitleLyricsPolicy.resolveEffectiveLyricsWithAlignment(
+                musicLyrics = lyricsState.lyricsDocument,
+                subtitleLyrics = adjustedSubtitleLyrics
+            )
+        }
     }
 
     MusicPlayerContent(
-        state = MusicPlayerUiState(
+        sourceState = MusicPlayerUiState(
             title = displayTitle,
             artist = info.owner.name,
             coverUrl = coverUrl,
@@ -298,6 +458,9 @@ internal fun AudioModeMusicPlayer(
             shuffleEnabled = shuffleEnabled,
             playbackSpeed = playback.playbackSpeed
         ),
+        // Video audio mode owns this player; the position clock stays inside content.
+        playbackPositionSource = player,
+        playbackPositionIdentity = "${info.bvid}:${info.cid}",
         onBack = onBack,
         onPlayPause = { player?.handleAudioModePlayPause() },
         onSeek = { positionMs ->
@@ -306,14 +469,38 @@ internal fun AudioModeMusicPlayer(
         },
         onPrevious = { viewModel.playPreviousAudioModeTrack() },
         onNext = { viewModel.playNextAudioModeTrack() },
+        onQueueMove = if (playlist.isNotEmpty()) PlaylistManager::moveQueueItem else null,
+        onQueueRemove = if (playlist.isNotEmpty()) PlaylistManager::removeQueueItem else null,
+        onQueuePlayNext = if (playlist.isNotEmpty()) PlaylistManager::playQueueItemNext else null,
+        onQueueClear = if (playlist.size > 1) PlaylistManager::clearUpcomingQueue else null,
+        onImportToQueue = { importedItems ->
+            PlaylistManager.setPlaylist(importedItems)
+            importedItems.firstOrNull()?.let { first ->
+                viewModel.loadVideo(
+                    bvid = first.bvid,
+                    cid = first.cid,
+                    autoPlay = resolveAudioModePageSwitchAutoPlay()
+                )
+            }
+        },
+        onPlayFromHistory = { historyBvid, historyCid ->
+            viewModel.loadVideo(bvid = historyBvid, cid = historyCid, autoPlay = true)
+        },
         onQueueItemSelected = { index ->
             if (playlist.isNotEmpty()) {
-                PlaylistManager.playAt(index)?.let {
-                    viewModel.loadVideo(
-                        bvid = it.bvid,
-                        cid = it.cid,
-                        autoPlay = resolveAudioModePageSwitchAutoPlay()
-                    )
+                PlaylistManager.playAt(index)?.let { item ->
+                    if (item.bvid == info.bvid && (item.cid == 0L || item.cid == info.cid)) {
+                        if (player != null && !player.isPlaying) {
+                            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
+                            playPlayerFromUserAction(player)
+                        }
+                    } else {
+                        viewModel.loadVideo(
+                            bvid = item.bvid,
+                            cid = item.cid,
+                            autoPlay = resolveAudioModePageSwitchAutoPlay()
+                        )
+                    }
                 }
             } else if (info.pages.size > 1) {
                 info.pages.getOrNull(index)?.let { page ->
@@ -335,10 +522,37 @@ internal fun AudioModeMusicPlayer(
         },
         onPlayModeChange = PlaylistManager::setPlayMode,
         onShuffleEnabledChange = PlaylistManager::setShuffleEnabled,
-        onLyricsOffsetChange = lyricsViewModel::adjustLyricsOffset,
+        onLyricsOffsetChange = { deltaMs ->
+            if (effectiveLyrics?.source == LyricSource.BILIBILI) {
+                subtitleOffsetMs = (subtitleOffsetMs + deltaMs).coerceIn(-10_000L, 10_000L)
+            } else {
+                lyricsViewModel.adjustLyricsOffset(deltaMs)
+            }
+        },
+        subtitleLanguageOptions = subtitleLanguageOptions,
+        secondarySubtitleLanguageOptions = subtitleLanguageOptions.filter { it.first != successState.subtitlePrimaryTrackKey },
+        selectedSecondarySubtitleTrackKey = secondaryTrack?.trackKey,
+        onSecondarySubtitleTrackSelected = { trackKey ->
+            videoSubtitlesEnabled = true
+            subtitleLanguageManuallySelected = true
+            audioSecondaryTrackKey = trackKey
+            audioSecondaryRequestId += 1
+        },
+        secondarySubtitleError = selectedSecondaryCues.value?.exceptionOrNull()?.let { "附加字幕加载失败，请重新选择语言重试" },
+        videoSubtitlesEnabled = videoSubtitlesEnabled,
+        onVideoSubtitlesEnabledChange = { videoSubtitlesEnabled = it },
+        selectedSubtitleTrackKey = successState.subtitlePrimaryTrackKey,
+        onSubtitleTrackSelected = { trackKey ->
+            videoSubtitlesEnabled = true
+            subtitleLanguageManuallySelected = true
+            viewModel.selectSubtitleTrack(trackKey)
+        },
         onLyricsRetry = lyricsViewModel::retryLyrics,
         onLyricsSearch = lyricsViewModel::searchLyrics,
-        onLyricsCandidateSelected = lyricsViewModel::selectLyricsCandidate,
+        onLyricsCandidateSelected = { index ->
+            subtitleLanguageManuallySelected = false
+            lyricsViewModel.selectLyricsCandidate(index)
+        },
         onVideoModeClick = {
             AudioNowPlayingSession.dismiss()
             onVideoModeClick(info.bvid, info.cid)
@@ -349,27 +563,47 @@ internal fun AudioModeMusicPlayer(
             else -> null
         },
         onSleepTimerClick = { showSleepTimerDialog = true },
-        sleepTimerLabel = formatAudioModeSleepTimerButtonLabel(sleepTimerMinutes),
+        sleepTimerLabel = if (sleepAfterCurrent) "播完当前首后停止" else formatAudioModeSleepTimerButtonLabel(sleepTimerMinutes),
         audioQualityLabel = audioQualityPresentation.label,
         audioQualityOptions = successState.availableAudioQualities,
         requestedAudioQuality = successState.requestedAudioQuality,
+        selectedAudioQuality = successState.selectedAudioQuality,
         isHiResAudioSelected = audioQualityPresentation.showHiResBadge,
         isDolbyAudioSelected = audioQualityPresentation.showDolbyBadge,
         onAudioQualitySelected = viewModel::setAudioQuality,
         onPipClick = if (showPipButton) onEnterPip else null,
         onToggleOrientation = onToggleOrientation,
         orientationActionLabel = orientationActionLabel,
-        isLiked = engagementState.isLiked,
+        isLiked = engagementState.likeStatusKnown &&
+            engagementState.subject?.aid == info.aid &&
+            engagementState.subject?.bvid == info.bvid && engagementState.isLiked,
+        isLikeStatusKnown = engagementState.likeStatusKnown &&
+            engagementState.subject?.aid == info.aid &&
+            engagementState.subject?.bvid == info.bvid,
         onLikeClick = {
-            engagementViewModel.toggleLike(
-                aid = info.aid,
-                bvid = info.bvid,
-                currentlyLiked = engagementState.isLiked
-            )
+            if (engagementState.likeStatusKnown && engagementState.subject?.aid == info.aid &&
+                engagementState.subject?.bvid == info.bvid) {
+                engagementViewModel.toggleLike(
+                    aid = info.aid,
+                    bvid = info.bvid,
+                    currentlyLiked = engagementState.isLiked
+                )
+            }
         },
         onCommentsClick = { showComments = true },
         isFavorited = engagementState.isFavorited,
-        onFavoriteClick = { engagementViewModel.toggleFavorite() },
+        onFavoriteClick = {
+            when (
+                resolveVideoFavoriteAction(
+                    entryPoint = VideoFavoriteEntryPoint.AudioMode,
+                    isLongPress = false,
+                    quickSaveDefaultFolder = favoriteQuickSaveDefaultFolder,
+                )
+            ) {
+                VideoFavoriteAction.ToggleFavorite -> engagementViewModel.toggleFavorite()
+                VideoFavoriteAction.OpenFavoriteFolders -> viewModel.showFavoriteFolderDialog()
+            }
+        },
         onDownloadClick = { viewModel.downloadAudio(context) },
         onShareClick = { showShare = true },
         onSpeedClick = { showSpeedMenu = true },
@@ -379,30 +613,29 @@ internal fun AudioModeMusicPlayer(
     )
 
     if (showPageSelector && info.pages.size > 1) {
-        AppModalBottomSheet(onDismissRequest = { showPageSelector = false }) {
-            PagesSelector(
-                pages = info.pages,
-                currentPageIndex = info.pages.indexOfFirst { it.cid == info.cid }.coerceAtLeast(0),
-                forceGridMode = true,
-                onDismissRequest = { showPageSelector = false },
-                onPageSelect = { index ->
-                    info.pages.getOrNull(index)?.let { page ->
-                        showPageSelector = false
-                        viewModel.loadVideo(
-                            bvid = info.bvid,
-                            cid = page.cid,
-                            autoPlay = resolveAudioModePageSwitchAutoPlay()
-                        )
-                    }
+        PlayerEpisodeMenu(
+            pages = info.pages,
+            cover = info.pic,
+            currentPageIndex = info.pages.indexOfFirst { it.cid == info.cid }.coerceAtLeast(0),
+            onDismiss = { showPageSelector = false },
+            onPageSelect = { index ->
+                info.pages.getOrNull(index)?.let { page ->
+                    showPageSelector = false
+                    viewModel.loadVideo(
+                        bvid = info.bvid,
+                        cid = page.cid,
+                        autoPlay = resolveAudioModePageSwitchAutoPlay()
+                    )
                 }
-            )
-        }
+            }
+        )
     }
 
     info.ugc_season?.let { season ->
         if (showCollectionSheet) {
             CollectionSheet(
                 ugcSeason = season,
+                currentVideoInfo = info,
                 currentBvid = info.bvid,
                 currentCid = info.cid,
                 onDismiss = { showCollectionSheet = false },
@@ -454,9 +687,19 @@ internal fun AudioModeMusicPlayer(
     if (showShare) {
         VideoShareSheet(
             payload = buildVideoSharePayload(
-                title = displayTitle,
+                title = resolveAudioModeShareTitle(
+                    videoTitle = info.title,
+                    displayTitle = displayTitle,
+                ),
                 bvid = info.bvid,
-                coverUrl = coverUrl
+                page = info.pages.indexOfFirst { it.cid == info.cid }.coerceAtLeast(0) + 1,
+                positionMs = player?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+                authorId = info.owner.mid,
+                coverUrl = coverUrl,
+                upName = info.owner.name,
+                playCountText = com.android.purebilibili.core.util.FormatUtils.formatStat(
+                    info.stat.view.toLong()
+                ),
             ),
             onDismiss = { showShare = false }
         )
@@ -465,6 +708,11 @@ internal fun AudioModeMusicPlayer(
     if (showSleepTimerDialog) {
         AudioModeSleepTimerDialog(
             currentMinutes = sleepTimerMinutes,
+            sleepAfterCurrent = sleepAfterCurrent,
+            onSleepAfterCurrent = {
+                viewModel.setSleepAfterCurrent(!sleepAfterCurrent)
+                showSleepTimerDialog = false
+            },
             onDismiss = { showSleepTimerDialog = false },
             onSelectPreset = { minutes ->
                 viewModel.setSleepTimer(minutes)
@@ -492,12 +740,6 @@ private fun rememberAudioPlaybackSnapshot(player: Player?): AudioPlaybackSnapsho
         onDispose { player?.removeListener(listener) }
     }
 
-    LaunchedEffect(player) {
-        while (isActive && player != null) {
-            snapshot = player.readAudioPlaybackSnapshot()
-            delay(250L)
-        }
-    }
     return snapshot
 }
 
@@ -510,4 +752,9 @@ private fun Player?.readAudioPlaybackSnapshot(): AudioPlaybackSnapshot {
         durationMs = player.duration.coerceAtLeast(0L),
         playbackSpeed = player.playbackParameters.speed
     )
+}
+
+/** 进程级标记：冷启动自动续播只在每次进程生命周期内触发一次。 */
+internal object AudioStartupAutoPlayGuard {
+    var handled: Boolean = false
 }

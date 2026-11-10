@@ -100,4 +100,67 @@ class HistoryNavigationPolicyTest {
 
         assertNull(presentation.showUpBadge)
     }
+
+    @Test
+    fun `pgc container opens player or detail using available episode identity`() {
+        val item = HistoryItem(
+            videoItem = VideoItem(title = "番剧"), business = HistoryBusiness.PGC,
+            seasonId = 123L, epid = 456L,
+        )
+        assertEquals(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.BangumiPlayer(123L, 456L),
+            resolveHistoryCardContainerTarget(item),
+        )
+        assertEquals(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.BangumiDetail(123L),
+            resolveHistoryCardContainerTarget(item.copy(epid = 0L)),
+        )
+        assertNull(resolveHistoryCardContainerTarget(item.copy(seasonId = 0L, epid = 0L)))
+    }
+
+    @Test
+    fun `course container keeps course playback and resume position`() {
+        val item = HistoryItem(
+            videoItem = VideoItem(), business = HistoryBusiness.CHEESE,
+            seasonId = 123L, epid = 456L, progress = 42,
+        )
+        assertEquals(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.BangumiPlayer(
+                seasonId = 123L, epId = 456L, resumePositionMs = 42_000L, isCourse = true,
+            ),
+            resolveHistoryCardContainerTarget(item),
+        )
+    }
+
+    @Test
+    fun `live container retains room title and host without treating room as video`() {
+        val item = HistoryItem(
+            videoItem = VideoItem(title = "直播", owner = Owner(name = "主播")),
+            business = HistoryBusiness.LIVE, roomId = 9988L,
+        )
+        assertEquals(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.Live(roomId = "9988", title = "直播", uname = "主播"),
+            resolveHistoryCardContainerTarget(item),
+        )
+        assertNull(resolveHistoryCardContainerTarget(item.copy(roomId = 0L)))
+    }
+
+    @Test
+    fun `article container retains article and opus targets while video keeps video navigation`() {
+        val article = HistoryItem(
+            videoItem = VideoItem(id = 123L, title = "专栏"), business = HistoryBusiness.ARTICLE,
+        )
+        assertEquals(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.ArticleDetail(123L, "专栏"),
+            resolveHistoryCardContainerTarget(article),
+        )
+        val opusId = 1_000_000_000_000_001L
+        assertEquals(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.DynamicDetail(opusId.toString()),
+            resolveHistoryCardContainerTarget(article.copy(videoItem = article.videoItem.copy(id = opusId))),
+        )
+        assertNull(resolveHistoryCardContainerTarget(article.copy(business = HistoryBusiness.ARCHIVE)))
+        assertNull(resolveHistoryCardContainerTarget(article.copy(business = HistoryBusiness.UNKNOWN)))
+    }
+
 }

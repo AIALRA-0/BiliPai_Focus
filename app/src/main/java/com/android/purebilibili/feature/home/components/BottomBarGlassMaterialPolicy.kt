@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.util.lerp
 import com.android.purebilibili.core.store.BottomBarLiquidGlassPreset
 
@@ -73,12 +72,9 @@ internal fun resolveBottomBarGlassMaterialContainerColor(
     liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
 ): Color {
     if (!glassEnabled) return surfaceColor.copy(alpha = fallbackAlpha)
-    val isDarkSurface = surfaceColor.luminance() < 0.5f
-    val alphaScale = when (preset) {
-        BottomBarLiquidGlassPreset.BILIPAI_TUNED -> if (isDarkSurface) 0.75f else 0.95f
-        BottomBarLiquidGlassPreset.IOS26_REFINED -> 1f
-    }
-    return surfaceColor.copy(alpha = (liquidGlassTuning.surfaceAlpha * alphaScale).coerceIn(0f, 1f))
+    // Upstream uses the theme surface at 40% in the balanced material; keep the slider's
+    // requested opacity without applying another preset-specific reduction.
+    return surfaceColor.copy(alpha = liquidGlassTuning.surfaceAlpha.coerceIn(0f, 1f))
 }
 
 private fun biliPaiTunedBottomBarGlassMaterial(

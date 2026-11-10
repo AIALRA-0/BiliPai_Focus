@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
+import top.yukonga.miuix.kmp.nav.transition.NavRole
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 import top.yukonga.miuix.kmp.nav.transition.NavTransitions
@@ -24,6 +25,7 @@ internal fun biliPaiMiuixNavTransition(
     miuixPredictiveBackMaxProgressPercent: Int =
         MIUIX_PREDICTIVE_BACK_DEFAULT_MAX_PROGRESS_PERCENT,
     miuixPredictiveBackProgressEnabled: Boolean = true,
+    blurMotionTierProvider: () -> MotionTier = { MotionTier.Normal },
 ): NavTransition {
     val progressControlEnabled = shouldUseMiuixPredictiveBackProgress(
         animation = animation,
@@ -41,6 +43,20 @@ internal fun biliPaiMiuixNavTransition(
         BiliPaiPredictiveBackAnimationStyle.AOSP -> AospNavTransition
         BiliPaiPredictiveBackAnimationStyle.SCALE -> scaleNavTransition(exitDirection)
         BiliPaiPredictiveBackAnimationStyle.CLASSIC -> ClassicNavTransition
+        BiliPaiPredictiveBackAnimationStyle.CIRCULAR_REVEAL -> return CircularRevealNavTransition
+        BiliPaiPredictiveBackAnimationStyle.IOS -> return IosPageNavTransition
+        BiliPaiPredictiveBackAnimationStyle.NO_TRANSITION -> return InstantPageNavTransition
+        BiliPaiPredictiveBackAnimationStyle.SIZE -> return SizePageNavTransition
+        BiliPaiPredictiveBackAnimationStyle.SHARED_AXIS -> return SharedAxisPageNavTransition
+        BiliPaiPredictiveBackAnimationStyle.FADE,
+        BiliPaiPredictiveBackAnimationStyle.FADE_IN,
+        BiliPaiPredictiveBackAnimationStyle.RIGHT_TO_LEFT,
+        BiliPaiPredictiveBackAnimationStyle.LEFT_TO_RIGHT,
+        BiliPaiPredictiveBackAnimationStyle.UP_TO_DOWN,
+        BiliPaiPredictiveBackAnimationStyle.DOWN_TO_UP,
+        BiliPaiPredictiveBackAnimationStyle.RIGHT_TO_LEFT_FADE,
+        BiliPaiPredictiveBackAnimationStyle.LEFT_TO_RIGHT_FADE,
+        BiliPaiPredictiveBackAnimationStyle.ZOOM -> return pagePresetNavTransition(animation)
     }
     return realtimeCoveredBlurTransition(
         baseTransition = baseTransition,
@@ -48,6 +64,7 @@ internal fun biliPaiMiuixNavTransition(
         blurEnabled = miuixTransitionBlurEnabled,
         progressControlEnabled = progressControlEnabled,
         maxPreviewFraction = maxPreviewFraction,
+        motionTierProvider = blurMotionTierProvider,
     )
 }
 
@@ -62,6 +79,7 @@ private fun realtimeCoveredBlurTransition(
     blurEnabled: Boolean,
     progressControlEnabled: Boolean,
     maxPreviewFraction: Float,
+    motionTierProvider: () -> MotionTier,
 ): NavTransition {
     return object : NavTransition {
         override val motion: NavMotion
@@ -80,12 +98,15 @@ private fun realtimeCoveredBlurTransition(
         }
 
         override fun Modifier.transformEntry(scope: NavTransitionScope): Modifier {
-            val renderEffectCache = MiuixCoveredBlurRenderEffectCache()
             val transformed = with(baseTransition) {
                 this@transformEntry.transformEntry(scope)
             }
+            // 模糊只作用于被覆盖页；开关关闭或进入/退出的顶层页不挂额外效果图层。
+            if (!blurEnabled || scope.role != NavRole.Covered) return transformed
+            val renderEffectCache = MiuixCoveredBlurRenderEffectCache()
             return transformed.graphicsLayer {
-                renderEffect = if (blurEnabled) {
+                val motionTier = motionTierProvider()
+                renderEffect = if (motionTier != MotionTier.Reduced) {
                     val blurFrame = resolvePredictiveBackBlurFrame(
                         progress = if (scope.gesture != null || scope.settle != null) {
                             val coveredDepth = if (
@@ -102,7 +123,7 @@ private fun realtimeCoveredBlurTransition(
                         } else {
                             0f
                         },
-                        motionTier = MotionTier.Normal,
+                        motionTier = motionTier,
                         isLightBackground = isLightBackground,
                     )
                     renderEffectCache.resolve(blurFrame.blurRadiusPx)
@@ -121,24 +142,20 @@ internal fun resolveMiuixNavCoveredBlurProgress(relativeDepth: Float): Float {
 }
 
 private class MiuixCoveredBlurRenderEffectCache {
-    private var cachedRadiusPx = Float.NaN
-    private var cachedEffect: ComposeRenderEffect? = null
+    // 半径已由公共策略按 4px 量化，往返手势复用各档效果，避免只缓存上一档反复创建。
+    private val effectsByRadius = mutableMapOf<Float, ComposeRenderEffect>()
 
     fun resolve(radiusPx: Float): ComposeRenderEffect? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || radiusPx <= 0.5f) {
-            cachedRadiusPx = 0f
-            cachedEffect = null
             return null
         }
         val quantizedRadius = kotlin.math.round(radiusPx * 2f) / 2f
-        if (quantizedRadius != cachedRadiusPx) {
-            cachedRadiusPx = quantizedRadius
-            cachedEffect = AndroidRenderEffect.createBlurEffect(
+        return effectsByRadius.getOrPut(quantizedRadius) {
+            AndroidRenderEffect.createBlurEffect(
                 quantizedRadius,
                 quantizedRadius,
                 Shader.TileMode.CLAMP,
             ).asComposeRenderEffect()
         }
-        return cachedEffect
     }
 }

@@ -8,6 +8,19 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomeVideoNavigationPolicyTest {
+    @Test
+    fun bangumiRecommendationOpensEpisodeInsteadOfVideoPlayer() {
+        val request = HomeVideoClickRequest(bvid = "bangumi:123", episodeId = 123L)
+        assertEquals(HomeNavigationTarget.BangumiDetail(123L), resolveHomeNavigationTarget(request))
+        assertNull(resolveHomeVideoNavigationIntent(request))
+    }
+
+    @Test
+    fun malformedNativeKeyCannotFallBackToAvPlayback() {
+        assertNull(resolveHomeNavigationTarget(HomeVideoClickRequest(bvid = "bangumi:bad")))
+        assertNull(resolveHomeNavigationTarget(HomeVideoClickRequest(bvid = "dynamic:bad")))
+    }
+
 
     @Test
     fun resolveIntent_returnsNull_whenBvidBlank() {

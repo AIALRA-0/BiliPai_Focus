@@ -9,6 +9,13 @@ import kotlin.test.assertTrue
 class PlaybackStallRecoveryPolicyTest {
 
     @Test
+    fun `startup and stalled CDN recovery wait ten seconds while rewritten URL timeout stays short`() {
+        assertEquals(10_000L, resolvePlaybackStallRecoveryTimeoutMs(firstFrameRendered = false))
+        assertEquals(10_000L, resolvePlaybackStallRecoveryTimeoutMs(firstFrameRendered = true))
+        assertEquals(2_500L, PLAYBACK_CDN_FIRST_FRAME_FALLBACK_TIMEOUT_MS)
+    }
+
+    @Test
     fun `stalled playback switches to the next untried CDN`() {
         val decision = resolvePlaybackStallRecoveryDecision(
             playbackState = Player.STATE_BUFFERING,
@@ -75,8 +82,8 @@ class PlaybackStallRecoveryPolicyTest {
     }
 
     @Test
-    fun `first frame and an alternate CDN are required`() {
-        assertFalse(
+    fun `startup without a first frame recovers only with an armed alternate CDN`() {
+        assertTrue(
             resolvePlaybackStallRecoveryDecision(
                 playbackState = Player.STATE_BUFFERING,
                 playWhenReady = true,
@@ -85,7 +92,8 @@ class PlaybackStallRecoveryPolicyTest {
                 currentCdnIndex = 0,
                 cdnCandidateCount = 2,
                 attemptedCdnIndexes = setOf(0),
-                usesAdaptivePlayback = false
+                usesAdaptivePlayback = false,
+                allowNoFirstFrameRecovery = true,
             ).shouldSwitchCdn
         )
         assertFalse(
@@ -97,7 +105,8 @@ class PlaybackStallRecoveryPolicyTest {
                 currentCdnIndex = 0,
                 cdnCandidateCount = 1,
                 attemptedCdnIndexes = setOf(0),
-                usesAdaptivePlayback = false
+                usesAdaptivePlayback = false,
+                allowNoFirstFrameRecovery = true,
             ).shouldSwitchCdn
         )
     }
@@ -148,7 +157,7 @@ class PlaybackStallRecoveryPolicyTest {
         }
 
         assertFalse(common(false, 0L, 2).shouldSwitchCdn)
-        assertFalse(common(true, 1L, 2).shouldSwitchCdn)
+        assertFalse(common(true, 501L, 2).shouldSwitchCdn)
         assertFalse(common(true, 0L, 1).shouldSwitchCdn)
         assertFalse(
             resolvePlaybackStallRecoveryDecision(
@@ -162,6 +171,24 @@ class PlaybackStallRecoveryPolicyTest {
                 usesAdaptivePlayback = true
             ).shouldSwitchCdn
         )
+    }
+
+    @Test
+    fun `startup recovery handles a stalled short buffer but preserves a usable buffer`() {
+        fun decision(bufferMs: Long, playWhenReady: Boolean = true) = resolvePlaybackStallRecoveryDecision(
+            playbackState = Player.STATE_BUFFERING,
+            playWhenReady = playWhenReady,
+            firstFrameRendered = false,
+            forwardBufferDurationMs = bufferMs,
+            currentCdnIndex = 0,
+            cdnCandidateCount = 2,
+            attemptedCdnIndexes = setOf(0),
+            usesAdaptivePlayback = false,
+            allowNoFirstFrameRecovery = true,
+        )
+        assertTrue(decision(400L).shouldSwitchCdn)
+        assertFalse(decision(700L).shouldSwitchCdn)
+        assertFalse(decision(0L, playWhenReady = false).shouldSwitchCdn)
     }
 
     @Test

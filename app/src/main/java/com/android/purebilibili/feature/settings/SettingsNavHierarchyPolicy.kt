@@ -17,6 +17,8 @@ internal val SETTINGS_SUBTREE_ROUTE_BASES: Set<String> = setOf(
     "animation_settings",
     "playback_settings",
     "permission_settings",
+    "space_privacy_settings",
+    "login_activity_settings",
     "message_notification_settings",
     "plugins_settings",
     "js_plugin",
@@ -34,6 +36,8 @@ private val SETTINGS_DEPTH2_ROUTE_BASES: Set<String> = setOf(
     "animation_settings",
     "playback_settings",
     "permission_settings",
+    "space_privacy_settings",
+    "login_activity_settings",
     "message_notification_settings",
     "plugins_settings",
     "bottom_bar_settings",
@@ -70,6 +74,11 @@ internal fun resolveSettingsCategoryDirectTargetKey(
 ): BiliPaiNavKey? = when (canonicalSettingsRootCategory(category)) {
     SettingsRootCategory.APPEARANCE_THEME -> BiliPaiNavKey.AppearanceSettings
     SettingsRootCategory.PLUGINS_EXTENSIONS -> BiliPaiNavKey.PluginsSettings()
+    SettingsRootCategory.NAVIGATION_INTERACTION -> BiliPaiNavKey.BottomBarSettings
+    SettingsRootCategory.HOME_RECOMMENDATION -> BiliPaiNavKey.HomeSettings
+    SettingsRootCategory.MESSAGE_NOTIFICATION -> BiliPaiNavKey.MessageNotificationSettings
+    // 播放设置页同时承载画质与互动评论分组，分类页不再提供二选一入口。
+    SettingsRootCategory.PLAYBACK_QUALITY -> BiliPaiNavKey.PlaybackSettings
     else -> null
 }
 
@@ -81,12 +90,14 @@ internal fun resolveSettingsCategoryNavKey(
 private val ROUTE_TO_CATEGORY: Map<String, SettingsRootCategory> = mapOf(
     "appearance_settings" to SettingsRootCategory.APPEARANCE_THEME,
     "home_settings" to SettingsRootCategory.HOME_RECOMMENDATION,
-    "animation_settings" to SettingsRootCategory.NAVIGATION_INTERACTION,
+    "animation_settings" to SettingsRootCategory.APPEARANCE_THEME,
     "icon_settings" to SettingsRootCategory.APPEARANCE_THEME,
     "bottom_bar_settings" to SettingsRootCategory.NAVIGATION_INTERACTION,
     "playback_settings" to SettingsRootCategory.PLAYBACK_QUALITY,
     "permission_settings" to SettingsRootCategory.PRIVACY_PERMISSION,
-    "message_notification_settings" to SettingsRootCategory.PRIVACY_PERMISSION,
+    "space_privacy_settings" to SettingsRootCategory.PRIVACY_PERMISSION,
+    "login_activity_settings" to SettingsRootCategory.PRIVACY_PERMISSION,
+    "message_notification_settings" to SettingsRootCategory.MESSAGE_NOTIFICATION,
     "settings_share" to SettingsRootCategory.STORAGE_BACKUP,
     "webdav_backup" to SettingsRootCategory.STORAGE_BACKUP,
     "plugins_settings" to SettingsRootCategory.PLUGINS_EXTENSIONS,
@@ -122,6 +133,7 @@ internal fun resolveSettingsNavParentRoute(childRoute: String?): String? {
         SETTINGS_ROUTE_BASE -> null
         SETTINGS_CATEGORY_ROUTE_BASE,
         SETTINGS_SEARCH_ROUTE_BASE -> SETTINGS_ROUTE_BASE
+        "animation_settings" -> "appearance_settings"
         in SETTINGS_DEPTH2_ROUTE_BASES -> SETTINGS_CATEGORY_ROUTE_BASE
         "icon_settings" -> "appearance_settings"
         "js_plugin" -> "plugins_settings"
@@ -141,7 +153,12 @@ internal fun resolveSettingsRootCategoryForRoute(routeBase: String?): SettingsRo
 
 internal fun resolveSettingsRootCategoryForNavKey(key: BiliPaiNavKey): SettingsRootCategory? {
     return when (key) {
-        is BiliPaiNavKey.SettingsCategory -> canonicalSettingsRootCategory(key.category)
+        is BiliPaiNavKey.SettingsCategory -> when (key.category) {
+            SettingsRootCategory.VIDEO_DECODER -> SettingsRootCategory.PLAYBACK_QUALITY
+            SettingsRootCategory.PLAYER_DIAGNOSTICS -> SettingsRootCategory.SYSTEM_ABOUT
+            SettingsRootCategory.GLASS_ADVANCED -> SettingsRootCategory.APPEARANCE_THEME
+            else -> canonicalSettingsRootCategory(key.category)
+        }
         else -> resolveSettingsRootCategoryForRoute(key.routeBase)
     }
 }

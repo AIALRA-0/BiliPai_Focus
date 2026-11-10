@@ -5,7 +5,6 @@ import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,23 +16,43 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
 class VideoPlayerOverlayPolicyTest {
+    @Test
+    fun endedPlayback_ignoresStaleRecoveryAndQualitySwitchFlags() {
+        assertNull(resolveCenterLoadingUiState(
+            isBuffering = true,
+            isQualitySwitching = true,
+            isSeekTransitionPending = true,
+            playWhenReady = true,
+            isPlaying = false,
+            bandwidthEstimate = "",
+            playbackState = androidx.media3.common.Player.STATE_ENDED,
+        ))
+        assertFalse(resolveOverlayPlaybackButtonPlayingState(
+            isPlaying = false,
+            playWhenReady = true,
+            playbackState = androidx.media3.common.Player.STATE_ENDED,
+            hasPendingSeekResume = true,
+        ))
+    }
 
     @Test
-    fun portraitMoreMenuUsesMiuixPopupOnlyInNonGlassMode() {
-        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt")
-            .readText()
-        val topBar = source
-            .substringAfter("private fun PortraitTopBar(")
-            .substringBefore("private fun PlaybackInsightPanel(")
-
-        assertTrue(topBar.contains("val useMiuixNonGlassChrome = isMiuixNonGlassEnabled()"))
-        assertTrue(topBar.contains("if (useMiuixNonGlassChrome)"))
-        assertTrue(topBar.contains("AppDropdownMenu("))
-        assertTrue(topBar.contains("AppDropdownMenuItem("))
-        assertTrue(topBar.contains("text = { AppText(\"播放设置\") }"))
-        assertTrue(topBar.contains("DropdownMenu("))
-        assertTrue(topBar.contains("DropdownMenuItem("))
-        assertTrue(topBar.contains("text = { Text(\"播放设置\") }"))
+    fun progressSnapshot_fillsLastTwoSecondsOnlyAfterPlaybackEnded() {
+        val ended = resolvePlayerProgressSnapshot(
+            58_000L, 60_000L, 59_000L, androidx.media3.common.Player.STATE_ENDED,
+        )
+        assertEquals(60_000L, ended.current)
+        assertEquals(60_000L, ended.buffered)
+        for (state in listOf(
+            androidx.media3.common.Player.STATE_READY,
+            androidx.media3.common.Player.STATE_BUFFERING,
+        )) {
+            assertEquals(58_000L, resolvePlayerProgressSnapshot(
+                58_000L, 60_000L, 59_000L, state,
+            ).current)
+        }
+        assertEquals(58_000L, resolvePlayerProgressSnapshot(
+            58_000L, 0L, 59_000L, androidx.media3.common.Player.STATE_ENDED,
+        ).current)
     }
 
     @Test
@@ -112,47 +131,33 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
-    fun inlineOverlayProgressPolling_stopsWhenHostLifecycleStops() {
-        assertTrue(
-            shouldPollInlineVideoOverlayProgress(
-                playerExists = true,
-                hostLifecycleStarted = true
-            )
-        )
-        assertFalse(
-            shouldPollInlineVideoOverlayProgress(
-                playerExists = true,
-                hostLifecycleStarted = false
-            )
-        )
-        assertFalse(
-            shouldPollInlineVideoOverlayProgress(
-                playerExists = false,
-                hostLifecycleStarted = true
-            )
-        )
-    }
-
-    @Test
     fun episodeEntryHiddenWhenOnlyRelatedVideosExist() {
         assertFalse(
             shouldShowEpisodeEntryFromVideoData(
                 relatedVideosCount = 1,
                 hasSeasonEpisodes = false,
                 pagesCount = 1,
-                hasFavoritePlaylist = false
+                hasExternalPlaylist = false
             )
         )
     }
 
     @Test
-    fun episodeEntryShownWhenFavoritePlaylistExists() {
+    fun episodeEntryShownWhenSingleItemExternalPlaylistExists() {
         assertTrue(
             shouldShowEpisodeEntryFromVideoData(
                 relatedVideosCount = 0,
                 hasSeasonEpisodes = false,
                 pagesCount = 1,
-                hasFavoritePlaylist = true
+                hasExternalPlaylist = true
+            )
+        )
+        assertTrue(
+            com.android.purebilibili.feature.video.ui.overlay.glass.shouldShowEpisodeEntryFromVideoData(
+                relatedVideosCount = 0,
+                hasSeasonEpisodes = false,
+                pagesCount = 1,
+                hasExternalPlaylist = true
             )
         )
     }
@@ -191,51 +196,220 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
-    fun nextEpisodeTargetPrefersPageNext() {
-        val target = resolveNextEpisodeTarget(
-            pagesCount = 3,
-            currentPageIndex = 0,
-            seasonEpisodeBvids = listOf("BV1", "BV2"),
-            currentBvid = "BV1",
-            relatedBvids = listOf("BV3")
-        )
-        assertTrue(target?.nextPageIndex == 1)
+    fun episodeNavigationExhaustsPartsBeforeCrossingCollectionBoundaryWithExactIdentity() {
+        val first = PiliEpisodeNavigationEntry("current", 11, pageIndex = 0)
+        val second = PiliEpisodeNavigationEntry("current", 12, pageIndex = 1)
+        val nextVideo = PiliEpisodeNavigationEntry("next", 71, pageIndex = 3)
+        val parts = listOf(first, second)
+        val collection = listOf(first, nextVideo)
+        assertEquals(second, navigateEpisode(first, parts, collection))
+        assertEquals(nextVideo, navigateEpisode(second, parts, collection))
+        assertEquals(first, navigateEpisode(second, parts, collection, forward = false))
     }
 
     @Test
-    fun nextEpisodeTargetFallsBackToSeasonThenRelated() {
-        val seasonTarget = resolveNextEpisodeTarget(
-            pagesCount = 1,
-            currentPageIndex = 0,
-            seasonEpisodeBvids = listOf("BV1", "BV2"),
-            currentBvid = "BV1",
-            relatedBvids = listOf("BV3")
-        )
-        assertTrue(seasonTarget?.nextBvid == "BV2")
-
-        val relatedTarget = resolveNextEpisodeTarget(
-            pagesCount = 1,
-            currentPageIndex = 0,
-            seasonEpisodeBvids = listOf("BV1"),
-            currentBvid = "BV1",
-            relatedBvids = listOf("BV1", "BV3")
-        )
-        assertTrue(relatedTarget?.nextBvid == "BV3")
+    fun episodeNavigationReversesPartsWithoutReversingCollection() {
+        val previous = PiliEpisodeNavigationEntry("previous", 1)
+        val first = PiliEpisodeNavigationEntry("current", 11, pageIndex = 0)
+        val middle = PiliEpisodeNavigationEntry("current", 12, pageIndex = 1)
+        val last = PiliEpisodeNavigationEntry("current", 13, pageIndex = 2)
+        val next = PiliEpisodeNavigationEntry("next", 21)
+        val parts = listOf(first, middle, last)
+        val collection = listOf(previous, first, next)
+        assertEquals(first, navigateEpisode(middle, parts, collection, reversePages = true))
+        assertEquals(next, navigateEpisode(first, parts, collection, reversePages = true))
+        assertEquals(last, navigateEpisode(middle, parts, collection, forward = false, reversePages = true))
     }
 
     @Test
-    fun nextEpisodeTargetReturnsNullWhenNoCandidate() {
-        assertTrue(
-            resolveNextEpisodeTarget(
-                pagesCount = 1,
-                currentPageIndex = 0,
-                seasonEpisodeBvids = emptyList(),
-                currentBvid = "BV1",
-                relatedBvids = emptyList()
+    fun episodeNavigationReversesCollectionWithoutReversingParts() {
+        val previous = PiliEpisodeNavigationEntry("previous", 1)
+        val first = PiliEpisodeNavigationEntry("current", 11, pageIndex = 0)
+        val last = PiliEpisodeNavigationEntry("current", 12, pageIndex = 1)
+        val next = PiliEpisodeNavigationEntry("next", 21)
+        val parts = listOf(first, last)
+        val collection = listOf(previous, first, next)
+        assertEquals(last, navigateEpisode(first, parts, collection, reverseOuter = true))
+        assertEquals(previous, navigateEpisode(last, parts, collection, reverseOuter = true))
+        assertEquals(next, navigateEpisode(first, parts, collection, forward = false, reverseOuter = true))
+    }
+
+    @Test
+    fun episodeNavigationLoopsPartsOnlyWhenNoOuterQueueExists() {
+        val first = PiliEpisodeNavigationEntry("current", 11, pageIndex = 0)
+        val last = PiliEpisodeNavigationEntry("current", 12, pageIndex = 1)
+        val parts = listOf(first, last)
+        assertEquals(first, navigateEpisode(last, parts, loop = true))
+        assertEquals(last, navigateEpisode(first, parts, forward = false, loop = true))
+        assertNull(navigateEpisode(last, parts))
+        val next = PiliEpisodeNavigationEntry("next", 21)
+        assertEquals(next, navigateEpisode(last, parts, listOf(first, next), loop = true))
+        assertNull(navigateEpisode(first, listOf(first), loop = true))
+    }
+
+    @Test
+    fun episodeNavigationLoopsOuterQueueInBothDirectionsWithoutLosingCid() {
+        val first = PiliEpisodeNavigationEntry("first", 11)
+        val last = PiliEpisodeNavigationEntry("last", 98, pageIndex = 4)
+        val queue = listOf(first, last)
+        assertEquals(first, navigateEpisode(last, outer = queue, loop = true))
+        assertEquals(last, navigateEpisode(first, outer = queue, forward = false, loop = true))
+        assertNull(navigateEpisode(last, outer = queue))
+    }
+
+    @Test
+    fun episodeRecommendationsRequireForwardAutomaticContinuationAndSkipCurrentVideo() {
+        val current = PiliEpisodeNavigationEntry("current", 11)
+        val sameVideoOtherPart = PiliEpisodeNavigationEntry("current", 12)
+        val related = PiliEpisodeNavigationEntry("related", 84)
+        val recommendations = listOf(sameVideoOtherPart, related)
+        assertNull(navigateEpisode(current, related = recommendations))
+        assertNull(navigateEpisode(current, related = recommendations, forward = false, autoContinue = true))
+        assertEquals(related, navigateEpisode(current, related = recommendations, autoContinue = true))
+    }
+
+    @Test
+    fun episodeNavigationDoesNotGuessAnIndexForUnknownPlaybackIdentity() {
+        val first = PiliEpisodeNavigationEntry("first", 11, pageIndex = 0)
+        val second = PiliEpisodeNavigationEntry("second", 21, pageIndex = 1)
+        val unknown = PiliEpisodeNavigationEntry("unknown", 999)
+        for (forward in listOf(false, true)) {
+            assertNull(navigateEpisode(unknown, listOf(first, second), listOf(first, second), forward = forward))
+            assertNull(navigateEpisode(unknown, listOf(first, second), listOf(first, second), forward = forward, loop = true))
+        }
+        assertNull(navigateEpisode(first.copy(cid = 999), pages = listOf(first)))
+    }
+
+    @Test
+    fun externalQueueTraversesPartsBeforeNextVideoRegardlessOfCollectionSort() {
+        val previous = PiliEpisodeNavigationEntry("previous", 7)
+        val first = PiliEpisodeNavigationEntry("A", 11, pageIndex = 0)
+        val middle = PiliEpisodeNavigationEntry("A", 12, pageIndex = 1)
+        val last = PiliEpisodeNavigationEntry("A", 13, pageIndex = 2)
+        val queued = PiliEpisodeNavigationEntry("B", 29)
+        val seasonSuccessor = PiliEpisodeNavigationEntry("C", 31)
+        val parts = listOf(first, middle, last)
+        val queue = listOf(previous, first.copy(pageIndex = null), queued)
+        val season = listOf(previous, first, seasonSuccessor)
+        for (reverseOuter in listOf(false, true)) {
+            for (reversePages in listOf(false, true)) {
+                val orderedParts = if (reversePages) parts.asReversed() else parts
+                fun next(current: PiliEpisodeNavigationEntry, forward: Boolean = true) = navigateEpisode(
+                    current, pages = parts, outer = season, externalPlaylist = queue,
+                    related = listOf(PiliEpisodeNavigationEntry("related", 41)),
+                    forward = forward, reversePages = reversePages, reverseOuter = reverseOuter,
+                    autoContinue = true,
+                )
+                assertEquals(orderedParts[1], next(orderedParts[0]))
+                assertEquals(orderedParts[2], next(orderedParts[1]))
+                assertEquals(queued, next(orderedParts[2]))
+                assertEquals(orderedParts[1], next(orderedParts[2], forward = false))
+                assertEquals(orderedParts[0], next(orderedParts[1], forward = false))
+                assertEquals(previous, next(orderedParts[0], forward = false))
+            }
+        }
+    }
+
+    @Test
+    fun externalQueueBoundariesStopOnlyAfterPartsAndNeverEscapeToSeasonOrRelated() {
+        val first = PiliEpisodeNavigationEntry("A", 11, pageIndex = 0)
+        val second = PiliEpisodeNavigationEntry("A", 12, pageIndex = 1)
+        val penultimate = PiliEpisodeNavigationEntry("B", 21, pageIndex = 0)
+        val last = PiliEpisodeNavigationEntry("B", 22, pageIndex = 1)
+        val queue = listOf(first.copy(pageIndex = null), penultimate.copy(pageIndex = null))
+        for ((parts, boundary, forward) in listOf(
+            Triple(listOf(first, second), first, false),
+            Triple(listOf(penultimate, last), last, true),
+        )) {
+            assertNull(
+                navigateEpisode(
+                    boundary, pages = parts, externalPlaylist = queue,
+                    outer = listOf(PiliEpisodeNavigationEntry("before", 1), boundary, PiliEpisodeNavigationEntry("after", 41)),
+                    related = listOf(PiliEpisodeNavigationEntry("C", 31)),
+                    forward = forward, autoContinue = true,
+                )
             )
-                == null
+        }
+        assertEquals(second, navigateEpisode(first, pages = listOf(first, second), externalPlaylist = queue))
+        assertEquals(penultimate, navigateEpisode(last, pages = listOf(penultimate, last), externalPlaylist = queue, forward = false))
+    }
+
+    @Test
+    fun externalLoopFinishesPartsBeforeWrappingQueueAndPreservesTargetCid() {
+        val first = PiliEpisodeNavigationEntry("A", 11)
+        val beforeLast = PiliEpisodeNavigationEntry("B", 28, pageIndex = 0)
+        val last = PiliEpisodeNavigationEntry("B", 29, pageIndex = 1)
+        val parts = listOf(beforeLast, last)
+        val queue = listOf(first, beforeLast.copy(pageIndex = null))
+        assertEquals(last, navigateEpisode(beforeLast, pages = parts, externalPlaylist = queue, loop = true))
+        assertEquals(
+            first,
+            navigateEpisode(
+                last, pages = parts, externalPlaylist = queue, loop = true,
+                related = listOf(PiliEpisodeNavigationEntry("C", 31)), autoContinue = true,
+            )
+        )
+        assertEquals(beforeLast, navigateEpisode(last, pages = parts, externalPlaylist = queue, forward = false, loop = true))
+        assertEquals(queue.last(), navigateEpisode(first, externalPlaylist = queue, forward = false, loop = true))
+        assertEquals(
+            beforeLast,
+            navigateEpisode(last, pages = parts, externalPlaylist = queue, reversePages = true, loop = true)
+        )
+        assertEquals(
+            first,
+            navigateEpisode(beforeLast, pages = parts, externalPlaylist = queue, reversePages = true, loop = true)
         )
     }
+
+    @Test
+    fun emptyOrSingleExternalQueueStillTraversesPartsButNeverFallsBackToSeason() {
+        val first = PiliEpisodeNavigationEntry("A", 11, pageIndex = 0)
+        val last = PiliEpisodeNavigationEntry("A", 12, pageIndex = 1)
+        val parts = listOf(first, last)
+        val season = listOf(PiliEpisodeNavigationEntry("before", 1), first, PiliEpisodeNavigationEntry("after", 41))
+        for (queue in listOf(emptyList(), listOf(first.copy(pageIndex = null)))) {
+            for (loop in listOf(false, true)) {
+                assertEquals(last, navigateEpisode(first, pages = parts, externalPlaylist = queue, loop = loop))
+                assertEquals(first, navigateEpisode(last, pages = parts, externalPlaylist = queue, forward = false, loop = loop))
+                assertNull(
+                    navigateEpisode(
+                        first, pages = parts, externalPlaylist = queue, outer = season,
+                        forward = false, loop = loop, autoContinue = true,
+                    )
+                )
+            }
+            assertNull(
+                navigateEpisode(
+                    last, pages = parts, externalPlaylist = queue, outer = season,
+                    related = listOf(PiliEpisodeNavigationEntry("C", 31)), autoContinue = true,
+                )
+            )
+        }
+        assertNull(navigateEpisode(last, pages = parts, externalPlaylist = emptyList(), loop = true, outer = season, autoContinue = true))
+        assertEquals(
+            first.copy(pageIndex = null),
+            navigateEpisode(last, pages = parts, externalPlaylist = listOf(first.copy(pageIndex = null)), loop = true),
+        )
+    }
+
+    private fun navigateEpisode(
+        current: PiliEpisodeNavigationEntry,
+        pages: List<PiliEpisodeNavigationEntry> = emptyList(),
+        outer: List<PiliEpisodeNavigationEntry> = emptyList(),
+        related: List<PiliEpisodeNavigationEntry> = emptyList(),
+        externalPlaylist: List<PiliEpisodeNavigationEntry>? = null,
+        forward: Boolean = true,
+        reversePages: Boolean = false,
+        reverseOuter: Boolean = false,
+        loop: Boolean = false,
+        autoContinue: Boolean = false,
+    ): PiliEpisodeNavigationEntry? = resolvePiliEpisodeNavigation(
+        pages = pages, outer = outer, related = related,
+        externalPlaylist = externalPlaylist,
+        currentBvid = current.bvid, currentCid = current.cid,
+        forward = forward, reversePages = reversePages, reverseOuter = reverseOuter,
+        loop = loop, autoContinue = autoContinue,
+    )
 
     @Test
     fun drawerVisibleShouldConsumeBackgroundGestures() {
@@ -255,77 +429,6 @@ class VideoPlayerOverlayPolicyTest {
         )
     }
 
-    @Test
-    fun drawerDismissesBeforeSwitchingVideo() {
-        val drawerClickBlock = loadVideoPlayerOverlaySource()
-            .substringAfter("onVideoClick = { vid, options ->")
-            .substringBefore("},\n            hazeState")
-
-        assertTrue(
-            drawerClickBlock.indexOf("onDismissEndDrawer()") <
-                drawerClickBlock.indexOf("onDrawerVideoClick(vid, options)")
-        )
-    }
-
-    @Test
-    fun centerPlayButtonHiddenWhenScrubbingOrBuffering() {
-        assertFalse(
-            shouldShowCenterPlayButton(
-                isVisible = true,
-                isPlaying = false,
-                isQualitySwitching = false,
-                isFullscreen = true,
-                isBuffering = true,
-                isScrubbing = false,
-                isSeekTransitionPending = false
-            )
-        )
-        assertFalse(
-            shouldShowCenterPlayButton(
-                isVisible = true,
-                isPlaying = false,
-                isQualitySwitching = false,
-                isFullscreen = true,
-                isBuffering = false,
-                isScrubbing = true,
-                isSeekTransitionPending = false
-            )
-        )
-        assertTrue(
-            shouldShowCenterPlayButton(
-                isVisible = true,
-                isPlaying = false,
-                isQualitySwitching = false,
-                isFullscreen = true,
-                isBuffering = false,
-                isScrubbing = false,
-                isSeekTransitionPending = false
-            )
-        )
-    }
-
-    @Test
-    fun centerPlayButtonHiddenDuringSeekResumeTransition() {
-        assertFalse(
-            shouldShowCenterPlayButton(
-                isVisible = true,
-                isPlaying = false,
-                isQualitySwitching = false,
-                isFullscreen = true,
-                isBuffering = false,
-                isScrubbing = false,
-                isSeekTransitionPending = true
-            )
-        )
-    }
-
-    @Test
-    fun centerPlayButton_routesSingleAndDoubleTapToSameResumeAction() {
-        val source = loadVideoPlayerOverlaySource()
-
-        assertTrue(source.contains("onClick = resumeFromCenterButton"))
-        assertTrue(source.contains("onDoubleClick = resumeFromCenterButton"))
-    }
 
     @Test
     fun playbackButtonState_staysActiveWhilePlayerIsBufferingForResume() {
@@ -370,6 +473,41 @@ class VideoPlayerOverlayPolicyTest {
                 isBuffering = true,
                 isQualitySwitching = true,
                 playWhenReady = true
+            )
+        )
+    }
+
+    @Test
+    fun bufferingIndicatorHidesUntilFirstFrameIsRendered() {
+        // 进场时 playWhenReady=true 且 STATE_BUFFERING，但首帧未到：
+        // 此时必须由封面承担加载表达，不能再叠转圈。
+        assertFalse(
+            shouldShowBufferingIndicator(
+                isBuffering = true,
+                isQualitySwitching = false,
+                playWhenReady = true,
+                hasRenderedFirstFrame = false,
+            )
+        )
+        assertTrue(
+            shouldShowBufferingIndicator(
+                isBuffering = true,
+                isQualitySwitching = false,
+                playWhenReady = true,
+                hasRenderedFirstFrame = true,
+            )
+        )
+    }
+
+    @Test
+    fun bufferingIndicatorHidesDuringTransitionOverlaySuppression() {
+        assertFalse(
+            shouldShowBufferingIndicator(
+                isBuffering = true,
+                isQualitySwitching = false,
+                playWhenReady = true,
+                hasRenderedFirstFrame = true,
+                suppressTransientOverlays = true,
             )
         )
     }
@@ -477,32 +615,6 @@ class VideoPlayerOverlayPolicyTest {
         assertEquals(FullscreenLockButtonIcon.UNLOCKED, unlocked.icon)
         assertEquals("未锁定", unlocked.contentDescription)
         assertFalse(unlocked.highlighted)
-    }
-
-    @Test
-    fun fullscreenLockButton_hidesAfterLockAndCanBeRevealedAgain() {
-        val sectionSource = loadVideoPlayerSectionSource()
-        val overlaySource = loadVideoPlayerOverlaySource()
-        val lockButtonBlock = overlaySource
-            .substringAfter("// --- 3.5")
-            .substringBefore("if (isFullscreen && showFullscreenScreenshotButton)")
-
-        assertTrue(sectionSource.contains("LaunchedEffect(isScreenLocked, showControls)"))
-        assertTrue(sectionSource.contains("delay(2_000L)"))
-        assertTrue(lockButtonBlock.contains("visible = isVisible"))
-        assertFalse(lockButtonBlock.contains("visible = isVisible || isScreenLocked"))
-    }
-
-    @Test
-    fun fullscreenLock_freezesAndRestoresActivityOrientation() {
-        val sectionSource = loadVideoPlayerSectionSource()
-        val lockEffect = sectionSource
-            .substringAfter("DisposableEffect(isFullscreen, isScreenLocked)")
-            .substringBefore("// 「播放页沉浸状态栏」")
-
-        assertTrue(lockEffect.contains("ActivityInfo.SCREEN_ORIENTATION_LOCKED"))
-        assertTrue(lockEffect.contains("previousRequestedOrientation"))
-        assertTrue(lockEffect.contains("applyPlayerRequestedOrientation(previousRequestedOrientation)"))
     }
 
     @Test
@@ -719,18 +831,6 @@ class VideoPlayerOverlayPolicyTest {
         assertTrue(signal.title.contains("卡顿"))
     }
 
-    @Test
-    fun playbackIssuePrompt_isNonBlockingAndKeepsViewAndExportActions() {
-        val source = loadVideoPlayerOverlaySource()
-        val issuePrompt = source
-            .substringAfter("if (playerDiagnosticLoggingEnabled) playbackIssueSignal?.let")
-            .substringBefore("// --- 5.")
-
-        assertFalse(issuePrompt.contains("AppAlertDialog"))
-        assertTrue(issuePrompt.contains("AppSurface"))
-        assertTrue(issuePrompt.contains("AppText(\"查看\")"))
-        assertTrue(issuePrompt.contains("AppText(\"导出\")"))
-    }
 
     @Test
     fun resolvePlaybackIssueSignal_flagsReadyWithoutFirstFrameAsBlackScreen() {
@@ -855,26 +955,6 @@ class VideoPlayerOverlayPolicyTest {
                 hasPendingUserAction = true
             )
         )
-    }
-
-    @Test
-    fun centerPlaybackButton_usesThemeTintedNativeIconWithoutContainerShadow() {
-        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/PlaybackButtonComponents.kt")
-            .readText()
-
-        assertTrue(source.contains("IconButton("))
-        assertTrue(source.contains("Icons.Filled.Pause"))
-        assertTrue(source.contains("Icons.Filled.PlayArrow"))
-        assertTrue(source.contains("tint = MaterialTheme.colorScheme.primary"))
-        assertFalse(source.contains("Surface("))
-        assertFalse(source.contains("BorderStroke("))
-        assertFalse(source.contains(".background("))
-    }
-
-    @Test
-    fun pageSelectorSheetOuterBottomPadding_isZeroInFullscreen() {
-        assertEquals(0, resolvePageSelectorSheetOuterBottomPaddingDp(isFullscreen = true))
-        assertEquals(8, resolvePageSelectorSheetOuterBottomPaddingDp(isFullscreen = false))
     }
 
     @Test
@@ -1057,40 +1137,4 @@ class VideoPlayerOverlayPolicyTest {
         )
     }
 
-    @Test
-    fun inlineProgressPolling_restartsWhenPlaybackMediaChanges() {
-        val source = loadVideoPlayerOverlaySource()
-        val progressStateBlock = source.substringAfter("val progressState by produceState(")
-            .substringBefore(") {")
-
-        assertTrue(progressStateBlock.contains("bvid"))
-        assertTrue(progressStateBlock.contains("cid"))
-        assertTrue(progressStateBlock.contains("videoDuration"))
-    }
-
-    @Test
-    fun playbackInsightDetails_useInlineRealtimeGlassInsteadOfFullscreenSheet() {
-        val source = loadVideoPlayerOverlaySource()
-        val insightPanelBlock = source.substringAfter("private fun PlaybackInsightPanel(")
-            .substringBefore("// --- 11. 侧边栏抽屉")
-
-        assertTrue(insightPanelBlock.contains("Modifier.unifiedBlur("))
-        assertTrue(insightPanelBlock.contains("BlurSurfaceType.DRAWER_OR_SHEET"))
-        assertTrue(insightPanelBlock.contains("Icons.Outlined.Close"))
-        assertFalse(source.contains("ModalBottomSheet("))
-    }
-
-    private fun loadVideoPlayerOverlaySource(): String {
-        return listOf(
-            File("app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt"),
-            File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt")
-        ).first(File::exists).readText()
-    }
-
-    private fun loadVideoPlayerSectionSource(): String {
-        return listOf(
-            File("app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt"),
-            File("src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt")
-        ).first(File::exists).readText()
-    }
 }

@@ -1,11 +1,43 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ZoomableImageScalePolicyTest {
+
+    @Test
+    fun fitImage_isCenteredInUntransformedViewport() {
+        assertEquals(
+            Rect(0f, 300f, 400f, 500f),
+            resolveZoomableImageLocalDisplayRect(IntSize(1000, 500), IntSize(400, 800)),
+        )
+    }
+
+    @Test
+    fun zoomedImage_appliesOnlyItsOwnScaleAndPan() {
+        assertEquals(
+            Rect(-190f, 170f, 610f, 570f),
+            resolveZoomableImageLocalDisplayRect(
+                imageSize = IntSize(1000, 500),
+                containerSize = IntSize(400, 800),
+                scale = 2f,
+                offsetX = 10f,
+                offsetY = -30f,
+            ),
+        )
+    }
+
+    @Test
+    fun localDisplayRect_waitsForValidImageAndViewportSizes() {
+        assertNull(resolveZoomableImageLocalDisplayRect(IntSize.Zero, IntSize(400, 800)))
+        assertNull(resolveZoomableImageLocalDisplayRect(IntSize(1000, 500), IntSize.Zero))
+        assertNull(resolveZoomableImageLocalDisplayRect(IntSize(0, 500), IntSize(400, 800)))
+    }
 
     @Test
     fun regularImage_keepsExistingZoomLevels() {

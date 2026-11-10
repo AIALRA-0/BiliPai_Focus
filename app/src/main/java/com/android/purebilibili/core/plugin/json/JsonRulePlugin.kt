@@ -178,17 +178,12 @@ data class Rule(
     /**
      * 获取统一的条件对象（兼容新旧格式）
      */
-    fun toCondition(): Condition? {
-        // 优先使用新格式
-        if (condition != null) return condition
-        
-        // 回退到旧格式
-        if (field != null && op != null && value != null) {
-            return Condition.Simple(field, op, value)
-        }
-        
-        return null
-    }
+    @kotlinx.serialization.Transient
+    private val legacyCondition: Condition? = if (field != null && op != null && value != null) {
+        Condition.Simple(field, op, value)
+    } else null
+
+    fun toCondition(): Condition? = condition ?: legacyCondition
 }
 
 /**

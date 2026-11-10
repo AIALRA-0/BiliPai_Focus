@@ -1,32 +1,43 @@
 package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
-import com.android.purebilibili.core.store.HomeHeaderCollapseMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CommonListHeaderCollapsePolicyTest {
 
     @Test
-    fun `collapse mode falls back to reverse scroll behavior`() {
+    fun `collapse mode falls back to top only behavior`() {
         assertEquals(
-            CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+            CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
             CommonListHeaderCollapseMode.fromValue(999)
         )
     }
 
     @Test
-    fun `global home header mode drives common list headers`() {
+    fun `max collapse reserves status bar inset for collapsible modes`() {
         assertEquals(
-            CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
-            resolveCommonListHeaderCollapseModeForScreen(
-                homeHeaderMode = HomeHeaderCollapseMode.BOTH,
+            0f,
+            resolveCommonListHeaderMaxCollapsePxForMode(
+                collapseMode = CommonListHeaderCollapseMode.ALWAYS_VISIBLE,
+                fixedTopBarHeightPx = 200,
+                statusBarHeightPx = 48f,
             )
         )
         assertEquals(
-            CommonListHeaderCollapseMode.ALWAYS_VISIBLE,
-            resolveCommonListHeaderCollapseModeForScreen(
-                homeHeaderMode = HomeHeaderCollapseMode.OFF,
+            152f,
+            resolveCommonListHeaderMaxCollapsePxForMode(
+                collapseMode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+                fixedTopBarHeightPx = 200,
+                statusBarHeightPx = 48f,
+            )
+        )
+        assertEquals(
+            152f,
+            resolveCommonListHeaderMaxCollapsePxForMode(
+                collapseMode = CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+                fixedTopBarHeightPx = 200,
+                statusBarHeightPx = 48f,
             )
         )
     }
@@ -80,7 +91,7 @@ class CommonListHeaderCollapsePolicyTest {
     }
 
     @Test
-    fun `top only mode stays collapsed until list reaches top`() {
+    fun `top only mode retains offset for animated reveal at top`() {
         assertEquals(
             -160f,
             resolveCommonListHeaderOffsetPx(
@@ -92,7 +103,7 @@ class CommonListHeaderCollapsePolicyTest {
             )
         )
         assertEquals(
-            0f,
+            -160f,
             resolveCommonListHeaderOffsetPx(
                 currentOffsetPx = -160f,
                 scrollDeltaYPx = 0f,
@@ -101,6 +112,25 @@ class CommonListHeaderCollapsePolicyTest {
                 mode = CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY
             )
         )
+    }
+
+    @Test
+    fun `remaining scroll at top preserves partially hidden header for animation`() {
+        for (mode in listOf(
+            CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+            CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+        )) {
+            assertEquals(
+                -72f,
+                resolveCommonListHeaderOffsetAfterContentScroll(
+                    currentOffsetPx = -72f,
+                    contentConsumedDeltaYPx = 200f,
+                    maxCollapsePx = 160f,
+                    isAtTop = true,
+                    mode = mode,
+                )
+            )
+        }
     }
 
     @Test

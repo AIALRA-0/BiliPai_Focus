@@ -7,9 +7,9 @@ import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import android.util.Log
 import android.view.Surface
-import com.android.purebilibili.feature.anime4k.Anime4KConfig
-import com.android.purebilibili.feature.anime4k.Anime4KPreset
-import com.android.purebilibili.feature.anime4k.VideoEnhancementAlgorithm
+import com.android.purebilibili.plugin.sdk.Anime4KConfig
+import com.android.purebilibili.plugin.sdk.Anime4KPreset
+import com.android.purebilibili.plugin.sdk.VideoEnhancementAlgorithm
 import com.android.purebilibili.feature.anime4k.resolveAnime4KInputSize
 import com.android.purebilibili.feature.anime4k.resolveAnime4KRenderProfile
 import com.android.purebilibili.feature.anime4k.resolveFsr1TargetSize
@@ -213,6 +213,19 @@ internal class Anime4KPipelineRenderer(
 
     fun release() {
         releaseGlResources(releaseInput = true)
+    }
+
+    /** GL 线程退出并销毁 EGL 后调用；此时只释放独立的原生输入资源，不再调用 GLES。 */
+    fun releaseInputAfterThreadExit() {
+        val detachedInput = inputSurface
+        inputSurface = null
+        externalTextureId = 0
+        hasLatchedFrame = false
+        frameAvailable = false
+        if (detachedInput != null) {
+            onInputSurfaceChanged(null)
+            detachedInput.release()
+        }
     }
 
     private fun renderFrame() {

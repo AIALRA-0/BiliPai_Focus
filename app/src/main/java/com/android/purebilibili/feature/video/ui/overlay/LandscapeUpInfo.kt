@@ -1,6 +1,8 @@
 // 文件路径: feature/video/ui/overlay/LandscapeUpInfo.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.ui.MediaContrastPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -52,7 +54,7 @@ fun LandscapeUpInfo(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(Color.Gray.copy(alpha = 0.3f)),
+                    .background(MediaContrastPalette.ControlScrim),
                 contentScale = ContentScale.Crop
             )
             

@@ -12,13 +12,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import com.android.purebilibili.core.ui.components.AppAdaptiveSplitLayout
-import com.android.purebilibili.core.ui.components.AppSplitAxis
 import com.android.purebilibili.core.util.AppFoldPosture
-import com.android.purebilibili.core.util.AppHingeOrientation
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 
 enum class AppAdaptiveSceneLayout {
     SinglePane,
@@ -39,31 +35,6 @@ enum class AppSplitPane {
     Primary,
     Secondary,
     Tertiary,
-}
-
-internal data class AppHingeSplitGeometry(
-    val primaryRatio: Float,
-    val dividerSizePx: Float,
-)
-
-internal fun resolveAppHingeSplitGeometry(
-    totalSizePx: Float,
-    hingeStartPx: Float,
-    hingeEndPx: Float,
-    clearancePx: Float,
-    fallbackRatio: Float,
-): AppHingeSplitGeometry {
-    if (totalSizePx <= 0f || hingeStartPx < 0f || hingeEndPx <= hingeStartPx) {
-        return AppHingeSplitGeometry(fallbackRatio, 1f)
-    }
-    val dividerSizePx = (hingeEndPx - hingeStartPx + clearancePx * 2f)
-        .coerceAtMost(totalSizePx)
-    val distributableSizePx = (totalSizePx - dividerSizePx).coerceAtLeast(1f)
-    val primarySizePx = (hingeStartPx - clearancePx).coerceIn(0f, distributableSizePx)
-    return AppHingeSplitGeometry(
-        primaryRatio = (primarySizePx / distributableSizePx).coerceIn(0.05f, 0.95f),
-        dividerSizePx = dividerSizePx,
-    )
 }
 
 /**
@@ -165,36 +136,7 @@ fun AppSplitLayout(
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
     val adaptiveInfo = LocalAppWindowAdaptiveInfo.current
-    val density = LocalDensity.current
-    val foldingFeature = adaptiveInfo.foldingFeature
-    val hingeBounds = foldingFeature.hingeBounds
-    val hasObstructingHinge = foldingFeature.hasObstructingHinge
-    val splitAxis = when (foldingFeature.hingeOrientation) {
-        AppHingeOrientation.Horizontal -> AppSplitAxis.Vertical
-        AppHingeOrientation.Vertical,
-        AppHingeOrientation.None -> AppSplitAxis.Horizontal
-    }
-    val hingeGeometry = if (hasObstructingHinge && hingeBounds != null) {
-        val clearancePx = with(density) { 16.dp.toPx() }
-        when (splitAxis) {
-            AppSplitAxis.Horizontal -> resolveAppHingeSplitGeometry(
-                totalSizePx = with(density) { windowSizeClass.widthDp.toPx() },
-                hingeStartPx = hingeBounds.left.toFloat(),
-                hingeEndPx = hingeBounds.right.toFloat(),
-                clearancePx = clearancePx,
-                fallbackRatio = primaryRatio,
-            )
-            AppSplitAxis.Vertical -> resolveAppHingeSplitGeometry(
-                totalSizePx = with(density) { windowSizeClass.heightDp.toPx() },
-                hingeStartPx = hingeBounds.top.toFloat(),
-                hingeEndPx = hingeBounds.bottom.toFloat(),
-                clearancePx = clearancePx,
-                fallbackRatio = primaryRatio,
-            )
-        }
-    } else null
-    val hingeAwareRatio = hingeGeometry?.primaryRatio ?: primaryRatio
-    val dividerSize = hingeGeometry?.let { with(density) { it.dividerSizePx.toDp() } } ?: 1.dp
+    val hingeAlignable = adaptiveInfo.shouldAvoidHinge
     LaunchedEffect(state, tertiaryContent != null) {
         state.ensureAvailable(tertiaryAvailable = tertiaryContent != null)
     }
@@ -210,6 +152,15 @@ fun AppSplitLayout(
             paneStateHolder.SaveableStateProvider(AppSplitPane.Tertiary.name, content)
         }
     }
+    if (hingeAlignable) {
+        com.android.purebilibili.core.ui.adaptive.AppHingePaneLayout(
+            primaryContent = savedPrimaryContent,
+            secondaryContent = if (secondaryPaneVisible) savedSecondaryContent else null,
+            tertiaryContent = if (secondaryPaneVisible) savedTertiaryContent else null,
+            modifier = modifier.fillMaxSize(),
+        )
+        return
+    }
     if (!secondaryPaneVisible) {
         androidx.compose.foundation.layout.Box(modifier = modifier.fillMaxSize()) {
             savedPrimaryContent()
@@ -217,8 +168,8 @@ fun AppSplitLayout(
         return
     }
     val sceneLayout = resolveAppAdaptiveSceneLayout(adaptiveInfo)
-    val useSplitLayout = windowSizeClass.shouldUseSplitLayout || hasObstructingHinge
-    if (!useSplitLayout || (sceneLayout == AppAdaptiveSceneLayout.SinglePane && !hasObstructingHinge)) {
+    val useSplitLayout = windowSizeClass.shouldUseSplitLayout
+    if (!useSplitLayout || sceneLayout == AppAdaptiveSceneLayout.SinglePane) {
         androidx.compose.foundation.layout.Box(modifier = modifier.fillMaxSize()) {
             when (state.currentPane) {
                 AppSplitPane.Primary -> savedPrimaryContent()
@@ -253,9 +204,7 @@ fun AppSplitLayout(
         useSplitLayout = true,
         primaryContent = savedPrimaryContent,
         secondaryContent = savedSecondaryContent,
-        primaryRatio = hingeAwareRatio,
-        splitAxis = splitAxis,
-        dividerSize = dividerSize,
+        primaryRatio = primaryRatio,
         modifier = modifier,
     )
 }

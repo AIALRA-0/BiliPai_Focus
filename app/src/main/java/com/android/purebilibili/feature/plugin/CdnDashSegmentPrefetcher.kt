@@ -11,8 +11,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.concurrent.TimeUnit
 
 internal data class CdnDashPrefetchRequest(
     val candidates: List<String>,
@@ -52,10 +50,8 @@ internal class CdnDashSegmentPrefetcher(
         val selectedHosts = mutableListOf<String>()
         segments.forEach { segment ->
             currentCoroutineContext().ensureActive()
-            val ranked = request.candidates
-                .mapNotNull { url -> probe(url, segment.range)?.let { url to it } }
-                .sortedBy { (_, elapsedMs) -> elapsedMs }
-            val winner = ranked.firstOrNull()?.first ?: return@forEach
+            // Live transfer samples rank nodes; do not download probe bytes for every segment.
+            val winner = CdnTransferRuntime.rank(request.candidates).firstOrNull() ?: return@forEach
             try {
                 PlaybackMediaCache.prefetchRange(
                     context = context,
@@ -79,7 +75,7 @@ internal class CdnDashSegmentPrefetcher(
         )
     }
 
-    private fun loadIndex(candidates: List<String>, range: CdnByteRange): CdnDashIndex? {
+    private suspend fun loadIndex(candidates: List<String>, range: CdnByteRange): CdnDashIndex? {
         candidates.forEach { url ->
             val bytes = readRange(url, range) ?: return@forEach
             parseCdnSidx(bytes, range.start)?.let { return it }
@@ -87,42 +83,13 @@ internal class CdnDashSegmentPrefetcher(
         return null
     }
 
-    private fun probe(url: String, segment: CdnByteRange): Long? {
-        val probeEnd = minOf(segment.endInclusive, segment.start + CDN_PREFETCH_PROBE_BYTES - 1L)
-        val startedAt = System.nanoTime()
-        val request = Request.Builder()
-            .url(url)
-            .header("Range", "bytes=${segment.start}-$probeEnd")
-            .header("Referer", "https://www.bilibili.com")
-            .build()
+    private suspend fun readRange(url: String, range: CdnByteRange): ByteArray? {
+        if (range.start < 0 || range.endInclusive < range.start || range.length !in 1..CDN_WINDOW_BYTES) return null
         return try {
-            client.newCall(request).execute().use { response ->
-                if (response.code != 206 && !response.isSuccessful) return null
-                response.body.byteStream().use { input ->
-                    val buffer = ByteArray(8 * 1024)
-                    if (input.read(buffer) <= 0) return null
-                }
-                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt).coerceAtLeast(1L)
-            }
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            null
-        }
-    }
-
-    private fun readRange(url: String, range: CdnByteRange): ByteArray? {
-        val request = Request.Builder()
-            .url(url)
-            .header("Range", "bytes=${range.start}-${range.endInclusive}")
-            .header("Referer", "https://www.bilibili.com")
-            .build()
-        return try {
-            client.newCall(request).execute().use { response ->
-                if (response.code != 206 && !response.isSuccessful) return null
-                response.body.bytes()
-            }
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
+            readExactCdnRange(client, url, range).bytes
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: java.io.IOException) {
             null
         }
     }

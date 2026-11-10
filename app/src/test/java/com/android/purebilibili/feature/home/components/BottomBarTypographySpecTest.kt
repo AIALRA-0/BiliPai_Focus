@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,6 +31,30 @@ class BottomBarTypographySpecTest {
             0.sp,
             resolveFloatingDockLabelFontSize(showIcon = true, showText = false),
         )
+        assertEquals(14.sp, resolveFloatingDockLabelLineHeight(showIcon = true))
+        assertEquals(19.sp, resolveFloatingDockLabelLineHeight(showIcon = false))
+    }
+
+    @Test
+    fun dockLabels_capRenderedGrowthOnceSystemFontScaleExceedsCap() {
+        // 渲染尺寸 = 字号 TextUnit × 系统 fontScale;预期恒等于 基准 × min(fontScale, cap)。
+        fun assertRendered(style: androidx.compose.ui.unit.TextUnit, baseSp: Float, fontScale: Float) {
+            val expected = baseSp * minOf(fontScale, DOCK_LABEL_FONT_SCALE_CAP)
+            val rendered = style.value * fontScale
+            assertTrue(
+                abs(rendered - expected) < 0.05f,
+                "rendered ${rendered}sp, expected ${expected}sp",
+            )
+        }
+        // 未超阈值:字号保持基准,由 sp 随系统缩放。
+        assertRendered(resolveBottomBarSkinDockLabelFontSize(fontScale = 1.1f), 12f, 1.1f)
+        assertRendered(resolveFloatingDockTextOnlyLabelFontSize(fontScale = 1f), 15f, 1f)
+        // 超过阈值:渲染尺寸封顶在 基准 × cap。
+        assertRendered(resolveBottomBarSkinDockLabelFontSize(fontScale = 1.5f), 12f, 1.5f)
+        assertRendered(resolveBottomBarSkinDockLabelLineHeight(fontScale = 2.0f), 18f, 2.0f)
+        assertRendered(resolveFloatingDockIconAndTextLabelFontSize(fontScale = 2.0f), 11f, 2.0f)
+        assertRendered(resolveFloatingDockTextOnlyLabelFontSize(fontScale = 1.8f), 15f, 1.8f)
+        assertRendered(resolveFloatingDockTextOnlyLabelFontSize(fontScale = DOCK_LABEL_FONT_SCALE_CAP), 15f, DOCK_LABEL_FONT_SCALE_CAP)
     }
 
     @Test
@@ -49,7 +74,14 @@ class BottomBarTypographySpecTest {
         assertTrue(floatingVisual.contains("resolveFloatingDockLabelFontSize("))
         assertTrue(topBar.contains("resolveFloatingDockLabelFontSize("))
         assertTrue(topDock.contains("fontSize = labelFontSize"))
+        assertTrue(topDock.contains("lineHeight = resolveFloatingDockLabelLineHeight("))
+        assertTrue(topDock.contains("autoSize = TextAutoSize.StepBased("))
+        assertTrue(topDock.contains("modifier = Modifier.size(resolveTopTabIconSizeDp("))
         assertFalse(topDock.contains("labelSmall.fontSize"))
+        // Dock 槽宽固定,标签必须省略号截断而不是切半字。
+        assertTrue(bottomBar.contains("overflow = TextOverflow.Ellipsis"), "dock 标签需要 Ellipsis")
+        assertTrue(topBar.contains("fontScale = density.fontScale"), "TopBar dock 需要传 fontScale")
+        assertTrue(bottomBar.contains("fontScale = LocalDensity.current.fontScale"), "底栏 dock 需要传 fontScale")
     }
 
     private fun loadSource(path: String): String {

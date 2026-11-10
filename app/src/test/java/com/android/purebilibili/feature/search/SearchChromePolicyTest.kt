@@ -1,12 +1,14 @@
 package com.android.purebilibili.feature.search
 
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Color
-import com.android.purebilibili.core.theme.AndroidNativeVariant
-import com.android.purebilibili.core.theme.UiPreset
-import com.android.purebilibili.core.theme.resolveUiStyle
-import com.android.purebilibili.core.ui.ContainerLevel
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.ui.resolveAppTopChromePolicy
-import com.android.purebilibili.feature.home.components.resolveSharedBottomBarCapsuleShape
+import com.android.purebilibili.feature.home.components.resolveHomeTopSearchContainerShape
+import com.android.purebilibili.feature.home.components.resolveHomeTopSearchPillHeight
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,64 +17,34 @@ import org.junit.Test
 class SearchChromePolicyTest {
 
     @Test
-    fun `md3 preset should use taller search chrome and filled action`() {
-        val spec = resolveSearchChromeVisualSpec(
-            resolveAppTopChromePolicy(resolveUiStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3))
-        )
-
-        assertEquals(56, spec.inputHeightDp)
-        assertEquals(ContainerLevel.Pill, spec.inputShapeLevel)
-        assertEquals(ContainerLevel.Pill, spec.actionShapeLevel)
-        assertEquals(ContainerLevel.Card, spec.suggestionShapeLevel)
-        assertEquals(ContainerLevel.Pill, spec.chipShapeLevel)
-        assertEquals(48, spec.clearActionSizeDp)
-        assertEquals(48, spec.submitActionSizeDp)
-        assertEquals(24, spec.actionIconSizeDp)
-        assertEquals(12, spec.horizontalGapDp)
-        assertTrue(spec.useFilledSearchAction)
-    }
-
-    @Test
-    fun `legacy ios preset maps to miuix search chrome`() {
-        // 2B 迁移：iOS 输入经迁移表并入 MIUIX，与 miuix 呈现一致。
-        val spec = resolveSearchChromeVisualSpec(
-            resolveAppTopChromePolicy(resolveUiStyle(UiPreset.IOS, AndroidNativeVariant.MATERIAL3))
-        )
-
-        assertEquals(48, spec.inputHeightDp)
-        assertEquals(ContainerLevel.Pill, spec.inputShapeLevel)
-        assertEquals(ContainerLevel.Pill, spec.actionShapeLevel)
-        assertEquals(48, spec.clearActionSizeDp)
-        assertEquals(48, spec.submitActionSizeDp)
-        assertEquals(14, spec.inputHorizontalPaddingDp)
-        assertTrue(spec.useFilledSearchAction)
-        assertEquals(ContainerLevel.Card, spec.suggestionShapeLevel)
-    }
-
-    @Test
-    fun `miuix variant should use denser rounded search chrome`() {
-        val spec = resolveSearchChromeVisualSpec(
-            resolveAppTopChromePolicy(resolveUiStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX))
-        )
-
-        assertEquals(48, spec.inputHeightDp)
-        assertEquals(ContainerLevel.Pill, spec.inputShapeLevel)
-        assertEquals(ContainerLevel.Pill, spec.actionShapeLevel)
-        assertEquals(48, spec.clearActionSizeDp)
-        assertEquals(48, spec.submitActionSizeDp)
-        assertEquals(14, spec.inputHorizontalPaddingDp)
-        assertTrue(spec.useFilledSearchAction)
-        assertEquals(ContainerLevel.Card, spec.suggestionShapeLevel)
-        assertEquals(ContainerLevel.Pill, spec.chipShapeLevel)
-    }
-
-    @Test
-    fun `search input shape follows result type capsule`() {
-        val md3 = resolveAppTopChromePolicy(resolveUiStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3))
-        val miuix = resolveAppTopChromePolicy(resolveUiStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX))
-
-        assertEquals(resolveSharedBottomBarCapsuleShape(), resolveSearchInputShape(md3))
-        assertEquals(resolveSharedBottomBarCapsuleShape(), resolveSearchInputShape(miuix))
+    fun `search fields keep rounded corners instead of semicircular ends at any width`() {
+        for (style in AppUiStyle.entries) {
+            val chrome = resolveAppTopChromePolicy(style)
+            val fields = listOf(
+                resolveSearchInputShape(chrome) to resolveSearchChromeVisualSpec(chrome).inputHeightDp.toFloat(),
+                resolveHomeTopSearchContainerShape(chrome) to resolveHomeTopSearchPillHeight(chrome).value,
+            )
+            for ((shape, heightDp) in fields) {
+                for (density in listOf(Density(1f), Density(2.75f))) {
+                    for (direction in LayoutDirection.entries) {
+                        val heightPx = heightDp * density.density
+                        val narrow = shape.createOutline(Size(200f * density.density, heightPx), direction, density) as Outline.Rounded
+                        val wide = shape.createOutline(Size(720f * density.density, heightPx), direction, density) as Outline.Rounded
+                        val corners = listOf(
+                            narrow.roundRect.topLeftCornerRadius,
+                            narrow.roundRect.topRightCornerRadius,
+                            narrow.roundRect.bottomLeftCornerRadius,
+                            narrow.roundRect.bottomRightCornerRadius,
+                        )
+                        for (corner in corners) {
+                            assertTrue("Search ends must not become a pill: $style", corner.x > 0f && corner.x < heightPx / 2f)
+                            assertEquals(corner.x, corner.y, 0.001f)
+                        }
+                        assertEquals(narrow.roundRect.topLeftCornerRadius, wide.roundRect.topLeftCornerRadius)
+                    }
+                }
+            }
+        }
     }
 
     @Test

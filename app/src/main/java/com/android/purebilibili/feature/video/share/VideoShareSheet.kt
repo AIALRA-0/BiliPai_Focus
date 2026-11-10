@@ -1,14 +1,21 @@
 package com.android.purebilibili.feature.video.share
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,13 +28,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.DynamicFeed
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.rememberModalBottomSheetState
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -45,39 +60,101 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.components.AppNativeSegmentedControl
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import com.android.purebilibili.core.ui.components.AppGlassMenu
+import com.android.purebilibili.core.ui.components.AppGlassMenuSource
+import com.android.purebilibili.core.ui.components.LocalAppGlassPanelDismissAction
+import com.android.purebilibili.core.ui.components.appGlassMenuAvailable
+
+@Composable
+internal fun VideoShareSheetHost(
+    payload: VideoSharePayload?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    glassSource: AppGlassMenuSource? = null,
+) {
+    payload?.let { sharePayload ->
+        VideoShareSheet(
+            payload = sharePayload,
+            onDismiss = onDismiss,
+            modifier = modifier,
+            glassSource = glassSource,
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun VideoShareSheet(
     payload: VideoSharePayload,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    glassSource: AppGlassMenuSource? = null,
 ) {
+    val sourcePayload = payload
+    var preciseShare by remember(sourcePayload.bvid, sourcePayload.page) { mutableStateOf(false) }
+    val effectivePayload = sourcePayload.withPosition(preciseShare)
     val context = LocalContext.current
     val shareScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isLandscape = isLandscapeVideoShare()
     var sharingTarget by remember { mutableStateOf<VideoShareTarget?>(null) }
+    var switchingSheet by remember { mutableStateOf(false) }
+    var showFollowingPicker by remember { mutableStateOf(false) }
+    var showDynamicComposer by remember { mutableStateOf(false) }
+    var showMoreTargets by remember { mutableStateOf(false) }
+    var moreShareMedia by remember { mutableStateOf<VideoShareCoverFile?>(null) }
+    var shareStyle by remember { mutableStateOf(VideoShareStyle.LINK) }
     val neutralIconBackground = MaterialTheme.colorScheme.surfaceContainerHighest
-    val neutralIconContent = MaterialTheme.colorScheme.onSurface
+    val neutralIconContent = AppContentColors.primaryText()
+    val styleOptions = remember {
+        listOf(
+            AppSegmentOption(VideoShareStyle.LINK, "链接"),
+            AppSegmentOption(VideoShareStyle.CARD, "卡片"),
+        )
+    }
     val items = listOf(
+        VideoShareSheetItem(
+            target = VideoShareTarget.BILIBILI_DYNAMIC,
+            label = "分享到动态",
+            iconText = null,
+            iconVector = Icons.Outlined.DynamicFeed,
+            backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+        VideoShareSheetItem(
+            target = VideoShareTarget.BILIBILI_FRIENDS,
+            label = "B 站好友",
+            iconText = null,
+            iconVector = Icons.Outlined.People,
+            backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
         VideoShareSheetItem(
             target = VideoShareTarget.WECHAT,
             label = "微信",
             iconText = "微",
             iconVector = null,
-            backgroundColor = Color(0xFF31C95B),
-            contentColor = Color.White
+            backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
         ),
         VideoShareSheetItem(
             target = VideoShareTarget.QQ,
             label = "QQ",
             iconText = "Q",
             iconVector = null,
-            backgroundColor = Color(0xFF25A9F2),
-            contentColor = Color.White
+            backgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
         ),
         VideoShareSheetItem(
             target = VideoShareTarget.COPY_LINK,
@@ -97,109 +174,303 @@ internal fun VideoShareSheet(
         )
     )
 
-    AppModalBottomSheet(
-        onDismissRequest = onDismiss,
-        modifier = modifier,
-        dragHandle = null
-    ) {
+    if (showDynamicComposer) {
+        VideoShareToDynamicDialog(payload = effectivePayload, onDismiss = onDismiss)
+        return
+    }
+    if (showFollowingPicker) {
+        VideoShareToFollowingDialog(
+            payload = effectivePayload,
+            onDismiss = onDismiss,
+            onSuccess = { count ->
+                if (count > 0) VideoShareFeedbackEvents.prepared(payload.bvid)
+                Toast.makeText(context, "已发送给 $count 位 B 站好友", Toast.LENGTH_SHORT).show()
+            },
+        )
+        return
+    }
+    if (showMoreTargets) {
+        VideoShareMoreTargetsSheet(
+            shareMedia = moreShareMedia,
+            onDismiss = onDismiss,
+            onTargetClick = { target ->
+                context.startTargetedVideoShare(
+                    payload = effectivePayload,
+                    packageName = target.packageName,
+                    appName = target.label,
+                    shareMedia = moreShareMedia,
+                    preferredActivityClassName = target.activityClassName,
+                )
+                onDismiss()
+            },
+            onSystemChooserClick = {
+                context.startMoreVideoShare(effectivePayload, moreShareMedia)
+                onDismiss()
+            },
+        )
+        return
+    }
+
+    // 锚点形变仅用于玻璃路径；原生底部面板与横屏侧栏保留原有尺寸和行为。
+    val anchoredGlass = glassSource?.isAvailable == true && appGlassMenuAvailable()
+    val panelScrollState = rememberScrollState()
+    val shareContent: @Composable () -> Unit = {
+        val finishPanel = LocalAppGlassPanelDismissAction.current.takeIf { anchoredGlass }
+        suspend fun hideSharePanel() {
+            if (finishPanel == null) {
+                hideVideoShareSheet(sheetState)
+            } else {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    finishPanel { if (continuation.isActive) continuation.resume(Unit) }
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
+                .then(if (isLandscape && !anchoredGlass) Modifier.fillMaxHeight() else Modifier.heightIn(
+                    max = (LocalConfiguration.current.screenHeightDp * 0.9f).dp,
+                ))
         ) {
-            AppText(
-                text = "分享",
-                modifier = Modifier.padding(start = 20.dp, top = 22.dp, bottom = 18.dp),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(28.dp)
-            ) {
-                items.forEach { item ->
-                    VideoShareSheetItemView(
-                        item = item,
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppText(
+                        "分享",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    com.android.purebilibili.core.ui.components.AppTextButton(
                         onClick = {
-                            when (item.target) {
-                                VideoShareTarget.WECHAT,
-                                VideoShareTarget.QQ -> {
-                                    val packageName = item.target.packageName ?: return@VideoShareSheetItemView
-                                    if (sharingTarget != null) return@VideoShareSheetItemView
-                                    sharingTarget = item.target
-                                    copyPlainTextToClipboard(context, payload.url, "视频链接")
-                                    Toast.makeText(context, "链接已复制，正在准备视频封面", Toast.LENGTH_SHORT).show()
-                                    shareScope.launch {
-                                        val coverFile = prepareVideoShareCoverFile(context, payload)
-                                        if (coverFile == null && payload.coverUrl.isNotBlank()) {
-                                            Toast.makeText(
-                                                context,
-                                                "封面加载失败，已改用链接分享",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                            if (anchoredGlass) shareScope.launch { hideSharePanel(); onDismiss() }
+                            else onDismiss()
+                        },
+                        enabled = !switchingSheet && sharingTarget == null,
+                    ) { AppText("关闭") }
+                }
+            }
+            if (!isLandscape) {
+                AppText(
+                    text = "分享",
+                    modifier = Modifier.padding(start = 20.dp, top = 22.dp, bottom = 14.dp),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
+                )
+            }
+            Column(
+                Modifier
+                    .weight(1f, fill = isLandscape && !anchoredGlass)
+                    .verticalScroll(panelScrollState)
+                    .then(if (isLandscape && !anchoredGlass) Modifier.navigationBarsPadding() else Modifier)
+            ) {
+                val segmentModifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()
+                if (LocalAppThemeConfig.current.liquidGlassEnabled) {
+                    BottomBarLiquidSegmentedControl(
+                        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                        items = styleOptions.map { it.label },
+                        selectedIndex = shareStyle.ordinal,
+                        onSelected = { shareStyle = VideoShareStyle.entries[it] },
+                        modifier = segmentModifier,
+                        forceEqualWidth = true,
+                    )
+                } else {
+                    AppNativeSegmentedControl(
+                        options = styleOptions,
+                        selectedValue = shareStyle,
+                        modifier = segmentModifier,
+                        onSelectionChange = { shareStyle = it },
+                    )
+                }
+                AppText(
+                    text = if (shareStyle == VideoShareStyle.CARD) {
+                        "以封面卡片图分享，并附上标题与二维码"
+                    } else {
+                        "以标题 + 链接分享，方便直接打开"
+                    },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    color = AppContentColors.secondaryText(),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                VideoShareTargets(sidePanel = isLandscape, modifier = Modifier.fillMaxWidth()) {
+                    items.forEach { item ->
+                        VideoShareSheetItemView(
+                            item = item,
+                            onClick = {
+                                if (sharingTarget != null || switchingSheet) return@VideoShareSheetItemView
+                                when (item.target) {
+                                    VideoShareTarget.BILIBILI_DYNAMIC -> {
+                                        if (sharingTarget != null || switchingSheet) return@VideoShareSheetItemView
+                                        if (TokenManager.csrfCache.isNullOrBlank()) {
+                                            Toast.makeText(context, "请先登录后分享到动态", Toast.LENGTH_SHORT).show()
+                                            return@VideoShareSheetItemView
                                         }
-                                        context.startTargetedVideoShare(
-                                            payload = payload,
-                                            packageName = packageName,
-                                            appName = item.label,
-                                            coverFile = coverFile,
-                                            onSuccess = onDismiss
-                                        )
-                                        sharingTarget = null
+                                        switchingSheet = true
+                                        shareScope.launch {
+                                            hideSharePanel()
+                                            showDynamicComposer = true
+                                        }
                                     }
-                                }
-                                VideoShareTarget.COPY_LINK -> {
-                                    copyPlainTextToClipboard(context, payload.url, "视频链接")
-                                    Toast.makeText(context, "已复制链接", Toast.LENGTH_SHORT).show()
-                                    onDismiss()
-                                }
-                                VideoShareTarget.MORE -> {
-                                    if (sharingTarget != null) return@VideoShareSheetItemView
-                                    sharingTarget = item.target
-                                    copyPlainTextToClipboard(context, payload.url, "视频链接")
-                                    Toast.makeText(context, "链接已复制，正在准备视频封面", Toast.LENGTH_SHORT).show()
-                                    shareScope.launch {
-                                        val coverFile = prepareVideoShareCoverFile(context, payload)
-                                        if (coverFile == null && payload.coverUrl.isNotBlank()) {
-                                            Toast.makeText(
-                                                context,
-                                                "封面加载失败，已改用链接分享",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                    VideoShareTarget.BILIBILI_FRIENDS -> {
+                                        if (sharingTarget != null) return@VideoShareSheetItemView
+                                        switchingSheet = true
+                                        shareScope.launch {
+                                            hideSharePanel()
+                                            showFollowingPicker = true
                                         }
-                                        context.startMoreVideoShare(
-                                            payload = payload,
-                                            coverFile = coverFile,
-                                            onSuccess = onDismiss
-                                        )
-                                        sharingTarget = null
+                                    }
+                                    VideoShareTarget.WECHAT,
+                                    VideoShareTarget.QQ -> {
+                                        val packageName = item.target.packageName ?: return@VideoShareSheetItemView
+                                        if (sharingTarget != null) return@VideoShareSheetItemView
+                                        sharingTarget = item.target
+                                        shareScope.launch {
+                                            try {
+                                                val shareMedia = prepareVideoShareMedia(
+                                                    context = context,
+                                                    payload = effectivePayload,
+                                                    style = shareStyle,
+                                                    progressMessage = "正在生成分享卡片",
+                                                )
+                                                hideSharePanel()
+                                                context.startTargetedVideoShare(
+                                                    payload = effectivePayload,
+                                                    packageName = packageName,
+                                                    appName = item.label,
+                                                    shareMedia = shareMedia,
+                                                )
+                                            } finally {
+                                                sharingTarget = null
+                                                onDismiss()
+                                            }
+                                        }
+                                    }
+                                    VideoShareTarget.COPY_LINK -> {
+                                        copyPlainTextToClipboard(context, effectivePayload.url, "视频链接")
+                                        VideoShareFeedbackEvents.prepared(payload.bvid)
+                                        Toast.makeText(context, "已复制链接", Toast.LENGTH_SHORT).show()
+                                        shareScope.launch {
+                                            hideSharePanel()
+                                            onDismiss()
+                                        }
+                                    }
+                                    VideoShareTarget.MORE -> {
+                                        if (sharingTarget != null) return@VideoShareSheetItemView
+                                        sharingTarget = item.target
+                                        shareScope.launch {
+                                            var openedLocalTargets = false
+                                            try {
+                                                val shareMedia = prepareVideoShareMedia(
+                                                    context = context,
+                                                    payload = effectivePayload,
+                                                    style = shareStyle,
+                                                    progressMessage = "正在生成分享卡片",
+                                                )
+                                                hideSharePanel()
+                                                if (isLandscape) {
+                                                    moreShareMedia = shareMedia
+                                                    showMoreTargets = true
+                                                    openedLocalTargets = true
+                                                } else {
+                                                    context.startMoreVideoShare(effectivePayload, shareMedia)
+                                                }
+                                            } finally {
+                                                sharingTarget = null
+                                                if (!openedLocalTargets) onDismiss()
+                                            }
+                                        }
                                     }
                                 }
                             }
+                        )
+                    }
+                }
+
+                if (sourcePayload.positionMs > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        com.android.purebilibili.core.ui.components.AppCheckbox(
+                            checked = preciseShare, onCheckedChange = { preciseShare = it },
+                        )
+                        AppText("从 ${sourcePayload.positionMs / 60000}:${(sourcePayload.positionMs / 1000 % 60).toString().padStart(2, '0')} 开始播放", modifier = Modifier.clickable { preciseShare = !preciseShare })
+                    }
+                }
+                com.android.purebilibili.core.ui.components.AppTextButton(onClick = {
+                    shareScope.launch {
+                        if (anchoredGlass) hideSharePanel()
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(effectivePayload.url)))
+                            onDismiss()
+                        } catch (_: ActivityNotFoundException) {
+                            Toast.makeText(context, "没有可打开此链接的应用", Toast.LENGTH_SHORT).show()
+                            if (anchoredGlass) onDismiss()
                         }
+                    }
+                }) { AppText("其他应用打开") }
+            }
+            if (!isLandscape) {
+                AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (anchoredGlass) Modifier else Modifier.navigationBarsPadding())
+                        .height(56.dp)
+                        .clickable(enabled = !switchingSheet && sharingTarget == null) {
+                            shareScope.launch {
+                                hideSharePanel()
+                                onDismiss()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AppText(
+                        text = "取消",
+                        color = AppContentColors.primaryText(),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .clickable(onClick = onDismiss),
-                contentAlignment = Alignment.Center
-            ) {
-                AppText(
-                    text = "取消",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
-                )
-            }
         }
+    }
+    if (anchoredGlass && AppGlassMenu(
+            expanded = true,
+            onDismissRequest = { if (!switchingSheet && sharingTarget == null) onDismiss() },
+            modifier = modifier,
+            source = glassSource,
+            minWidth = 280.dp,
+            maxWidth = 360.dp,
+            maxHeight = (LocalConfiguration.current.screenHeightDp * 0.9f).dp,
+            scrollState = panelScrollState,
+            interactiveContent = true,
+            content = shareContent,
+        )) return
+    AppModalBottomSheet(
+        onDismissRequest = { if (!switchingSheet && sharingTarget == null) onDismiss() },
+        modifier = modifier,
+        presentationOverride = videoSharePresentation(isLandscape),
+        sheetState = sheetState,
+        dragHandle = null,
+    ) { shareContent() }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VideoShareTargets(
+    sidePanel: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    BoxWithConstraints(modifier.padding(horizontal = 16.dp)) {
+        val columns = if (!sidePanel && maxWidth >= 560.dp) 6 else 3
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            maxItemsInEachRow = columns,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) { content() }
     }
 }
 
@@ -210,33 +481,65 @@ private data class VideoShareSheetItem(
     val iconText: String?,
     val iconVector: ImageVector?,
     val backgroundColor: Color,
-    val contentColor: Color
+    val contentColor: Color,
 )
 
 @Composable
 private fun VideoShareSheetItemView(
     item: VideoShareSheetItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val appIcon = remember(context, item.target) {
+        item.target.packageName?.let { packageName ->
+            try {
+                context.packageManager.getApplicationIcon(packageName)
+            } catch (_: PackageManager.NameNotFoundException) {
+                null
+            }
+        }
+    }
     Column(
-        modifier = Modifier.width(72.dp),
+        modifier = modifier
+            .width(72.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
-                .size(58.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(item.backgroundColor)
-                .clickable(onClick = onClick),
+                .background(if (appIcon == null) item.backgroundColor else Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
-            if (item.iconVector != null) {
-                AppIcon(
-                    imageVector = item.iconVector,
-                    contentDescription = item.label,
-                    modifier = Modifier.size(28.dp),
-                    tint = item.contentColor
+            if (appIcon != null) {
+                AndroidView(
+                    factory = { viewContext -> ImageView(viewContext).apply {
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                    } },
+                    update = { it.setImageDrawable(appIcon) },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
                 )
+            } else if (item.iconVector != null) {
+                if (item.target == VideoShareTarget.BILIBILI_FRIENDS) {
+                    Icon(
+                        imageVector = item.iconVector,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(28.dp),
+                        tint = item.contentColor,
+                    )
+                } else {
+                    AppIcon(
+                        imageVector = item.iconVector,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(28.dp),
+                        tint = item.contentColor,
+                    )
+                }
             } else {
                 AppText(
                     text = item.iconText.orEmpty(),
@@ -248,11 +551,49 @@ private fun VideoShareSheetItemView(
         Spacer(modifier = Modifier.height(8.dp))
         AppText(
             text = item.label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = AppContentColors.secondaryText(),
             style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
+            maxLines = 2,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+internal suspend fun hideVideoShareSheet(
+    sheetState: androidx.compose.material3.SheetState
+) {
+    try {
+        if (sheetState.isVisible) {
+            sheetState.hide()
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        // A disappearing host can make hide fail; the caller still completes its action.
+    }
+}
+
+/**
+ * 按分享形态准备媒体：链接模式不附图；卡片模式合成卡片图，失败时回退空（走链接）。
+ */
+private suspend fun prepareVideoShareMedia(
+    context: Context,
+    payload: VideoSharePayload,
+    style: VideoShareStyle,
+    progressMessage: String,
+): VideoShareCoverFile? {
+    return when (style) {
+        VideoShareStyle.LINK -> null
+        VideoShareStyle.CARD -> {
+            Toast.makeText(context, progressMessage, Toast.LENGTH_SHORT).show()
+            val cardFile = prepareVideoShareCardFile(context, payload)
+            if (cardFile == null) {
+                Toast.makeText(context, "卡片生成失败，已改用链接分享", Toast.LENGTH_SHORT).show()
+            }
+            cardFile
+        }
     }
 }
 
@@ -260,23 +601,33 @@ private fun Context.startTargetedVideoShare(
     payload: VideoSharePayload,
     packageName: String,
     appName: String,
-    coverFile: VideoShareCoverFile?,
-    onSuccess: () -> Unit
+    shareMedia: VideoShareCoverFile?,
+    preferredActivityClassName: String? = null,
 ) {
     try {
-        val intent = if (coverFile != null) {
+        val mimeType = shareMedia?.mimeType ?: "text/plain"
+        val activityClassName = preferredActivityClassName ?: resolveShareActivityClassName(
+            packageName = packageName,
+            mimeType = mimeType,
+        )
+        val intent = if (shareMedia != null) {
             buildVideoCoverShareIntent(
                 payload = payload,
-                coverUri = coverFile.uri,
-                mimeType = coverFile.mimeType,
+                coverUri = shareMedia.uri,
+                mimeType = shareMedia.mimeType,
                 packageName = packageName,
+                activityClassName = activityClassName,
                 contentResolver = contentResolver
             )
         } else {
-            buildTargetedShareIntent(payload, packageName)
+            buildTargetedShareIntent(
+                payload = payload,
+                packageName = packageName,
+                activityClassName = activityClassName,
+            )
         }
         startActivityWithTaskFlag(intent)
-        onSuccess()
+        VideoShareFeedbackEvents.prepared(payload.bvid)
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(this, "未安装$appName", Toast.LENGTH_SHORT).show()
     } catch (_: Exception) {
@@ -286,26 +637,25 @@ private fun Context.startTargetedVideoShare(
 
 private fun Context.startMoreVideoShare(
     payload: VideoSharePayload,
-    coverFile: VideoShareCoverFile?,
-    onSuccess: () -> Unit
+    shareMedia: VideoShareCoverFile?,
 ) {
     try {
-        val sendIntent = if (coverFile != null) {
+        val sendIntent = if (shareMedia != null) {
             buildVideoCoverShareIntent(
                 payload = payload,
-                coverUri = coverFile.uri,
-                mimeType = coverFile.mimeType,
+                coverUri = shareMedia.uri,
+                mimeType = shareMedia.mimeType,
                 contentResolver = contentResolver
             )
         } else {
             buildVideoShareIntent(payload)
         }
-        val chooser = Intent.createChooser(sendIntent, "分享视频到")
-        if (coverFile != null) {
+        val chooser = Intent.createChooser(sendIntent, resolveVideoShareChooserTitle(payload))
+        if (shareMedia != null) {
             chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivityWithTaskFlag(chooser)
-        onSuccess()
+        VideoShareFeedbackEvents.prepared(payload.bvid)
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(this, "无法打开分享面板", Toast.LENGTH_SHORT).show()
     } catch (_: Exception) {
@@ -318,4 +668,27 @@ private fun Context.startActivityWithTaskFlag(intent: Intent) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     startActivity(intent)
+}
+
+/**
+ * 锁定「发给好友 / 选一个聊天」入口，避免同包多 Activity 触发系统 Resolver。
+ */
+private fun Context.resolveShareActivityClassName(
+    packageName: String,
+    mimeType: String,
+): String? {
+    val query = Intent(Intent.ACTION_SEND).apply {
+        type = mimeType
+        setPackage(packageName)
+    }
+    val resolveInfos = packageManager.queryIntentActivities(query, 0)
+    if (resolveInfos.isEmpty()) return null
+    val candidates = resolveInfos.map { info ->
+        ShareActivityCandidate(
+            packageName = info.activityInfo.packageName,
+            className = info.activityInfo.name,
+            label = info.loadLabel(packageManager).toString(),
+        )
+    }
+    return resolvePreferredShareActivity(candidates)?.className
 }

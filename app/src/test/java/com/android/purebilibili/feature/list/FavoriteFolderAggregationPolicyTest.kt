@@ -16,6 +16,21 @@ import kotlinx.coroutines.test.runTest
 class FavoriteFolderAggregationPolicyTest {
 
     @Test
+    fun `subscribed folder keys separate collection types and retain fid identity`() {
+        val folder = FavFolder(id = 12L, fid = 34L, type = 11)
+
+        assertEquals("11:12_34", resolveSubscribedFavoriteFolderKey(folder))
+        assertFalse(
+            resolveSubscribedFavoriteFolderKey(folder) ==
+                resolveSubscribedFavoriteFolderKey(folder.copy(type = 21))
+        )
+        assertFalse(
+            resolveSubscribedFavoriteFolderKey(folder) ==
+                resolveSubscribedFavoriteFolderKey(folder.copy(fid = 35L))
+        )
+    }
+
+    @Test
     fun `mergeFavoriteFoldersForDisplay keeps owned folders first and appends subscribed folders`() {
         val owned = listOf(
             FavFolder(id = 1, title = "默认收藏夹", media_count = 10, source = FavFolderSource.OWNED),

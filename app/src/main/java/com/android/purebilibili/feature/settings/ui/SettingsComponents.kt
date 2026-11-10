@@ -1,8 +1,9 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 
@@ -27,7 +28,7 @@ fun BlurIntensitySelector(
         selectedValue = selectedIntensity,
         modifier = modifier,
         icon = rememberSettingsSemanticIcon(SettingsIconRole.BLUR_INTENSITY),
-        iconTint = iOSBlue,
+        iconTint = AppContentColors.secondaryText(),
         onSelectionChange = onIntensityChange,
     )
 }

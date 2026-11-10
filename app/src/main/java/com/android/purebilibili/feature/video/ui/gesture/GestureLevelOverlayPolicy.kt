@@ -18,6 +18,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -30,7 +31,7 @@ import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
  * Layout, placement, icon family and motion all differ by style.
  */
 enum class GestureLevelOverlayStyle {
-    /** Material 3: centered, theme-colored circular indicator. */
+    /** Material 3: compact horizontal bar at the top of the player. */
     Md3,
     /** iOS: centered frosted capsule with SF-style glyphs. */
     Ios,
@@ -101,6 +102,7 @@ fun resolveGestureLevelOverlaySpec(
     style: GestureLevelOverlayStyle,
     kind: GestureLevelKind,
     percent: Float,
+    brightnessColor: Color,
     colorScheme: ColorScheme = darkColorScheme(),
     miuixContainerColor: Color = Color(0xE61A1A1A),
     miuixContentColor: Color = Color.White
@@ -115,13 +117,13 @@ fun resolveGestureLevelOverlaySpec(
             showLabel = false,
             showPercentText = true,
             verticalRail = false,
-            accentColor = colorScheme.primary,
-            trackColor = colorScheme.primary.copy(alpha = 0.16f),
-            fillColor = colorScheme.primary,
-            containerColor = colorScheme.surfaceContainerHigh,
+            accentColor = if (isVolume) colorScheme.primary else brightnessColor,
+            trackColor = Color.White.copy(alpha = 0.18f),
+            fillColor = if (isVolume) lerp(colorScheme.primary, Color.White, 0.30f) else brightnessColor,
+            containerColor = Color(0xFF16181D).copy(alpha = 0.70f),
             borderColor = colorScheme.outlineVariant,
-            iconTint = colorScheme.primary,
-            textColor = colorScheme.onSurface,
+            iconTint = Color.White,
+            textColor = Color.White,
             railWidthDp = 0,
             railHeightDp = 0,
             capsuleMinWidthDp = 0,
@@ -135,9 +137,9 @@ fun resolveGestureLevelOverlaySpec(
             showLabel = true,
             showPercentText = true,
             verticalRail = false,
-            accentColor = if (isVolume) Color(0xFF64D2FF) else Color(0xFFFFD60A),
+            accentColor = if (isVolume) Color(0xFF64D2FF) else brightnessColor,
             trackColor = Color.White.copy(alpha = 0.22f),
-            fillColor = if (isVolume) Color(0xFF64D2FF) else Color(0xFFFFD60A),
+            fillColor = if (isVolume) Color(0xFF64D2FF) else brightnessColor,
             containerColor = Color.Black.copy(alpha = 0.52f + progress * 0.08f),
             borderColor = Color.White.copy(alpha = 0.28f),
             iconTint = Color.White,
@@ -155,9 +157,9 @@ fun resolveGestureLevelOverlaySpec(
             showLabel = false,
             showPercentText = false,
             verticalRail = false,
-            accentColor = if (isVolume) Color(0xFF0D84FF) else Color(0xFFFFC107),
+            accentColor = if (isVolume) Color(0xFF0D84FF) else brightnessColor,
             trackColor = Color.White.copy(alpha = 0.18f),
-            fillColor = if (isVolume) Color(0xFF0D84FF) else Color(0xFFFFC107),
+            fillColor = if (isVolume) Color(0xFF0D84FF) else brightnessColor,
             containerColor = miuixContainerColor,
             borderColor = Color.White.copy(alpha = 0.06f),
             iconTint = miuixContentColor,
@@ -169,19 +171,6 @@ fun resolveGestureLevelOverlaySpec(
             topInsetDp = 32
         )
     }
-}
-
-internal fun resolveMd3GestureLevelDiameterDp(
-    availableWidthDp: Float,
-    availableHeightDp: Float
-): Float {
-    val shortSide = minOf(availableWidthDp, availableHeightDp).coerceAtLeast(0f)
-    val preferred = when {
-        shortSide < 300f -> 112f
-        shortSide < 600f -> 136f
-        else -> 160f
-    }
-    return minOf(preferred, (shortSide - 16f).coerceAtLeast(0f))
 }
 
 fun resolveGestureLevelIcon(

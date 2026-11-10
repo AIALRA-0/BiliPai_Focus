@@ -1,0 +1,100 @@
+{
+  "bilipai_maid_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "7165f8d952519fb5bc7113685e71ba5f37ee8536ad8657128321b1ff057ddc2d"
+  },
+  "bilipai_maid_clean_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "87aaa2d67c083e1f1aab9375a878d6e7f40475026ed4ceb24d122c56697cea27"
+  },
+  "bilipai_maid_cleaning_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "dd5477c57adf80e62f356ad51d0631ccd582229da86c9d12dba0db8132d78def"
+  },
+  "bilipai_maid_retry_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "805b5e0082f36ede2c8afbd72cd805f4b6f6fe9e16011477a1007fc121963e1e"
+  },
+  "bilipai_maid_empty_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "45f78b8d179a63ccd2915e8fa6d0830c1d36933b3c97fdc4dbb00a516d62a75c"
+  },
+  "bilipai_maid_search_empty_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "7eb8914ae33ae3fa0b566d094b6860b22a6747aa670a205fccfbea61f095d92d"
+  },
+  "bilipai_maid_favorite_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "e9ec1074e58ff61420ad90703bb7bac6709f1b311dd7e77dd16d96b3158d03ef"
+  },
+  "bilipai_maid_follow_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "377d13681fff9d8f6ea109cf655e5320f94c1d922e7007df277b8fd91899a658"
+  },
+  "bilipai_maid_unfollow_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "e0343e24ff813b70e81d914fe84431fa0941467e56379560bf6e6dbaca3abd50"
+  },
+  "bilipai_maid_dislike_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "cfa7cdf855e32c4b08c78cc4f33ff02eff0b3365de391298631d236b97cfe786"
+  },
+  "bilipai_maid_share_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "f43199f2933db5176d2908f923ca4bce6fb073ccd3948f3265070207ec0ccb9d"
+  },
+  "bilipai_maid_coin_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "01da3c46ef57e463b59732d22ee428cd9e04ae748a82ee8450ee5d6a32ee9d60"
+  },
+  "bilipai_maid_download_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "8980c6303a4e6972350a8daed48d4532ed547164124dfd20c9f63d69929c8daa"
+  },
+  "bilipai_maid_triple_static": {
+    "size": [
+      512,
+      512
+    ],
+    "rgba_sha256": "feb2e32fe300a1483b8cb84e5afd03de554d7915c1a19c7ac1b4ec8fb41301fc"
+  }
+}

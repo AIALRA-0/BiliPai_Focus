@@ -15,7 +15,7 @@ import com.android.purebilibili.core.database.entity.CommentFraudRecord
 
 @Database(
     entities = [SearchHistory::class, BlockedUp::class, CommentFraudRecord::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,10 +34,16 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_6)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_6, MIGRATION_6_7)
                     .build()
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE comment_fraud_records ADD COLUMN proto3_payload TEXT")
             }
         }
 

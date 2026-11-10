@@ -18,9 +18,8 @@ import kotlinx.coroutines.withContext
  * `PureApplication` 启动、`NetworkUtils`、播放器初始化这类**必须同步拿到值**的地方能
  * 工作，项目里长期用 SharedPreferences 做影子缓存：每次 `set*` 都双写一份。
  *
- * 这些工具刻意放在 `SettingsManager.kt` 之外的独立文件：那个门面文件正在按领域拆成
- * 多个 store，且有行数棘轮（`SettingsManagerSizeRatchetTest`）盯着只减不增。
- * 通用基建本来也不属于门面。
+ * 这些工具放在 `SettingsManager.kt` 之外的独立文件：门面正按领域拆成多个 store，
+ * 通用缓存基建也不属于门面。结构约束不再由包含注释和空行的物理行数判断。
  */
 
 /**

@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.video.viewmodel
 
-import com.android.purebilibili.feature.video.playback.policy.PlaybackQualityMode
+import com.android.purebilibili.core.player.policy.PlaybackQualityMode
 import com.android.purebilibili.feature.video.controller.QualityPermissionResult
 import com.android.purebilibili.data.model.VideoLoadError
 import kotlin.test.Test
@@ -344,10 +344,10 @@ class VideoLoadRequestPolicyTest {
     }
 
     @Test
-    fun `initial playback quality mode defaults to auto`() {
+    fun `initial playback quality mode locks the selected quality`() {
         assertEquals(
-            PlaybackQualityMode.AUTO,
-            resolveInitialPlaybackQualityMode()
+            PlaybackQualityMode.LOCKED(120),
+            resolveInitialPlaybackQualityMode(120)
         )
     }
 

@@ -71,3 +71,30 @@ fun resolveProfileCardCoverHeightDp(cardTokens: ProfileCardTokens = resolveProfi
 fun resolveProfileCardHeightDp(cardTokens: ProfileCardTokens = resolveProfileCardTokens()): Float {
     return resolveProfileCardCoverHeightDp(cardTokens) + cardTokens.metadataHeightDp
 }
+
+// Shared geometry repair for both native and liquid-glass profiles, not a material override.
+internal const val PROFILE_EXPANDED_AVATAR_SIZE_DP = 96f
+internal const val PROFILE_EXPANDED_AVATAR_TOP_DP = 35f
+internal const val PROFILE_EXPANDED_NAME_TOP_DP = 147.3f
+internal const val PROFILE_EXPANDED_NAME_SCALE = 1.12f
+
+internal fun resolveProfileAvatarSizePx(
+    density: Float,
+    expandedFraction: Float,
+    circularCutoutWidthPx: Float,
+): Float {
+    val endSizePx = if (circularCutoutWidthPx > 0f) circularCutoutWidthPx * 0.5f else 24f * density
+    return endSizePx + (PROFILE_EXPANDED_AVATAR_SIZE_DP * density - endSizePx) *
+        expandedFraction.coerceIn(0f, 1f)
+}
+
+internal fun resolveProfileIdentityStatsTopPx(
+    statusBarTopPx: Float,
+    density: Float,
+    nameHeightPx: Int,
+    uidHeightPx: Int,
+): Float = statusBarTopPx + maxOf(
+    215f * density,
+    PROFILE_EXPANDED_NAME_TOP_DP * density +
+        nameHeightPx * PROFILE_EXPANDED_NAME_SCALE + uidHeightPx + 30f * density,
+)

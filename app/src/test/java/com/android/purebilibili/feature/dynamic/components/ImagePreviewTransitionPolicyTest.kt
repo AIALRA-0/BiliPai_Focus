@@ -84,6 +84,44 @@ class ImagePreviewTransitionPolicyTest {
     }
 
     @Test
+    fun resolveImagePreviewPresentedCornerRadius_lerpsCircularSourceWithoutOvershoot() {
+        // 圆形源（头像）：半径等于短边一半，回位过程中圆角始终被钳在 [0, source] 区间
+        val circleRadius = 40f
+        for (progress in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
+            val corner = resolveImagePreviewPresentedCornerRadiusDp(
+                visualProgress = progress,
+                verticalDragProgress = 0f,
+                hasSourceRect = true,
+                sourceCornerRadiusDp = circleRadius,
+            )
+            assertTrue(corner >= 0f && corner <= circleRadius, "corner out of range at $progress: $corner")
+        }
+        assertEquals(0f, resolveImagePreviewPresentedCornerRadiusDp(
+            visualProgress = 1f,
+            verticalDragProgress = 0f,
+            hasSourceRect = true,
+            sourceCornerRadiusDp = circleRadius,
+        ))
+        assertEquals(circleRadius, resolveImagePreviewPresentedCornerRadiusDp(
+            visualProgress = 0f,
+            verticalDragProgress = 0f,
+            hasSourceRect = true,
+            sourceCornerRadiusDp = circleRadius,
+        ))
+    }
+
+    @Test
+    fun resolveImagePreviewPresentedCornerRadius_verticalDragNeverGoesBelowMorphCorner() {
+        val corner = resolveImagePreviewPresentedCornerRadiusDp(
+            visualProgress = 1f,
+            verticalDragProgress = 0.6f,
+            hasSourceRect = true,
+            sourceCornerRadiusDp = 10f,
+        )
+        assertTrue(corner > 0f, "dragging back from fullscreen should reveal source corner")
+    }
+
+    @Test
     fun resolveImagePreviewTransitionFrame_usesZeroCornerWhenNoSourceRect() {
         val frame = resolveImagePreviewTransitionFrame(
             rawProgress = 0.5f,
@@ -100,9 +138,8 @@ class ImagePreviewTransitionPolicyTest {
 
         assertEquals(0f, motion.overshootTarget)
         assertEquals(0f, motion.settleTarget)
-        assertEquals(300, motion.collapseDurationMillis)
         assertEquals(180, motion.cancelRecoverDurationMillis)
-        assertEquals(320, motion.openDurationMillis)
+        assertEquals(260, motion.openDurationMillis)
         assertEquals(motion.overshootTarget, motion.settleTarget)
     }
 
@@ -385,16 +422,106 @@ class ImagePreviewTransitionPolicyTest {
     }
 
     @Test
+    fun resolveImagePreviewDismissContentAlpha_fadesOnlyOnFallbackDismiss() {
+        // Rect 飞行路径图片全程不透明，自己飞回缩略图。
+        assertEquals(1f, resolveImagePreviewDismissContentAlpha(hasRectFlight = true, isDismissing = true, visualProgress = 0f))
+        assertEquals(1f, resolveImagePreviewDismissContentAlpha(hasRectFlight = true, isDismissing = true, visualProgress = 0.4f))
+        // 非 dismiss 状态（打开中）不淡出。
+        assertEquals(1f, resolveImagePreviewDismissContentAlpha(hasRectFlight = false, isDismissing = false, visualProgress = 0.4f))
+        // fallback 关闭随进度同步淡出，避免窗口移除瞬间闪切。
+        assertEquals(0.4f, resolveImagePreviewDismissContentAlpha(hasRectFlight = false, isDismissing = true, visualProgress = 0.4f), 0.0001f)
+        assertEquals(0f, resolveImagePreviewDismissContentAlpha(hasRectFlight = false, isDismissing = true, visualProgress = -0.5f), 0.0001f)
+    }
+
+    @Test
     fun resolveImagePreviewChromeAlpha_fadesEarlierThanImageDuringDismiss() {
         assertEquals(1f, resolveImagePreviewChromeAlpha(visualProgress = 1f, isDismissing = false))
         assertEquals(0.5f, resolveImagePreviewChromeAlpha(visualProgress = 0.5f, isDismissing = false))
 
-        // dismiss 时 0.35 以下 chrome 已清零，图片仍可继续 morph。
-        assertEquals(0f, resolveImagePreviewChromeAlpha(visualProgress = 0.35f, isDismissing = true))
-        assertTrue(
-            resolveImagePreviewChromeAlpha(visualProgress = 0.7f, isDismissing = true) < 0.7f
-        )
+        // dismiss 时 0.05 以下 chrome 已清零，0.6 之后清零完成，与背景/图片节奏错位更小。
+        assertEquals(0f, resolveImagePreviewChromeAlpha(visualProgress = 0.05f, isDismissing = true))
+        assertEquals(1f, resolveImagePreviewChromeAlpha(visualProgress = 0.6f, isDismissing = true))
         assertEquals(1f, resolveImagePreviewChromeAlpha(visualProgress = 1f, isDismissing = true))
+    }
+
+    @Test
+    fun resolveImagePreviewCounterScaledCornerRadii_keepsScreenCornerCircular() {
+        // 非均匀缩放（x 压缩为 0.5）下，横向半径需反除以更大的比例分量。
+        val radii = resolveImagePreviewCounterScaledCornerRadii(
+            cornerRadiusDp = 12f,
+            scaleX = 0.5f,
+            scaleY = 0.1f
+        )
+        assertEquals(24f, radii.horizontalDp, 0.0001f)
+        assertEquals(120f, radii.verticalDp, 0.0001f)
+        // 非法缩放钳制到 0.01，半径带 64 倍上限防御极端比例。
+        val guarded = resolveImagePreviewCounterScaledCornerRadii(
+            cornerRadiusDp = 8f,
+            scaleX = 0f,
+            scaleY = -1f
+        )
+        assertEquals(512f, guarded.horizontalDp, 0.0001f)
+        assertEquals(512f, guarded.verticalDp, 0.0001f)
+    }
+
+    @Test
+    fun resolveImagePreviewGallery3DBlend_entersSmoothlyAfterThreshold() {
+        assertEquals(0f, resolveImagePreviewGallery3DBlend(0f))
+        assertEquals(0f, resolveImagePreviewGallery3DBlend(0.85f))
+        assertEquals(0.5f, resolveImagePreviewGallery3DBlend(0.925f), 0.0001f)
+        assertEquals(1f, resolveImagePreviewGallery3DBlend(1f))
+        assertEquals(1f, resolveImagePreviewGallery3DBlend(1.5f))
+    }
+
+    @Test
+    fun resolveImagePreviewLivePhotoAlpha_fadesInAcrossTail() {
+        assertEquals(0f, resolveImagePreviewLivePhotoAlpha(0f))
+        assertEquals(0f, resolveImagePreviewLivePhotoAlpha(0.7f))
+        assertEquals(0.5f, resolveImagePreviewLivePhotoAlpha(0.85f), 0.0001f)
+        assertEquals(1f, resolveImagePreviewLivePhotoAlpha(1f))
+    }
+
+    @Test
+    fun clampImagePreviewDismissVelocity_limitsExtremeFlings() {
+        assertEquals(0f, clampImagePreviewDismissVelocity(0f))
+        assertEquals(3000f, clampImagePreviewDismissVelocity(9000f), 0.0001f)
+        assertEquals(-3000f, clampImagePreviewDismissVelocity(-9000f), 0.0001f)
+    }
+
+    @Test
+    fun dismissVelocity_convertsPixelsToProgressAndRespectsReturnDirection() {
+        val start = Rect(0f, 0f, 200f, 200f)
+        val below = Rect(0f, 1000f, 200f, 1200f)
+        val above = Rect(0f, -1000f, 200f, -800f)
+        assertEquals(-1f, resolveImagePreviewDismissProgressVelocity(1000f, start, below, 2000f), 0.0001f)
+        assertEquals(-1f, resolveImagePreviewDismissProgressVelocity(-1000f, start, above, 2000f), 0.0001f)
+        assertEquals(0f, resolveImagePreviewDismissProgressVelocity(1000f, start, above, 2000f))
+        // A diagonal return only carries the part of the vertical velocity along its path.
+        val diagonal = below.translate(androidx.compose.ui.geometry.Offset(1000f, 0f))
+        assertEquals(-0.5f, resolveImagePreviewDismissProgressVelocity(1000f, start, diagonal, 2000f), 0.0001f)
+    }
+
+    @Test
+    fun dismissVelocity_handlesMissingAndCoincidentAnchorsWithoutOvershoot() {
+        val rect = Rect(0f, 0f, 200f, 200f)
+        assertEquals(0f, resolveImagePreviewDismissProgressVelocity(3000f, rect, rect, 2000f))
+        assertEquals(-0.75f, resolveImagePreviewDismissProgressVelocity(-3000f, rect, null, 2000f, 0.5f))
+        assertEquals(-6f, resolveImagePreviewDismissProgressVelocity(3000f, null, null, 0f, 0.5f))
+    }
+
+    @Test
+    fun dismissCorners_startAtDraggedCornerAndLandAtThumbnailCorner() {
+        assertEquals(7f, resolveImagePreviewDismissCornerRadiusDp(1f, 7f, 12f))
+        assertEquals(9.5f, resolveImagePreviewDismissCornerRadiusDp(0.5f, 7f, 12f))
+        assertEquals(12f, resolveImagePreviewDismissCornerRadiusDp(0f, 7f, 12f))
+        assertEquals(7f, resolveImagePreviewDismissCornerRadiusDp(2f, 7f, 12f))
+    }
+
+    @Test
+    fun resolveImagePreviewBlurRadiusPx_growsLinearlyWithReturnProgress() {
+        assertEquals(0f, resolveImagePreviewBlurRadiusPx(visualProgress = 1f, maxBlurRadiusPx = 20f))
+        assertEquals(10f, resolveImagePreviewBlurRadiusPx(visualProgress = 0.5f, maxBlurRadiusPx = 20f), 0.0001f)
+        assertEquals(20f, resolveImagePreviewBlurRadiusPx(visualProgress = 0f, maxBlurRadiusPx = 20f), 0.0001f)
     }
 
     @Test

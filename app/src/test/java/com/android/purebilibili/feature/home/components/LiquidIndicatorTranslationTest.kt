@@ -6,6 +6,24 @@ import org.junit.Test
 class LiquidIndicatorTranslationTest {
 
     @Test
+    fun `scroll activity without page displacement does not press the indicator`() {
+        for (position in listOf(0f, 1f, 2f, 0.0001f, 0.9999f)) {
+            assertEquals(false, shouldStartExternalPagerIndicatorPress(true, true, position))
+        }
+        assertEquals(false, shouldStartExternalPagerIndicatorPress(true, true, null))
+        assertEquals(false, shouldStartExternalPagerIndicatorPress(true, true, Float.NaN))
+    }
+
+    @Test
+    fun `actual pager travel starts press only while motion effects are enabled`() {
+        for (position in listOf(0.03f, 0.5f, 1.2f)) {
+            assertEquals(true, shouldStartExternalPagerIndicatorPress(true, true, position))
+            assertEquals(false, shouldStartExternalPagerIndicatorPress(true, false, position))
+            assertEquals(false, shouldStartExternalPagerIndicatorPress(false, true, position))
+        }
+    }
+
+    @Test
     fun `translation keeps center alignment when clamp disabled`() {
         val translation = resolveIndicatorTranslationXPx(
             position = 0f,

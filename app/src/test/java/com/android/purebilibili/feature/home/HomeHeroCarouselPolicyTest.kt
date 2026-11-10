@@ -96,6 +96,21 @@ class HomeHeroCarouselPolicyTest {
     }
 
     @Test
+    fun `carousel fills available slots with eligible items in feed order`() {
+        assertEquals(
+            listOf("video-a", "video-b"),
+            selectHomeHeroCarouselItems(
+                listOf("picture", "video-a", "bangumi", "video-b", "video-c"),
+                maxItems = 2,
+            ) { it.startsWith("video-") }
+        )
+        assertEquals(
+            emptyList(),
+            selectHomeHeroCarouselItems(listOf("picture", "bangumi")) { it.startsWith("video-") }
+        )
+    }
+
+    @Test
     fun `carousel feed removes visible hero items from regular grid`() {
         val items = listOf("a", "b", "c", "d")
         val carouselItems = listOf("a", "b")
@@ -182,7 +197,7 @@ class HomeHeroCarouselPolicyTest {
     }
 
     @Test
-    fun `carousel transform avoids 3d fold artifacts while swiping`() {
+    fun `carousel transform folds side cards into a cover flow while swiping`() {
         val centered = resolveHomeHeroCarouselCardTransform(0f)
         assertTrue(abs(centered.rotationY) < 0.001f)
         assertTrue(abs(centered.scale - 1f) < 0.001f)
@@ -192,47 +207,49 @@ class HomeHeroCarouselPolicyTest {
         assertTrue(abs(centered.contentParallaxFraction) < 0.001f)
         assertTrue(abs(centered.contentScale - 1f) < 0.001f)
         assertTrue(abs(centered.edgeShadeAlpha) < 0.001f)
-        assertTrue(abs(centered.shadowElevationFraction - 0.35f) < 0.001f)
         assertTrue(abs(centered.rotationZ) < 0.001f)
         assertTrue(centered.zIndex >= 1f)
 
-        val left = resolveHomeHeroCarouselCardTransform(-1f)
-        val right = resolveHomeHeroCarouselCardTransform(1f)
-        assertTrue(abs(left.rotationY) < 0.001f)
-        assertTrue(abs(right.rotationY) < 0.001f)
-        assertTrue(abs(left.translationXFraction) < 0.001f)
-        assertTrue(abs(right.translationXFraction) < 0.001f)
-        assertTrue(abs(left.rotationZ) < 0.001f)
-        assertTrue(abs(right.rotationZ) < 0.001f)
-        assertEquals(0.5f, left.pivotFractionX)
-        assertEquals(0.5f, right.pivotFractionX)
-        assertEquals(left.scale, right.scale)
-        assertEquals(left.alpha, right.alpha)
-        assertTrue(left.scale < centered.scale)
-        assertTrue(left.alpha < centered.alpha)
-        assertTrue(left.contentParallaxFraction > 0.05f)
-        assertTrue(right.contentParallaxFraction < -0.05f)
-        assertEquals(left.contentParallaxFraction, -right.contentParallaxFraction)
-        assertTrue(left.contentScale > 1.1f)
-        assertEquals(left.contentScale, right.contentScale)
-        assertTrue(left.edgeShadeAlpha > 0.2f)
-        assertTrue(right.edgeShadeAlpha > 0.2f)
-        assertTrue(left.edgeShadeStartFromLeft)
-        assertFalse(right.edgeShadeStartFromLeft)
-        assertTrue(left.shadowElevationFraction < centered.shadowElevationFraction)
+        // pageOffset<0 为右邻卡：绕左缘（内缘）向中心旋转 +26°，左移聚拢。
+        val rightNeighbor = resolveHomeHeroCarouselCardTransform(-1f)
+        // pageOffset>0 为左邻卡：绕右缘（内缘）向中心旋转 -26°，右移聚拢。
+        val leftNeighbor = resolveHomeHeroCarouselCardTransform(1f)
+        assertTrue(abs(rightNeighbor.rotationY - 26f) < 0.001f)
+        assertTrue(abs(leftNeighbor.rotationY + 26f) < 0.001f)
+        assertEquals(0f, rightNeighbor.pivotFractionX)
+        assertEquals(1f, leftNeighbor.pivotFractionX)
+        assertTrue(rightNeighbor.translationXFraction < -0.001f)
+        assertTrue(leftNeighbor.translationXFraction > 0.001f)
+        assertEquals(rightNeighbor.translationXFraction, -leftNeighbor.translationXFraction)
+        assertTrue(abs(rightNeighbor.rotationZ) < 0.001f)
+        assertTrue(abs(leftNeighbor.rotationZ) < 0.001f)
+        assertEquals(rightNeighbor.scale, leftNeighbor.scale)
+        assertEquals(rightNeighbor.alpha, leftNeighbor.alpha)
+        assertTrue(rightNeighbor.scale < centered.scale)
+        assertTrue(rightNeighbor.alpha < centered.alpha)
+        assertTrue(rightNeighbor.alpha >= 0.35f)
+        assertTrue(rightNeighbor.contentParallaxFraction > 0.05f)
+        assertTrue(leftNeighbor.contentParallaxFraction < -0.05f)
+        assertEquals(rightNeighbor.contentParallaxFraction, -leftNeighbor.contentParallaxFraction)
+        assertTrue(rightNeighbor.contentScale > 1.1f)
+        assertEquals(rightNeighbor.contentScale, leftNeighbor.contentScale)
+        assertTrue(rightNeighbor.edgeShadeAlpha > 0.2f)
+        assertTrue(leftNeighbor.edgeShadeAlpha > 0.2f)
+        assertTrue(rightNeighbor.edgeShadeStartFromLeft)
+        assertFalse(leftNeighbor.edgeShadeStartFromLeft)
 
         val draggingLeft = resolveHomeHeroCarouselCardTransform(-0.5f)
         val draggingRight = resolveHomeHeroCarouselCardTransform(0.5f)
-        assertTrue(abs(draggingLeft.translationXFraction) < 0.001f)
-        assertTrue(abs(draggingRight.translationXFraction) < 0.001f)
+        assertTrue(abs(draggingLeft.rotationY - 13f) < 0.001f)
+        assertTrue(abs(draggingRight.rotationY + 13f) < 0.001f)
         assertTrue(abs(draggingLeft.rotationZ) < 0.001f)
         assertTrue(abs(draggingRight.rotationZ) < 0.001f)
-        assertTrue(abs(draggingLeft.rotationY) < 0.001f)
-        assertTrue(abs(draggingRight.rotationY) < 0.001f)
-        assertTrue(draggingLeft.scale in 0.95f..1f)
-        assertTrue(draggingRight.scale in 0.95f..1f)
-        assertTrue(draggingLeft.alpha in 0.9f..1f)
-        assertTrue(draggingRight.alpha in 0.9f..1f)
+        assertTrue(draggingLeft.scale in 0.93f..0.97f)
+        assertTrue(draggingRight.scale in 0.93f..0.97f)
+        assertTrue(draggingLeft.alpha in 0.85f..0.95f)
+        assertTrue(draggingRight.alpha in 0.85f..0.95f)
+        assertTrue(draggingLeft.pivotFractionX < 0.1f)
+        assertTrue(draggingRight.pivotFractionX > 0.9f)
         assertTrue(draggingLeft.contentParallaxFraction > 0.02f)
         assertTrue(draggingRight.contentParallaxFraction < -0.02f)
         assertTrue(draggingLeft.contentScale > 1.05f)
@@ -242,7 +259,6 @@ class HomeHeroCarouselPolicyTest {
 
         val pressed = resolveHomeHeroCarouselCardTransform(0f, pressedProgress = 1f)
         assertTrue(pressed.scale < centered.scale)
-        assertTrue(pressed.shadowElevationFraction < centered.shadowElevationFraction)
     }
 
     @Test

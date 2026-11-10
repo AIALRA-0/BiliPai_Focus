@@ -1,211 +1,109 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TopControlBarPolicyTest {
-
     @Test
-    fun clockPolling_runsOnlyWhenTimeVisibleAndHostStarted() {
-        assertTrue(
-            shouldPollTopControlBarClock(
-                showCurrentTime = true,
-                hostLifecycleStarted = true
-            )
-        )
-        assertFalse(
-            shouldPollTopControlBarClock(
-                showCurrentTime = true,
-                hostLifecycleStarted = false
-            )
-        )
-        assertFalse(
-            shouldPollTopControlBarClock(
-                showCurrentTime = false,
-                hostLifecycleStarted = true
-            )
-        )
+    fun portraitInline_showsHomeAndPlayerActions() {
+        val policy = resolveTopControlBarLayoutPolicy(isPortrait = true, isFullscreen = false)
+        assertTrue(policy.showHome)
+        assertFalse(policy.showTitle)
+        assertFalse(policy.showStatus)
+        assertTrue(policy.showAudio)
+        assertTrue(policy.showCast)
+        assertFalse(policy.showDanmakuActions)
+        assertFalse(policy.showEngagement)
     }
 
     @Test
-    fun batteryPolling_runsOnlyWhenBatteryVisibleAndHostStarted() {
-        assertTrue(
-            shouldPollTopControlBarBattery(
-                showBatteryLevel = true,
-                hostLifecycleStarted = true
-            )
-        )
-        assertFalse(
-            shouldPollTopControlBarBattery(
-                showBatteryLevel = true,
-                hostLifecycleStarted = false
-            )
-        )
-        assertFalse(
-            shouldPollTopControlBarBattery(
-                showBatteryLevel = false,
-                hostLifecycleStarted = true
-            )
-        )
+    fun portraitFullscreen_showsTitleDanmakuAndSecondRowEngagement() {
+        val policy = resolveTopControlBarLayoutPolicy(isPortrait = true, isFullscreen = true)
+        assertFalse(policy.showHome)
+        assertTrue(policy.showTitle)
+        assertFalse(policy.showStatus)
+        assertFalse(policy.showAudio)
+        assertFalse(policy.showCast)
+        assertTrue(policy.showDanmakuActions)
+        assertTrue(policy.showEngagement)
+        assertTrue(policy.showDislike)
     }
 
     @Test
-    fun dislikeActionHiddenOnPhoneLandscape() {
-        assertFalse(
-            shouldShowDislikeInTopControlBar(
-                widthDp = 780
+    fun landscapeInline_horizontalScreen_hidesTitleStatusAndEngagement() {
+        val policy = resolveTopControlBarLayoutPolicy(isPortrait = false, isFullscreen = false)
+        assertTrue(policy.showHome)
+        assertFalse(policy.showTitle)
+        assertFalse(policy.showStatus)
+        assertTrue(policy.showAudio)
+        assertTrue(policy.showCast)
+        assertTrue(policy.showDanmakuActions)
+        assertFalse(policy.showEngagement)
+    }
+
+    @Test
+    fun landscapeFullscreen_showsTitleStatusAndEngagementWithoutCastOrAudio() {
+        val policy = resolveTopControlBarLayoutPolicy(isPortrait = false, isFullscreen = true)
+        assertTrue(policy.showHome)
+        assertTrue(policy.showTitle)
+        assertTrue(policy.showStatus)
+        assertFalse(policy.showAudio)
+        assertFalse(policy.showCast)
+        assertTrue(policy.showDanmakuActions)
+        assertTrue(policy.showEngagement)
+    }
+
+    @Test
+    fun landscapeInline_withoutHorizontalScreen_alsoShowsTitleAndStatus() {
+        val policy = resolveTopControlBarLayoutPolicy(
+            isPortrait = false, isFullscreen = false, horizontalScreen = false,
+        )
+        assertTrue(policy.showTitle)
+        assertTrue(policy.showStatus)
+    }
+
+    @Test
+    fun localFiles_hideNetworkActionsAndEngagement() {
+        for (fullscreen in listOf(false, true)) {
+            val policy = resolveTopControlBarLayoutPolicy(
+                isPortrait = false, isFullscreen = fullscreen, isFileSource = true,
             )
-        )
+            assertFalse(policy.showAudio)
+            assertFalse(policy.showCast)
+            assertFalse(policy.showEngagement)
+            assertTrue(policy.showDanmakuActions)
+        }
     }
 
     @Test
-    fun dislikeActionVisibleOnWideLandscape() {
-        assertTrue(
-            shouldShowDislikeInTopControlBar(
-                widthDp = 1200
+    fun pgcHasNoAudioPageOrDislikeButRetainsFullscreenEngagement() {
+        val inline = resolveTopControlBarLayoutPolicy(isPortrait = true, isFullscreen = false, isUgc = false)
+        val fullscreen = resolveTopControlBarLayoutPolicy(isPortrait = true, isFullscreen = true, isUgc = false)
+        assertFalse(inline.showAudio)
+        assertTrue(inline.showCast)
+        assertFalse(fullscreen.showDislike)
+        assertTrue(fullscreen.showEngagement)
+    }
+
+    @Test
+    fun fullscreenEngagementPreference_controlsBothOrientations() {
+        for (portrait in listOf(false, true)) {
+            val policy = resolveTopControlBarLayoutPolicy(
+                isPortrait = portrait, isFullscreen = true, showFullscreenActionItems = false,
             )
-        )
+            assertFalse(policy.showEngagement)
+        }
     }
 
     @Test
-    fun interactiveActionsVisibleWhenSettingEnabled() {
-        assertTrue(
-            shouldShowInteractiveActionsInTopControlBar(
-                showFullscreenActionItems = true
-            )
-        )
-    }
-
-    @Test
-    fun interactiveActionsHiddenWhenSettingDisabled() {
-        assertFalse(
-            shouldShowInteractiveActionsInTopControlBar(
-                showFullscreenActionItems = false
-            )
-        )
-    }
-
-    @Test
-    fun topBar_padsWhenStatusBarVisibleEvenIfInline() {
-        assertTrue(
-            shouldApplyStatusBarPaddingToTopControlBar(
-                isFullscreen = false,
-                statusBarVisible = true,
-            )
-        )
-    }
-
-    @Test
-    fun topBar_skipsPaddingWhenStatusBarHidden() {
-        assertFalse(
-            shouldApplyStatusBarPaddingToTopControlBar(
-                isFullscreen = true,
-                statusBarVisible = false,
-            )
-        )
-        assertFalse(
-            shouldApplyStatusBarPaddingToTopControlBar(
-                isFullscreen = false,
-                statusBarVisible = false,
-            )
-        )
-    }
-
-    @Test
-    fun landscapeStatusInfo_showsBatteryAndTimeInExpectedOrder() {
-        val result = resolveLandscapeTopStatusInfo(
-            showBatteryLevel = true,
-            batteryLevelPercent = 95,
-            showCurrentTime = true,
-            currentTimeText = "11:13"
-        )
-
-        assertEquals("95%", result.battery?.displayText)
-        assertEquals("11:13", result.currentTimeText)
-        assertTrue(result.isVisible)
-    }
-
-    @Test
-    fun landscapeStatusInfo_hidesTimeWhenToggleDisabled() {
-        val result = resolveLandscapeTopStatusInfo(
-            showBatteryLevel = true,
-            batteryLevelPercent = 95,
-            showCurrentTime = false,
-            currentTimeText = "11:13"
-        )
-
-        assertEquals("95%", result.battery?.displayText)
-        assertNull(result.currentTimeText)
-        assertTrue(result.isVisible)
-    }
-
-    @Test
-    fun landscapeStatusInfo_hidesBatteryGroupWhenToggleDisabled() {
-        val result = resolveLandscapeTopStatusInfo(
-            showBatteryLevel = false,
-            batteryLevelPercent = 95,
-            showCurrentTime = true,
-            currentTimeText = "11:13"
-        )
-
-        assertNull(result.battery)
-        assertEquals("11:13", result.currentTimeText)
-        assertTrue(result.isVisible)
-    }
-
-    @Test
-    fun landscapeStatusInfo_hidesRowWhenBothTogglesDisabled() {
-        val result = resolveLandscapeTopStatusInfo(
-            showBatteryLevel = false,
-            batteryLevelPercent = 95,
-            showCurrentTime = false,
-            currentTimeText = "11:13"
-        )
-
-        assertNull(result.battery)
-        assertNull(result.currentTimeText)
-        assertFalse(result.isVisible)
-    }
-
-    @Test
-    fun batteryVisualState_tracksActualBatteryPercentage() {
-        val result = resolveLandscapeBatteryVisualState(83)
-
-        assertEquals("83%", result?.displayText)
-        assertEquals(0.83f, result?.fillFraction ?: 0f, 0.001f)
-        assertEquals(BatteryChargeTone.NORMAL, result?.chargeTone)
-    }
-
-    @Test
-    fun batteryVisualState_marksCriticalBatteryClearly() {
-        val result = resolveLandscapeBatteryVisualState(9)
-
-        assertEquals("9%", result?.displayText)
-        assertEquals(BatteryChargeTone.CRITICAL, result?.chargeTone)
-    }
-
-    @Test
-    fun batteryMetaRow_isShownBelowTitleWhenStatusOrOnlineCountExists() {
-        assertTrue(
-            shouldShowLandscapeMetaRow(
-                hasStatusInfo = true,
-                onlineCount = ""
-            )
-        )
-        assertTrue(
-            shouldShowLandscapeMetaRow(
-                hasStatusInfo = false,
-                onlineCount = "23.4万在线"
-            )
-        )
-        assertFalse(
-            shouldShowLandscapeMetaRow(
-                hasStatusInfo = false,
-                onlineCount = ""
-            )
-        )
+    fun statusPolling_requiresBothVisibleStatusAndStartedHost() {
+        for (visible in listOf(false, true)) {
+            for (started in listOf(false, true)) {
+                val expected = visible && started
+                kotlin.test.assertEquals(expected, shouldPollTopControlBarClock(visible, started))
+                kotlin.test.assertEquals(expected, shouldPollTopControlBarBattery(visible, started))
+            }
+        }
     }
 }

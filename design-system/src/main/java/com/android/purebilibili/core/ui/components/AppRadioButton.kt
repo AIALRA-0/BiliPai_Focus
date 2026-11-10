@@ -16,10 +16,11 @@ fun AppRadioButton(
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource? = null,
 ) {
+    val materialClick = if (onClick != null) appActionWithFeedback(com.android.purebilibili.core.ui.AppHapticScene.MENUS, onClick) else null
     when (LocalAppUiStyle.current) {
         AppUiStyle.MATERIAL3 -> AppMaterial3RadioButton(
             selected = selected,
-            onClick = onClick,
+            onClick = materialClick,
             modifier = modifier,
             enabled = enabled,
             interactionSource = interactionSource,

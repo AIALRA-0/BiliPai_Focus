@@ -1,5 +1,10 @@
 package com.android.purebilibili.core.plugin.feed
 
+import net.dankito.readability4j.Readability4J
+import net.dankito.readability4j.model.ReadabilityOptions
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+
 private val readMoreText = Regex(
     """(查看全文|阅读全文|阅读更多|继续阅读|Read more|Continue reading).*""",
     RegexOption.IGNORE_CASE,
@@ -28,82 +33,96 @@ fun feedBodyNeedsRemoteFetch(item: ParsedFeedItem): Boolean {
         (htmlText.length < 120 && summary.length > htmlText.length + 80)
 }
 
-fun extractArticleBody(pageHtml: String): String? {
-    val withoutNoise = pageHtml
-        .replace(Regex("""(?is)<(script|style|noscript|nav|header|footer|aside)\b[^>]*>.*?</\1>"""), " ")
-    val markers = listOf(
-        "article__main__content",
-        "article-body",
-        "entry-content",
-        "post-content",
-        "post-body",
-        "article-content",
-        "rich_media_content",
-        "markdown-body",
-        "articleBody",
-        "story-body",
-        "post__content",
-        "content-body",
+/**
+ * Adapt Instant View's extract-then-render flow to the existing native RSS reader.
+ * Readability4J runs locally on downloaded HTML: no remote parsing service, WebView,
+ * Telegram page model, or execution of website scripts is involved.
+ */
+fun extractArticleBody(pageHtml: String, baseUrl: String = ""): String? =
+    extractReadableArticle(pageHtml, baseUrl)?.html
+
+data class ReadableArticle(
+    val url: String,
+    val title: String,
+    val author: String,
+    val html: String,
+)
+
+fun extractReadableArticle(pageHtml: String, baseUrl: String): ReadableArticle? {
+    if (pageHtml.isBlank() || pageHtml.length > 2 * 1024 * 1024) return null
+    val document = Jsoup.parse(pageHtml, baseUrl)
+    if (document.getAllElements().size > 20_000) return null
+    document.select("script, style, noscript, nav, header, footer, aside, form, " +
+        "[hidden], [aria-hidden=true], [role=navigation], [role=banner], [role=contentinfo]").remove()
+    document.getAllElements().filter { element ->
+        val style = element.attr("style").replace(articleWhitespace, "").lowercase()
+        style.contains("display:none") || style.contains("visibility:hidden") ||
+            articleNoise.containsMatchIn(element.id() + " " + element.className())
+    }.forEach { it.remove() }
+
+    // Resolve before Readability: its legacy URL resolver drops explicit ports and
+    // does not consistently handle ../. The result is also cached independently of the page.
+    document.select("a[href]").forEach { link ->
+        resolveFeedUrl(link.attr("href"), document.baseUri())?.let { link.attr("href", it) }
+            ?: link.removeAttr("href")
+    }
+    document.select("img").forEach { image ->
+        val source = sequenceOf("data-src", "data-original", "data-lazy-src", "src")
+            .map { image.attr(it) }
+            .mapNotNull { resolveFeedUrl(it, document.baseUri()) }
+            .firstOrNull()
+            ?: image.attr("srcset").substringBefore(',').trim().substringBefore(' ')
+                .let { resolveFeedUrl(it, document.baseUri()) }
+        if (source != null) image.attr("src", source)
+        listOf("data-src", "data-original", "data-lazy-src", "srcset").forEach { image.removeAttr(it) }
+    }
+
+    // Run against a clone; Readability mutates its DOM and the original is needed
+    // for short Chinese articles and known site containers it may discard.
+    val readable = runCatching {
+        Readability4J(
+            document.baseUri(), document.clone(),
+            ReadabilityOptions(maxElemsToParse = 20_000, wordThreshold = 80),
+        ).parse()
+    }.getOrNull()
+    val readableContent = readable?.articleContent
+    // Retain known containers for short posts when Readability discards them.
+    val content = if (readableContent != null && isReadableArticle(readableContent)) {
+        readableContent
+    } else {
+        document.select(articleContainers).firstOrNull { isReadableArticle(it, minimumText = 20) }
+            ?: document.body().takeIf { isReadableArticle(it, minimumText = 30, minimumParagraphs = 2) }
+    } ?: return null
+
+    return ReadableArticle(
+        url = baseUrl,
+        title = readable?.title?.takeIf { it.isNotBlank() }
+            ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.takeIf { it.isNotBlank() }
+            ?: document.title(),
+        author = readable?.byline.orEmpty(),
+        html = content.html(),
     )
-    markers.forEach { marker ->
-        val index = withoutNoise.indexOf(marker)
-        if (index >= 0) {
-            // A named article-body container is strong structural evidence. Short
-            // posts are valid articles too, so do not discard them with the generic
-            // fallback's long-body threshold.
-            sliceHtmlElement(withoutNoise, index)
-                ?.takeIf { feedPlainText(it).isNotBlank() }
-                ?.let { return it }
-        }
-    }
-    val articleStart = Regex("""(?i)<article\b""").find(withoutNoise)?.range?.first
-    if (articleStart != null) {
-        sliceHtmlElement(withoutNoise, articleStart)?.takeIf { feedPlainText(it).length > 20 }?.let { return it }
-    }
-    val mainStart = Regex("""(?i)<main\b""").find(withoutNoise)?.range?.first
-    if (mainStart != null) {
-        sliceHtmlElement(withoutNoise, mainStart)?.takeIf { feedPlainText(it).length > 40 }?.let { return it }
-    }
-    val bodyStart = Regex("""(?i)<body\b""").find(withoutNoise)?.range?.first
-    if (bodyStart != null) {
-        sliceHtmlElement(withoutNoise, bodyStart)?.takeIf { body ->
-            val length = feedPlainText(body).length
-            val paragraphs = Regex("""(?i)<p\b""").findAll(body).count()
-            length > 80 || (paragraphs >= 2 && length > 30)
-        }?.let { return it }
-    }
-    return null
 }
 
-internal fun sliceHtmlElement(html: String, markerIndex: Int): String? {
-    val open = html.lastIndexOf('<', markerIndex)
-    if (open < 0) return null
-    val tagEnd = html.indexOf('>', open)
-    if (tagEnd < 0) return null
-    val tagName = html.substring(open + 1, tagEnd)
-        .trim()
-        .substringBefore(' ')
-        .substringBefore('/')
-        .lowercase()
-    if (tagName.isBlank()) return null
-    if (tagName == "img") return null
-    val closeToken = "</$tagName"
-    var depth = 1
-    var index = tagEnd + 1
-    val lower = html.lowercase()
-    val openToken = "<$tagName"
-    while (index < html.length && depth > 0) {
-        val nextOpen = lower.indexOf(openToken, index)
-        val nextClose = lower.indexOf(closeToken, index)
-        if (nextClose < 0) return null
-        if (nextOpen in 0 until nextClose) {
-            depth += 1
-            index = nextOpen + openToken.length
-        } else {
-            depth -= 1
-            if (depth == 0) return html.substring(tagEnd + 1, nextClose)
-            index = nextClose + closeToken.length
-        }
-    }
-    return null
+private val articleWhitespace = Regex("\\s+")
+
+private val articleNoise = Regex(
+    """(?:^|[\s_-])(comment(?:s)?|related|recommend(?:ations)?|sidebar|share|social|advert(?:isement)?|ads|cookie-banner)(?:$|[\s_-])""",
+    RegexOption.IGNORE_CASE,
+)
+
+private const val articleContainers = ".article__main__content, .article-body, .entry-content, " +
+    ".post-content, .post-body, .article-content, #js_content, .rich_media_content, " +
+    ".markdown-body, [itemprop=articleBody], .story-body, .post__content, .content-body, article, main"
+
+private fun isReadableArticle(
+    element: Element,
+    minimumText: Int = 40,
+    minimumParagraphs: Int = 1,
+): Boolean {
+    val textLength = element.text().length
+    if (textLength <= minimumText) return false
+    val linkLength = element.select("a").sumOf { it.text().length }
+    if (linkLength.toDouble() / textLength > 0.5) return false
+    return element.select("p, pre, blockquote").count { it.text().isNotBlank() } >= minimumParagraphs
 }

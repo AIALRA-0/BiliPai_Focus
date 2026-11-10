@@ -32,7 +32,7 @@ object PersonalFavoriteRepository {
             val data = response.data
             FavoriteCategoryPage(
                 items = data?.items.orEmpty().mapNotNull { article ->
-                    val id = article.opusId?.toLongOrNull() ?: return@mapNotNull null
+                    val id = article.opusId?.trim()?.toLongOrNull()?.takeIf { it > 0L } ?: return@mapNotNull null
                     FavoriteCategoryItem(
                         id = id,
                         title = article.content.orEmpty().lineSequence().firstOrNull().orEmpty().ifBlank { "收藏文章" },
@@ -120,7 +120,7 @@ object PersonalFavoriteRepository {
             apiCall {
                 val csrf = requireCsrf()
                 val response = when (item.section) {
-                    FavoriteSection.ARTICLE -> api.deleteFavoriteArticle(item.id, csrf)
+                    FavoriteSection.ARTICLE -> api.favoriteOpusAction(csrf, buildFavoriteOpusRemovalRequest(item.id))
                     FavoriteSection.NOTE -> if (publishedNote) {
                         api.deletePublishedFavoriteNote(item.id.toString(), csrf)
                     } else {

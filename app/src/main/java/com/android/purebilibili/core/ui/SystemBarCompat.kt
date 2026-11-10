@@ -1,6 +1,8 @@
 package com.android.purebilibili.core.ui
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Color
 import android.os.Build
 import android.view.WindowManager
@@ -86,6 +88,16 @@ internal object AppWindowSystemUiController {
         )
         return true
     }
+}
+
+/** Unwraps [ContextThemeWrapper]-style chains to the hosting [Activity]; null when detached. */
+internal fun Context.findHostActivity(): Activity? {
+    var context = this
+    while (context is ContextWrapper) {
+        if (context is Activity) return context
+        context = context.baseContext
+    }
+    return null
 }
 
 @Suppress("DEPRECATION")

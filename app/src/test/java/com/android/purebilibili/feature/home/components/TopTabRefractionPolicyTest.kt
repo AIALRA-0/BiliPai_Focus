@@ -11,6 +11,31 @@ import org.junit.Test
 class TopTabRefractionPolicyTest {
 
     @Test
+    fun `non glass top tab indicator never samples a backdrop during drag or settle`() {
+        for (hasBackdrop in listOf(false, true)) {
+            for ((position, interacting, velocity) in listOf(
+                Triple(0f, false, 0f),
+                Triple(0.4f, true, 900f),
+                Triple(1.2f, false, 200f),
+            )) {
+                val visualPolicy = resolveTopTabIndicatorVisualPolicy(
+                    position = position,
+                    interacting = interacting,
+                    velocityPxPerSecond = velocity,
+                    useNeutralIndicatorTint = false,
+                )
+                val policy = resolveTopTabIndicatorBackdropPolicy(
+                    effectiveLiquidGlassEnabled = false,
+                    hasBackdrop = hasBackdrop,
+                    indicatorVisualPolicy = visualPolicy,
+                )
+                assertFalse(policy.useIndicatorBackdrop)
+                assertFalse(policy.useCombinedBackdrop)
+            }
+        }
+    }
+
+    @Test
     fun `home search reuses top dock soft BiliPai shell without pre clipping`() {
         val header = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt"

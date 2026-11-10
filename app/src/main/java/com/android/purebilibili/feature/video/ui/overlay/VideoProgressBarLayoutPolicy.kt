@@ -23,8 +23,8 @@ fun resolveVideoProgressBarLayoutPolicy(
 ): VideoProgressBarLayoutPolicy {
     if (widthDp >= 1600) {
         return VideoProgressBarLayoutPolicy(
-            baseHeightWithoutChapterDp = 32,
-            baseHeightWithChapterDp = 48,
+            baseHeightWithoutChapterDp = 24,
+            baseHeightWithChapterDp = 44,
             draggingContainerHeightDp = 140,
             previewBottomPaddingDp = 30,
             chapterBottomPaddingDp = 6,
@@ -32,7 +32,7 @@ fun resolveVideoProgressBarLayoutPolicy(
             chapterIconSizeDp = 16,
             chapterSpacingDp = 8,
             chapterFontSp = 14,
-            touchContainerHeightDp = 28,
+            touchContainerHeightDp = 20,
             trackHeightDp = 2f,
             thumbIdleSizeDp = 14,
             thumbDraggingSizeDp = 20,
@@ -43,8 +43,8 @@ fun resolveVideoProgressBarLayoutPolicy(
 
     if (widthDp >= 840) {
         return VideoProgressBarLayoutPolicy(
-            baseHeightWithoutChapterDp = 26,
-            baseHeightWithChapterDp = 40,
+            baseHeightWithoutChapterDp = 18,
+            baseHeightWithChapterDp = 36,
             draggingContainerHeightDp = 120,
             previewBottomPaddingDp = 26,
             chapterBottomPaddingDp = 5,
@@ -52,7 +52,7 @@ fun resolveVideoProgressBarLayoutPolicy(
             chapterIconSizeDp = 14,
             chapterSpacingDp = 6,
             chapterFontSp = 12,
-            touchContainerHeightDp = 24,
+            touchContainerHeightDp = 16,
             trackHeightDp = 2f,
             thumbIdleSizeDp = 12,
             thumbDraggingSizeDp = 16,
@@ -63,8 +63,8 @@ fun resolveVideoProgressBarLayoutPolicy(
 
     if (widthDp >= 600) {
         return VideoProgressBarLayoutPolicy(
-            baseHeightWithoutChapterDp = 23,
-            baseHeightWithChapterDp = 36,
+            baseHeightWithoutChapterDp = 15,
+            baseHeightWithChapterDp = 32,
             draggingContainerHeightDp = 110,
             previewBottomPaddingDp = 25,
             chapterBottomPaddingDp = 4,
@@ -72,7 +72,7 @@ fun resolveVideoProgressBarLayoutPolicy(
             chapterIconSizeDp = 13,
             chapterSpacingDp = 5,
             chapterFontSp = 11,
-            touchContainerHeightDp = 22,
+            touchContainerHeightDp = 14,
             trackHeightDp = 2f,
             thumbIdleSizeDp = 11,
             thumbDraggingSizeDp = 15,
@@ -82,8 +82,8 @@ fun resolveVideoProgressBarLayoutPolicy(
     }
 
     return VideoProgressBarLayoutPolicy(
-        baseHeightWithoutChapterDp = 20,
-        baseHeightWithChapterDp = 32,
+        baseHeightWithoutChapterDp = 12,
+        baseHeightWithChapterDp = 28,
         draggingContainerHeightDp = 100,
         previewBottomPaddingDp = 24,
         chapterBottomPaddingDp = 4,
@@ -91,11 +91,24 @@ fun resolveVideoProgressBarLayoutPolicy(
         chapterIconSizeDp = 12,
         chapterSpacingDp = 4,
         chapterFontSp = 10,
-        touchContainerHeightDp = 20,
+        touchContainerHeightDp = 12,
         trackHeightDp = 2f,
         thumbIdleSizeDp = 10,
         thumbDraggingSizeDp = 14,
         thumbIdleOffsetDp = 6,
         thumbDraggingOffsetDp = 8
     )
+}
+
+/** Reserve image height plus its gap; chapter chrome must not consume the image's space. */
+internal fun resolveVideoProgressPreviewAreaHeightDp(
+    layoutPolicy: VideoProgressBarLayoutPolicy,
+    hasChapter: Boolean,
+    previewImageHeightDp: Int?,
+): Int {
+    val baseHeight = if (hasChapter) layoutPolicy.baseHeightWithChapterDp
+        else layoutPolicy.baseHeightWithoutChapterDp
+    val existingHeight = (layoutPolicy.draggingContainerHeightDp - baseHeight).coerceAtLeast(52)
+    val requiredHeight = previewImageHeightDp?.let { it + layoutPolicy.previewBottomPaddingDp } ?: 0
+    return maxOf(existingHeight, requiredHeight)
 }

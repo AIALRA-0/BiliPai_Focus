@@ -6,7 +6,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import com.android.purebilibili.data.model.response.Dash
-import com.android.purebilibili.feature.plugin.PlaybackCdnPlugin
+import com.android.purebilibili.plugin.sdk.PlaybackCdnPlugin
 import com.android.purebilibili.feature.video.playback.audio.AudioSelectionDecision
 import com.android.purebilibili.feature.video.playback.audio.collectAudioStreamCandidates
 import com.android.purebilibili.feature.video.playback.audio.resolveAudioStreamSelection

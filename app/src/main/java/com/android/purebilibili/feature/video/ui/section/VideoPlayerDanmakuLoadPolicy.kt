@@ -23,6 +23,7 @@ fun resolveVideoPlayerDanmakuLoadPolicy(
 
 enum class VideoPlayerDanmakuEngineSyncAction {
     Enable,
+    KeepCurrent,
     DisableAndClear
 }
 
@@ -30,12 +31,19 @@ fun resolveVideoPlayerDanmakuEngineSyncAction(
     danmakuEnabled: Boolean,
     cid: Long
 ): VideoPlayerDanmakuEngineSyncAction {
-    return if (cid > 0L && danmakuEnabled) {
-        VideoPlayerDanmakuEngineSyncAction.Enable
-    } else {
-        VideoPlayerDanmakuEngineSyncAction.DisableAndClear
+    return when {
+        !danmakuEnabled -> VideoPlayerDanmakuEngineSyncAction.DisableAndClear
+        cid > 0L -> VideoPlayerDanmakuEngineSyncAction.Enable
+        // Loading/transition UI can temporarily omit cid; it is not a user toggle.
+        else -> VideoPlayerDanmakuEngineSyncAction.KeepCurrent
     }
 }
+
+/** Player/view ownership survives temporary lifecycle and return-preview changes. */
+internal fun shouldKeepVideoPlayerDanmakuHost(
+    danmakuHostActive: Boolean,
+    isPortraitFullscreen: Boolean,
+): Boolean = danmakuHostActive && !isPortraitFullscreen
 
 /**
  * Navigation keeps the outgoing detail entry composed during its transition. Both entries share

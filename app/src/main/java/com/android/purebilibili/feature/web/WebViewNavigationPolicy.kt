@@ -2,12 +2,14 @@ package com.android.purebilibili.feature.web
 
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
+import com.android.purebilibili.core.util.hasCommentLocation
 
 internal sealed interface WebViewNavigationAction {
     data object AllowWebLoad : WebViewNavigationAction
     data object Block : WebViewNavigationAction
     data class LoadInWebView(val url: String) : WebViewNavigationAction
     data class DispatchTarget(val target: BilibiliNavigationTarget) : WebViewNavigationAction
+    data class OpenExternal(val url: String) : WebViewNavigationAction
 }
 
 internal fun resolveWebViewNavigationAction(
@@ -18,7 +20,18 @@ internal fun resolveWebViewNavigationAction(
     val normalizedUrl = trimmedUrl.lowercase()
     val isCustomScheme = normalizedUrl.startsWith("bilibili://") || normalizedUrl.startsWith("bili://")
 
+    // Short shopping links can redirect off-site. Hand the destination to another app
+    // before WebView renders it; checking the host boundary avoids lookalike domains.
+    if (shouldOpenWebUrlExternally(trimmedUrl)) {
+        return WebViewNavigationAction.OpenExternal(trimmedUrl)
+    }
+
     if (isOfficialMusicDetailUrl(trimmedUrl)) {
+        return WebViewNavigationAction.AllowWebLoad
+    }
+
+    // 空间子页包含网页投稿、充电等独立内容，不能丢掉路径后拦回 UP 主首页。
+    if (isOfficialSpaceSubpageUrl(trimmedUrl)) {
         return WebViewNavigationAction.AllowWebLoad
     }
 
@@ -28,7 +41,7 @@ internal fun resolveWebViewNavigationAction(
         }
 
         val target = BilibiliNavigationTargetParser.parse(urlString)
-        if (target is BilibiliNavigationTarget.Dynamic) {
+        if (target != null && (target is BilibiliNavigationTarget.Dynamic || target.hasCommentLocation)) {
             return WebViewNavigationAction.DispatchTarget(target)
         }
 
@@ -41,11 +54,31 @@ internal fun resolveWebViewNavigationAction(
     }
 
     val target = BilibiliNavigationTargetParser.parse(urlString)
+    // 显式网页入口的自动重定向保留在网页内，点击文集链接时才进入原生页面。
+    if (target is BilibiliNavigationTarget.ArticleCollection && !hasUserGesture) {
+        return WebViewNavigationAction.AllowWebLoad
+    }
     return if (target != null) {
         WebViewNavigationAction.DispatchTarget(target)
     } else {
         WebViewNavigationAction.AllowWebLoad
     }
+}
+
+internal fun shouldOpenWebUrlExternally(urlString: String): Boolean {
+    val uri = runCatching { java.net.URI(urlString.trim()) }.getOrNull() ?: return false
+    if (!uri.scheme.equals("http", ignoreCase = true) &&
+        !uri.scheme.equals("https", ignoreCase = true)
+    ) return false
+    val host = uri.host?.lowercase() ?: return false
+    return !com.android.purebilibili.core.util.isBilibiliWebHost(host)
+}
+
+internal fun isOfficialSpaceSubpageUrl(urlString: String): Boolean {
+    val uri = runCatching { java.net.URI(urlString.trim()) }.getOrNull() ?: return false
+    val segments = uri.path.orEmpty().split('/').filter { it.isNotBlank() }
+    return uri.host.equals("space.bilibili.com", ignoreCase = true) && segments.size > 1 &&
+        segments.first().toLongOrNull()?.let { it > 0L } == true
 }
 
 internal fun isOfficialMusicDetailUrl(urlString: String): Boolean {

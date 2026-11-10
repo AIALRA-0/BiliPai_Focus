@@ -49,6 +49,21 @@ class BiliPaiDanmakuFrameTimingBenchmark {
     }
 
     @Test
+    fun landscapeDenseSegment_frameTiming() = benchmarkVideoFixture("benchmark.danmakuDenseBvid") {
+        enterLandscapePlayer()
+        SystemClock.sleep(DANMAKU_SAMPLE_DURATION_MS)
+    }
+
+    @Test
+    fun landscapeProgressScrub_frameTiming() = benchmarkVideoFixture("benchmark.danmakuLongBvid") {
+        enterLandscapePlayer()
+        repeat(6) { index ->
+            scrubLandscapeProgress(forward = index % 2 == 0)
+            SystemClock.sleep(750L)
+        }
+    }
+
+    @Test
     fun liveBurst_appendOnlyFrameTiming() {
         val roomId = argument("benchmark.danmakuLiveRoomId")
         assumeTrue("Set benchmark.danmakuLiveRoomId to a burst fixture room", roomId.isNotBlank())
@@ -95,6 +110,35 @@ class BiliPaiDanmakuFrameTimingBenchmark {
         val fromX = if (forward) (device.displayWidth * 25) / 100 else (device.displayWidth * 75) / 100
         val toX = if (forward) (device.displayWidth * 75) / 100 else (device.displayWidth * 25) / 100
         device.swipe(fromX, y, toX, y, 18)
+    }
+
+    private fun MacrobenchmarkScope.enterLandscapePlayer() {
+        var fullscreen = device.findObject(By.desc("横屏"))
+        if (fullscreen == null) {
+            device.click(device.displayWidth / 2, device.displayHeight * 22 / 100)
+            fullscreen = device.wait(Until.findObject(By.desc("横屏")), DANMAKU_UI_WAIT_TIMEOUT_MS)
+        }
+        checkNotNull(fullscreen) { "Landscape control was not found" }.click()
+        check(device.wait(Until.hasObject(By.desc("退出横屏")), DANMAKU_UI_WAIT_TIMEOUT_MS)) {
+            "Player did not enter landscape fullscreen"
+        }
+        check(device.displayWidth > device.displayHeight) { "Benchmark requires landscape display bounds" }
+    }
+
+    private fun MacrobenchmarkScope.scrubLandscapeProgress(forward: Boolean) {
+        var track = device.findObject(By.res(TARGET_PACKAGE_NAME, "player_progress"))
+        if (track == null) {
+            device.click(device.displayWidth / 2, device.displayHeight / 2)
+            track = device.wait(Until.findObject(By.res(TARGET_PACKAGE_NAME, "player_progress")), DANMAKU_UI_WAIT_TIMEOUT_MS)
+        }
+        val bounds = checkNotNull(track) { "Landscape progress track was not found" }.visibleBounds
+        // The chapter is above the track; scrub the lower touch area, not the player surface.
+        val y = bounds.bottom - (bounds.height() / 5).coerceAtLeast(1)
+        val left = bounds.left + bounds.width() / 4
+        val right = bounds.right - bounds.width() / 4
+        check(device.swipe(if (forward) left else right, y, if (forward) right else left, y, 40)) {
+            "Progress scrub injection failed"
+        }
     }
 
     private fun argument(name: String): String =

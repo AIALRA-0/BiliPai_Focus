@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.home
 
-import com.android.purebilibili.core.plugin.RecommendationStrategy
+import com.android.purebilibili.plugin.sdk.RecommendationStrategy
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap

@@ -2,6 +2,9 @@
 // design-system DampedDragAnimationState used by top tabs / segmented controls.
 package com.android.purebilibili.feature.home.components.miuix
 
+import com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion
+import com.android.purebilibili.core.ui.animation.LiquidIndicatorVelocity
+
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.MutatorMutex
@@ -15,11 +18,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.IntSize
-import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 
 enum class DampedDragTrackingMode {
@@ -44,6 +50,9 @@ class DampedDragAnimation(
     val initialScale: Float,
     pressedScale: Float,
     private val trackingMode: DampedDragTrackingMode = DampedDragTrackingMode.SPRING,
+    // Miuix example motion at 5c91d5e5. Opt in only for glass indicators;
+    // native non-glass controls retain their existing tracking and release behavior.
+    private val useMiuixIndicatorMotion: Boolean = false,
     val canDrag: (Offset) -> Boolean = { true },
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
@@ -51,21 +60,19 @@ class DampedDragAnimation(
 ) {
 
     private val valueAnimationSpec =
-        AppMotionTokens.floatingDockDampedValueSpring(visibilityThreshold)
-    private val velocityAnimationSpec =
-        AppMotionTokens.floatingDockDampedVelocitySpring(visibilityThreshold * 10f)
+        LiquidIndicatorMotion.positionSpec(visibilityThreshold)
     private val pressProgressAnimationSpec =
-        AppMotionTokens.floatingDockPressProgressSpring()
+        LiquidIndicatorMotion.pressSpec()
     // Motion tuning copied from HyperIsland's LiquidGlassNavigationBar.
     private val scaleXAnimationSpec =
-        AppMotionTokens.floatingDockIndicatorScaleXSpring()
+        LiquidIndicatorMotion.scaleXSpec()
     private val scaleYAnimationSpec =
-        AppMotionTokens.floatingDockIndicatorScaleYSpring()
+        LiquidIndicatorMotion.scaleYSpec()
 
     private val valueAnimation =
         Animatable(initialValue, visibilityThreshold)
-    private val velocityAnimation =
-        Animatable(0f, 5f)
+    private val velocityAnimation = LiquidIndicatorVelocity(animationScope)
+    private val miuixVelocityAnimation = Animatable(0f, 5f)
     private val pressProgressAnimation =
         Animatable(0f, 0.001f)
     private val scaleXAnimation =
@@ -83,14 +90,24 @@ class DampedDragAnimation(
     private var valueTrackingJob: Job? = null
     private var pressJob: Job? = null
     private var releaseJob: Job? = null
-    private var velocityJob: Job? = null
 
     val value: Float get() = valueAnimation.value
     val targetValue: Float get() = requestedValue
     val pressProgress: Float get() = pressProgressAnimation.value
     val scaleX: Float get() = scaleXAnimation.value
     val scaleY: Float get() = scaleYAnimation.value
-    val velocity: Float get() = velocityAnimation.value
+    val velocity: Float get() = if (useMiuixIndicatorMotion) miuixVelocityAnimation.value else velocityAnimation.value
+
+    /** Glass-only landing feedback overlaps shrink instead of waiting for all springs to stop. */
+    val isReadyForRecoil: Boolean get() =
+        com.android.purebilibili.core.ui.animation.canStartLiquidIndicatorRecoil(
+            position = value,
+            target = targetValue,
+            range = valueRange.endInclusive - valueRange.start,
+            interactionActive = isDragging,
+            returning = pressProgressAnimation.targetValue == 0f &&
+                scaleXAnimation.targetValue == initialScale && scaleYAnimation.targetValue == initialScale,
+        )
 
     var isDragging by mutableStateOf(false)
         private set
@@ -187,36 +204,49 @@ class DampedDragAnimation(
         }
     }
 
-    fun release() {
+    fun release(waitForBloom: Boolean = true) {
         releaseJob?.cancel()
-        velocityJob?.cancel()
         releaseJob = animationScope.launch {
-            withFrameNanos { }
-            if (value != targetValue) {
-                val threshold = ((valueRange.endInclusive - valueRange.start) * 0.025f)
-                    .coerceAtLeast(visibilityThreshold.coerceAtLeast(0.001f))
-                while (abs(valueAnimation.value - targetValue) > threshold) {
-                    withFrameNanos { }
+            if (useMiuixIndicatorMotion) {
+                withFrameNanos { }
+                if (value != targetValue) {
+                    val threshold = ((valueRange.endInclusive - valueRange.start) * 0.025f)
+                        .coerceAtLeast(visibilityThreshold.coerceAtLeast(0.001f))
+                    withTimeoutOrNull(LiquidIndicatorMotion.SettleWaitMillis) {
+                        snapshotFlow { abs(valueAnimation.value - targetValue) }.first { it < threshold }
+                    }
+                }
+                launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
+                launch { scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec) }
+                launch { scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec) }
+                return@launch
+            }
+            val settled = withTimeoutOrNull(LiquidIndicatorMotion.SettleWaitMillis) {
+                withFrameNanos { }
+                if (value != targetValue) {
+                    val threshold = ((valueRange.endInclusive - valueRange.start) * LiquidIndicatorMotion.SettleTolerance)
+                        .coerceAtLeast(visibilityThreshold.coerceAtLeast(0.001f))
+                    snapshotFlow { abs(valueAnimation.value - targetValue) }
+                        .filter { it <= threshold }
+                        .first()
+                }
+                true
+            }
+            if (settled == null) {
+                valueTrackingJob?.cancel()
+                valueAnimation.snapTo(targetValue)
+            }
+            if (waitForBloom && (pressJob?.isActive == true || pressProgressAnimation.value > 0f)) {
+                val pressScaleDelta = pressedScale - initialScale
+                if (abs(pressScaleDelta) > 0.001f) {
+                    val visiblePressScale = initialScale + pressScaleDelta * 0.3f
+                    withTimeoutOrNull(LiquidIndicatorMotion.BloomWaitMillis) {
+                        snapshotFlow { scaleXAnimation.value }.first { scale ->
+                            if (pressScaleDelta > 0f) scale >= visiblePressScale else scale <= visiblePressScale
+                        }
+                    }
                 }
             }
-            // Ensure the press is perceptible even when the position target is already reached
-            // (for example, a one-item dock). Starting the return before the scale rises makes
-            // the still-running press spring win the race and leave the indicator enlarged.
-            val pressScaleDelta = pressedScale - initialScale
-            if (abs(pressScaleDelta) > 0.001f) {
-                val visiblePressScale = initialScale + pressScaleDelta * 0.3f
-                fun hasVisiblePressScale(): Boolean = if (pressScaleDelta > 0f) {
-                    scaleXAnimation.value >= visiblePressScale
-                } else {
-                    scaleXAnimation.value <= visiblePressScale
-                }
-                while (!hasVisiblePressScale()) {
-                    withFrameNanos { }
-                }
-            }
-            // Cancel the press spring at its current value, then let the return spring own both
-            // axes. This keeps the handoff continuous without joining the press all the way to
-            // its peak, which previously introduced a visible pause before shrinking.
             pressJob?.cancel()
             pressJob = null
             launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
@@ -224,20 +254,45 @@ class DampedDragAnimation(
             launch { scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec) }
             // 速度形变是非对称的（scaleX 除以 1-v、scaleY 乘以 1-v），不归零就会留下
             // 椭圆残影。参考项目靠 animateToValue 里的归零，这里补上 release 路径。
-            launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
+            velocityAnimation.updateTarget(0f)
         }
     }
 
-    fun snapTo(value: Float) {
+    fun snapTo(value: Float, trackVelocity: Boolean = false) {
         val next = value.coerceIn(valueRange)
         requestedValue = next
-        launchValueTracking { valueAnimation.snapTo(next) }
+        launchValueTracking {
+            valueAnimation.snapTo(next)
+            // Pager motion bypasses updateValue; sample its actual frame positions too.
+            if (trackVelocity) updateVelocity()
+        }
+    }
+
+    /** Follow the pager's position and bloom on the same timeline, without a second spring. */
+    fun followPagerPosition(value: Float) {
+        val next = value.coerceIn(valueRange)
+        requestedValue = next
+        pressJob?.cancel()
+        releaseJob?.cancel()
+        val progress = LiquidIndicatorMotion.pagerPressProgress(next)
+        val scale = initialScale + (pressedScale - initialScale) * progress
+        launchValueTracking {
+            valueAnimation.snapTo(next)
+            updateVelocity()
+            pressProgressAnimation.snapTo(progress)
+            scaleXAnimation.snapTo(scale)
+            scaleYAnimation.snapTo(scale)
+        }
     }
 
     fun updateValue(value: Float) {
         val targetValue = value.coerceIn(valueRange)
+        if (useMiuixIndicatorMotion && targetValue == requestedValue && valueTrackingJob?.isActive == true) return
+        // Cancelling the owner resets Animatable.velocity. Carry it across pointer
+        // retargets so Miuix's position spring does not restart from rest each time.
+        val initialVelocity = if (useMiuixIndicatorMotion) valueAnimation.velocity else 0f
         requestedValue = targetValue
-        if (trackingMode == DampedDragTrackingMode.DIRECT || isDragging) {
+        if (!useMiuixIndicatorMotion && (trackingMode == DampedDragTrackingMode.DIRECT || isDragging)) {
             launchValueTracking {
                 valueAnimation.snapTo(targetValue)
                 updateVelocity()
@@ -245,7 +300,13 @@ class DampedDragAnimation(
             return
         }
         launchValueTracking {
-            valueAnimation.animateTo(targetValue, valueAnimationSpec) { updateVelocity() }
+            if (useMiuixIndicatorMotion) {
+                valueAnimation.animateTo(targetValue, valueAnimationSpec, initialVelocity = initialVelocity) {
+                    updateVelocity(springVelocity = this.velocity)
+                }
+            } else {
+                valueAnimation.animateTo(targetValue, valueAnimationSpec) { updateVelocity() }
+            }
         }
     }
 
@@ -254,14 +315,30 @@ class DampedDragAnimation(
         animatePress: Boolean = true,
     ) {
         val targetValue = value.coerceIn(valueRange)
+        val initialVelocity = if (useMiuixIndicatorMotion) valueAnimation.velocity else 0f
         requestedValue = targetValue
         launchValueTracking {
             mutatorMutex.mutate {
                 if (animatePress) press()
-                launch { valueAnimation.animateTo(targetValue, valueAnimationSpec) }
+                launch {
+                    valueAnimation.animateTo(
+                        targetValue,
+                        valueAnimationSpec,
+                        initialVelocity = if (useMiuixIndicatorMotion) initialVelocity else valueAnimation.velocity,
+                    ) {
+                        // Drag settling follows Miuix updateValue; selection animations use
+                        // its animateToValue path, which restores velocity separately.
+                        if (!useMiuixIndicatorMotion || !animatePress) {
+                            updateVelocity(springVelocity = if (useMiuixIndicatorMotion) this.velocity else null)
+                        }
+                    }
+                }
                 if (velocity != 0f) {
-                    velocityJob?.cancel()
-                    velocityJob = launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
+                    if (useMiuixIndicatorMotion) {
+                        launch { miuixVelocityAnimation.animateTo(0f, LiquidIndicatorMotion.velocitySpec()) }
+                    } else {
+                        velocityAnimation.updateTarget(0f)
+                    }
                 }
                 if (animatePress) release()
             }
@@ -282,7 +359,17 @@ class DampedDragAnimation(
         )
     }
 
-    private fun updateVelocity() {
+    private fun updateVelocity(springVelocity: Float? = null) {
+        if (useMiuixIndicatorMotion && springVelocity != null) {
+            // The position spring already has a continuous analytic velocity. Sampling
+            // its positions again with millisecond pointer timestamps adds start/stop
+            // spikes, especially when several retargets arrive within one frame.
+            val normalized = normalizeFloatingDockDragVelocity(springVelocity, valueRange)
+            animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                miuixVelocityAnimation.snapTo(normalized)
+            }
+            return
+        }
         velocityTracker.addPosition(
             SystemClock.uptimeMillis(),
             Offset(value, 0f)
@@ -291,11 +378,13 @@ class DampedDragAnimation(
             slotVelocity = velocityTracker.calculateVelocity().x,
             valueRange = valueRange,
         )
-        velocityJob?.cancel()
-        velocityJob = animationScope.launch(
-            start = CoroutineStart.UNDISPATCHED,
-        ) {
-            velocityAnimation.animateTo(targetVelocity, velocityAnimationSpec)
+        if (useMiuixIndicatorMotion) {
+            // Upstream snaps the measured, range-normalized velocity without smoothing.
+            animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                miuixVelocityAnimation.snapTo(targetVelocity)
+            }
+        } else {
+            velocityAnimation.updateTarget(targetVelocity)
         }
     }
 }

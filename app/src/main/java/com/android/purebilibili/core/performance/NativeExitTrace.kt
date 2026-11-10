@@ -4,10 +4,28 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.util.Base64
 
+private const val TOMBSTONE_BEGIN = "----- BEGIN TOMBSTONE PROTOBUF BASE64 -----"
+private const val TOMBSTONE_END = "----- END TOMBSTONE PROTOBUF BASE64 -----"
+
+/** The readable crash summary can be sanitized without touching the encoded protobuf. */
+internal fun nativeExitTraceSummary(trace: String): String =
+    trace.substringBefore(TOMBSTONE_BEGIN).trimEnd()
+
+internal fun decodeNativeExitTrace(trace: String): ByteArray? {
+    val start = trace.indexOf(TOMBSTONE_BEGIN)
+    if (start < 0) return null
+    val end = trace.indexOf(TOMBSTONE_END, start + TOMBSTONE_BEGIN.length)
+    if (end < 0) return null
+    val payload = trace.substring(start + TOMBSTONE_BEGIN.length, end).trim()
+    return runCatching { Base64.getDecoder().decode(payload) }.getOrNull()
+}
+
 private data class NativeBacktraceFrame(
     val relativePc: Long?,
     val functionName: String?,
-    val fileName: String?
+    val fileName: String?,
+    val functionOffset: Long? = null,
+    val buildId: String? = null,
 )
 
 private data class NativeCrashSummary(
@@ -16,7 +34,13 @@ private data class NativeCrashSummary(
     val faultAddress: Long?,
     val threadId: Long?,
     val threadName: String?,
-    val frames: List<NativeBacktraceFrame>
+    val frames: List<NativeBacktraceFrame>,
+    val buildFingerprint: String?,
+    val timestamp: String?,
+    val processUptime: Long?,
+    val pageSize: Long?,
+    val mainThreadId: Long?,
+    val threads: Map<Long, Pair<String?, List<NativeBacktraceFrame>>>,
 ) {
     val isArtJitInliningCrash: Boolean
         get() = threadName == "Jit thread pool" &&
@@ -52,15 +76,20 @@ internal fun encodeNativeExitTrace(stream: InputStream, maxBytes: Int = 4 * 1024
         if (summary != null) {
             appendNativeCrashSummary(summary)
         } else {
-            appendLine("Native crash summary: unavailable (raw tombstone preserved below)")
+            appendLine("Native crash summary: unavailable")
         }
-        appendLine("----- BEGIN TOMBSTONE PROTOBUF BASE64 -----")
+        appendLine(TOMBSTONE_BEGIN)
         appendLine(Base64.getEncoder().encodeToString(bytes))
-        append("----- END TOMBSTONE PROTOBUF BASE64 -----")
+        append(TOMBSTONE_END)
     }
 }
 
 private fun StringBuilder.appendNativeCrashSummary(summary: NativeCrashSummary) {
+    summary.buildFingerprint?.let { appendLine("System build fingerprint: $it") }
+    summary.timestamp?.let { appendLine("Native crash timestamp: $it") }
+    summary.processUptime?.let { appendLine("Process uptime: ${it}s") }
+    summary.pageSize?.let { appendLine("Memory page size: $it bytes") }
+    appendLine("Captured threads: ${summary.threads.size}")
     append("Native crash summary: signal=")
     append(summary.signalName ?: "unknown")
     summary.signalCodeName?.let { append(" (").append(it).append(')') }
@@ -72,21 +101,49 @@ private fun StringBuilder.appendNativeCrashSummary(summary: NativeCrashSummary) 
     appendLine()
     if (summary.isArtJitInliningCrash) {
         appendLine(
-            "Root-cause classification: Android Runtime (ART) JIT compiler crashed while " +
+            "Crash-site classification: Android Runtime (ART) JIT compiler crashed while " +
                 "inlining Dex code; no app native library appears in the crashing stack."
         )
+        appendLine("提示: 此分类仅定位崩溃位置，不能确定触发的业务方法或系统缺陷；JIT 编译目标可能未包含在回溯中。")
     }
     if (summary.frames.isNotEmpty()) {
-        appendLine("Crashing thread backtrace:")
-        summary.frames.take(24).forEachIndexed { index, frame ->
+        if (summary.threadName == "RenderThread") {
+            appendLine("排查方向: 界面原生渲染崩溃；仅凭渲染栈不能确定具体组件或根因。")
+            val repeatedFrames = summary.frames.mapNotNull { it.functionName }
+                .groupingBy { it }.eachCount().filterValues { it >= 8 }
+            if (repeatedFrames.isNotEmpty()) {
+                appendLine("重复栈帧: ${repeatedFrames.entries.joinToString { "${it.key} ×${it.value}" }}")
+                appendLine("提示: 检查渲染层级递归或背景自采样；重复帧不等同于已确认根因。")
+            }
+        }
+        appendLine("Crashing thread backtrace: ${summary.frames.size} frames (all decoded frames)")
+        summary.frames.forEachIndexed { index, frame ->
             append("  #")
             append(index.toString().padStart(2, '0'))
             frame.relativePc?.let { append(" pc 0x").append(it.toString(16)) }
             append(' ')
             append(frame.functionName ?: "<unknown>")
+            frame.functionOffset?.let { append(" +").append(it) }
             frame.fileName?.let { append(" (").append(it).append(')') }
+            frame.buildId?.let { append(" [BuildId: ").append(it).append(']') }
             appendLine()
         }
+    }
+    // These are concurrent snapshots, not the caller chain of the crashing JIT worker.
+    summary.threads.filter { (id, thread) ->
+        id != summary.threadId && (id == summary.mainThreadId || thread.first == "RenderThread")
+    }.forEach { (id, thread) ->
+        appendLine("Other thread snapshot (causality unknown): ${thread.first ?: "unknown"} (tid=$id)")
+        thread.second.take(120).forEachIndexed { index, frame ->
+            append("  #${index.toString().padStart(2, '0')} ")
+            frame.relativePc?.let { append("pc 0x${it.toString(16)} ") }
+            append(frame.functionName ?: "<unknown>")
+            frame.functionOffset?.let { append(" +$it") }
+            frame.fileName?.let { append(" ($it)") }
+            frame.buildId?.let { append(" [BuildId: $it]") }
+            appendLine()
+        }
+        if (thread.second.size > 120) appendLine("  [text limited to 120 frames; full frames in .pb]")
     }
 }
 
@@ -95,11 +152,21 @@ private fun parseNativeCrashSummary(bytes: ByteArray): NativeCrashSummary? = run
     var signalCodeName: String? = null
     var faultAddress: Long? = null
     var crashingThreadId: Long? = null
+    var buildFingerprint: String? = null
+    var timestamp: String? = null
+    var processUptime: Long? = null
+    var pageSize: Long? = null
+    var processId: Long? = null
     val threads = mutableMapOf<Long, Pair<String?, List<NativeBacktraceFrame>>>()
 
     ProtoReader(bytes).forEachField { number, wireType, value ->
         when (number) {
+            2 -> if (wireType == WIRE_LENGTH_DELIMITED) buildFingerprint = value.asUtf8()
+            4 -> if (wireType == WIRE_LENGTH_DELIMITED) timestamp = value.asUtf8()
+            5 -> if (wireType == WIRE_VARINT) processId = value.asLong()
             6 -> if (wireType == WIRE_VARINT) crashingThreadId = value.asLong()
+            20 -> if (wireType == WIRE_VARINT) processUptime = value.asLong()
+            22 -> if (wireType == WIRE_VARINT) pageSize = value.asLong()
             10 -> if (wireType == WIRE_LENGTH_DELIMITED) {
                 ProtoReader(value.asBytes()).forEachField { signalField, signalWireType, signalValue ->
                     when (signalField) {
@@ -126,7 +193,13 @@ private fun parseNativeCrashSummary(bytes: ByteArray): NativeCrashSummary? = run
         faultAddress = faultAddress,
         threadId = crashingThreadId,
         threadName = crashingThread?.first,
-        frames = crashingThread?.second.orEmpty()
+        frames = crashingThread?.second.orEmpty(),
+        buildFingerprint = buildFingerprint,
+        timestamp = timestamp,
+        processUptime = processUptime,
+        pageSize = pageSize,
+        mainThreadId = processId,
+        threads = threads,
     )
 }.getOrNull()
 
@@ -160,15 +233,19 @@ private fun parseBacktraceFrame(bytes: ByteArray): NativeBacktraceFrame? {
     var relativePc: Long? = null
     var functionName: String? = null
     var fileName: String? = null
+    var functionOffset: Long? = null
+    var buildId: String? = null
     ProtoReader(bytes).forEachField { number, wireType, value ->
         when (number) {
             1 -> if (wireType == WIRE_VARINT) relativePc = value.asLong()
             4 -> if (wireType == WIRE_LENGTH_DELIMITED) functionName = value.asUtf8()
+            5 -> if (wireType == WIRE_VARINT) functionOffset = value.asLong()
             6 -> if (wireType == WIRE_LENGTH_DELIMITED) fileName = value.asUtf8()
+            8 -> if (wireType == WIRE_LENGTH_DELIMITED) buildId = value.asUtf8()
         }
     }
     if (relativePc == null && functionName == null && fileName == null) return null
-    return NativeBacktraceFrame(relativePc, functionName, fileName)
+    return NativeBacktraceFrame(relativePc, functionName, fileName, functionOffset, buildId)
 }
 
 private const val WIRE_VARINT = 0

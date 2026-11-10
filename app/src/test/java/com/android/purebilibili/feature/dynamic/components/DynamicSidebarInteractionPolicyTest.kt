@@ -7,7 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DynamicSidebarInteractionPolicyTest {
-
     @Test
     fun userAvatarClick_triggersLightHapticBeforeFilteringUser() {
         val events = mutableListOf<String>()

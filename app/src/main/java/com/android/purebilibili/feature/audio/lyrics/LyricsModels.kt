@@ -48,7 +48,9 @@ internal data class LyricDocument(
 internal data class LyricQuery(
     val title: String,
     val artist: String,
-    val durationMs: Long
+    val durationMs: Long,
+    val originalTitle: String = title,
+    val artistIsUploader: Boolean = false,
 )
 
 internal data class LyricCandidate(

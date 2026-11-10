@@ -14,3 +14,14 @@ internal fun resolveRelatedVideoCardLayout(availableWidthDp: Int): RelatedVideoC
     } else {
         RelatedVideoCardLayout.HORIZONTAL
     }
+
+internal fun resolveRelatedVideoListCardLayout(
+    viewportWidthPx: Int,
+    horizontalContentPaddingPx: Int,
+    cardHorizontalPaddingPx: Int,
+    density: Float,
+): RelatedVideoCardLayout {
+    val cardWidthPx = (viewportWidthPx - horizontalContentPaddingPx - 2 * cardHorizontalPaddingPx)
+        .coerceAtLeast(0)
+    return resolveRelatedVideoCardLayout((cardWidthPx / density).toInt())
+}

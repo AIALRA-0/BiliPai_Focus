@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
 import com.android.purebilibili.core.network.policy.HomeFeedAnonymizerRuntime
 import com.android.purebilibili.core.network.policy.HomeFeedAnonymizerStatsSnapshot
-import com.android.purebilibili.core.plugin.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapability
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,7 +17,7 @@ class HomeFeedAnonymizerPluginTest {
     fun plugin_declaresMetadataAndCapabilities() {
         val plugin = HomeFeedAnonymizerPlugin()
 
-        assertEquals(HOME_FEED_ANONYMIZER_PLUGIN_ID, plugin.id)
+        assertEquals(BuiltinPluginIds.HOME_FEED_ANONYMIZER, plugin.id)
         assertEquals("初见推荐", plugin.name)
         assertEquals("1.0.2", plugin.version)
         assertEquals("BiliPai项目组", plugin.author)

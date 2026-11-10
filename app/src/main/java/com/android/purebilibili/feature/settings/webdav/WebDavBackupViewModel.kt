@@ -57,7 +57,7 @@ class WebDavBackupViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun testConnection() {
-        runAction("正在测试连接...") { config ->
+        runAction("正在测试连接…") { config ->
             service.testConnection(config)
                 .fold(
                     onSuccess = {
@@ -77,7 +77,7 @@ class WebDavBackupViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun refreshRemoteBackups() {
-        runAction("正在读取远端备份...") { config ->
+        runAction("正在读取远端备份…") { config ->
             service.listBackups(config)
                 .fold(
                     onSuccess = { list ->
@@ -98,7 +98,7 @@ class WebDavBackupViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun backupNow() {
-        runAction("正在上传备份...") { config ->
+        runAction("正在上传备份…") { config ->
             service.backupNow(config)
                 .fold(
                     onSuccess = { entry ->
@@ -122,7 +122,7 @@ class WebDavBackupViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun restoreLatest() {
-        runAction("正在恢复最新备份...") { config ->
+        runAction("正在恢复最新备份…") { config ->
             service.restoreLatest(config)
                 .fold(
                     onSuccess = { entry ->

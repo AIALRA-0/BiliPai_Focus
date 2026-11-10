@@ -206,14 +206,16 @@ fun resolveAdaptiveMiniPlayerDimensions(
     videoAspectRatio: Float,
     currentWidthDp: Float,
     defaultHeightDp: Float,
+    maxWidthDp: Float = Float.POSITIVE_INFINITY,
+    maxHeightDp: Float = Float.POSITIVE_INFINITY,
 ): AdaptiveMiniPlayerDimensions {
-    val safeAspect = if (videoAspectRatio > 0f) {
+    val safeAspect = if (videoAspectRatio.isFinite() && videoAspectRatio > 0f) {
         videoAspectRatio.coerceIn(0.45f, 2.39f)
     } else {
         16f / 9f
     }
 
-    return if (safeAspect >= 1.0f) {
+    val dimensions = if (safeAspect >= 1.0f) {
         val width = currentWidthDp.coerceAtLeast(120f)
         val height = width / safeAspect
         AdaptiveMiniPlayerDimensions(
@@ -232,4 +234,10 @@ fun resolveAdaptiveMiniPlayerDimensions(
             aspectRatio = safeAspect,
         )
     }
+    val fitScale = minOf(
+        1f,
+        maxWidthDp.coerceAtLeast(1f) / dimensions.widthDp,
+        maxHeightDp.coerceAtLeast(1f) / dimensions.heightDp,
+    )
+    return dimensions.copy(widthDp = dimensions.widthDp * fitScale, heightDp = dimensions.heightDp * fitScale)
 }

@@ -63,7 +63,7 @@ class VideoPlayerDanmakuLoadPolicyTest {
     }
 
     @Test
-    fun engineSync_enablesOnlyWhenCidIsValidAndSettingIsOn() {
+    fun engineSync_preservesCurrentTimelineWhileCidIsTemporarilyUnavailable() {
         assertEquals(
             VideoPlayerDanmakuEngineSyncAction.Enable,
             resolveVideoPlayerDanmakuEngineSyncAction(
@@ -72,12 +72,19 @@ class VideoPlayerDanmakuLoadPolicyTest {
             )
         )
         assertEquals(
-            VideoPlayerDanmakuEngineSyncAction.DisableAndClear,
+            VideoPlayerDanmakuEngineSyncAction.KeepCurrent,
             resolveVideoPlayerDanmakuEngineSyncAction(
                 danmakuEnabled = true,
                 cid = 0L
             )
         )
+    }
+
+    @Test
+    fun hostOwnership_survivesPreviewButYieldsToAnotherPlaybackHost() {
+        assertTrue(shouldKeepVideoPlayerDanmakuHost(true, false))
+        assertFalse(shouldKeepVideoPlayerDanmakuHost(false, false))
+        assertFalse(shouldKeepVideoPlayerDanmakuHost(true, true))
     }
 
     @Test

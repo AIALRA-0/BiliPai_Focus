@@ -90,4 +90,44 @@ class PbpProgressPolicyTest {
 
         assertEquals(listOf(0f, 1f, 1f), samples.map { it.fraction })
     }
+
+    @Test
+    fun buildDanmakuDensityValues_bucketsPositionsByAdaptiveStep() {
+        // 600s 视频 -> step = max(2, min(10, 600/240=2)) = 2s，桶数 = 300
+        val values = buildDanmakuDensityValues(
+            positionsMs = listOf(0L, 1_999L, 2_000L, 5_000L, 599_000L),
+            durationSeconds = 600L
+        )
+        assertEquals(300, values.size)
+        assertEquals(2f, values[0])
+        assertEquals(1f, values[1])
+        assertEquals(1f, values[2])
+        assertEquals(0f, values[3])
+        assertEquals(1f, values.last())
+
+        // 超出时长的位置被丢弃
+        val clamped = buildDanmakuDensityValues(
+            positionsMs = listOf(0L, 700_000L, -1L),
+            durationSeconds = 600L
+        )
+        assertEquals(300, clamped.size)
+        assertEquals(1f, clamped[0])
+        assertTrue(clamped.drop(1).all { it == 0f })
+    }
+
+    @Test
+    fun buildDanmakuDensityValues_stepClampsToTenSecondsForLongVideos() {
+        val values = buildDanmakuDensityValues(
+            positionsMs = listOf(0L, 60_000L),
+            durationSeconds = 10_800L // 3h -> step = 10s
+        )
+        assertEquals(1080, values.size)
+        assertEquals(2f, values[6]) // 60s / 10s = bucket 6
+    }
+
+    @Test
+    fun buildDanmakuDensityValues_rejectsInvalidInput() {
+        assertTrue(buildDanmakuDensityValues(emptyList(), durationSeconds = 0L).isEmpty())
+        assertTrue(buildDanmakuDensityValues(emptyList(), durationSeconds = 100L, stepSeconds = 0).isEmpty())
+    }
 }

@@ -22,10 +22,10 @@ class AppearanceSettingsNavigationPolicyTest {
         val appearanceSource = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/screen/AppearanceSettingsScreen.kt")
         val navigationSource = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/screen/BottomBarSettingsScreen.kt")
 
-        assertFalse(appearanceSource.contains("title = \"底栏搜索联动\""))
+        assertFalse(appearanceSource.contains("title = \"底栏搜索按钮\""))
         assertFalse(appearanceSource.contains("setBottomBarSearchLayoutMode"))
-        assertTrue(navigationSource.contains("title = \"底栏搜索联动\""))
-        assertTrue(navigationSource.contains("视频小横条随滚动自然收拢或展开"))
+        assertTrue(navigationSource.contains("title = \"底栏搜索按钮\""))
+        assertTrue(navigationSource.contains("显示搜索按钮，并随浏览收起或展开"))
         assertFalse(navigationSource.contains("title = \"底栏搜索布局\""))
         assertFalse(navigationSource.contains("title = \"搜索框自动展开\""))
     }

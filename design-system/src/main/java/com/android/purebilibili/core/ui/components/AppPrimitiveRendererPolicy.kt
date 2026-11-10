@@ -8,7 +8,8 @@ internal fun shouldUseMiuixOutlinedTextField(
     uiStyle: AppUiStyle,
     hasPrefix: Boolean,
     hasSuffix: Boolean,
-): Boolean = uiStyle == AppUiStyle.MIUIX && !hasPrefix && !hasSuffix
+    liquidGlassEnabled: Boolean = false,
+): Boolean = uiStyle == AppUiStyle.MIUIX && (!liquidGlassEnabled || (!hasPrefix && !hasSuffix))
 
 /**
  * Native Miuix action primitives are used when UI style is MIUIX.
@@ -50,20 +51,16 @@ internal fun resolveMiuixNonGlassChipMetrics(): AppMiuixCompactChipMetrics =
         iconGapDp = 8,
     )
 
-internal fun shouldUseOfficialMiuixButtonPadding(
-    usesDefaultMaterialPadding: Boolean,
-): Boolean = usesDefaultMaterialPadding
-
 internal fun resolveMiuixFabMinSizeDp(small: Boolean): Int = if (small) 48 else 60
 
 internal fun resolveMiuixFabContainerColor(
     requested: Color,
     defaultMaterialContainer: Color,
-    miuixPrimary: Color,
-): Color = if (requested == defaultMaterialContainer) miuixPrimary else requested
+    miuixDefaultContainer: Color,
+): Color = if (requested == defaultMaterialContainer) miuixDefaultContainer else requested
 
 internal fun resolveMiuixFabContentColor(
     requested: Color,
     defaultMaterialContent: Color,
-    miuixOnPrimary: Color,
-): Color = if (requested == defaultMaterialContent) miuixOnPrimary else requested
+    miuixDefaultContent: Color,
+): Color = if (requested == defaultMaterialContent) miuixDefaultContent else requested

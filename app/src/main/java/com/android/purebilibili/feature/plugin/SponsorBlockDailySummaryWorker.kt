@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
@@ -44,7 +46,7 @@ class SponsorBlockDailySummaryWorker(
 
     private suspend fun readConfig(): SponsorBlockConfig? {
         return runCatching {
-            val json = PluginStore.getConfigJson(applicationContext, SPONSOR_BLOCK_PLUGIN_ID)
+            val json = PluginStore.getConfigJson(applicationContext, BuiltinPluginIds.SPONSOR_BLOCK)
                 ?: return SponsorBlockConfig.default()
             Json.decodeFromString<SponsorBlockConfig>(json).normalized()
         }.onFailure { error ->

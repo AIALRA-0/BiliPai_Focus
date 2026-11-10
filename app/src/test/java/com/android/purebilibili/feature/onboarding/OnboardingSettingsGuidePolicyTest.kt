@@ -13,9 +13,9 @@ class OnboardingSettingsGuidePolicyTest {
     fun recommendedProfileAppliesRequestedFirstInstallDefaults() {
         val preset = resolveOnboardingSettingsGuidePreset(OnboardingSettingsProfile.RECOMMENDED)
 
-        assertTrue(preset.bottomBarFloating)
-        assertTrue(preset.androidNativeLiquidGlassEnabled)
-        assertTrue(preset.bottomBarLiquidGlassEnabled)
+        assertFalse(preset.bottomBarFloating)
+        assertFalse(preset.androidNativeLiquidGlassEnabled)
+        assertFalse(preset.bottomBarLiquidGlassEnabled)
         assertEquals(SettingsManager.TopTabLabelMode.TEXT_ONLY, preset.topTabLabelMode)
         assertEquals(
             listOf("FOLLOW", "SUBSCRIPTIONS"),

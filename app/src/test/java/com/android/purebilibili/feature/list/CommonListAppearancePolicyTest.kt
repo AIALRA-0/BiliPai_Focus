@@ -34,6 +34,48 @@ class CommonListAppearancePolicyTest {
                 globalLiquidGlassReuseEnabled = true,
             )
         )
+        assertTrue(
+            shouldUseFloatingCommonListHeaderChrome(
+                isHistoryPage = false,
+                isFavoritePage = true,
+                globalLiquidGlassReuseEnabled = true,
+            )
+        )
+        assertFalse(
+            shouldUseFloatingCommonListHeaderChrome(
+                isHistoryPage = false,
+                isFavoritePage = true,
+                globalLiquidGlassReuseEnabled = false,
+            )
+        )
+    }
+
+    @Test
+    fun collapsibleListModesCollapseTitleDownToStatusBarInset() {
+        assertEquals(
+            0f,
+            resolveCommonListHeaderMaxCollapsePxForMode(
+                collapseMode = com.android.purebilibili.core.store.CommonListHeaderCollapseMode.ALWAYS_VISIBLE,
+                fixedTopBarHeightPx = 96,
+                statusBarHeightPx = 24f,
+            ),
+        )
+        assertEquals(
+            72f,
+            resolveCommonListHeaderMaxCollapsePxForMode(
+                collapseMode = com.android.purebilibili.core.store.CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
+                fixedTopBarHeightPx = 96,
+                statusBarHeightPx = 24f,
+            ),
+        )
+        assertEquals(
+            72f,
+            resolveCommonListHeaderMaxCollapsePxForMode(
+                collapseMode = com.android.purebilibili.core.store.CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+                fixedTopBarHeightPx = 96,
+                statusBarHeightPx = 24f,
+            ),
+        )
     }
 
     @Test

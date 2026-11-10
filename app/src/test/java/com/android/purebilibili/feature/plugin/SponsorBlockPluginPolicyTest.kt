@@ -13,6 +13,21 @@ import kotlin.test.assertTrue
 class SponsorBlockPluginPolicyTest {
 
     @Test
+    fun sponsorBlockConfig_normalizationCreatesValidStableUserId() {
+        val config = SponsorBlockConfig().normalized()
+
+        assertNull(validateSponsorBlockUserId(config.userId))
+        assertEquals(config.userId, config.normalized().userId)
+    }
+
+    @Test
+    fun sponsorBlockConfig_normalizationPreservesImportedUserId() {
+        val userId = "a".repeat(32)
+
+        assertEquals(userId, SponsorBlockConfig(userId = userId).normalized().userId)
+    }
+
+    @Test
     fun normalizeSponsorSegments_discardsInvalidRangesAndSortsByStartTime() {
         val normalized = normalizeSponsorSegments(
             listOf(

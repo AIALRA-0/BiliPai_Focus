@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
+
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import androidx.compose.material3.MaterialTheme
 
@@ -15,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,21 +35,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Report
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.foundation.text.selection.SelectionContainer
+import com.android.purebilibili.core.ui.common.AppSelectionContainer as SelectionContainer
 import androidx.compose.material.icons.filled.SelectAll
 import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
 import com.android.purebilibili.core.ui.common.TextSelectionBottomSheet
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.util.FormatUtils
 
-// iOS Visual Styles
-private val MenuBackground = Color(0xCC1C1C1E) // Translucent Black
-private val SeparatorColor = Color(0xFF38383A)
-private val DestructiveColor = Color(0xFFFF453A) // System Red
-private val PrimaryColor = Color(0xFF0A84FF) // System Blue
+// Popup surfaces and content follow the active application theme.
 
 internal enum class DanmakuBlockActionTarget {
     KEYWORD,
@@ -82,10 +83,49 @@ internal fun resolveDanmakuBlockActionFeedbackMessage(
     }
 }
 
+/** 举报原因（label, API reason code），弹幕点按菜单与弹幕列表共用 */
+internal val DanmakuReportReasons: List<Pair<String, Int>> = listOf(
+    "违法违禁" to 1,
+    "色情低俗" to 2,
+    "赌博诈骗" to 3,
+    "人身攻击" to 4,
+    "侵犯隐私" to 5,
+    "垃圾广告" to 6,
+    "引战" to 7,
+    "剧透" to 8,
+    "恶意刷屏" to 9,
+    "视频无关" to 10,
+    "青少年不良信息" to 12,
+    "违法信息外链" to 13,
+    "其它" to 11
+)
+
+private val DanmakuTimestampJumpRegex = Regex("(?<![\\d:])(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?![\\d:])")
+
+/**
+ * 从弹幕文本中解析可跳转的时间戳（mm:ss 或 h:mm:ss），返回目标位置毫秒数；
+ * 无匹配或分秒越界时返回 null。
+ */
+internal fun resolveDanmakuTimestampJumpMs(text: String): Long? {
+    val match = DanmakuTimestampJumpRegex.find(text) ?: return null
+    val first = match.groupValues[1].toInt()
+    val second = match.groupValues[2].toInt()
+    val third = match.groupValues[3].takeIf { it.isNotEmpty() }?.toInt()
+    return when (third) {
+        null -> if (second < 60) (first * 60L + second) * 1000L else null
+        else -> if (second < 60 && third < 60) ((first * 60L + second) * 60L + third) * 1000L else null
+    }
+}
+
+internal fun resolveValidDanmakuTimestampJumpMs(text: String, durationMs: Long): Long? =
+    resolveDanmakuTimestampJumpMs(text)?.takeIf { it > 0 && it < durationMs }
+
 @Composable
 fun DanmakuContextMenu(
     text: String,
     onDismiss: () -> Unit,
+    tapAnchor: com.android.purebilibili.feature.video.danmaku.DanmakuTapAnchor? = null,
+    onExpandActions: () -> Unit = {},
     onLike: () -> Unit,
     onRecall: () -> Unit,
     canRecall: Boolean = false,
@@ -94,14 +134,42 @@ fun DanmakuContextMenu(
     hasLiked: Boolean = false,
     voteLoading: Boolean = false,
     canVote: Boolean = false,
+    timestampJumpMs: Long? = null,
+    onSeekToTimestamp: (Long) -> Unit = {},
     onBlockKeyword: () -> Unit = {},
     canBlockKeyword: Boolean = true,
     canBlockUser: Boolean = true,
-    onBlockUser: () -> Unit = {}
+    onBlockUser: () -> Unit = {},
+    durationMs: Long = 0L,
+    onReportWithDetails: ((reason: Int, explanation: String, blockUser: Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var currentPage by remember { mutableStateOf(DanmakuContextMenuPage.MAIN) }
     var showTextSelectionSheet by remember { mutableStateOf(false) }
+    var expanded by remember(text, tapAnchor) { mutableStateOf(false) }
+    val jumpMs = timestampJumpMs?.takeIf { it > 0 && it < durationMs }
+    if (tapAnchor != null && !expanded) {
+        DanmakuActionToolbar(
+            anchor = tapAnchor,
+            hasLiked = hasLiked,
+            voteCount = voteCount,
+            canVote = canVote,
+            voteLoading = voteLoading,
+            canRecall = canRecall,
+            hasTimestamp = jumpMs != null,
+            onDismiss = onDismiss,
+            onLike = { onLike(); onDismiss() },
+            onCopy = { copyPlainTextToClipboard(context, text); onDismiss() },
+            onReportOrRecall = {
+                currentPage = if (canRecall) DanmakuContextMenuPage.RECALL_CONFIRM else DanmakuContextMenuPage.REPORT
+                onExpandActions()
+                expanded = true
+            },
+            onTimestamp = { jumpMs?.let(onSeekToTimestamp); onDismiss() },
+            onMore = { onExpandActions(); expanded = true },
+        )
+        return
+    }
 
     if (showTextSelectionSheet) {
         TextSelectionBottomSheet(
@@ -117,6 +185,7 @@ fun DanmakuContextMenu(
             onDismissRequest = onDismiss,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -135,13 +204,21 @@ fun DanmakuContextMenu(
                     label = "MenuTransition"
                 ) { page ->
                     when (page) {
-                        DanmakuContextMenuPage.REPORT -> ReportReasonMenu(
-                            onSelectReason = { reason ->
-                                onReport(reason)
+                        DanmakuContextMenuPage.REPORT -> Column(
+                            Modifier.width(300.dp).background(MaterialTheme.colorScheme.surface).padding(12.dp)
+                        ) {
+                            AppTextButton(onClick = { currentPage = DanmakuContextMenuPage.MAIN }) {
+                                AppText("返回")
+                            }
+                            DanmakuReportForm(canBlockUser = canBlockUser, onSubmit = { reason, explanation, block ->
+                                if (onReportWithDetails != null) onReportWithDetails(reason, explanation, block)
+                                else {
+                                    onReport(reason)
+                                    if (block) onBlockUser()
+                                }
                                 onDismiss()
-                            },
-                            onBack = { currentPage = DanmakuContextMenuPage.MAIN }
-                        )
+                            })
+                        }
                         DanmakuContextMenuPage.RECALL_CONFIRM -> RecallConfirmMenu(
                             previewText = resolveDanmakuRecallConfirmationPreview(text),
                             onBack = { currentPage = DanmakuContextMenuPage.MAIN },
@@ -157,6 +234,11 @@ fun DanmakuContextMenu(
                             voteLoading = voteLoading,
                             canVote = canVote,
                             canRecall = canRecall,
+                            timestampJumpMs = timestampJumpMs?.takeIf { it > 0 && it < durationMs },
+                            onSeekToTimestamp = {
+                                onSeekToTimestamp(it)
+                                onDismiss()
+                            },
                             onLike = {
                                 onLike()
                                 onDismiss()
@@ -200,7 +282,7 @@ private fun RecallConfirmMenu(
         modifier = Modifier
             .width(280.dp)
             .clip(AppShapes.container(ContainerLevel.Dialog))
-            .background(MenuBackground),
+            .background(com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -215,13 +297,13 @@ private fun RecallConfirmMenu(
                 AppIcon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
-                    tint = PrimaryColor,
+                    tint = AppContentColors.neutralAction(),
                     modifier = Modifier.size(24.dp),
                 )
             }
             AppText(
                 text = "确认撤回",
-                color = Color.White,
+                color = AppContentColors.primaryText(),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 modifier = Modifier.align(Alignment.Center)
             )
@@ -237,20 +319,20 @@ private fun RecallConfirmMenu(
         ) {
             AppText(
                 text = "撤回后不可恢复",
-                color = Color.White,
+                color = AppContentColors.primaryText(),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
             )
             Spacer(modifier = Modifier.height(8.dp))
             AppText(
                 text = "确认撤回这条弹幕？",
-                color = Color.White.copy(alpha = 0.82f),
+                color = AppContentColors.secondaryText(),
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
             AppText(
                 text = previewText,
-                color = Color.White.copy(alpha = 0.62f),
+                color = AppContentColors.secondaryText(),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -263,7 +345,7 @@ private fun RecallConfirmMenu(
         MenuItem(
             label = "撤回弹幕",
             icon = Icons.AutoMirrored.Filled.Reply,
-            color = DestructiveColor,
+            color = AppContentColors.error(),
             onClick = onConfirm
         )
     }
@@ -277,6 +359,8 @@ private fun MainMenu(
     voteLoading: Boolean,
     canVote: Boolean,
     canRecall: Boolean,
+    timestampJumpMs: Long? = null,
+    onSeekToTimestamp: (Long) -> Unit = {},
     onLike: () -> Unit,
     onRecall: () -> Unit,
     onReportClick: () -> Unit,
@@ -291,7 +375,7 @@ private fun MainMenu(
         modifier = Modifier
             .width(280.dp)
             .clip(AppShapes.container(ContainerLevel.Dialog))
-            .background(MenuBackground)
+            .background(com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer())
             .padding(vertical = 0.dp), // iOS menus often have no outer padding inside the rounded container
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -304,14 +388,14 @@ private fun MainMenu(
         ) {
             AppText(
                 text = "弹幕内容",
-                color = Color.White.copy(0.5f),
+                color = AppContentColors.secondaryText(),
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium)
             )
             Spacer(modifier = Modifier.height(4.dp))
             SelectionContainer {
                 AppText(
                     text = text,
-                    color = Color.White,
+                    color = AppContentColors.primaryText(),
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -323,7 +407,7 @@ private fun MainMenu(
         MenuSeparator()
 
         val voteLabel = when {
-            voteLoading -> "加载点赞状态..."
+            voteLoading -> "正在提交..."
             !canVote -> "当前弹幕不支持点赞"
             hasLiked -> "取消点赞 (${formatVoteCount(voteCount)})"
             else -> "点赞弹幕 (${formatVoteCount(voteCount)})"
@@ -334,9 +418,9 @@ private fun MainMenu(
             enabled = canVote && !voteLoading,
             onClick = onLike
         )
-        
+
         MenuSeparator()
-        
+
         MenuItem(
             label = "复制全部",
             icon = Icons.Filled.ContentCopy,
@@ -344,6 +428,15 @@ private fun MainMenu(
         )
 
         MenuSeparator()
+
+        if (timestampJumpMs != null) {
+            MenuItem(
+                label = "跳转到 ${formatDanmakuTimestampJumpLabel(timestampJumpMs)}",
+                icon = Icons.Filled.PlayArrow,
+                onClick = { onSeekToTimestamp(timestampJumpMs) }
+            )
+            MenuSeparator()
+        }
 
         MenuItem(
             label = "选择内容",
@@ -371,7 +464,7 @@ private fun MainMenu(
             )
             MenuSeparator()
         }
-        
+
         MenuItem(
             label = "屏蔽发送者",
             icon = Icons.Filled.Block,
@@ -384,87 +477,33 @@ private fun MainMenu(
         MenuItem(
             label = "举报弹幕",
             icon = Icons.Filled.Report,
-            color = DestructiveColor, // Red for Report
+            color = AppContentColors.error(), // Red for Report
             onClick = onReportClick
         )
     }
 }
 
-@Composable
-private fun ReportReasonMenu(
-    onSelectReason: (Int) -> Unit,
-    onBack: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(280.dp)
-            .clip(AppShapes.container(ContainerLevel.Dialog))
-            .background(MenuBackground),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Header with Back
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
-        ) {
-            AppIconButton(
-                onClick = onBack,
-                modifier = Modifier.align(Alignment.CenterStart),
-            ) {
-                AppIcon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回",
-                    tint = PrimaryColor,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            AppText(
-                text = "举报原因",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.align(Alignment.Center)
-            )
-        }
 
-        MenuSeparator()
+private fun formatVoteCount(rawCount: Int): String =
+    FormatUtils.formatStat(rawCount.toLong())
 
-        val reasons = listOf(
-            Pair("违法违禁", 1),
-            Pair("色情低俗", 2),
-            Pair("赌博诈骗", 3), // mapped to 'Advertising' or similar in API usually? API doc said: 1=违法/2=色情/3=广告/4=引战/5=辱骂/6=剧透/7=刷屏/8=其他
-            Pair("人身攻击", 5),
-            Pair("引战", 4),
-            Pair("剧透", 6),
-            Pair("刷屏", 7),
-            Pair("其他", 8)
-        )
-
-        reasons.forEachIndexed { index, (label, code) ->
-            MenuItem(
-                label = label,
-                centered = true, // Center text for options
-                onClick = { onSelectReason(code) }
-            )
-            if (index < reasons.lastIndex) {
-                MenuSeparator()
-            }
-        }
+private fun formatDanmakuTimestampJumpLabel(timeMs: Long): String {
+    val totalSeconds = timeMs / 1000L
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
     }
-}
-
-private fun formatVoteCount(rawCount: Int): String {
-    val count = rawCount.coerceAtLeast(0)
-    if (count < 10_000) return count.toString()
-    val compact = ((count / 1000) / 10f).toString().removeSuffix(".0")
-    return "${compact}万"
 }
 
 @Composable
 private fun MenuItem(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    color: Color = Color.White,
+    color: Color = AppContentColors.primaryText(),
     centered: Boolean = false,
     enabled: Boolean = true,
     onClick: () -> Unit
@@ -499,7 +538,7 @@ private fun MenuItem(
 @Composable
 private fun MenuSeparator() {
     AppHorizontalDivider(
-        color = SeparatorColor,
+        color = com.android.purebilibili.core.ui.AppSurfaceTokens.divider(),
         thickness = 0.5.dp
     )
 }

@@ -37,6 +37,8 @@ data class UserState(
     val vipLabel: String = "",
     /** vip.type: 1 monthly, 2 annual — used when [vipLabel] is empty */
     val vipType: Int = 0,
+    /** nav.officialVerify.type: -1 无认证，0 个人认证，1 机构认证 — 头像角标用 */
+    val officialVerifyType: Int = -1,
     //  [New] 顶部背景图
     val topPhoto: String = ""
 )
@@ -145,7 +147,9 @@ data class CategoryContent(
     val isLoading: Boolean = false,
     val error: String? = null,
     val pageIndex: Int = 1, //  保存分页索引
-    val hasMore: Boolean = true //  保存是否还有更多数据
+    val hasMore: Boolean = true, //  保存是否还有更多数据
+    val loadMoreError: String? = null,
+    val refreshError: String? = null,
 )
 
 /**

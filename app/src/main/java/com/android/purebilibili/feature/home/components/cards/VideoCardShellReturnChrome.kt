@@ -57,6 +57,13 @@ internal fun Modifier.videoCardShellReturnChromeAlpha(
         } else {
             isSharedMorphSourceCard
         }
+        // Unrelated cards keep their native appearance and must not observe the flying
+        // card's frame clock. Apply this before evaluating any progress provider.
+        if (!effectiveSharedMorphSourceCard) {
+            alpha = 1f
+            translationY = 0f
+            return@graphicsLayer
+        }
         val phase = bgState.phaseProvider()
         val returnGestureInProgress = bgState.isReturnGestureInProgressProvider() ||
             bgState.isGestureRestoreInProgressProvider()
@@ -126,6 +133,10 @@ internal fun Modifier.videoCardShellReturnCoverAlpha(
         )
     }
     return graphicsLayer {
+        if (!isSharedMorphSourceCard) {
+            alpha = 1f
+            return@graphicsLayer
+        }
         alpha = resolveHomeCardReturnSourceVisualAlpha(
             useCardContainerSharedBounds = enabled,
             isSharedMorphSourceCard = isSharedMorphSourceCard,

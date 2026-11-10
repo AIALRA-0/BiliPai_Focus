@@ -36,11 +36,12 @@ import com.android.purebilibili.core.plugin.skin.UiSkinAssets
 import com.android.purebilibili.core.plugin.skin.UiSkinColorTokens
 import com.android.purebilibili.core.plugin.skin.UiSkinManifest
 import java.io.File
-
-// Preserve existing local corner geometry across theme migrations.
-private object SkinPreviewShapeSpec {
-    const val Radius28Dp = 28
-}
+import com.android.purebilibili.core.plugin.skin.InstalledUiSkinPackage
+import com.android.purebilibili.core.plugin.skin.UiSkinState
+import com.android.purebilibili.feature.home.components.BottomNavItem
+import com.android.purebilibili.feature.home.components.IllustratedSkinBottomBar
+import com.android.purebilibili.feature.home.components.resolveBottomBarUiSkinDecoration
+import com.android.purebilibili.feature.home.components.usesIllustratedNavigation
 
 /**
  * 真实合成预览的数据模型。从已安装皮肤或临时预览资源构造，不可变。
@@ -124,7 +125,7 @@ fun parsePreviewColor(value: String?, fallback: Color): Color {
  * 让用户在导入前看到「启用后底栏实际长什么样」，而非资源网格。
  *
  * 尺寸复用 [com.android.purebilibili.feature.home.components] 的 token：
- * dock 高 64dp、图标 32dp，与生产底栏一致，确保预览所见即所得。
+ * 普通 dock 使用 32dp 图标；完整插画皮肤直接复用生产导航组件。
  */
 @Composable
 fun UiSkinCompositionPreview(
@@ -133,7 +134,21 @@ fun UiSkinCompositionPreview(
     showLiquidGlass: Boolean = true
 ) {
     val layers = resolveUiSkinCompositionLayers(data)
-    val dockShape: Shape = RoundedCornerShape(SkinPreviewShapeSpec.Radius28Dp.dp)
+    val decoration = resolveBottomBarUiSkinDecoration(
+        UiSkinState(
+            enabled = true,
+            activeSkin = InstalledUiSkinPackage(
+                manifest = data.manifest,
+                packageSha256 = "preview",
+                packagePath = "",
+                installedAtMillis = 0L,
+                assetFiles = data.assetFiles,
+            ),
+        ),
+        isDark = data.darkMode,
+    )
+    val illustrated = decoration.usesIllustratedNavigation(isTablet = false)
+    val dockShape: Shape = RoundedCornerShape(28.dp)
     val dockHeight = previewDockHeight()
     val iconSize = previewDockIconSize()
 
@@ -156,17 +171,31 @@ fun UiSkinCompositionPreview(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = if (illustrated) 0.dp else 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
-            PreviewBottomBarDock(
-                layers = layers,
-                dockShape = dockShape,
-                dockHeight = dockHeight,
-                iconSize = iconSize,
-                showLiquidGlass = showLiquidGlass,
-                darkMode = data.darkMode
-            )
+            if (illustrated && decoration != null) {
+                IllustratedSkinBottomBar(
+                    decoration = decoration,
+                    currentItem = BottomNavItem.HOME,
+                    visibleItems = listOf(
+                        BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY,
+                        BottomNavItem.LISTEN_VIDEO, BottomNavItem.PROFILE,
+                    ),
+                    onItemClick = {},
+                    includeNavigationInset = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                PreviewBottomBarDock(
+                    layers = layers,
+                    dockShape = dockShape,
+                    dockHeight = dockHeight,
+                    iconSize = iconSize,
+                    showLiquidGlass = showLiquidGlass,
+                    darkMode = data.darkMode
+                )
+            }
         }
     }
 }

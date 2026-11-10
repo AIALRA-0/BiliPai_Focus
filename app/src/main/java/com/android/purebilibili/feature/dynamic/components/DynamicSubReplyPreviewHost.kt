@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
@@ -18,10 +20,12 @@ fun DynamicSubReplyPreviewHost(
     state: SubReplyUiState,
     onDismiss: () -> Unit,
     onLoadMore: () -> Unit,
+    onRefresh: () -> Unit,
     onSortModeChange: (SubReplySortMode) -> Unit,
     onUserClick: (Long) -> Unit,
     onReplyClick: ((ReplyItem) -> Unit)? = null,
     onCommentLike: ((Long) -> Unit)? = null,
+    onCommentHate: ((Long) -> Unit)? = null,
     currentMid: Long = 0L,
     onDeleteComment: ((Long) -> Unit)? = null,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
@@ -36,14 +40,17 @@ fun DynamicSubReplyPreviewHost(
     var showImagePreview by remember { mutableStateOf(false) }
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
-    var previewSourceRect by remember { mutableStateOf<Rect?>(null) }
+    var previewSourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
 
     if (showImagePreview && previewImages.isNotEmpty()) {
         ImagePreviewDialog(
             images = previewImages,
             initialIndex = previewInitialIndex,
-            sourceRect = previewSourceRect,
+            sourceRect = previewSourceRect?.rect,
+            sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+            sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
+                ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = previewTextContent,
             onDismiss = {
                 showImagePreview = false
@@ -57,10 +64,12 @@ fun DynamicSubReplyPreviewHost(
         emoteMap = emoteMap,
         onDismiss = onDismiss,
         onLoadMore = onLoadMore,
+        onRefresh = onRefresh,
         onSortModeChange = onSortModeChange,
         onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
         onReplyClick = onReplyClick,
         onCommentLike = onCommentLike,
+        onCommentHate = onCommentHate,
         currentMid = currentMid,
         onDeleteComment = onDeleteComment,
         onImagePreview = { images, index, rect, textContent ->

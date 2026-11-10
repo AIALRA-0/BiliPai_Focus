@@ -136,6 +136,8 @@ Android Studio 与 Android SDK 需要支持仓库声明的 Gradle 插件和 SDK 
 
 当前依赖版本见 [`gradle/libs.versions.toml`](gradle/libs.versions.toml) 与构建脚本
 
+环境：JDK 21、Android SDK 37。
+
 ```bash
 # Clone this repository and compile the app source
 git clone https://github.com/AIALRA-0/BiliPai_Focus.git

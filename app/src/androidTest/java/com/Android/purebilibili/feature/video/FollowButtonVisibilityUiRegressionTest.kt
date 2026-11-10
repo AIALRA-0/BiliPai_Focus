@@ -34,7 +34,8 @@ class FollowButtonVisibilityUiRegressionTest {
                     info = ViewInfo(
                         bvid = "BV_TEST",
                         owner = Owner(mid = 1L, name = "测试UP主")
-                    )
+                    ),
+                    followStatusKnown = true
                 )
             }
         }

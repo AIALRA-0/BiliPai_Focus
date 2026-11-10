@@ -1,6 +1,8 @@
 // 文件路径: feature/dynamic/components/DrawGrid.kt
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 
@@ -13,7 +15,7 @@ import com.android.purebilibili.core.ui.MediaContrastPalette
 import com.android.purebilibili.core.ui.rememberAppSparklesIcon
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Material Icons
@@ -23,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -31,7 +34,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
-import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
 import coil3.imageLoader
 import com.android.purebilibili.data.model.response.DrawItem
 import com.android.purebilibili.core.ui.components.AppText
@@ -46,12 +49,15 @@ fun DrawGridV2(
     items: List<DrawItem>,
     gifImageLoader: ImageLoader,
     maxDisplayImages: Int? = DYNAMIC_FEED_PREVIEW_MAX_IMAGES,
-    onImageClick: (Int, Rect?) -> Unit = { _, _ -> }  //  [修改] 图片点击回调，新增 Rect 参数
+    onImageClick: (Int, Rect?) -> Unit = { _, _ -> },
+    onImagePreviewClick: ((Int, ImagePreviewSourceAnchor?) -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
 
     val context = LocalContext.current
     val defaultImageLoader = context.imageLoader
+    // Plain map: bounds update while feed cards scroll and must not invalidate the grid.
+    val galleryRects = remember(items) { mutableMapOf<Int, Rect>() }
     val totalCount = items.size  //  保存总图片数
     val displayCount = resolveDrawGridDisplayCount(
         totalImages = totalCount,
@@ -89,7 +95,9 @@ fun DrawGridV2(
                 defaultImageLoader = defaultImageLoader,
                 cornerRadius = cornerRadius,
                 scaleMode = resolveDrawGridScaleMode(displayItems.size),
-                onImageClick = onImageClick
+                galleryRects = galleryRects,
+                onImageClick = onImageClick,
+                onImagePreviewClick = onImagePreviewClick,
             )
         } else {
             var globalIndex = 0
@@ -113,7 +121,9 @@ fun DrawGridV2(
                                 defaultImageLoader = defaultImageLoader,
                                 cornerRadius = cornerRadius,
                                 scaleMode = resolveDrawGridScaleMode(displayItems.size),
-                                onImageClick = onImageClick
+                                galleryRects = galleryRects,
+                                onImageClick = onImageClick,
+                                onImagePreviewClick = onImagePreviewClick,
                             )
                         }
                         repeat(columns - row.size) {
@@ -137,7 +147,9 @@ private fun DrawGridImage(
     defaultImageLoader: ImageLoader,
     cornerRadius: androidx.compose.ui.unit.Dp,
     scaleMode: DrawGridScaleMode,
-    onImageClick: (Int, Rect?) -> Unit
+    galleryRects: MutableMap<Int, Rect>,
+    onImageClick: (Int, Rect?) -> Unit,
+    onImagePreviewClick: ((Int, ImagePreviewSourceAnchor?) -> Unit)?,
 ) {
     val context = LocalContext.current
     val imageUrl = remember(item.src) {
@@ -154,23 +166,52 @@ private fun DrawGridImage(
     // boundsInWindow changes on every scroll frame. Keep it outside snapshot state so
     // measuring a waterfall item never back-writes into composition and reflows the grid.
     val imageRectRef = remember { object { var value: Rect? = null } }
+    // 预览打开期间隐藏原位卡片，回位落地后恢复。
+    // 优先按图片 URL 身份匹配，几何判定仅作无身份键入口的回退，
+    // 避免 Dialog 窗口/滚动容器坐标差异导致的"原图残留"。
+    val sourceHidden = isImagePreviewSourceHidden(imageRectRef.value, imageUrl)
 
     Box(
         modifier = modifier
+            .alpha(if (sourceHidden) 0f else 1f)
             .clip(RoundedCornerShape(cornerRadius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .onGloballyPositioned { coordinates ->
                 imageRectRef.value = coordinates.boundsInWindow()
+                galleryRects[index] = imageRectRef.value!!
             }
-            .clickable { onImageClick(index, imageRectRef.value) },
+            .appActionClickable(
+                interactionSource = null,
+                indication = null,
+                enabled = !sourceHidden,
+            ) {
+                val rect = imageRectRef.value
+                val anchor = rect?.let {
+                    ImagePreviewSourceAnchor(
+                        rect = it,
+                        cornerRadiusDp = cornerRadius.value,
+                        galleryRects = galleryRects.toMap(),
+                        sourceKey = imageUrl,
+                    )
+                }
+                if (onImagePreviewClick != null) {
+                    prepareImagePreviewSourceTransition(anchor?.rect, imageUrl)
+                }
+                onImageClick(index, rect)
+                onImagePreviewClick?.invoke(index, anchor)
+            },
         contentAlignment = Alignment.Center
     ) {
         if (imageUrl.isNotEmpty()) {
-            AsyncImage(
+            PageAwareAsyncImage(
                 model = coil3.request.ImageRequest.Builder(context)
                     .data(imageUrl)
+                    // Reuse this exact source identity as the preview's placeholder key.
+                    .memoryCacheKey(imageUrl)
                     .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
-                    .crossfade(!isGif)
+                    // The Hero flight is the only transition; don't fade the source
+                    // again if its list item is recreated while the preview is open.
+                    .crossfade(false)
                     .build(),
                 imageLoader = if (isGif) gifImageLoader else defaultImageLoader,
                 contentDescription = null,
@@ -185,7 +226,7 @@ private fun DrawGridImage(
                 rememberAppSparklesIcon(),
                 contentDescription = null,
                 modifier = Modifier.size(AppSpacingTokens.DoubleExtraLarge),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                tint = AppContentColors.secondaryText().copy(alpha = 0.5f)
             )
         }
 

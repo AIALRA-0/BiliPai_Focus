@@ -4,11 +4,16 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.OPUS_DETAIL_FEATURES
 import com.android.purebilibili.core.network.WbiUtils
+import com.android.purebilibili.core.store.AccountSessionIdentity
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.DynamicFeedResponse
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.feature.article.shouldFetchArticleFallbackForOpus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -23,8 +28,14 @@ import kotlinx.coroutines.withContext
  * - `update_num`：本次在更新基线以上的新动态条数
  */
 object DynamicRepository {
-    private val feedPagination = DynamicFeedPaginationRegistry()
-    private val userFeedPagination = DynamicUserPaginationRegistry()
+    private data class AccountPagination(
+        val identity: AccountSessionIdentity,
+        val feed: DynamicFeedPaginationRegistry = DynamicFeedPaginationRegistry(),
+        val users: DynamicUserPaginationRegistry = DynamicUserPaginationRegistry(),
+    )
+    private var accountPagination: AccountPagination? = null
+    private val feedPagination get() = paginationForAccount().feed
+    private val userFeedPagination get() = paginationForAccount().users
     private val detailSeeds = object : LinkedHashMap<String, DynamicItem>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, DynamicItem>?): Boolean {
             return size > 32
@@ -32,10 +43,26 @@ object DynamicRepository {
     }
     private val detailSeedsLock = Any()
 
+    private fun paginationForAccount(): AccountPagination = synchronized(detailSeedsLock) {
+        val identity = TokenManager.accountIdentity.value
+        accountPagination?.takeIf { it.identity == identity } ?: AccountPagination(identity).also {
+            accountPagination = it
+            detailSeeds.clear()
+        }
+    }
+
+    private suspend fun ensureCurrentAccount(identity: AccountSessionIdentity) {
+        currentCoroutineContext().ensureActive()
+        if (!isDynamicAccountRequestCurrent(identity, TokenManager.accountIdentity.value, TokenManager.midCache)) {
+            throw IllegalStateException("账号已切换，请重新刷新动态")
+        }
+    }
+
     fun rememberDynamicDetailSeed(item: DynamicItem) {
         val id = item.id_str.trim()
         if (id.isEmpty()) return
         synchronized(detailSeedsLock) {
+            paginationForAccount()
             detailSeeds[id] = item
         }
         item.orig?.let(::rememberDynamicDetailSeed)
@@ -45,6 +72,7 @@ object DynamicRepository {
         val id = dynamicId.trim()
         if (id.isEmpty()) return null
         return synchronized(detailSeedsLock) {
+            paginationForAccount()
             detailSeeds[id]
         }
     }
@@ -60,7 +88,10 @@ object DynamicRepository {
         type: String = "all",
         incrementalRefresh: Boolean = false
     ): Result<DynamicFeedFetchResult> = withContext(Dispatchers.IO) {
+        val account = paginationForAccount()
+        val feedPagination = account.feed
         try {
+            ensureCurrentAccount(account.identity)
             val paginationBeforeRefresh = feedPagination.snapshot(scope, type)
             val useIncrementalRefresh = shouldUseDynamicIncrementalRefresh(
                 refresh = refresh,
@@ -87,114 +118,27 @@ object DynamicRepository {
                 )
             }
 
-            val visibleItems = mutableListOf<DynamicItem>()
-            var pagesFetched = 0
-            var fetchedItemCount = 0
-            var reportedUpdateNum = 0
-            var resolvedUpdateBaseline = paginationForPageUpdate.updateBaseline
-            var requestOffset = if (refresh) "" else feedPagination.offset(scope, type)
-            while (true) {
-                val previousOffset = requestOffset
-                val requestUpdateBaseline = if (previousOffset.isBlank() && useIncrementalRefresh) {
-                    paginationBeforeRefresh.updateBaseline
-                } else {
-                    ""
-                }
-                val response = fetchDynamicFeedPageWithRetry {
-                    NetworkModule.dynamicApi.getDynamicFeed(
-                        type = type,
-                        offset = previousOffset,
-                        updateBaseline = requestUpdateBaseline
-                    )
-                }.getOrElse { error ->
-                    return@withContext Result.failure(error)
-                }
-
-                val data = response.data
-                if (data == null) {
-                    feedPagination.updateState(
-                        scope = scope,
-                        type = type,
-                        state = resolveDynamicPaginationStateAfterPage(
-                            paginationBeforeRefresh = paginationForPageUpdate,
-                            responseOffset = previousOffset,
-                            responseUpdateBaseline = "",
-                            responseHasMore = false,
-                            preserveExistingPagination = useIncrementalRefresh,
-                            reportedUpdateNum = reportedUpdateNum
-                        )
-                    )
-                    break
-                }
-
-                if (pagesFetched == 0) {
-                    // 首包的 update_num 才是「相对 update_baseline 的新动态数」
-                    reportedUpdateNum = data.update_num.coerceAtLeast(0)
-                }
-                resolvedUpdateBaseline = resolveDynamicFeedUpdateBaseline(
-                    currentBaseline = resolvedUpdateBaseline,
-                    responseBaseline = data.update_baseline,
-                    pagesFetched = pagesFetched
-                )
-
-                // Do not keep a broken cursor marked as loadable; otherwise a repeated
-                // offset lets the next request return the same page forever.
-                val pageHasMore = data.has_more && hasDynamicPaginationProgress(
-                    previousOffset = previousOffset,
-                    nextOffset = data.offset
-                )
-                requestOffset = data.offset
-                feedPagination.updateState(
-                    scope = scope,
-                    type = type,
-                    state = resolveDynamicPaginationStateAfterPage(
-                        paginationBeforeRefresh = paginationForPageUpdate,
-                        responseOffset = data.offset,
-                        responseUpdateBaseline = resolvedUpdateBaseline,
-                        responseHasMore = pageHasMore,
-                        preserveExistingPagination = useIncrementalRefresh,
-                        reportedUpdateNum = reportedUpdateNum
-                    )
-                )
-
-                // Keep folded/hidden cards in the timeline. PiliPlus only shrinks
-                // `visible == false` items in UI and unfolds them from module_fold;
-                // dropping them here swallows the hours between two visible posts.
-                visibleItems += data.items
-                fetchedItemCount += data.items.size
-                pagesFetched += 1
-
-                val shouldContinue = if (useIncrementalRefresh) {
-                    shouldContinueDynamicIncrementalFetch(
-                        accumulatedItemCount = fetchedItemCount,
-                        updateNum = reportedUpdateNum,
-                        hasMore = pageHasMore,
-                        previousOffset = previousOffset,
-                        nextOffset = data.offset
-                    )
-                } else {
-                    shouldContinueDynamicFetchAfterFilter(
-                        accumulatedVisibleCount = visibleItems.size,
-                        hasMore = pageHasMore,
-                        previousOffset = previousOffset,
-                        nextOffset = data.offset,
-                        pagesFetched = pagesFetched
-                    )
-                }
-                if (!shouldContinue) {
-                    break
-                }
-            }
-
-            Result.success(
-                DynamicFeedFetchResult(
-                    items = visibleItems,
-                    updateNum = reportedUpdateNum,
-                    usedUpdateBaseline = useIncrementalRefresh,
-                    nextOffset = requestOffset,
-                    hasMore = feedPagination.hasMore(scope, type)
+            val page = loadDynamicPage(
+                type = type,
+                offset = if (refresh) "" else paginationBeforeRefresh.offset,
+                updateBaseline = paginationBeforeRefresh.updateBaseline.takeIf { useIncrementalRefresh }.orEmpty()
+            ).getOrThrow()
+            ensureCurrentAccount(account.identity)
+            feedPagination.updateState(
+                scope = scope,
+                type = type,
+                state = resolveDynamicPaginationStateAfterPage(
+                    paginationBeforeRefresh = paginationForPageUpdate,
+                    responseOffset = page.nextOffset,
+                    responseUpdateBaseline = page.updateBaseline,
+                    responseHasMore = page.hasMore,
+                    preserveExistingPagination = useIncrementalRefresh,
+                    reportedUpdateNum = page.updateNum
                 )
             )
+            Result.success(page.copy(hasMore = feedPagination.hasMore(scope, type)))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
@@ -212,7 +156,10 @@ object DynamicRepository {
      * @param refresh 是否刷新 (重置分页)
      */
     suspend fun getUserDynamicFeed(hostMid: Long, refresh: Boolean = false): Result<List<DynamicItem>> = withContext(Dispatchers.IO) {
+        val account = paginationForAccount()
+        val userFeedPagination = account.users
         try {
+            ensureCurrentAccount(account.identity)
             if (refresh) {
                 userFeedPagination.reset(hostMid)
             }
@@ -221,57 +168,90 @@ object DynamicRepository {
                 return@withContext Result.success(emptyList())
             }
 
-            val visibleItems = mutableListOf<DynamicItem>()
-            var pagesFetched = 0
-            while (true) {
-                val previousOffset = userFeedPagination.offset(hostMid)
-                val response = fetchDynamicFeedPageWithRetry {
-                    NetworkModule.dynamicApi.getUserDynamicFeed(
-                        params = buildSelectedUserDynamicFeedParams(
-                            hostMid = hostMid,
-                            offset = previousOffset
-                        )
-                    )
-                }.getOrElse { error ->
-                    return@withContext Result.failure(error)
-                }
-
-                val data = response.data
-                if (data == null) {
-                    userFeedPagination.update(
-                        hostMid = hostMid,
-                        offset = previousOffset,
-                        hasMore = false
-                    )
-                    break
-                }
-
-                // 更新分页状态
-                userFeedPagination.update(
-                    hostMid = hostMid,
-                    offset = data.offset,
-                    hasMore = data.has_more
-                )
-
-                visibleItems += data.items
-                pagesFetched += 1
-
-                if (!shouldContinueDynamicFetchAfterFilter(
-                        accumulatedVisibleCount = visibleItems.size,
-                        hasMore = data.has_more,
-                        previousOffset = previousOffset,
-                        nextOffset = data.offset,
-                        pagesFetched = pagesFetched
-                    )
-                ) {
-                    break
-                }
-            }
-
-            Result.success(visibleItems)
+            val page = loadDynamicPage(
+                hostMid = hostMid,
+                offset = userFeedPagination.offset(hostMid)
+            ).getOrThrow()
+            ensureCurrentAccount(account.identity)
+            userFeedPagination.update(hostMid, offset = page.nextOffset, hasMore = page.hasMore)
+            Result.success(page.items)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
+        }
+    }
+
+    /** 无共享游标的页面请求；列表的继续加载与失败重试由调用方拥有。 */
+    internal suspend fun loadDynamicPage(
+        type: String = "all",
+        offset: String = "",
+        updateBaseline: String = "",
+        hostMid: Long? = null,
+    ): Result<DynamicFeedFetchResult> = withContext(Dispatchers.IO) {
+        val identity = TokenManager.accountIdentity.value
+        try {
+            val blockGoods = goodsDynamicFilterEnabled()
+            val items = mutableListOf<DynamicItem>()
+            val useBaseline = hostMid == null && offset.isBlank() && updateBaseline.isNotBlank()
+            var requestOffset = offset
+            var baseline = updateBaseline
+            var updateNum = 0
+            var pagesFetched = 0
+            var receivedItemCount = 0
+            var hasMore: Boolean
+            while (true) {
+                val previousOffset = requestOffset
+                val response = fetchDynamicFeedPageWithRetry {
+                    ensureCurrentAccount(identity)
+                    if (hostMid != null) {
+                        NetworkModule.dynamicApi.getUserDynamicFeed(
+                            params = buildSelectedUserDynamicFeedParams(hostMid, previousOffset)
+                        )
+                    } else {
+                        NetworkModule.dynamicApi.getDynamicFeed(
+                            type = type,
+                            offset = previousOffset,
+                            updateBaseline = updateBaseline.takeIf { useBaseline && pagesFetched == 0 }.orEmpty()
+                        )
+                    }
+                }.getOrThrow()
+                ensureCurrentAccount(identity)
+                val data = response.data
+                if (data == null) {
+                    hasMore = false
+                    break
+                }
+                if (pagesFetched == 0) updateNum = data.update_num.coerceAtLeast(0)
+                baseline = resolveDynamicFeedUpdateBaseline(baseline, data.update_baseline, pagesFetched)
+                requestOffset = data.offset
+                hasMore = data.has_more
+                receivedItemCount += data.items.size
+                // 折叠卡片仍保留在时间线中，供展开操作恢复对应内容。
+                items += if (blockGoods) data.items.filterNot(::isGoodsDynamic) else data.items
+                pagesFetched += 1
+                val fetchNext = if (useBaseline) {
+                    shouldContinueDynamicIncrementalFetch(receivedItemCount, updateNum, hasMore, previousOffset, requestOffset)
+                } else {
+                    shouldContinueDynamicFetchAfterFilter(items.size, hasMore, previousOffset, requestOffset, pagesFetched)
+                }
+                if (!fetchNext) break
+            }
+            val enriched = DynamicCommentPreviewRepository.enrich(items)
+            ensureCurrentAccount(identity)
+            Result.success(DynamicFeedFetchResult(
+                items = enriched,
+                updateNum = updateNum,
+                usedUpdateBaseline = useBaseline,
+                nextOffset = requestOffset,
+                hasMore = hasMore,
+                updateBaseline = baseline
+            ))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Result.failure(failure)
         }
     }
 
@@ -280,7 +260,9 @@ object DynamicRepository {
      * 再按需降级到 opus、desktop，以及列表卡片缓存。
      */
     suspend fun getDynamicDetail(dynamicId: String): Result<DynamicItem> = withContext(Dispatchers.IO) {
+        val account = paginationForAccount()
         try {
+            ensureCurrentAccount(account.identity)
             val cleanedId = dynamicId.trim()
             if (cleanedId.isEmpty()) {
                 return@withContext Result.failure(IllegalArgumentException("dynamicId 不能为空"))
@@ -339,15 +321,17 @@ object DynamicRepository {
                         )
                     }
                 }
-                return@withContext Result.success(
-                    mergeDynamicDetailInteractionMetadata(
-                        detailItem = merged,
-                        seedItem = seed
-                    )
+                val withMetadata = restoreLocatedDynamicCommentPreviewMetadata(
+                    mergeDynamicDetailInteractionMetadata(detailItem = merged, seedItem = seed),
+                    seed,
                 )
+                ensureCurrentAccount(account.identity)
+                return@withContext Result.success(withMetadata)
             }
 
             Result.failure(Exception("动态详情为空"))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
@@ -550,39 +534,9 @@ object DynamicRepository {
         )
     }
 
-    private suspend fun fetchDynamicFeedPageWithRetry(
-        request: suspend () -> DynamicFeedResponse
-    ): Result<DynamicFeedResponse> {
-        var lastError: Throwable? = null
-        for (attempt in 1..DYNAMIC_FETCH_MAX_ATTEMPTS) {
-            try {
-                val response = request()
-                if (response.code == 0) {
-                    return Result.success(response)
-                }
-                val shouldRetry = attempt < DYNAMIC_FETCH_MAX_ATTEMPTS &&
-                    isRetryableDynamicApiError(response.code, response.message)
-                if (shouldRetry) {
-                    delay(resolveDynamicRetryDelayMs(attempt))
-                    continue
-                }
-                val message = resolveDynamicFriendlyErrorMessage(response.code, response.message)
-                return Result.failure(Exception(message))
-            } catch (error: Exception) {
-                lastError = error
-                val shouldRetry = attempt < DYNAMIC_FETCH_MAX_ATTEMPTS &&
-                    isRetryableDynamicException(error)
-                if (shouldRetry) {
-                    delay(resolveDynamicRetryDelayMs(attempt))
-                    continue
-                }
-                val message = resolveDynamicFriendlyErrorMessage(code = -1, message = error.message.orEmpty())
-                return Result.failure(Exception(message, error))
-            }
-        }
-        val message = resolveDynamicFriendlyErrorMessage(code = -1, message = lastError?.message.orEmpty())
-        return Result.failure(Exception(message, lastError))
-    }
+    private suspend fun fetchDynamicFeedPageWithRetry(request: suspend () -> DynamicFeedResponse): Result<DynamicFeedResponse> =
+        DynamicFeedPageDataSource.fetch(request)
+
 }
 
 internal fun resolveDynamicUpdateCountBaseline(
@@ -629,6 +583,12 @@ internal fun resolveDynamicPaginationStateAfterPage(
     }
 }
 
+internal fun isDynamicAccountRequestCurrent(
+    requested: AccountSessionIdentity,
+    current: AccountSessionIdentity,
+    cachedMid: Long?,
+): Boolean = requested == current && requested.mid == cachedMid
+
 enum class DynamicFeedScope {
     DYNAMIC_SCREEN,
     HOME_FOLLOW
@@ -639,7 +599,8 @@ data class DynamicFeedFetchResult(
     val updateNum: Int = 0,
     val usedUpdateBaseline: Boolean = false,
     val nextOffset: String = "",
-    val hasMore: Boolean = true
+    val hasMore: Boolean = true,
+    val updateBaseline: String = ""
 )
 
 internal data class DynamicPaginationState(

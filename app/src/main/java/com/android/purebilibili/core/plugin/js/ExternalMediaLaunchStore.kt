@@ -8,7 +8,9 @@ data class ExternalMediaLaunchRequest(
     val title: String,
     val coverUrl: String? = null,
     val streams: List<BiliPaiJsMediaStream>,
-    val selectedStreamIndex: Int = 0
+    val selectedStreamIndex: Int = 0,
+    /** 提供第三方弹幕的 JS 插件 ID；null 表示本次播放不加载弹幕。 */
+    val danmakuPluginId: String? = null
 )
 
 object ExternalMediaLaunchStore {
@@ -18,7 +20,8 @@ object ExternalMediaLaunchStore {
         title: String,
         coverUrl: String?,
         streams: List<BiliPaiJsMediaStream>,
-        selectedStreamIndex: Int = 0
+        selectedStreamIndex: Int = 0,
+        danmakuPluginId: String? = null
     ): String {
         val launchId = UUID.randomUUID().toString()
         requests[launchId] = ExternalMediaLaunchRequest(
@@ -26,7 +29,8 @@ object ExternalMediaLaunchStore {
             title = title,
             coverUrl = coverUrl,
             streams = streams,
-            selectedStreamIndex = selectedStreamIndex.coerceIn(0, streams.lastIndex.coerceAtLeast(0))
+            selectedStreamIndex = selectedStreamIndex.coerceIn(0, streams.lastIndex.coerceAtLeast(0)),
+            danmakuPluginId = danmakuPluginId
         )
         return launchId
     }

@@ -15,6 +15,23 @@ class DynamicPublishComposerPolicyTest {
     }
 
     @Test
+    fun editingTextMovesIntactTokensAndDropsChangedTokens() {
+        val token = com.android.purebilibili.data.model.response.DynamicPublishToken(3, 6, 2, "42", "@甲乙")
+        assertEquals(listOf(token.copy(start = 5, end = 8)), updateDynamicComposerTokens("正文 @甲乙", "新 正文 @甲乙", listOf(token)))
+        assertEquals(emptyList(), updateDynamicComposerTokens("正文 @甲乙", "正文 @甲", listOf(token)))
+        assertEquals(listOf(token.copy(start = 6, end = 9)), replaceDynamicComposerTokens(listOf(token), 3, 3, 3))
+    }
+
+    @Test
+    fun unresolvedTextMovesWithEditsAndClearsOnlyWhenReplacedOrRemoved() {
+        val issue = com.android.purebilibili.data.model.response.DynamicRichTextIssue(3, 6)
+        assertEquals(listOf(issue.copy(start = 5, end = 8)), updateDynamicRichTextIssues("正文 @甲乙", "新 正文 @甲乙", listOf(issue)))
+        assertEquals(listOf(issue.copy(end = 5)), updateDynamicRichTextIssues("正文 @甲乙", "正文 @甲", listOf(issue)))
+        assertTrue(replaceDynamicRichTextIssues(listOf(issue), 3, 6, 4).isEmpty())
+        assertTrue(updateDynamicRichTextIssues("正文 @甲乙", "正文 ", listOf(issue)).isEmpty())
+    }
+
+    @Test
     fun liquidDockReuseFollowsTheUserSetting() {
         val source = loadComposerSource()
 

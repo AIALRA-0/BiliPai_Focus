@@ -12,9 +12,7 @@ class VideoCardImageDecodeStrategyStructureTest {
         val sourceRoot = File("src/main/java/com/android/purebilibili/feature/home/components/cards")
         val cardSources = listOf(
             "VideoCard.kt",
-            "StoryVideoCard.kt",
-            "GlassVideoCard.kt",
-            "CinematicVideoCard.kt"
+            "StoryVideoCard.kt"
         ).associateWith { fileName -> sourceRoot.resolve(fileName).readText() }
 
         cardSources.forEach { (fileName, source) ->
@@ -45,7 +43,6 @@ class VideoCardImageDecodeStrategyStructureTest {
         assertTrue(resolvedRoot.resolve("components/HomeTopControls.kt").readText().contains(".size(128, 128)"))
         assertTrue(resolvedRoot.resolve("components/TopBar.kt").readText().contains(".size(128, 128)"))
         assertTrue(resolvedRoot.resolve("components/cards/StoryVideoCard.kt").readText().contains(".size(96, 96)"))
-        assertTrue(resolvedRoot.resolve("components/cards/GlassVideoCard.kt").readText().contains(".size(72, 72)"))
         assertTrue(
             resolvedRoot.resolve("components/cards/HomeStyleSingleColumnVideoCard.kt")
                 .readText()

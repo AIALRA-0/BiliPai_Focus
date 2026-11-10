@@ -36,6 +36,7 @@ internal fun resolveSearchEmptyStateCopy(
     }
 
     val title = when (searchType) {
+        SearchType.ALL -> "未找到相关内容"
         SearchType.VIDEO -> "未找到相关视频"
         SearchType.UP -> "未找到相关UP主"
         SearchType.BANGUMI -> "未找到相关番剧"

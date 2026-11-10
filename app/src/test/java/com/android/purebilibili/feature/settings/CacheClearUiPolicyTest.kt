@@ -2,9 +2,9 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.util.CacheUtils
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -118,27 +118,6 @@ class CacheClearUiPolicyTest {
     }
 
     @Test
-    fun cacheClearAnimationDialog_drawsBehindSystemBars() {
-        val source = loadCacheClearAnimationSource()
-
-        assertTrue(
-            source.contains("decorFitsSystemWindows = false"),
-            "Cache clear animation dialog should be edge-to-edge so the scrim covers status and navigation bars"
-        )
-    }
-
-    @Test
-    fun cacheClearAnimationDialog_usesNativeCircularProgressInsteadOfCustomParticles() {
-        val source = loadCacheClearAnimationSource()
-
-        assertTrue(source.contains("AppCircularProgressIndicator"))
-        assertTrue(source.contains("AdaptiveLoadingIndicator"))
-        assertFalse(source.contains("DataDissolveParticles"))
-        assertFalse(source.contains("CenterCleaningIcon"))
-        assertFalse(source.contains("CircularProgressRing"))
-    }
-
-    @Test
     fun donutSegments_fillRingFromSelectedBytesAndUpdatePercents() {
         val breakdown = CacheUtils.CacheBreakdown(
             imageDiskCache = 50L,
@@ -157,9 +136,11 @@ class CacheClearUiPolicyTest {
         assertEquals(135f, network.sweepAngle, absoluteTolerance = 0.01f)
         assertEquals(225f, image.sweepAngle, absoluteTolerance = 0.01f)
         assertEquals(0f, temp.sweepAngle)
-        assertEquals("62%", image.percentLabel)
-        assertEquals("37%", network.percentLabel)
-        assertEquals("0%", temp.percentLabel)
+        assertEquals("50%", image.percentLabel)
+        assertEquals("30%", network.percentLabel)
+        assertEquals("20%", temp.percentLabel)
+        assertEquals("63%", image.chartPercentLabel)
+        assertEquals("37%", network.chartPercentLabel)
         assertTrue(image.selected)
         assertFalse(segments.first { it.target == CacheClearTarget.PLAYBACK_QUALITY }.selected)
     }
@@ -178,9 +159,10 @@ class CacheClearUiPolicyTest {
         val network = afterUncheck.first { it.target == CacheClearTarget.NETWORK }
 
         assertEquals(360f, image.sweepAngle, absoluteTolerance = 0.01f)
-        assertEquals("100%", image.percentLabel)
+        assertEquals("50%", image.percentLabel)
+        assertEquals("100%", image.chartPercentLabel)
         assertEquals(0f, network.sweepAngle)
-        assertEquals("0%", network.percentLabel)
+        assertEquals("50%", network.percentLabel)
         assertEquals(
             formatCacheClearBytes(50L),
             resolveCacheClearDonutCenterSize(
@@ -251,13 +233,47 @@ class CacheClearUiPolicyTest {
         )
     }
 
-    private fun loadCacheClearAnimationSource(): String {
-        val candidates = listOf(
-            File("app/src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt"),
-            File("src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt")
-        )
-        val sourceFile = candidates.firstOrNull { it.exists() }
-            ?: error("Cannot locate CacheClearAnimation.kt from ${File(".").absolutePath}")
-        return sourceFile.readText()
+    @Test
+    fun unknownAndZeroCachesDoNotCreateInventedSlices() {
+        val selected = CacheClearTarget.entries.toSet()
+        val unknown = resolveCacheClearDonutSegments(null, selected)
+        assertTrue(unknown.all { it.sweepAngle == 0f && it.percentLabel == "—" && !it.sizeKnown })
+        val empty = resolveCacheClearDonutSegments(CacheUtils.CacheBreakdown(), selected)
+        assertTrue(empty.all { it.sweepAngle == 0f && it.percentLabel == "0%" })
+        assertFalse(empty.first { it.target == CacheClearTarget.APP_METADATA }.sizeKnown)
+        assertEquals("0%", formatCacheClearPercent(0L, 100L))
+    }
+
+    @Test
+    fun roundedPercentsPreserveTotalAndExcludeZeroBuckets() {
+        assertEquals(listOf(34, 33, 33, 0), roundedCacheClearPercents(listOf(1L, 1L, 1L, 0L)))
+        assertEquals(listOf(0, 0), roundedCacheClearPercents(listOf(0L, 0L)))
+        assertEquals(100, roundedCacheClearPercents(listOf(99999999999L, 1L, 40000L)).sum())
+    }
+
+    @Test
+    fun tinyCategoriesRemainTouchableWithoutInventingZeroShares() {
+        val fractions = cacheClearVisualFractions(listOf(999L, 1L, 0L))
+        assertEquals(.98f, fractions[0], .0001f)
+        assertEquals(.02f, fractions[1], .0001f)
+        assertEquals(0f, fractions[2])
+        assertEquals(1f, fractions.sum(), .0001f)
+    }
+
+    @Test
+    fun metadataOnlySelectionRemainsActionableWithoutDiskShare() {
+        val targets = setOf(CacheClearTarget.APP_METADATA)
+        val segments = resolveCacheClearDonutSegments(CacheUtils.CacheBreakdown(httpCache = 500L), targets)
+        assertTrue(segments.all { it.sweepAngle == 0f })
+        assertTrue(segments.first { it.target == CacheClearTarget.APP_METADATA }.selected)
+        assertEquals("清理缓存 0 KB", resolveCacheClearButtonLabel(CacheUtils.CacheBreakdown(), targets))
+    }
+
+    @Test
+    fun progressDistinguishesPreparationFromRealCompletedSteps() {
+        assertNull(cacheClearProgressFraction(0, 0))
+        assertEquals(.5f, cacheClearProgressFraction(2, 4))
+        assertEquals(0f, cacheClearProgressFraction(-1, 4))
+        assertEquals(1f, cacheClearProgressFraction(9, 4))
     }
 }

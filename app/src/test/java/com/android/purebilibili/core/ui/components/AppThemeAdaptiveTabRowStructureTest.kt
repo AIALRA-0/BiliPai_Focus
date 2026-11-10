@@ -2,7 +2,7 @@ package com.android.purebilibili.core.ui.components
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.testutil.readProjectSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,37 +50,29 @@ class AppThemeAdaptiveTabRowStructureTest {
     }
 
     @Test
-    fun `adaptive tabs keep beta21 liquid width without reverting non glass accessibility`() {
+    fun `adaptive tabs use the compact default while preserving explicit minimum width`() {
         assertEquals(
-            72.dp,
+            AppChromeSizeTokens.CompactTabMinWidth,
             resolveAppAdaptiveTabMinWidth(
                 requestedMinTabWidth = Dp.Unspecified,
-                uiStyle = AppUiStyle.MIUIX,
-                liquidGlassEnabled = true,
-            ),
-        )
-        assertEquals(
-            48.dp,
-            resolveAppAdaptiveTabMinWidth(
-                requestedMinTabWidth = Dp.Unspecified,
-                uiStyle = AppUiStyle.MIUIX,
-                liquidGlassEnabled = false,
-            ),
-        )
-        assertEquals(
-            72.dp,
-            resolveAppAdaptiveTabMinWidth(
-                requestedMinTabWidth = Dp.Unspecified,
-                uiStyle = AppUiStyle.MATERIAL3,
-                liquidGlassEnabled = false,
             ),
         )
         assertEquals(
             60.dp,
             resolveAppAdaptiveTabMinWidth(
                 requestedMinTabWidth = 60.dp,
-                uiStyle = AppUiStyle.MATERIAL3,
-                liquidGlassEnabled = true,
+            ),
+        )
+        assertEquals(
+            48.dp,
+            resolveAppAdaptiveTabMinWidth(
+                requestedMinTabWidth = 48.dp,
+            ),
+        )
+        assertEquals(
+            72.dp,
+            resolveAppAdaptiveTabMinWidth(
+                requestedMinTabWidth = 72.dp,
             ),
         )
     }

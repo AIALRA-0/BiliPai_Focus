@@ -9,6 +9,8 @@ import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 
 @Immutable
 internal data class VideoDetailPlaybackActions(
+    val resolveNextWatch: () -> com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion? = { null },
+    val playNextWatch: (com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion) -> Boolean = { false },
     val changeQuality: (Int) -> Unit,
     val reloadVideo: () -> Unit,
     val switchCdn: () -> Unit,
@@ -17,12 +19,15 @@ internal data class VideoDetailPlaybackActions(
     val setAudioMode: (Boolean) -> Unit,
     val setSleepTimer: (Int?) -> Unit,
     val switchPage: (Int) -> Unit,
+    val jumpToLastPlayedPart: () -> Unit = {},
+    val dismissPartResumeNotice: () -> Unit = {},
     val openDownloadDialog: () -> Unit,
     val showDanmakuSendDialog: () -> Unit,
     val skipSponsorSegment: () -> Unit,
     val dismissSponsorSkipButton: () -> Unit,
     val voteSponsorSegment: (Int) -> Unit,
     val markSponsorContributionBoundary: () -> Unit,
+    val markWholeVideoAsSponsor: () -> Unit,
     val setSponsorContributionCategory: (String) -> Unit,
     val setSponsorContributionActionType: (String) -> Unit,
     val submitSponsorContribution: () -> Unit,
@@ -46,23 +51,34 @@ internal data class VideoDetailPlaybackActions(
     val openVideoNoteEditor: () -> Unit,
     val closeVideoNoteEditor: () -> Unit,
     val updateVideoNoteEditorDocument: (VideoNoteEditorDocument) -> Unit,
-    val insertCurrentPlaybackTimestampIntoNote: () -> Unit,
+    val currentVideoNoteTimestamp: () -> com.android.purebilibili.feature.video.note.VideoNoteBlock.Timestamp?,
     val seekTo: (Long) -> Unit,
     val saveVideoNote: (VideoNoteEditorDocument?) -> Unit,
     val deleteVideoNote: () -> Unit,
     val retryVideoNote: () -> Unit,
+    val loadMorePublicVideoNotes: () -> Unit,
     val openRootCommentComposer: () -> Unit,
     val replyTo: (ReplyItem) -> Unit,
     val markVideoNotInterested: () -> Unit,
     val likeDanmaku: (Long) -> Unit = {},
-    val recallDanmaku: (Long) -> Unit = {}
+    val likeDanmakuToggle: (dmid: Long, like: Boolean) -> Unit = { _, _ -> },
+    val likedDanmakuIds: kotlinx.coroutines.flow.StateFlow<Set<Long>> =
+        kotlinx.coroutines.flow.MutableStateFlow(emptySet()),
+    val reportDanmaku: (dmid: Long, reason: Int) -> Unit = { _, _ -> },
+    val recallDanmaku: (Long) -> Unit = {},
+    val menuActions: com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions =
+        com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions(),
+    val retryPlayback: () -> Unit = reloadVideo
 )
 
 @Immutable
 internal data class VideoDetailEngagementActions(
     val toggleFollow: () -> Unit,
+    val followOwner: () -> Unit,
     val toggleFavorite: () -> Unit,
+    val onFavoriteAction: (isLongPress: Boolean) -> Unit,
     val toggleLike: () -> Unit,
+    val toggleDislike: () -> Unit = {},
     val openCoinDialog: () -> Unit,
     val doTripleAction: () -> Unit,
     val toggleWatchLater: () -> Unit
@@ -71,10 +87,12 @@ internal data class VideoDetailEngagementActions(
 @Immutable
 internal data class VideoDetailCommentActions(
     val loadComments: () -> Unit,
+    val refreshComments: () -> Unit,
     val setSortMode: (CommentSortMode) -> Unit,
     val deleteComment: (Long) -> Unit,
     val startDissolve: (Long) -> Unit,
     val loadMoreSubReplies: () -> Unit,
+    val refreshSubReplies: () -> Unit,
     val setSubReplySortMode: (SubReplySortMode) -> Unit,
     val openSubReply: (ReplyItem, Long) -> Unit,
     val openSubReplyConversation: (ReplyItem) -> Unit,

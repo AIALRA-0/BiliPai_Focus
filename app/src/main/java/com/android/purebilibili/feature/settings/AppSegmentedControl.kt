@@ -6,14 +6,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.ui.components.AppNativeSegmentedControl
 import com.android.purebilibili.core.ui.components.AppSegmentOption
-import com.android.purebilibili.core.ui.components.AppSegmentedChrome
 import com.android.purebilibili.core.ui.components.resolveAppLiquidSegmentedControlSpec
-import com.android.purebilibili.core.ui.components.resolveAppSegmentedChrome
 import com.android.purebilibili.core.ui.components.resolveAppSegmentedSelectionIndex
-import com.android.purebilibili.core.ui.rememberAppSegmentedControlPolicy
 import com.android.purebilibili.feature.home.components.BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP
 import com.android.purebilibili.feature.home.components.BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
@@ -26,7 +21,7 @@ internal fun <T> AppSegmentedControl(
     enabled: Boolean = true,
     height: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP.dp,
     indicatorHeight: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP.dp,
-    labelFontSize: TextUnit = 14.sp,
+    labelFontSize: TextUnit = TextUnit.Unspecified,
     tapPressRefractionEnabled: Boolean = true,
     dragSelectionEnabled: Boolean = true,
     containerColorOverride: Color? = null,
@@ -34,40 +29,24 @@ internal fun <T> AppSegmentedControl(
     onSelectionChange: (T) -> Unit,
 ) {
     if (options.isEmpty()) return
-    val policy = rememberAppSegmentedControlPolicy()
-    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-    when (
-        resolveAppSegmentedChrome(
-            usesMaterialFallback = policy.usesMaterialFallback,
-            nativeLiquidGlassEnabled = liquidGlassEnabled,
-        )
-    ) {
-        AppSegmentedChrome.NATIVE -> AppNativeSegmentedControl(
-            options = options,
-            selectedValue = selectedValue,
-            modifier = modifier,
-            enabled = enabled,
-            onSelectionChange = onSelectionChange,
-        )
-        AppSegmentedChrome.LIQUID -> AppLiquidSegmentedControlHost(
-            options = options,
-            selectedValue = selectedValue,
-            modifier = modifier,
-            enabled = enabled,
-            height = height,
-            indicatorHeight = indicatorHeight,
-            labelFontSize = labelFontSize,
-            tapPressRefractionEnabled = tapPressRefractionEnabled,
-            dragSelectionEnabled = dragSelectionEnabled,
-            containerColorOverride = containerColorOverride,
-            indicatorIdleSurfaceColorOverride = indicatorIdleSurfaceColorOverride,
-            onSelectionChange = onSelectionChange,
-        )
-    }
+    AppSegmentedControlHost(
+        options = options,
+        selectedValue = selectedValue,
+        modifier = modifier,
+        enabled = enabled,
+        height = height,
+        indicatorHeight = indicatorHeight,
+        labelFontSize = labelFontSize,
+        tapPressRefractionEnabled = tapPressRefractionEnabled,
+        dragSelectionEnabled = dragSelectionEnabled,
+        containerColorOverride = containerColorOverride,
+        indicatorIdleSurfaceColorOverride = indicatorIdleSurfaceColorOverride,
+        onSelectionChange = onSelectionChange,
+    )
 }
 
 @Composable
-private fun <T> AppLiquidSegmentedControlHost(
+private fun <T> AppSegmentedControlHost(
     options: List<AppSegmentOption<T>>,
     selectedValue: T,
     modifier: Modifier,
@@ -91,16 +70,22 @@ private fun <T> AppLiquidSegmentedControlHost(
     val usesDefaultBottomBarSizing =
         height == BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP.dp &&
             indicatorHeight == BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP.dp &&
-            labelFontSize == 14.sp
+            labelFontSize == TextUnit.Unspecified
     val resolvedHeight = if (usesDefaultBottomBarSizing) spec.heightDp.dp else height
     val resolvedIndicatorHeight =
         if (usesDefaultBottomBarSizing) spec.indicatorHeightDp.dp else indicatorHeight
     val resolvedLabelFontSize =
-        if (usesDefaultBottomBarSizing) spec.labelFontSizeSp.sp else labelFontSize
+        if (labelFontSize == TextUnit.Unspecified) com.android.purebilibili.core.ui.appTabLabelFontSize() else labelFontSize
     val resolvedTapPressRefractionEnabled =
         if (usesDefaultBottomBarSizing) spec.tapPressRefractionEnabled else tapPressRefractionEnabled
 
     BottomBarLiquidSegmentedControl(
+        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+        // 设置页的短分段选项在手机、大屏和窄分屏内均居中；
+        // 玻璃与原生路径分别显式选择，不改变共享控件的布局默认值。
+        centerGlassContent = true,
+        centerNativeContent = true,
         items = options.map { it.label },
         selectedIndex = selectedIndex,
         onSelected = { index ->
@@ -109,6 +94,7 @@ private fun <T> AppLiquidSegmentedControlHost(
         modifier = modifier,
         enabled = enabled,
         itemWidth = null,
+        nativeSegmentedControl = true,
         height = resolvedHeight,
         indicatorHeight = resolvedIndicatorHeight,
         labelFontSize = resolvedLabelFontSize,

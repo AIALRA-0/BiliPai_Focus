@@ -1,0 +1,99 @@
+package com.android.purebilibili.feature.nearby
+
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.Closeable
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+
+class NearbyDuplexConnectionTest {
+    @Test fun identityCodeIsSymmetricAndChangesWhenEitherIdentityChanges() {
+        val first = "a".repeat(64)
+        val second = "b".repeat(64)
+        assertEquals(nearbyVerificationCode(first, second), nearbyVerificationCode(second, first))
+        assertNotEquals(nearbyVerificationCode(first, second), nearbyVerificationCode(first, "c".repeat(64)))
+        assertEquals(32, nearbyVerificationCode(first, second).replace(" ", "").length)
+    }
+
+    @Test fun receiverCanRequestFreshPositionWhileOriginalOfferIsWaiting() = runTest {
+        withContext(Dispatchers.IO) {
+            val aInput = PipedInputStream(32_768)
+            val bOutput = PipedOutputStream(aInput)
+            val bInput = PipedInputStream(32_768)
+            val aOutput = PipedOutputStream(bInput)
+            val aResource = Closeable { aInput.close(); aOutput.close() }
+            val bResource = Closeable { bInput.close(); bOutput.close() }
+            val aId = "a".repeat(32)
+            val bId = "b".repeat(32)
+            val aPeer = NearbyPeer(aId, "手机", "a".repeat(64), "192.168.1.2", NEARBY_PORT)
+            val bPeer = NearbyPeer(bId, "模拟器", "b".repeat(64), "10.0.2.16", NEARBY_PORT)
+            var position = 100L
+            val sender = NearbyDuplexConnection(bPeer, aResource, aInput, aOutput, aId) { _, request ->
+                assertEquals("snapshot", request.kind)
+                NearbyMessage(kind = "snapshot", id = aId, transferId = request.transferId,
+                    video = NearbyVideo("BV1xx411c7mD", 12, position, 1f, "视频", ""), accepted = true)
+            }
+            val receiver = NearbyDuplexConnection(aPeer, bResource, bInput, bOutput, bId) { link, offer ->
+                position = 9_000L // 模拟接收端准备期间发送端继续播放。
+                val latest = link.request(NearbyMessage(kind = "snapshot", id = bId, transferId = offer.transferId))
+                assertEquals(9_000L, latest.video?.positionMs)
+                NearbyMessage(kind = "playing", id = bId, transferId = offer.transferId, accepted = true)
+            }
+            val senderReader = launch(Dispatchers.IO) { try { sender.run() } catch (_: IOException) { /* 流关闭。 */ } }
+            val receiverReader = launch(Dispatchers.IO) { try { receiver.run() } catch (_: IOException) { /* 流关闭。 */ } }
+            try {
+                withTimeout(5_000) {
+                    val result = sender.request(NearbyMessage(kind = "video", id = aId, transferId = nearbyToken()))
+                    assertEquals("playing", result.kind)
+                    assertEquals(true, result.accepted)
+                    // 反方向继续使用原流，无需连接模拟器地址。
+                    val reverse = receiver.request(NearbyMessage(kind = "snapshot", id = bId, transferId = nearbyToken()))
+                    assertEquals(9_000L, reverse.video?.positionMs)
+                }
+            } finally {
+                sender.close(); receiver.close()
+                senderReader.cancel(); receiverReader.cancel()
+            }
+        }
+    }
+
+    @Test fun closingFailsPendingAndFutureRequestsWithTheOriginalReason() = runTest {
+        withContext(Dispatchers.IO) {
+            val written = CompletableDeferred<Unit>()
+            val output = object : ByteArrayOutputStream() {
+                override fun flush() { written.complete(Unit) }
+            }
+            val peer = NearbyPeer("b".repeat(32), "设备", "b".repeat(64), "192.168.1.2", NEARBY_PORT)
+            val link = NearbyDuplexConnection(peer, Closeable {}, ByteArrayInputStream(byteArrayOf()),
+                output, "a".repeat(32)) { _, _ -> error("此用例不接收请求") }
+            val request = NearbyMessage(kind = "hello", id = "a".repeat(32))
+            val result = async {
+                try { link.request(request); error("关闭后不得继续等待") }
+                catch (error: IOException) { error }
+            }
+            try {
+                withTimeout(5_000) {
+                    written.await()
+                    val reason = NearbyConnectionFailure("两端设备接力协议不兼容，请使用相同版本")
+                    link.close(reason)
+                    link.close()
+                    assertSame(reason, result.await())
+                    assertSame(reason, assertFailsWith<NearbyConnectionFailure> { link.request(request) })
+                }
+            } finally { link.close(); result.cancel() }
+        }
+    }
+}

@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.plugin.dlna
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Tv
 import com.android.purebilibili.feature.cast.SsdpDiscovery
 import com.android.purebilibili.feature.cast.VisibleSsdpDevice
 import org.junit.Assert.*
@@ -29,7 +27,6 @@ class DlnaCastRoutePolicyTest {
         assertEquals("ssdp:http://192.168.1.11/root.xml", route.routeId)
         assertEquals("Bedroom TV", route.name)
         assertEquals("Xiaomi", route.description)
-        assertEquals(Icons.Rounded.Tv, route.icon)
     }
 
     // ── resolveDlnaRouteSelection ──────────────────────────────────────────────

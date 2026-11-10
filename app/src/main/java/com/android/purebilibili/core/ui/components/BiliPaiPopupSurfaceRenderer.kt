@@ -1,18 +1,15 @@
 package com.android.purebilibili.core.ui.components
 
-import androidx.compose.material3.Surface
+import com.android.purebilibili.core.ui.components.AppSurface
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.border
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppPopupSurfaceRenderer
 import com.android.purebilibili.core.ui.AppPopupSurfaceType
-import com.android.purebilibili.core.ui.LocalAppThemeConfig
-import com.android.purebilibili.core.ui.blur.LocalFloatingChromeBackdrop
-import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
-import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 
 object BiliPaiPopupSurfaceRenderer : AppPopupSurfaceRenderer {
     @Composable
@@ -25,43 +22,47 @@ object BiliPaiPopupSurfaceRenderer : AppPopupSurfaceRenderer {
         tonalElevation: Dp,
         content: @Composable () -> Unit,
     ) {
-        val themeConfig = LocalAppThemeConfig.current
-        val glassEnabled = themeConfig.liquidGlassEnabled &&
-            !isLowBlurBudgetForced()
-        // 居中弹窗与菜单始终使用标准容器；液态玻璃仅用于半屏抽屉。
-        val isLiquidTarget = when (type) {
-            AppPopupSurfaceType.MENU -> false
-            AppPopupSurfaceType.DIALOG -> false
-            AppPopupSurfaceType.SHEET -> glassEnabled
+        val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+            com.android.purebilibili.core.ui.LocalAppPopupWindowMaterialEnabled.current &&
+            android.os.Build.VERSION.SDK_INT >= 33 && type != AppPopupSurfaceType.MENU
+        val lowBudget = com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
+        val dark = com.android.purebilibili.core.ui.isAppInDarkTheme()
+        val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current ||
+            !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+        val feedback = com.android.purebilibili.core.ui.popup.rememberPopupDragFeedback(
+            enabled = glass && !reduceMotion && !LocalAppGlassMenuActive.current,
+            closing = com.android.purebilibili.core.ui.LocalAppDialogExitRunning.current,
+        )
+        val palette = if (glass) com.android.purebilibili.core.ui.popup.rememberGlassPopupPalette()
+            else com.android.purebilibili.core.store.home.GlassPopupPalette.DOCK
+        // 配色只作用于玻璃窗口，关闭玻璃时沿用调用方原生底色。
+        val glassBase = com.android.purebilibili.feature.home.components.resolveBiliPaiBottomBarContainerColor(
+            darkTheme = dark,
+            liquidGlassTuning = com.android.purebilibili.feature.home.components.LocalLiquidGlassRenderConfig.current.tuning,
+        )
+        // 浅色模式文字为深色，窗口叠在深色内容上时需更高的白色不透明度保证可读性。
+        val surfaceColor = when {
+            !glass -> containerColor
+            !lowBudget && palette == com.android.purebilibili.core.store.home.GlassPopupPalette.THEME_FROSTED ->
+                com.android.purebilibili.core.ui.popup.resolveThemeFrostedPopupColor(
+                    dark, androidx.compose.material3.MaterialTheme.colorScheme)
+            else -> glassBase.copy(alpha = if (lowBudget) 0.96f else if (dark) 0.63f else 0.70f)
         }
-
-        if (!isLiquidTarget) {
-            Surface(
-                modifier = modifier,
-                shape = shape,
-                color = containerColor,
-                contentColor = contentColor,
-                tonalElevation = tonalElevation,
-                content = content,
-            )
-            return
+        val glassModifier = if (glass) feedback.border(0.7.dp,
+            (if (dark) Color.White else Color.Black).copy(alpha = if (dark) 0.14f else 0.1f), shape) else Modifier
+        // 玻璃底色叠任意背景时次要文字按最差背景校正对比，仅玻璃路径生效。
+        val contentSlot: @Composable () -> Unit = if (glass) {
+            { com.android.purebilibili.core.ui.ProvideAppGlassPopupContentColors(surfaceColor) { content() } }
+        } else {
+            content
         }
-        BottomBarMatchedReusableLiquidDock(
+        AppSurface(
+            modifier = modifier.then(glassModifier),
             shape = shape,
-            modifier = modifier,
-            backdrop = LocalFloatingChromeBackdrop.current,
-            liquidGlassEffectsEnabled = isLiquidTarget,
-            reuseEnabled = true,
-            useNeutralLiquidContainer = true,
-            drawShellLens = isLiquidTarget,
-        ) { liquidChromeActive ->
-            Surface(
-                shape = shape,
-                color = if (liquidChromeActive) Color.Transparent else containerColor,
-                contentColor = contentColor,
-                tonalElevation = if (liquidChromeActive) 0.dp else tonalElevation,
-                content = content,
-            )
-        }
+            color = surfaceColor,
+            contentColor = contentColor,
+            tonalElevation = tonalElevation,
+            content = contentSlot,
+        )
     }
 }

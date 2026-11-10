@@ -1,140 +1,73 @@
-// File: feature/video/ui/overlay/TopControlBar.kt
 package com.android.purebilibili.feature.video.ui.overlay
-import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.AppText
+
+import com.android.purebilibili.feature.video.ui.components.favoriteFolderMenuSource
+import com.android.purebilibili.core.util.HapticType
+import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
 import android.os.BatteryManager
+import com.android.purebilibili.core.ui.components.appGlassMenuSource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.currentStateAsState
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppIcons
-import com.android.purebilibili.core.ui.components.AppIconButton
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ThumbUp
-import androidx.compose.material.icons.outlined.ThumbUp
-import androidx.compose.material.icons.outlined.ThumbDown
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Cast
-import androidx.compose.material.icons.outlined.Comment
+import androidx.compose.ui.unit.constrainHeight
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuGlyph
+import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuSettingsIcon
+import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuSendIcon
+import com.android.purebilibili.feature.video.ui.feedback.likeBurstAnchor
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-internal fun shouldShowDislikeInTopControlBar(widthDp: Int): Boolean = widthDp >= 980
-internal fun shouldShowInteractiveActionsInTopControlBar(
-    showFullscreenActionItems: Boolean
-): Boolean = showFullscreenActionItems
-/**
- * 顶栏是否加状态栏 padding。
- *
- * 以 [statusBarVisible] 为准；全屏时系统栏通常已隐藏，应传 false。
- * [isFullscreen] 仅作兼容旧调用：未显式传 statusBarVisible 时，全屏仍 pad
- *（隐藏栏时 inset 为 0，无视觉影响）。
- */
-internal fun shouldApplyStatusBarPaddingToTopControlBar(
-    isFullscreen: Boolean = false,
-    statusBarVisible: Boolean = isFullscreen,
-): Boolean = com.android.purebilibili.feature.video.screen
-    .shouldApplyStatusBarPaddingToVideoPlayerChrome(statusBarVisible = statusBarVisible)
-internal fun shouldPollTopControlBarClock(
-    showCurrentTime: Boolean,
-    hostLifecycleStarted: Boolean
-): Boolean = showCurrentTime && hostLifecycleStarted
-internal fun shouldPollTopControlBarBattery(
-    showBatteryLevel: Boolean,
-    hostLifecycleStarted: Boolean
-): Boolean = showBatteryLevel && hostLifecycleStarted
-
-internal enum class BatteryChargeTone {
-    CRITICAL,
-    LOW,
-    NORMAL
-}
-
-internal data class LandscapeBatteryVisualState(
-    val percent: Int,
-    val fillFraction: Float,
-    val chargeTone: BatteryChargeTone
-) {
-    val displayText: String
-        get() = "$percent%"
-}
-
-internal fun resolveLandscapeBatteryVisualState(percent: Int?): LandscapeBatteryVisualState? {
-    val normalizedPercent = percent?.coerceIn(0, 100) ?: return null
-    val chargeTone = when {
-        normalizedPercent <= 15 -> BatteryChargeTone.CRITICAL
-        normalizedPercent <= 35 -> BatteryChargeTone.LOW
-        else -> BatteryChargeTone.NORMAL
-    }
-    return LandscapeBatteryVisualState(
-        percent = normalizedPercent,
-        fillFraction = normalizedPercent / 100f,
-        chargeTone = chargeTone
-    )
-}
-
-internal data class LandscapeTopStatusInfo(
-    val battery: LandscapeBatteryVisualState? = null,
-    val currentTimeText: String? = null
-) {
-    val isVisible: Boolean
-        get() = battery != null || !currentTimeText.isNullOrBlank()
-}
-
-internal fun resolveLandscapeTopStatusInfo(
-    showBatteryLevel: Boolean,
-    batteryLevelPercent: Int?,
-    showCurrentTime: Boolean,
-    currentTimeText: String
-): LandscapeTopStatusInfo {
-    return LandscapeTopStatusInfo(
-        battery = if (showBatteryLevel) resolveLandscapeBatteryVisualState(batteryLevelPercent) else null,
-        currentTimeText = currentTimeText.takeIf { showCurrentTime }
-    )
-}
-
-internal fun shouldShowLandscapeMetaRow(
-    hasStatusInfo: Boolean,
-    onlineCount: String
-): Boolean = hasStatusInfo || onlineCount.isNotBlank()
+import androidx.compose.material.icons.outlined.Home
 
 /**
- * Top Control Bar Component
- * 
- * Redesigned to match official Bilibili landscape layout:
- * - Left: Back button, Title (Marquee), Online count
- * - Right: Action buttons (Like, Dislike, Coin, Share, Cast, More)
+ * Shared Android PiliPlus HeaderControl for inline/fullscreen and portrait/landscape.
+ * Each button owns its material; title, status and action rows never become glass capsules.
+ * Nullable actions permit isolated previews. Production callers supply every applicable handler.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -142,60 +75,83 @@ fun TopControlBar(
     title: String,
     onlineCount: String = "",
     isFullscreen: Boolean,
-    /** 系统状态栏是否仍显示；显示时顶栏必须 statusBarsPadding。 */
     statusBarVisible: Boolean = isFullscreen,
     showBatteryLevel: Boolean = false,
     showCurrentTime: Boolean = true,
     showInteractiveActions: Boolean = true,
+    likeCount: Long? = null,
+    favoriteCount: Long? = null,
+    commentCount: Long? = null,
     onBack: () -> Unit,
-    // Interactions
     isLiked: Boolean = false,
+    likeStatusKnown: Boolean,
     isCoined: Boolean = false,
     allowDislikeAction: Boolean = true,
-    onLikeClick: () -> Unit = {},
-    onDislikeClick: () -> Unit = {},
-    onCoinClick: () -> Unit = {},
-    onShareClick: () -> Unit = {},
-    onCommentClick: () -> Unit = {},
-    onCastClick: () -> Unit = {}, // Added Cast callback
+    onLikeClick: (() -> Unit)? = null,
+    onDislikeClick: (() -> Unit)? = null,
+    onCoinClick: (() -> Unit)? = null,
+    shareMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
+    onShareClick: (() -> Unit)? = null,
+    onCastClick: (() -> Unit)? = null,
     showCastButton: Boolean = true,
-    onMoreClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onMoreClick: (() -> Unit)? = null,
+    isFavorited: Boolean = false,
+    onFavoriteClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    isPortrait: Boolean = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT,
+    horizontalScreen: Boolean = true,
+    isFileSource: Boolean = false,
+    isUgc: Boolean = true,
+    onHomeClick: (() -> Unit)? = null,
+    moreMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
+    danmakuMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
+    onAudioClick: (() -> Unit)? = null,
+    onSendDanmakuClick: (() -> Unit)? = null,
+    danmakuEnabled: Boolean = true,
+    onDanmakuToggle: (() -> Unit)? = null,
+    onDanmakuSettingsClick: (() -> Unit)? = null,
+    showPipButton: Boolean = false,
+    onPipClick: (() -> Unit)? = null,
+    onLikeLongClick: (() -> Unit)? = null,
+    onFavoriteLongClick: (() -> Unit)? = null,
+    isDisliked: Boolean = false,
+    showSponsorSubmitButton: Boolean = false,
+    sponsorSubmitDescription: String = "提交片段",
+    onSponsorSubmitClick: (() -> Unit)? = null,
+    showSponsorSegmentsButton: Boolean = false,
+    onSponsorSegmentsClick: (() -> Unit)? = null,
+    onCommentClick: (() -> Unit)? = null,
+    onRelatedVideosClick: (() -> Unit)? = null,
+    commentsVisible: Boolean = false,
+    relatedVideosVisible: Boolean = false,
 ) {
+    val policy = resolveTopControlBarLayoutPolicy(
+        isPortrait = isPortrait,
+        isFullscreen = isFullscreen,
+        horizontalScreen = horizontalScreen,
+        isFileSource = isFileSource,
+        isUgc = isUgc,
+        showFullscreenActionItems = showInteractiveActions,
+    )
+    val visibleCounts = rememberVisibleFullscreenCounts()
+    val showCounts = isFullscreen
+    fun visibleCount(kind: com.android.purebilibili.core.store.FullscreenActionCount, value: Long?): Long? =
+        value.takeIf { showCounts && kind in visibleCounts }
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
-    val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
-    val layoutPolicy = remember(configuration.screenWidthDp) {
-        resolveTopControlBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp
-        )
-    }
-    val showDislikeAction = remember(configuration.screenWidthDp, allowDislikeAction, showInteractiveActions) {
-        allowDislikeAction &&
-            showInteractiveActions &&
-            shouldShowDislikeInTopControlBar(widthDp = configuration.screenWidthDp)
-    }
-    val showInteractiveActionGroup = remember(showInteractiveActions) {
-        shouldShowInteractiveActionsInTopControlBar(
-            showFullscreenActionItems = showInteractiveActions
-        )
-    }
-    val currentTimeText by produceState(initialValue = formatCurrentTime(), showCurrentTime, hostLifecycleStarted) {
-        if (!shouldPollTopControlBarClock(showCurrentTime, hostLifecycleStarted)) {
-            value = formatCurrentTime()
-            return@produceState
-        }
+    val hostStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+    val clockVisible = policy.showStatus && showCurrentTime
+    val batteryVisible = policy.showStatus && showBatteryLevel
+    val currentTime by produceState(initialValue = formatCurrentTime(), clockVisible, hostStarted) {
+        if (!shouldPollTopControlBarClock(clockVisible, hostStarted)) return@produceState
         while (true) {
             value = formatCurrentTime()
-            val now = System.currentTimeMillis()
-            val nextMinuteDelay = (60_000L - (now % 60_000L)).coerceAtLeast(1_000L)
-            delay(nextMinuteDelay)
+            delay((60_000L - System.currentTimeMillis() % 60_000L).coerceAtLeast(1_000L))
         }
     }
-    val batteryLevelPercent by produceState<Int?>(initialValue = null, showBatteryLevel, hostLifecycleStarted) {
-        if (!shouldPollTopControlBarBattery(showBatteryLevel, hostLifecycleStarted)) {
+    val batteryPercent by produceState<Int?>(initialValue = null, batteryVisible, hostStarted) {
+        if (!shouldPollTopControlBarBattery(batteryVisible, hostStarted)) {
             value = null
             return@produceState
         }
@@ -204,298 +160,361 @@ fun TopControlBar(
             delay(30_000L)
         }
     }
-    val statusInfo = remember(currentTimeText, batteryLevelPercent, showBatteryLevel, showCurrentTime) {
-        resolveLandscapeTopStatusInfo(
-            showBatteryLevel = showBatteryLevel,
-            batteryLevelPercent = batteryLevelPercent,
-            showCurrentTime = showCurrentTime,
-            currentTimeText = currentTimeText
-        )
+    val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+    val buttonSpacing = if (glass) 4.dp else 0.dp
+    val motionEnabled = LocalComponentMotionEnabled.current
+    val hasTitle = policy.showTitle && title.isNotEmpty()
+    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
+    val likeClick: (() -> Unit)? = onLikeClick?.let { action ->
+        { haptic(HapticType.LIGHT); action() }
     }
+    val triplePress = rememberPiliHeaderTriplePressState()
+    val likeGesture = if (likeStatusKnown && onLikeClick != null && onLikeLongClick != null) {
+        piliHeaderLikeGesture(triplePress, isLiked && isCoined && isFavorited, requireNotNull(likeClick), onLikeLongClick)
+    } else null
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(
-                if (
-                    shouldApplyStatusBarPaddingToTopControlBar(
-                        isFullscreen = isFullscreen,
-                        statusBarVisible = statusBarVisible,
-                    )
-                ) {
-                    Modifier.statusBarsPadding()
-                } else {
-                    Modifier
-                }
-            )
-            .padding(
-                horizontal = layoutPolicy.horizontalPaddingDp.dp,
-                vertical = layoutPolicy.verticalPaddingDp.dp
-            )
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+    PlayerControlTouchBounds(height = policy.buttonHeightDp.dp) {
+        Column(
+            modifier = modifier.fillMaxWidth()
+                .windowInsetsPadding(playerControlHorizontalInsets(isFullscreen, isPortrait))
+                .playerControlTopSafeArea(isFullscreen, isPortrait, statusBarVisible)
+                .padding(vertical = policy.verticalPaddingDp.dp),
         ) {
-            // --- Left Section: Back & Info ---
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f) // Text takes remaining space
-            ) {
-                // Back Button
-                AppIconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
-                ) {
-                    AppIcon(
-                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-                        contentDescription = "Back", 
-                        tint = Color.White,
-                        modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.width(layoutPolicy.backToTitleSpacingDp.dp))
-
-                // 标题与右侧图标保持同一行
-                AppText(
-                    text = title,
-                    color = Color.White,
-                    fontSize = layoutPolicy.titleFontSp.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .weight(1f)
-                        .basicMarquee() // Marquee effect for long text
-                )
-            }
-            
-            Spacer(modifier = Modifier.width(layoutPolicy.sectionGapDp.dp)) // Space between text and actions
-            
-            // --- Right Section: Actions ---
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(layoutPolicy.actionSpacingDp.dp)
-            ) {
-                if (showInteractiveActionGroup) {
-                    // Like
-                    ActionIcon(
-                        icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
-                        contentDescription = "点赞",
-                        isActive = isLiked,
-                        onClick = onLikeClick,
-                        buttonSizeDp = layoutPolicy.buttonSizeDp,
-                        iconSizeDp = layoutPolicy.iconSizeDp
-                    )
-
-                    if (showDislikeAction) {
-                        // Dislike
-                        ActionIcon(
-                            icon = Icons.Outlined.ThumbDown,
-                            contentDescription = "不喜欢",
-                            isActive = false,
-                            onClick = onDislikeClick,
-                            buttonSizeDp = layoutPolicy.buttonSizeDp,
-                            iconSizeDp = layoutPolicy.iconSizeDp
-                        )
-                    }
-
-                    // Coin
-                    ActionIcon(
-                        icon = AppIcons.BiliCoin,
-                        contentDescription = "投币",
-                        isActive = isCoined,
-                        onClick = onCoinClick,
-                        buttonSizeDp = layoutPolicy.buttonSizeDp,
-                        iconSizeDp = layoutPolicy.iconSizeDp
-                    )
-
-                    // Share
-                    ActionIcon(
-                        icon = Icons.Outlined.Share,
-                        contentDescription = "分享",
-                        isActive = false,
-                        onClick = onShareClick,
-                        buttonSizeDp = layoutPolicy.buttonSizeDp,
-                        iconSizeDp = layoutPolicy.iconSizeDp
-                    )
-                }
-
-                if (showCastButton) {
-                    ActionIcon(
-                        icon = Icons.Outlined.Cast,
-                        contentDescription = "投屏",
-                        isActive = false,
-                        onClick = onCastClick,
-                        buttonSizeDp = layoutPolicy.buttonSizeDp,
-                        iconSizeDp = layoutPolicy.iconSizeDp
-                    )
-                }
-
-                ActionIcon(
-                    icon = Icons.Outlined.Comment,
-                    contentDescription = "评论区",
-                    isActive = false,
-                    onClick = onCommentClick,
-                    buttonSizeDp = layoutPolicy.buttonSizeDp,
-                    iconSizeDp = layoutPolicy.iconSizeDp
-                )
-                
-                // More (Three dots)
-                AppIconButton(
-                    onClick = onMoreClick,
-                    modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
-                ) {
-                    AppIcon(
-                        imageVector = Icons.Outlined.MoreVert,
-                        contentDescription = "更多",
-                        tint = Color.White,
-                        modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
-                    )
-                }
-            }
-        }
-
-        if (shouldShowLandscapeMetaRow(statusInfo.isVisible, onlineCount)) {
-            Column(
-                modifier = Modifier.padding(
-                    start = layoutPolicy.onlineCountStartPaddingDp.dp,
-                    top = layoutPolicy.timeBottomSpacingDp.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(layoutPolicy.onlineCountTopPaddingDp.dp)
-            ) {
-                statusInfo.battery?.let { battery ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        BatteryStatusIcon(
-                            state = battery,
-                            modifier = Modifier.size(
-                                width = (layoutPolicy.timeFontSp + 14).dp,
-                                height = (layoutPolicy.timeFontSp + 4).dp
-                            )
-                        )
-                        AppText(
-                            text = battery.displayText,
-                            color = resolveBatteryStatusTint(battery).copy(alpha = 0.95f),
-                            fontSize = layoutPolicy.timeFontSp.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        statusInfo.currentTimeText?.let { timeText ->
-                            AppText(
-                                text = timeText,
-                                color = Color.White.copy(alpha = 0.88f),
-                                fontSize = layoutPolicy.timeFontSp.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+            PiliHeaderSlots(
+                hasTitle = hasTitle,
+                allowSeparateTitleRow = isFullscreen && !isPortrait,
+                left = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(buttonSpacing)) {
+                        HeaderIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回", onBack, iconSize = if (glass) 15 else 20)
+                        if (policy.showHome && onHomeClick != null) {
+                            HeaderIcon(Icons.Outlined.Home, "返回首页", onHomeClick)
                         }
                     }
-                } ?: statusInfo.currentTimeText?.let { timeText ->
-                    AppText(
-                        text = timeText,
-                        color = Color.White.copy(alpha = 0.88f),
-                        fontSize = layoutPolicy.timeFontSp.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                if (onlineCount.isNotEmpty()) {
-                    AppText(
-                        text = onlineCount,
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = layoutPolicy.onlineCountFontSp.sp,
-                        fontWeight = FontWeight.Normal
-                    )
+                },
+                right = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(buttonSpacing)) {
+                        if (glass) {
+                            if (clockVisible || (batteryVisible && batteryPercent != null)) {
+                                PlayerControlGlassDock(
+                                    enabled = true,
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.heightIn(min = policy.buttonHeightDp.dp).padding(horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        if (batteryVisible) batteryPercent?.let { HeaderStatusText("$it%") }
+                                        if (clockVisible) HeaderStatusText(currentTime)
+                                    }
+                                }
+                            }
+                        } else {
+                            if (batteryVisible) {
+                                batteryPercent?.let { HeaderStatusText("$it%") }
+                                Spacer(Modifier.width(10.dp))
+                            }
+                            if (clockVisible) HeaderStatusText(currentTime)
+                        }
+                        if (policy.showAudio && onAudioClick != null) {
+                            HeaderIcon(Icons.Outlined.Headphones, "听音频", onAudioClick)
+                        }
+                        if (policy.showCast && showCastButton && onCastClick != null) {
+                            HeaderIcon(Icons.Outlined.Cast, "投屏", onCastClick)
+                        }
+                        if (!isFileSource && showSponsorSubmitButton && onSponsorSubmitClick != null) {
+                            HeaderButton(sponsorSubmitDescription, onSponsorSubmitClick) {
+                                PiliPlusDanmakuGlyph("\uE814", sponsorSubmitDescription, Color.White, 20.dp)
+                            }
+                        }
+                        if (showSponsorSegmentsButton && onSponsorSegmentsClick != null) {
+                            HeaderButton("片段信息", onSponsorSegmentsClick) { HeaderAdvertisementIcon() }
+                        }
+                        if (policy.showDanmakuActions) {
+                            if (onSendDanmakuClick != null) {
+                                HeaderButton("发弹幕", onSendDanmakuClick) {
+                                    PiliPlusDanmakuSendIcon(tint = Color.White, size = 20.dp)
+                                }
+                            }
+                            if (onDanmakuToggle != null) {
+                                val description = if (danmakuEnabled) "关闭弹幕" else "开启弹幕"
+                                HeaderButton(description, onDanmakuToggle) {
+                                    PiliPlusDanmakuGlyph(
+                                        if (danmakuEnabled) "\uE803" else "\uE802",
+                                        description,
+                                        if (danmakuEnabled) com.android.purebilibili.core.ui.AppSurfaceTokens.primary() else Color.White,
+                                        20.dp,
+                                    )
+                                }
+                            }
+                        }
+                        if (onDanmakuSettingsClick != null) {
+                            HeaderButton("弹幕设置", onDanmakuSettingsClick, modifier = danmakuMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onDanmakuSettingsClick) } ?: Modifier) {
+                                PiliPlusDanmakuSettingsIcon(tint = Color.White, size = 20.dp)
+                            }
+                        }
+                        if (showPipButton && onPipClick != null) {
+                            HeaderIcon(Icons.Outlined.PictureInPicture, "画中画", onPipClick)
+                        }
+                        if (onMoreClick != null) {
+                            HeaderIcon(Icons.Outlined.MoreVert, "更多设置", onMoreClick, modifier = moreMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onMoreClick) } ?: Modifier)
+                        }
+                    }
+                },
+                title = {
+                    // 玻璃标题独立提供圆角材质，原生标题保持原有排版与末端间距。
+                    PlayerControlGlassDock(
+                        enabled = glass,
+                        modifier = Modifier.padding(end = if (isPortrait) 0.dp else 10.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+                    ) {
+                        Column(
+                            modifier = if (glass) Modifier
+                                .heightIn(min = policy.buttonHeightDp.dp)
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                            else Modifier,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            AppText(
+                                text = title, color = Color.White, fontSize = policy.titleFontSp.sp, lineHeight = 19.sp,
+                                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                                modifier = if (motionEnabled) Modifier.basicMarquee(
+                                    iterations = Int.MAX_VALUE, spacing = androidx.compose.foundation.MarqueeSpacing(30.dp),
+                                    velocity = 30.dp,
+                                ) else Modifier,
+                                tapToCopyEnabled = false,
+                            )
+                            if (onlineCount.isNotBlank()) {
+                                AppText(
+                                    text = onlineCount, color = Color.White,
+                                    fontSize = policy.onlineCountFontSp.sp, lineHeight = 13.sp, maxLines = 1,
+                                    softWrap = false, overflow = TextOverflow.Ellipsis,
+                                    tapToCopyEnabled = false,
+                                )
+                            }
+                        }
+                    }
+                },
+            )
+            // 侧栏入口属于浏览功能，不随点赞、投币等互动快捷键一起隐藏。
+            if (policy.showEngagement || onCommentClick != null || onRelatedVideosClick != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 两排玻璃轮廓留出独立呼吸空间；原生控件保持原有间距。
+                        .then(if (glass) Modifier.padding(top = 6.dp) else Modifier)
+                        .horizontalScroll(rememberScrollState())
+                        // 角标伸出按钮的部分也必须位于滚动视口内；两种材质共用此边界。
+                        .padding(top = PlayerActionCountTopOverflow, end = PlayerActionCountEndOverflow),
+                    horizontalArrangement = if (glass) Arrangement.spacedBy(buttonSpacing, Alignment.End) else Arrangement.End,
+                ) {
+                    if (onCommentClick != null) {
+                        HeaderIcon(Icons.Outlined.Forum, "评论", onCommentClick,
+                            active = commentsVisible, iconSize = 18,
+                            count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.COMMENT, commentCount))
+                    }
+                    if (onRelatedVideosClick != null) {
+                        HeaderIcon(Icons.Outlined.VideoLibrary, "相关推荐", onRelatedVideosClick,
+                            active = relatedVideosVisible, iconSize = 18)
+                    }
+                    if (policy.showEngagement) {
+                        if (onLikeClick != null) {
+                            Box(Modifier.likeBurstAnchor()) {
+                                HeaderIcon(
+                                    if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                                    if (likeStatusKnown) "点赞" else "点赞状态尚未确认",
+                                    requireNotNull(likeClick), active = likeStatusKnown && isLiked, iconSize = 18,
+                                    gestureModifier = likeGesture, progress = triplePress.progress,
+                                    count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.LIKE, likeCount),
+                                )
+                            }
+                        }
+                        if (policy.showDislike && allowDislikeAction && onDislikeClick != null) {
+                            HeaderIcon(
+                                if (isDisliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
+                                "点踩", onDislikeClick, active = isDisliked, iconSize = 18,
+                            )
+                        }
+                        if (onCoinClick != null) HeaderIcon(
+                            AppIcons.BiliCoin, "投币", { haptic(HapticType.LIGHT); onCoinClick() }, active = isCoined,
+                            progress = triplePress.progress, iconSize = 18,
+                        )
+                        if (onFavoriteClick != null) {
+                            HeaderIcon(
+                                if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                "收藏", { haptic(HapticType.LIGHT); onFavoriteClick() }, active = isFavorited, iconSize = 18,
+                                onLongClick = onFavoriteLongClick, progress = triplePress.progress,
+                                modifier = Modifier.favoriteFolderMenuSource(),
+                                count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.FAVORITE, favoriteCount),
+                            )
+                        }
+                        if (onShareClick != null) HeaderIcon(Icons.Outlined.Share, "分享", onShareClick, iconSize = 18, modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShareClick) } ?: Modifier)
+                    }
                 }
             }
         }
     }
 }
 
-private fun formatCurrentTime(): String {
-    val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return formatter.format(Date())
-}
-
-private fun resolveBatteryLevelPercent(context: Context): Int? {
-    return runCatching {
-        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-        if (level < 0 || scale <= 0) return@runCatching null
-        (level * 100f / scale).toInt().coerceIn(0, 100)
-    }.getOrNull()
-}
-
+/**
+ * 左右操作先按自然尺寸测量；横屏全屏的标题空间不足时独占下一行。
+ * 由实际播放器宽度判断，因此左右侧栏、窄窗口和大字体共用同一条布局路径。
+ * 材质只由各控件负责，不改变玻璃、MD3、Miuix 的字号、按钮尺寸或默认间距。
+ */
 @Composable
-private fun BatteryStatusIcon(
-    state: LandscapeBatteryVisualState,
-    modifier: Modifier = Modifier
+private fun PiliHeaderSlots(
+    hasTitle: Boolean,
+    allowSeparateTitleRow: Boolean,
+    left: @Composable () -> Unit,
+    right: @Composable () -> Unit,
+    title: @Composable () -> Unit,
 ) {
-    val tint = resolveBatteryStatusTint(state)
-    Canvas(modifier = modifier) {
-        val strokeWidth = size.height * 0.12f
-        val terminalWidth = size.width * 0.09f
-        val bodyWidth = size.width - terminalWidth - strokeWidth
-        val bodyHeight = size.height * 0.76f
-        val bodyTop = (size.height - bodyHeight) / 2f
-        val cornerRadius = CornerRadius(bodyHeight * 0.18f, bodyHeight * 0.18f)
-        val innerPadding = strokeWidth * 1.1f
-        val fillWidth = ((bodyWidth - innerPadding * 2f) * state.fillFraction).coerceAtLeast(0f)
-
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.92f),
-            topLeft = Offset(0f, bodyTop),
-            size = Size(bodyWidth, bodyHeight),
-            cornerRadius = cornerRadius,
-            style = Stroke(width = strokeWidth)
+    Layout(
+        content = {
+            Box { left() }
+            Box { right() }
+            if (hasTitle) Box { title() }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { measurables, constraints ->
+        val natural = Constraints(maxHeight = constraints.maxHeight)
+        val leftPlaceable = measurables[0].measure(natural)
+        val rightPlaceable = measurables[1].measure(natural)
+        val edgeWidth = leftPlaceable.width + rightPlaceable.width
+        val width = constraints.maxWidth
+        val scale = if (edgeWidth > width) width.toFloat() / edgeWidth else 1f
+        // 至少为八个标题字及材质内边距留出空间，避免标题退化成竖长窄条。
+        val minimumTitleWidth = 128.sp.roundToPx() + 34.dp.roundToPx()
+        val separateTitleRow = hasTitle && allowSeparateTitleRow &&
+            width - edgeWidth < minimumTitleWidth
+        val edgeHeight = maxOf(leftPlaceable.height, rightPlaceable.height)
+        val titleRowGap = if (separateTitleRow) 4.dp.roundToPx() else 0
+        val titlePlaceable = if (hasTitle) measurables[2].measure(
+            Constraints(
+                maxWidth = if (separateTitleRow) width else (width - edgeWidth).coerceAtLeast(0),
+                maxHeight = constraints.maxHeight,
+            ),
+        ) else null
+        val rowHeight = if (separateTitleRow) edgeHeight else maxOf(edgeHeight, titlePlaceable?.height ?: 0)
+        val height = constraints.constrainHeight(
+            rowHeight + if (separateTitleRow) titleRowGap + (titlePlaceable?.height ?: 0) else 0,
         )
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.92f),
-            topLeft = Offset(bodyWidth + strokeWidth * 0.35f, size.height * 0.34f),
-            size = Size(terminalWidth, size.height * 0.28f),
-            cornerRadius = CornerRadius(terminalWidth / 2f, terminalWidth / 2f)
-        )
-        if (fillWidth > 0f) {
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(innerPadding, bodyTop + innerPadding),
-                size = Size(fillWidth, bodyHeight - innerPadding * 2f),
-                cornerRadius = CornerRadius(cornerRadius.x / 1.5f, cornerRadius.y / 1.5f)
+        layout(width, height) {
+            if (scale < 1f) {
+                leftPlaceable.placeRelativeWithLayer(0, ((rowHeight - leftPlaceable.height * scale) / 2).toInt()) {
+                    scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0f)
+                }
+                rightPlaceable.placeRelativeWithLayer(
+                    (leftPlaceable.width * scale).toInt(), ((rowHeight - rightPlaceable.height * scale) / 2).toInt(),
+                ) {
+                    scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0f)
+                }
+            } else {
+                leftPlaceable.placeRelative(0, (rowHeight - leftPlaceable.height) / 2)
+                rightPlaceable.placeRelative(width - rightPlaceable.width, (rowHeight - rightPlaceable.height) / 2)
+            }
+            titlePlaceable?.placeRelative(
+                if (separateTitleRow) 0 else leftPlaceable.width,
+                if (separateTitleRow) rowHeight + titleRowGap else (rowHeight - titlePlaceable.height) / 2,
             )
         }
     }
 }
 
-private fun resolveBatteryStatusTint(
-    state: LandscapeBatteryVisualState
-): Color {
-    return when (state.chargeTone) {
-        BatteryChargeTone.CRITICAL -> Color(0xFFFF5A5F)
-        BatteryChargeTone.LOW -> Color(0xFFFFB347)
-        BatteryChargeTone.NORMAL -> Color.White.copy(alpha = 0.92f)
+@Composable
+private fun HeaderStatusText(text: String) {
+    AppText(
+        text = text, color = Color.White, fontSize = 13.sp, maxLines = 1,
+        softWrap = false, tapToCopyEnabled = false,
+    )
+}
+
+@Composable
+private fun HeaderAdvertisementIcon() {
+    Box(Modifier.size(width = 19.dp, height = 15.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.matchParentSize()) {
+            drawRoundRect(
+                Color.White,
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
+                style = Stroke(1.4.dp.toPx()),
+            )
+        }
+        AppText(
+            text = "AD", color = Color.White, fontSize = 8.sp, lineHeight = 10.sp,
+            maxLines = 1, softWrap = false, tapToCopyEnabled = false,
+        )
     }
 }
 
 @Composable
-private fun ActionIcon(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    isActive: Boolean,
+private fun HeaderIcon(
+    icon: ImageVector,
+    description: String,
     onClick: () -> Unit,
-    buttonSizeDp: Int = 32,
-    iconSizeDp: Int = 24
+    active: Boolean = false,
+    iconSize: Int = 19,
+    onLongClick: (() -> Unit)? = null,
+    gestureModifier: Modifier? = null,
+    progress: Float = 0f,
+    count: Long? = null,
+    modifier: Modifier = Modifier,
 ) {
-    AppIconButton(
-        onClick = onClick,
-        modifier = Modifier.size(buttonSizeDp.dp)
-    ) {
-        AppIcon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
-            modifier = Modifier.size(iconSizeDp.dp)
-        )
+    val progressColor = AppContentColors.accent()
+    CountedPlayerAction(count = count, iconSize = iconSize.dp, modifier = modifier) {
+        HeaderButton(description, onClick, active, onLongClick, gestureModifier) {
+            if (progress > 0f) Canvas(Modifier.size(28.dp)) {
+                drawArc(progressColor, -90f, -360f * progress, useCenter = false, style = Stroke(2.dp.toPx()))
+            }
+            AppIcon(
+                imageVector = icon, contentDescription = null,
+                tint = if (active) AppContentColors.accent() else Color.White,
+                modifier = Modifier.size(iconSize.dp),
+            )
+        }
     }
 }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HeaderButton(
+    description: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    gestureModifier: Modifier? = null,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val feedbackClick = appActionWithFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS, onClick)
+    PlayerControlGlassDock(enabled = true, modifier = modifier, shape = CircleShape) {
+        Box(
+            modifier = Modifier
+                .then(if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
+                    Modifier.size(PlayerGlassIconButtonSize)
+                } else {
+                    Modifier.size(34.dp)
+                })
+                .semantics(mergeDescendants = true) {
+                    contentDescription = description
+                    selected = active
+                    if (gestureModifier != null) {
+                        role = Role.Button
+                        onClick(action = { feedbackClick(); true })
+                    }
+                }
+                .then(gestureModifier ?: Modifier.combinedClickable(
+                    role = Role.Button, onClick = feedbackClick, onLongClick = onLongClick,
+                )),
+            contentAlignment = Alignment.Center,
+        ) { content() }
+    }
+}
+
+private fun formatCurrentTime(): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+
+private fun resolveBatteryLevelPercent(context: Context): Int? = runCatching {
+    val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+    if (level < 0 || scale <= 0) null else (level * 100f / scale).toInt().coerceIn(0, 100)
+}.getOrNull()

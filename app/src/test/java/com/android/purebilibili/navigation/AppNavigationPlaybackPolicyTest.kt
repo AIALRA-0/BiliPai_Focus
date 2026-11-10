@@ -8,25 +8,6 @@ import kotlin.test.assertTrue
 class AppNavigationPlaybackPolicyTest {
 
     @Test
-    fun audioNowPlayingBar_defaultsToVideoDetailAndCanOpenAudioMode() {
-        val detailRoute = resolveAudioNowPlayingBarExpandRoute(
-            opensAudioMode = false,
-            bvid = "BV1TEST",
-            cid = 42L,
-            coverUrl = "https://example.com/cover.jpg",
-        )
-        val audioRoute = resolveAudioNowPlayingBarExpandRoute(
-            opensAudioMode = true,
-            bvid = "BV1TEST",
-            cid = 42L,
-            coverUrl = "https://example.com/cover.jpg",
-        )
-
-        assertTrue(detailRoute.startsWith("video/BV1TEST?cid=42"))
-        assertEquals(ScreenRoutes.AudioMode.createRoute("BV1TEST", 42L), audioRoute)
-    }
-
-    @Test
     fun miniPlayerTransition_doesNotMarkPlaybackAsNavigationLeave() {
         assertFalse(shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = true))
         assertTrue(shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = false))
@@ -59,7 +40,29 @@ class AppNavigationPlaybackPolicyTest {
         assertTrue(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = ScreenRoutes.Home.route
+                toRoute = ScreenRoutes.Home.route,
+                isVideoEntryRetained = false,
+            )
+        )
+    }
+
+    @Test
+    fun coveringRetainedVideo_doesNotDestroyItsPlaybackIntentBeforeSessionSuspension() {
+        for (target in listOf("search?keyword=android", ScreenRoutes.Settings.route, "video/BVchild")) {
+            assertFalse(
+                shouldStopPlaybackEagerlyOnVideoRouteExit(
+                    fromRoute = "video/BVparent",
+                    toRoute = target,
+                    isVideoEntryRetained = true,
+                ),
+                target,
+            )
+        }
+        assertTrue(
+            shouldStopPlaybackEagerlyOnVideoRouteExit(
+                fromRoute = "video/BVparent",
+                toRoute = "search?keyword=android",
+                isVideoEntryRetained = false,
             )
         )
     }
@@ -69,7 +72,8 @@ class AppNavigationPlaybackPolicyTest {
         assertFalse(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = ScreenRoutes.AudioMode.route
+                toRoute = ScreenRoutes.AudioMode.route,
+                isVideoEntryRetained = false,
             )
         )
     }
@@ -79,7 +83,8 @@ class AppNavigationPlaybackPolicyTest {
         assertFalse(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = ScreenRoutes.Space.createRoute(123L)
+                toRoute = ScreenRoutes.Space.createRoute(123L),
+                isVideoEntryRetained = false,
             )
         )
     }
@@ -89,7 +94,8 @@ class AppNavigationPlaybackPolicyTest {
         assertFalse(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = VideoRoute.route
+                toRoute = VideoRoute.route,
+                isVideoEntryRetained = false,
             )
         )
     }
@@ -99,7 +105,8 @@ class AppNavigationPlaybackPolicyTest {
         assertFalse(
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
-                toRoute = null
+                toRoute = null,
+                isVideoEntryRetained = false,
             )
         )
     }

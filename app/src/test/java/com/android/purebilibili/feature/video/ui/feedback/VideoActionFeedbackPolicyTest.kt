@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.feedback
 
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.theme.AppUiStyle
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -70,17 +71,29 @@ class VideoActionFeedbackPolicyTest {
     fun `detail action active colors derive from active theme roles`() {
         val primary = Color(0xFF3366FF)
         val secondary = Color(0xFF00A884)
-        val tertiary = Color(0xFFFF8A00)
 
         val colors = resolveVideoDetailActionActiveColors(
             primary = primary,
-            secondary = secondary,
-            tertiary = tertiary
+            secondary = secondary
         )
 
         assertEquals(primary, colors.primaryAction)
-        assertEquals(tertiary, colors.watchLater)
+        assertEquals(primary, colors.watchLater)
         assertEquals(secondary, colors.downloadInProgress)
+        assertEquals(primary, colors.downloaded)
+    }
+
+    @Test
+    fun `miuix active actions do not inherit neutral secondary color`() {
+        val primary = Color(0xFF3366FF)
+        val colors = resolveVideoDetailActionActiveColors(
+            primary = primary,
+            secondary = Color.Gray,
+            uiStyle = AppUiStyle.MIUIX,
+        )
+
+        assertEquals(primary, colors.watchLater)
+        assertEquals(primary, colors.downloadInProgress)
         assertEquals(primary, colors.downloaded)
     }
 
@@ -119,10 +132,12 @@ class VideoActionFeedbackPolicyTest {
     }
 
     @Test
-    fun `like burst placement uses centered emphasized overlay`() {
-        val placement = resolveLikeBurstPlacement()
+    fun `like feedback clears controls and the navigation inset`() {
+        val placement = resolveLikeBurstPlacement(bottomInsetDp = 24)
 
-        assertEquals(VideoFeedbackAnchor.CenterOverlay, placement.anchor)
+        assertEquals(VideoFeedbackAnchor.BottomTrailing, placement.anchor)
+        assertEquals(88, placement.bottomInsetDp)
+        assertEquals(16, placement.sideInsetDp)
         assertEquals(VideoFeedbackEmphasis.Emphasized, placement.emphasis)
     }
 }

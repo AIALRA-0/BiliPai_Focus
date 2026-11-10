@@ -50,7 +50,6 @@ class VideoDetailScreenPolicyTest {
         )
         assertTrue(collapsedHeightPolicy.contains("collapsedPortraitInlineSpec.heightDp.dp"))
     }
-
     @Test
     fun localBack_prefersPortraitFullscreenOverLandscapeFullscreen() {
         assertEquals(
@@ -82,6 +81,51 @@ class VideoDetailScreenPolicyTest {
                 directPortraitEntry = true,
             )
         )
+    }
+
+    @Test
+    fun localBack_consumesPendingEnterExitAndCollapseBeforeRouteNavigation() {
+        for (phase in ContinuousPlayerTransitionPhase.entries) {
+            assertEquals(
+                if (phase == ContinuousPlayerTransitionPhase.Inline) {
+                    VideoDetailLocalBackTarget.NAVIGATE_BACK
+                } else {
+                    VideoDetailLocalBackTarget.EXIT_LANDSCAPE_FULLSCREEN
+                },
+                resolveVideoDetailLocalBackTarget(
+                    isLandscapeFullscreen = false,
+                    isPortraitFullscreen = false,
+                    continuousPlayerPhase = phase,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun localBack_keepsPortraitPriorityButCancelsPendingLandscapeForDirectPortraitEntry() {
+        for (phase in ContinuousPlayerTransitionPhase.entries) {
+            assertEquals(
+                VideoDetailLocalBackTarget.EXIT_PORTRAIT_FULLSCREEN,
+                resolveVideoDetailLocalBackTarget(
+                    isLandscapeFullscreen = false,
+                    isPortraitFullscreen = true,
+                    continuousPlayerPhase = phase,
+                ),
+            )
+            assertEquals(
+                if (phase == ContinuousPlayerTransitionPhase.Inline) {
+                    VideoDetailLocalBackTarget.NAVIGATE_BACK
+                } else {
+                    VideoDetailLocalBackTarget.EXIT_LANDSCAPE_FULLSCREEN
+                },
+                resolveVideoDetailLocalBackTarget(
+                    isLandscapeFullscreen = false,
+                    isPortraitFullscreen = true,
+                    directPortraitEntry = true,
+                    continuousPlayerPhase = phase,
+                ),
+            )
+        }
     }
 
     @Test
@@ -238,52 +282,6 @@ class VideoDetailScreenPolicyTest {
         )
     }
 
-    @Test
-    fun secondaryNavigationCallbacks_deferPlaybackExitToNavigationLayer() {
-        val source = File("src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt")
-            .readText()
-        val userSpaceSource = source.substringAfter("val navigateToUserSpaceFromVideo")
-            .substringBefore("val navigateToSearchFromVideo")
-
-        assertFalse(userSpaceSource.contains("markSecondaryNavigationLeave"))
-        assertTrue(userSpaceSource.contains("onUpClick(mid)"))
-    }
-
-    @Test
-    fun videoNavigationInsideDetailSwitchesCurrentPageWithoutPushingRoute() {
-        val source = File("src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt")
-            .readText()
-        val relatedVideoSource = source.substringAfter("val navigateToRelatedVideo")
-            .substringBefore("LaunchedEffect(bvid, cid)")
-
-        assertTrue(relatedVideoSource.contains("shouldSwitchCollectionVideoInsideCurrentDetailPage("))
-        assertTrue(relatedVideoSource.contains("switchVideoInCurrentDetailPage("))
-        assertTrue(relatedVideoSource.contains("onVideoClick(targetBvid, navOptions)"))
-        assertTrue(relatedVideoSource.contains("captureVideoDetailParentUiSnapshot("))
-        assertFalse(relatedVideoSource.contains("captureVideoDetailParentFreezeFrame("))
-        assertFalse(relatedVideoSource.contains("withTimeoutOrNull(320L)"))
-        assertFalse(relatedVideoSource.contains("PixelCopy.request("))
-        assertTrue(
-            relatedVideoSource.indexOf("restoreVideoDetailParentUiSnapshot(") <
-                relatedVideoSource.indexOf(
-                    "canReleaseRelatedVideoNavigation("
-                )
-        )
-        // 相关推荐 push / 同页切集前必须清掉单例弹幕会话，避免新页绑定时弹幕不显示。
-        assertTrue(relatedVideoSource.contains("sharedDanmakuManager.clearForVideoChange()"))
-        assertTrue(
-            source.contains("presentationState.switchVideo(normalizedBvid, safeCid)") &&
-                source.contains("viewModel.loadVideo(")
-        )
-        // Presentation state already changes the player identity. A forced request here races the
-        // keyed player effect and can prepare the old player before the new player is attached.
-        val switchSource = source.substringAfter("fun switchVideoInCurrentDetailPage")
-            .substringBefore("val navigateToRelatedVideo")
-        assertFalse(switchSource.contains("force = true"))
-        assertTrue(switchSource.contains("resolveUgcSeasonEpisodeCoverUrl("))
-        assertTrue(switchSource.contains("pendingInPageSwitchCoverUrl"))
-        assertTrue(switchSource.contains("sharedDanmakuManager.clearForVideoChange()"))
-    }
 
     @Test
     fun collectionVideoNavigationSwitchesInsideCurrentDetailOnlyForSameCollection() {

@@ -8,14 +8,14 @@ class BuiltinPluginDefaultPolicyTest {
 
     @Test
     fun castPluginsAreEnabledByDefault() {
-        assertTrue(resolvePluginDefaultEnabled("dlna_cast"))
-        assertTrue(resolvePluginDefaultEnabled("google_cast"))
+        assertTrue(resolvePluginDefaultEnabled(BuiltinPluginIds.DLNA_CAST))
+        assertTrue(resolvePluginDefaultEnabled(BuiltinPluginIds.GOOGLE_CAST))
     }
 
     @Test
     fun optionalPluginsStayDisabledByDefault() {
-        assertFalse(resolvePluginDefaultEnabled("sponsor_block"))
-        assertFalse(resolvePluginDefaultEnabled("ad_filter"))
+        assertFalse(resolvePluginDefaultEnabled(BuiltinPluginIds.SPONSOR_BLOCK))
+        assertFalse(resolvePluginDefaultEnabled(BuiltinPluginIds.AD_FILTER))
         assertFalse(resolvePluginDefaultEnabled("unknown_plugin"))
     }
 }

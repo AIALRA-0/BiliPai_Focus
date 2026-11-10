@@ -25,10 +25,10 @@ class VideoContentSectionPerformanceStructureTest {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
         )
-        val commentTabSource = source.substringAfter("private fun VideoCommentTab(")
+        val commentTabSource = source.substringAfter("internal fun VideoCommentTab(")
 
         assertTrue(commentTabSource.contains("val shouldLoadMore by remember("))
-        assertTrue(commentTabSource.contains("LaunchedEffect(shouldLoadMore)"))
+        assertTrue(commentTabSource.contains("LaunchedEffect(shouldLoadMore, isRepliesRefreshing, repliesError, paginationPage)"))
         assertFalse(
             commentTabSource.contains(
                 "item {\n                    val shouldLoadMore by remember("
@@ -56,27 +56,38 @@ class VideoContentSectionPerformanceStructureTest {
         assertTrue(source.contains("reduceVideoContentTabBarCollapseOnPreScroll("))
         assertTrue(source.contains("reduceVideoContentTabBarCollapseOnPostScroll("))
         assertTrue(source.contains("nestedScroll(tabBarCollapseConnection)"))
-        assertTrue(source.contains("var tabBarCollapsePx by remember"))
+        assertTrue(source.contains("var commentHeaderCollapsePx by remember"))
         assertTrue(source.contains("resolveVideoContentTabBarCollapseProgress("))
-        assertTrue(source.contains("enabled = tabBarCollapseEnabled"))
+        assertTrue(source.contains("enabled = commentHeaderCollapseEnabled"))
         assertFalse(source.contains("visible = !collapseTabBarForCommentScroll"))
         // Sort filter bar lives in the top chrome beside the comment tab.
-        assertTrue(source.contains("pagerState.currentPage == 1 &&"))
-        assertTrue(source.contains("visible = commentListAtTop"))
+        // Essential comment controls stay available independently of tab collapse.
+        val sharedHeader = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentFloatingHeader.kt"
+        )
+        assertTrue(source.contains("VideoCommentFloatingHeader("))
+        assertFalse(sharedHeader.contains("AnimatedVisibility"))
+        assertFalse(sharedHeader.contains("listAtTop"))
+        assertFalse(sharedHeader.contains("showNativeTitle"))
+        assertTrue(source.contains("val commentListAtTop by remember(commentListState)"))
+        assertTrue(source.contains("commentHeaderCollapseEnabled by remember(pagerState)"))
+        assertTrue(source.contains("showHeader = !immersiveVideoContentChromeEnabled && !liquidGlassEnabled"))
+        assertTrue(source.contains("floatingHeaderContentPaddingPx = if (immersiveVideoContentChromeEnabled || liquidGlassEnabled)"))
+        assertTrue(source.contains("tabBarVisibleHeightPx() + commentHeaderVisibleHeightPx() * commentFraction"))
+        assertTrue(source.contains(".videoContentHeight(commentHeaderVisibleHeightPx)"))
+        assertFalse(source.contains("tabBarVisibleHeightPx() + commentHeaderHeightProvider() * commentFraction"))
         assertTrue(source.contains("CommentSortFilterBar("))
-        val sortControlSource = source
-            .substringAfter("CommentSortFilterBar(")
-            .substringBefore("AppLiquidGlassBackToTopButton(")
-        assertTrue(sortControlSource.contains("liquidGlassEffectsEnabled = liquidGlassEnabled"))
-        assertTrue(sortControlSource.contains(".align(Alignment.TopEnd)"))
-        assertFalse(sortControlSource.contains("visible = commentListAtTop"))
+        assertTrue(sharedHeader.contains("liquidGlassEffectsEnabled = liquidGlassEnabled"))
+        assertTrue(sharedHeader.contains("FlowRow("))
+        assertTrue(sharedHeader.contains("Modifier.offset(y = (-nativeSortDockLiftDp).dp)"))
         assertFalse(source.contains("(!tabBarCollapseEnabled || commentListAtTop)"))
         assertTrue(source.contains("顶部标签与评论标题/排序共用同一张渐进模糊材质"))
-        assertTrue(source.contains(".height(tabBarVisibleHeightDp + commentChromeHeight)"))
+        assertTrue(source.contains("resolveVideoContentCommentChromeHeightFraction("))
+        assertFalse(source.contains("pagerState.currentPage == 1 || pagerState.isScrollInProgress"))
         assertTrue(source.contains("progressiveTopFadeEnabled"))
         assertTrue(source.contains(".topSolidProgressiveFade("))
         assertTrue(source.contains("showHeader = !immersiveVideoContentChromeEnabled"))
-        assertTrue(source.contains("shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)"))
+        assertTrue(source.contains("showDanmakuActions && shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)"))
     }
 
     private fun loadSource(path: String): String {

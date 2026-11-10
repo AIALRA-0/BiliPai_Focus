@@ -1,9 +1,11 @@
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -39,7 +41,7 @@ internal fun TabletOwnerUploadsPane(
             AdaptiveLoadingIndicator()
         }
         is SpaceUiState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            AppText(current.message, color = MaterialTheme.colorScheme.error)
+            AppText(current.message, color = AppContentColors.error())
         }
         is SpaceUiState.Success -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -76,7 +78,7 @@ internal fun TabletOwnerUploadsPane(
                         AppText(
                             text = "${com.android.purebilibili.core.util.FormatUtils.formatStat(video.play.toLong())}播放 · ${video.comment}评论",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AppContentColors.secondaryText()
                         )
                     }
                 }

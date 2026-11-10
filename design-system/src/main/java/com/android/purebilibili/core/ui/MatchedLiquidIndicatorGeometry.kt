@@ -14,6 +14,12 @@ const val BottomBarReferencePressedHeightDp = 78f
 /** HyperIsland liquid indicator press bloom: 56dp -> 78dp. */
 const val BottomBarReferencePressedScale = BottomBarReferencePressedHeightDp / 56f
 
+/** Glass-only end breathing room; native callers retain their authored inset. */
+fun resolveLiquidGlassIndicatorHorizontalInsetDp(
+    requestedInsetDp: Float,
+    liquidGlassEnabled: Boolean,
+): Float = if (liquidGlassEnabled) requestedInsetDp.coerceIn(0f, 4f) else requestedInsetDp
+
 data class MatchedLiquidIndicatorGeometry(
     val dockHeightDp: Float,
     val indicatorHeightDp: Float,
@@ -43,7 +49,7 @@ fun resolveMatchedLiquidIndicatorPressedScale(
     // physical glass body at 78dp so short global controls do not turn into oversized bubbles.
     val pressedHeight = minOf(
         BottomBarReferencePressedHeightDp,
-        dockHeightDp * BottomBarReferencePressedScale,
+        dockHeightDp * BottomBarReferencePressedHeightDp / BottomBarReferenceShellHeightDp,
     )
     return (pressedHeight / indicatorHeightDp).coerceAtLeast(1f)
 }

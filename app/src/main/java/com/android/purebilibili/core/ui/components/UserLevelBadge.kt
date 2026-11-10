@@ -97,15 +97,15 @@ private fun LegacyUserLevelBadge(
     level: Int,
     modifier: Modifier = Modifier
 ) {
-    val badgeColor = resolveUserLevelFallbackColor(level)
+    val colorScheme = MaterialTheme.colorScheme
     Box(
         modifier = modifier
             .clip(AppShapes.container(ContainerLevel.Tag))
             .background(
                 brush = Brush.horizontalGradient(
                     colors = listOf(
-                        badgeColor.copy(alpha = 0.92f),
-                        badgeColor
+                        colorScheme.secondaryContainer,
+                        colorScheme.secondaryContainer
                     )
                 )
             )
@@ -115,18 +115,7 @@ private fun LegacyUserLevelBadge(
             text = "LV$level",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = colorScheme.onSecondaryContainer
         )
-    }
-}
-
-private fun resolveUserLevelFallbackColor(level: Int): Color {
-    return when {
-        level >= 6 -> Color(0xFFF04444)
-        level >= 5 -> Color(0xFFFF7A45)
-        level >= 4 -> Color(0xFFFF8B5A)
-        level >= 3 -> Color(0xFFFF9C6E)
-        level >= 2 -> Color(0xFFFFAE84)
-        else -> Color(0xFFA7ADB8)
     }
 }

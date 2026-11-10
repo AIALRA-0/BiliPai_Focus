@@ -15,7 +15,6 @@ internal data class LiveBiliPaiHomeMetrics(
 
 internal data class LiveVisualSpec(
     val homeMetrics: LiveBiliPaiHomeMetrics,
-    val maxContentWidthDp: Int,
     val roomCardDetailsMinHeightDp: Int,
     val playerButtonTouchTargetDp: Int,
     val playerButtonVisualSizeDp: Int,
@@ -108,38 +107,22 @@ internal data class LiveMedalBadgeVisualSpec(
 internal fun resolveLiveVisualSpec(
     tabPresentation: AppTopTabPresentation,
 ): LiveVisualSpec {
-    val safeSpaceDp = when (tabPresentation) {
-        AppTopTabPresentation.MOVING_CAPSULE -> 12
-        AppTopTabPresentation.TONAL_CAPSULE -> 16
-        AppTopTabPresentation.MATERIAL_UNDERLINE -> 18
-    }
-    val cardSpaceDp = when (tabPresentation) {
-        AppTopTabPresentation.MOVING_CAPSULE -> 8
-        AppTopTabPresentation.TONAL_CAPSULE -> 10
-        AppTopTabPresentation.MATERIAL_UNDERLINE -> 12
-    }
-    val playerButtonVisualSizeDp = when (tabPresentation) {
-        AppTopTabPresentation.MOVING_CAPSULE,
-        AppTopTabPresentation.TONAL_CAPSULE -> 38
-        AppTopTabPresentation.MATERIAL_UNDERLINE -> 40
-    }
-    val roomCardDetailsMinHeightDp = when (tabPresentation) {
-        AppTopTabPresentation.MOVING_CAPSULE -> 90
-        AppTopTabPresentation.TONAL_CAPSULE -> 95
-        AppTopTabPresentation.MATERIAL_UNDERLINE -> 88
-    }
+    // 列表在所有材质中共用内容几何，材质差异由 App 组件负责。
+    val safeSpaceDp = 12
+    val cardSpaceDp = 8
+    val playerButtonVisualSizeDp = 30
+    val roomCardDetailsMinHeightDp = 90
     return LiveVisualSpec(
         homeMetrics = LiveBiliPaiHomeMetrics(
             safeSpaceDp = safeSpaceDp,
             cardSpaceDp = cardSpaceDp,
-            cardRadiusDp = 10,
+            cardRadiusDp = 12,
             coverAspectRatio = 16f / 10f,
             followAvatarSizeDp = 45,
             followItemExtentDp = 70,
         ),
-        maxContentWidthDp = 1200,
         roomCardDetailsMinHeightDp = roomCardDetailsMinHeightDp,
-        playerButtonTouchTargetDp = 48,
+        playerButtonTouchTargetDp = 30,
         playerButtonVisualSizeDp = playerButtonVisualSizeDp,
         playerQualityDialogWidthDp = 280,
         emptyStateContainerSizeDp = 64,
@@ -148,10 +131,10 @@ internal fun resolveLiveVisualSpec(
 }
 
 internal fun resolveLiveChatInputVisualSpec(): LiveChatInputVisualSpec = LiveChatInputVisualSpec(
-    controlSizeDp = 48,
-    inputFieldHeightDp = 40,
+    controlSizeDp = 30,
+    inputFieldHeightDp = 30,
     iconSizeDp = 20,
-    sendButtonSizeDp = 48,
+    sendButtonSizeDp = 30,
     sendIconOffsetXDp = -2,
     sendIconOffsetYDp = 2,
     overlayMessageSpaceDp = 10,
@@ -172,7 +155,7 @@ internal fun resolveLiveSuperChatVisualSpec(): LiveSuperChatVisualSpec = LiveSup
 
 internal fun resolveLivePlayerControlVisualSpec(): LivePlayerControlVisualSpec =
     LivePlayerControlVisualSpec(
-        rowHeightDp = 48,
+        rowHeightDp = 40,
         iconSizeDp = 14,
     )
 
@@ -192,8 +175,9 @@ internal fun resolveLiveBiliPaiGridColumns(
     widthDp: Int,
     isTabletLayout: Boolean,
 ): Int {
-    if (!isTabletLayout) return 2
-    return (widthDp / 240).coerceIn(3, 5)
+    // Same density rule for phones, tablets and resizable windows.
+    val contentWidth = (widthDp - 24).coerceAtLeast(1)
+    return kotlin.math.ceil((contentWidth - 8).coerceAtLeast(1) / 248.0).toInt().coerceAtLeast(1)
 }
 
 internal fun resolveLiveBiliPaiChipColors(
@@ -214,7 +198,7 @@ internal fun resolveLiveBiliPaiChatBubbleTokens(
     isDark: Boolean
 ): LiveBiliPaiChatBubbleTokens {
     val backgroundAlpha = when {
-        isOverlay -> 0f
+        isOverlay -> 0.4f
         else -> 0.08f
     }
     val nameAlpha = if (isOverlay) 0.90f else 0.60f
@@ -248,7 +232,7 @@ internal fun resolveLiveInteractionSegmentedControlSpec(
 ): LiveInteractionSegmentedControlSpec {
     return LiveInteractionSegmentedControlSpec(
         horizontalPaddingDp = compactChrome.chipHorizontalPaddingDp,
-        verticalPaddingDp = compactChrome.standardGapDp,
+        verticalPaddingDp = 2,
         heightDp = compactChrome.primaryHeightDp,
         indicatorHeightDp = com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(
             compactChrome.primaryHeightDp.toFloat()

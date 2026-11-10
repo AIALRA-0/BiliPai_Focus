@@ -216,82 +216,40 @@ class HomeGlassVisualPolicyTest {
     }
 
     @Test
-    fun globalHomeWallpaperBackdropVisibility_followsScopeAndRoute() {
-        assertFalse(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.HOME_ONLY,
-                currentRoute = "dynamic",
-            )
+    fun globalWallpaperCoversSupportedPagesAndRetainsMediaBoundaries() {
+        val supportedRoutes = listOf(
+            "home", "dynamic", "profile", "settings", "settings_category/HOME",
+            "appearance_settings", "history", "favorite", "watch_later", "inbox",
+            "message/reply_me", "chat/123/1?name=UP主", "search?keyword=壁纸", "bangumi",
         )
-        assertFalse(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                currentRoute = "home",
-            )
-        )
-        assertTrue(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                currentRoute = "chat/123/1?name=UP主",
-            )
-        )
-        assertFalse(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                currentRoute = "dynamic",
-            )
-        )
-        assertFalse(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                currentRoute = "message/reply_me",
-            )
-        )
-        assertFalse(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                currentRoute = null,
-            )
-        )
-        assertFalse(
-            shouldExposeGlobalHomeWallpaperChrome(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                hasWallpaperUri = true,
-                currentRoute = "history",
-            )
-        )
-        assertFalse(
-            shouldExposeGlobalHomeWallpaperChrome(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                hasWallpaperUri = false,
-                currentRoute = "history",
-            )
-        )
+        supportedRoutes.forEach { route ->
+            assertTrue(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, route), route)
+            assertFalse(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.HOME_ONLY, route), route)
+        }
+        listOf(null, "", "main_host", "video/BV1", "story", "live/123", "bangumi/play/1/2",
+            "offline_video/1", "external_media/123", "web", "login", "space/123", "unknown"
+        ).forEach { route ->
+            assertFalse(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, route), route)
+        }
+        assertTrue(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, "main_host", "home"))
+        assertTrue(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, "main_host", "dynamic"))
+        assertFalse(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, "main_host", "story"))
+        assertTrue(shouldExposeGlobalHomeWallpaperChrome(HomeWallpaperEffectScope.GLOBAL, true, "history"))
+        assertFalse(shouldExposeGlobalHomeWallpaperChrome(HomeWallpaperEffectScope.GLOBAL, false, "history"))
         assertEquals("home", resolveGlobalHomeWallpaperRoute("main_host", "home"))
-        assertEquals("dynamic", resolveGlobalHomeWallpaperRoute("main_host", "dynamic"))
         assertEquals("video/BV1", resolveGlobalHomeWallpaperRoute("video/BV1", "home"))
-        assertFalse(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                currentRoute = "main_host",
-                mainHostTabRoute = "home",
-            )
-        )
-        assertFalse(
-            shouldRenderGlobalHomeWallpaperBackdrop(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                currentRoute = "main_host",
-                mainHostTabRoute = "dynamic",
-            )
-        )
-        assertFalse(
-            shouldExposeGlobalHomeWallpaperChrome(
-                effectScope = HomeWallpaperEffectScope.GLOBAL,
-                hasWallpaperUri = true,
-                currentRoute = "main_host",
-                mainHostTabRoute = "history",
-            )
-        )
+    }
+
+    @Test
+    fun rootMediaDefersToExistingHomeAndChatPlayers() {
+        listOf("home", "chat/123/1").forEach { route ->
+            assertFalse(shouldRenderRootHomeWallpaperMedia(true, false, route))
+            assertTrue(shouldRenderRootHomeWallpaperMedia(true, true, route))
+        }
+        assertFalse(shouldRenderRootHomeWallpaperMedia(true, false, "main_host", "home"))
+        assertTrue(shouldRenderRootHomeWallpaperMedia(true, false, "main_host", "dynamic"))
+        assertTrue(shouldRenderRootHomeWallpaperMedia(true, false, "settings"))
+        assertFalse(shouldRenderRootHomeWallpaperMedia(false, true, "settings"))
     }
 
     @Test
@@ -619,5 +577,32 @@ class HomeGlassVisualPolicyTest {
         assertEquals(1, Regex("""\bWallpaperMedia\(""").findAll(source).count())
         assertTrue(source.contains("imageModel = imageRequest"))
         assertEquals(1, Regex("""\bAsyncImage\(""").findAll(mediaRenderer).count())
+    }
+
+    @Test
+    fun overlayPillsShareOneGlassCapsuleComponent() {
+        // 「撤销刷新」「定位上次刷新」必须共用 HomeOverlayPillButton，
+        // 避免同屏出现实心 primaryContainer 与毛玻璃两种胶囊。
+        listOf(
+            "app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt",
+            "app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt",
+            "app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt",
+        ).forEach { path ->
+            val source = listOf(File(path), File(path.removePrefix("app/"))).first(File::exists).readText()
+            assertTrue(
+                source.contains("HomeOverlayPillButton("),
+                "$path 未接入统一的悬浮玻璃胶囊组件",
+            )
+        }
+        val pill = File(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeOverlayPillButton.kt"
+        ).readText()
+        assertTrue(pill.contains("AppShapes.container(ContainerLevel.Pill)"))
+        assertTrue(pill.contains("overlayPillColors.borderColor"))
+        // 动态页在本地解析同一套颜色，玻璃/模糊开关关闭时与首页退化形态一致。
+        val dynamic = File(
+            "app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt"
+        ).readText()
+        assertTrue(dynamic.contains("rememberHomeGlassPillColors("))
     }
 }

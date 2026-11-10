@@ -62,7 +62,9 @@ data class UiSkinAssets(
     val playerProgressIcon: String? = null,
     val playerProgressDraggingIcon: String? = null,
     val playerProgressStaticIcon: String? = null,
-    val bottomBarIcons: Map<String, String> = emptyMap()
+    val bottomBarIcons: Map<String, String> = emptyMap(),
+    val spaceBackgrounds: List<UiSkinSpaceBackground> = emptyList(),
+    val emojiImages: Map<String, String> = emptyMap(),
 ) {
     fun declaredPaths(): List<String> {
         return buildList {
@@ -87,9 +89,20 @@ data class UiSkinAssets(
             playerProgressDraggingIcon?.let(::add)
             playerProgressStaticIcon?.let(::add)
             addAll(bottomBarIcons.values)
+            spaceBackgrounds.forEach { background ->
+                background.portrait?.let(::add)
+                background.landscape?.let(::add)
+            }
+            addAll(emojiImages.values)
         }
     }
 }
+
+@Serializable
+data class UiSkinSpaceBackground(
+    val portrait: String? = null,
+    val landscape: String? = null,
+)
 
 @Serializable
 data class UiSkinColorTokens(

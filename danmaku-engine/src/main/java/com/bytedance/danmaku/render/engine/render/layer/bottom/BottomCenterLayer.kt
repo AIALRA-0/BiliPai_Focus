@@ -47,7 +47,7 @@ class BottomCenterLayer : IRenderLayer, ITouchDelegate, ConfigChangeListener {
      * The last line is align the bottom of layer
      */
     private val mLines = LinkedList<BottomCenterLine>()
-    private val mPreDrawItems = LinkedList<DrawItem<DanmakuData>>()
+    private val mPreDrawItems = ArrayList<DrawItem<DanmakuData>>()
     private var mTotalDanmakuCountInLayer = 0
     private var mWidth = 0
     private var mHeight = 0
@@ -78,6 +78,12 @@ class BottomCenterLayer : IRenderLayer, ITouchDelegate, ConfigChangeListener {
         mBuffer.addItems(list)
         mBuffer.trimBuffer(playTime)
     }
+
+    override fun addData(
+        playTime: Long,
+        list: List<DanmakuData>,
+        createItem: (DanmakuData) -> DrawItem<DanmakuData>,
+    ) = mBuffer.addData(playTime, list, createItem)
 
     override fun releaseItem(item: DrawItem<DanmakuData>) {
         mController.notifyEvent(Events.obtainEvent(EVENT_DANMAKU_DISMISS, item.data))

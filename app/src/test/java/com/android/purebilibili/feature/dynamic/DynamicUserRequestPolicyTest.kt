@@ -42,6 +42,16 @@ class DynamicUserRequestPolicyTest {
     }
 
     @Test
+    fun `leaving and returning to an author rejects both old success and failure scopes`() {
+        // The UID alone is insufficient after A → B → A: the previous A request is stale.
+        assertFalse(shouldApplyUserDynamicsResult(123L, 123L, 12L, 10L))
+        assertFalse(shouldApplyUserDynamicsResult(123L, 456L, 12L, 11L))
+        assertTrue(shouldApplyUserDynamicsResult(123L, 123L, 12L, 12L))
+        // Clearing the author filter invalidates pending pagination as well.
+        assertFalse(shouldApplyUserDynamicsResult(null, 123L, 13L, 12L))
+    }
+
+    @Test
     fun `selected user reload policy retries same user when scoped state is empty or failed`() {
         assertFalse(
             shouldReloadSelectedUserDynamics(
@@ -107,7 +117,7 @@ class DynamicUserRequestPolicyTest {
     }
 
     @Test
-    fun `selected user content filter keeps author and content axes independent`() {
+    fun `selected user content follows the top level category`() {
         val video = DynamicItem(
             id_str = "video",
             type = "DYNAMIC_TYPE_AV",
@@ -130,46 +140,18 @@ class DynamicUserRequestPolicyTest {
             listOf("video"),
             filterSelectedUserDynamicItems(
                 items = listOf(video, article),
-                filter = DynamicUserContentFilter.VIDEO,
+                logicalTab = 1,
             ).map { it.id_str },
         )
         assertEquals(
             listOf("article", "legacy-article"),
             filterSelectedUserDynamicItems(
                 items = listOf(video, article, legacyArticle),
-                filter = DynamicUserContentFilter.ARTICLE,
+                logicalTab = 3,
             ).map { it.id_str },
         )
     }
 
-    @Test
-    fun `empty concrete user filter does not trigger unbounded pagination`() {
-        assertEquals(
-            listOf("全部", "视频", "图文专栏"),
-            DynamicUserContentFilter.entries.map(DynamicUserContentFilter::label),
-        )
-        assertTrue(
-            shouldAutoLoadMoreForUserContentFilter(
-                isSelectedUserFeed = true,
-                filter = DynamicUserContentFilter.ALL,
-                visibleItemCount = 0,
-            )
-        )
-        assertFalse(
-            shouldAutoLoadMoreForUserContentFilter(
-                isSelectedUserFeed = true,
-                filter = DynamicUserContentFilter.ARTICLE,
-                visibleItemCount = 0,
-            )
-        )
-        assertTrue(
-            shouldAutoLoadMoreForUserContentFilter(
-                isSelectedUserFeed = true,
-                filter = DynamicUserContentFilter.ARTICLE,
-                visibleItemCount = 1,
-            )
-        )
-    }
 }
 
 private fun buildDynamicItem(id: String, mid: Long) = DynamicItem(

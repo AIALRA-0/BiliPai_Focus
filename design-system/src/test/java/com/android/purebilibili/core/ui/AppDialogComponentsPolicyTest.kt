@@ -30,6 +30,9 @@ class AppDialogComponentsPolicyTest {
         )
         val dialogSource = source.readText()
         assertTrue(dialogSource.contains("WindowDialog("))
+        assertTrue(dialogSource.contains("backgroundColor = Color.Transparent"))
+        assertTrue(dialogSource.contains("insideMargin = DpSize(0.dp, 0.dp)"))
+        assertTrue(dialogSource.contains("cornerRadius = 0.dp"))
         assertFalse(dialogSource.contains("LocalAppPopupSurfaceRenderer.current"))
     }
 
@@ -68,7 +71,7 @@ class AppDialogComponentsPolicyTest {
     }
 
     @Test
-    fun `popup facades delegate their visual surface to the injected renderer`() {
+    fun `popup facades select native hosts and preserve the injected hinge surface`() {
         val popupSurface = java.io.File(
             "src/main/java/com/android/purebilibili/core/ui/AppPopupSurface.kt"
         ).readText()
@@ -87,11 +90,13 @@ class AppDialogComponentsPolicyTest {
 
         assertTrue(popupSurface.contains("LocalAppPopupSurfaceRenderer"))
         assertTrue(popupSurface.contains("renderer.Render("))
-        assertTrue(sheet.contains("type = AppPopupSurfaceType.SHEET"))
+        assertTrue(sheet.contains("WindowBottomSheet("))
+        assertTrue(sheet.contains("type = AppPopupSurfaceType.DIALOG"))
         assertTrue(selection.contains("type = AppPopupSurfaceType.DIALOG"))
         assertTrue(selection.contains("AppSingleChoicePresentation.CENTERED_DIALOG"))
-        assertTrue(primitives.contains("type = com.android.purebilibili.core.ui.AppPopupSurfaceType.MENU"))
-        assertTrue(actionMenu.contains("parentActions = parentActions + action"))
+        assertTrue(primitives.contains("DropdownMenu("))
+        assertTrue(primitives.contains("LocalAppUiStyle.current == AppUiStyle.MIUIX &&"))
+        assertTrue(actionMenu.contains("WindowCascadingListPopup("))
         assertTrue(actionMenu.contains("action.onClick?.invoke()"))
     }
 }

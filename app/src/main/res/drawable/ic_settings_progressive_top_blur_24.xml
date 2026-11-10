@@ -1,0 +1,12 @@
+<!-- App-authored: a header with progressively lighter blur samples below it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/white"
+        android:pathData="M3,3h18v2H3zM4,8h3v3H4zM10.5,8h3v3h-3zM17,8h3v3h-3z" />
+    <path android:fillColor="@android:color/white" android:fillAlpha="0.65"
+        android:pathData="M5,14h2v2H5zM11,14h2v2h-2zM17,14h2v2h-2z" />
+    <path android:fillColor="@android:color/white" android:fillAlpha="0.3"
+        android:pathData="M5,20h2v2H5zM11,20h2v2h-2zM17,20h2v2h-2z" />
+</vector>

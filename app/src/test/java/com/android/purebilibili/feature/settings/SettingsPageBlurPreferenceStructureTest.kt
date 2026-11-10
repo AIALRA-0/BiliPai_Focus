@@ -19,13 +19,11 @@ class SettingsPageBlurPreferenceStructureTest {
         assertTrue(source.contains("Modifier.hazeSourceCompat(hazeState)"))
         assertTrue(source.contains("surfaceType = BlurSurfaceType.HEADER"))
         assertTrue(source.contains("BiliPaiImmersiveTopBar("))
-        assertTrue(source.contains("Modifier.layerBackdrop(backdrop)"))
+        assertTrue(source.contains(".then(chromeSource?.modifier ?: Modifier)"))
         assertFalse(source.contains("TopReadabilityChrome"))
         assertTrue(source.contains("top = padding.calculateTopPadding()"))
-        assertTrue(source.contains("if (progressiveBlurEnabled) rememberLayerBackdrop()"))
-        assertTrue(source.contains("Box(\n                        modifier = scrollModifier,"))
-        assertTrue(source.contains("LazyColumn("))
-        assertTrue(source.contains("contentPadding = PaddingValues("))
+        assertTrue(source.contains("if (progressiveBlurEnabled) rememberChromeBackdropSource()"))
+        assertTrue(source.contains("Column(modifier = scrollModifier)"))
         assertTrue(source.contains("fun settingsScrollContentPadding("))
         assertFalse(source.contains("scrollModifier.padding(padding)"))
         assertFalse(source.contains(".fillMaxSize()\n                .hazeSourceCompat(state = hazeState)"))
@@ -60,7 +58,7 @@ class SettingsPageBlurPreferenceStructureTest {
         ).readText()
 
         assertTrue(scaffold.contains("AppUiStyle.MIUIX -> AppSurfaceTokens.chromeBackground()"))
-        assertTrue(scaffold.contains("containerColor = if (!topBarBlurActive || nonGlassMiuix)"))
+        assertTrue(scaffold.contains("containerColor = if (!topBarBlurActive)"))
         assertTrue(scaffold.contains("Color.Transparent"))
     }
 

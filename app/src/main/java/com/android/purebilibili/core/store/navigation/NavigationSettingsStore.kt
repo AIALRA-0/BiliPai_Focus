@@ -15,7 +15,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
+
 internal val bottomBarItemLabelsPreferencesKey = stringPreferencesKey("bottom_bar_item_labels")
+internal val liquidIndicatorWobblePreferencesKey = booleanPreferencesKey("liquid_indicator_wobble_enabled")
+internal val liquidIndicatorDynamicLengthPreferencesKey = booleanPreferencesKey("liquid_indicator_dynamic_length_enabled")
 internal val miuixPredictiveBackMaxProgressPercentPreferencesKey =
     intPreferencesKey("miuix_predictive_back_max_progress_percent")
 
@@ -74,6 +77,11 @@ object NavigationSettingsStore {
         booleanPreferencesKey("miuix_transition_blur_enabled")
     internal val keyVideoSharedReturnGestureFollowEnabled =
         booleanPreferencesKey("video_shared_return_gesture_follow_enabled")
+    private val keyVideoSharedReturnGestureTranslationEnabled =
+        booleanPreferencesKey("video_shared_return_gesture_translation_enabled")
+    private val keySettingsContainerRealtimeBlurEnabled = booleanPreferencesKey("settings_container_realtime_blur_enabled")
+    private val keySettingsContainerMorphEnabled =
+        booleanPreferencesKey("settings_container_morph_enabled")
     private val keyFullScreenSwipeBackEnabled =
         booleanPreferencesKey("full_screen_swipe_back_enabled")
     private val keyBottomBarOrder = stringPreferencesKey("bottom_bar_order")
@@ -192,6 +200,14 @@ object NavigationSettingsStore {
         }
     }
 
+    suspend fun setLiquidIndicatorDynamicLengthEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[liquidIndicatorDynamicLengthPreferencesKey] = enabled }
+    }
+
+    suspend fun setLiquidIndicatorWobbleEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[liquidIndicatorWobblePreferencesKey] = enabled }
+    }
+
     suspend fun setPredictiveBackAnimationStyle(context: Context, style: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[keyPredictiveBackAnimationStyle] = style
@@ -220,6 +236,38 @@ object NavigationSettingsStore {
     suspend fun setVideoSharedReturnGestureFollowEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[keyVideoSharedReturnGestureFollowEnabled] = enabled
+        }
+    }
+
+    suspend fun setVideoReturnContentFollowProgressEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[booleanPreferencesKey("video_return_content_follow_progress_enabled")] = enabled
+        }
+    }
+
+    /** 设置容器形变开关：开启时设置页入口以条目容器形变展开，关闭走默认导航转场。 */
+    fun getSettingsContainerRealtimeBlurEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[keySettingsContainerRealtimeBlurEnabled] ?: false }
+            .distinctUntilChanged()
+
+    suspend fun setSettingsContainerRealtimeBlurEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[keySettingsContainerRealtimeBlurEnabled] = enabled }
+    }
+
+    fun getSettingsContainerMorphEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[keySettingsContainerMorphEnabled] ?: true }
+
+    suspend fun setSettingsContainerMorphEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keySettingsContainerMorphEnabled] = enabled
+        }
+    }
+
+    suspend fun setVideoSharedReturnGestureTranslationEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyVideoSharedReturnGestureTranslationEnabled] = enabled
         }
     }
 

@@ -9,6 +9,41 @@ import org.junit.Test
 class SsdpCastClientTest {
 
     @Test
+    fun `device URLBase resolves relative control paths`() {
+        val xml = """
+            <root xmlns="urn:schemas-upnp-org:device-1-0">
+              <URLBase>http://192.168.1.9:8080/services/</URLBase>
+              <device><serviceList><service>
+                <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
+                <controlURL>avtransport</controlURL>
+              </service></serviceList></device>
+            </root>
+        """.trimIndent()
+        assertEquals(
+            "http://192.168.1.9:8080/services/avtransport",
+            SsdpCastClient.parseAvTransportEndpoint(xml, "http://192.168.1.9:80/description.xml")?.controlUrl,
+        )
+    }
+
+    @Test
+    fun `metadata reports the actual media type and escapes media information`() {
+        val metadata = SsdpCastClient.buildDidlMetadata(
+            "http://192.168.1.2/manifest?a=1&b=2", "A & B", "作者", "application/dash+xml",
+        )
+        assertTrue(metadata.contains("protocolInfo=\"http-get:*:application/dash+xml:*\""))
+        assertTrue(metadata.contains("A &amp; B"))
+        assertTrue(metadata.contains("a=1&amp;b=2"))
+        assertTrue(SsdpCastClient.buildDidlMetadata("x", "x", "x", "bad:type")
+            .contains("protocolInfo=\"http-get:*:video/mp4:*\""))
+    }
+
+    @Test
+    fun `cast poll interval drops to background cadence only while backgrounded`() {
+        assertEquals(1_000L, resolveCastPlaybackPollIntervalMs(isInBackground = false))
+        assertEquals(5_000L, resolveCastPlaybackPollIntervalMs(isInBackground = true))
+    }
+
+    @Test
     fun `parseAvTransportEndpoint resolves relative control URL`() {
         val descriptionXml = """
             <?xml version="1.0"?>

@@ -63,13 +63,12 @@ class UpBadgeNamePolicyTest {
     }
 
     @Test
-    fun `user up badge spec matches pili plus small badge`() {
+    fun `user up badge keeps compact container with theme typography`() {
         assertEquals(
             UserUpBadgeVisualSpec(
                 cornerRadiusDp = 3,
                 horizontalPaddingDp = 3,
-                verticalPaddingDp = 2,
-                fontSp = 9
+                verticalPaddingDp = 2
             ),
             resolveUserUpBadgeVisualSpec()
         )

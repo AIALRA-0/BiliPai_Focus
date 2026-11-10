@@ -27,21 +27,61 @@ class VideoPlayerStateReusePolicyTest {
         assertFalse(
             shouldSuspendLocalPlaybackWhenSessionInactive(
                 playbackSessionActive = false,
-                isOwnedByMiniPlayer = true,
+                isOwnedByPlaybackHandoff = true,
             )
         )
         assertTrue(
-            shouldTreatPlayerAsOwnedByMiniPlayer(
+            shouldTreatPlayerAsOwnedByPlaybackHandoff(
                 isMiniPlayerActive = true,
                 isPlayerManaged = true,
                 isMiniMode = true,
             )
         )
         assertFalse(
-            shouldTreatPlayerAsOwnedByMiniPlayer(
+            shouldTreatPlayerAsOwnedByPlaybackHandoff(
                 isMiniPlayerActive = true,
                 isPlayerManaged = true,
                 isMiniMode = false,
+            )
+        )
+    }
+
+    @Test
+    fun audioBarHandoffKeepsTheTransferredPlayerAfterDetailBecomesInactive() {
+        val ownedByHandoff = shouldTreatPlayerAsOwnedByPlaybackHandoff(
+            isMiniPlayerActive = true,
+            isPlayerManaged = true,
+            isMiniMode = false,
+            isLeavingByNavigation = true,
+            isAudioNowPlayingActive = true,
+        )
+        assertTrue(ownedByHandoff)
+        assertFalse(
+            shouldSuspendLocalPlaybackWhenSessionInactive(
+                playbackSessionActive = false,
+                isOwnedByPlaybackHandoff = ownedByHandoff,
+            )
+        )
+    }
+
+    @Test
+    fun audioSessionDoesNotKeepCoveredOrReplacedDetailPlaying() {
+        assertFalse(
+            shouldTreatPlayerAsOwnedByPlaybackHandoff(
+                isMiniPlayerActive = true,
+                isPlayerManaged = true,
+                isMiniMode = false,
+                isLeavingByNavigation = false,
+                isAudioNowPlayingActive = true,
+            )
+        )
+        assertFalse(
+            shouldTreatPlayerAsOwnedByPlaybackHandoff(
+                isMiniPlayerActive = true,
+                isPlayerManaged = false,
+                isMiniMode = false,
+                isLeavingByNavigation = true,
+                isAudioNowPlayingActive = true,
             )
         )
     }

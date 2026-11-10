@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -16,7 +17,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 让 AMOLED、动态取色与 Miuix 桥接在两种主题风格下保持一致。
  *
  * - 卡片容器 = surfaceContainer（Miuix 桥接映射到同名上游语义角色）。
- * - 分组列表 / chrome 背景 = background。
+ * - 页面 / 分组列表 / chrome 背景 = 桥接后的 Material background。
+ *   Miuix 的原生 background 是另一种表面，不能作为页面画布使用。
  */
 object AppSurfaceTokens {
 
@@ -28,9 +30,22 @@ object AppSurfaceTokens {
 
     fun resolveCardContainer(colorScheme: ColorScheme): Color = colorScheme.surfaceContainer
 
-    fun resolveGroupedListContainer(colorScheme: ColorScheme): Color = colorScheme.background
+    /** 视频卡片保留主题容器色；玻璃的透明度与采样由卡片材质层独立处理。 */
+    fun resolveVideoCardContainer(
+        colorScheme: ColorScheme,
+        @Suppress("UNUSED_PARAMETER") glassEnabled: Boolean,
+    ): Color = resolveCardContainer(colorScheme)
 
-    fun resolveChromeBackground(colorScheme: ColorScheme): Color = colorScheme.background
+    @Composable
+    @ReadOnlyComposable
+    fun videoCardContainer(glassEnabled: Boolean = false): Color =
+        resolveVideoCardContainer(MaterialTheme.colorScheme, glassEnabled)
+
+    fun resolveBackground(colorScheme: ColorScheme): Color = colorScheme.background
+
+    fun resolveGroupedListContainer(colorScheme: ColorScheme): Color = resolveBackground(colorScheme)
+
+    fun resolveChromeBackground(colorScheme: ColorScheme): Color = resolveBackground(colorScheme)
 
     fun resolveDivider(colorScheme: ColorScheme): Color = colorScheme.outlineVariant
 
@@ -98,10 +113,9 @@ object AppSurfaceTokens {
 
     @Composable
     @ReadOnlyComposable
-    fun background(): Color = resolveMiuixSemanticColorComposable(
-        miuixColor = MiuixTheme.colorScheme.background,
-        materialFallback = MaterialTheme.colorScheme.background
-    )
+    // 页面基础色不随玻璃开关分流：MD3 保留生成色板，Miuix 使用桥接后的原生 surface。
+    // 卡片、搜索框与原生组件仍分别读取各自的容器角色。
+    fun background(): Color = resolveBackground(MaterialTheme.colorScheme)
 
     @Composable
     @ReadOnlyComposable
@@ -171,6 +185,43 @@ object AppSurfaceTokens {
     fun primary(): Color = resolveMiuixSemanticColorComposable(
         miuixColor = MiuixTheme.colorScheme.primary,
         materialFallback = MaterialTheme.colorScheme.primary
+    )
+
+    /** 原生 Miuix 统一先合成到页面底色，避免同一选中态随 dock、列表底面变色。 */
+    fun resolveSelectionContainer(
+        accent: Color,
+        pageSurface: Color,
+        uiStyle: AppUiStyle,
+        liquidGlassEnabled: Boolean,
+    ): Color {
+        val tint = accent.copy(alpha = 0.14f)
+        return if (isMiuixNonGlassEnabled(uiStyle, liquidGlassEnabled)) {
+            tint.compositeOver(pageSurface.copy(alpha = 1f))
+        } else tint
+    }
+
+    /** MD3 与玻璃保留原有透明度；原生 Miuix 的导航、分类共用不透明选中底色。 */
+    @Composable
+    @ReadOnlyComposable
+    fun selectionContainer(): Color = resolveSelectionContainer(
+        accent = primary(),
+        pageSurface = background(),
+        uiStyle = LocalAppUiStyle.current,
+        liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled,
+    )
+
+    @Composable
+    @ReadOnlyComposable
+    fun primaryContainer(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.primaryContainer,
+        materialFallback = MaterialTheme.colorScheme.primaryContainer,
+    )
+
+    @Composable
+    @ReadOnlyComposable
+    fun onPrimaryContainer(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.onPrimaryContainer,
+        materialFallback = MaterialTheme.colorScheme.onPrimaryContainer,
     )
 
     @Composable

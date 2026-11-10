@@ -26,6 +26,18 @@ class TvQrConfirmationPolicyTest {
     }
 
     @Test
+    fun buvid3CookieIsAppendedWhenAvailable() {
+        assertEquals(
+            "SESSDATA=session; bili_jct=csrf; DedeUserID=42; buvid3=buvid-value",
+            buildTvQrConfirmationCookie("session", "csrf", 42L, "buvid-value")
+        )
+        assertEquals(
+            "SESSDATA=session; bili_jct=csrf",
+            buildTvQrConfirmationCookie("session", "csrf", null, "")
+        )
+    }
+
+    @Test
     fun missingOrInjectedCredentialsAreRejected() {
         listOf("", " ", "session; DedeUserID=7", "session\r\nX-Test: value", "v1:bad token").forEach {
             assertThrows(IllegalArgumentException::class.java) { buildTvQrConfirmationCookie(it, "csrf", 42L) }

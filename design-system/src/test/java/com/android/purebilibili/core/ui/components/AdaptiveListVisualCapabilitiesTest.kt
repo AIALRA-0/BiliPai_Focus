@@ -11,13 +11,13 @@ import kotlin.test.assertTrue
 class AdaptiveListVisualCapabilitiesTest {
 
     @Test
-    fun `material3 capabilities preserve explicit chevron and roomier metrics`() {
+    fun `material3 capabilities preserve explicit chevron and compact row metrics`() {
         val capabilities = resolveAdaptiveListVisualCapabilities(AppUiStyle.MATERIAL3)
 
         assertTrue(capabilities.showExplicitActionChevron)
         assertEquals(40, capabilities.componentSpec.iconContainerSizeDp)
-        assertEquals(18, capabilities.rowSpec.insideHorizontalPaddingDp)
-        assertEquals(48, capabilities.rowSpec.minTouchTargetHeightDp)
+        assertEquals(16, capabilities.rowSpec.insideHorizontalPaddingDp)
+        assertEquals(44, capabilities.rowSpec.minTouchTargetHeightDp)
     }
 
     @Test
@@ -27,6 +27,6 @@ class AdaptiveListVisualCapabilitiesTest {
         assertFalse(capabilities.showExplicitActionChevron)
         assertEquals(38, capabilities.componentSpec.iconContainerSizeDp)
         assertEquals(16, capabilities.rowSpec.insideHorizontalPaddingDp)
-        assertEquals(48, capabilities.rowSpec.minTouchTargetHeightDp)
+        assertEquals(44, capabilities.rowSpec.minTouchTargetHeightDp)
     }
 }

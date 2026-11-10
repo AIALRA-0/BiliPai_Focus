@@ -33,6 +33,8 @@ data class SkinCatalogEntry(
     val color: String? = null,
     val colorSecondPage: String? = null,
     val tailColor: String? = null,
+    val officialExample: Boolean = false,
+    val licenseNote: String? = null,
     val effectAssets: SkinCatalogEffectAssets = SkinCatalogEffectAssets(),
     val capabilities: SkinCatalogCapabilities = SkinCatalogCapabilities()
 ) {

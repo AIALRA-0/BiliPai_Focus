@@ -84,31 +84,4 @@ class AdaptiveListItemPolicyTest {
         )
     }
 
-    @Test
-    fun `miuix switch item routes to switch preference`() {
-        assertTrue(
-            shouldRouteSwitchItemToMiuixSwitchPreference(
-                uiStyle = AppUiStyle.MIUIX
-            )
-        )
-        assertFalse(
-            shouldRouteSwitchItemToMiuixSwitchPreference(
-                uiStyle = AppUiStyle.MATERIAL3
-            )
-        )
-    }
-
-    @Test
-    fun `miuix slider preference routes to official slider preference`() {
-        assertTrue(
-            shouldRouteSliderPreferenceToMiuixSliderPreference(
-                uiStyle = AppUiStyle.MIUIX
-            )
-        )
-        assertFalse(
-            shouldRouteSliderPreferenceToMiuixSliderPreference(
-                uiStyle = AppUiStyle.MATERIAL3
-            )
-        )
-    }
 }

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.purebilibili.core.store.SettingsManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -32,6 +33,9 @@ object PluginStore {
      * 获取插件启用状态 (Flow)
      */
     fun isEnabledFlow(context: Context, pluginId: String): Flow<Boolean> {
+        if (pluginId == BuiltinPluginIds.SPONSOR_BLOCK) {
+            return SettingsManager.getSponsorBlockEnabled(context)
+        }
         val key = booleanPreferencesKey("plugin_enabled_$pluginId")
         return context.pluginDataStore.data.map { prefs ->
             prefs[key] ?: resolvePluginDefaultEnabled(pluginId)
@@ -49,6 +53,10 @@ object PluginStore {
      * 设置插件启用状态
      */
     suspend fun setEnabled(context: Context, pluginId: String, enabled: Boolean) {
+        if (pluginId == BuiltinPluginIds.SPONSOR_BLOCK) {
+            SettingsManager.persistSponsorBlockEnabled(context, enabled)
+            return
+        }
         val key = booleanPreferencesKey("plugin_enabled_$pluginId")
         context.pluginDataStore.edit { prefs ->
             prefs[key] = enabled

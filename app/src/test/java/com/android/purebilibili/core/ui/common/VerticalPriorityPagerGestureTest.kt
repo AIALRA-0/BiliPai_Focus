@@ -33,6 +33,29 @@ class VerticalPriorityPagerGestureTest {
     }
 
     @Test
+    fun `early vertical drift does not lock vertical before a horizontal swipe shows intent`() {
+        // 用户场景：手指落下先向下漂几像素，随后横向滑动。竖向漂移超出系统
+        // slop 但仍在意图宽限内时必须保持 UNDECIDED，给横向锁定留机会。
+        assertEquals(
+            PagerGestureDirection.UNDECIDED,
+            resolveVerticalPriorityPagerGestureDirection(
+                totalX = 3f,
+                totalY = 9f,
+                touchSlop = 8f,
+            ),
+        )
+        // 漂移继续累积直到超出宽限后，仍归属竖向（保持既有偏竖语义）。
+        assertEquals(
+            PagerGestureDirection.VERTICAL,
+            resolveVerticalPriorityPagerGestureDirection(
+                totalX = 4f,
+                totalY = 14f,
+                touchSlop = 8f,
+            ),
+        )
+    }
+
+    @Test
     fun `ambiguous diagonal drag prefers vertical content`() {
         assertEquals(
             PagerGestureDirection.VERTICAL,
@@ -203,16 +226,15 @@ class VerticalPriorityPagerGestureTest {
             .substringAfter("val homeTopPagerSwipeEnabled")
             .substringAfter("HorizontalPager(")
             .substringBefore(") { page ->")
-        assertTrue(homePager.contains("userScrollEnabled = false"))
-        assertTrue(homePager.contains(".verticalPriorityHorizontalPagerSwipe("))
-        assertTrue(homePager.contains("HOME_PAGER_HORIZONTAL_LOCK_SLOP_MULTIPLIER"))
-        assertTrue(homePager.contains("shouldYield = shouldYieldHomePagerToHeroCarousel"))
+        assertTrue(homePager.contains("userScrollEnabled = homeTopPagerSwipeEnabled"))
+        assertTrue(homeSource.contains("AppHorizontalPager as HorizontalPager"))
+        assertTrue(homePager.contains("shouldYieldGesture = shouldYieldHomePagerToHeroCarousel"))
 
         val commentPager = videoContentSource
             .substringAfter("HorizontalPager(")
             .substringBefore(") { page ->")
-        assertTrue(commentPager.contains("userScrollEnabled = false"))
-        assertTrue(commentPager.contains(".verticalPriorityHorizontalPagerSwipe("))
+        assertTrue(commentPager.contains("userScrollEnabled = shouldEnableVideoContentHorizontalPagerSwipe("))
+        assertTrue(videoContentSource.contains("AppHorizontalPager as HorizontalPager"))
     }
 
     @Test
@@ -229,12 +251,12 @@ class VerticalPriorityPagerGestureTest {
         expectedGateCounts.forEach { (relativePath, expectedCount) ->
             val source = File("src/main/java/com/android/purebilibili/$relativePath").readText()
             assertTrue(
-                source.countOccurrences(".verticalPriorityHorizontalPagerSwipe(") >= expectedCount,
-                "$relativePath should use the shared pager direction gate",
+                source.countOccurrences("HorizontalPager(") >= expectedCount,
+                "$relativePath should use the shared theme pager",
             )
             assertTrue(
-                source.countOccurrences("userScrollEnabled = false") >= expectedCount,
-                "$relativePath should disable the pager's competing built-in drag detector",
+                source.contains("AppHorizontalPager as HorizontalPager"),
+                "$relativePath should select the native pager through the theme facade",
             )
         }
 

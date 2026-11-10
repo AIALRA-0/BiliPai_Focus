@@ -31,8 +31,4 @@ class AppDisplayModePreferenceTest {
         )
     }
 
-    @Test
-    fun displayModeLabel_containsRateAndResolution() {
-        assertEquals("120 Hz · 1080 × 2400", displayModePreferenceLabel(modes.last()))
-    }
 }

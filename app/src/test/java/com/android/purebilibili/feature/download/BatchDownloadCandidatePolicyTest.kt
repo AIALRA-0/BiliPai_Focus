@@ -163,4 +163,56 @@ class BatchDownloadCandidatePolicyTest {
         assertEquals(182, candidate?.durationSeconds)
         assertTrue(candidate?.selected == true)
     }
+
+    @Test
+    fun collectionParts_preserveOrder_deduplicateAndSelectOnlyCurrentCid() {
+        val pages = listOf(
+            Page(cid = 11, page = 1, part = "上半", duration = 10),
+            Page(cid = 12, page = 2, part = "下半", duration = 20),
+        )
+        val first = UgcEpisode(bvid = "A", cid = 11, title = "第一集", pages = pages)
+        val second = UgcEpisode(bvid = "B", cid = 21, title = "第二集", aid = 200,
+            pages = listOf(Page(cid = 21, page = 1, part = "上"), Page(cid = 22, page = 2, part = "下")))
+        val info = ViewInfo(bvid = "A", cid = 12, title = "第一集", pages = pages,
+            ugc_season = UgcSeason(id = 9, title = "合集", sections = listOf(
+                UgcSection(episodes = listOf(first, second, first)),
+            )))
+
+        val candidates = resolveBatchDownloadCandidates(info)
+
+        assertEquals(listOf("A#11", "A#12", "B#21", "B#22"), candidates.map { it.id })
+        assertEquals(listOf("A#12"), candidates.filter { it.selected }.map { it.id })
+        assertEquals(listOf(1, 2, 3, 4), candidates.map { it.episodeSortIndex })
+        assertTrue(candidates.all { it.episodeCount == 4 && it.groupKey == "ugc:9" })
+        assertEquals("P2 下半", candidates[1].label)
+        assertEquals(20, candidates[1].durationSeconds)
+        assertEquals(200L, candidates[2].aid)
+    }
+
+    @Test
+    fun currentDetailsSupplyMissingCollectionPages_evenWhenEpisodeCidIsMissing() {
+        val info = ViewInfo(bvid = "A", cid = 12, title = "当前稿件",
+            pages = listOf(Page(cid = 11, page = 1), Page(cid = 12, page = 2)),
+            ugc_season = UgcSeason(sections = listOf(UgcSection(episodes = listOf(
+                UgcEpisode(bvid = "A", cid = 0),
+            )))))
+        assertEquals(listOf("A#11", "A#12"), resolveBatchDownloadCandidates(info).map { it.id })
+    }
+
+    @Test
+    fun expandedDetailsKeepEachPartMetadata_andFallbackOnlyForUnknownEpisodes() {
+        val info = ViewInfo(bvid = "A", cid = 1,
+            ugc_season = UgcSeason(sections = listOf(UgcSection(episodes = listOf(
+                UgcEpisode(bvid = "A", cid = 1), UgcEpisode(bvid = "B", cid = 2),
+            )))))
+        val details = mapOf("B" to ViewInfo(bvid = "B", aid = 20, title = "补取的标题",
+            pages = listOf(Page(cid = 2, page = 1), Page(cid = 3, page = 2, duration = 30))))
+        val candidates = resolveBatchDownloadCandidates(info, details)
+        assertEquals(listOf("A#1", "B#2", "B#3"), candidates.map { it.id })
+        assertEquals("补取的标题", candidates.last().title)
+        assertEquals(30, candidates.last().durationSeconds)
+        assertEquals(20L, candidates.last().aid)
+        assertTrue(candidates.first().selected)
+    }
+
 }

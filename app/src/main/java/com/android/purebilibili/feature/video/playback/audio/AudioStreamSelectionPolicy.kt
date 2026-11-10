@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.playback.audio
 
 import com.android.purebilibili.data.model.response.Dash
+import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.feature.video.playback.policy.resolveSpeedCompatibleAudioQualityPreference
 
 fun resolveRequestedAudioQuality(
@@ -16,11 +17,10 @@ fun resolveRequestedAudioQuality(
 }
 
 fun normalizeAudioQualityPreference(preferenceId: Int): Int {
-    return when (preferenceId) {
-        AUDIO_QUALITY_HI_RES,
-        AUDIO_QUALITY_DOLBY,
-        AUDIO_QUALITY_AUTO -> preferenceId
-        else -> AUDIO_QUALITY_AUTO
+    return if (preferenceId > 0 || preferenceId == AUDIO_QUALITY_AUTO) {
+        preferenceId
+    } else {
+        AUDIO_QUALITY_AUTO
     }
 }
 
@@ -29,59 +29,50 @@ fun collectAudioStreamCandidates(
     isDolbyAudioSupported: Boolean = true,
     isDolbyAudioSoftwareDecoded: Boolean = false
 ): List<AudioStreamCandidate> {
-    val standard = dash.audio.orEmpty()
-        .filter { it.getValidUrl().isNotBlank() }
-        .map { track ->
-            AudioStreamCandidate(
-                preferenceId = track.id,
-                kind = AudioStreamKind.STANDARD,
-                label = "AAC",
-                track = track
-            )
+    fun candidate(
+        track: DashAudio,
+        sourceKind: AudioStreamKind = AudioStreamKind.STANDARD
+    ): AudioStreamCandidate? {
+        if (track.id <= 0 || track.getValidUrl().isBlank()) return null
+        val kind = when {
+            track.codecs.isDolbyAtmosCodec() -> AudioStreamKind.DOLBY
+            track.codecs.equals("flac", ignoreCase = true) -> AudioStreamKind.HI_RES
+            sourceKind == AudioStreamKind.HI_RES -> AudioStreamKind.HI_RES
+            track.codecs.isBlank() && track.id == AUDIO_QUALITY_HI_RES -> AudioStreamKind.HI_RES
+            track.codecs.isBlank() &&
+                (track.id == AUDIO_QUALITY_DOLBY || track.id == 30255) -> AudioStreamKind.DOLBY
+            else -> AudioStreamKind.STANDARD
         }
-    val dolby = if (isDolbyAudioSupported) {
-        dash.dolby
-            ?.takeIf { it.type > 0 }
-            ?.audio
-            .orEmpty()
-            .filter { track ->
-                track.getValidUrl().isNotBlank() &&
-                    track.id == AUDIO_QUALITY_DOLBY &&
-                    track.codecs.isDolbyAtmosCodec()
+        if (kind == AudioStreamKind.DOLBY && !isDolbyAudioSupported) return null
+        val softwareDecoded = kind == AudioStreamKind.DOLBY && isDolbyAudioSoftwareDecoded
+        val label = when (kind) {
+            AudioStreamKind.HI_RES -> "Hi-Res 无损"
+            AudioStreamKind.DOLBY -> if (softwareDecoded) "杜比音频" else "杜比全景声"
+            AudioStreamKind.STANDARD -> when (track.id) {
+                30216 -> "64K"
+                30232 -> "132K"
+                30280 -> "192K"
+                else -> track.id.toString()
             }
-            .map { track ->
-                AudioStreamCandidate(
-                    preferenceId = AUDIO_QUALITY_DOLBY,
-                    kind = AudioStreamKind.DOLBY,
-                    label = if (isDolbyAudioSoftwareDecoded) "杜比音频" else "杜比全景声",
-                    track = track,
-                    isSoftwareDecoded = isDolbyAudioSoftwareDecoded
-                )
-            }
-    } else {
-        emptyList()
+        }
+        return AudioStreamCandidate(
+            preferenceId = track.id,
+            kind = kind,
+            label = label,
+            track = track,
+            isSoftwareDecoded = softwareDecoded
+        )
     }
-    val hiRes = dash.flac?.audio
-        ?.takeIf { it.getValidUrl().isNotBlank() }
-        ?.let { track ->
-            AudioStreamCandidate(
-                preferenceId = AUDIO_QUALITY_HI_RES,
-                kind = AudioStreamKind.HI_RES,
-                label = "Hi-Res 无损",
-                track = track
-            )
-        }
-        ?.let(::listOf)
-        .orEmpty()
 
-    return (hiRes + dolby + standard)
-        .distinctBy { candidate ->
-            Triple(
-                candidate.preferenceId,
-                candidate.kind,
-                candidate.track.getValidUrl()
-            )
-        }
+    val standard = dash.audio.orEmpty().mapNotNull { candidate(it) }
+    val dolby = dash.dolby?.takeIf { it.type > 0 }?.audio.orEmpty()
+        .mapNotNull { candidate(it, AudioStreamKind.DOLBY) }
+    val hiRes = dash.flac?.audio?.let { candidate(it, AudioStreamKind.HI_RES) }
+        ?.let(::listOf).orEmpty()
+
+    return (hiRes + dolby + standard).distinctBy { candidate ->
+        Triple(candidate.preferenceId, candidate.kind, candidate.track.getValidUrl())
+    }
 }
 
 fun buildAvailableAudioQualityOptions(
@@ -89,8 +80,7 @@ fun buildAvailableAudioQualityOptions(
 ): List<AudioQualityOption> {
     if (candidates.isEmpty()) return emptyList()
 
-    val premiumOptions = candidates
-        .filter { it.kind != AudioStreamKind.STANDARD }
+    val playableOptions = candidates
         .groupBy { it.preferenceId }
         .mapNotNull { (_, groupedCandidates) ->
             groupedCandidates.maxByOrNull { it.track.bandwidth }
@@ -106,22 +96,16 @@ fun buildAvailableAudioQualityOptions(
                 label = candidate.label,
                 isHiRes = candidate.kind == AudioStreamKind.HI_RES,
                 isDolby = candidate.kind == AudioStreamKind.DOLBY,
-                isSoftwareDecoded = candidate.isSoftwareDecoded
+                isSoftwareDecoded = candidate.isSoftwareDecoded,
+                codecDescription = candidate.track.codecs
             )
         }
-
-    val hasStandardAudio = candidates.any { it.kind == AudioStreamKind.STANDARD }
-    return premiumOptions + if (hasStandardAudio) {
-        listOf(
-            AudioQualityOption(
-                preferenceId = AUDIO_QUALITY_AUTO,
-                kind = AudioStreamKind.STANDARD,
-                label = "AAC"
-            )
-        )
+    val automaticOption = if (candidates.any { it.kind == AudioStreamKind.STANDARD }) {
+        listOf(AudioQualityOption(AUDIO_QUALITY_AUTO, kind = null, label = "自动"))
     } else {
         emptyList()
     }
+    return automaticOption + playableOptions
 }
 
 fun resolveAudioStreamSelection(
@@ -148,9 +132,13 @@ fun resolveAudioStreamSelection(
         )
     }
 
+    val requestedCandidate = candidates
+        .filter { it.preferenceId == normalizedRequestedAudioQuality }
+        .maxByOrNull { it.track.bandwidth }
     val effectivePreference = resolveSpeedCompatibleAudioQualityPreference(
         requestedAudioQuality = normalizedRequestedAudioQuality,
-        playbackSpeed = playbackSpeed
+        playbackSpeed = playbackSpeed,
+        requestedAudioKind = requestedCandidate?.kind
     )
     val bestStandard = candidates
         .filter { it.kind == AudioStreamKind.STANDARD }
@@ -159,9 +147,7 @@ fun resolveAudioStreamSelection(
     val exactSelection = if (effectivePreference == AUDIO_QUALITY_AUTO) {
         bestStandard
     } else {
-        candidates
-            .filter { it.preferenceId == effectivePreference }
-            .maxByOrNull { it.track.bandwidth }
+        requestedCandidate
     }
     val selected = exactSelection ?: bestStandard
     val fallbackReason = when {
@@ -187,9 +173,9 @@ fun resolveAudioQualityControlPresentation(
     selectedAudioQuality: Int
 ): AudioQualityControlPresentation {
     val selectedOption = options.firstOrNull { it.preferenceId == selectedAudioQuality }
-    val label = when (selectedOption?.preferenceId) {
-        AUDIO_QUALITY_HI_RES -> "Hi-Res"
-        AUDIO_QUALITY_DOLBY -> if (selectedOption.isSoftwareDecoded) "杜比音频" else "杜比"
+    val label = when (selectedOption?.kind) {
+        AudioStreamKind.HI_RES -> "Hi-Res"
+        AudioStreamKind.DOLBY -> if (selectedOption.isSoftwareDecoded) "杜比音频" else "杜比"
         else -> selectedOption?.label?.takeIf { it.isNotBlank() } ?: "音质"
     }
     return AudioQualityControlPresentation(

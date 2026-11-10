@@ -15,11 +15,6 @@ class FeedIconActionStructureTest {
     fun compactCardActions_useNamed48DpTouchTargetsAndLabels() {
         val files = listOf(
             ExpectedIconAction(
-                "src/main/java/com/android/purebilibili/feature/home/components/cards/CinematicVideoCard.kt",
-                semanticMarkers = listOf("contentDescription = \"更多操作\""),
-                minimumTouchTargetCount = 1,
-            ),
-            ExpectedIconAction(
                 "src/main/java/com/android/purebilibili/feature/home/components/cards/HomeStyleSingleColumnVideoCard.kt",
                 semanticMarkers = listOf("contentDescription = \"更多操作\""),
                 minimumTouchTargetCount = 1,
@@ -27,7 +22,7 @@ class FeedIconActionStructureTest {
             ExpectedIconAction(
                 "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt",
                 semanticMarkers = listOf(
-                    "contentDescription = \"取消收藏\"",
+                    "contentDescription = \"从收藏夹移除\"",
                     "contentDescription = \"更多操作\"",
                 ),
                 minimumTouchTargetCount = 2,
@@ -88,22 +83,6 @@ class FeedIconActionStructureTest {
                 )
             }
         }
-
-        val cinematicSource = locate(
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/CinematicVideoCard.kt",
-        ).readText()
-        val touchTargetIndex = cinematicSource.indexOf(".size(AppChromeSizeTokens.MinimumTouchTarget)")
-        val visualContainerIndex = cinematicSource.indexOf(
-            ".size(AppSpacingTokens.ExtraLarge)",
-            startIndex = touchTargetIndex,
-        )
-        val visualBackgroundIndex = cinematicSource.indexOf(
-            ".background(MediaContrastPalette.Scrim.copy(alpha = 0.3f), CircleShape)",
-            startIndex = touchTargetIndex,
-        )
-        assertTrue(touchTargetIndex >= 0)
-        assertTrue(visualContainerIndex > touchTargetIndex)
-        assertTrue(visualBackgroundIndex > visualContainerIndex)
     }
 
     private fun locate(path: String): File = listOf(File(path), File("app/$path"))

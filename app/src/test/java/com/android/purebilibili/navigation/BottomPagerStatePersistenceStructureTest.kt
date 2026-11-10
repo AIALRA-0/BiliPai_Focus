@@ -41,13 +41,13 @@ class BottomPagerStatePersistenceStructureTest {
 
         assertTrue(source.contains("navigationStartPage"))
         assertTrue(switchNavigationSource.contains("animatePagerSelection(pagerState, safeTargetIndex)"))
-        assertTrue(sharedMotionSource.contains("pagerState.scroll(MutatePriority.UserInput)"))
-        assertTrue(sharedMotionSource.contains("scrollBy(value - consumedPx)"))
+        assertTrue(sharedMotionSource.contains("PagerState.tabIndicatorPosition"))
+        assertFalse(sharedMotionSource.contains("scrollBy(value - consumedPx)"))
         assertTrue(sharedMotionSource.contains("easing = EaseInOut"))
-        assertTrue(sharedMotionSource.contains("resolveBottomPagerNavigationDurationMillis(pageDistance)"))
+        assertTrue(sharedMotionSource.contains("pagerState.animateScrollToPage(target, animationSpec = spec)"))
         assertTrue(sharedMotionSource.contains("pagerState.scrollToPage(safeTargetPage)"))
         assertFalse(sharedMotionSource.contains("pagerState.animateScrollBy("))
-        assertTrue(sharedMotionSource.contains("scrollDistancePx"))
+        assertTrue(sharedMotionSource.contains("if (state.value === motion) state.value = null"))
         // No self-invented absolute seek / predictive progress path.
         assertFalse(source.contains("seekPredictiveReturnToPage"))
         assertFalse(source.contains("dispatchRawDelta"))
@@ -63,7 +63,7 @@ class BottomPagerStatePersistenceStructureTest {
         assertTrue(source.contains("val indicatorPosition: Float"))
         assertTrue(
             source.contains(
-                "pagerState.currentPage + pagerState.currentPageOffsetFraction"
+                "pagerState.tabIndicatorPosition"
             )
         )
         assertTrue(source.contains("val isScrollInProgress: Boolean"))

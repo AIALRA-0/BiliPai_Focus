@@ -1,6 +1,13 @@
 package com.android.purebilibili.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.navigationevent.NavigationEventDispatcher
+import androidx.navigationevent.NavigationEventDispatcherOwner
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
@@ -26,4 +33,45 @@ internal fun MainHostTabBackHandler(
         isBackEnabled = enabled,
         onBackCompleted = onReturnToHomeTab,
     )
+}
+
+/** Retained pager pages keep their UI state, but only the settled page owns Back. */
+@Composable
+internal fun MainHostTabBackScope(
+    enabled: Boolean,
+    content: @Composable () -> Unit,
+) {
+    val parent = LocalNavigationEventDispatcherOwner.current
+    if (parent == null) {
+        content()
+        return
+    }
+    val dispatcher = remember(parent) {
+        NavigationEventDispatcher(parent = parent.navigationEventDispatcher).also {
+            it.isEnabled = enabled
+        }
+    }
+    SideEffect {
+        // NavDisplay can dispose the parent before this retained page leaves composition.
+        try {
+            dispatcher.isEnabled = enabled
+        } catch (_: IllegalStateException) {
+            // The parent already disposed this dispatcher.
+        }
+    }
+    DisposableEffect(dispatcher) {
+        onDispose {
+            try {
+                dispatcher.dispose()
+            } catch (_: IllegalStateException) {
+                // Parent disposal cascades to children before their own onDispose.
+            }
+        }
+    }
+    val owner = remember(dispatcher) {
+        object : NavigationEventDispatcherOwner {
+            override val navigationEventDispatcher = dispatcher
+        }
+    }
+    CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides owner, content = content)
 }

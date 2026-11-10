@@ -12,12 +12,17 @@ import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import com.android.purebilibili.feature.plugin.CdnPlaybackDataSource
 import com.android.purebilibili.core.util.Logger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import java.io.File
 import java.net.URI
 import java.util.LinkedHashSet
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -31,7 +36,9 @@ internal data class PlaybackMediaCacheStats(
     val ignoredCount: Int
 )
 
-internal fun resolvePlaybackMediaCacheMaxBytes(): Long = 512L * 1024L * 1024L
+// 128MB：跨会话分片缓存只服务「回看刚看过的片段」，不需要装下整个视频；
+// 512MB 上限曾让 cache 目录轻松涨到 500MB+（用户反馈缓存过大、跳看流量浪费）。
+internal fun resolvePlaybackMediaCacheMaxBytes(): Long = 128L * 1024L * 1024L
 
 internal fun shouldUsePlaybackMediaCache(uri: Uri): Boolean {
     return shouldUsePlaybackMediaCache(uri.toString())
@@ -79,7 +86,7 @@ internal object PlaybackMediaCache {
     ): DataSource.Factory {
         val appContext = context.applicationContext
         val monitoredUpstreamFactory = DataSource.Factory {
-            upstreamFactory.createDataSource().apply {
+            CdnPlaybackDataSource(upstreamFactory.createDataSource()).apply {
                 addTransferListener(upstreamTransferListener)
             }
         }
@@ -122,8 +129,8 @@ internal object PlaybackMediaCache {
         }
     }
 
-    /** Must be called from an IO dispatcher. CacheWriter only commits complete bytes it reads. */
-    fun prefetchRange(
+    /** Caller-owned operation; cancellation closes active media requests and stops cache writes. */
+    suspend fun prefetchRange(
         context: Context,
         upstreamFactory: DataSource.Factory,
         url: Uri,
@@ -133,19 +140,19 @@ internal object PlaybackMediaCache {
     ) {
         if (length <= 0L) return
         val lease = acquireCache(context.applicationContext) ?: return
-        val cacheDataSource = try {
-            CacheDataSource.Factory()
+        try {
+            val activeUpstream = AtomicReference<CdnPlaybackDataSource?>()
+            val cancelableFactory = DataSource.Factory {
+                CdnPlaybackDataSource(upstreamFactory.createDataSource(), background = true)
+                    .also(activeUpstream::set)
+            }
+            val cacheDataSource = CacheDataSource.Factory()
                 .setCache(lease.cache)
-                .setUpstreamDataSourceFactory(upstreamFactory)
+                .setUpstreamDataSourceFactory(cancelableFactory)
                 .setCacheKeyFactory(playbackCacheKeyFactory)
                 .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
                 .createDataSourceForDownloading()
-        } catch (error: Throwable) {
-            lease.close()
-            throw error
-        }
-        try {
-            CacheWriter(
+            val writer = CacheWriter(
                 cacheDataSource,
                 DataSpec.Builder()
                     .setUri(url)
@@ -155,13 +162,19 @@ internal object PlaybackMediaCache {
                     .build(),
                 null,
                 null
-            ).cache()
-        } finally {
-            try {
-                cacheDataSource.close()
-            } finally {
-                lease.close()
+            )
+            coroutineScope {
+                val reader = async(Dispatchers.IO) { writer.cache() }
+                try {
+                    reader.await()
+                } finally {
+                    writer.cancel()
+                    // CacheWriter closes the cache data source; interrupt its active transport on cancellation.
+                    activeUpstream.get()?.cancelPendingRequests()
+                }
             }
+        } finally {
+            lease.close()
         }
     }
 
@@ -171,7 +184,7 @@ internal object PlaybackMediaCache {
             .sumOf { it.length() }
     }
 
-    fun clear(context: Context) {
+    fun clear(context: Context): Result<Unit> {
         val clearNow = cacheLock.withLock {
             while (cacheClearPending) cacheStateChanged.awaitUninterruptibly()
             cacheClearPending = true
@@ -183,8 +196,9 @@ internal object PlaybackMediaCache {
         }
         if (!clearNow.first) {
             Logger.d(TAG, "播放器媒体缓存将在当前读取结束后清理")
+            return Result.success(Unit)
         } else {
-            finishClear(context.applicationContext, clearNow.second)
+            return finishClear(context.applicationContext, clearNow.second)
         }
     }
 
@@ -244,15 +258,18 @@ internal object PlaybackMediaCache {
         }
     }
 
-    private fun finishClear(context: Context, cache: SimpleCache?) {
+    private fun finishClear(context: Context, cache: SimpleCache?): Result<Unit> {
+        val result = runCatching {
+            cache?.release()
+            val directory = cacheDir(context)
+            check(!directory.exists() || directory.deleteRecursively()) { "部分媒体分片缓存无法清理" }
+            Logger.d(TAG, "播放器媒体缓存已清理")
+        }
+        result.onFailure { error ->
+            Logger.w(TAG, "播放器媒体缓存清理失败: ${error.message}")
+        }
         try {
-            runCatching {
-                cache?.release()
-                cacheDir(context).deleteRecursively()
-                Logger.d(TAG, "播放器媒体缓存已清理")
-            }.onFailure { error ->
-                Logger.w(TAG, "播放器媒体缓存清理失败: ${error.message}")
-            }
+            return result
         } finally {
             cacheLock.withLock {
                 cacheClearPending = false

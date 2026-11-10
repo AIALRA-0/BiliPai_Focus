@@ -10,6 +10,27 @@ import kotlin.test.assertTrue
 class LiveAudioOnlyPlaybackPolicyTest {
 
     @Test
+    fun `container navigation clips live texture without requiring legacy shared scopes`() {
+        assertTrue(
+            shouldUseTextureSurfaceForLivePlayer(
+                hasSharedTransitionScope = false,
+                hasAnimatedVisibilityScope = false,
+                preferCompatibleTextureSurface = false,
+                hasContainerTransition = true,
+            )
+        )
+        assertFalse(
+            shouldUseTextureSurfaceForLivePlayer(
+                hasSharedTransitionScope = false,
+                hasAnimatedVisibilityScope = false,
+                preferCompatibleTextureSurface = false,
+                hasContainerTransition = true,
+                requiresHdrSurfaceOutput = true,
+            )
+        )
+    }
+
+    @Test
     fun `audio only mode does not bind live player view`() {
         assertFalse(shouldBindLivePlayerViewForAudioOnly(isAudioOnly = true))
         assertTrue(shouldBindLivePlayerViewForAudioOnly(isAudioOnly = false))
@@ -42,21 +63,45 @@ class LiveAudioOnlyPlaybackPolicyTest {
         assertTrue(
             shouldUseTextureSurfaceForLivePlayer(
                 hasSharedTransitionScope = true,
-                hasAnimatedVisibilityScope = true
+                hasAnimatedVisibilityScope = true,
+                preferCompatibleTextureSurface = false,
             )
         )
         assertFalse(
             shouldUseTextureSurfaceForLivePlayer(
                 hasSharedTransitionScope = false,
-                hasAnimatedVisibilityScope = true
+                hasAnimatedVisibilityScope = true,
+                preferCompatibleTextureSurface = false,
             )
         )
         assertFalse(
             shouldUseTextureSurfaceForLivePlayer(
                 hasSharedTransitionScope = true,
-                hasAnimatedVisibilityScope = false
+                hasAnimatedVisibilityScope = false,
+                preferCompatibleTextureSurface = false,
             )
         )
+    }
+
+    @Test
+    fun `compatible live playback uses texture without a transition but retains hdr output`() {
+        assertTrue(
+            shouldUseTextureSurfaceForLivePlayer(
+                hasSharedTransitionScope = false,
+                hasAnimatedVisibilityScope = false,
+                preferCompatibleTextureSurface = true,
+            )
+        )
+        for (compatible in listOf(false, true)) {
+            assertFalse(
+                shouldUseTextureSurfaceForLivePlayer(
+                    hasSharedTransitionScope = true,
+                    hasAnimatedVisibilityScope = true,
+                    requiresHdrSurfaceOutput = true,
+                    preferCompatibleTextureSurface = compatible,
+                )
+            )
+        }
     }
 
     @Test

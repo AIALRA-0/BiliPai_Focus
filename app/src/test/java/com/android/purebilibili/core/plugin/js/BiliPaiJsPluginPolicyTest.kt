@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.plugin.js
 
-import com.android.purebilibili.core.plugin.PluginCapability
+import com.android.purebilibili.plugin.sdk.PluginCapability
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -61,6 +61,243 @@ class BiliPaiJsPluginPolicyTest {
                     modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load-items"))
                 )
             )
+        )
+    }
+
+    @Test
+    fun manifestRejectsNegativeCacheDurationAndUnknownParamType() {
+        assertEquals(
+            "JS 插件模块 cacheDuration 不能为负数: 负缓存",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "bad.cache",
+                    title = "坏缓存",
+                    modules = listOf(
+                        BiliPaiJsModule(title = "负缓存", functionName = "load", cacheDuration = -1L)
+                    )
+                )
+            )
+        )
+        assertEquals(
+            "JS 插件参数类型无效: number（page）",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "bad.param",
+                    title = "坏参数",
+                    modules = listOf(
+                        BiliPaiJsModule(
+                            title = "模块",
+                            functionName = "load",
+                            params = listOf(BiliPaiJsParam(name = "page", title = "页码", type = "number"))
+                        )
+                    )
+                )
+            )
+        )
+        assertEquals(
+            null,
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "good.params",
+                    title = "好参数",
+                    modules = listOf(
+                        BiliPaiJsModule(
+                            title = "模块",
+                            functionName = "load",
+                            cacheDuration = 600L,
+                            params = listOf(
+                                BiliPaiJsParam(name = "page", title = "页码", type = BiliPaiJsParamTypes.PAGE)
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    }
+
+    @Test
+    fun manifestRejectsInvalidDetailFunctionAndNegativeDetailCache() {
+        assertEquals(
+            "JS 插件详情函数名格式无效: load-detail",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "bad.detail",
+                    title = "坏详情",
+                    modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                    detailFunctionName = "load-detail"
+                )
+            )
+        )
+        assertEquals(
+            "JS 插件 detailCacheDuration 不能为负数",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "bad.detail.cache",
+                    title = "坏详情缓存",
+                    modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                    detailFunctionName = "loadDetail",
+                    detailCacheDuration = -5L
+                )
+            )
+        )
+    }
+
+    @Test
+    fun manifestRejectsRequiredApiBeyondHostSupport() {
+        assertEquals(
+            "JS 插件要求宿主 API 版本 99，当前宿主最高支持 ${BiliPaiJsApiLevel.CURRENT}，请升级 BiliPai",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "future.plugin",
+                    title = "未来插件",
+                    modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                    requiredApi = 99
+                )
+            )
+        )
+        assertEquals(
+            null,
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "current.plugin",
+                    title = "当前插件",
+                    modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                    requiredApi = BiliPaiJsApiLevel.CURRENT
+                )
+            )
+        )
+    }
+
+    @Test
+    fun manifestRejectsInvalidDanmakuFunctionAndNegativeDanmakuCache() {
+        assertEquals(
+            "JS 插件弹幕函数名格式无效: load-danmu",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "bad.danmu",
+                    title = "坏弹幕",
+                    modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                    danmakuFunctionName = "load-danmu"
+                )
+            )
+        )
+        assertEquals(
+            "JS 插件 danmakuCacheDuration 不能为负数",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "bad.danmu.cache",
+                    title = "坏弹幕缓存",
+                    modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                    danmakuFunctionName = "loadDanmu",
+                    danmakuCacheDuration = -1L
+                )
+            )
+        )
+    }
+
+    @Test
+    fun manifestRejectsUnknownModuleLayout() {
+        assertEquals(
+            "JS 插件模块布局无效: waterfall（瀑布流模块），仅支持 list 或 grid",
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "bad.layout",
+                    title = "坏布局",
+                    modules = listOf(
+                        BiliPaiJsModule(title = "瀑布流模块", functionName = "load", layout = "waterfall")
+                    )
+                )
+            )
+        )
+        assertEquals(
+            null,
+            validateBiliPaiJsPluginManifest(
+                BiliPaiJsPluginManifest(
+                    id = "good.layout",
+                    title = "好布局",
+                    modules = listOf(
+                        BiliPaiJsModule(title = "网格模块", functionName = "load", layout = BiliPaiJsLayouts.GRID)
+                    )
+                )
+            )
+        )
+    }
+
+    @Test
+    fun supportsDanmakuFollowsDanmakuFunctionName() {
+        assertTrue(
+            BiliPaiJsPluginManifest(
+                id = "with.danmu",
+                title = "有弹幕",
+                modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                danmakuFunctionName = "loadDanmu"
+            ).supportsDanmaku
+        )
+        assertFalse(
+            BiliPaiJsPluginManifest(
+                id = "without.danmu",
+                title = "无弹幕",
+                modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load"))
+            ).supportsDanmaku
+        )
+    }
+
+    @Test
+    fun supportsDetailFollowsDetailFunctionName() {
+        assertTrue(
+            BiliPaiJsPluginManifest(
+                id = "with.detail",
+                title = "有详情",
+                modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load")),
+                detailFunctionName = "loadDetail"
+            ).supportsDetail
+        )
+        assertFalse(
+            BiliPaiJsPluginManifest(
+                id = "without.detail",
+                title = "无详情",
+                modules = listOf(BiliPaiJsModule(title = "模块", functionName = "load"))
+            ).supportsDetail
+        )
+    }
+
+    @Test
+    fun hostDrivenParamsAndSelectableOptionsAreClassified() {
+        val pageParam = BiliPaiJsParam(name = "page", title = "页码", type = BiliPaiJsParamTypes.PAGE)
+        val offsetParam = BiliPaiJsParam(name = "offset", title = "偏移", type = BiliPaiJsParamTypes.OFFSET)
+        val enumParam = BiliPaiJsParam(
+            name = "category",
+            title = "分类",
+            type = BiliPaiJsParamTypes.ENUM,
+            options = listOf(BiliPaiJsEnumOption(title = "全部", value = "all"))
+        )
+        val textParam = BiliPaiJsParam(name = "source", title = "数据源")
+
+        assertTrue(pageParam.isHostDriven)
+        assertTrue(offsetParam.isHostDriven)
+        assertTrue(!textParam.isHostDriven)
+        assertTrue(enumParam.hasSelectableOptions)
+        assertTrue(!textParam.hasSelectableOptions)
+    }
+
+    @Test
+    fun moduleWithPageOrOffsetParamSupportsPagination() {
+        assertTrue(
+            BiliPaiJsModule(
+                title = "分页模块",
+                functionName = "load",
+                params = listOf(BiliPaiJsParam(name = "page", title = "页码", type = BiliPaiJsParamTypes.PAGE))
+            ).supportsPagination
+        )
+        assertTrue(
+            BiliPaiJsModule(
+                title = "偏移模块",
+                functionName = "load",
+                params = listOf(BiliPaiJsParam(name = "offset", title = "偏移", type = BiliPaiJsParamTypes.OFFSET))
+            ).supportsPagination
+        )
+        assertTrue(
+            !BiliPaiJsModule(title = "普通模块", functionName = "load").supportsPagination
         )
     }
 

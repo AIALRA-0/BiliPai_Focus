@@ -1,8 +1,12 @@
 package com.android.purebilibili.plugin.sdk
 
-interface PlayerPluginApi {
-    val capabilityManifest: PluginCapabilityManifest
+/** Application-wide definition; each player/video owns an independent session. */
+interface PlayerPluginApi : Plugin {
+    fun createSession(): PlayerPluginSession
+}
 
+/** Mutable playback state belongs here, never on the shared plugin definition. */
+interface PlayerPluginSession {
     suspend fun onVideoLoad(bvid: String, cid: Long)
 
     suspend fun onPositionUpdate(positionMs: Long): SkipAction?
@@ -17,12 +21,24 @@ sealed class SkipAction {
 
     data class SkipTo(
         val positionMs: Long,
-        val reason: String
+        val reason: String,
+        val segmentId: String? = null,
+        val startMs: Long? = null,
+        val category: String? = null,
+        val categoryName: String? = null,
+        val showToast: Boolean = true,
     ) : SkipAction()
 
     data class ShowButton(
         val skipToMs: Long,
         val label: String,
         val segmentId: String
+    ) : SkipAction()
+
+    data class Mute(
+        val untilMs: Long,
+        val reason: String,
+        val segmentId: String? = null,
+        val showToast: Boolean = true,
     ) : SkipAction()
 }

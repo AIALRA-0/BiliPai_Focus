@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.animation.canStartLiquidIndicatorRecoil
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -7,6 +8,22 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FloatingBottomBarPagerFollowPolicyTest {
+    @Test
+    fun `returning to the selected tab retains ownership until local absorption finishes`() {
+        val target = resolveIndicatorOwnedTargetOnDragStop(
+            targetIndex = 1, selectedIndex = 1, hasExternalPagerPosition = true,
+            indicatorPosition = 1.3f,
+        )
+        assertEquals(1, target)
+        assertTrue(shouldSuppressExternalPagerIndicatorFollow(
+            ownedTargetIndex = target, previousExternalPosition = 1f,
+            externalPosition = 1f, isPagerScrolling = false, internalPosition = 1.12f,
+        ))
+        assertFalse(shouldSuppressExternalPagerIndicatorFollow(
+            ownedTargetIndex = target, previousExternalPosition = 1f,
+            externalPosition = 1f, isPagerScrolling = false, internalPosition = 1f,
+        ))
+    }
 
     @Test
     fun `drag onto a new tab owns that target when pager position is provided`() {
@@ -239,4 +256,65 @@ class FloatingBottomBarPagerFollowPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `external pager follow suppresses the discrete settle spring`() {
+        assertFalse(
+            shouldAnimateIndicatorToSelectedIndex(
+                isDragging = false,
+                isPagerScrolling = false,
+                indicatorTarget = 1f,
+                selectedIndex = 2,
+                ownedTargetIndex = null,
+                hasExternalPagerFollow = true,
+            ),
+        )
+        assertTrue(
+            shouldAnimateIndicatorToSelectedIndex(
+                isDragging = false,
+                isPagerScrolling = false,
+                indicatorTarget = 1f,
+                selectedIndex = 2,
+                ownedTargetIndex = null,
+                hasExternalPagerFollow = false,
+            ),
+        )
+        assertFalse(
+            shouldAnimateIndicatorToSelectedIndex(
+                isDragging = false,
+                isPagerScrolling = false,
+                indicatorTarget = 1f,
+                selectedIndex = 2,
+                ownedTargetIndex = 1,
+                hasExternalPagerFollow = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `released pager can recoil before scroll settles in either direction`() {
+        val held = resolveFloatingDockWobbleManualInteraction(
+            indicatorDragging = false, pagerDragging = true, pagerScrolling = true,
+            tapMotionActive = false, indicatorOwnsTarget = false,
+        )
+        val released = resolveFloatingDockWobbleManualInteraction(
+            indicatorDragging = false, pagerDragging = false, pagerScrolling = true,
+            tapMotionActive = false, indicatorOwnsTarget = false,
+        )
+        // A held gesture must not wobble, even when it is near either endpoint.
+        for ((position, target) in listOf(0.98f to 1f, 0.02f to 0f)) {
+            assertFalse(canStartLiquidIndicatorRecoil(position, target, 1f, interactionActive = held))
+            assertTrue(canStartLiquidIndicatorRecoil(position, target, 1f, interactionActive = released))
+        }
+        assertFalse(canStartLiquidIndicatorRecoil(0.5f, 1f, 1f, interactionActive = released))
+    }
+
+    @Test
+    fun `callers without explicit pointer state retain scrolling fallback`() {
+        assertTrue(resolveFloatingDockWobbleManualInteraction(
+            indicatorDragging = false, pagerDragging = null, pagerScrolling = true,
+            tapMotionActive = false, indicatorOwnsTarget = false,
+        ))
+    }
+
 }

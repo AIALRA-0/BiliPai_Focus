@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.transition
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import kotlin.math.roundToInt
 
 internal enum class VideoCardSourceLayout {
@@ -25,6 +26,8 @@ internal data class VideoCardSourceInfoPresentation(
      * When false, those live on the cover overlay and must not appear under the title.
      */
     val showStatsInInfo: Boolean = false,
+    /** Stacked feed cards place the uploader above off-cover statistics. */
+    val ownerBeforeStats: Boolean = false,
     /**
      * Whether duration is painted in the source card's information region.
      *
@@ -41,6 +44,10 @@ internal data class VideoCardSourceInfoPresentation(
     val useTintedInfoSurface: Boolean = false,
     /** Whether the stationary card exposes the bottom-right overflow affordance. */
     val showOverflowMenu: Boolean = false,
+    /** Regular home cards keep two title lines and single-line metadata at every width. */
+    val singleLineMetadata: Boolean = false,
+    /** Empty means no info-region online row; an unknown visible count is recorded as “—”. */
+    val onlineCountText: String = "",
 )
 
 /**
@@ -63,6 +70,8 @@ internal data class VideoCardSourceCoverPresentation(
     val premiumBadgeText: String = "",
     val showHistoryProgressBar: Boolean = false,
     val historyProgressFraction: Float = 0f,
+    /** 源封面的实际圆角，与透明横卡的整行外框圆角独立；未记录时沿用默认值。 */
+    val cornerRadiusDp: Float? = null,
 )
 
 /**
@@ -88,6 +97,7 @@ internal data class VideoCardSourceChromeSnapshot(
     val danmakuText: String = "",
     val durationText: String = "",
     val followed: Boolean = false,
+    val recommendationReason: String = "",
     /** What the list info column actually showed at click. */
     val infoPresentation: VideoCardSourceInfoPresentation = VideoCardSourceInfoPresentation(),
     /** What the list cover actually painted at click. */
@@ -99,7 +109,17 @@ internal data class VideoCardSourceChromeSnapshot(
     /** Coil `size(w,h)` from list HomeCoverRequestSpec; 0 = omit size(). */
     val coverDecodeWidthPx: Int = 0,
     val coverDecodeHeightPx: Int = 0,
+    /** Opaque click-time information plate, including the wallpaper behind its tint. */
+    val infoContainerColor: Color? = null,
+    /** Compact playback bar uses an early source-chrome handoff on return. */
+    val isNowPlayingBar: Boolean = false,
 )
+
+/** 相同内容也可能来自另一次点击；只有原始快照实例能使用该次点击的像素。 */
+internal fun ownsVideoCardSourceSnapshot(
+    expected: VideoCardSourceChromeSnapshot?,
+    recorded: VideoCardSourceChromeSnapshot?,
+): Boolean = expected != null && expected === recorded
 
 /** Freeze the measured source-cover decode size together with the click-time snapshot. */
 internal fun VideoCardSourceChromeSnapshot.withMeasuredCoverDecodeSize(
@@ -117,13 +137,19 @@ internal fun resolveVideoCardSourceInfoPresentation(
     ownerBeforePublish: Boolean = false,
     useTintedInfoSurface: Boolean = false,
     showOverflowMenu: Boolean = false,
+    ownerBeforeStats: Boolean = false,
+    singleLineMetadata: Boolean = false,
+    onlineCountText: String = "",
 ): VideoCardSourceInfoPresentation = VideoCardSourceInfoPresentation(
     publishTimeText = publishTimeText.trim(),
     showStatsInInfo = showStatsInInfo,
+    ownerBeforeStats = ownerBeforeStats,
     showDurationInInfo = showDurationInInfo,
     ownerBeforePublish = ownerBeforePublish,
     useTintedInfoSurface = useTintedInfoSurface,
     showOverflowMenu = showOverflowMenu,
+    singleLineMetadata = singleLineMetadata,
+    onlineCountText = onlineCountText,
 )
 
 internal fun resolveVideoCardSourceLayout(
