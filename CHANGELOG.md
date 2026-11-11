@@ -1,12 +1,12 @@
-## [v0.7.9-beta.9.focus.1](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1) (2026-11-11)
+## [v0.7.9-beta.9.focus.2](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.2) (2026-11-11)
 
-BiliPai Focus 稳定更新渠道版本，基于上游 BiliPai `0.7.9-beta.9`（上游基础为 beta）；`versionCode 391`。
+BiliPai Focus 稳定更新渠道版本，基于上游 BiliPai `0.7.9-beta.9`（上游基础为 beta）；`versionCode 392`。
 
 [同步] 纳入上游 beta.8 至 beta.9 的首页顶栏、播放器控制与弹幕、详情页布局及加载过渡改进；完整上游改动见下方记录。
 
 [修复] 视频预加载后保留备用线路状态；首帧迟迟不出现且有备用线路时，按原有 10 秒门槛尝试恢复。
 
-[修复] 起播阶段所有线路均返回 HTTP 错误后，播放器持续显示失败原因和重试按钮；用户重试时重新开始一次有界线路尝试。
+[修复] 首帧前遇到 HTTP 状态错误并耗尽所有播放线路后，播放器最多重新获取一次播放地址，并保留当前播放位置和播放/暂停意图；如果新地址仍无法启动，播放器会显示失败原因和重试按钮，停止自动刷新；用户重试会重新开始一轮有界线路恢复。
 
 [修复] 顶栏在高饱和度壁纸上按实际取色补足文字对比度，避免仅按灰度亮度估计时文字难辨。
 

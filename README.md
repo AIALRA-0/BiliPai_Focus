@@ -1,8 +1,8 @@
 <div align="center">
 <h1>BiliPai Focus</h1>
 <p>BiliPai Focus 是基于 BiliPai 的第三方 Android 客户端，供你浏览和播放哔哩哔哩内容，并单独调整关注过滤、相关推荐与历史记录入口</p>
-<p><a href="README.en.md">English</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1">Focus 0.7.9-beta.9.focus.1 版本页</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/jay3-yy/BiliPai">上游 BiliPai</a></p>
-<p>当前源码版本：<code>0.7.9-beta.9.focus.1</code> / Android 应用升级序号 <code>versionCode 391</code> · 上游基线：<code>0.7.9-beta.9</code>（beta）· 发布状态与安装包以版本页为准</p>
+<p><a href="README.en.md">English</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.2">Focus 0.7.9-beta.9.focus.2 版本页</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/jay3-yy/BiliPai">上游 BiliPai</a></p>
+<p>当前源码版本：<code>0.7.9-beta.9.focus.2</code> / Android 应用升级序号 <code>versionCode 392</code> · 上游基线：<code>0.7.9-beta.9</code>（beta）· 发布状态与安装包以版本页为准</p>
 </div>
 
 <div align="center">
@@ -25,7 +25,7 @@ Focus 专属的内容控制见下文
 
 ## 2 这个版本目前处于什么状态
 
-当前源码记录的 Focus 版本为 `0.7.9-beta.9.focus.1`，Android 应用升级序号 `versionCode` 为 `391`，上游基础版本是 `0.7.9-beta.9`
+当前源码记录的 Focus 版本为 `0.7.9-beta.9.focus.2`，Android 应用升级序号 `versionCode` 为 `392`，上游基础版本是 `0.7.9-beta.9`
 
 源码已同步到上游 `main` 的 `199164c0b` 提交；版本名保留上游版本号，并追加 Focus 渠道序号
 
@@ -45,7 +45,7 @@ Focus Release 页面会显示该版本的发布状态与安装包；只有页面
 
 收藏或追番等账号功能可能需要登录，高清画质也取决于账号权限
 
-- 第一步，打开 [Focus 0.7.9-beta.9.focus.1 Release 页面](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1)，阅读发布说明
+- 第一步，打开 [Focus 0.7.9-beta.9.focus.2 Release 页面](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.2)，阅读发布说明
   只有页面列出对应的 Focus APK 后，才下载并安装；如果还没有安装包，请等 CI 发布该版本资产
 - 第二步，在 Android 设备上下载并打开 APK；如果系统询问，请允许当前来源安装应用
 - 第三步，打开应用后，你可以先浏览公开内容；使用需要账号权限的功能时，应用会提示登录

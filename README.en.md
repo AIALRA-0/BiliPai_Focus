@@ -1,8 +1,8 @@
 <div align="center">
 <h1>BiliPai Focus</h1>
 <p>BiliPai Focus is a third-party Android client based on BiliPai. It lets you browse and watch Bilibili content while keeping Focus controls for followed-account filtering, related videos, and history actions.</p>
-<p><a href="README.md">简体中文</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1">Focus 0.7.9-beta.9.focus.1 release page</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/jay3-yy/BiliPai">BiliPai upstream</a></p>
-<p>Current source version: <code>0.7.9-beta.9.focus.1</code> / Android update code <code>391</code> · Upstream base: <code>0.7.9-beta.9</code> (beta) · Release status and APK availability are shown on the release page</p>
+<p><a href="README.md">简体中文</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.2">Focus 0.7.9-beta.9.focus.2 release page</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/jay3-yy/BiliPai">BiliPai upstream</a></p>
+<p>Current source version: <code>0.7.9-beta.9.focus.2</code> / Android update code <code>392</code> · Upstream base: <code>0.7.9-beta.9</code> (beta) · Release status and APK availability are shown on the release page</p>
 </div>
 
 <div align="center">
@@ -19,7 +19,7 @@ BiliPai Focus follows the [BiliPai upstream project](https://github.com/jay3-yy/
 
 ## 2 What is the status of this version
 
-The current source records Focus version `0.7.9-beta.9.focus.1`, with Android update code (`versionCode`) `391`, based on upstream `0.7.9-beta.9`.
+The current source records Focus version `0.7.9-beta.9.focus.2`, with Android update code (`versionCode`) `392`, based on upstream `0.7.9-beta.9`.
 
 The source is synchronized through upstream `main` commit `199164c0b`. Its version name keeps the upstream version and adds the Focus channel sequence.
 
@@ -29,7 +29,7 @@ The Focus Release page shows this version's publication status and APK. Download
 
 The app targets Android 8.0 (API 26) and later on 64-bit ARM devices. Playback quality depends on account permissions, video availability, and device decoding support. You can browse public content without signing in; some features, including saved items, following anime, and higher quality tiers, may require an account.
 
-- Step 1: Open the [Focus 0.7.9-beta.9.focus.1 release page](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1) and read the release notes. Download and install the package only after the page lists the matching Focus APK; if the asset is not there yet, wait for CI to publish it.
+- Step 1: Open the [Focus 0.7.9-beta.9.focus.2 release page](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.2) and read the release notes. Download and install the package only after the page lists the matching Focus APK; if the asset is not there yet, wait for CI to publish it.
 - Step 2: Download and open the APK on your Android device. If prompted, allow installation from the source you used to open it.
 - Step 3: Open the app. You can start with public content; sign in when a feature requires account access.
 - Step 4: If the sign-in page offers several methods, follow its instructions to use TV QR, phone and password, SMS verification, or Cookie import.

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AppVersionPolicyTest {
@@ -19,8 +20,8 @@ class AppVersionPolicyTest {
             ?.getOrNull(1)
             ?.toIntOrNull()
 
-        assertTrue((versionCode ?: 0) > 390)
-        assertTrue(defaultConfig.contains("versionName = \"0.7.9-beta.9.focus.1\""))
+        assertEquals(392, versionCode)
+        assertTrue(defaultConfig.contains("versionName = \"0.7.9-beta.9.focus.2\""))
         assertTrue(
             buildFile.contains("语义化") ||
                 buildFile.contains("MAJOR.MINOR.PATCH") ||
