@@ -1,8 +1,8 @@
 <div align="center">
 <h1>BiliPai Focus</h1>
 <p>BiliPai Focus 是基于 BiliPai 的第三方 Android 客户端，供你浏览和播放哔哩哔哩内容，并单独调整关注过滤、相关推荐与历史记录入口</p>
-<p><a href="README.en.md">English</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1">下载 Focus 0.7.9-beta.7.focus.1</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/jay3-yy/BiliPai">上游 BiliPai</a></p>
-<p>当前已发布 Focus 版本：<code>0.7.9-beta.7.focus.1</code> / Android 应用升级序号 <code>versionCode 390</code> · 上游基线：<code>0.7.9-beta.7</code>（beta）</p>
+<p><a href="README.en.md">English</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1">Focus 0.7.9-beta.9.focus.1 版本页</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/jay3-yy/BiliPai">上游 BiliPai</a></p>
+<p>当前源码版本：<code>0.7.9-beta.9.focus.1</code> / Android 应用升级序号 <code>versionCode 391</code> · 上游基线：<code>0.7.9-beta.9</code>（beta）· 发布状态与安装包以版本页为准</p>
 </div>
 
 <div align="center">
@@ -25,17 +25,17 @@ Focus 专属的内容控制见下文
 
 ## 2 这个版本目前处于什么状态
 
-当前已发布的 Focus 版本为 `0.7.9-beta.7.focus.1`，Android 应用升级序号 `versionCode` 为 `390`，上游基础版本是 `0.7.9-beta.7`
+当前源码记录的 Focus 版本为 `0.7.9-beta.9.focus.1`，Android 应用升级序号 `versionCode` 为 `391`，上游基础版本是 `0.7.9-beta.9`
 
-版本名沿用上游 beta.7 版本线；源码已同步到上游 `main` 的 `05c4e2ac5` 提交
+源码已同步到上游 `main` 的 `199164c0b` 提交；版本名保留上游版本号，并追加 Focus 渠道序号
 
-该版本已作为 Focus 稳定更新渠道版本发布，可在 [GitHub Release 页面](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1)查看说明并下载安装包
+Focus Release 页面会显示该版本的发布状态与安装包；只有页面列出对应的 Focus APK 后，才能从该页面下载安装
 
 版本号规则和 Focus 稳定更新渠道说明见[版本规范](docs/wiki/VERSIONING.md)
 
-上游基础版本仍是 beta，不代表上游稳定版
+“稳定更新渠道”指 Focus 自己的分发渠道；上游基础版本仍是 beta，不代表上游稳定版
 
-## 3 我怎样安装当前已发布版本
+## 3 我怎样安装这个版本
 
 安装包面向 Android 8.0（API 26）及更新版本的 64 位 ARM 设备
 
@@ -45,8 +45,8 @@ Focus 专属的内容控制见下文
 
 收藏或追番等账号功能可能需要登录，高清画质也取决于账号权限
 
-- 第一步，打开 [Focus 0.7.9-beta.7.focus.1 Release](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1)，阅读发布说明
-  下载前请确认选择的是 Focus 安装包
+- 第一步，打开 [Focus 0.7.9-beta.9.focus.1 Release 页面](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1)，阅读发布说明
+  只有页面列出对应的 Focus APK 后，才下载并安装；如果还没有安装包，请等 CI 发布该版本资产
 - 第二步，在 Android 设备上下载并打开 APK；如果系统询问，请允许当前来源安装应用
 - 第三步，打开应用后，你可以先浏览公开内容；使用需要账号权限的功能时，应用会提示登录
 - 第四步，如果登录页面提供多种方式，请按页面说明选择 TV 扫码、手机号密码、短信验证码或 Cookie 导入
@@ -110,21 +110,42 @@ Focus 专属的内容控制见下文
 
 桌面小组件与 Android Auto 的使用说明见[系统媒体指南](docs/wiki/SYSTEM_MEDIA.md)；完整更新记录见 [CHANGELOG.md](CHANGELOG.md)
 
-## 6 beta.7 同步带来了哪些变化
+## 6 beta.9 同步带来了哪些变化
 
-本次发布基于上游 `0.7.9-beta.7`，主要变化包括：
+当前源码以 `0.7.9-beta.9` 为上游基础，基线是上游 `main` 提交 `199164c0b`
 
-- 横屏全屏新增“返回时显示评论”选项；打开后，第一次按返回键会打开评论；再按一次才返回上一级，并保持横屏
-- 小店商品、专栏、动态详情、UP 主搜索和直播分区等页面补齐从来源卡片进入详情的系统转场
-- Focus 修复备用线路的计时器：普通视频不会因为计时器被重置而提前切换线路；播放确实报错时仍可尝试备用线路
+上游 beta.9 带来以下可见变化：
 
-这些变化随本次 Focus Release 发布；完整记录和其他更新见 [CHANGELOG.md](CHANGELOG.md)
+- 半屏与横屏全屏来回切换时，播放器会保留已经显示的弹幕和时间线，避免重新刷新
+- 中央播放或暂停按钮可以统一关闭，默认位置移到左下角；玻璃时间胶囊也与相邻按钮保持同高
+- 返回首页时的视频卡片过渡得到修正，折叠播放器恢复“更多”菜单入口
+- 手机和平板视频详情页从骨架占位切换到正文时更连贯；统计、发布时间、在线人数和 AI／笔记入口也调整了布局，减少窄屏拥挤；MD3 标签改用原生组件
+- 顶栏模糊、玻璃弹窗和标签高光做了调整；关闭女仆动效后，点赞特效也会关闭
 
-### 6.1 上游近期还做了哪些改进
+Focus 在本次同步中还修复了起播恢复：
 
-- **内容页与卡片** 推荐卡片会标出竖屏视频，动态页可以隐藏顶部 UP 主头像；横屏弹幕样式、播放器加载与缓冲提示也得到完善
-- **播放与历史** 短视频返回首页后会续接未浏览内容，只有实际播放才写入观看历史；全屏切换小窗会释放方向锁，稍后再看卡片可以移除
-- **搜索与评论** 搜索输入与查询同步调整，修复光标和输入法组合文字被异步重置；评论翻译能识别中文回复和混合文本，楼中楼保留滚动位置
+- 预加载后会保留备用线路状态；如果首帧超过原有 10 秒门槛仍未出现且存在备用线路，播放器会尝试恢复
+- 起播时所有线路都返回 HTTP 错误后，页面会保留失败原因和重试按钮；点击重试会重新开始一次有界线路尝试
+
+### 6.1 beta.8 同步带来了哪些变化
+
+- 根评论不可读时，从“回复我的”、消息或外链进入会加载目标回复所在的对话列表，并保留部分结果提示、分页和下拉重试
+- 网格列数分别记住窄屏、宽屏竖屏和宽屏横屏设置，并按当前窗口比例切换；首页、搜索、个人列表、UP 主空间和插件内容页都使用这项设置
+- 顶栏模糊方案减少重复采样；部分隐藏的骨架与装饰动画会停止运行，并遵守减少动态效果设置
+
+### 6.2 beta.7 历史更新
+
+旧版 Focus 以 `0.7.9-beta.7` 为上游基础，版本名为 `0.7.9-beta.7.focus.1`，`versionCode 390`
+
+详情见 [Focus 0.7.9-beta.7 Release 页面](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1)
+
+当时的主要变化如下：
+
+- 横屏全屏新增“返回时显示评论”选项；打开后，第一次按返回键会打开评论，再按一次才返回上一级，并保持横屏
+- 小店商品、专栏、动态详情、UP 主搜索和直播分区等页面补齐了从来源卡片进入详情的系统转场
+- Focus 修复了备用线路计时器：普通视频不会因计时器重置而提前切换线路，播放确实报错时仍可尝试备用线路
+
+完整版本记录见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 7 插件可以做什么，导入前要检查什么
 

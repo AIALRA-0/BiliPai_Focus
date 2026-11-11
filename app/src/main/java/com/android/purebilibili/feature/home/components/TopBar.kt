@@ -986,6 +986,7 @@ internal fun resolveIosTopTabCapsuleContainerColor(
 /** Same full-strength shell lens as [FloatingBottomBar] (24dp / 24dp). */
 internal const val TOP_DOCK_SHELL_LENS_INTENSITY = 1f
 
+@Composable
 internal fun Modifier.homeTopBottomBarMatchedSurface(
     renderMode: HomeTopChromeRenderMode,
     shape: Shape,
@@ -1002,7 +1003,7 @@ internal fun Modifier.homeTopBottomBarMatchedSurface(
     isScrolling: Boolean = false,
     materialScrollProgress: Float = if (isScrolling) 1f else 0f,
     interactionState: com.android.purebilibili.core.ui.components.AppElasticPressState? = null,
-): Modifier = composed {
+): Modifier {
     val isGlassEnabled = renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP ||
         renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_HAZE
     val isBlurEnabled = renderMode != HomeTopChromeRenderMode.PLAIN
@@ -1024,7 +1025,7 @@ internal fun Modifier.homeTopBottomBarMatchedSurface(
         liquidGlassPreset = liquidGlassPreset,
         liquidGlassTuning = resolvedLiquidGlassTuning
     )
-    if (isGlassEnabled && miuixBackdrop != null) {
+    return if (isGlassEnabled && miuixBackdrop != null) {
         // BiliPai outer dock shell (same stack as bottom FloatingBottomBar).
         this.biliPaiFloatingDockShell(
             backdrop = miuixBackdrop,
@@ -2104,7 +2105,7 @@ private fun LightweightHomeTopTabs(
                                         .background(topTabIndicatorCaptureSurfaceColor)
                                 }
                             }
-                            .then(topTabCaptureHighlight?.modifier ?: Modifier),
+                            .then(topTabCaptureHighlight?.backgroundModifier ?: Modifier),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Row(

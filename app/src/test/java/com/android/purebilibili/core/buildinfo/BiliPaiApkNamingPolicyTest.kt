@@ -22,19 +22,19 @@ class BiliPaiApkNamingPolicyTest {
         assertTrue(source.contains("export\${capitalizedVariantName}Apk"))
         assertTrue(source.contains("finalizedBy(exportTask)"))
         assertTrue(source.contains("never app-release"))
-        assertTrue(source.contains("versionName = \"0.7.9-beta.7.focus.1\""))
+        assertTrue(source.contains("versionName = \"0.7.9-beta.9.focus.1\""))
         assertTrue(source.contains("Delivery APK must be BiliPai-"))
     }
 
     @Test
     fun canonicalNames_matchExpectedPattern() {
         assertEquals(
-            "BiliPai-Focus-0.7.9-beta.7.focus.1.apk",
-            resolveDeliveryNameFromScriptLogic(versionName = "0.7.9-beta.7.focus.1", variantName = "release"),
+            "BiliPai-Focus-0.7.9-beta.9.focus.1.apk",
+            resolveDeliveryNameFromScriptLogic(versionName = "0.7.9-beta.9.focus.1", variantName = "release"),
         )
         assertEquals(
-            "BiliPai-Focus-0.7.9-beta.7.focus.1-dev.apk",
-            resolveDeliveryNameFromScriptLogic(versionName = "0.7.9-beta.7.focus.1", variantName = "dev"),
+            "BiliPai-Focus-0.7.9-beta.9.focus.1-dev.apk",
+            resolveDeliveryNameFromScriptLogic(versionName = "0.7.9-beta.9.focus.1", variantName = "dev"),
         )
     }
 
@@ -44,8 +44,9 @@ class BiliPaiApkNamingPolicyTest {
         assertFalse(isCanonicalNameFromScriptLogic("app-dev.apk"))
         assertFalse(isCanonicalNameFromScriptLogic("app.apk"))
         assertFalse(isCanonicalNameFromScriptLogic("release.apk"))
+        assertTrue(isCanonicalNameFromScriptLogic("BiliPai-Focus-0.7.9-beta.9.focus.1.apk"))
+        assertTrue(isCanonicalNameFromScriptLogic("BiliPai-Focus-0.7.9-beta.9.focus.1-dev.apk"))
         assertTrue(isCanonicalNameFromScriptLogic("BiliPai-Focus-0.7.9-beta.7.focus.1.apk"))
-        assertTrue(isCanonicalNameFromScriptLogic("BiliPai-Focus-0.7.9-beta.7.focus.1-dev.apk"))
     }
 
     private fun resolveDeliveryNameFromScriptLogic(versionName: String, variantName: String): String {

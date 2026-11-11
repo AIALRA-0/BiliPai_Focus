@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.ui.wallpaper.WallpaperLuminanceBand
@@ -42,7 +43,20 @@ internal fun resolveTopChromeFadeColor(
         foregroundColor = foregroundColor,
         blurred = blurred,
     )
-    // 有模糊时让真实背景透色；单独渐隐仍保留消隐强度，但不再完全盖实。
+    // 通常让背景透色；实际取色仍不够清晰时，再提高局部遮罩的不透明度。
     val minimum = if (blurred) 0.18f else 0.76f
-    return fill.copy(alpha = max(minimum, protection) * surfaceColor.alpha)
+    val alpha = max(minimum, protection) * surfaceColor.alpha
+    if (sampled == null || surfaceColor.alpha < 0.999f ||
+        readable(fill.copy(alpha = alpha).compositeOver(sampled))
+    ) return fill.copy(alpha = alpha)
+
+    // 饱和色壁纸与灰度亮度带的估计可能不同；用实际取色补足文字对比度。
+    var low = alpha
+    var high = 1f
+    repeat(12) {
+        val midpoint = (low + high) / 2f
+        if (readable(fill.copy(alpha = midpoint).compositeOver(sampled))) high = midpoint
+        else low = midpoint
+    }
+    return fill.copy(alpha = high)
 }

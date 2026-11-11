@@ -5875,6 +5875,9 @@ fun AppNavigation(
                     BottomBarMatchedDockVisibility(
                         visibleState = bottomBarVisibilityState,
                         edge = BottomBarMatchedDockEdge.BOTTOM,
+                        // 普通视频返回只保留滑入和淡入；玻璃与原生共用，其他显隐沿用默认缩放。
+                        animateScale = systemCardTransitionEnabled ||
+                            !navigation3ReturnSession.isReturningFromDetail,
                         enterFadeDurationMillis = navMotionSpec.slowFadeDurationMillis,
                         exitFadeDurationMillis = navMotionSpec.fastFadeDurationMillis
                     ) {

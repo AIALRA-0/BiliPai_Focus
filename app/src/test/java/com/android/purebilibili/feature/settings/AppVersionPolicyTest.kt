@@ -19,8 +19,8 @@ class AppVersionPolicyTest {
             ?.getOrNull(1)
             ?.toIntOrNull()
 
-        assertTrue((versionCode ?: 0) > 389)
-        assertTrue(defaultConfig.contains("versionName = \"0.7.9-beta.7.focus.1\""))
+        assertTrue((versionCode ?: 0) > 390)
+        assertTrue(defaultConfig.contains("versionName = \"0.7.9-beta.9.focus.1\""))
         assertTrue(
             buildFile.contains("语义化") ||
                 buildFile.contains("MAJOR.MINOR.PATCH") ||

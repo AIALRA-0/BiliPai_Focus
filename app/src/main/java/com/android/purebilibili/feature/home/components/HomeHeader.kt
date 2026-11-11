@@ -11,7 +11,7 @@ import com.android.purebilibili.core.ui.components.AppSearchEntry
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppTopChromePolicy
 import com.android.purebilibili.core.ui.resolveAppSearchGlyphOpticalScale
-import com.android.purebilibili.core.ui.blur.TopSolidProgressiveFadeOverlay
+import com.android.purebilibili.core.ui.blur.ProgressiveFadeDefaults
 import com.android.purebilibili.core.ui.AppTopTabPresentation
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -46,7 +46,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -1348,6 +1347,7 @@ private fun resolveHomeTopChromeSurfaceColor(
     }
 }
 
+@Composable
 internal fun Modifier.homeTopChromeSurface(
     renderMode: HomeTopChromeRenderMode,
     shape: Shape,
@@ -1365,14 +1365,14 @@ internal fun Modifier.homeTopChromeSurface(
     useProgressiveTopFade: Boolean = false,
     preferFlatGlass: Boolean = false,
     darkThemeWhiteOverlayMultiplier: Float = 0.86f
-): Modifier = composed {
+): Modifier {
     val isLiquidGlassMode = renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP ||
         renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_HAZE
     // Compact controls reuse the bottom-bar material. The full-width top slab deliberately keeps
     // the progressive blur path so its lower edge fades into content instead of becoming a clipped
     // glass-shell boundary.
     if (isLiquidGlassMode && !useProgressiveTopBlur && !useProgressiveTopFade) {
-        return@composed this.homeTopBottomBarMatchedSurface(
+        return this.homeTopBottomBarMatchedSurface(
             renderMode = renderMode,
             shape = shape,
             hazeState = hazeState,
@@ -1389,7 +1389,7 @@ internal fun Modifier.homeTopChromeSurface(
         )
     }
 
-    when (renderMode) {
+    return when (renderMode) {
         HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
         HomeTopChromeRenderMode.LIQUID_GLASS_HAZE -> {
             this
@@ -2514,6 +2514,18 @@ fun HomeHeader(
             isProgressiveBlurActive ||
             isProgressiveFadeActive
         if (shouldRenderContinuousSlab) {
+            val protectedFraction = if (wallpaperTopReadability != null) 0.65f else 0f
+            val fadeBrush = if ((isProgressiveFadeActive || wallpaperProtectionActive) &&
+                topFadeSurfaceColor.alpha > 0.001f
+            ) {
+                remember(topFadeSurfaceColor, protectedFraction) {
+                    Brush.verticalGradient(
+                        colorStops = ProgressiveFadeDefaults.createStops(
+                            topFadeSurfaceColor, protectedFraction,
+                        ).toTypedArray(),
+                    )
+                }
+            } else null
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2539,16 +2551,9 @@ fun HomeHeader(
                         useProgressiveTopBlur = isProgressiveBlurRequested,
                         useProgressiveTopFade = isProgressiveFadeActive,
                     )
-            ) {
-                if (isProgressiveFadeActive || wallpaperProtectionActive) {
-                    TopSolidProgressiveFadeOverlay(
-                        surfaceColor = topFadeSurfaceColor,
-
-                        fadeHeight = continuousSlabHeight,
-                        protectedFraction = if (wallpaperTopReadability != null) 0.65f else 0f,
-                    )
-                }
-            }
+                    // 渐隐复用连续顶栏的实际绘制边界，不再单独测量一层遮罩。
+                    .then(if (fadeBrush != null) Modifier.background(fadeBrush) else Modifier),
+            )
         }
         val nativeTopProtectionAlpha = resolveHomeNativeTopProtectionAlpha(
             liquidGlassActive = isGlassEnabled || topChromeLiquidGlassEnabled,

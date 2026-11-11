@@ -1,8 +1,8 @@
 <div align="center">
 <h1>BiliPai Focus</h1>
 <p>BiliPai Focus is a third-party Android client based on BiliPai. It lets you browse and watch Bilibili content while keeping Focus controls for followed-account filtering, related videos, and history actions.</p>
-<p><a href="README.md">简体中文</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1">Download Focus 0.7.9-beta.7.focus.1</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/jay3-yy/BiliPai">BiliPai upstream</a></p>
-<p>Latest published Focus version: <code>0.7.9-beta.7.focus.1</code> / Android update code <code>390</code> · Upstream base: <code>0.7.9-beta.7</code> (beta)</p>
+<p><a href="README.md">简体中文</a> · <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1">Focus 0.7.9-beta.9.focus.1 release page</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/jay3-yy/BiliPai">BiliPai upstream</a></p>
+<p>Current source version: <code>0.7.9-beta.9.focus.1</code> / Android update code <code>391</code> · Upstream base: <code>0.7.9-beta.9</code> (beta) · Release status and APK availability are shown on the release page</p>
 </div>
 
 <div align="center">
@@ -19,17 +19,17 @@ BiliPai Focus follows the [BiliPai upstream project](https://github.com/jay3-yy/
 
 ## 2 What is the status of this version
 
-The latest published Focus version is `0.7.9-beta.7.focus.1`, with Android update code (`versionCode`) `390`, based on upstream `0.7.9-beta.7`.
+The current source records Focus version `0.7.9-beta.9.focus.1`, with Android update code (`versionCode`) `391`, based on upstream `0.7.9-beta.9`.
 
-The version name follows the upstream beta.7 release line; the source is synchronized through upstream `main` commit `05c4e2ac5`.
+The source is synchronized through upstream `main` commit `199164c0b`. Its version name keeps the upstream version and adds the Focus channel sequence.
 
-The [Focus 0.7.9-beta.7.focus.1 Release](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1) provides the release notes and APK. See the [versioning guide](docs/wiki/VERSIONING.md) for version names and the Focus stable update channel. The upstream base is still beta, so this is not an upstream stable release.
+The Focus Release page shows this version's publication status and APK. Download and install the package only after that page lists the matching Focus APK. See the [versioning guide](docs/wiki/VERSIONING.md) for version names and the Focus stable update channel. “Stable update channel” describes Focus's distribution channel; the upstream base is still beta.
 
-## 3 How do I install the latest published version
+## 3 How do I install this version
 
 The app targets Android 8.0 (API 26) and later on 64-bit ARM devices. Playback quality depends on account permissions, video availability, and device decoding support. You can browse public content without signing in; some features, including saved items, following anime, and higher quality tiers, may require an account.
 
-- Step 1: Open the [Focus 0.7.9-beta.7.focus.1 Release](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1), read the release notes, and confirm that you are downloading the Focus package (APK).
+- Step 1: Open the [Focus 0.7.9-beta.9.focus.1 release page](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.9.focus.1) and read the release notes. Download and install the package only after the page lists the matching Focus APK; if the asset is not there yet, wait for CI to publish it.
 - Step 2: Download and open the APK on your Android device. If prompted, allow installation from the source you used to open it.
 - Step 3: Open the app. You can start with public content; sign in when a feature requires account access.
 - Step 4: If the sign-in page offers several methods, follow its instructions to use TV QR, phone and password, SMS verification, or Cookie import.
@@ -83,21 +83,33 @@ Upstream navigation settings now control home-tab visibility and order. When an 
 
 See the [system media guide](docs/wiki/SYSTEM_MEDIA.md) for the home-screen widget and Android Auto. The [changelog](CHANGELOG.md) lists source updates.
 
-## 6 What changed with the beta.7 merge
+## 6 What changed with the beta.9 merge
 
-The current candidate is based on upstream `0.7.9-beta.7`. Notable changes include:
+The current source is based on upstream `0.7.9-beta.9`, at upstream `main` commit `199164c0b`. This merge includes the following visible changes:
 
-- A new **Show comments on landscape back** option: when enabled, the first Back action opens comments in landscape fullscreen; the next returns to the previous level while keeping landscape orientation.
-- System card transitions now cover additional shop-product, article, activity-detail, creator-search, and live-category pages.
-- Focus fixed the backup-line timer so ordinary playback does not switch lines early when that timer resets. A real playback error can still trigger a backup line.
+- Switching between the half-screen player and landscape fullscreen keeps the displayed danmaku and timeline, so they do not refresh during the transition.
+- A single setting can hide the center play/pause control. It now defaults to the lower-left corner, and the Liquid Glass time capsule matches the height of nearby controls.
+- The video-card transition when returning home is fixed, and the collapsed player has its More menu again.
+- Video detail pages on phones and tablets move from skeleton placeholders to content more smoothly. The layout for statistics, publish time, online count, and AI or notes entries also reduces crowding on narrow screens; MD3 tabs use native components.
+- The top-bar blur, glass popups, and tab highlights were adjusted. Turning off maid animations also turns off the like effect.
 
-These changes are part of the source candidate and have not shipped in a Focus Release. See the [changelog](CHANGELOG.md) for the complete record.
+Focus also fixed startup recovery in this sync. Preloading now retains the backup-line state. If the first frame has not appeared after the existing 10-second threshold and a backup line is available, playback tries to recover. If every line returns an HTTP error during startup, the page keeps the failure reason and Retry button; tapping Retry starts a new bounded line attempt.
 
-### 6.1 What else has the upstream project recently improved
+### 6.1 What changed with beta.8
 
-- Content pages and cards: recommendation cards identify portrait videos, and the activity feed can hide its top creator row. Landscape danmaku styling and player loading or buffering indicators have also improved.
-- Playback and history: short videos resume unseen items after returning home, and the app records watch history only after actual playback. Fullscreen-to-mini-player transitions release the orientation lock; Watch later cards now have a remove action.
-- Search and comments: search input now updates the query without resetting cursors or IME composition. Comment translation handles Chinese replies and mixed-language text, while reply threads keep their scroll position.
+- When a root comment cannot be read, entry points from Replies, Messages, or external links load the conversation containing the target reply, with partial-result notices, pagination, and pull-to-retry.
+- Grid column counts are remembered separately for narrow screens, wide portrait, and wide landscape windows, then selected by the current window shape. Home, Search, personal lists, creator pages, and plugin content pages use these settings.
+- The top-bar blur path reduces repeated sampling. Some hidden skeleton and decorative animations stop running and follow the reduced-motion setting.
+
+### 6.2 beta.7 history
+
+The older Focus version used upstream `0.7.9-beta.7` and was named [`0.7.9-beta.7.focus.1`](https://github.com/AIALRA-0/BiliPai_Focus/releases/tag/v0.7.9-beta.7.focus.1), with `versionCode 390`. Its notable changes included:
+
+- The **Show comments on landscape back** option opened comments on the first Back action in landscape fullscreen; the next action returned to the previous level while keeping landscape orientation.
+- System card transitions covered additional shop-product, article, activity-detail, creator-search, and live-category pages.
+- Focus fixed the backup-line timer so ordinary playback did not switch lines early when that timer reset. A real playback error could still trigger a backup line.
+
+See the [changelog](CHANGELOG.md) for the full version history.
 
 ## 7 What can plugins do, and what should I check before importing one
 
