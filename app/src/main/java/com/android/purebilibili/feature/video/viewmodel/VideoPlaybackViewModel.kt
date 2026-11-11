@@ -197,13 +197,15 @@ internal data class PlaybackStallRecoveryDecision(
 
 internal data class StartupHttpStatusRecoveryState(
     val hasRenderedFirstFrame: Boolean = false,
-    val startupFailureReported: Boolean = false
+    val startupFailureReported: Boolean = false,
+    val freshPlayUrlRefreshAttempted: Boolean = false
 )
 
 internal data class StartupHttpStatusRecoveryDecision(
     val attemptedCdnIndexes: Set<Int>,
     val state: StartupHttpStatusRecoveryState,
     val nextCdnIndex: Int?,
+    val shouldRefreshPlayUrl: Boolean,
     val shouldReportExhaustion: Boolean
 )
 
@@ -224,6 +226,7 @@ internal fun recordStartupHttpStatusFailure(
             attemptedCdnIndexes = attemptedCdnIndexes,
             state = state,
             nextCdnIndex = null,
+            shouldRefreshPlayUrl = false,
             shouldReportExhaustion = false
         )
     }
@@ -236,11 +239,18 @@ internal fun recordStartupHttpStatusFailure(
         cdnCandidateCount = cdnCandidateCount,
         attemptedCdnIndexes = attempted
     )
-    val shouldReportExhaustion = nextIndex == null && !state.startupFailureReported
+    val shouldRefreshPlayUrl = nextIndex == null && !state.freshPlayUrlRefreshAttempted
+    val shouldReportExhaustion = nextIndex == null &&
+        !shouldRefreshPlayUrl &&
+        !state.startupFailureReported
     return StartupHttpStatusRecoveryDecision(
         attemptedCdnIndexes = attempted,
-        state = state.copy(startupFailureReported = state.startupFailureReported || shouldReportExhaustion),
+        state = state.copy(
+            startupFailureReported = state.startupFailureReported || shouldReportExhaustion,
+            freshPlayUrlRefreshAttempted = state.freshPlayUrlRefreshAttempted || shouldRefreshPlayUrl
+        ),
         nextCdnIndex = nextIndex,
+        shouldRefreshPlayUrl = shouldRefreshPlayUrl,
         shouldReportExhaustion = shouldReportExhaustion
     )
 }
@@ -269,7 +279,10 @@ internal fun markPlaybackCdnFirstFrameRendered(
 
 internal fun resetStartupHttpStatusRecoveryForUserAction(
     state: StartupHttpStatusRecoveryState
-): StartupHttpStatusRecoveryState = state.copy(startupFailureReported = false)
+): StartupHttpStatusRecoveryState = state.copy(
+    startupFailureReported = false,
+    freshPlayUrlRefreshAttempted = false
+)
 
 internal fun resolvePlaybackStallRecoveryDecision(
     playbackState: Int,
@@ -2790,6 +2803,18 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                 "trying untried CDN ${nextCdnIndex + 1}/${current.cdnCount}"
                         )
                         switchCdnToForRecovery(nextCdnIndex)
+                    } else if (decision.shouldRefreshPlayUrl) {
+                        Logger.w(
+                            "PlayerVM",
+                            "Startup HTTP status recovery exhausted CDN candidates; refreshing play URL once"
+                        )
+                        attemptedPlaybackStallRecoveryCdnIndexes.clear()
+                        _uiState.update { state ->
+                            if (state is VideoPlaybackUiState.Success &&
+                                state.info.bvid == current.info.bvid && state.info.cid == current.info.cid
+                            ) state.copy(startupPlaybackFailed = false) else state
+                        }
+                        refreshPlayUrlAfterStartupHttpStatusFailure(current)
                     } else if (decision.shouldReportExhaustion) {
                         Logger.w("PlayerVM", "Startup HTTP status recovery exhausted all CDN candidates")
                         _uiState.update { state ->
@@ -2830,6 +2855,28 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 state.copy(startupPlaybackFailed = false)
             } else state
         }
+    }
+
+    private fun refreshPlayUrlAfterStartupHttpStatusFailure(
+        current: VideoPlaybackUiState.Success
+    ) {
+        val player = exoPlayer
+        val currentPositionMs = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val resumePlayback = player?.let {
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = it.playWhenReady,
+                isPlaying = it.isPlaying
+            )
+        } ?: true
+        loadVideo(
+            bvid = current.info.bvid,
+            aid = current.info.aid,
+            force = true,
+            autoPlay = resumePlayback,
+            audioLang = current.currentAudioLang,
+            cid = current.info.cid,
+            fallbackResumePositionMs = currentPositionMs
+        )
     }
 
     private fun schedulePlaybackStallRecovery() {

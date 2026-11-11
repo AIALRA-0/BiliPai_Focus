@@ -61,10 +61,9 @@ class PlaybackStallRecoveryPolicyTest {
     }
 
     @Test
-    fun `startup bad HTTP status tries each CDN once and stops after exhaustion`() {
+    fun `startup bad HTTP status refreshes play URL once after CDN exhaustion then reports failure`() {
         var recoveryState = StartupHttpStatusRecoveryState()
         var attemptedCdnIndexes = emptySet<Int>()
-        var exhausted: StartupHttpStatusRecoveryDecision? = null
 
         for (currentCdnIndex in 0..2) {
             val decision = recordStartupHttpStatusFailure(
@@ -76,24 +75,47 @@ class PlaybackStallRecoveryPolicyTest {
             assertEquals(currentCdnIndex.takeIf { it < 2 }?.plus(1), decision.nextCdnIndex)
             attemptedCdnIndexes = decision.attemptedCdnIndexes + listOfNotNull(decision.nextCdnIndex)
             recoveryState = decision.state
-            if (currentCdnIndex == 2) exhausted = decision
+            if (currentCdnIndex == 2) {
+                assertTrue(decision.shouldRefreshPlayUrl)
+                assertFalse(decision.shouldReportExhaustion)
+            }
         }
 
-        assertTrue(requireNotNull(exhausted).shouldReportExhaustion)
+        assertTrue(recoveryState.freshPlayUrlRefreshAttempted)
+        assertFalse(recoveryState.startupFailureReported)
+
+        // The automatic refresh supplies a fresh candidate set, so route indexes restart at zero.
+        attemptedCdnIndexes = emptySet()
+        var refreshedExhaustion: StartupHttpStatusRecoveryDecision? = null
+        for (currentCdnIndex in 0..2) {
+            val decision = recordStartupHttpStatusFailure(
+                state = recoveryState,
+                attemptedCdnIndexes = attemptedCdnIndexes,
+                currentCdnIndex = currentCdnIndex,
+                cdnCandidateCount = 3
+            )
+            assertEquals(currentCdnIndex.takeIf { it < 2 }?.plus(1), decision.nextCdnIndex)
+            attemptedCdnIndexes = decision.attemptedCdnIndexes + listOfNotNull(decision.nextCdnIndex)
+            recoveryState = decision.state
+            if (currentCdnIndex == 2) refreshedExhaustion = decision
+        }
+
+        assertFalse(requireNotNull(refreshedExhaustion).shouldRefreshPlayUrl)
+        assertTrue(requireNotNull(refreshedExhaustion).shouldReportExhaustion)
         val repeated = recordStartupHttpStatusFailure(
             state = recoveryState,
             attemptedCdnIndexes = attemptedCdnIndexes,
             currentCdnIndex = 2,
             cdnCandidateCount = 3
         )
-        assertEquals(null, repeated.nextCdnIndex)
+        assertFalse(repeated.shouldRefreshPlayUrl)
         assertFalse(repeated.shouldReportExhaustion)
     }
 
     @Test
     fun `first rendered frame disables startup HTTP recovery`() {
         val failure = recordStartupHttpStatusFailure(
-            state = StartupHttpStatusRecoveryState(),
+            state = StartupHttpStatusRecoveryState(freshPlayUrlRefreshAttempted = true),
             attemptedCdnIndexes = emptySet(),
             currentCdnIndex = 0,
             cdnCandidateCount = 2
@@ -101,6 +123,7 @@ class PlaybackStallRecoveryPolicyTest {
         val afterFirstFrame = markPlaybackCdnFirstFrameRendered(failure.state)
 
         assertTrue(afterFirstFrame.hasRenderedFirstFrame)
+        assertTrue(afterFirstFrame.freshPlayUrlRefreshAttempted)
         assertFalse(
             shouldUseStartupHttpStatusRecovery(
                 errorCode = androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
@@ -116,15 +139,17 @@ class PlaybackStallRecoveryPolicyTest {
     }
 
     @Test
-    fun `explicit retry or route change clears only the startup failure notice`() {
+    fun `explicit retry or route change clears notice and refresh budget but preserves first-frame state`() {
         val state = StartupHttpStatusRecoveryState(
             hasRenderedFirstFrame = false,
-            startupFailureReported = true
+            startupFailureReported = true,
+            freshPlayUrlRefreshAttempted = true
         )
 
         val afterUserAction = resetStartupHttpStatusRecoveryForUserAction(state)
 
         assertFalse(afterUserAction.startupFailureReported)
+        assertFalse(afterUserAction.freshPlayUrlRefreshAttempted)
         assertTrue(shouldUseStartupHttpStatusRecovery(
             errorCode = androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
             state = afterUserAction
