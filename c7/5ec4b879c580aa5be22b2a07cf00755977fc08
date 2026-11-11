@@ -1,0 +1,187 @@
+app/src/main/java/com/android/purebilibili/MainActivity.kt
+  s_71db67cf8751ad::t_e73768c599990b 1678-1679
+app/src/main/java/com/android/purebilibili/feature/home/components/HomeTopTabChrome.kt
+  s_71db67cf8751ad::t_e73768c599990b 210-217,219-220,223-270,272-273,275-297,300-306,308-311
+app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlayContracts.kt
+  s_71db67cf8751ad::t_e73768c599990b 187,294
+app/src/main/java/com/android/purebilibili/core/ui/ImmersiveAppScaffold.kt
+  s_71db67cf8751ad::t_e73768c599990b 92
+app/src/main/java/com/android/purebilibili/feature/video/VideoActivity.kt
+  s_71db67cf8751ad::t_e73768c599990b 356-357,360-361,417-428
+  s_71db67cf8751ad::t_29ecdc59042b49 438
+docs/wiki/VERSIONING.md
+  s_71db67cf8751ad::t_edf0f1dbfe6960 5,7,9,21-23,35-36,39,43-45,50,55-57,64,79,86-87
+  s_71db67cf8751ad::t_2b3264e59769e1 3
+app/src/main/java/com/android/purebilibili/feature/home/components/FloatingBottomBar.kt
+  s_71db67cf8751ad::t_e73768c599990b 1651-1652
+app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt
+  s_71db67cf8751ad::t_e73768c599990b 876,879-886,1743-1745,2048
+design-system/src/main/java/com/android/purebilibili/core/ui/AdaptiveChrome.kt
+  s_71db67cf8751ad::t_e73768c599990b 216-217,243-244,643,655
+app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt
+  s_71db67cf8751ad::t_e73768c599990b 4382-4393,4516-4518,4599,4628-4634,5332,5513
+.github/workflows/Build.yml
+  s_71db67cf8751ad::t_b17fbe14611ea1 554
+  s_71db67cf8751ad::t_8ce22757f13e50 9
+app/src/main/java/com/android/purebilibili/feature/home/components/miuix/InteractiveHighlight.kt
+  s_71db67cf8751ad::t_e73768c599990b 13-14,64-72
+app/src/test/java/com/android/purebilibili/feature/video/screen/TabletVideoLayoutPolicyTest.kt
+  s_71db67cf8751ad::t_d639b3d70d3495 127-128
+app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/BottomControlBar.kt
+  s_71db67cf8751ad::t_e73768c599990b 223-225,228-230,326-335,340-343,363,379,404,428,436,444
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/CelebrationAnimations.kt
+  s_71db67cf8751ad::t_e73768c599990b 20,44-50
+  s_71db67cf8751ad::t_517648d8592518 51
+app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt
+  s_71db67cf8751ad::t_e73768c599990b 989,1006,1028,2108
+app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/glass/BottomControlBar.kt
+  s_71db67cf8751ad::t_e73768c599990b 532,536
+app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt
+  s_71db67cf8751ad::t_e73768c599990b 5878-5880
+app/src/main/java/com/android/purebilibili/core/ui/components/BiliPaiTopBarIconDecorator.kt
+  s_71db67cf8751ad::t_e73768c599990b 46-47
+app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentEntryBar.kt
+  s_71db67cf8751ad::t_e73768c599990b 66-67
+app/src/main/java/com/android/purebilibili/feature/home/components/OfficialProgressiveTopBlur.kt
+  s_71db67cf8751ad::t_e73768c599990b 20,24,26,84-86,93-103,106-110,143,158-166
+app/src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt
+  s_71db67cf8751ad::t_644c5e7b108745 285
+  s_71db67cf8751ad::t_e73768c599990b 199-209,211-212,215-216,218,224-225,227-229,231-233,238-284,286-289
+  s_71db67cf8751ad::t_d2a19864390235 290-292
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/SkeletonComponents.kt
+  s_71db67cf8751ad::t_e73768c599990b 46,54,93-96,100
+README.en.md
+  s_71db67cf8751ad::t_81cb9edda65956 4-5,22,24,26,28,32,86,88,90-92,94,96,98,100-112
+  s_71db67cf8751ad::t_083b2d0ce23a6d 93
+app/src/main/java/com/android/purebilibili/feature/settings/SettingsDescriptionIndex.kt
+  s_71db67cf8751ad::t_e73768c599990b 160
+app/src/main/java/com/android/purebilibili/feature/video/screen/TabletVideoLayout.kt
+  s_71db67cf8751ad::t_c19ff03432639e 615,675
+  s_71db67cf8751ad::t_e73768c599990b 560-566,573-600,608-614,616-618,620-649,652-674,676-681,689-721,724-726
+  s_71db67cf8751ad::t_644c5e7b108745 650-651,722-723
+app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailSkeletonHandoff.kt
+  s_71db67cf8751ad::t_e73768c599990b 1-39
+app/src/test/java/com/android/purebilibili/feature/settings/AppVersionPolicyTest.kt
+  s_71db67cf8751ad::t_3eefe61dea7d90 22-23
+app/src/androidTest/java/com/Android/purebilibili/feature/video/DanmakuFullscreenContinuityUiTest.kt
+  s_71db67cf8751ad::t_e73768c599990b 1-115
+CHANGELOG.md
+  s_71db67cf8751ad::t_7ccb0dca35b1b2 1
+  s_71db67cf8751ad::t_c123c44be8be30 11-12
+  s_71db67cf8751ad::t_e73768c599990b 65-95,97
+  s_71db67cf8751ad::t_6afe04021ddea8 2-10,13-14
+design-system/src/main/java/com/android/purebilibili/core/ui/effect/LiquidLensEffectCache.kt
+  s_71db67cf8751ad::t_e73768c599990b 13,16,23,26-28
+app/src/main/java/com/android/purebilibili/feature/home/components/ProgressiveTopChrome.kt
+  s_71db67cf8751ad::t_e73768c599990b 5,82-83,103-110,113-137,141,150-155
+app/src/main/java/com/android/purebilibili/feature/home/components/BottomBarMatchedLiquidChrome.kt
+  s_71db67cf8751ad::t_e73768c599990b 49,554,569-570,574-576,585-587,610,625-626,630-632,641-643
+app/src/androidTest/java/com/Android/purebilibili/feature/video/LikeFeedbackSettingsUiTest.kt
+  s_71db67cf8751ad::t_e73768c599990b 1-69
+app/src/androidTest/java/com/Android/purebilibili/feature/video/VideoStatsActionsLayoutUiTest.kt
+  s_71db67cf8751ad::t_e73768c599990b 1-130
+app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPlayerTransitionHost.kt
+  s_71db67cf8751ad::t_e73768c599990b 187-188,252,330
+app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsPageScaffold.kt
+  s_71db67cf8751ad::t_e73768c599990b 209
+app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailPhoneContent.kt
+  s_71db67cf8751ad::t_e73768c599990b 137-138,165,179,181-183
+app/src/main/java/com/android/purebilibili/feature/list/ListScopedSearchActiveBar.kt
+  s_71db67cf8751ad::t_e73768c599990b 44-45
+app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt
+  s_71db67cf8751ad::t_5c4fed5a3e06b6 3414
+  s_71db67cf8751ad::t_e73768c599990b 3719,3748-3749,5311,5429-5482,5488-5508,5510-5557,5559,5561-5571,5573-5582,5584,5586-5588,5592-5602,5604-5614,5616-5636,5638-5649,5651-5685,5688,5692
+  s_71db67cf8751ad::t_644c5e7b108745 5509
+app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSectionContracts.kt
+  s_71db67cf8751ad::t_e73768c599990b 100,176
+app/src/test/java/com/android/purebilibili/core/buildinfo/BiliPaiApkNamingPolicyTest.kt
+  s_71db67cf8751ad::t_edf0f1dbfe6960 25,32-33,36-37,47-48
+app/src/main/java/com/android/purebilibili/feature/video/ui/components/VideoSettingsPanel.kt
+  s_71db67cf8751ad::t_e73768c599990b 372,488-497
+app/src/main/java/com/android/purebilibili/feature/video/SystemVideoCardTransition.kt
+  s_71db67cf8751ad::t_e73768c599990b 69,207,426-431
+  s_71db67cf8751ad::t_340ac7513ea4dc 432-433
+app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoSupplementSection.kt
+  s_71db67cf8751ad::t_e73768c599990b 79
+app/src/androidTest/java/com/Android/purebilibili/feature/video/BottomControlBarUiRegressionTest.kt
+  s_71db67cf8751ad::t_e73768c599990b 40-87
+  s_71db67cf8751ad::t_dec615dc4130b5 39
+app/src/androidTest/java/com/Android/purebilibili/feature/home/ScaffoldTopBlurOwnershipUiTest.kt
+  s_71db67cf8751ad::t_e73768c599990b 1-112
+app/src/main/java/com/android/purebilibili/core/ui/popup/AppGlassPopupHost.kt
+  s_71db67cf8751ad::t_e73768c599990b 1082,1159,1178
+brand-motion/src/main/java/com/android/purebilibili/core/ui/BlueSnowMaidAnimation.kt
+  s_71db67cf8751ad::t_e73768c599990b 46
+app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerProgressContent.kt
+  s_71db67cf8751ad::t_e73768c599990b 17,23,123-130,136-140
+app/src/main/java/com/android/purebilibili/core/ui/popup/AppGlassPopupSurface.kt
+  s_71db67cf8751ad::t_e73768c599990b 3,60,63-68,171-177,183,187-188,191-223,225
+app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt
+  s_71db67cf8751ad::t_e73768c599990b 14,1350,1368,1375,1392,2517-2528,2554-2556
+app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/CenterPlaybackControl.kt
+  s_71db67cf8751ad::t_e73768c599990b 17-20,33-41
+  s_71db67cf8751ad::t_8971c4b17a5154 42
+app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/glass/VideoPlayerOverlay.kt
+  s_71db67cf8751ad::t_e73768c599990b 1786
+app/build.gradle.kts
+  s_71db67cf8751ad::t_65116af9d9e19f 228-229
+app/src/main/java/com/android/purebilibili/feature/search/SearchTopBar.kt
+  s_71db67cf8751ad::t_e73768c599990b 110
+app/src/main/java/com/android/purebilibili/navigation3/VideoCardFallbackTransition.kt
+  s_71db67cf8751ad::t_e73768c599990b 3,5-6,8,11-23,31
+app/src/test/java/com/android/purebilibili/core/ui/popup/AppGlassPopupMotionTest.kt
+  s_71db67cf8751ad::t_e73768c599990b 11-12,18-32
+  s_71db67cf8751ad::t_5bc9dc29009fa6 33
+app/src/test/java/com/android/purebilibili/navigation3/VideoCardFallbackTransitionTest.kt
+  s_71db67cf8751ad::t_e73768c599990b 5,7,12-17,19-23
+app/src/test/java/com/android/purebilibili/feature/home/components/ProgressiveTopChromePolicyTest.kt
+  s_71db67cf8751ad::t_040521aff6cbe2 174,180-181
+  s_71db67cf8751ad::t_d639b3d70d3495 91,137-138,173,177-178
+app/src/test/java/com/android/purebilibili/feature/video/ui/components/VideoDetailSkeletonStructureTest.kt
+  s_71db67cf8751ad::t_5309d370dd2320 18
+  s_71db67cf8751ad::t_d639b3d70d3495 16-17,19-20,22,41-44,51-53
+app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoInfoSection.kt
+  s_71db67cf8751ad::t_e73768c599990b 621-622,625-626,628-664,667-681,683,685-703,705-763,766,769-773,776-777
+app/src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt
+  s_71db67cf8751ad::t_e73768c599990b 2466-2468,2883-2896
+  s_71db67cf8751ad::t_df8bd868bbb13e 2897-2898
+app/src/main/java/com/android/purebilibili/core/ui/MaidLottieAnimationSettingsHost.kt
+  s_71db67cf8751ad::t_e73768c599990b 5,13-14
+design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptiveContentCardComponents.kt
+  s_71db67cf8751ad::t_e73768c599990b 8,167,197,201-216
+app/src/main/java/com/android/purebilibili/feature/home/components/TopChromeColorPolicy.kt
+  s_71db67cf8751ad::t_748d1688d10343 4,48-61
+  s_71db67cf8751ad::t_ce23f43b4fd7c3 46
+app/src/main/java/com/android/purebilibili/feature/settings/PlaybackSettingDirectory.kt
+  s_71db67cf8751ad::t_e73768c599990b 110
+app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoDanmakuRenderSurface.kt
+  s_71db67cf8751ad::t_e73768c599990b 1-54
+app/src/main/java/com/android/purebilibili/core/ui/blur/ProgressiveBlurRendererPreference.kt
+  s_71db67cf8751ad::t_e73768c599990b 1-25
+app/src/main/java/com/android/purebilibili/core/store/player/PlayerSettingsStore.kt
+  s_71db67cf8751ad::t_e73768c599990b 44,60-61,63
+app/src/main/java/com/android/purebilibili/feature/settings/screen/AnimationSettingsScreen.kt
+  s_71db67cf8751ad::t_e73768c599990b 207-216,227
+README.md
+  s_71db67cf8751ad::t_ae19da5f5d793f 115,117,125,127-128
+  s_71db67cf8751ad::t_083b2d0ce23a6d 122
+  s_71db67cf8751ad::t_81cb9edda65956 4-5,28,30,32,36,38,48-49,113,119-121,123,130-137,143-148
+  s_71db67cf8751ad::t_b1e058c8ff8efa 138-142
+  s_71db67cf8751ad::t_0f0f23756d8c2a 129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c75ec4b879c580aa5be22b2a07cf00755977fc08",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
