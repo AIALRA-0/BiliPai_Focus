@@ -1,0 +1,21 @@
+app/src/main/java/com/android/purebilibili/feature/plugin/CdnPlaybackDataSource.kt
+  s_71db67cf8751ad::t_659abb1a04dccc 19,27-47,176,184
+app/src/test/java/com/android/purebilibili/feature/plugin/CdnPlaybackDataSourceTest.kt
+  s_71db67cf8751ad::t_659abb1a04dccc 67-104,109,181,188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5eab24b9392e07df37e8ec6182969d34995a60d1",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
