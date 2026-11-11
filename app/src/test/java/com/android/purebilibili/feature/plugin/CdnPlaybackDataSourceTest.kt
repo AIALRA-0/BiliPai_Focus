@@ -64,11 +64,49 @@ class CdnPlaybackDataSourceTest {
     }
 
     @Test
-    fun `unknown lengths use upstream without speculative ranges`() {
+    fun `initial unbounded bilivideo get adds an open ended range to the delegate`() {
+        val upstream = MemorySource()
+        val source = CdnPlaybackDataSource(upstream)
+        val spec = DataSpec.Builder()
+            .setUri(Uri.parse("https://upos-sz-mirrorcosov.bilivideo.com/video.m4s"))
+            .setLength(C.LENGTH_UNSET.toLong())
+            .build()
+        try {
+            source.open(spec)
+            assertEquals("bytes=0-", upstream.openedSpec?.httpRequestHeaders?.get("Range"))
+        } finally {
+            source.close()
+        }
+    }
+
+    @Test
+    fun `initial range injection leaves explicit ranges seeks and other hosts intact`() {
+        val bilivideo = Uri.parse("https://upos-sz-mirrorcosov.bilivideo.com/video.m4s")
+        val cases = listOf(
+            DataSpec.Builder().setUri(bilivideo)
+                .setHttpRequestHeaders(mapOf("rAnGe" to "bytes=8-15"))
+                .build(),
+            DataSpec.Builder().setUri(bilivideo).setPosition(8).build(),
+            DataSpec.Builder().setUri(bilivideo).setLength(16).build(),
+            DataSpec.Builder().setUri(Uri.parse("https://upos-hz-mirrorakam.akamaized.net/video.m4s")).build(),
+            DataSpec.Builder().setUri(Uri.parse("https://evilbilivideo.com/video.m4s")).build(),
+            DataSpec.Builder().setUri(Uri.parse("http://upos-sz-mirrorcosov.bilivideo.com/video.m4s")).build(),
+            DataSpec.Builder().setUri(bilivideo).setHttpMethod(DataSpec.HTTP_METHOD_POST).build()
+        )
+
+        cases.forEach { spec ->
+            val result = withInitialBilivideoRange(spec)
+            assertEquals(spec.httpRequestHeaders, result.httpRequestHeaders)
+        }
+    }
+
+    @Test
+    fun `unknown lengths at seek positions use upstream without adding an initial range`() {
         withSource { request -> error("Unexpected parallel request: $request") }.use { fixture ->
             fixture.source.open(fixture.spec.buildUpon().setLength(C.LENGTH_UNSET.toLong()).build())
             assertContentEquals(bytes.copyOfRange(137, bytes.size), readAll(fixture.source))
             assertEquals(1, fixture.upstream.opens)
+            assertEquals(null, fixture.upstream.openedSpec?.httpRequestHeaders?.get("Range"))
         }
     }
 
@@ -140,12 +178,14 @@ class CdnPlaybackDataSourceTest {
     private inner class MemorySource : DataSource {
         var opens = 0
         var openPosition = 0L
+        var openedSpec: DataSpec? = null
         private var spec: DataSpec? = null
         private var position = 0
         private var end = 0
         override fun open(dataSpec: DataSpec): Long {
             opens++
             openPosition = dataSpec.position
+            openedSpec = dataSpec
             spec = dataSpec
             position = dataSpec.position.toInt()
             end = if (dataSpec.length == C.LENGTH_UNSET.toLong()) bytes.size else position + dataSpec.length.toInt()

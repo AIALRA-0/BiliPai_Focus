@@ -16,12 +16,34 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.util.LinkedHashMap
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicLong
+
+internal fun withInitialBilivideoRange(dataSpec: DataSpec): DataSpec {
+    if (dataSpec.httpMethod != DataSpec.HTTP_METHOD_GET || dataSpec.httpBody != null ||
+        dataSpec.position != 0L || dataSpec.length != C.LENGTH_UNSET.toLong()
+    ) {
+        return dataSpec
+    }
+
+    val host = dataSpec.uri.host?.lowercase() ?: return dataSpec
+    if (!dataSpec.uri.scheme.equals("https", ignoreCase = true) ||
+        (host != "bilivideo.com" && !host.endsWith(".bilivideo.com")) ||
+        dataSpec.httpRequestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
+    ) {
+        return dataSpec
+    }
+
+    val headers = LinkedHashMap(dataSpec.httpRequestHeaders).apply {
+        put("Range", "bytes=0-")
+    }
+    return dataSpec.buildUpon().setHttpRequestHeaders(headers).build()
+}
 
 /** Media3 calls this synchronous boundary on its loader thread. OkHttp owns cancellable I/O.
  * Finite ranges use bounded windows; unknown lengths, small reads and failures use the upstream.
@@ -151,6 +173,7 @@ internal class CdnPlaybackDataSource(
     }
 
     private fun openDelegate(dataSpec: DataSpec): Long {
+        val delegateSpec = withInitialBilivideoRange(dataSpec)
         delegateHost = hostFromCdnUrl(dataSpec.uri.toString())
         delegateBytes = 0
         delegateStartedNs = System.nanoTime()
@@ -158,7 +181,7 @@ internal class CdnPlaybackDataSource(
         if (monitored) CdnTransferRuntime.start(delegateHost)
         // Set before open so failed opens can still release upstream resources in close().
         delegateOpen = true
-        return try { upstream.open(dataSpec) } catch (error: IOException) {
+        return try { upstream.open(delegateSpec) } catch (error: IOException) {
             if (monitored) finishDelegate(false, closed)
             throw error
         }
