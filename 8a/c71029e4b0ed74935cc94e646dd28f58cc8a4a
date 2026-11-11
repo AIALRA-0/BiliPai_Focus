@@ -1,0 +1,24 @@
+app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt
+  s_71db67cf8751ad::t_7718c60a665bee 2806-2817,2860-2879
+  s_71db67cf8751ad::t_be0ef5901f7179 200-201,208,229,242-245,248-251,253,282-285
+  s_71db67cf8751ad::t_34294f2623c529 2880-2881
+app/src/test/java/com/android/purebilibili/feature/video/viewmodel/PlaybackStallRecoveryPolicyTest.kt
+  s_71db67cf8751ad::t_0a7395836b0102 64,78-81,84-104,111,145-146,152
+  s_71db67cf8751ad::t_d949ba823cf9b4 118,126,142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8ac71029e4b0ed74935cc94e646dd28f58cc8a4a",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
