@@ -225,8 +225,8 @@ android {
         targetSdk = 37
         // Focus 版本名沿用上游 X.Y.Z（含预发布后缀）并追加 .focus.N；版本码从上一版 Focus 递增。
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 392
-        versionName = "0.7.9-beta.9.focus.2"
+        versionCode = 393
+        versionName = "0.7.9-beta.9.focus.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
