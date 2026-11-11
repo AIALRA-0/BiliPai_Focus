@@ -1,0 +1,32 @@
+app/src/test/java/com/android/purebilibili/core/buildinfo/BiliPaiApkNamingPolicyTest.kt
+  s_71db67cf8751ad::t_a967d3fbd389f7 25,32-33,36-37,47-48
+README.md
+  s_71db67cf8751ad::t_a967d3fbd389f7 4-5,28,48
+app/build.gradle.kts
+  s_71db67cf8751ad::t_a967d3fbd389f7 228-229
+app/src/test/java/com/android/purebilibili/feature/settings/AppVersionPolicyTest.kt
+  s_71db67cf8751ad::t_a967d3fbd389f7 5,23-24
+docs/wiki/VERSIONING.md
+  s_71db67cf8751ad::t_a967d3fbd389f7 5,21,23,35-36,50,79,86-87
+CHANGELOG.md
+  s_71db67cf8751ad::t_a967d3fbd389f7 1,3
+  s_71db67cf8751ad::t_d31ec80af7574e 9
+README.en.md
+  s_71db67cf8751ad::t_a967d3fbd389f7 4-5,22,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d5d19773483ce5935c3729bed1fb342a09d47bad",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
