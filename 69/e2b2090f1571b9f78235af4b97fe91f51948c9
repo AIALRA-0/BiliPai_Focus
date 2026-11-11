@@ -1,0 +1,30 @@
+app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt
+  s_71db67cf8751ad::t_953f078e0a0d73 176-186
+  s_71db67cf8751ad::t_13f731dc827f98 780,2695-2699,2795-2799,2828-2832
+  s_71db67cf8751ad::t_523ce7df63de06 3960
+  s_71db67cf8751ad::t_bcd01c78d7215d 2838-2844,3855,3958-3959
+  s_71db67cf8751ad::t_a70e0e7b92c0db 3355
+app/src/test/java/com/android/purebilibili/feature/video/viewmodel/PlaybackStallRecoveryPolicyTest.kt
+  s_71db67cf8751ad::t_7de3db1aa0bc28 191-233
+  s_71db67cf8751ad::t_2082e9c4b37a69 190
+app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt
+  s_71db67cf8751ad::t_0b163d093fd894 5765
+  s_71db67cf8751ad::t_e9fbb5dc8b5624 547-585
+  s_71db67cf8751ad::t_db428ed13fce3c 5766-5772,5774
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "69e2b2090f1571b9f78235af4b97fe91f51948c9",
+  "prompts": {},
+  "sessions": {
+    "s_71db67cf8751ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd4d-9767-7400-affa-5e2753d39249",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "AIALRA-0 <aialra@163.com>"
+    }
+  }
+}
