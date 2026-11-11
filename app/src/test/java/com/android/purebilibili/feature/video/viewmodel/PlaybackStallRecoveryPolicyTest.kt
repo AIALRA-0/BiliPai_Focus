@@ -188,6 +188,50 @@ class PlaybackStallRecoveryPolicyTest {
     }
 
     @Test
+    fun `ready without a frame schedules recovery only while playing with an armed alternate`() {
+        assertTrue(
+            shouldSchedulePlaybackStallRecovery(
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                firstFrameRendered = false,
+                allowNoFirstFrameRecovery = true
+            )
+        )
+        assertFalse(
+            shouldSchedulePlaybackStallRecovery(
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                firstFrameRendered = false,
+                allowNoFirstFrameRecovery = false
+            )
+        )
+        assertFalse(
+            shouldSchedulePlaybackStallRecovery(
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                firstFrameRendered = true,
+                allowNoFirstFrameRecovery = true
+            )
+        )
+        assertFalse(
+            shouldSchedulePlaybackStallRecovery(
+                playbackState = Player.STATE_READY,
+                playWhenReady = false,
+                firstFrameRendered = false,
+                allowNoFirstFrameRecovery = true
+            )
+        )
+        assertTrue(
+            shouldSchedulePlaybackStallRecovery(
+                playbackState = Player.STATE_BUFFERING,
+                playWhenReady = true,
+                firstFrameRendered = true,
+                allowNoFirstFrameRecovery = false
+            )
+        )
+    }
+
+    @Test
     fun `ten second no first frame recovery allows one stalled alternative including adaptive playback`() {
         val buffering = resolvePlaybackStallRecoveryDecision(
             playbackState = Player.STATE_BUFFERING,

@@ -544,6 +544,45 @@ internal fun VideoPlayerSection(
     }
 }
 
+@Composable
+private fun StartupPlaybackFailureNotice(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AppSurface(
+        modifier = modifier
+            .fillMaxWidth(0.9f)
+            .widthIn(max = 360.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Black.copy(alpha = 0.78f),
+        contentColor = Color.White,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AppText(
+                text = "所有播放线路都无法播放",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+            AppButton(
+                onClick = onRetry,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+            ) {
+                AppText("重试")
+            }
+        }
+    }
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun VideoPlayerSectionContent(
@@ -5723,8 +5762,16 @@ private fun VideoPlayerSectionContent(
                 }
             }
 
+            val showStartupPlaybackFailureNotice = uiState.startupPlaybackFailed && !isFirstFrameRendered
+            if (showStartupPlaybackFailureNotice) {
+                StartupPlaybackFailureNotice(
+                    onRetry = onReloadVideo,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
+
             // 起播反馈独立于控制栏透明度；暂停、离页、离屏或返回预览时停止。
-            if (playerVisualWorkActive && !isFirstFrameRendered && isBuffering &&
+            if (!showStartupPlaybackFailureNotice && playerVisualWorkActive && !isFirstFrameRendered && isBuffering &&
                 playerState.player.playWhenReady && !keepCoverForManualStart &&
                 !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition
             ) {

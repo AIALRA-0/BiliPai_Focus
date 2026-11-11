@@ -173,6 +173,17 @@ internal fun resolvePlaybackStallRecoveryTimeoutMs(firstFrameRendered: Boolean):
     if (firstFrameRendered) PLAYBACK_STALL_RECOVERY_TIMEOUT_MS
     else PLAYBACK_STARTUP_RECOVERY_TIMEOUT_MS
 
+internal fun shouldSchedulePlaybackStallRecovery(
+    playbackState: Int,
+    playWhenReady: Boolean,
+    firstFrameRendered: Boolean,
+    allowNoFirstFrameRecovery: Boolean
+): Boolean {
+    if (!playWhenReady) return false
+    return playbackState == Player.STATE_BUFFERING ||
+        (playbackState == Player.STATE_READY && !firstFrameRendered && allowNoFirstFrameRecovery)
+}
+
 /** 官方客户端把「剩最后 5 秒」也算看完（TfCode.MOBILE_TF_RULES_NO_MATCH_VALUE）。 */
 private const val HISTORY_FINISH_THRESHOLD_MS = 5_000L
 /** 已经上报过「看完」的哨兵值，避免重复请求。 */
@@ -766,6 +777,7 @@ sealed class VideoPlaybackUiState {
         val cdnCandidateSources: List<com.android.purebilibili.plugin.sdk.PlaybackCdnCandidateSource> = emptyList(),
         val cdnLineDiagnostics: List<CdnLineDiagnostic> = emptyList(),
         val isCdnProbing: Boolean = false,
+        val startupPlaybackFailed: Boolean = false,
         // 🖼️ [新增] 视频预览图数据（用于进度条拖动预览）
         val videoshotData: VideoshotData? = null,
         // 🎞️ [New] Codec & Audio Info
@@ -2680,6 +2692,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         override fun onRenderedFirstFrame() {
             maybeAnnounceRestoredPlaybackPosition()
             playbackStallRecoveryFirstFrameRendered = true
+            _uiState.update { state ->
+                if (state is VideoPlaybackUiState.Success && state.startupPlaybackFailed) {
+                    state.copy(startupPlaybackFailed = false)
+                } else state
+            }
             val current = _uiState.value as? VideoPlaybackUiState.Success
             if (current != null) {
                 preparePlaybackCdnRecoveryForMedia(current.info.bvid, current.info.cid)
@@ -2775,6 +2792,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         switchCdnToForRecovery(nextCdnIndex)
                     } else if (decision.shouldReportExhaustion) {
                         Logger.w("PlayerVM", "Startup HTTP status recovery exhausted all CDN candidates")
+                        _uiState.update { state ->
+                            if (state is VideoPlaybackUiState.Success &&
+                                state.info.bvid == current.info.bvid && state.info.cid == current.info.cid
+                            ) state.copy(startupPlaybackFailed = true) else state
+                        }
                         toast("所有播放线路都无法启动，请稍后重试")
                     }
                     return
@@ -2803,12 +2825,23 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private fun resetStartupHttpStatusRecoveryBudgetForUserAction() {
         attemptedPlaybackStallRecoveryCdnIndexes.clear()
         startupHttpStatusRecoveryState = resetStartupHttpStatusRecoveryForUserAction(startupHttpStatusRecoveryState)
+        _uiState.update { state ->
+            if (state is VideoPlaybackUiState.Success && state.startupPlaybackFailed) {
+                state.copy(startupPlaybackFailed = false)
+            } else state
+        }
     }
 
     private fun schedulePlaybackStallRecovery() {
         val scheduledPlayer = exoPlayer ?: return
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
-        if (scheduledPlayer.playbackState != Player.STATE_BUFFERING || !scheduledPlayer.playWhenReady) return
+        if (!shouldSchedulePlaybackStallRecovery(
+                playbackState = scheduledPlayer.playbackState,
+                playWhenReady = scheduledPlayer.playWhenReady,
+                firstFrameRendered = playbackStallRecoveryFirstFrameRendered,
+                allowNoFirstFrameRecovery = playbackCdnFallbackState.hasFallbackCandidate
+            )
+        ) return
         val mediaKey = "${current.info.bvid}:${current.info.cid}"
         preparePlaybackCdnRecoveryForMedia(current.info.bvid, current.info.cid)
         if (playbackStallRecoveryJob?.isActive == true) return
@@ -3319,6 +3352,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     fun reloadVideo() {
         val bvid = currentBvid.takeIf { it.isNotBlank() } ?: return
         val currentPos = exoPlayer?.currentPosition ?: 0L
+        resetStartupHttpStatusRecoveryBudgetForUserAction()
 
         // 💾 [修复] 在清除状态前明确保存进度，防止 loadVideo 读取到 0
         if (currentPos > 0) {
@@ -3818,6 +3852,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                         provisionalSource = cdn.adaptiveDashSource
                                         playResolvedPlayback(cdn.playUrl, cdn.audioUrl, cdn.adaptiveDashSource,
                                             requestedStartPositionMs, playWhenReady = false,
+                                            cdnFallbackState = cdn.fallbackState,
                                             cdnCacheKeysByUrl = cdn.cdnCacheKeysByUrl)
                                         provisionalMediaItem = player.currentMediaItem
                                     }
@@ -3920,7 +3955,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                 prepared.playerError == null && prepared.mediaItemCount > 0
                             ) {
                                 prepared.seekTo(startPos)
-                                prepared.playWhenReady = activeLoadAutoPlay ?: shouldAutoPlay
+                                val playWhenReady = activeLoadAutoPlay ?: shouldAutoPlay
+                                armPlaybackCdnFallback(cdnSelection.fallbackState, playWhenReady)
+                                prepared.playWhenReady = playWhenReady
                             } else playResolvedPlayback(
                                 videoUrl = cdnSelection.playUrl,
                                 audioUrl = cdnSelection.audioUrl,
